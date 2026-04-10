@@ -471,6 +471,9 @@ class _SettingsPageState extends State<SettingsPage> {
         onTapSettings: () {
           Navigator.of(context).pop();
         },
+        onTapPlugins: () {
+          context.go(AppRoutes.plugins);
+        },
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

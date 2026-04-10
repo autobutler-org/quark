@@ -1,8 +1,17 @@
 import 'dart:async';
 
+import 'package:autobutler/models/plugin_manifest.dart';
 import 'package:flutter/material.dart';
 
-enum AutobutlerDrawerSection { cirrus, photos, devices, health, settings }
+enum AutobutlerDrawerSection {
+  cirrus,
+  photos,
+  devices,
+  health,
+  settings,
+  plugins,
+  plugin,
+}
 
 class AutobutlerDrawer extends StatelessWidget {
   const AutobutlerDrawer({
@@ -13,6 +22,10 @@ class AutobutlerDrawer extends StatelessWidget {
     this.onTapDevices,
     this.onTapHealth,
     this.onTapSettings,
+    this.onTapPlugins,
+    this.plugins = const [],
+    this.activePluginId,
+    this.onTapPlugin,
   });
 
   final AutobutlerDrawerSection activeSection;
@@ -21,6 +34,16 @@ class AutobutlerDrawer extends StatelessWidget {
   final FutureOr<void> Function()? onTapDevices;
   final FutureOr<void> Function()? onTapHealth;
   final FutureOr<void> Function()? onTapSettings;
+  final FutureOr<void> Function()? onTapPlugins;
+
+  /// Plugin manifests to append to the drawer after the built-in items.
+  final List<PluginManifest> plugins;
+
+  /// The ID of the currently active plugin (if any).
+  final String? activePluginId;
+
+  /// Called when a plugin nav item is tapped.
+  final void Function(PluginManifest plugin)? onTapPlugin;
 
   @override
   Widget build(BuildContext context) {
@@ -79,8 +102,45 @@ class AutobutlerDrawer extends StatelessWidget {
               onTapSettings?.call();
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.extension_outlined),
+            title: const Text('Plugins'),
+            selected: activeSection == AutobutlerDrawerSection.plugins,
+            onTap: () {
+              onTapPlugins?.call();
+            },
+          ),
+          // Installed plugin nav items appended after built-in items.
+          for (final plugin in plugins)
+            if (plugin.contributes.navItem != null)
+              ListTile(
+                leading: Icon(_iconFromName(plugin.contributes.navItem!.icon)),
+                title: Text(plugin.contributes.navItem!.label),
+                selected:
+                    activeSection == AutobutlerDrawerSection.plugin &&
+                    activePluginId == plugin.id,
+                onTap: () => onTapPlugin?.call(plugin),
+              ),
         ],
       ),
     );
+  }
+
+  /// Public accessor so external widgets can resolve icon names.
+  static IconData iconFromName(String name) => _iconFromName(name);
+
+  /// Resolves a Material icon by name string.
+  /// Falls back to [Icons.extension] for unknown names.
+  static IconData _iconFromName(String name) {
+    const map = <String, IconData>{
+      'waving_hand': Icons.waving_hand,
+      'extension': Icons.extension,
+      'download': Icons.download,
+      'settings': Icons.settings,
+      'folder': Icons.folder,
+      'photo': Icons.photo,
+      'health': Icons.monitor_heart_outlined,
+    };
+    return map[name] ?? Icons.extension;
   }
 }

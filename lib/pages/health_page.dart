@@ -76,6 +76,9 @@ class _HealthPageState extends State<HealthPage>
         onTapSettings: () {
           context.go(AppRoutes.settings);
         },
+        onTapPlugins: () {
+          context.go(AppRoutes.plugins);
+        },
       ),
       body: _buildBody(context),
     );
