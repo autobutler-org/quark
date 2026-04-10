@@ -23,7 +23,6 @@ import (
 	v1_version "github.com/autobutler-org/autobutler/internal/server/api/v1/version"
 	v1_webdav "github.com/autobutler-org/autobutler/internal/server/api/v1/webdav"
 	"github.com/autobutler-org/autobutler/pkg/botel/system"
-	"github.com/autobutler-org/autobutler/pkg/util/pluginutil"
 	"github.com/autobutler-org/autobutler/pkg/util/serverutil"
 	"github.com/autobutler-org/autobutler/pkg/util/storageutil"
 
@@ -35,9 +34,6 @@ import (
 var public embed.FS
 
 func setupRoutes(engine *gin.Engine, systemCollector *system.Collector) {
-	if err := pluginutil.EnsureHelloPlugin(); err != nil {
-		slog.Warn("plugins: failed to seed hello plugin", "err", err)
-	}
 	setupRouters(engine, systemCollector)
 	setupWebDAV(engine)
 	setupStaticRoutes(engine)

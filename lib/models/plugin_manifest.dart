@@ -31,6 +31,38 @@ class PluginContributes {
       );
 }
 
+/// A plugin from the marketplace, annotated with whether it is installed.
+class MarketplaceEntry extends PluginManifest {
+  final bool installed;
+
+  const MarketplaceEntry({
+    required super.id,
+    required super.name,
+    required super.version,
+    required super.description,
+    required super.author,
+    required super.enabled,
+    required super.contributes,
+    required this.installed,
+  });
+
+  factory MarketplaceEntry.fromJson(Map<String, dynamic> json) =>
+      MarketplaceEntry(
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        version: json['version'] as String? ?? '',
+        description: json['description'] as String? ?? '',
+        author: json['author'] as String? ?? '',
+        enabled: json['enabled'] as bool? ?? false,
+        contributes: json['contributes'] != null
+            ? PluginContributes.fromJson(
+                json['contributes'] as Map<String, dynamic>,
+              )
+            : const PluginContributes(),
+        installed: json['installed'] as bool? ?? false,
+      );
+}
+
 class PluginManifest {
   final String id;
   final String name;

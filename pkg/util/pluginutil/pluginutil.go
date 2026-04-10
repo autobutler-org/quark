@@ -45,23 +45,18 @@ func GetPluginsDir() (string, error) {
 	return dir, nil
 }
 
-// EnsureHelloPlugin writes the bundled hello plugin manifest if it doesn't
-// already exist on disk.
-func EnsureHelloPlugin() error {
-	pluginsDir, err := GetPluginsDir()
-	if err != nil {
-		return err
-	}
-	helloDir := filepath.Join(pluginsDir, "hello")
-	if err := os.MkdirAll(helloDir, 0755); err != nil {
-		return fmt.Errorf("failed to create hello plugin directory: %w", err)
-	}
-	manifestPath := filepath.Join(helloDir, manifestFileName)
-	if _, err := os.Stat(manifestPath); err == nil {
-		// Already exists — don't overwrite user edits.
-		return nil
-	}
-	m := Manifest{
+// MarketplaceEntry describes a plugin available for installation.  For now
+// this is a superset of Manifest with an extra Available flag so the frontend
+// can distinguish installed vs not-installed in a single list.
+type MarketplaceEntry struct {
+	Manifest
+	Installed bool `json:"installed"`
+}
+
+// builtinCatalog is the hardcoded marketplace catalog.  Replace / extend this
+// with a remote fetch once a real marketplace backend exists.
+var builtinCatalog = []Manifest{
+	{
 		ID:          "hello",
 		Name:        "Hello World",
 		Version:     "1.0.0",
@@ -75,12 +70,69 @@ func EnsureHelloPlugin() error {
 				Route: "/plugins/hello",
 			},
 		},
-	}
-	data, err := json.MarshalIndent(m, "", "  ")
+	},
+}
+
+// ListMarketplace returns all available plugins, annotated with whether they
+// are already installed on this device.
+func ListMarketplace() ([]MarketplaceEntry, error) {
+	installed, err := ListPlugins()
 	if err != nil {
-		return fmt.Errorf("failed to marshal hello plugin manifest: %w", err)
+		return nil, err
 	}
-	return os.WriteFile(manifestPath, data, 0644)
+	installedIDs := make(map[string]bool, len(installed))
+	for _, p := range installed {
+		installedIDs[p.ID] = true
+	}
+	entries := make([]MarketplaceEntry, 0, len(builtinCatalog))
+	for _, m := range builtinCatalog {
+		entries = append(entries, MarketplaceEntry{
+			Manifest:  m,
+			Installed: installedIDs[m.ID],
+		})
+	}
+	return entries, nil
+}
+
+// InstallPlugin writes the manifest for the given plugin ID to disk.
+// Returns an error if the plugin is not in the catalog.
+func InstallPlugin(id string) error {
+	var target *Manifest
+	for i := range builtinCatalog {
+		if builtinCatalog[i].ID == id {
+			target = &builtinCatalog[i]
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("plugin %q not found in marketplace", id)
+	}
+	pluginsDir, err := GetPluginsDir()
+	if err != nil {
+		return err
+	}
+	pluginDir := filepath.Join(pluginsDir, id)
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		return fmt.Errorf("failed to create plugin directory: %w", err)
+	}
+	data, err := json.MarshalIndent(target, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal plugin manifest: %w", err)
+	}
+	return os.WriteFile(filepath.Join(pluginDir, manifestFileName), data, 0644)
+}
+
+// UninstallPlugin removes the plugin directory for the given ID.
+func UninstallPlugin(id string) error {
+	pluginsDir, err := GetPluginsDir()
+	if err != nil {
+		return err
+	}
+	pluginDir := filepath.Join(pluginsDir, id)
+	if _, err := os.Stat(pluginDir); os.IsNotExist(err) {
+		return fmt.Errorf("plugin %q is not installed", id)
+	}
+	return os.RemoveAll(pluginDir)
 }
 
 // ListPlugins scans <dataDir>/plugins/ and returns all valid, enabled manifests.

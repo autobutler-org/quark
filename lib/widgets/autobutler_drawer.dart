@@ -9,6 +9,7 @@ enum AutobutlerDrawerSection {
   devices,
   health,
   settings,
+  plugins,
   plugin,
 }
 
@@ -21,6 +22,7 @@ class AutobutlerDrawer extends StatelessWidget {
     this.onTapDevices,
     this.onTapHealth,
     this.onTapSettings,
+    this.onTapPlugins,
     this.plugins = const [],
     this.activePluginId,
     this.onTapPlugin,
@@ -32,6 +34,7 @@ class AutobutlerDrawer extends StatelessWidget {
   final FutureOr<void> Function()? onTapDevices;
   final FutureOr<void> Function()? onTapHealth;
   final FutureOr<void> Function()? onTapSettings;
+  final FutureOr<void> Function()? onTapPlugins;
 
   /// Plugin manifests to append to the drawer after the built-in items.
   final List<PluginManifest> plugins;
@@ -99,7 +102,15 @@ class AutobutlerDrawer extends StatelessWidget {
               onTapSettings?.call();
             },
           ),
-          // Plugin nav items appended after built-in items.
+          ListTile(
+            leading: const Icon(Icons.extension_outlined),
+            title: const Text('Plugins'),
+            selected: activeSection == AutobutlerDrawerSection.plugins,
+            onTap: () {
+              onTapPlugins?.call();
+            },
+          ),
+          // Installed plugin nav items appended after built-in items.
           for (final plugin in plugins)
             if (plugin.contributes.navItem != null)
               ListTile(
@@ -114,6 +125,9 @@ class AutobutlerDrawer extends StatelessWidget {
       ),
     );
   }
+
+  /// Public accessor so external widgets can resolve icon names.
+  static IconData iconFromName(String name) => _iconFromName(name);
 
   /// Resolves a Material icon by name string.
   /// Falls back to [Icons.extension] for unknown names.

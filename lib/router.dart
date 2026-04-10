@@ -6,6 +6,7 @@ import 'package:autobutler/pages/login_page.dart';
 import 'package:autobutler/pages/photos_page.dart';
 import 'package:autobutler/pages/recover_page.dart';
 import 'package:autobutler/pages/settings_page.dart';
+import 'package:autobutler/pages/plugins_page.dart';
 import 'package:autobutler/pages/setup_page.dart';
 import 'package:autobutler/plugins/plugin_registry.dart';
 import 'package:autobutler/services/app_settings.dart';
@@ -25,6 +26,7 @@ class AppRoutes {
   static const devices = '/devices';
   static const health = '/health';
   static const settings = '/settings';
+  static const plugins = '/plugins';
   static const setup = '/setup';
   static const login = '/login';
   static const recover = '/recover';
@@ -98,6 +100,10 @@ GoRouter buildRouter({List<PluginManifest> plugins = const []}) {
       GoRoute(
         path: AppRoutes.settings,
         builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.plugins,
+        builder: (context, state) => const PluginsPage(),
       ),
       GoRoute(
         path: AppRoutes.setup,

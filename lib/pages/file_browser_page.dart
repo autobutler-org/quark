@@ -1048,6 +1048,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           onTapSettings: () {
             context.go(AppRoutes.settings);
           },
+          onTapPlugins: () {
+            context.go(AppRoutes.plugins);
+          },
           onTapPlugin: (plugin) {
             context.go(AppRoutes.pluginPath(plugin.id));
           },
