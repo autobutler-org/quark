@@ -111,3 +111,5 @@ sable/
 ## ExoKomodo's personal dev context (AI co-developer workspace)
 exokomodo/
 linux/flutter/ephemeral/
+logs
+memory/
