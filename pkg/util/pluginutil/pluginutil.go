@@ -163,8 +163,8 @@ func UninstallPlugin(id string) error {
 		return err
 	}
 	pluginDir := filepath.Join(pluginsDir, id)
-	if _, err := os.Stat(pluginDir); os.IsNotExist(err) {
-		return fmt.Errorf("plugin %q is not installed", id)
+	if _, statErr := os.Stat(pluginDir); os.IsNotExist(statErr) {
+		return fmt.Errorf("plugin %q is not installed (looked in %s)", id, pluginDir)
 	}
 	return os.RemoveAll(pluginDir)
 }

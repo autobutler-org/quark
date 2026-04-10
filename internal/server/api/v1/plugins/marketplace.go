@@ -1,6 +1,9 @@
 package v1_plugins
 
 import (
+	"log/slog"
+	"strings"
+
 	"github.com/autobutler-org/autobutler/pkg/util/pluginutil"
 	"github.com/autobutler-org/autobutler/pkg/util/serverutil"
 	"github.com/gin-gonic/gin"
@@ -34,8 +37,10 @@ func listMarketplace(c *gin.Context) *serverutil.Response {
 // @Router /plugins/{id}/install [post]
 func installPlugin(c *gin.Context) *serverutil.Response {
 	id := c.Param("id")
+	slog.Info("plugins: install requested", "id", id)
 	if err := pluginutil.InstallPlugin(id); err != nil {
-		if isNotFoundError(err) {
+		slog.Error("plugins: install failed", "id", id, "err", err)
+		if strings.Contains(err.Error(), "not found in marketplace") {
 			return serverutil.BadRequest(err)
 		}
 		return serverutil.InternalServerError(err)
@@ -55,8 +60,10 @@ func installPlugin(c *gin.Context) *serverutil.Response {
 // @Router /plugins/{id} [delete]
 func uninstallPlugin(c *gin.Context) *serverutil.Response {
 	id := c.Param("id")
+	slog.Info("plugins: uninstall requested", "id", id)
 	if err := pluginutil.UninstallPlugin(id); err != nil {
-		if isNotFoundError(err) {
+		slog.Error("plugins: uninstall failed", "id", id, "err", err)
+		if isNotInstalledError(err) {
 			return serverutil.BadRequest(err)
 		}
 		return serverutil.InternalServerError(err)
@@ -64,26 +71,9 @@ func uninstallPlugin(c *gin.Context) *serverutil.Response {
 	return serverutil.Ok()
 }
 
-// isNotFoundError checks whether an error is a "not found" kind.
-func isNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return len(msg) > 0 && (contains(msg, "not found") || contains(msg, "not installed"))
-}
-
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsAt(s, sub))
-}
-
-func containsAt(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
+// isNotInstalledError returns true only when the plugin was not found on disk.
+func isNotInstalledError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "is not installed")
 }
 
 var listMarketplaceRoute = serverutil.ApiRoute("GET", "/plugins/marketplace", listMarketplace)
