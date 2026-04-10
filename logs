@@ -1,0 +1,9 @@
+WARNING: Google OAuth environment variables not set
+Required: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URL
+Google OAuth configured with redirect URL: 
+panic: failed to initialize cirrus directory: failed to create cirrus directory: mkdir /home/butler/autobutler: not a directory
+
+goroutine 1 [running]:
+github.com/autobutler-org/autobutler/internal/server/api/v1/migration.init.0()
+	/tmp/autobutler/internal/server/api/v1/migration/google_migration.go:28 +0x1bc
+exit status 2

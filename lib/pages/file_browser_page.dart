@@ -15,6 +15,7 @@ import 'package:autobutler/utils/file_browser_dialog_utils.dart';
 import 'package:autobutler/utils/file_browser_drag_config.dart';
 import 'package:autobutler/utils/file_browser_path_utils.dart';
 import 'package:autobutler/utils/safe_set_state_mixin.dart';
+import 'package:autobutler/services/plugin_state.dart';
 import 'package:autobutler/widgets/autobutler_drawer.dart';
 import 'package:autobutler/widgets/device_upload_picker.dart';
 import 'package:autobutler/widgets/file_browser/file_browser_header.dart';
@@ -1027,23 +1028,30 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: AutobutlerDrawer(
-        activeSection: AutobutlerDrawerSection.cirrus,
-        onTapCirrus: () {
-          Navigator.of(context).pop();
-        },
-        onTapPhotos: () {
-          context.go(AppRoutes.photos);
-        },
-        onTapDevices: () {
-          context.go(AppRoutes.devices);
-        },
-        onTapHealth: () {
-          context.go(AppRoutes.health);
-        },
-        onTapSettings: () {
-          context.go(AppRoutes.settings);
-        },
+      drawer: ListenableBuilder(
+        listenable: PluginState.instance,
+        builder: (context, _) => AutobutlerDrawer(
+          activeSection: AutobutlerDrawerSection.cirrus,
+          plugins: PluginState.instance.plugins,
+          onTapCirrus: () {
+            Navigator.of(context).pop();
+          },
+          onTapPhotos: () {
+            context.go(AppRoutes.photos);
+          },
+          onTapDevices: () {
+            context.go(AppRoutes.devices);
+          },
+          onTapHealth: () {
+            context.go(AppRoutes.health);
+          },
+          onTapSettings: () {
+            context.go(AppRoutes.settings);
+          },
+          onTapPlugin: (plugin) {
+            context.go(AppRoutes.pluginPath(plugin.id));
+          },
+        ),
       ),
       body: Column(
         children: [

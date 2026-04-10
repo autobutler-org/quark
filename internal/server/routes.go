@@ -15,6 +15,7 @@ import (
 	v1_metrics "github.com/autobutler-org/autobutler/internal/server/api/v1/metrics"
 	v1_migration "github.com/autobutler-org/autobutler/internal/server/api/v1/migration"
 	v1_photos "github.com/autobutler-org/autobutler/internal/server/api/v1/photos"
+	v1_plugins "github.com/autobutler-org/autobutler/internal/server/api/v1/plugins"
 	v1_settings "github.com/autobutler-org/autobutler/internal/server/api/v1/settings"
 	v1_smb "github.com/autobutler-org/autobutler/internal/server/api/v1/smb"
 	v1_storage "github.com/autobutler-org/autobutler/internal/server/api/v1/storage"
@@ -22,6 +23,7 @@ import (
 	v1_version "github.com/autobutler-org/autobutler/internal/server/api/v1/version"
 	v1_webdav "github.com/autobutler-org/autobutler/internal/server/api/v1/webdav"
 	"github.com/autobutler-org/autobutler/pkg/botel/system"
+	"github.com/autobutler-org/autobutler/pkg/util/pluginutil"
 	"github.com/autobutler-org/autobutler/pkg/util/serverutil"
 	"github.com/autobutler-org/autobutler/pkg/util/storageutil"
 
@@ -33,6 +35,9 @@ import (
 var public embed.FS
 
 func setupRoutes(engine *gin.Engine, systemCollector *system.Collector) {
+	if err := pluginutil.EnsureHelloPlugin(); err != nil {
+		slog.Warn("plugins: failed to seed hello plugin", "err", err)
+	}
 	setupRouters(engine, systemCollector)
 	setupWebDAV(engine)
 	setupStaticRoutes(engine)
@@ -50,6 +55,7 @@ func setupRouters(engine *gin.Engine, systemCollector *system.Collector) {
 		v1_metrics.NewRouter(),
 		v1_migration.NewRouter(),
 		v1_photos.NewRouter(),
+		v1_plugins.NewRouter(),
 		v1_settings.NewRouter(),
 		v1_storage.NewRouter(),
 		v1_thumbnails.NewRouter(),
