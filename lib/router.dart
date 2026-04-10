@@ -8,7 +8,7 @@ import 'package:autobutler/pages/recover_page.dart';
 import 'package:autobutler/pages/settings_page.dart';
 import 'package:autobutler/pages/plugins_page.dart';
 import 'package:autobutler/pages/setup_page.dart';
-import 'package:autobutler/plugins/plugin_registry.dart';
+import 'package:autobutler/widgets/plugin_renderer.dart';
 import 'package:autobutler/services/app_settings.dart';
 import 'package:autobutler/services/auth_service.dart';
 import 'package:flutter/material.dart';
@@ -55,11 +55,9 @@ List<RouteBase> buildPluginRoutes(List<PluginManifest> plugins) {
         GoRoute(
           path: AppRoutes.pluginPath(plugin.id),
           builder: (context, state) {
-            final builder = pluginPageRegistry[plugin.id];
-            if (builder != null) return builder(context);
-            return Scaffold(
-              appBar: AppBar(title: Text(plugin.name)),
-              body: Center(child: Text('Plugin "${plugin.name}" loaded.')),
+            return PluginPage(
+              name: plugin.name,
+              pageNode: plugin.contributes.page,
             );
           },
         ),

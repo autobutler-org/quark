@@ -18,10 +18,25 @@ type NavItem struct {
 	Route string `json:"route"`
 }
 
+// PluginNode is a node in the declarative widget tree.
+// The "type" field determines rendering; supported types:
+//   centered, column, row, text, icon, padding, sized_box, button
+type PluginNode struct {
+	Type     string            `json:"type"`
+	Value    string            `json:"value,omitempty"`    // text content / icon name
+	Style    string            `json:"style,omitempty"`    // text: headline|title|body|caption
+	Size     float64           `json:"size,omitempty"`     // icon size / sized_box dimension
+	URL      string            `json:"url,omitempty"`      // button: launch URL
+	Padding  float64           `json:"padding,omitempty"`  // padding: all-sides shorthand
+	Children []PluginNode      `json:"children,omitempty"`
+	Attrs    map[string]string `json:"attrs,omitempty"`    // future extension bag
+}
+
 // Contributes describes what UI slots the plugin fills.
 type Contributes struct {
-	NavItem       *NavItem `json:"navItem,omitempty"`
-	SettingsPanel bool     `json:"settingsPanel,omitempty"`
+	NavItem       *NavItem    `json:"navItem,omitempty"`
+	SettingsPanel bool        `json:"settingsPanel,omitempty"`
+	Page          *PluginNode `json:"page,omitempty"`
 }
 
 // Manifest is the on-disk description of a plugin.
@@ -68,6 +83,25 @@ var builtinCatalog = []Manifest{
 				Label: "Hello",
 				Icon:  "waving_hand",
 				Route: "/plugins/hello",
+			},
+			Page: &PluginNode{
+				Type: "centered",
+				Children: []PluginNode{
+					{
+						Type:  "icon",
+						Value: "waving_hand",
+						Size:  64,
+					},
+					{
+						Type:  "padding",
+						Padding: 12,
+					},
+					{
+						Type:  "text",
+						Value: "Hello, World!",
+						Style: "headline",
+					},
+				},
 			},
 		},
 	},
