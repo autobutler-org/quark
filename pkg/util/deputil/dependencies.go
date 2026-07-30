@@ -7,6 +7,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
+	"github.com/autobutler-org/quark/pkg/util/pluginutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/vaultcrypto"
 	"github.com/autobutler-org/quark/pkg/util/workerutil"
@@ -29,8 +30,10 @@ type Dependencies interface {
 	WithHealthDatabase(healthDatabase *db.DatabaseRaw) Dependencies
 	WithIOSemaphore(sem *iosemutil.Semaphore) Dependencies
 	MetadataStore() vfs.MetadataStore
+	PluginHost() *pluginutil.Host
 	VFSRegistry() vfs.Registry
 	WithMetadataStore(s vfs.MetadataStore) Dependencies
+	WithPluginHost(h *pluginutil.Host) Dependencies
 	WithStorageService(s *storageutil.StorageService) Dependencies
 	WithVFSRegistry(r vfs.Registry) Dependencies
 	SetVaultDB(database *db.DatabaseSqlc)
@@ -45,6 +48,7 @@ type dependencies struct {
 	fileIndex      *storageutil.FileIndex
 	healthDatabase *db.DatabaseRaw
 	ioSemaphore    *iosemutil.Semaphore
+	pluginHost     *pluginutil.Host
 	storageService *storageutil.StorageService
 	vaultDB        *db.DatabaseSqlc
 	vaultDBMu      sync.RWMutex
@@ -179,6 +183,15 @@ func (d *dependencies) WithVaultSession(session *vaultcrypto.VaultSession) Depen
 
 func (d *dependencies) MetadataStore() vfs.MetadataStore {
 	return d.metadataStore
+}
+
+func (d *dependencies) PluginHost() *pluginutil.Host {
+	return d.pluginHost
+}
+
+func (d *dependencies) WithPluginHost(h *pluginutil.Host) Dependencies {
+	d.pluginHost = h
+	return d
 }
 
 func (d *dependencies) WithMetadataStore(s vfs.MetadataStore) Dependencies {

@@ -24,6 +24,7 @@ import (
 	v0_vault "github.com/autobutler-org/quark/internal/server/api/v0/vault"
 	v0_version "github.com/autobutler-org/quark/internal/server/api/v0/version"
 	v0_videos "github.com/autobutler-org/quark/internal/server/api/v0/videos"
+	v1_plugins "github.com/autobutler-org/quark/internal/server/api/v1/plugins"
 	v1_vfs "github.com/autobutler-org/quark/internal/server/api/v1/vfs"
 	"github.com/autobutler-org/quark/internal/server/middleware"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
@@ -46,6 +47,7 @@ func setupRouters(engine *gin.Engine, systemCollector *healthutil.Collector, dep
 	v1group := engine.Group("/api/v1")
 	v1Routers := []serverutil.Router{
 		v1_vfs.NewRouter(),
+		v1_plugins.NewRouter(),
 	}
 	for _, router := range v1Routers {
 		serverutil.RegisterRouterWithGroup(v1group, router)
