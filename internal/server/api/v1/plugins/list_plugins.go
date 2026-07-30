@@ -62,7 +62,7 @@ var listPluginsRoute = serverutil.ApiRoute("GET", "/plugins", listPlugins)
 // @Success 200 "Proxied response"
 // @Failure 404 {object} serverutil.Response
 // @Security BearerAuth
-// @Router /plugins/{id}/{path} [any]
+// @Router /plugins/{id}/{path} [get]
 func proxyPlugin(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
 	if !ok {
