@@ -12,6 +12,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
+	"github.com/autobutler-org/quark/pkg/util/pluginutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/repairutil"
 	"github.com/autobutler-org/quark/pkg/util/sshutil"
@@ -66,8 +67,10 @@ type Dependencies interface {
 	WithRepairSystem(system repairutil.System) Dependencies
 	WithSSHSystem(system sshutil.System) Dependencies
 	MetadataStore() vfs.MetadataStore
+	PluginHost() *pluginutil.Host
 	VFSRegistry() vfs.Registry
 	WithMetadataStore(s vfs.MetadataStore) Dependencies
+	WithPluginHost(h *pluginutil.Host) Dependencies
 	WithStorageService(s *storageutil.StorageService) Dependencies
 	WithUploadSessions(store *uploadutil.SessionStore) Dependencies
 	WithVFSRegistry(r vfs.Registry) Dependencies
