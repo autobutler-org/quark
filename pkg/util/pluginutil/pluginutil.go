@@ -5,9 +5,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/autobutler-org/autobutler/pkg/util/storageutil"
 )
+
+// pluginIDPattern restricts plugin IDs to safe filesystem identifiers.
+// Path components like "..", absolute paths, and shell metacharacters
+// are all rejected before any filepath.Join call.
+var pluginIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+// validatePluginID returns an error if id contains characters that could
+// escape the plugins directory when used in a filepath.Join.
+func validatePluginID(id string) error {
+	if !pluginIDPattern.MatchString(id) {
+		return fmt.Errorf("invalid plugin id %q: must match [a-zA-Z0-9_-]+", id)
+	}
+	return nil
+}
 
 const manifestFileName = "manifest.json"
 
@@ -130,8 +145,11 @@ func ListMarketplace() ([]MarketplaceEntry, error) {
 }
 
 // InstallPlugin writes the manifest for the given plugin ID to disk.
-// Returns an error if the plugin is not in the catalog.
+// Returns an error if the plugin is not in the catalog or if id is malformed.
 func InstallPlugin(id string) error {
+	if err := validatePluginID(id); err != nil {
+		return err
+	}
 	var target *Manifest
 	for i := range builtinCatalog {
 		if builtinCatalog[i].ID == id {
@@ -158,14 +176,30 @@ func InstallPlugin(id string) error {
 }
 
 // UninstallPlugin removes the plugin directory for the given ID.
+// id must be in the builtin catalog and must match [a-zA-Z0-9_-]+ to
+// prevent path-traversal attacks.
 func UninstallPlugin(id string) error {
+	if err := validatePluginID(id); err != nil {
+		return err
+	}
+	// Require the plugin to be in the known catalog before touching the FS.
+	var found bool
+	for _, m := range builtinCatalog {
+		if m.ID == id {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("plugin %q is not a known plugin", id)
+	}
 	pluginsDir, err := GetPluginsDir()
 	if err != nil {
 		return err
 	}
 	pluginDir := filepath.Join(pluginsDir, id)
 	if _, statErr := os.Stat(pluginDir); os.IsNotExist(statErr) {
-		return fmt.Errorf("plugin %q is not installed (looked in %s)", id, pluginDir)
+		return fmt.Errorf("plugin %q is not installed", id)
 	}
 	return os.RemoveAll(pluginDir)
 }

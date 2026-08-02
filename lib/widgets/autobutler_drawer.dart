@@ -127,11 +127,11 @@ class AutobutlerDrawer extends StatelessWidget {
   }
 
   /// Public accessor so external widgets can resolve icon names.
-  static IconData iconFromName(String name) => _iconFromName(name);
-
   /// Resolves a Material icon by name string.
+  /// This is the single source of truth for icon name → [IconData] mapping;
+  /// both the drawer and [PluginRenderer] use it.
   /// Falls back to [Icons.extension] for unknown names.
-  static IconData _iconFromName(String name) {
+  static IconData iconFromName(String name) {
     const map = <String, IconData>{
       'waving_hand': Icons.waving_hand,
       'extension': Icons.extension,
@@ -140,6 +140,12 @@ class AutobutlerDrawer extends StatelessWidget {
       'folder': Icons.folder,
       'photo': Icons.photo,
       'health': Icons.monitor_heart_outlined,
+      'home': Icons.home,
+      'star': Icons.star,
+      'info': Icons.info_outline,
+      'check': Icons.check_circle_outline,
+      'warning': Icons.warning_amber_outlined,
+      'error': Icons.error_outline,
     };
     return map[name] ?? Icons.extension;
   }

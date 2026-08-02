@@ -17,6 +17,7 @@
 // ---------------------------------------------------------------------------
 
 import 'package:autobutler/models/plugin_manifest.dart';
+import 'package:autobutler/widgets/autobutler_drawer.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -122,25 +123,9 @@ class PluginRenderer extends StatelessWidget {
   }
 
   /// Resolves a Material icon by name string.
-  /// Extend this map as needed. Falls back to [Icons.extension].
-  static IconData _resolveIcon(String name) {
-    const map = <String, IconData>{
-      'waving_hand': Icons.waving_hand,
-      'extension': Icons.extension,
-      'download': Icons.download,
-      'settings': Icons.settings,
-      'folder': Icons.folder,
-      'photo': Icons.photo,
-      'health': Icons.monitor_heart_outlined,
-      'home': Icons.home,
-      'star': Icons.star,
-      'info': Icons.info_outline,
-      'check': Icons.check_circle_outline,
-      'warning': Icons.warning_amber_outlined,
-      'error': Icons.error_outline,
-    };
-    return map[name] ?? Icons.extension;
-  }
+  /// Delegates to [AutobutlerDrawer.iconFromName] — single source of truth.
+  static IconData _resolveIcon(String name) =>
+      AutobutlerDrawer.iconFromName(name);
 
   static Future<void> _launch(String url) async {
     final uri = Uri.tryParse(url);
