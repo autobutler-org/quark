@@ -20,16 +20,17 @@ type NavItem struct {
 
 // PluginNode is a node in the declarative widget tree.
 // The "type" field determines rendering; supported types:
-//   centered, column, row, text, icon, padding, sized_box, button
+//
+//	centered, column, row, text, icon, padding, sized_box, button
 type PluginNode struct {
 	Type     string            `json:"type"`
-	Value    string            `json:"value,omitempty"`    // text content / icon name
-	Style    string            `json:"style,omitempty"`    // text: headline|title|body|caption
-	Size     float64           `json:"size,omitempty"`     // icon size / sized_box dimension
-	URL      string            `json:"url,omitempty"`      // button: launch URL
-	Padding  float64           `json:"padding,omitempty"`  // padding: all-sides shorthand
+	Value    string            `json:"value,omitempty"`   // text content / icon name
+	Style    string            `json:"style,omitempty"`   // text: headline|title|body|caption
+	Size     float64           `json:"size,omitempty"`    // icon size / sized_box dimension
+	URL      string            `json:"url,omitempty"`     // button: launch URL
+	Padding  float64           `json:"padding,omitempty"` // padding: all-sides shorthand
 	Children []PluginNode      `json:"children,omitempty"`
-	Attrs    map[string]string `json:"attrs,omitempty"`    // future extension bag
+	Attrs    map[string]string `json:"attrs,omitempty"` // future extension bag
 }
 
 // Contributes describes what UI slots the plugin fills.
@@ -41,14 +42,14 @@ type Contributes struct {
 
 // Manifest is the on-disk description of a plugin.
 type Manifest struct {
-	ID             string      `json:"id"`
-	Name           string      `json:"name"`
-	Version        string      `json:"version"`
-	Description    string      `json:"description"`
-	Author         string      `json:"author"`
-	Enabled        bool        `json:"enabled"`
-	Contributes    Contributes `json:"contributes"`
-	MinAppVersion  string      `json:"minAppVersion,omitempty"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Version       string      `json:"version"`
+	Description   string      `json:"description"`
+	Author        string      `json:"author"`
+	Enabled       bool        `json:"enabled"`
+	Contributes   Contributes `json:"contributes"`
+	MinAppVersion string      `json:"minAppVersion,omitempty"`
 }
 
 // GetPluginsDir returns (and creates) <dataDir>/plugins.
@@ -93,7 +94,7 @@ var builtinCatalog = []Manifest{
 						Size:  64,
 					},
 					{
-						Type:  "padding",
+						Type:    "padding",
 						Padding: 12,
 					},
 					{
