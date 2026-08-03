@@ -14,6 +14,7 @@ import (
 
 	docs "github.com/autobutler-org/autobutler/docs/swagger"
 	"github.com/autobutler-org/autobutler/internal/db"
+	v0_videos "github.com/autobutler-org/autobutler/internal/server/api/v0/videos"
 	"github.com/autobutler-org/autobutler/internal/server/middleware"
 	"github.com/autobutler-org/autobutler/pkg/backup"
 	"github.com/autobutler-org/autobutler/pkg/util/authutil"
@@ -234,6 +235,13 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 	syncWorker, err := setupServices(deps)
 	if err != nil {
 		return fmt.Errorf("failed to setup services: %w", err)
+	}
+
+	// Start the video job worker (transcode queue).
+	videoWorkerCtx, videoWorkerCancel := context.WithCancel(context.Background())
+	defer videoWorkerCancel()
+	if filesDir, dirErr := storageutil.GetCirrusDir(); dirErr == nil {
+		go v0_videos.StartWorker(videoWorkerCtx, deps.Database(), filesDir)
 	}
 
 	// In TLS mode the server binds to HTTPS_PORT (default 443); in insecure
