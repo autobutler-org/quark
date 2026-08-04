@@ -1639,6 +1639,12 @@ definitions:
       remoteUrl:
         description: RemoteURL is set only when Connected.
         type: string
+      tailscaleHostname:
+        description: |-
+          TailscaleHostname is the node's fully-qualified *.ts.net DNS name when
+          Tailscale is connected and the Quark is reachable via a Let's Encrypt
+          certificate. Empty when not connected.
+        type: string
     type: object
   v0_settings.SettingsJSON:
     properties:

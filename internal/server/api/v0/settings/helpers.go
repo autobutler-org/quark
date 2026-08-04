@@ -24,10 +24,11 @@ func callerID(c *gin.Context) (int64, error) {
 func remoteAccessResponse(enabled bool) RemoteAccessResponse {
 	status := remoteutil.Status()
 	return RemoteAccessResponse{
-		Enabled:   enabled,
-		Connected: status.Connected,
-		RemoteURL: status.RemoteURL,
-		Error:     status.Error,
+		Enabled:           enabled,
+		Connected:         status.Connected,
+		RemoteURL:         status.RemoteURL,
+		TailscaleHostname: remoteutil.TailscaleHostname(),
+		Error:             status.Error,
 	}
 }
 

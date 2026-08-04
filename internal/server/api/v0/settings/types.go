@@ -24,6 +24,10 @@ type RemoteAccessResponse struct {
 	Connected bool `json:"connected"`
 	// RemoteURL is set only when Connected.
 	RemoteURL string `json:"remoteUrl,omitempty"`
+	// TailscaleHostname is the node's fully-qualified *.ts.net DNS name when
+	// Tailscale is connected and the Quark is reachable via a Let's Encrypt
+	// certificate. Empty when not connected.
+	TailscaleHostname string `json:"tailscaleHostname,omitempty"`
 	// Error is the last start failure, a diagnostic for the log reader rather
 	// than copy for a user.
 	Error string `json:"error,omitempty"`
