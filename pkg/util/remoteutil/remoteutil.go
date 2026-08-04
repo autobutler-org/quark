@@ -207,3 +207,60 @@ func StartProxy(localPort int, localTLS bool) error {
 	}()
 	return nil
 }
+
+// GetCertificate implements the tls.Config.GetCertificate callback. When
+// Tailscale is running it returns a Tailscale-managed Let's Encrypt certificate
+// for the node's *.ts.net hostname, falling back to the provided fallback
+// function (typically the self-signed cert) when not running or when the
+// ServerName in the ClientHelloInfo does not match the Tailscale hostname.
+//
+// Wire this into the server's tls.Config:
+//
+//	tlsCfg.GetCertificate = remoteutil.GetCertificate(selfSignedFallback)
+func GetCertificate(fallback func(*tls.ClientHelloInfo) (*tls.Certificate, error)) func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return func(hi *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		mu.Lock()
+		s := srv
+		mu.Unlock()
+		if s != nil {
+			lc, err := s.LocalClient()
+			if err == nil {
+				cert, err := lc.GetCertificate(hi)
+				if err == nil {
+					return cert, nil
+				}
+				// GetCertificate fails when the ServerName doesn't match the
+				// Tailscale hostname (e.g. a LAN client hitting the IP directly).
+				// Fall through to the self-signed cert.
+			}
+		}
+		if fallback != nil {
+			return fallback(hi)
+		}
+		return nil, fmt.Errorf("no certificate available")
+	}
+}
+
+// TailscaleHostname returns the node's fully-qualified *.ts.net hostname when
+// Tailscale is running, or "" if not connected.
+func TailscaleHostname() string {
+	mu.Lock()
+	if !running || srv == nil {
+		mu.Unlock()
+		return ""
+	}
+	s := srv
+	mu.Unlock()
+
+	lc, err := s.LocalClient()
+	if err != nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	st, err := lc.Status(ctx)
+	if err != nil || st.Self == nil {
+		return ""
+	}
+	return strings.TrimSuffix(st.Self.DNSName, ".")
+}

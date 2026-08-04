@@ -16,6 +16,10 @@ type RemoteAccessRequest struct {
 type RemoteAccessResponse struct {
 	Enabled   bool   `json:"enabled"`
 	RemoteURL string `json:"remoteUrl,omitempty"`
+	// TailscaleHostname is the node's fully-qualified *.ts.net DNS name when
+	// Tailscale is connected and the butler is reachable via a Let's Encrypt
+	// certificate. Empty when not connected.
+	TailscaleHostname string `json:"tailscaleHostname,omitempty"`
 }
 
 // getRemoteAccess godoc
@@ -28,8 +32,9 @@ type RemoteAccessResponse struct {
 var getRemoteAccessRoute = serverutil.ApiRoute(
 	"GET", "/settings/remote-access", func(c *gin.Context) *serverutil.Response {
 		return serverutil.Ok().WithData(RemoteAccessResponse{
-			Enabled:   remoteutil.IsRunning(),
-			RemoteURL: remoteutil.RemoteURL(),
+			Enabled:           remoteutil.IsRunning(),
+			RemoteURL:         remoteutil.RemoteURL(),
+			TailscaleHostname: remoteutil.TailscaleHostname(),
 		})
 	},
 )
@@ -49,8 +54,9 @@ var enableRemoteAccessRoute = serverutil.ApiRoute(
 	"POST", "/settings/remote-access", func(c *gin.Context) *serverutil.Response {
 		if remoteutil.IsRunning() {
 			return serverutil.Ok().WithData(RemoteAccessResponse{
-				Enabled:   true,
-				RemoteURL: remoteutil.RemoteURL(),
+				Enabled:           true,
+				RemoteURL:         remoteutil.RemoteURL(),
+				TailscaleHostname: remoteutil.TailscaleHostname(),
 			})
 		}
 		var req RemoteAccessRequest
@@ -74,8 +80,9 @@ var enableRemoteAccessRoute = serverutil.ApiRoute(
 			return serverutil.InternalServerError(err)
 		}
 		return serverutil.Ok().WithData(RemoteAccessResponse{
-			Enabled:   true,
-			RemoteURL: remoteutil.RemoteURL(),
+			Enabled:           true,
+			RemoteURL:         remoteutil.RemoteURL(),
+			TailscaleHostname: remoteutil.TailscaleHostname(),
 		})
 	},
 )
