@@ -25,6 +25,12 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
   String? _errorMessage;
   bool _isUnsupportedFormat = false;
   bool _downloading = false;
+  bool _savingFrame = false;
+  bool _trimMode = false;
+  bool _exportingTrim = false;
+  // Trim handles as fractions [0.0, 1.0] of total duration.
+  double _trimStart = 0.0;
+  double _trimEnd = 1.0;
 
   static const _nonWebNativeExtensions = {
     '.mov',
@@ -179,6 +185,163 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
     }
   }
 
+  Future<void> _showConvertDialog() async {
+    final params = widget.url.queryParameters;
+    final relPath = params['filePath'] ?? '';
+    final serial = params['serial'];
+    if (relPath.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot convert: file path unknown')),
+      );
+      return;
+    }
+
+    final presets = [
+      ('Compatible MP4 (720p)', 'compatible'),
+      ('Small MP4 (480p)', 'small'),
+      ('Web WebM (720p)', 'web'),
+    ];
+
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Convert Video'),
+        children: [
+          for (final (label, preset) in presets)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(ctx).pop(preset),
+              child: Text(label),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (chosen == null || !mounted) return;
+
+    try {
+      final jobId = await CirrusService.transcodeVideo(
+        relPath,
+        serial: serial,
+        preset: chosen,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Conversion queued (job #$jobId)')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Convert failed: $e')));
+    }
+  }
+
+  void _enterTrimMode() {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    controller.pause();
+    setState(() {
+      _trimMode = true;
+      _trimStart = 0.0;
+      _trimEnd = 1.0;
+    });
+  }
+
+  Future<void> _exportTrim() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    if (_exportingTrim) return;
+
+    final params = widget.url.queryParameters;
+    final relPath = params['filePath'] ?? '';
+    final serial = params['serial'];
+    if (relPath.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot trim: file path unknown')),
+      );
+      return;
+    }
+
+    final totalMs = controller.value.duration.inMilliseconds;
+    final startMs = (_trimStart * totalMs).round();
+    final endMs = (_trimEnd * totalMs).round();
+
+    setState(() => _exportingTrim = true);
+    try {
+      final savedPath = await CirrusService.trimVideo(
+        relPath,
+        serial: serial,
+        startMs: startMs,
+        endMs: endMs,
+      );
+      if (!mounted) return;
+      final fileName = savedPath.split('/').last;
+      setState(() {
+        _trimMode = false;
+        _trimStart = 0.0;
+        _trimEnd = 1.0;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Clip saved as $fileName')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Trim failed: $e')));
+    } finally {
+      if (mounted) setState(() => _exportingTrim = false);
+    }
+  }
+
+  Future<void> _saveFrame() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    if (_savingFrame) return;
+
+    // Derive relPath and serial from the media URL query parameters.
+    final params = widget.url.queryParameters;
+    final relPath = params['filePath'] ?? '';
+    final serial = params['serial'];
+    if (relPath.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot save frame: file path unknown')),
+      );
+      return;
+    }
+
+    final wasPlaying = controller.value.isPlaying;
+    if (wasPlaying) await controller.pause();
+
+    final positionMs = controller.value.position.inMilliseconds;
+
+    if (!mounted) return;
+    setState(() => _savingFrame = true);
+    try {
+      final savedPath = await CirrusService.extractVideoFrame(
+        relPath,
+        serial: serial,
+        timestampMs: positionMs,
+      );
+      if (!mounted) return;
+      final fileName = savedPath.split('/').last;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Frame saved as $fileName')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Save frame failed: $e')));
+    } finally {
+      if (mounted) setState(() => _savingFrame = false);
+      if (wasPlaying && _controller != null) await _controller!.play();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
@@ -186,7 +349,60 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.name),
-        actions: const [ThemeToggleButton()],
+        actions: [
+          if (_exportingTrim)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (_trimMode) ...[
+            TextButton(
+              onPressed: _exportTrim,
+              child: const Text(
+                'Save Clip',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+            TextButton(
+              onPressed: () => setState(() {
+                _trimMode = false;
+                _trimStart = 0.0;
+                _trimEnd = 1.0;
+              }),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+          ] else if (!_savingFrame)
+            PopupMenuButton<String>(
+              tooltip: 'More options',
+              onSelected: (action) {
+                if (action == 'saveFrame') _saveFrame();
+                if (action == 'trim') _enterTrimMode();
+                if (action == 'convert') _showConvertDialog();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'saveFrame', child: Text('Save Frame')),
+                PopupMenuItem(value: 'trim', child: Text('Trim Clip')),
+                PopupMenuItem(value: 'convert', child: Text('Convert…')),
+              ],
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          const ThemeToggleButton(),
+        ],
       ),
       body: Center(
         child: _loading
@@ -213,6 +429,11 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
             ? _InlineVideoPlayer(
                 controller: controller,
                 onToggleFullscreen: _openFullscreen,
+                trimMode: _trimMode,
+                trimStart: _trimStart,
+                trimEnd: _trimEnd,
+                onTrimStartChanged: (v) => setState(() => _trimStart = v),
+                onTrimEndChanged: (v) => setState(() => _trimEnd = v),
               )
             : const SizedBox.shrink(),
       ),
@@ -223,10 +444,20 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
 class _InlineVideoPlayer extends StatelessWidget {
   final VideoPlayerController controller;
   final VoidCallback onToggleFullscreen;
+  final bool trimMode;
+  final double trimStart;
+  final double trimEnd;
+  final ValueChanged<double>? onTrimStartChanged;
+  final ValueChanged<double>? onTrimEndChanged;
 
   const _InlineVideoPlayer({
     required this.controller,
     required this.onToggleFullscreen,
+    this.trimMode = false,
+    this.trimStart = 0.0,
+    this.trimEnd = 1.0,
+    this.onTrimStartChanged,
+    this.onTrimEndChanged,
   });
 
   @override
@@ -237,6 +468,11 @@ class _InlineVideoPlayer extends StatelessWidget {
         controller: controller,
         isFullscreen: false,
         onToggleFullscreen: onToggleFullscreen,
+        trimMode: trimMode,
+        trimStart: trimStart,
+        trimEnd: trimEnd,
+        onTrimStartChanged: onTrimStartChanged,
+        onTrimEndChanged: onTrimEndChanged,
       ),
     );
   }
@@ -311,12 +547,23 @@ class _VideoSurfaceWithControls extends StatefulWidget {
   final bool isFullscreen;
   final VoidCallback onToggleFullscreen;
   final Widget? topOverlay;
+  // Trim state passed down from _VideoViewerPageState.
+  final bool trimMode;
+  final double trimStart;
+  final double trimEnd;
+  final ValueChanged<double>? onTrimStartChanged;
+  final ValueChanged<double>? onTrimEndChanged;
 
   const _VideoSurfaceWithControls({
     required this.controller,
     required this.isFullscreen,
     required this.onToggleFullscreen,
     this.topOverlay,
+    this.trimMode = false,
+    this.trimStart = 0.0,
+    this.trimEnd = 1.0,
+    this.onTrimStartChanged,
+    this.onTrimEndChanged,
   });
 
   @override
@@ -461,6 +708,11 @@ class _VideoSurfaceWithControlsState extends State<_VideoSurfaceWithControls> {
                   widget.onToggleFullscreen();
                 },
                 onInteraction: _onControlsInteraction,
+                trimMode: widget.trimMode,
+                trimStart: widget.trimStart,
+                trimEnd: widget.trimEnd,
+                onTrimStartChanged: widget.onTrimStartChanged,
+                onTrimEndChanged: widget.onTrimEndChanged,
               ),
             ),
           ),
@@ -475,12 +727,22 @@ class _PlayerControls extends StatelessWidget {
   final bool isFullscreen;
   final VoidCallback onToggleFullscreen;
   final VoidCallback onInteraction;
+  final bool trimMode;
+  final double trimStart;
+  final double trimEnd;
+  final ValueChanged<double>? onTrimStartChanged;
+  final ValueChanged<double>? onTrimEndChanged;
 
   const _PlayerControls({
     required this.controller,
     required this.isFullscreen,
     required this.onToggleFullscreen,
     required this.onInteraction,
+    this.trimMode = false,
+    this.trimStart = 0.0,
+    this.trimEnd = 1.0,
+    this.onTrimStartChanged,
+    this.onTrimEndChanged,
   });
 
   Future<void> _seekBy(Duration delta) async {
@@ -537,7 +799,7 @@ class _PlayerControls extends StatelessWidget {
             children: [
               VideoProgressIndicator(
                 controller,
-                allowScrubbing: true,
+                allowScrubbing: !trimMode,
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 colors: VideoProgressColors(
                   playedColor: Theme.of(context).colorScheme.primary,
@@ -545,6 +807,24 @@ class _PlayerControls extends StatelessWidget {
                   backgroundColor: Colors.white24,
                 ),
               ),
+              if (trimMode)
+                _TrimBar(
+                  start: trimStart,
+                  end: trimEnd,
+                  duration: controller.value.duration,
+                  onStartChanged: (v) {
+                    onTrimStartChanged?.call(v);
+                    final ms = (v * controller.value.duration.inMilliseconds)
+                        .round();
+                    controller.seekTo(Duration(milliseconds: ms));
+                  },
+                  onEndChanged: (v) {
+                    onTrimEndChanged?.call(v);
+                    final ms = (v * controller.value.duration.inMilliseconds)
+                        .round();
+                    controller.seekTo(Duration(milliseconds: ms));
+                  },
+                ),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -641,6 +921,173 @@ class _PlayerControls extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// A trim range bar with two draggable handles (start and end).
+///
+/// Renders a track with:
+/// - A semi-transparent overlay for the un-selected regions (before start, after end)
+/// - A highlighted selected region between start and end
+/// - Draggable circular handles at start and end positions
+/// - Timestamp labels above each handle
+class _TrimBar extends StatelessWidget {
+  final double start; // 0.0–1.0 fraction
+  final double end; // 0.0–1.0 fraction
+  final Duration duration;
+  final ValueChanged<double> onStartChanged;
+  final ValueChanged<double> onEndChanged;
+
+  const _TrimBar({
+    required this.start,
+    required this.end,
+    required this.duration,
+    required this.onStartChanged,
+    required this.onEndChanged,
+  });
+
+  static const _handleSize = 24.0;
+  static const _trackHeight = 6.0;
+
+  String _formatMs(int ms) {
+    final d = Duration(milliseconds: ms);
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    final s = d.inSeconds % 60;
+    final tenths = (ms % 1000) ~/ 100;
+    if (h > 0) {
+      return '${h}h${m.toString().padLeft(2, '0')}m${s.toString().padLeft(2, '0')}s';
+    }
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}.$tenths';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final totalMs = duration.inMilliseconds;
+    final startLabel = _formatMs((start * totalMs).round());
+    final endLabel = _formatMs((end * totalMs).round());
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final startX = start * width;
+          final endX = end * width;
+
+          return SizedBox(
+            height: _handleSize + 20, // track + labels
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Track background
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: _trackHeight,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(_trackHeight / 2),
+                    ),
+                  ),
+                ),
+                // Selected region highlight
+                Positioned(
+                  left: startX,
+                  width: (endX - startX).clamp(0.0, width),
+                  child: Container(
+                    height: _trackHeight,
+                    color: primary.withValues(alpha: 0.7),
+                  ),
+                ),
+                // Start handle + label
+                Positioned(
+                  left: (startX - _handleSize / 2).clamp(
+                    0.0,
+                    width - _handleSize,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        startLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                        ),
+                      ),
+                      GestureDetector(
+                        onHorizontalDragUpdate: (details) {
+                          final newFrac = ((startX + details.delta.dx) / width)
+                              .clamp(0.0, end - 0.01);
+                          onStartChanged(newFrac);
+                        },
+                        child: Container(
+                          width: _handleSize,
+                          height: _handleSize,
+                          decoration: BoxDecoration(
+                            color: primary,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // End handle + label
+                Positioned(
+                  left: (endX - _handleSize / 2).clamp(
+                    0.0,
+                    width - _handleSize,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        endLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                        ),
+                      ),
+                      GestureDetector(
+                        onHorizontalDragUpdate: (details) {
+                          final newFrac = ((endX + details.delta.dx) / width)
+                              .clamp(start + 0.01, 1.0);
+                          onEndChanged(newFrac);
+                        },
+                        child: Container(
+                          width: _handleSize,
+                          height: _handleSize,
+                          decoration: BoxDecoration(
+                            color: primary,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

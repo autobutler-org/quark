@@ -850,6 +850,110 @@ class CirrusService with AuthenticatedService {
         .toList(growable: false);
   }
 
+  /// Extracts a still frame from a video at [timestampMs] milliseconds.
+  /// Returns the relative path of the saved JPEG file.
+  static Future<String> extractVideoFrame(
+    String relPath, {
+    String? serial,
+    required int timestampMs,
+  }) async {
+    final uri = _apiBaseUri.resolve('/api/v0/videos/extract-frame');
+    final body = jsonEncode({
+      'relPath': relPath,
+      'serial': serial?.trim() ?? '',
+      'timestampMs': timestampMs,
+    });
+    final response = await instance.authenticatedPost(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: body,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Failed to extract frame (${response.statusCode}): ${response.body}',
+      );
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return data['relPath'] as String;
+  }
+
+  /// Trims [relPath] to the range [startMs, endMs] and saves a new file.
+  /// Returns the relative path of the saved clip.
+  static Future<String> trimVideo(
+    String relPath, {
+    String? serial,
+    required int startMs,
+    required int endMs,
+  }) async {
+    final uri = _apiBaseUri.resolve('/api/v0/videos/trim');
+    final body = jsonEncode({
+      'relPath': relPath,
+      'serial': serial?.trim() ?? '',
+      'startMs': startMs,
+      'endMs': endMs,
+    });
+    final response = await instance.authenticatedPost(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: body,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Failed to trim video (${response.statusCode}): ${response.body}',
+      );
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return data['relPath'] as String;
+  }
+
+  /// Queues a background transcode job. Returns the job ID.
+  static Future<int> transcodeVideo(
+    String relPath, {
+    String? serial,
+    required String preset,
+  }) async {
+    final uri = _apiBaseUri.resolve('/api/v0/videos/transcode');
+    final body = jsonEncode({
+      'relPath': relPath,
+      'serial': serial?.trim() ?? '',
+      'preset': preset,
+    });
+    final response = await instance.authenticatedPost(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: body,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Failed to queue transcode (${response.statusCode}): ${response.body}',
+      );
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return data['jobId'] as int;
+  }
+
+  /// Gets the status of a video processing job.
+  static Future<Map<String, dynamic>> getVideoJob(int jobId) async {
+    final uri = _apiBaseUri.resolve('/api/v0/videos/jobs/$jobId');
+    final response = await instance.authenticatedGet(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to get job $jobId (${response.statusCode})');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// Lists recent video processing jobs.
+  static Future<List<Map<String, dynamic>>> listVideoJobs() async {
+    final uri = _apiBaseUri.resolve('/api/v0/videos/jobs');
+    final response = await instance.authenticatedGet(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to list video jobs (${response.statusCode})');
+    }
+    return (jsonDecode(response.body) as List<dynamic>)
+        .whereType<Map<String, dynamic>>()
+        .toList();
+  }
+
   static Future<void> updateToVersion(String version) async {
     final endpointUri = _apiBaseUri.resolve('/api/v0/version/update');
     final body = jsonEncode({'version': version});

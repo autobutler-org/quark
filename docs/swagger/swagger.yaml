@@ -535,6 +535,76 @@ definitions:
       name:
         type: string
     type: object
+  v0_videos.extractFrameRequest:
+    properties:
+      relPath:
+        type: string
+      serial:
+        type: string
+      timestampMs:
+        type: integer
+    type: object
+  v0_videos.extractFrameResponse:
+    properties:
+      relPath:
+        type: string
+    type: object
+  v0_videos.transcodeJobResponse:
+    properties:
+      jobId:
+        type: integer
+    type: object
+  v0_videos.transcodeRequest:
+    properties:
+      preset:
+        description: '"compatible" | "small" | "web" | raw preset name'
+        type: string
+      relPath:
+        type: string
+      serial:
+        type: string
+    type: object
+  v0_videos.trimVideoRequest:
+    properties:
+      endMs:
+        type: integer
+      relPath:
+        type: string
+      serial:
+        type: string
+      startMs:
+        type: integer
+    type: object
+  v0_videos.trimVideoResponse:
+    properties:
+      relPath:
+        type: string
+    type: object
+  v0_videos.videoJobJSON:
+    properties:
+      createdAt:
+        type: string
+      deviceSerial:
+        type: string
+      errorMessage:
+        type: string
+      id:
+        type: integer
+      inputRelPath:
+        type: string
+      jobType:
+        type: string
+      outputRelPath:
+        type: string
+      preset:
+        type: string
+      progress:
+        type: number
+      status:
+        type: string
+      updatedAt:
+        type: string
+    type: object
   v1_vfs.FileInfoJSON:
     properties:
       content_hash:
@@ -2795,6 +2865,91 @@ paths:
       summary: Write a file to a VFS namespace
       tags:
       - vfs
+  /videos/extract-frame:
+    post:
+      consumes:
+      - application/json
+      description: Extracts a JPEG frame at the given timestamp and saves it alongside
+        the source video.
+      parameters:
+      - description: Extract frame request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_videos.extractFrameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_videos.extractFrameResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "501":
+          description: Not Implemented — ffmpeg not available
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Extract a still frame from a video
+      tags:
+      - videos
+  /videos/jobs:
+    get:
+      description: Returns the 50 most recent video processing jobs, newest first.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/v0_videos.videoJobJSON'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: List recent video jobs
+      tags:
+      - videos
+  /videos/jobs/{id}:
+    get:
+      description: Returns current status and progress for a video processing job.
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_videos.videoJobJSON'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Get a video job by ID
+      tags:
+      - videos
   /videos/metadata:
     get:
       description: Returns duration, resolution, codec, bitrate, framerate, rotation,
@@ -2833,6 +2988,84 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
       summary: Get metadata for a single video file
+      tags:
+      - videos
+  /videos/transcode:
+    post:
+      consumes:
+      - application/json
+      description: Queues a background transcode job and returns the job ID. Poll
+        GET /videos/jobs/:id for status.
+      parameters:
+      - description: Transcode request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_videos.transcodeRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/v0_videos.transcodeJobResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "501":
+          description: Not Implemented — ffmpeg not available
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Queue a video transcode job
+      tags:
+      - videos
+  /videos/trim:
+    post:
+      consumes:
+      - application/json
+      description: Extracts a sub-clip [startMs, endMs] from the source video using
+        stream copy (fast, lossless). The original file is not modified.
+      parameters:
+      - description: Trim request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_videos.trimVideoRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_videos.trimVideoResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "501":
+          description: Not Implemented — ffmpeg not available
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Trim a video clip
       tags:
       - videos
 swagger: "2.0"

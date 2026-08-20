@@ -14,5 +14,10 @@ func NewRouter() serverutil.Router {
 func (r *router) Routes() []*serverutil.Route {
 	return []*serverutil.Route{
 		getVideoMetadataRoute,
+		extractVideoFrameRoute,
+		trimVideoRoute,
+		queueTranscodeRoute,
+		getVideoJobRoute,
+		listVideoJobsRoute,
 	}
 }

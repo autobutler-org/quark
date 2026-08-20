@@ -157,3 +157,17 @@ type VfsMetadatum struct {
 	Value     string
 	UpdatedAt time.Time
 }
+
+type VideoJob struct {
+	ID            int64
+	JobType       string
+	Status        string
+	DeviceSerial  string
+	InputRelPath  string
+	OutputRelPath string
+	Params        string
+	Progress      float64
+	ErrorMessage  string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
