@@ -304,9 +304,16 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 		if err != nil {
 			return fmt.Errorf("failed to load TLS key pair: %w", err)
 		}
+
+		// selfSignedFallback returns the self-signed cert for any SNI name.
+		selfSignedFallback := func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			return &cert, nil
+		}
 		tlsCfg := &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			MinVersion:   tls.VersionTLS13,
+			// GetCertificate tries Tailscale (Let's Encrypt *.ts.net) first,
+			// then falls back to the local self-signed cert for LAN clients.
+			GetCertificate: remoteutil.GetCertificate(selfSignedFallback),
+			MinVersion:     tls.VersionTLS13,
 		}
 
 		addr := fmt.Sprintf(":%s", port)
