@@ -2314,6 +2314,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/plugins": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all currently running plugins and their manifests.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "plugins"
+                ],
+                "summary": "List installed plugins",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "plugins": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/v1_plugins.PluginInfoJSON"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/plugins/{id}/{path}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Reverse-proxies the request to the plugin identified by :id.",
+                "tags": [
+                    "plugins"
+                ],
+                "summary": "Proxy a request to a plugin",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Plugin ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Proxied response"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/sbom": {
             "get": {
                 "description": "Returns the Go version and all embedded dependency information from the compiled binary",
@@ -4347,6 +4414,27 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "relPath": {
+                    "type": "string"
+                }
+            }
+        },
+        "v1_plugins.PluginInfoJSON": {
+            "type": "object",
+            "properties": {
+                "addr": {
+                    "description": "host:port (internal, may be omitted in prod)",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "version": {
                     "type": "string"
                 }
             }

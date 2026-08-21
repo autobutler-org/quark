@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/autobutler-org/autobutler/pkg/util/pluginutil"
+	"github.com/autobutler-org/quark/pkg/util/pluginutil"
 )
 
 // ---------------------------------------------------------------------------
