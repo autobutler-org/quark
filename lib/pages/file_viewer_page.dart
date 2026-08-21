@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/models/cirrus_file_node.dart';
-import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/generic_file_viewer_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
-import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/services/cirrus_service.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 
@@ -16,8 +14,8 @@ import 'package:quark/widgets/layout/theme_toggle_button.dart';
 /// | fileType                         | Destination                     |
 /// |----------------------------------|---------------------------------|
 /// | `image`                          | [ImageViewerPage]               |
-/// | `video`                          | [VideoViewerPage]               |
-/// | `audio`                          | [AudioPlayerPage]               |
+/// | `video`                          | /videos/&lt;path&gt;            |
+/// | `audio`                          | /audio/&lt;path&gt;             |
 /// | `abdoc`                          | /docs/&lt;path&gt;              |
 /// | `absheet`                        | /sheets/&lt;path&gt;            |
 /// | `text`                           | /edit/&lt;path&gt;              |
@@ -112,28 +110,14 @@ class _FileViewerPageState extends State<FileViewerPage> {
           );
 
         case 'video':
-          final videoUrl = CirrusService.constructMediaUrl(
-            widget.filePath,
-            serial: serial,
-          );
           if (!mounted) return;
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute<void>(
-              builder: (_) => VideoViewerPage(url: videoUrl, name: name),
-            ),
-          );
+          // Use the named route so the URL bar reflects the viewer path and
+          // the link is shareable / deep-linkable.
+          context.go(_buildRoute('/videos', widget.filePath, serial: serial));
 
         case 'audio':
-          final audioUrl = CirrusService.constructMediaUrl(
-            widget.filePath,
-            serial: serial,
-          );
           if (!mounted) return;
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute<void>(
-              builder: (_) => AudioPlayerPage(url: audioUrl, name: name),
-            ),
-          );
+          context.go(_buildRoute('/audio', widget.filePath, serial: serial));
 
         case 'abdoc':
           context.go(_buildRoute('/docs', widget.filePath, serial: serial));

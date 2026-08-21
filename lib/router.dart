@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/docs_page.dart';
 import 'package:quark/pages/document_editor_page.dart';
 import 'package:quark/pages/file_browser_page.dart';
@@ -15,8 +16,10 @@ import 'package:quark/pages/spreadsheet_editor_page.dart';
 import 'package:quark/pages/storage_devices_page.dart';
 import 'package:quark/pages/terms_page.dart';
 import 'package:quark/pages/vault_page.dart';
+import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
+import 'package:quark/services/cirrus_service.dart';
 
 // Route paths — use these constants everywhere instead of string literals.
 class AppRoutes {
@@ -42,6 +45,8 @@ class AppRoutes {
   static const recover = '/recover';
   static const terms = '/terms';
   static const plaintextEditor = '/edit';
+  static const videoViewer = '/videos';
+  static const audioPlayer = '/audio';
 
   /// Build a URL for a specific plaintext file.
   /// e.g. plaintextEditorPath('notes/readme.txt') → '/edit/notes/readme.txt'
@@ -88,6 +93,26 @@ class AppRoutes {
   static String sheetFile(String path, {String? serial}) {
     final clean = path.replaceAll(RegExp(r'^/+'), '');
     final base = '$sheets/$clean';
+    return (serial != null && serial.isNotEmpty)
+        ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
+        : base;
+  }
+
+  /// Build a deep-link URL for a video file.
+  /// e.g. videoPath('movies/clip.mp4') → '/videos/movies/clip.mp4'
+  static String videoPath(String path, {String? serial}) {
+    final clean = path.replaceAll(RegExp(r'^/+'), '');
+    final base = '$videoViewer/$clean';
+    return (serial != null && serial.isNotEmpty)
+        ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
+        : base;
+  }
+
+  /// Build a deep-link URL for an audio file.
+  /// e.g. audioPath('music/track.mp3') → '/audio/music/track.mp3'
+  static String audioPath(String path, {String? serial}) {
+    final clean = path.replaceAll(RegExp(r'^/+'), '');
+    final base = '$audioPlayer/$clean';
     return (serial != null && serial.isNotEmpty)
         ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
         : base;
@@ -213,6 +238,32 @@ final router = GoRouter(
         final filePath = Uri.decodeComponent(raw);
         final serial = state.uri.queryParameters['serial'] ?? '';
         return PlaintextEditorPage(filePath: filePath, deviceSerial: serial);
+      },
+    ),
+    GoRoute(
+      // Matches /videos/<anything including slashes> — opens the video viewer.
+      // e.g. /videos/movies/clip.mp4?serial=ABC
+      path: '${AppRoutes.videoViewer}/:path(.*)',
+      builder: (context, state) {
+        final raw = state.pathParameters['path'] ?? '';
+        final filePath = Uri.decodeComponent(raw);
+        final serial = state.uri.queryParameters['serial'];
+        final url = CirrusService.constructMediaUrl(filePath, serial: serial);
+        final name = filePath.split('/').last;
+        return VideoViewerPage(url: url, name: name);
+      },
+    ),
+    GoRoute(
+      // Matches /audio/<anything including slashes> — opens the audio player.
+      // e.g. /audio/music/track.mp3?serial=ABC
+      path: '${AppRoutes.audioPlayer}/:path(.*)',
+      builder: (context, state) {
+        final raw = state.pathParameters['path'] ?? '';
+        final filePath = Uri.decodeComponent(raw);
+        final serial = state.uri.queryParameters['serial'];
+        final url = CirrusService.constructMediaUrl(filePath, serial: serial);
+        final name = filePath.split('/').last;
+        return AudioPlayerPage(url: url, name: name);
       },
     ),
   ],
