@@ -144,7 +144,7 @@ func (h *Host) runPlugin(ctx context.Context, entry PluginEntry, delay time.Dura
 }
 
 // spawnPlugin forks the plugin binary, waits for READY, fetches the manifest,
-// and returns the fully initialised PluginState.
+// and returns the fully initialized PluginState.
 func (h *Host) spawnPlugin(ctx context.Context, entry PluginEntry) (*PluginState, error) {
 	token, err := IssueVFSToken(entry.ID, entry.NamespacesRead, entry.NamespacesWrite)
 	if err != nil {
