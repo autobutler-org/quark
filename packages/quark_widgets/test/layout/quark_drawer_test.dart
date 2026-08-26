@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/pump.dart';
@@ -30,6 +31,7 @@ void main() {
     onTapVault: callbacks[QuarkDrawerSection.vault],
     onTapUsers: callbacks[QuarkDrawerSection.users],
     onTapSettings: callbacks[QuarkDrawerSection.settings],
+    onTapPlugins: callbacks[QuarkDrawerSection.plugins],
   );
 
   testBothViewports('lists every offered section and marks the active one', (
@@ -65,6 +67,7 @@ void main() {
       'Vault',
       'Users',
       'Settings',
+      'Plugins',
     ]) {
       await tester.scrollUntilVisible(find.text(label), 50);
       expect(find.text(label), findsOneWidget, reason: '$label is missing');
@@ -137,6 +140,41 @@ void main() {
 
     expect(tapped, ['users']);
     expect(find.byKey(const ValueKey('drawer_files')), findsNothing);
+  });
+
+  testBothViewports('gives each plugin a row and marks the open one', (
+    tester,
+    size,
+  ) async {
+    final tapped = <String>[];
+    await pumpAt(
+      tester,
+      QuarkDrawer(
+        activeSection: QuarkDrawerSection.plugins,
+        onTapPlugins: () {},
+        plugins: const [
+          DrawerPluginItem(
+            id: 'hello',
+            label: 'Hello',
+            icon: QuarkIcons.waving_hand,
+          ),
+        ],
+        activePluginId: 'hello',
+        onTapPlugin: tapped.add,
+      ),
+      size: size,
+    );
+
+    final row = find.byKey(const ValueKey('drawer_plugin_hello'));
+    expect(tester.widget<ListTile>(row).selected, isTrue);
+    expect(
+      tester
+          .widget<ListTile>(find.byKey(const ValueKey('drawer_plugins')))
+          .selected,
+      isFalse,
+    );
+    await tester.tap(row);
+    expect(tapped, ['hello']);
   });
 
   for (final (label, brightness) in [

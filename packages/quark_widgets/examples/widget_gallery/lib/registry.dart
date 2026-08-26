@@ -617,6 +617,15 @@ final List<GalleryEntry> registry = [
         onTapVault: () => log('QuarkDrawer.onTapVault'),
         onTapUsers: () => log('QuarkDrawer.onTapUsers'),
         onTapSettings: () => log('QuarkDrawer.onTapSettings'),
+        onTapPlugins: () => log('QuarkDrawer.onTapPlugins'),
+        plugins: const [
+          DrawerPluginItem(
+            id: 'hello',
+            label: 'Hello',
+            icon: QuarkIcons.waving_hand,
+          ),
+        ],
+        onTapPlugin: (id) => log('QuarkDrawer.onTapPlugin($id)'),
       ),
     ),
   ),

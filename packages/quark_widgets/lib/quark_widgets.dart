@@ -96,6 +96,7 @@ export 'src/models/chat_permission_preset.dart';
 export 'src/models/chat_reaction_item.dart';
 export 'src/models/connection_mode.dart';
 export 'src/models/create_user_input.dart';
+export 'src/models/drawer_plugin_item.dart';
 export 'src/models/duplicate_group_item.dart';
 export 'src/models/duplicate_photo_item.dart';
 export 'src/models/file_shortcut.dart';

@@ -11,6 +11,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/services/feature_flags_service.dart';
+import 'package:quark/services/plugin_service.dart';
+import 'package:quark/services/plugin_state.dart';
 import 'package:quark/services/settings_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:sodium/sodium_sumo.dart' show SecureKey;
@@ -281,8 +283,9 @@ class AuthService {
   /// Fetches the signed-in user's admin flag again into [AppSettings.isAdmin],
   /// their id and picture version into [AppSettings.userId] and
   /// [AppSettings.avatarUpdatedAt], the beta feature flags into
-  /// [AppSettings.featureFlags], and the Quark's theme color and the user's own
-  /// into [AppSettings.themeColor] (#2740). The Quark's theme color needs no session,
+  /// [AppSettings.featureFlags], the installed plugins into [PluginState], and
+  /// the Quark's theme color and the user's own into [AppSettings.themeColor]
+  /// (#2740). The Quark's theme color needs no session,
   /// so it is fetched for the sign-in page too.
   ///
   /// Without a session there is no admin and no account. A failed call keeps the last known
@@ -296,9 +299,11 @@ class AuthService {
       settings.userId.value = null;
       settings.avatarUpdatedAt.value = null;
       settings.featureFlags.value = const [];
+      PluginState.instance.setPlugins(const []);
       return;
     }
     unawaited(FeatureFlagsService.refresh());
+    unawaited(PluginService.refresh());
     try {
       final status = await checkStatus();
       settings.isAdmin.value = status.isAdmin;
