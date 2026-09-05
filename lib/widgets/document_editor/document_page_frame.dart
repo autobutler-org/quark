@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:quark/utils/editor_shortcuts.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// A `QuillEditorConfig.onKeyPressed` handler: non-null stops the event.
@@ -142,6 +143,7 @@ class DocumentPageFrame extends StatelessWidget {
               padding: EdgeInsets.zero,
               placeholder: 'Start writing…',
               customStyles: _quillStyles(pageCs),
+              customShortcuts: editorNavigationShortcuts(),
               // Keeps Quill's built-in search dialog from opening on top of the
               // inline find bar — see [quillFindKeyInterceptor].
               // ignore: experimental_member_use
