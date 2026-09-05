@@ -8,6 +8,7 @@ import 'package:quark/models/paginated_photos_response.dart' as wire;
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/services/album_service.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/demo_photos_service.dart';
 import 'package:quark/services/favorites_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/storage_service.dart';
@@ -33,6 +34,7 @@ class AddToAlbumOutcome {
     required this.added,
     required this.skipped,
     required this.failed,
+    this.error,
   });
 
   /// Photos the Quark added.
@@ -43,6 +45,10 @@ class AddToAlbumOutcome {
 
   /// Photos the Quark refused or never answered for.
   final int failed;
+
+  /// What the last failed photo threw, for the page to word; null when
+  /// nothing failed.
+  final Object? error;
 }
 
 /// Everything the photos page shows and does, kept out of its [State]
@@ -124,6 +130,25 @@ class PhotosController extends ChangeNotifier {
        _uploadFiles = uploadFiles,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
        _isWeb = isWeb;
+
+  /// A controller over Demo mode's bundled sample library (#1746).
+  ///
+  /// Every Quark-bound photo and album call is swapped for its
+  /// [DemoPhotosService] stand-in, so nothing it shows comes from, or is
+  /// asked of, a Quark. Device photos and uploads are left as they are.
+  factory PhotosController.demo() => PhotosController(
+    getPhotos: DemoPhotosService.getPhotos,
+    activeHost: DemoPhotosService.activeHost,
+    listFavoriteKeys: DemoPhotosService.listFavoriteKeys,
+    toggleFavorite: DemoPhotosService.toggleFavorite,
+    downloadFileBytes: DemoPhotosService.downloadFileBytes,
+    thumbnailUrl: DemoPhotosService.thumbnailUrl,
+    listAlbums: DemoPhotosService.listAlbums,
+    createAlbum: DemoPhotosService.createAlbum,
+    renameAlbum: DemoPhotosService.renameAlbum,
+    deleteAlbum: DemoPhotosService.deleteAlbum,
+    addPhotoToAlbum: DemoPhotosService.addPhotoToAlbum,
+  );
 
   /// How many Quark photos one page fetches.
   static const int pageSize = 50;
@@ -559,6 +584,7 @@ class PhotosController extends ChangeNotifier {
     var added = 0;
     var skipped = 0;
     var failed = 0;
+    Object? error;
     for (final photo in [..._quark, ..._mobile]) {
       if (!_selectedIds.contains(photo.id)) continue;
       final relPath = photo.relPath;
@@ -573,12 +599,18 @@ class PhotosController extends ChangeNotifier {
           relPath: relPath,
         );
         added++;
-      } catch (_) {
+      } catch (e) {
         failed++;
+        error = e;
       }
     }
     exitSelectionMode();
-    return AddToAlbumOutcome(added: added, skipped: skipped, failed: failed);
+    return AddToAlbumOutcome(
+      added: added,
+      skipped: skipped,
+      failed: failed,
+      error: error,
+    );
   }
 
   // ── Albums ─────────────────────────────────────────────────────────────────

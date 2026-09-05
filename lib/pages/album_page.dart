@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/pages/photos_page.dart';
 import 'package:quark/services/album_service.dart';
+import 'package:quark/services/demo_photos_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/utils/connection_error.dart';
@@ -43,7 +45,9 @@ class _AlbumPageState extends State<AlbumPage> {
       _error = null;
     });
     try {
-      final items = await AlbumService.listAlbumItems(widget.album.id);
+      final items = DemoPhotosService.isEnabled
+          ? DemoPhotosService.listAlbumItems(widget.album.id)
+          : await AlbumService.listAlbumItems(widget.album.id);
       if (!mounted) return;
       setState(() {
         _items = items;
@@ -67,6 +71,13 @@ class _AlbumPageState extends State<AlbumPage> {
     // Reload after returning in case photos were added
     await _load();
   }
+
+  static bool _isDemo(PhotoAlbumItem item) =>
+      DemoPhotosService.isDemoSerial(item.deviceSerial);
+
+  Future<Uint8List?> _bytesFor(PhotoAlbumItem item) => _isDemo(item)
+      ? DemoPhotosService.loadBytes(item.relPath)
+      : FilesService.downloadFileBytes(item.relPath, serial: item.deviceSerial);
 
   Future<void> _removeItem(PhotoAlbumItem item) async {
     final confirmed = await showDialog<bool>(
@@ -187,20 +198,14 @@ class _AlbumPageState extends State<AlbumPage> {
                 itemCount: _items.length,
                 itemBuilder: (context, idx) {
                   final item = _items[idx];
-                  final url = FilesService.constructThumbnailUrl(
-                    item.relPath,
-                    serial: item.deviceSerial,
-                  );
+                  final isDemo = _isDemo(item);
                   return GestureDetector(
                     onTap: () async {
                       if (_isOpeningPhoto) return;
                       _isOpeningPhoto = true;
                       try {
                         final navigator = Navigator.of(context);
-                        final bytes = await FilesService.downloadFileBytes(
-                          item.relPath,
-                          serial: item.deviceSerial,
-                        );
+                        final bytes = await _bytesFor(item);
                         if (bytes == null || !mounted) return;
                         final changed = await navigator.push<bool>(
                           MaterialPageRoute(
@@ -209,19 +214,24 @@ class _AlbumPageState extends State<AlbumPage> {
                               name: item.relPath.split('/').last,
                               initialIndex: idx,
                               imageCount: _items.length,
-                              relPath: item.relPath,
-                              serial: item.deviceSerial,
-                              sourceAlbum: widget.album,
+                              relPath: isDemo ? null : item.relPath,
+                              serial: isDemo ? null : item.deviceSerial,
+                              sourceAlbum: isDemo ? null : widget.album,
                               getImageCount: () async => _items.length,
                               onLoadImage: (newIdx) async {
                                 if (newIdx >= _items.length) {
                                   return (null, '', null, null);
                                 }
                                 final ni = _items[newIdx];
-                                final b = await FilesService.downloadFileBytes(
-                                  ni.relPath,
-                                  serial: ni.deviceSerial,
-                                );
+                                final b = await _bytesFor(ni);
+                                if (_isDemo(ni)) {
+                                  return (
+                                    b,
+                                    ni.relPath.split('/').last,
+                                    null,
+                                    null,
+                                  );
+                                }
                                 return (
                                   b,
                                   ni.relPath.split('/').last,
@@ -237,29 +247,37 @@ class _AlbumPageState extends State<AlbumPage> {
                         if (mounted) setState(() => _isOpeningPhoto = false);
                       }
                     },
-                    onLongPress: () => _showItemMenu(context, item),
+                    onLongPress: isDemo
+                        ? null
+                        : () => _showItemMenu(context, item),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.network(
-                          url.toString(),
-                          fit: BoxFit.cover,
-                          loadingBuilder: (_, child, progress) {
-                            if (progress == null) return child;
-                            return Container(
+                        if (isDemo)
+                          Image.asset(item.relPath, fit: BoxFit.cover)
+                        else
+                          Image.network(
+                            FilesService.constructThumbnailUrl(
+                              item.relPath,
+                              serial: item.deviceSerial,
+                            ).toString(),
+                            fit: BoxFit.cover,
+                            loadingBuilder: (_, child, progress) {
+                              if (progress == null) return child;
+                              return Container(
+                                color: colorScheme.surfaceContainerHighest,
+                              );
+                            },
+                            errorBuilder: (context, error, stack) => Container(
                               color: colorScheme.surfaceContainerHighest,
-                            );
-                          },
-                          errorBuilder: (context, error, stack) => Container(
-                            color: colorScheme.surfaceContainerHighest,
-                            child: Icon(
-                              QuarkIcons.broken_image_outlined,
-                              color: colorScheme.onSurface.withValues(
-                                alpha: 0.3,
+                              child: Icon(
+                                QuarkIcons.broken_image_outlined,
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.3,
+                                ),
                               ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   );

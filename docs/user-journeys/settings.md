@@ -343,3 +343,25 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 - Session is cleared.
 - App redirects to `/login`.
 - See also JN-AUTH-007.
+
+---
+
+### JN-ST-023: Toggle demo mode
+
+**Preconditions:** User is on the Settings page. No quark needs to be configured.
+
+**Steps:**
+
+1. Find the **Demo mode** toggle.
+2. Enable it.
+3. Navigate to `/photos`.
+
+**Expected result:**
+
+- The Photos page shows the bundled sample photos and albums (`assets/demo/`) instead of the quark's library, and
+  makes no request to the quark for them.
+- Sample photos open in the image viewer, can be starred (locally only), and their albums open from the sidebar.
+- Album creation, renaming, deletion, and adding sample photos to albums are disabled.
+- The setting persists across app restarts.
+- Switching the toggle off returns the Photos page to the quark's real library with nothing from the sample set
+  rendered.

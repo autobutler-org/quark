@@ -145,6 +145,8 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _autoUpdateError;
   bool _isLoadingAutoUpdate = false;
 
+  bool _demoMode = false;
+
   // SBOM state
   GoSbom? _goSbom;
   List<FlutterPackage>? _flutterSbom;
@@ -202,6 +204,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void _load() {
     _theme = AppSettings.instance.themeMode.value;
     _refreshIntervalSeconds = AppSettings.instance.refreshIntervalSeconds;
+    _demoMode = AppSettings.instance.demoMode.value;
     // Cleared up front so removing the last host retires the banner: with no
     // host every loader below returns early and none would ever clear it.
     _disconnected = false;
@@ -961,6 +964,21 @@ class _SettingsPageState extends State<SettingsPage> {
                             },
                     ),
             ),
+          const SizedBox(height: 16),
+          Card(
+            child: SwitchListTile(
+              title: const Text('Demo mode'),
+              subtitle: const Text(
+                'Shows bundled sample photos and albums instead of your '
+                'library. Your real files are not affected.',
+              ),
+              value: _demoMode,
+              onChanged: (newValue) async {
+                setState(() => _demoMode = newValue);
+                await AppSettings.instance.setDemoMode(newValue);
+              },
+            ),
+          ),
           const SizedBox(height: 24),
           const Text(
             'Auto-refresh interval',

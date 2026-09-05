@@ -7,6 +7,7 @@ import 'package:quark/models/photo_album.dart';
 import 'package:quark/pages/album_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/photo_grid_config.dart';
@@ -36,7 +37,14 @@ class PhotosPage extends StatefulWidget {
 
 class PhotosPageState extends State<PhotosPage>
     with WidgetsBindingObserver, AutoRefreshMixin {
-  final PhotosController _controller = PhotosController();
+  /// Whether this page shows Demo mode's sample library (#1746). Read once:
+  /// Settings is its own route, so flipping the switch there builds a fresh
+  /// page on the way back.
+  final bool _demo = AppSettings.instance.demoMode.value;
+
+  late final PhotosController _controller = _demo
+      ? PhotosController.demo()
+      : PhotosController();
 
   // Above-viewport nav: the hidden nav panel is measured once on first layout,
   // then the scroll controller's initial offset is set so the photo grid is
@@ -209,7 +217,7 @@ class PhotosPageState extends State<PhotosPage>
       final navigator = Navigator.of(context);
       final opened = await _controller.openPhotoAt(index);
       if (opened == null || !mounted) return;
-      final (bytes, name, relPath, serial) = opened;
+      final (bytes, name, relPath, serial) = _forViewer(opened);
       final changed = await navigator.push<bool>(
         MaterialPageRoute(
           builder: (_) => ImageViewerPage(
@@ -240,11 +248,18 @@ class PhotosPageState extends State<PhotosPage>
   /// request (#1708).
   Future<LoadedPhoto> _loadPhotoAt(int index) async {
     try {
-      return await _controller.loadPhotoAt(index);
+      return _forViewer(await _controller.loadPhotoAt(index));
     } on ApiException catch (e) {
       if (e.statusCode == 404) await manualRefresh();
       rethrow;
     }
+  }
+
+  /// A sample photo has no Quark path, so the viewer gets none and keeps its
+  /// metadata, rotate, delete, and album actions off.
+  LoadedPhoto _forViewer(LoadedPhoto photo) {
+    final (bytes, name, _, _) = photo;
+    return _demo ? (bytes, name, null, null) : photo;
   }
 
   Future<void> _uploadPhotos() async {
@@ -315,7 +330,7 @@ class PhotosPageState extends State<PhotosPage>
         '$failed',
       );
     } else {
-      _snack(Errors.couldNot('add photos to "${album.name}"'));
+      _snack(Errors.message(outcome.error, 'add photos to "${album.name}"'));
     }
 
     // Stay in adding mode when nothing was added, so the user can try again.
