@@ -26,6 +26,7 @@ class FileTopBar extends StatefulWidget {
     required this.onSearchClosed,
     required this.onRefresh,
     required this.onUploadPressed,
+    this.onUploadPhotosPressed,
     this.onUploadFolderPressed,
     this.onCancelUploadPressed,
     required this.onCreateFolderPressed,
@@ -58,12 +59,19 @@ class FileTopBar extends StatefulWidget {
   final VoidCallback onRefresh;
   final VoidCallback onUploadPressed;
 
+  /// Photos library upload, when Files cannot see the Camera Roll.
+  ///
+  /// iOS only. Null everywhere else, where the ordinary file picker already
+  /// includes photos. When set, Upload opens a chooser with Photos first.
+  final VoidCallback? onUploadPhotosPressed;
+
   /// Folder upload, when the platform has a folder picker at all.
   ///
   /// It gets no button of its own: to the user "upload" is one action, and
   /// whether they are uploading a file or a folder is a property of what they
   /// pick, not a different feature. Null on mobile, which has no folder
-  /// picker — there Upload goes straight to the file picker, as it always has.
+  /// picker — there Upload goes straight to the file picker unless Photos
+  /// is also offered.
   final VoidCallback? onUploadFolderPressed;
 
   /// Abandons an upload in progress.
@@ -189,6 +197,7 @@ class _FileTopBarState extends State<FileTopBar> {
                 onCreateFolderPressed: widget.onCreateFolderPressed,
                 onNewFilePressed: widget.onNewFilePressed,
                 onPathSelected: widget.onPathSelected,
+                onUploadPhotosPressed: widget.onUploadPhotosPressed,
                 onUploadFolderPressed: widget.onUploadFolderPressed,
                 onCancelUploadPressed: widget.onCancelUploadPressed,
                 devices: widget.devices,
