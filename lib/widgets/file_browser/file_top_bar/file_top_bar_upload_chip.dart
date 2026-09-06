@@ -4,11 +4,16 @@ import 'package:quark_icons/quark_icons.dart';
 
 /// One Upload chip, whatever this platform can upload.
 ///
-/// Where folders can be picked the chip opens a chooser rather than gaining
-/// a sibling in the toolbar, because no picker we can reach offers files and
-/// folders in one pass — `<input webkitdirectory>` selects folders only, and
-/// file_picker implements a combined dialog on macOS alone. That platform
-/// constraint belongs inside the Upload action, not spread across the bar.
+/// Where more than one source exists the chip opens a chooser rather than
+/// gaining a sibling in the toolbar, because no picker we can reach offers
+/// those sources in one pass — `<input webkitdirectory>` selects folders
+/// only, iOS's document picker is the Files app and cannot see the Camera
+/// Roll, and file_picker implements a combined dialog on macOS alone. That
+/// platform constraint belongs inside the Upload action, not spread across
+/// the bar.
+///
+/// Photos is first when it is offered: backing up the Camera Roll is the
+/// reason iOS users open `/files` (#1797).
 ///
 /// While an upload runs the chip shows progress and stays live if there is a
 /// way out: a batch failing its way through a large folder must not leave the
@@ -19,6 +24,7 @@ class FileTopBarUploadChip extends StatelessWidget {
     required this.uploadTotal,
     required this.uploadCompleted,
     required this.onUploadPressed,
+    this.onUploadPhotosPressed,
     this.onUploadFolderPressed,
     this.onCancelUploadPressed,
     super.key,
@@ -28,6 +34,7 @@ class FileTopBarUploadChip extends StatelessWidget {
   final int uploadTotal;
   final int uploadCompleted;
   final VoidCallback onUploadPressed;
+  final VoidCallback? onUploadPhotosPressed;
   final VoidCallback? onUploadFolderPressed;
   final VoidCallback? onCancelUploadPressed;
 
@@ -38,6 +45,7 @@ class FileTopBarUploadChip extends StatelessWidget {
         : 'Upload';
 
     final onCancel = onCancelUploadPressed;
+    final onUploadPhotos = onUploadPhotosPressed;
     final onUploadFolder = onUploadFolderPressed;
 
     final List<Widget>? menuItems;
@@ -51,21 +59,28 @@ class FileTopBarUploadChip extends StatelessWidget {
                 child: const Text('Cancel upload'),
               ),
             ];
+    } else if (onUploadPhotos == null && onUploadFolder == null) {
+      menuItems = null;
     } else {
-      menuItems = onUploadFolder == null
-          ? null
-          : [
-              MenuItemButton(
-                onPressed: onUploadPressed,
-                leadingIcon: const Icon(QuarkIcons.upload_rounded),
-                child: const Text('Files'),
-              ),
-              MenuItemButton(
-                onPressed: onUploadFolder,
-                leadingIcon: const Icon(Icons.drive_folder_upload_outlined),
-                child: const Text('Folder'),
-              ),
-            ];
+      menuItems = [
+        if (onUploadPhotos != null)
+          MenuItemButton(
+            onPressed: onUploadPhotos,
+            leadingIcon: const Icon(QuarkIcons.photo_library_outlined),
+            child: const Text('Photos'),
+          ),
+        MenuItemButton(
+          onPressed: onUploadPressed,
+          leadingIcon: const Icon(QuarkIcons.upload_rounded),
+          child: const Text('Files'),
+        ),
+        if (onUploadFolder != null)
+          MenuItemButton(
+            onPressed: onUploadFolder,
+            leadingIcon: const Icon(Icons.drive_folder_upload_outlined),
+            child: const Text('Folder'),
+          ),
+      ];
     }
 
     if (menuItems == null) {

@@ -28,6 +28,7 @@ class FileTopBarPathRow extends StatelessWidget {
     required this.onCreateFolderPressed,
     required this.onNewFilePressed,
     this.onPathSelected,
+    this.onUploadPhotosPressed,
     this.onUploadFolderPressed,
     this.onCancelUploadPressed,
     this.devices,
@@ -53,6 +54,7 @@ class FileTopBarPathRow extends StatelessWidget {
   final VoidCallback onCreateFolderPressed;
   final VoidCallback onNewFilePressed;
   final ValueChanged<String>? onPathSelected;
+  final VoidCallback? onUploadPhotosPressed;
   final VoidCallback? onUploadFolderPressed;
   final VoidCallback? onCancelUploadPressed;
   final List<StorageDevice>? devices;
@@ -134,6 +136,7 @@ class FileTopBarPathRow extends StatelessWidget {
                 onUploadPressed: onUploadPressed,
                 onCreateFolderPressed: onCreateFolderPressed,
                 onNewFilePressed: onNewFilePressed,
+                onUploadPhotosPressed: onUploadPhotosPressed,
                 onUploadFolderPressed: onUploadFolderPressed,
                 onCancelUploadPressed: onCancelUploadPressed,
               ),

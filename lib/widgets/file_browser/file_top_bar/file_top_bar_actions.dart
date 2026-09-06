@@ -13,6 +13,7 @@ class FileTopBarActions extends StatelessWidget {
     required this.onUploadPressed,
     required this.onCreateFolderPressed,
     required this.onNewFilePressed,
+    this.onUploadPhotosPressed,
     this.onUploadFolderPressed,
     this.onCancelUploadPressed,
     super.key,
@@ -25,6 +26,7 @@ class FileTopBarActions extends StatelessWidget {
   final VoidCallback onUploadPressed;
   final VoidCallback onCreateFolderPressed;
   final VoidCallback onNewFilePressed;
+  final VoidCallback? onUploadPhotosPressed;
   final VoidCallback? onUploadFolderPressed;
   final VoidCallback? onCancelUploadPressed;
 
@@ -38,6 +40,7 @@ class FileTopBarActions extends StatelessWidget {
           uploadTotal: uploadTotal,
           uploadCompleted: uploadCompleted,
           onUploadPressed: onUploadPressed,
+          onUploadPhotosPressed: onUploadPhotosPressed,
           onUploadFolderPressed: onUploadFolderPressed,
           onCancelUploadPressed: onCancelUploadPressed,
         ),

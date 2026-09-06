@@ -409,3 +409,24 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 
 - File browser opens at `photos/2024`.
 - Breadcrumb shows the correct path.
+
+---
+
+### JN-FB-026: Upload photos from the Camera Roll on iOS
+
+**Preconditions:** User is on iOS (Safari, the installed PWA, or the native app). Photos or videos exist in the Camera Roll.
+
+**Steps:**
+
+1. Navigate to `/files` (or any subfolder).
+2. Tap the upload control (the **Create** FAB on a phone, the **Upload** chip on iPad).
+3. Choose **Upload photos** / **Photos** — it is the first option.
+4. Select one or more photos or videos from the Photos library.
+
+**Expected result:**
+
+- The Photos library opens, not the Files app.
+- Selected items upload to the current directory.
+- **Upload files** remains available as a separate source for documents.
+
+**Notes:** iOS's document picker is the Files app and cannot see the Camera Roll. Photos is a distinct source for that reason. Other platforms keep a single Files picker, which already includes the gallery.
