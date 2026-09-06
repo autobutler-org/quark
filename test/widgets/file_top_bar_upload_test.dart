@@ -7,10 +7,14 @@ import 'package:quark/widgets/file_browser/file_top_bar.dart';
 /// what they chose. The platform still forces a choice — no picker we can
 /// reach offers files and folders in one pass — so it lives inside the Upload
 /// action rather than beside it in the toolbar.
+///
+/// iOS adds Photos as a third source (#1797): its document picker is the
+/// Files app and cannot see the Camera Roll, so Photos is listed first.
 void main() {
   Future<void> pumpBar(
     WidgetTester tester, {
     required VoidCallback onUpload,
+    VoidCallback? onUploadPhotos,
     VoidCallback? onUploadFolder,
     VoidCallback? onCancelUpload,
     bool isUploading = false,
@@ -44,6 +48,7 @@ void main() {
             onSearchClosed: () {},
             onRefresh: () {},
             onUploadPressed: onUpload,
+            onUploadPhotosPressed: onUploadPhotos,
             onUploadFolderPressed: onUploadFolder,
             onCancelUploadPressed: onCancelUpload,
             onCreateFolderPressed: () {},
@@ -106,10 +111,10 @@ void main() {
     expect(files, 1);
   });
 
-  testWidgets('without a folder picker Upload goes straight to files', (
+  testWidgets('without extra sources Upload goes straight to files', (
     tester,
   ) async {
-    // Mobile: no folder picker exists, so the chooser would only ever offer
+    // Android / desktop-without-folder: the chooser would only ever offer
     // one real option. Upload behaves exactly as it always has.
     var files = 0;
     await pumpBar(tester, onUpload: () => files++);
@@ -119,6 +124,60 @@ void main() {
 
     expect(files, 1);
     expect(find.byType(MenuItemButton), findsNothing);
+  });
+
+  testWidgets('iOS Upload offers Photos first, then Files', (tester) async {
+    var photos = 0;
+    var files = 0;
+    await pumpBar(
+      tester,
+      onUpload: () => files++,
+      onUploadPhotos: () => photos++,
+    );
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(MenuItemButton, 'Photos'), findsOneWidget);
+    expect(find.widgetWithText(MenuItemButton, 'Files'), findsOneWidget);
+    expect(find.widgetWithText(MenuItemButton, 'Folder'), findsNothing);
+    expect(photos, 0, reason: 'opening the chooser must not start an upload');
+    expect(files, 0);
+
+    await tester.tap(find.widgetWithText(MenuItemButton, 'Photos'));
+    await tester.pumpAndSettle();
+    expect(photos, 1);
+    expect(files, 0);
+  });
+
+  testWidgets('Photos sits above Files when folders are also offered', (
+    tester,
+  ) async {
+    await pumpBar(
+      tester,
+      onUpload: () {},
+      onUploadPhotos: () {},
+      onUploadFolder: () {},
+    );
+
+    await tester.tap(find.text('Upload'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(MenuItemButton, 'Photos'), findsOneWidget);
+    expect(find.widgetWithText(MenuItemButton, 'Files'), findsOneWidget);
+    expect(find.widgetWithText(MenuItemButton, 'Folder'), findsOneWidget);
+
+    final photosY = tester
+        .getTopLeft(find.widgetWithText(MenuItemButton, 'Photos'))
+        .dy;
+    final filesY = tester
+        .getTopLeft(find.widgetWithText(MenuItemButton, 'Files'))
+        .dy;
+    final folderY = tester
+        .getTopLeft(find.widgetWithText(MenuItemButton, 'Folder'))
+        .dy;
+    expect(photosY, lessThan(filesY));
+    expect(filesY, lessThan(folderY));
   });
 
   testWidgets('an upload in flight cannot start another', (tester) async {
@@ -148,6 +207,7 @@ void main() {
     await pumpBar(
       tester,
       onUpload: () => files++,
+      onUploadPhotos: () {},
       onUploadFolder: () {},
       onCancelUpload: () => cancels++,
       isUploading: true,
@@ -163,6 +223,7 @@ void main() {
       find.widgetWithText(MenuItemButton, 'Cancel upload'),
       findsOneWidget,
     );
+    expect(find.widgetWithText(MenuItemButton, 'Photos'), findsNothing);
     expect(find.widgetWithText(MenuItemButton, 'Files'), findsNothing);
     expect(find.widgetWithText(MenuItemButton, 'Folder'), findsNothing);
 

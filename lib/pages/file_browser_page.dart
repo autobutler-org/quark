@@ -627,6 +627,27 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     }
   }
 
+  Future<void> _handleUploadPhotosPressed() async {
+    if (_isUploading) {
+      return;
+    }
+
+    try {
+      final selectedFiles = await _controller.pickUploadPhotos();
+      if (selectedFiles.isEmpty) {
+        return;
+      }
+
+      await _uploadPendingFiles(selectedFiles, _currentPath);
+    } on MissingPluginException {
+      if (!mounted) {
+        return;
+      }
+
+      _showMessage('File picker plugin not available. Fully restart the app.');
+    }
+  }
+
   Future<void> _handleUploadPressed() async {
     if (_isUploading) {
       return;
@@ -1895,6 +1916,18 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (_controller.isPhotoUploadSupported)
+                ListTile(
+                  leading: const Icon(QuarkIcons.photo_library_outlined),
+                  title: const Text('Upload photos'),
+                  enabled: !_isUploading,
+                  onTap: _isUploading
+                      ? null
+                      : () {
+                          Navigator.of(ctx).pop();
+                          _handleUploadPhotosPressed();
+                        },
+                ),
               ListTile(
                 leading: _isUploading
                     ? const SizedBox(
@@ -2032,6 +2065,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                 onSearchClosed: _handleSearchClosed,
                 onRefresh: _refreshFileState,
                 onUploadPressed: _handleUploadPressed,
+                onUploadPhotosPressed: _controller.isPhotoUploadSupported
+                    ? _handleUploadPhotosPressed
+                    : null,
                 onUploadFolderPressed: _controller.isFolderUploadSupported
                     ? _handleUploadFolderPressed
                     : null,

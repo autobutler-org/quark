@@ -14,6 +14,10 @@ import 'package:quark/utils/upload_tree_utils.dart';
 bool get isFolderPickerSupportedPlatform =>
     Platform.isLinux || Platform.isMacOS || Platform.isWindows;
 
+/// Native iOS uses the Files document picker for [FileType.any], which cannot
+/// see the Camera Roll. Android's picker already includes the gallery.
+bool get isPhotoLibraryPickerNeededPlatform => Platform.isIOS;
+
 Future<List<PendingUpload>> pickFolderUploadsPlatform() async {
   if (!isFolderPickerSupportedPlatform) {
     return const [];
@@ -108,7 +112,20 @@ String _basename(String relativePath) {
 /// own byte stream, which is read lazily at upload time and takes the
 /// single-request path.
 Future<List<PendingUpload>> pickFileUploadsPlatform() async {
-  final result = await FilePicker.pickFiles();
+  return _pendingUploadsFromPicker(await FilePicker.pickFiles());
+}
+
+/// Photos and videos from the device library.
+///
+/// [FileType.media] is the PHPicker on iOS, which is the Camera Roll.
+/// [FileType.any] (used by [pickFileUploadsPlatform]) is the Files app.
+Future<List<PendingUpload>> pickPhotoUploadsPlatform() async {
+  return _pendingUploadsFromPicker(
+    await FilePicker.pickFiles(type: FileType.media),
+  );
+}
+
+List<PendingUpload> _pendingUploadsFromPicker(List<PlatformFile> result) {
   if (result.isEmpty) {
     return const [];
   }
