@@ -11,6 +11,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/internal/server/middleware"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/gin-gonic/gin"
 	_ "modernc.org/sqlite"
@@ -288,5 +289,77 @@ func TestRequireAuth_BasicAuthGrantsAccess(t *testing.T) {
 	w := doMiddlewareReq(engine, req)
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200 with Basic Auth, got %d", w.Code)
+	}
+}
+
+// TestRequireAuth_SetsUserIDOnContext verifies requireAuth puts the caller's id
+// on the gin context as an int64 under "userID", for both the token path and
+// the HTTP Basic path. The session-management handlers read it with
+// ctxutil.Get[int64](c, "userID"); when the middleware did not set it they
+// returned 401 for every authenticated request (#1763). A missing key and a
+// wrong type both fail here.
+func TestRequireAuth_SetsUserIDOnContext(t *testing.T) {
+	sqlDB, queries := newMiddlewareTestDB(t)
+	ctx := context.Background()
+	result, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+		Username: "admin",
+		Password: "SecurePass1!",
+	})
+	if err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	user, err := queries.GetUserByUsername(ctx, "admin")
+	if err != nil {
+		t.Fatalf("GetUserByUsername: %v", err)
+	}
+
+	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{Db: sqlDB, Queries: queries})
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	middleware.Use(engine, deps)
+	var (
+		gotID     int64
+		gotOK     bool
+		gotUser   string
+		gotUserOK bool
+	)
+	engine.GET("/api/v0/protected", func(c *gin.Context) {
+		gotID, gotOK = ctxutil.Get[int64](c, "userID")
+		gotUser, gotUserOK = ctxutil.Get[string](c, "username")
+		c.Status(http.StatusOK)
+	})
+
+	for _, tc := range []struct {
+		name    string
+		prepare func(*http.Request)
+	}{
+		{"bearer token", func(r *http.Request) {
+			r.Header.Set("Authorization", "Bearer "+result.SessionToken)
+		}},
+		{"session cookie", func(r *http.Request) {
+			r.AddCookie(&http.Cookie{Name: "session", Value: result.SessionToken})
+		}},
+		{"basic auth", func(r *http.Request) {
+			r.SetBasicAuth("admin", "SecurePass1!")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gotID, gotOK, gotUser, gotUserOK = 0, false, "", false
+			req := httptest.NewRequest(http.MethodGet, "/api/v0/protected", nil)
+			tc.prepare(req)
+			if w := doMiddlewareReq(engine, req); w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+			if !gotOK {
+				t.Fatal(`requireAuth did not set "userID" on the context`)
+			}
+			if gotID != user.ID {
+				t.Errorf("userID = %d, want %d", gotID, user.ID)
+			}
+			if !gotUserOK || gotUser != "admin" {
+				t.Errorf(`username = %q (ok=%v), want "admin"`, gotUser, gotUserOK)
+			}
+		})
 	}
 }

@@ -61,7 +61,7 @@ func TestValidateSession_ValidWithinUTCOffsetWindow(t *testing.T) {
 				row.lastUsedAt,
 			)
 
-			if _, err := authutil.ValidateSession(context.Background(), queries, token); err != nil {
+			if _, _, err := authutil.ValidateSession(context.Background(), queries, token); err != nil {
 				t.Fatalf("session with an hour left was rejected: %v", err)
 			}
 		})
@@ -88,7 +88,7 @@ func TestValidateSession_ExpiredWithinUTCOffsetWindow(t *testing.T) {
 				row.lastUsedAt,
 			)
 
-			if _, err := authutil.ValidateSession(context.Background(), queries, token); err == nil {
+			if _, _, err := authutil.ValidateSession(context.Background(), queries, token); err == nil {
 				t.Fatal("session that expired an hour ago was accepted")
 			}
 		})

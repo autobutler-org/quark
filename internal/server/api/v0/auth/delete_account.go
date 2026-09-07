@@ -34,8 +34,8 @@ func deleteAccount(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(fmt.Errorf("dependencies not found in context"))
 	}
 
-	// requireAuth sets "username", not "userID" — the user is resolved from it
-	// below rather than read straight out of the context.
+	// The username is what this handler needs: the confirm parameter must match
+	// it, and the user record is looked up from it below.
 	username, ok := ctxutil.Get[string](c, "username")
 	if !ok || username == "" {
 		return serverutil.Unauthorized(fmt.Errorf("not authenticated"))

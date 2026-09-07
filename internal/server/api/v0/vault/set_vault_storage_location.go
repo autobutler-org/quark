@@ -41,7 +41,7 @@ var setVaultStorageLocationRoute = serverutil.ApiRoute(
 		if sessionUser, ok := ctxutil.Get[string](c, "username"); ok && sessionUser != req.Username {
 			return serverutil.Unauthorized(fmt.Errorf("username does not match session"))
 		}
-		if _, err := authutil.ValidateBasicAuth(ctx, deps.Database().Queries, req.Username, req.Password); err != nil {
+		if _, _, err := authutil.ValidateBasicAuth(ctx, deps.Database().Queries, req.Username, req.Password); err != nil {
 			return serverutil.Unauthorized(fmt.Errorf("invalid credentials"))
 		}
 
