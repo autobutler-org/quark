@@ -55,6 +55,26 @@ DefaultStyles _quillStyles(ColorScheme cs) {
       VerticalSpacing.zero,
       null,
     ),
+    // A block style left null here does not inherit `paragraph` — flutter_quill
+    // merges its own default over it, which is 16px/1.15 in the *ambient*
+    // theme's color rather than the page's. That is what made a list item
+    // render bigger and in the wrong color than the body text around it
+    // (#1748), so lists and their bullets get the paragraph style explicitly.
+    lists: DefaultListBlockStyle(
+      base(),
+      HorizontalSpacing.zero,
+      VerticalSpacing.zero,
+      VerticalSpacing.zero,
+      null,
+      null,
+    ),
+    leading: DefaultTextBlockStyle(
+      base(),
+      HorizontalSpacing.zero,
+      VerticalSpacing.zero,
+      VerticalSpacing.zero,
+      null,
+    ),
     quote: DefaultTextBlockStyle(
       base().copyWith(color: muted, fontStyle: FontStyle.italic),
       const HorizontalSpacing(16, 0),

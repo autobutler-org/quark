@@ -31,6 +31,22 @@
 
     <title>quark</title>
     <link rel="manifest" href="manifest.json" />
+
+    <!--
+      Flutter parks a hidden <textarea> over the canvas to drive text input and
+      keeps it invisible with `color: transparent`. Firefox refuses to paint
+      selected text in a color it considers invisible, so as soon as you select
+      anything in the document editor it inverts that transparent to opaque
+      white — the textarea's own copy of the text appears on top of the canvas,
+      wrapped differently because it falls back to a different font (#1747).
+      Naming the selection colors here keeps Firefox from substituting its own.
+    -->
+    <style>
+      .flt-text-editing::selection {
+        background-color: transparent;
+        color: transparent;
+      }
+    </style>
   </head>
   <body>
     <!--
