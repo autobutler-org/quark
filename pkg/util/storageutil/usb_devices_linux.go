@@ -3,14 +3,28 @@
 package storageutil
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
 
+// usbDevicesPath is the sysfs directory the kernel exposes USB devices under.
+// It is a var so tests can point enumeration at a directory that does not exist.
+var usbDevicesPath = "/sys/bus/usb/devices/"
+
 // ListUsbDevices lists all USB devices under /sys/bus/usb/devices/
 func ListUsbDevices(onlyStorage bool) ([]UsbDevice, error) {
-	base := "/sys/bus/usb/devices/"
+	base := usbDevicesPath
 	entries, err := os.ReadDir(base)
+	if errors.Is(err, fs.ErrNotExist) {
+		// The kernel was built without USB support, so there is no USB
+		// subsystem to enumerate — WSL2, minimal VMs, containers with a
+		// restricted /sys. That is an empty device list, not a failure, and
+		// reporting it as one floods the log on every poll (#1788). The darwin
+		// and other-platform builds already return empty for the same reason.
+		return []UsbDevice{}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
