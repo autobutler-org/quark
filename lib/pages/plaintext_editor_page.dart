@@ -132,15 +132,15 @@ class _PlaintextEditorPageState extends State<PlaintextEditorPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          tooltip: 'Back',
+        leading: BackButton(
           onPressed: () {
             if (context.canPop()) {
               context.pop();
-            } else {
-              context.go(AppRoutes.files);
+              return;
             }
+            // Nothing underneath — a deep link, or a pasted URL. The home
+            // folder is not where this file lives (#1749).
+            context.go(AppRoutes.containingFolder(widget.filePath));
           },
         ),
         actions: [

@@ -158,6 +158,28 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
     });
   }
 
+  /// The editor's own way out when nothing was pushed underneath it.
+  ///
+  /// [AppBar] implies a back button only when the navigator can pop, so a doc
+  /// reached by deep link or a pasted URL had no way out at all except the
+  /// browser's, which walked to whatever sat before the app. Returning null
+  /// leaves every other entry point — the docs list, a search hit, the file
+  /// browser's overlay — on the implied button, and their existing pop
+  /// handling (#1749).
+  Widget? _backButton() => Navigator.of(context).canPop()
+      ? null
+      : BackButton(onPressed: _leaveForContainingFolder);
+
+  /// Closes a doc that has no history behind it, landing in the folder that
+  /// holds it rather than the home folder.
+  Future<void> _leaveForContainingFolder() async {
+    if (_dirty && !await _confirmDiscard(context)) {
+      return;
+    }
+    if (!mounted) return;
+    context.go(AppRoutes.containingFolder(widget.filePath));
+  }
+
   void _restoreOverlayCloseRoute() {
     final targetRoute = widget.overlayTargetRoute;
     final closeRoute = widget.overlayCloseRoute;
@@ -477,6 +499,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
           autofocus: true,
           child: Scaffold(
             appBar: AppBar(
+              leading: _backButton(),
               title: Text(_dirty ? '$_displayName •' : _displayName),
               actions: _buildAppBarActions(context),
             ),

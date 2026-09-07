@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:data_table/data_sheet.dart';
 import 'package:data_table/data_table.dart';
 import 'package:flutter/material.dart' hide DataTable, DataRow, DataCell;
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
@@ -110,6 +111,21 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
       await Navigator.of(context).maybePop();
     });
   }
+
+  /// The editor's own way out when nothing was pushed underneath it.
+  ///
+  /// [AppBar] implies a back button only when the navigator can pop, so a sheet
+  /// reached by deep link or a pasted URL had no way out at all except the
+  /// browser's, which walked to whatever sat before the app. Returning null
+  /// leaves every other entry point — the sheets list, a search hit, the file
+  /// browser's overlay — on the implied button, and their existing pop
+  /// handling (#1749).
+  Widget? _backButton() => Navigator.of(context).canPop()
+      ? null
+      : BackButton(
+          onPressed: () =>
+              context.go(AppRoutes.containingFolder(widget.filePath)),
+        );
 
   void _restoreOverlayCloseRoute() {
     final targetRoute = widget.overlayTargetRoute;
@@ -291,7 +307,11 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
 
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: Text(title), actions: const [AppThemeToggle()]),
+        appBar: AppBar(
+          leading: _backButton(),
+          title: Text(title),
+          actions: const [AppThemeToggle()],
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -299,7 +319,11 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
     final error = _error;
     if (error != null) {
       return Scaffold(
-        appBar: AppBar(title: Text(title), actions: const [AppThemeToggle()]),
+        appBar: AppBar(
+          leading: _backButton(),
+          title: Text(title),
+          actions: const [AppThemeToggle()],
+        ),
         body: isQuarkUnreachableError(error)
             ? QuarkDisconnectedView(
                 hostAddress: AppSettings.instance.activeHost,
@@ -319,6 +343,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
       },
       child: Scaffold(
         appBar: AppBar(
+          leading: _backButton(),
           title: Text(title),
           actions: [
             if (_saving)
