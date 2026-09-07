@@ -145,15 +145,7 @@ func ImageToThumbnail(filePath string, width, height uint) (image.Image, string,
 		return nil, "", fmt.Errorf("error decoding image file %s: %w", filePath, err)
 	}
 
-	imgFormat := ImageFormatFromPath(filePath)
-	if imgFormat != 0 {
-		if _, seekErr := file.Seek(0, 0); seekErr == nil {
-			orientation := GetOrientation(file, imgFormat)
-			img = applyExifOrientation(img, orientation)
-		}
-	} else {
-		img, _ = CorrectImageOrientation(img, file)
-	}
+	img = orientDecodedImage(img, file, ImageFormatFromPath(filePath))
 
 	// Scale so the shorter side fills the target dimension, then center-crop.
 	// This preserves aspect ratio rather than squishing the image.
@@ -195,13 +187,6 @@ func ImageToThumbnail(filePath string, width, height uint) (image.Image, string,
 	return cropped, format, nil
 }
 
-// CorrectImageOrientation reads EXIF orientation data and rotates/flips the image accordingly.
-// Uses bep/imagemeta which supports JPEG, HEIC/HEIF, PNG, WebP, TIFF, and RAW formats.
-// Falls back to no-op for unsupported formats.
-func CorrectImageOrientation(img image.Image, r io.ReadSeeker) (image.Image, error) {
-	return img, nil
-}
-
 // ApplyRotation rotates img by quarters × 90° clockwise.
 // Negative values are normalized: -1 → 3, -2 → 2, etc.
 func ApplyRotation(img image.Image, quarters int64) image.Image {
@@ -240,14 +225,7 @@ func GenerateThumbnailFromReader(r io.Reader, ext string, width, height uint) (*
 		return nil, fmt.Errorf("GenerateThumbnailFromReader: decode: %w", err)
 	}
 
-	// Seek back and apply EXIF orientation.
-	if _, seekErr := rs.Seek(0, io.SeekStart); seekErr == nil {
-		imgFormat := ImageFormatFromPath("file" + ext)
-		if imgFormat != 0 {
-			orientation := GetOrientation(rs, imgFormat)
-			img = applyExifOrientation(img, orientation)
-		}
-	}
+	img = orientDecodedImage(img, rs, ImageFormatFromPath("file"+ext))
 
 	cropped, _, err := cropToFit(img, width, height)
 	if err != nil {
