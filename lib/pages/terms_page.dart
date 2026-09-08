@@ -63,10 +63,9 @@ class TermsPage extends StatelessWidget {
                     title: '2. Your Data',
                     body:
                         'You retain full ownership of all data you store with '
-                        'Quark. By default, Quark is designed so your content '
-                        'stays on hardware you control. We do not operate a '
-                        'classic hosted cloud that holds your library for '
-                        'you.\n\n'
+                        'Quark. By default your content stays on hardware you '
+                        'control. Any optional backup or sync service we may '
+                        'offer later would require your explicit opt-in.\n\n'
                         'Some features (for example remote access via a '
                         'mesh/VPN you enable, or optional imports from '
                         'third-party services you choose) may involve '
