@@ -4,6 +4,7 @@ import 'dart:js_interop';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/services/upload_chunk_source_web.dart';
+import 'package:quark/utils/ios_photo_library.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:web/web.dart' as web;
 
@@ -16,6 +17,16 @@ import 'package:web/web.dart' as web;
 /// straight to the DOM instead of through file_picker, whose PlatformFile
 /// does not surface the property at all.
 bool get isFolderPickerSupportedPlatform => true;
+
+/// Safari, the PWA, and iPadOS "desktop" mode. See [isIosPhotoLibraryClient].
+bool get isPhotoLibraryPickerNeededPlatform {
+  final nav = web.window.navigator;
+  return isIosPhotoLibraryClient(
+    userAgent: nav.userAgent,
+    platform: nav.platform,
+    maxTouchPoints: nav.maxTouchPoints,
+  );
+}
 
 Future<List<PendingUpload>> pickFolderUploadsPlatform() {
   return _pickUploads(directory: true);
@@ -31,17 +42,35 @@ Future<List<PendingUpload>> pickFolderUploadsPlatform() {
 /// #1629 had to fix. An `<input type="file">` gives us the `File` objects
 /// themselves, and a `File` is a `Blob`: sliceable, and read only when
 /// something consumes the slice.
+///
+/// No `accept` on purpose: on iOS a missing accept (with `multiple`) is what
+/// opens the Files app. Photos is a separate entry point (#1797).
 Future<List<PendingUpload>> pickFileUploadsPlatform() {
   return _pickUploads(directory: false);
 }
 
-Future<List<PendingUpload>> _pickUploads({required bool directory}) async {
+/// Photos library selection.
+///
+/// `accept="image/*,video/*"` is the switch that makes iOS Safari open the
+/// Camera Roll instead of Files. `capture` is deliberately not set — that
+/// attribute skips the library and opens the camera.
+Future<List<PendingUpload>> pickPhotoUploadsPlatform() {
+  return _pickUploads(directory: false, accept: kPhotoUploadAccept);
+}
+
+Future<List<PendingUpload>> _pickUploads({
+  required bool directory,
+  String? accept,
+}) async {
   final input = web.HTMLInputElement()
     ..type = 'file'
     ..multiple = true
     ..style.display = 'none';
   if (directory) {
     input.setAttribute('webkitdirectory', 'true');
+  }
+  if (accept != null && accept.isNotEmpty) {
+    input.accept = accept;
   }
   web.document.body?.append(input);
 

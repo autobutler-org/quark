@@ -59,6 +59,19 @@ class FileBrowserController {
   /// hide the affordance rather than offering one that cannot work.
   bool get isFolderUploadSupported => isFolderPickerSupported;
 
+  /// Whether this client must offer Photos as a source separate from Files.
+  ///
+  /// iOS's document picker is the Files app and cannot see the Camera Roll,
+  /// so Photos is a distinct upload action there (#1797).
+  bool get isPhotoUploadSupported => isPhotoLibraryPickerNeeded;
+
+  /// Picks photos and videos from the device library.
+  ///
+  /// Same [PendingUpload] shape as [pickUploadFiles]. Empty if cancelled.
+  Future<List<PendingUpload>> pickUploadPhotos() {
+    return pickPhotoUploads();
+  }
+
   /// Picks a folder and returns its files, each carrying the directory it sat
   /// in relative to the chosen folder.
   ///
