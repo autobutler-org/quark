@@ -69,7 +69,16 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   bool _fabVisible = true;
   double _lastScrollOffset = 0.0;
 
-  Future<List<FileNode>> _filesFuture = Future.value(const <FileNode>[]);
+  /// Sentinel for "no listing has been issued yet". Deliberately never
+  /// completes: a pre-resolved empty list here reads as a loaded, empty folder,
+  /// and `FutureBuilder` carries that data forward onto the *next* future it is
+  /// handed, so the real listing arrived already holding a snapshot that said
+  /// the folder was empty. That flashed "No files yet" over every deep-linked
+  /// folder between `statFile` answering and the listing landing (#1808).
+  static final Future<List<FileNode>> _notLoaded =
+      Completer<List<FileNode>>().future;
+
+  Future<List<FileNode>> _filesFuture = _notLoaded;
   List<FileNode>? _cachedFiles; // last successful result, shown during refresh
   int _generation = 0; // incremented on each reload to discard stale fetches
   String _currentPath = '';
@@ -303,7 +312,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     await _loadDevices();
     if (!mounted) return;
     setState(() => _reloadFiles());
-    await _filesFuture;
+    // `_reloadFiles` issues nothing while a deep link is still being resolved.
+    // Awaiting the sentinel would hang the refresh, and with it the mixin's
+    // in-flight flag, for the rest of the session.
+    if (!identical(_filesFuture, _notLoaded)) await _filesFuture;
   }
 
   Future<void> _loadDevices() async {

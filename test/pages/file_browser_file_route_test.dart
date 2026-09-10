@@ -28,6 +28,13 @@ class _RecordingClient implements HttpClient {
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async {
     requested.add(url);
+    // A directory listing is the slow call in the real app — a folder with a
+    // lot of files is exactly when the empty-state flash was visible — so hold
+    // it open long enough for a test to pump inside the window. Recorded first,
+    // so a test asserting the request was issued does not have to wait for it.
+    if (url.path.endsWith('/api/v0/files')) {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
     return _RecordingRequest(url, _bodyFor(url));
   }
 
@@ -45,6 +52,17 @@ class _RecordingClient implements HttpClient {
         'fileType': isFile ? 'pdf' : 'folder',
         'name': path.split('/').last,
       });
+    }
+    if (url.path.endsWith('/api/v0/files')) {
+      return jsonEncode([
+        {
+          'name': 'notes.txt',
+          'size': 12,
+          'isDir': false,
+          'dirPath': '${url.queryParameters['rootDir'] ?? ''}/notes.txt',
+          'fileType': 'txt',
+        },
+      ]);
     }
     return '[]';
   }
@@ -213,6 +231,53 @@ void main() {
             'GET /api/v0/files?rootDir=report.pdf can only 404 — the path '
             'names a file, not a directory',
       );
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  testWidgets('a route resolving to a file never flashes the empty state', (
+    tester,
+  ) async {
+    // #1808: `_reloadFiles` leaves `_filesFuture` on its pre-resolved empty
+    // default for a file route, and AutoRefreshMixin's first refresh clears
+    // `isInitialLoad` before `statFile` has answered — so the browser rendered
+    // "No files yet" until the viewer took over.
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(
+        const MaterialApp(home: FileBrowserPage(initialPath: '/report.pdf')),
+      );
+      for (var i = 0; i < 8; i++) {
+        expect(
+          find.text('No files yet'),
+          findsNothing,
+          reason: 'the deep link names a file, not an empty folder',
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  testWidgets('a folder route never flashes the empty state before its list', (
+    tester,
+  ) async {
+    // #1808: a deep link is a pending open until `statFile` says what it is,
+    // so the first refresh issues no listing and leaves `_filesFuture` on its
+    // pre-resolved empty default. Once stat answers "folder" and the real
+    // listing is issued, `FutureBuilder` carries that empty result forward as
+    // the new future's snapshot data — and with `isInitialLoad` already
+    // cleared, "No files yet" rendered until the listing landed.
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(
+        const MaterialApp(home: FileBrowserPage(initialPath: '/Documents')),
+      );
+      for (var i = 0; i < 40; i++) {
+        expect(
+          find.text('No files yet'),
+          findsNothing,
+          reason: '/Documents has files — the listing was just still in flight',
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(find.text('notes.txt'), findsOneWidget);
     }, createHttpClient: overrides.createHttpClient);
   });
 
