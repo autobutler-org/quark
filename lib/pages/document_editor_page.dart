@@ -25,11 +25,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Swallows Ctrl/Cmd+F inside a [QuillEditor] and runs [onToggle] instead.
 ///
 /// flutter_quill binds Ctrl/Cmd+F to its own modal search dialog
-/// (`OpenSearchIntent`), which would open on top of our inline find bar. Its
-/// `customShortcuts` hook can't override that — the package merges its defaults
-/// *over* the caller's map — so this hangs off `onKeyPressed`, which runs on the
-/// editor's own focus node, below the `Shortcuts` widget that dispatches the
-/// intent. Returning a non-null result stops the event there (#1046).
+/// (`OpenSearchIntent`), which would open on top of our inline find bar. A
+/// `customShortcuts` entry does win today, but only by accident:
+/// `SingleActivator` compares by identity, so the caller's entry and the
+/// package's non-const default never collide in the merged map and ours is
+/// simply found first. That is an implementation detail, not a documented
+/// contract, so this hangs off `onKeyPressed`, which runs on the editor's own
+/// focus node before any `Shortcuts` layer and does not depend on map
+/// ordering. Returning a non-null result stops the event there (#1046).
 ///
 /// Returns null for anything else so flutter_quill handles keys as usual.
 KeyEventResult? quillFindKeyInterceptor(KeyEvent event, VoidCallback onToggle) {
