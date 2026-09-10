@@ -19,7 +19,10 @@ import (
 
 // cacheVersion is bumped whenever the thumbnail generation algorithm
 // changes, so that stale cached thumbnails are automatically regenerated.
-const cacheVersion = "v2"
+// v3: HEIC/HEIF thumbnails were rotated twice, once by libheif and once from
+// the EXIF tag (#1798). The already-sideways entries are only rewritten when
+// the key moves, because a cache entry newer than its source is a hit.
+const cacheVersion = "v3"
 
 // CacheDir returns the path to the thumbnail cache directory, creating it if
 // it doesn't exist.

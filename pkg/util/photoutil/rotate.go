@@ -1,6 +1,34 @@
 package photoutil
 
-import "image"
+import (
+	"image"
+	"io"
+
+	"github.com/bep/imagemeta"
+)
+
+// orientDecodedImage turns a freshly decoded image upright using the EXIF
+// orientation of the source stream it was decoded from. r is rewound to
+// the start, because the decode has already consumed it.
+//
+// It is the one place orientation is applied, because whether it *should* be
+// applied depends on the decoder: libheif — behind image.Decode for HEIC/HEIF —
+// applies the container's rotate and mirror transforms itself and hands back
+// pixels that are already upright, leaving the EXIF tag informational
+// (gen2brain/heic says so on DecodeExif). Applying the tag on top of that
+// rotates the image a second time, which is why iPhone portrait photos came
+// back sideways (#1798). Every other decoder registered here — Go's JPEG, PNG
+// and GIF, x/image's BMP, TIFF and WebP — ignores orientation, so those still
+// need it applied.
+func orientDecodedImage(img image.Image, r io.ReadSeeker, format imagemeta.ImageFormat) image.Image {
+	if format == 0 || format == imagemeta.HEIF {
+		return img
+	}
+	if _, err := r.Seek(0, io.SeekStart); err != nil {
+		return img
+	}
+	return applyExifOrientation(img, GetOrientation(r, format))
+}
 
 // applyExifOrientation transforms an image based on the EXIF orientation value.
 // http://sylvana.net/jpegcrop/exif_orientation.html

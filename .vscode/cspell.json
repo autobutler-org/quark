@@ -257,6 +257,7 @@
     "libapp",
     "libexec",
     "libglu",
+    "libheif",
     "libopus",
     "libvpx",
     "libx",
