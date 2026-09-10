@@ -71,6 +71,7 @@ dependencies:
   flutter_quill_to_pdf: ^2.3.9
   printing: ^5.15.0
   package_info_plus: ^10.2.1
+  flutter_svg: ^2.3.0
   data_table:
     path: packages/data_table
   quark_icons:

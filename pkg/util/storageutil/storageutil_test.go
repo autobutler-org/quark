@@ -474,6 +474,10 @@ func TestDetermineFileTypeFromPath(t *testing.T) {
 		{"presentation.pptx", FileTypeSlideshow},
 		{"presentation.ppt", FileTypeSlideshow},
 		{"photo.png", FileTypeImage},
+		// SVG is XML, not a raster codec — it must not land in the image
+		// bucket that feeds thumbnails and JPEG conversion (#1806).
+		{"logo.svg", FileTypeSvg},
+		{"LOGO.SVG", FileTypeSvg},
 		{"photo.jpg", FileTypeImage},
 		{"photo.jpeg", FileTypeImage},
 		{"video.mp4", FileTypeVideo},

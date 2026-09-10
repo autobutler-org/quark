@@ -192,7 +192,8 @@ func (v *StorageServiceVFS) filesDir() (string, error) {
 // disables server-side JPEG conversion for image previews.
 func mimeTypeForName(name string) string {
 	ext := filepath.Ext(name)
-	if storageutil.DetermineFileTypeFromPath(name) == storageutil.FileTypeImage {
+	switch storageutil.DetermineFileTypeFromPath(name) {
+	case storageutil.FileTypeImage, storageutil.FileTypeSvg:
 		return storageutil.ImageMIMETypeFromExtension(ext)
 	}
 	return mime.TypeByExtension(ext)
