@@ -25,3 +25,4 @@ Looking for setup instructions? Start with the [README](../README.md).
 
 - [API (Swagger)](./swagger/index.html) — Auto-generated API docs (start the backend first)
 - [ePub Viewer](./epub/index.md) — Notes on the epub.js integration
+- [Competitive Analysis](./competitive-analysis.md) — how Quark compares to consumer NAS software and file managers
