@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:quark/services/app_settings.dart';
@@ -36,7 +37,7 @@ class DocumentEditorBody extends StatelessWidget {
   final VoidCallback onEditorTap;
   final DocumentEditorKeyHandler onEditorKey;
 
-  final int wordCount;
+  final ValueListenable<int> wordCount;
   final bool dirty;
 
   const DocumentEditorBody({
@@ -119,12 +120,15 @@ class DocumentEditorBody extends StatelessWidget {
                       onKeyPressed: onEditorKey,
                     ),
                   ),
-                  DocumentStatusBar(
-                    darkPage: darkPage,
-                    onToggleDarkPage: onToggleDarkPage,
-                    wordCount: wordCount,
-                    isReadOnly: isReadOnly,
-                    dirty: dirty,
+                  ValueListenableBuilder<int>(
+                    valueListenable: wordCount,
+                    builder: (context, count, _) => DocumentStatusBar(
+                      darkPage: darkPage,
+                      onToggleDarkPage: onToggleDarkPage,
+                      wordCount: count,
+                      isReadOnly: isReadOnly,
+                      dirty: dirty,
+                    ),
                   ),
                 ],
               ),
