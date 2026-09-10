@@ -236,10 +236,11 @@ packages:
   desktop_drop:
     dependency: "direct main"
     description:
-      name: desktop_drop
-      sha256: "47ded09c85909edfed644fd4cbb5051b040d0aed5c79e7e062ea4b3b7156dbe4"
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/desktop_drop"
+      ref: main
+      resolved-ref: "29e5924fa2da5e0d840482157839adba8b310e21"
+      url: "https://github.com/autobutler-org/flutter-plugins.git"
+    source: git
     version: "0.8.4"
   diff_match_patch:
     dependency: transitive
