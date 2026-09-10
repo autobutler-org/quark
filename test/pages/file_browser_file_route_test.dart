@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/pages/file_browser_page.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Records the paths every outgoing request is sent to, and answers each one
@@ -160,6 +161,10 @@ void main() {
   });
 
   tearDown(FileBrowserCache.instance.clearOpenFile);
+
+  // The shared client is built once and kept (#1782), so a client built inside
+  // one test's HttpOverrides zone would answer the next test's requests too.
+  tearDown(resetSharedHttpClient);
 
   /// Listing requests whose rootDir names [path] — the exact shape of the
   /// doomed request, so an unrelated root listing cannot pass or fail this.

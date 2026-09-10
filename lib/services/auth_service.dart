@@ -54,9 +54,13 @@ class DeleteAccountResult {
 /// [TimeoutException] as unreachable and routes to the disconnected UI.
 const Duration kAuthRequestTimeout = Duration(seconds: 5);
 
-/// Builds the client every auth call goes out through. Overridable in tests.
+/// The client every auth call goes out through. Overridable in tests.
+///
+/// Defaults to the session-wide [sharedHttpClient], so auth calls reuse the
+/// connection the rest of the app is already holding open. Nothing here closes
+/// the client it gets back.
 @visibleForTesting
-http.Client Function() authHttpClientFactory = buildLocalTrustHttpClient;
+http.Client Function() authHttpClientFactory = () => sharedHttpClient;
 
 /// Communicates with the quark auth API.
 class AuthService {
@@ -65,13 +69,9 @@ class AuthService {
   /// Checks whether initial setup has been completed on the quark.
   static Future<AuthStatus> checkStatus() async {
     final uri = _baseUri.resolve('/api/v0/auth/status');
-    final client = authHttpClientFactory();
-    final http.Response response;
-    try {
-      response = await client.get(uri).timeout(kAuthRequestTimeout);
-    } finally {
-      client.close();
-    }
+    final response = await authHttpClientFactory()
+        .get(uri)
+        .timeout(kAuthRequestTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, 'Failed to check auth status');
     }
@@ -87,19 +87,13 @@ class AuthService {
     required String password,
   }) async {
     final uri = _baseUri.resolve('/api/v0/auth/setup');
-    final client = authHttpClientFactory();
-    final http.Response response;
-    try {
-      response = await client
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'username': username, 'password': password}),
-          )
-          .timeout(kAuthRequestTimeout);
-    } finally {
-      client.close();
-    }
+    final response = await authHttpClientFactory()
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'username': username, 'password': password}),
+        )
+        .timeout(kAuthRequestTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = _tryDecodeError(response.body);
       throwApiError(response.statusCode, body, 'Setup failed');
@@ -118,19 +112,13 @@ class AuthService {
     required String password,
   }) async {
     final uri = _baseUri.resolve('/api/v0/auth/login');
-    final client = authHttpClientFactory();
-    final http.Response response;
-    try {
-      response = await client
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'username': username, 'password': password}),
-          )
-          .timeout(kAuthRequestTimeout);
-    } finally {
-      client.close();
-    }
+    final response = await authHttpClientFactory()
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'username': username, 'password': password}),
+        )
+        .timeout(kAuthRequestTimeout);
     if (response.statusCode == 401) {
       throw const MessageException('Invalid username or password.');
     }
@@ -151,22 +139,16 @@ class AuthService {
     required String newPassword,
   }) async {
     final uri = _baseUri.resolve('/api/v0/auth/recover');
-    final client = authHttpClientFactory();
-    final http.Response response;
-    try {
-      response = await client
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'recoveryPhrase': recoveryPhrase,
-              'newPassword': newPassword,
-            }),
-          )
-          .timeout(kAuthRequestTimeout);
-    } finally {
-      client.close();
-    }
+    final response = await authHttpClientFactory()
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'recoveryPhrase': recoveryPhrase,
+            'newPassword': newPassword,
+          }),
+        )
+        .timeout(kAuthRequestTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = _tryDecodeError(response.body);
       throwApiError(response.statusCode, body, 'Recovery failed');
@@ -184,14 +166,9 @@ class AuthService {
     if (token == null) return;
     try {
       final uri = _baseUri.resolve('/api/v0/auth/logout');
-      final client = authHttpClientFactory();
-      try {
-        await client
-            .post(uri, headers: {'Authorization': 'Bearer $token'})
-            .timeout(kAuthRequestTimeout);
-      } finally {
-        client.close();
-      }
+      await authHttpClientFactory()
+          .post(uri, headers: {'Authorization': 'Bearer $token'})
+          .timeout(kAuthRequestTimeout);
     } catch (_) {
       // Best-effort — token is already cleared locally.
     }
@@ -259,15 +236,9 @@ class AuthService {
     final uri = _baseUri
         .resolve('/api/v0/auth/account')
         .replace(queryParameters: {...aspects, 'confirm': confirmUsername});
-    final client = authHttpClientFactory();
-    final http.Response response;
-    try {
-      response = await client
-          .delete(uri, headers: {'Authorization': 'Bearer $token'})
-          .timeout(kAuthRequestTimeout);
-    } finally {
-      client.close();
-    }
+    final response = await authHttpClientFactory()
+        .delete(uri, headers: {'Authorization': 'Bearer $token'})
+        .timeout(kAuthRequestTimeout);
     // A session the Quark no longer honors is handled the way the rest of the
     // app handles one, rather than as a failure: the token is dropped and the
     // caller routes the user out. Reading it as an error would put the Quark's

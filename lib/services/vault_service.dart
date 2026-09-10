@@ -200,7 +200,7 @@ class VaultService with AuthenticatedService {
   static Uri _apiUri(String path) => apiBaseUri.resolve('/api/v0$path');
 
   static Future<VaultStatus> getStatus() async {
-    final resp = await http.get(
+    final resp = await sharedHttpClient.get(
       _apiUri('/vault/status'),
       headers: _authHeaders,
     );
@@ -211,7 +211,7 @@ class VaultService with AuthenticatedService {
   }
 
   static Future<void> setup(String password) async {
-    final resp = await http.post(
+    final resp = await sharedHttpClient.post(
       _apiUri('/vault/setup'),
       headers: _jsonHeaders,
       body: json.encode({'masterPassword': password}),
@@ -223,7 +223,7 @@ class VaultService with AuthenticatedService {
   }
 
   static Future<bool> unlock(String password) async {
-    final resp = await http.post(
+    final resp = await sharedHttpClient.post(
       _apiUri('/vault/unlock'),
       headers: _jsonHeaders,
       body: json.encode({'masterPassword': password}),
@@ -236,14 +236,17 @@ class VaultService with AuthenticatedService {
   }
 
   static Future<void> lock() async {
-    final resp = await http.post(_apiUri('/vault/lock'), headers: _jsonHeaders);
+    final resp = await sharedHttpClient.post(
+      _apiUri('/vault/lock'),
+      headers: _jsonHeaders,
+    );
     if (resp.statusCode != 200) {
       throw ApiException(resp.statusCode, 'Lock failed');
     }
   }
 
   static Future<List<VaultEntryItem>> listEntries() async {
-    final resp = await http.get(
+    final resp = await sharedHttpClient.get(
       _apiUri('/vault/entries'),
       headers: _authHeaders,
     );
@@ -258,7 +261,7 @@ class VaultService with AuthenticatedService {
   }
 
   static Future<VaultEntryDetail> getEntry(int id) async {
-    final resp = await http.get(
+    final resp = await sharedHttpClient.get(
       _apiUri('/vault/entries/$id'),
       headers: _authHeaders,
     );
@@ -283,7 +286,7 @@ class VaultService with AuthenticatedService {
     List<VaultCustomField> customFields = const [],
     int? folderId,
   }) async {
-    final resp = await http.post(
+    final resp = await sharedHttpClient.post(
       _apiUri('/vault/entries'),
       headers: _jsonHeaders,
       body: json.encode({
@@ -317,7 +320,7 @@ class VaultService with AuthenticatedService {
     List<VaultCustomField> customFields = const [],
     int? folderId,
   }) async {
-    final resp = await http.put(
+    final resp = await sharedHttpClient.put(
       _apiUri('/vault/entries/$id'),
       headers: _jsonHeaders,
       body: json.encode({
@@ -338,7 +341,7 @@ class VaultService with AuthenticatedService {
   }
 
   static Future<void> deleteEntry(int id) async {
-    final resp = await http.delete(
+    final resp = await sharedHttpClient.delete(
       _apiUri('/vault/entries/$id'),
       headers: _authHeaders,
     );
@@ -348,7 +351,7 @@ class VaultService with AuthenticatedService {
   }
 
   static Future<List<VaultFolder>> listFolders() async {
-    final resp = await http.get(
+    final resp = await sharedHttpClient.get(
       _apiUri('/vault/folders'),
       headers: _authHeaders,
     );
@@ -366,7 +369,7 @@ class VaultService with AuthenticatedService {
     required String name,
     int? parentId,
   }) async {
-    final resp = await http.post(
+    final resp = await sharedHttpClient.post(
       _apiUri('/vault/folders'),
       headers: _jsonHeaders,
       body: json.encode({
@@ -380,7 +383,7 @@ class VaultService with AuthenticatedService {
   }
 
   static Future<void> deleteFolder(int id) async {
-    final resp = await http.delete(
+    final resp = await sharedHttpClient.delete(
       _apiUri('/vault/folders/$id'),
       headers: _authHeaders,
     );
@@ -397,7 +400,7 @@ class VaultService with AuthenticatedService {
     bool symbols = true,
     bool avoidAmbiguous = false,
   }) async {
-    final resp = await http.post(
+    final resp = await sharedHttpClient.post(
       _apiUri('/vault/generate'),
       headers: _jsonHeaders,
       body: json.encode({
@@ -417,7 +420,7 @@ class VaultService with AuthenticatedService {
   }
 
   static Future<VaultStorageLocation> getStorageLocation() async {
-    final resp = await http.get(
+    final resp = await sharedHttpClient.get(
       _apiUri('/vault/storage-location'),
       headers: _authHeaders,
     );
@@ -434,7 +437,7 @@ class VaultService with AuthenticatedService {
     required String username,
     required String password,
   }) async {
-    final resp = await http.put(
+    final resp = await sharedHttpClient.put(
       _apiUri('/vault/storage-location'),
       headers: _jsonHeaders,
       body: json.encode({
@@ -464,7 +467,7 @@ class VaultService with AuthenticatedService {
     request.files.add(
       http.MultipartFile.fromBytes('file', fileBytes, filename: fileName),
     );
-    final streamed = await request.send();
+    final streamed = await sharedHttpClient.send(request);
     final body = await streamed.stream.bytesToString();
     if (streamed.statusCode == 423) throw VaultLockedException();
     if (streamed.statusCode != 200) {
@@ -474,7 +477,7 @@ class VaultService with AuthenticatedService {
   }
 
   static Future<List<int>> exportEntries({String format = 'json'}) async {
-    final resp = await http.get(
+    final resp = await sharedHttpClient.get(
       _apiUri('/vault/export?format=$format'),
       headers: _authHeaders,
     );
@@ -489,7 +492,7 @@ class VaultService with AuthenticatedService {
     required String currentPassword,
     required String newPassword,
   }) async {
-    final resp = await http.put(
+    final resp = await sharedHttpClient.put(
       _apiUri('/vault/change-password'),
       headers: _jsonHeaders,
       body: json.encode({

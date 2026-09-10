@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -136,7 +135,7 @@ class StorageService with AuthenticatedService {
 
   static Future<List<StorageDevice>> _fetchDevices() async {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/status');
-    final response = await http.get(uri, headers: _authHeaders);
+    final response = await sharedHttpClient.get(uri, headers: _authHeaders);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, 'Failed to list storage devices');
     }
@@ -152,7 +151,7 @@ class StorageService with AuthenticatedService {
   /// Mounts a USB device by serial. Requires the quark to be running as root.
   static Future<void> mountDevice(String serial) async {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/usb/$serial');
-    final response = await http.post(uri, headers: _authHeaders);
+    final response = await sharedHttpClient.post(uri, headers: _authHeaders);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = jsonDecode(response.body) as Map<String, dynamic>?;
       throwApiError(response.statusCode, body?['error'], 'Mount failed');
@@ -169,7 +168,7 @@ class StorageService with AuthenticatedService {
   /// groundwork for safe eject.
   static Future<void> unmountDevice(String serial) async {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/usb/$serial');
-    final response = await http.delete(uri, headers: _authHeaders);
+    final response = await sharedHttpClient.delete(uri, headers: _authHeaders);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = jsonDecode(response.body) as Map<String, dynamic>?;
       throwApiError(response.statusCode, body?['error'], 'Unmount failed');
@@ -184,7 +183,7 @@ class StorageService with AuthenticatedService {
     final uri = apiBaseUri
         .resolve('/api/v0/storage/devices/rename')
         .replace(queryParameters: {'devicePath': devicePath});
-    final response = await http.patch(
+    final response = await sharedHttpClient.patch(
       uri,
       headers: {'Content-Type': 'application/json', ..._authHeaders},
       body: jsonEncode({'name': name}),
@@ -202,7 +201,7 @@ class StorageService with AuthenticatedService {
     required String password,
   }) async {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/role');
-    final response = await http.put(
+    final response = await sharedHttpClient.put(
       uri,
       headers: {'Content-Type': 'application/json', ..._authHeaders},
       body: jsonEncode({
@@ -231,7 +230,7 @@ class StorageService with AuthenticatedService {
     if (password != null) body['password'] = password;
     if (recoveryPassword != null) body['recoveryPassword'] = recoveryPassword;
 
-    final response = await http.post(
+    final response = await sharedHttpClient.post(
       uri,
       headers: {'Content-Type': 'application/json', ..._authHeaders},
       body: jsonEncode(body),
@@ -252,7 +251,7 @@ class StorageService with AuthenticatedService {
     final uri = apiBaseUri.resolve(
       '/api/v0/storage/devices/snapshot-backup/status/$jobId',
     );
-    final response = await http.get(uri, headers: _authHeaders);
+    final response = await sharedHttpClient.get(uri, headers: _authHeaders);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, 'Failed to get backup status');
     }
@@ -267,7 +266,7 @@ class StorageService with AuthenticatedService {
     final uri = apiBaseUri.resolve(
       '/api/v0/storage/devices/snapshot-backup/verify',
     );
-    final response = await http.post(
+    final response = await sharedHttpClient.post(
       uri,
       headers: {'Content-Type': 'application/json', ..._authHeaders},
       body: jsonEncode({'deviceSerial': deviceSerial, 'full': full}),
