@@ -17,6 +17,7 @@ import 'package:quark/pages/terms_page.dart';
 import 'package:quark/pages/vault_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
+import 'package:quark/utils/file_browser_path_utils.dart';
 
 // Route paths — use these constants everywhere instead of string literals.
 class AppRoutes {
@@ -126,6 +127,16 @@ class AppRoutes {
         ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
         : base;
   }
+
+  /// The files route for the folder that holds [filePath].
+  /// e.g. containingFolder('reports/2024/q1.qdoc') → '/files/reports/2024'
+  ///
+  /// Where an editor lands when it is closed with nothing underneath it to pop
+  /// back to — a deep link, a pasted URL, a link someone shared. Sending those
+  /// to [files] instead put the user in the home folder however deep the
+  /// document lived (#1749).
+  static String containingFolder(String filePath) =>
+      filesPath(parentPath(filePath));
 }
 
 /// Everything that can invalidate the [authRedirect] gate.
@@ -212,35 +223,36 @@ final router = GoRouter(
     GoRoute(
       path: AppRoutes.docs,
       builder: (context, state) => const DocsPage(),
-      routes: [
-        GoRoute(
-          // Matches /docs/<anything including slashes> — opens the doc editor.
-          path: ':path(.*)',
-          builder: (context, state) {
-            final filePath = state.pathParameters['path'] ?? '';
-            final serial = state.uri.queryParameters['serial'] ?? '';
-            return DocumentEditorPage(filePath: filePath, deviceSerial: serial);
-          },
-        ),
-      ],
+    ),
+    GoRoute(
+      // Matches /docs/<anything including slashes> — opens the doc editor.
+      //
+      // Top-level, not nested under /docs, and the same for /sheets below —
+      // matching how /edit already declares the plaintext editor. A nested
+      // editor route makes go_router build the section list underneath every
+      // editor, so a deep link the user never navigated to still answers
+      // "back" with a page they never visited, and leaving the editor left the
+      // folder the document lives in entirely (#1749). Pushing from the list
+      // still stacks the list underneath, so that back is unaffected.
+      path: '${AppRoutes.docs}/:path(.*)',
+      builder: (context, state) {
+        final filePath = state.pathParameters['path'] ?? '';
+        final serial = state.uri.queryParameters['serial'] ?? '';
+        return DocumentEditorPage(filePath: filePath, deviceSerial: serial);
+      },
     ),
     GoRoute(
       path: AppRoutes.sheets,
       builder: (context, state) => const SheetsPage(),
-      routes: [
-        GoRoute(
-          // Matches /sheets/<anything including slashes> — opens the sheet editor.
-          path: ':path(.*)',
-          builder: (context, state) {
-            final filePath = state.pathParameters['path'] ?? '';
-            final serial = state.uri.queryParameters['serial'] ?? '';
-            return SpreadsheetEditorPage(
-              filePath: filePath,
-              deviceSerial: serial,
-            );
-          },
-        ),
-      ],
+    ),
+    GoRoute(
+      // Matches /sheets/<anything including slashes> — opens the sheet editor.
+      path: '${AppRoutes.sheets}/:path(.*)',
+      builder: (context, state) {
+        final filePath = state.pathParameters['path'] ?? '';
+        final serial = state.uri.queryParameters['serial'] ?? '';
+        return SpreadsheetEditorPage(filePath: filePath, deviceSerial: serial);
+      },
     ),
     GoRoute(
       path: AppRoutes.devices,
