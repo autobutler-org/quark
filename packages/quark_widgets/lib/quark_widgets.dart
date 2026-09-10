@@ -21,6 +21,7 @@ export 'src/file_browser/file_selection_bar.dart';
 export 'src/file_browser/new_file_dialog.dart';
 export 'src/layout/quark_app_bar.dart';
 export 'src/layout/quark_brand_button.dart';
+export 'src/layout/quark_checkerboard.dart';
 export 'src/layout/quark_drawer.dart';
 export 'src/layout/quark_page_scaffold.dart';
 export 'src/layout/quark_section.dart';

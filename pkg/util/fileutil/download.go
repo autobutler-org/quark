@@ -198,7 +198,7 @@ func downloadContentType(fileType storageutil.FileType, ext string) string {
 	switch fileType {
 	case storageutil.FileTypePDF:
 		return "application/pdf"
-	case storageutil.FileTypeImage:
+	case storageutil.FileTypeImage, storageutil.FileTypeSvg:
 		return storageutil.ImageMIMETypeFromExtension(ext)
 	case storageutil.FileTypeVideo:
 		return storageutil.VideoMIMETypeFromExtension(ext)

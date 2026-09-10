@@ -29,6 +29,7 @@ const (
 	FileTypeQdoc      FileType = "qdoc"
 	FileTypeQsheet    FileType = "qsheet"
 	FileTypeSlideshow FileType = "slideshow"
+	FileTypeSvg       FileType = "svg"
 	FileTypeVideo     FileType = "video"
 	FileTypeXlsx      FileType = "xlsx"
 	FileTypeSpacer    FileType = "spacer"
@@ -179,7 +180,12 @@ func DetermineFileTypeFromPath(filePath string) FileType {
 		return FileTypePDF
 	case ".pptx", ".ppt":
 		return FileTypeSlideshow
-	case ".png", ".jpg", ".jpeg", ".gif", ".svg", ".heic", ".heif", ".webp", ".bmp", ".tiff", ".tif", ".avif",
+	// SVG is XML, not a raster codec: it cannot be decoded, resized into a
+	// thumbnail, or converted to JPEG the way the formats below can, so it
+	// gets its own type rather than reaching those paths and failing (#1806).
+	case ".svg":
+		return FileTypeSvg
+	case ".png", ".jpg", ".jpeg", ".gif", ".heic", ".heif", ".webp", ".bmp", ".tiff", ".tif", ".avif",
 		// Raw camera formats
 		".raw", ".cr2", ".cr3", ".nef", ".nrw", ".arw", ".srf", ".sr2",
 		".orf", ".rw2", ".pef", ".dng", ".raf", ".rwl", ".x3f":

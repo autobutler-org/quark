@@ -193,6 +193,29 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkCheckerboard',
+    group: 'Layout',
+    build: (context, log) => SizedBox(
+      height: 220,
+      // A white glyph and a black one, so the board can be judged the way it
+      // is used: transparent artwork that could be either.
+      child: QuarkCheckerboard(
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final color in const [Colors.white, Colors.black])
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Icon(Icons.auto_awesome, size: 72, color: color),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkDrawer',
     group: 'Layout',
     build: (context, log) => SizedBox(

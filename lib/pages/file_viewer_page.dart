@@ -4,6 +4,7 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/generic_file_viewer_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
+import 'package:quark/pages/svg_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -17,6 +18,7 @@ import 'package:quark/widgets/layout/theme_toggle_button.dart';
 /// | fileType                         | Destination                     |
 /// |----------------------------------|---------------------------------|
 /// | `image`                          | [ImageViewerPage]               |
+/// | `svg`                            | [SvgViewerPage]                 |
 /// | `video`                          | [VideoViewerPage]               |
 /// | `audio`                          | [AudioPlayerPage]               |
 /// | `qdoc`                          | /docs/&lt;path&gt;              |
@@ -108,6 +110,26 @@ class _FileViewerPageState extends State<FileViewerPage> {
                 relPath: widget.filePath,
                 serial: serial,
               ),
+            ),
+          );
+
+        case 'svg':
+          // SVG is XML, not a raster codec, so it needs SvgPicture rather
+          // than the photo viewer's Image.memory (#1806).
+          final svgBytes = await FilesService.downloadFileBytes(
+            widget.filePath,
+            serial: serial,
+          );
+          if (!mounted) return;
+          if (svgBytes == null) {
+            setState(
+              () => _errorMessage = Errors.couldNot('download the image'),
+            );
+            return;
+          }
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute<void>(
+              builder: (_) => SvgViewerPage(bytes: svgBytes, name: name),
             ),
           );
 
