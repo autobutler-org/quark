@@ -10,6 +10,7 @@ Looking for setup instructions? Start with the [README](../README.md).
 ## Development
 
 - [Dev Onboarding](./dev-onboarding.md) — Get the codebase running locally
+- [Container Image](./container.md) — running Quark in Docker or Kubernetes
 - [UI Components](./ui/index.md) — How to edit the frontend
 - [iOS Dev Setup](./ios-dev/README.md) — running the app on your own iPhone
 - [iOS App Store Release](./ios-release.md) — building and publishing to the App Store

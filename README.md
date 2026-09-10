@@ -68,6 +68,27 @@ make emulate/android  # or emulate/ios
 make serve/frontend/mobile
 ```
 
+#### Container
+
+Runs a **published release**, not your working tree:
+
+```bash
+make build/docker                       # build the image for the latest released tag
+make serve/docker                       # run it on http://localhost:8080
+make serve/docker DOCKER_PORT=9000      # different host port
+make serve/docker DOCKER_DATA=/abs/path # use a Quark directory on the host
+make clean/docker                       # remove the container
+```
+
+It downloads the tarball for a tagged version, so it will not pick up local
+changes — `make watch/backend` is still the development loop. Use this to check
+the shipped artifact, to reproduce something a user reports on a specific
+version, or to try Quark without a Go and Flutter toolchain.
+
+State lives in the `quark-data` volume by default and persists between runs.
+See [docs/container.md](docs/container.md) for Kubernetes, the uid 999 the data
+directory must be owned by on Linux, and the rest.
+
 > USB device mounting requires root on Linux, as does binding `:443` in secure
 > mode. Use `AS_ROOT=1` with any backend target if you need it — e.g.
 > `make watch/backend/secure AS_ROOT=1`.
