@@ -187,12 +187,21 @@ func usbDeviceMonitor(deps deputil.Dependencies) {
 	// Track serials we've already handled so we don't reattempt on every tick.
 	handled := make(map[string]bool)
 
+	// An enumeration failure is usually permanent, so log it on transition
+	// rather than on every 5s tick — otherwise one bad host produces 17k
+	// identical lines a day and buries everything else (#1788).
+	lastErr := ""
+
 	for range ticker.C {
 		devices, err := storageutil.ListUsbDevices(true)
 		if err != nil {
-			log.Printf("[storage] usbDeviceMonitor: failed to list USB devices: %v", err)
+			if err.Error() != lastErr {
+				lastErr = err.Error()
+				log.Printf("[storage] usbDeviceMonitor: failed to list USB devices: %v", err)
+			}
 			continue
 		}
+		lastErr = ""
 
 		for _, device := range devices {
 			serial := device.GetSerial()
