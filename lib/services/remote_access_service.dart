@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -26,7 +25,7 @@ class RemoteAccessService with AuthenticatedService {
 
   static Future<RemoteAccessStatus> getStatus() async {
     final uri = apiBaseUri.resolve('/api/v0/settings/remote-access');
-    final response = await http.get(uri, headers: _authHeaders);
+    final response = await sharedHttpClient.get(uri, headers: _authHeaders);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(
         response.statusCode,
@@ -39,7 +38,7 @@ class RemoteAccessService with AuthenticatedService {
 
   static Future<RemoteAccessStatus> enable() async {
     final uri = apiBaseUri.resolve('/api/v0/settings/remote-access');
-    final response = await http.post(
+    final response = await sharedHttpClient.post(
       uri,
       headers: {'Content-Type': 'application/json', ..._authHeaders},
       body: jsonEncode(<String, dynamic>{}),
@@ -58,7 +57,7 @@ class RemoteAccessService with AuthenticatedService {
 
   static Future<RemoteAccessStatus> disable() async {
     final uri = apiBaseUri.resolve('/api/v0/settings/remote-access');
-    final response = await http.delete(uri, headers: _authHeaders);
+    final response = await sharedHttpClient.delete(uri, headers: _authHeaders);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = jsonDecode(response.body) as Map<String, dynamic>?;
       throwApiError(

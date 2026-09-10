@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -43,7 +42,7 @@ class ConnectedDevicesService with AuthenticatedService {
 
   static Future<List<ConnectedDevice>> listDevices() async {
     final uri = apiBaseUri.resolve('/api/v0/devices');
-    final response = await http.get(uri, headers: _authHeaders);
+    final response = await sharedHttpClient.get(uri, headers: _authHeaders);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, 'Failed to fetch devices');
     }
@@ -67,7 +66,7 @@ class ConnectedDevicesService with AuthenticatedService {
 
   static Future<void> deleteDevice(int id) async {
     final uri = apiBaseUri.resolve('/api/v0/devices/$id');
-    final response = await http.delete(uri, headers: _authHeaders);
+    final response = await sharedHttpClient.delete(uri, headers: _authHeaders);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, 'Failed to delete device');
     }

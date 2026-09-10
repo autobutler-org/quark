@@ -84,7 +84,7 @@ void main() {
     await settings.setActiveIndex(0);
   });
 
-  tearDown(() => authHttpClientFactory = buildLocalTrustHttpClient);
+  tearDown(() => authHttpClientFactory = () => sharedHttpClient);
 
   _RecordingClient serve({int statusCode = 200, String body = '{}'}) {
     final client = _RecordingClient(statusCode: statusCode, body: body);

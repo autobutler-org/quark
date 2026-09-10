@@ -51,6 +51,47 @@ String _extractHost(String? url) {
   }
 }
 
+http.Client? _sharedClient;
+
+/// Host key [_sharedClient] was built for. Null means nothing is cached; `''`
+/// is a real key, since [_extractHost] returns it for an unset active host.
+String? _sharedClientHost;
+
+/// Builds the client [sharedHttpClient] hands out. Overridable in tests.
+@visibleForTesting
+http.Client Function() sharedHttpClientFactory = buildLocalTrustHttpClient;
+
+/// The one [http.Client] every API call to the active host goes out through.
+///
+/// A client that is closed after each request also closes its socket, so every
+/// call paid a fresh TCP connect plus TLS handshake — tens of milliseconds on a
+/// LAN, the dominant cost of a listing over remote access, and a radio wake-up
+/// on a phone. Keeping one client alive lets the next request ride the
+/// connection the last one opened, which is also what makes a cheap answer
+/// cheap: a 304 revalidation only saves anything when it does not have to
+/// build a connection to ask.
+///
+/// The client is rebuilt when [AppSettings.activeHost] changes, because trust
+/// (see [isLocalTrustHost]) is decided per host and pooled connections to the
+/// old one are worthless.
+http.Client get sharedHttpClient {
+  final host = _extractHost(AppSettings.instance.activeHost);
+  final cached = _sharedClient;
+  if (cached != null && _sharedClientHost == host) return cached;
+
+  cached?.close();
+  _sharedClientHost = host;
+  return _sharedClient = sharedHttpClientFactory();
+}
+
+/// Closes and forgets the shared client, so the next access builds a new one.
+@visibleForTesting
+void resetSharedHttpClient() {
+  _sharedClient?.close();
+  _sharedClient = null;
+  _sharedClientHost = null;
+}
+
 /// Mixin providing a shared auth header helper for services that talk to the quark API.
 ///
 /// Include this mixin in any service class that makes HTTP calls to the quark.
@@ -82,27 +123,23 @@ mixin AuthenticatedService {
     }
   }
 
-  /// Returns an HTTP client that trusts self-signed certs when the active host
-  /// is a local/LAN address. Safe to call on every request; the returned client
-  /// must be closed by the caller when no longer needed.
-  http.Client get httpClient => buildLocalTrustHttpClient();
+  /// The shared HTTP client for the active host — see [sharedHttpClient].
+  ///
+  /// Do not close it. It is reused by every other call on every other service,
+  /// and closing it drops the pooled connections that make it worth having.
+  http.Client get httpClient => sharedHttpClient;
 
   /// Authenticated GET — injects auth headers and checks for 401 automatically.
   Future<http.Response> authenticatedGet(
     Uri uri, {
     Map<String, String>? headers,
   }) async {
-    final client = httpClient;
-    try {
-      final response = await client.get(
-        uri,
-        headers: {...authHeaders, ...?headers},
-      );
-      checkUnauthorized(response);
-      return response;
-    } finally {
-      client.close();
-    }
+    final response = await httpClient.get(
+      uri,
+      headers: {...authHeaders, ...?headers},
+    );
+    checkUnauthorized(response);
+    return response;
   }
 
   /// Authenticated GET streamed straight onto disk, returning where it landed.
@@ -117,32 +154,32 @@ mixin AuthenticatedService {
     Uri uri, {
     Map<String, String>? headers,
   }) async {
-    final client = httpClient;
-    try {
-      final request = http.Request('GET', uri)
-        ..headers.addAll({...authHeaders, ...?headers});
-      final response = await client.send(request);
+    final request = http.Request('GET', uri)
+      ..headers.addAll({...authHeaders, ...?headers});
+    final response = await httpClient.send(request);
 
-      if (response.statusCode == 401) {
-        AppSettings.instance.setSessionToken(null);
-        throw const UnauthorizedException();
-      }
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw ApiException(response.statusCode, 'Failed to download file');
-      }
-
-      final dir = await Directory.systemTemp.createTemp('quark_download_');
-      final file = File('${dir.path}/download');
-      final sink = file.openWrite();
-      try {
-        await response.stream.pipe(sink);
-      } finally {
-        await sink.close();
-      }
-      return DownloadedFile._(dir, file.path, response.headers);
-    } finally {
-      client.close();
+    // An unread body pins the connection out of the pool for good, so the
+    // error paths have to discard it before they leave. `drain` throws it
+    // away as it arrives rather than accumulating it.
+    if (response.statusCode == 401) {
+      await response.stream.drain<void>();
+      AppSettings.instance.setSessionToken(null);
+      throw const UnauthorizedException();
     }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      await response.stream.drain<void>();
+      throw ApiException(response.statusCode, 'Failed to download file');
+    }
+
+    final dir = await Directory.systemTemp.createTemp('quark_download_');
+    final file = File('${dir.path}/download');
+    final sink = file.openWrite();
+    try {
+      await response.stream.pipe(sink);
+    } finally {
+      await sink.close();
+    }
+    return DownloadedFile._(dir, file.path, response.headers);
   }
 
   /// Authenticated POST — injects auth headers and checks for 401 automatically.
@@ -151,18 +188,13 @@ mixin AuthenticatedService {
     Map<String, String>? headers,
     Object? body,
   }) async {
-    final client = httpClient;
-    try {
-      final response = await client.post(
-        uri,
-        headers: {...authHeaders, ...?headers},
-        body: body,
-      );
-      checkUnauthorized(response);
-      return response;
-    } finally {
-      client.close();
-    }
+    final response = await httpClient.post(
+      uri,
+      headers: {...authHeaders, ...?headers},
+      body: body,
+    );
+    checkUnauthorized(response);
+    return response;
   }
 
   /// Authenticated PATCH — injects auth headers and checks for 401 automatically.
@@ -171,18 +203,13 @@ mixin AuthenticatedService {
     Map<String, String>? headers,
     Object? body,
   }) async {
-    final client = httpClient;
-    try {
-      final response = await client.patch(
-        uri,
-        headers: {...authHeaders, ...?headers},
-        body: body,
-      );
-      checkUnauthorized(response);
-      return response;
-    } finally {
-      client.close();
-    }
+    final response = await httpClient.patch(
+      uri,
+      headers: {...authHeaders, ...?headers},
+      body: body,
+    );
+    checkUnauthorized(response);
+    return response;
   }
 
   /// Authenticated DELETE — injects auth headers and checks for 401 automatically.
@@ -191,18 +218,13 @@ mixin AuthenticatedService {
     Map<String, String>? headers,
     Object? body,
   }) async {
-    final client = httpClient;
-    try {
-      final response = await client.delete(
-        uri,
-        headers: {...authHeaders, ...?headers},
-        body: body,
-      );
-      checkUnauthorized(response);
-      return response;
-    } finally {
-      client.close();
-    }
+    final response = await httpClient.delete(
+      uri,
+      headers: {...authHeaders, ...?headers},
+      body: body,
+    );
+    checkUnauthorized(response);
+    return response;
   }
 
   /// Authenticated PUT — injects auth headers and checks for 401 automatically.
@@ -211,18 +233,13 @@ mixin AuthenticatedService {
     Map<String, String>? headers,
     Object? body,
   }) async {
-    final client = httpClient;
-    try {
-      final response = await client.put(
-        uri,
-        headers: {...authHeaders, ...?headers},
-        body: body,
-      );
-      checkUnauthorized(response);
-      return response;
-    } finally {
-      client.close();
-    }
+    final response = await httpClient.put(
+      uri,
+      headers: {...authHeaders, ...?headers},
+      body: body,
+    );
+    checkUnauthorized(response);
+    return response;
   }
 }
 

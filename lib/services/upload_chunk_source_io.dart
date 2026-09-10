@@ -49,12 +49,7 @@ class FileUploadChunkSource implements UploadChunkSource {
     // Bounded by the chunk size, not the file size: openRead's range is the
     // whole point of this class.
     final bytes = await _readRange(start, end);
-    final client = buildLocalTrustHttpClient();
-    try {
-      return await client.put(uri, headers: headers, body: bytes);
-    } finally {
-      client.close();
-    }
+    return sharedHttpClient.put(uri, headers: headers, body: bytes);
   }
 
   Future<Uint8List> _readRange(int start, int end) async {

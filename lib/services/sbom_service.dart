@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -93,7 +92,7 @@ class SbomService with AuthenticatedService {
   /// Fetch Go SBOM from the backend.
   static Future<GoSbom> getGoSbom() async {
     final uri = apiBaseUri.resolve('/api/v0/sbom');
-    final response = await http.get(uri, headers: _authHeaders);
+    final response = await sharedHttpClient.get(uri, headers: _authHeaders);
     if (response.statusCode != 200) {
       throw ApiException(response.statusCode, 'Failed to load Go SBOM');
     }
@@ -141,7 +140,9 @@ class SbomService with AuthenticatedService {
       ];
       for (final relativePath in webCandidates) {
         try {
-          final response = await http.get(Uri.base.resolve(relativePath));
+          final response = await sharedHttpClient.get(
+            Uri.base.resolve(relativePath),
+          );
           if (response.statusCode == 200) {
             return _parseFlutterPackages(response.body);
           }

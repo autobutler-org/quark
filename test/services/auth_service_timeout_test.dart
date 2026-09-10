@@ -20,7 +20,7 @@ void main() {
     tester,
   ) async {
     authHttpClientFactory = () => _SilentClient();
-    addTearDown(() => authHttpClientFactory = buildLocalTrustHttpClient);
+    addTearDown(() => authHttpClientFactory = () => sharedHttpClient);
 
     Object? error;
     unawaited(
