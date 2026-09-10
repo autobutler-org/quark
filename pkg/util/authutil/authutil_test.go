@@ -231,7 +231,7 @@ func TestValidateSession_Valid(t *testing.T) {
 		Password: "mypassword",
 	})
 
-	username, err := authutil.ValidateSession(context.Background(), queries, setupResult.SessionToken)
+	username, _, err := authutil.ValidateSession(context.Background(), queries, setupResult.SessionToken)
 	if err != nil {
 		t.Fatalf("ValidateSession failed: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestValidateSession_Valid(t *testing.T) {
 
 func TestValidateSession_Invalid(t *testing.T) {
 	queries := newTestDB(t)
-	_, err := authutil.ValidateSession(context.Background(), queries, "notavalidtoken")
+	_, _, err := authutil.ValidateSession(context.Background(), queries, "notavalidtoken")
 	if err == nil {
 		t.Error("Expected error for invalid session token")
 	}
@@ -260,7 +260,7 @@ func TestLogout_InvalidatesSession(t *testing.T) {
 		t.Fatalf("Logout failed: %v", err)
 	}
 
-	_, err = authutil.ValidateSession(context.Background(), queries, setupResult.SessionToken)
+	_, _, err = authutil.ValidateSession(context.Background(), queries, setupResult.SessionToken)
 	if err == nil {
 		t.Error("Expected session to be invalid after logout")
 	}
@@ -285,7 +285,7 @@ func TestRecover_Success(t *testing.T) {
 	}
 
 	// Old session should be invalidated
-	_, err = authutil.ValidateSession(context.Background(), queries, setupResult.SessionToken)
+	_, _, err = authutil.ValidateSession(context.Background(), queries, setupResult.SessionToken)
 	if err == nil {
 		t.Error("Expected old session to be invalidated after recovery")
 	}
@@ -332,7 +332,7 @@ func TestValidateBasicAuth_Success(t *testing.T) {
 		Password: "mypassword",
 	})
 
-	username, err := authutil.ValidateBasicAuth(context.Background(), queries, "admin", "mypassword")
+	username, _, err := authutil.ValidateBasicAuth(context.Background(), queries, "admin", "mypassword")
 	if err != nil {
 		t.Fatalf("ValidateBasicAuth failed: %v", err)
 	}
@@ -348,7 +348,7 @@ func TestValidateBasicAuth_WrongPassword(t *testing.T) {
 		Password: "mypassword",
 	})
 
-	_, err := authutil.ValidateBasicAuth(context.Background(), queries, "admin", "wrongpassword")
+	_, _, err := authutil.ValidateBasicAuth(context.Background(), queries, "admin", "wrongpassword")
 	if err == nil {
 		t.Error("Expected error for wrong password")
 	}
@@ -361,7 +361,7 @@ func TestValidateBasicAuth_WrongUsername(t *testing.T) {
 		Password: "mypassword",
 	})
 
-	_, err := authutil.ValidateBasicAuth(context.Background(), queries, "notadmin", "mypassword")
+	_, _, err := authutil.ValidateBasicAuth(context.Background(), queries, "notadmin", "mypassword")
 	if err == nil {
 		t.Error("Expected error for wrong username")
 	}

@@ -208,32 +208,34 @@ func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*Login
 	return &LoginResult{SessionToken: token}, nil
 }
 
-// ValidateSession checks a session token and returns the username if valid.
-// The raw token is hashed before the DB lookup — tokens are never stored plaintext.
+// ValidateSession checks a session token and returns the username and user id
+// if valid. The raw token is hashed before the DB lookup — tokens are never
+// stored plaintext. The id comes from the sessions row already being read, so
+// callers that need it pay no extra query.
 //
 // Using a session also renews it; see renewSession.
-func ValidateSession(ctx context.Context, queries *db.Queries, token string) (string, error) {
+func ValidateSession(ctx context.Context, queries *db.Queries, token string) (string, int64, error) {
 	digest := hashToken(token)
 	session, err := queries.GetSession(ctx, digest)
 	if err != nil {
-		return "", fmt.Errorf("invalid or expired session")
+		return "", 0, fmt.Errorf("invalid or expired session")
 	}
 	renewSession(ctx, queries, digest, session)
-	return session.Username, nil
+	return session.Username, session.UserID, nil
 }
 
 // ValidateBasicAuth checks a username/password pair against the user database.
-// Returns the username if valid, or an error if not. Unlike Login, this does
-// not create a session — each request authenticates independently.
-func ValidateBasicAuth(ctx context.Context, queries *db.Queries, username, password string) (string, error) {
+// Returns the username and user id if valid, or an error if not. Unlike Login,
+// this does not create a session — each request authenticates independently.
+func ValidateBasicAuth(ctx context.Context, queries *db.Queries, username, password string) (string, int64, error) {
 	user, err := queries.GetUserByUsername(ctx, username)
 	if err != nil {
-		return "", fmt.Errorf("invalid credentials")
+		return "", 0, fmt.Errorf("invalid credentials")
 	}
 	if !CheckPassword(password, user.PasswordHash) {
-		return "", fmt.Errorf("invalid credentials")
+		return "", 0, fmt.Errorf("invalid credentials")
 	}
-	return user.Username, nil
+	return user.Username, user.ID, nil
 }
 
 // Logout deletes a session token.

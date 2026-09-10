@@ -161,7 +161,7 @@ func prepareVaultExport(params StartSnapshotBackupParams) (*VaultExportParams, e
 	}
 
 	ctx := params.Ctx
-	if _, err := authutil.ValidateBasicAuth(ctx, params.Queries, params.Username, params.Password); err != nil {
+	if _, _, err := authutil.ValidateBasicAuth(ctx, params.Queries, params.Username, params.Password); err != nil {
 		return nil, ErrInvalidCredentials
 	}
 

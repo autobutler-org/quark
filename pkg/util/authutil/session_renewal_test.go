@@ -108,7 +108,7 @@ func TestValidateSession_RenewsExpiryOnUse(t *testing.T) {
 	later := time.Now().Add(2 * time.Hour)
 	defer authutil.SetNow(later)()
 
-	if _, err := authutil.ValidateSession(context.Background(), queries, token); err != nil {
+	if _, _, err := authutil.ValidateSession(context.Background(), queries, token); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
 
@@ -130,7 +130,7 @@ func TestValidateSession_DebouncesRenewal(t *testing.T) {
 	defer authutil.SetNow(time.Now().Add(authutil.SessionRenewInterval / 2))()
 
 	for range 3 {
-		if _, err := authutil.ValidateSession(context.Background(), queries, token); err != nil {
+		if _, _, err := authutil.ValidateSession(context.Background(), queries, token); err != nil {
 			t.Fatalf("validate: %v", err)
 		}
 	}
@@ -154,7 +154,7 @@ func TestValidateSession_ClampsRenewalToMaxLifetime(t *testing.T) {
 
 	defer authutil.SetNow(pinned)()
 
-	if _, err := authutil.ValidateSession(context.Background(), queries, token); err != nil {
+	if _, _, err := authutil.ValidateSession(context.Background(), queries, token); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
 
@@ -181,7 +181,7 @@ func TestValidateSession_StopsRenewingAtCap(t *testing.T) {
 
 	defer authutil.SetNow(pinned)()
 
-	if _, err := authutil.ValidateSession(context.Background(), queries, token); err != nil {
+	if _, _, err := authutil.ValidateSession(context.Background(), queries, token); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
 
@@ -204,7 +204,7 @@ func TestValidateSession_ExpiredSessionStaysExpired(t *testing.T) {
 
 	defer authutil.SetNow(pinned)()
 
-	if _, err := authutil.ValidateSession(context.Background(), queries, token); err == nil {
+	if _, _, err := authutil.ValidateSession(context.Background(), queries, token); err == nil {
 		t.Fatal("expected an expired session to be rejected")
 	}
 

@@ -209,9 +209,10 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 		}
 
 		for _, t := range tokens {
-			username, err := authutil.ValidateSession(ctx, db.Queries, t)
+			username, userID, err := authutil.ValidateSession(ctx, db.Queries, t)
 			if err == nil {
 				c = ctxutil.With(c, "username", username)
+				c = ctxutil.With(c, "userID", userID)
 				c.Next()
 				return
 			}
@@ -219,9 +220,10 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 
 		// Fall back to HTTP Basic Auth.
 		if username, password, ok := c.Request.BasicAuth(); ok {
-			validUser, err := authutil.ValidateBasicAuth(ctx, db.Queries, username, password)
+			validUser, userID, err := authutil.ValidateBasicAuth(ctx, db.Queries, username, password)
 			if err == nil {
 				c = ctxutil.With(c, "username", validUser)
+				c = ctxutil.With(c, "userID", userID)
 				c.Next()
 				return
 			}
