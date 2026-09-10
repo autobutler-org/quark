@@ -69,6 +69,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   // FAB visibility — hidden when the user scrolls down, restored on scroll up.
   bool _fabVisible = true;
   double _lastScrollOffset = 0.0;
+  Animation<double>? _coveredAnimation;
 
   /// Sentinel for "no listing has been issued yet". Deliberately never
   /// completes: a pre-resolved empty list here reads as a loaded, empty folder,
@@ -360,7 +361,29 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Every viewer and editor opens as a route on top of this page, and the
+    // scroll listener — the only thing that flips [_fabVisible] — cannot fire
+    // while that route is up. secondaryAnimation is the notification that this
+    // page has been covered and uncovered again (#1811).
+    final covered = ModalRoute.of(context)?.secondaryAnimation;
+    if (identical(covered, _coveredAnimation)) {
+      return;
+    }
+    _coveredAnimation?.removeStatusListener(_onCoveredChanged);
+    _coveredAnimation = covered?..addStatusListener(_onCoveredChanged);
+  }
+
+  void _onCoveredChanged(AnimationStatus status) {
+    if (status == AnimationStatus.dismissed) {
+      _resetFabVisibility();
+    }
+  }
+
+  @override
   void dispose() {
+    _coveredAnimation?.removeStatusListener(_onCoveredChanged);
     _eventSub?.cancel();
     _uploadResultSub?.cancel();
     // Detaching only stops us watching — the upload itself keeps running.
@@ -1907,6 +1930,16 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   }
 
   // ── Mobile FAB (Create actions) ──────────────────────────────────────────
+
+  /// Shows the FAB again and resyncs the offset the scroll listener compares
+  /// against, so a page uncovered mid-list does not immediately re-hide it.
+  void _resetFabVisibility() {
+    if (!mounted) return;
+    if (_fileBrowserScrollController.hasClients) {
+      _lastScrollOffset = _fileBrowserScrollController.offset;
+    }
+    if (!_fabVisible) setState(() => _fabVisible = true);
+  }
 
   void _onScroll() {
     if (!_fileBrowserScrollController.hasClients) return;
