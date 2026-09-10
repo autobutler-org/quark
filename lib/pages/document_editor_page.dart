@@ -97,8 +97,13 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
   bool _autoSaveEnabled = true;
   Timer? _autoSaveTimer;
 
-  // Word/char count (updated on doc change)
-  int _wordCount = 0;
+  // Word count. `toPlainText()` walks the whole document, so it is recomputed
+  // on a debounce and published through a notifier — the count changing
+  // rebuilds the status bar rather than the whole page (#1816).
+  static const _wordCountDelay = Duration(milliseconds: 300);
+  final ValueNotifier<int> _wordCount = ValueNotifier(0);
+  Timer? _wordCountTimer;
+  StreamSubscription<DocChange>? _docChanges;
 
   // In-document find bar (#1046)
   bool _showFindBar = false;
@@ -121,6 +126,9 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
   void dispose() {
     _autoSaveTimer?.cancel();
     _hintTimer?.cancel();
+    _wordCountTimer?.cancel();
+    _docChanges?.cancel();
+    _wordCount.dispose();
     if (widget.overlayTargetRoute != null) {
       router.routeInformationProvider.removeListener(_handleOverlayRouteChange);
     }
@@ -267,7 +275,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
           _loading = false;
           _dirty = false;
         });
-        _controller.addListener(_onDocumentChanged);
+        _listenForEdits();
         return;
       }
 
@@ -291,9 +299,9 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
         _controller = controller;
         _loading = false;
         _dirty = false;
-        _wordCount = _countWords(doc.toPlainText());
       });
-      _controller.addListener(_onDocumentChanged);
+      _wordCount.value = _countWords(doc.toPlainText());
+      _listenForEdits();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -319,21 +327,35 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
     return trimmed.split(RegExp(r'\s+')).length;
   }
 
+  /// Subscribes to document edits only.
+  ///
+  /// [QuillController] notifies on every change it knows about, caret and
+  /// selection moves included, so listening to the controller re-ran the word
+  /// count on every arrow key (#1816). The document's own stream carries edits
+  /// and nothing else.
+  void _listenForEdits() {
+    _docChanges?.cancel();
+    _docChanges = _controller.document.changes.listen(
+      (_) => _onDocumentChanged(),
+    );
+  }
+
   void _onDocumentChanged() {
     if (!mounted) return;
     // Do not mark dirty or schedule auto-save in read-only mode
     if (_isReadOnly) return;
-    final wc = _countWords(_controller.document.toPlainText());
-    if (!_dirty || wc != _wordCount) {
-      setState(() {
-        _dirty = true;
-        _wordCount = wc;
-      });
-    }
+    if (!_dirty) setState(() => _dirty = true);
+    _wordCountTimer?.cancel();
+    _wordCountTimer = Timer(_wordCountDelay, _recountWords);
     if (_autoSaveEnabled) {
       _autoSaveTimer?.cancel();
       _autoSaveTimer = Timer(_autoSaveDelay, _autoSaveSilently);
     }
+  }
+
+  void _recountWords() {
+    if (!mounted) return;
+    _wordCount.value = _countWords(_controller.document.toPlainText());
   }
 
   Future<void> _autoSaveSilently() async {
