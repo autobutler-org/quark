@@ -90,7 +90,7 @@ GO_MOD_VERSION := $(shell awk '/^go /{print $$2; exit}' go.mod)
 export GOTOOLCHAIN=go$(GO_MOD_VERSION)
 
 .PHONY: clean
-clean: clean/go clean/flutter ## Clean all build and test artifacts
+clean: clean/go clean/flutter clean/docker ## Clean all build and test artifacts
 
 .PHONY: clean/go
 clean/go: ## Clean Go build artifacts
@@ -99,6 +99,14 @@ clean/go: ## Clean Go build artifacts
 .PHONY: clean/flutter
 clean/flutter: ## Clean flutter project
 	flutter clean
+
+# Deliberately not dependent on check/docker, and silent about every failure: `clean` is run
+# casually and on machines with no Docker at all, so a missing daemon or a container that was
+# never created is nothing to report. Leaves $(DOCKER_VOLUME) alone -- that is the user's data,
+# not a build artifact.
+.PHONY: clean/docker
+clean/docker: ## Remove the $(DOCKER_CONTAINER) container (keeps the $(DOCKER_VOLUME) volume)
+	docker rm -f $(DOCKER_CONTAINER) >/dev/null 2>&1 || true
 
 .PHONY: setup
 setup: setup/gotools setup/golangci-lint setup/probe setup/air setup/sqlc setup/swag setup/flutter setup/skills setup/hooks ## Setup development environment
@@ -683,6 +691,39 @@ build/provisioning: ## Build provisioning service
 build/lsusb: ## Build lsusb utility
 	$(GO) build -o ./build/lsusb ./cmd/lsusb/main.go
 
+# The image downloads a published release rather than building from source, so it can only
+# be built for a version that has actually been tagged and released. Override with
+# BUILD_NAME=X.Y.Z. The release workflow builds the multi-arch image and pushes it; this
+# target is the local host-architecture build.
+DOCKER_IMAGE ?= ghcr.io/autobutler-org/quark
+DOCKER_VOLUME ?= quark-data
+DOCKER_CONTAINER ?= quark-serve
+# Empty uses the $(DOCKER_VOLUME) named volume. Set it to an absolute host path to bind-mount that
+# directory as the Quark root instead -- see docs/container.md for the uid it has to be owned by.
+DOCKER_DATA ?=
+# The same port serve/backend uses. Collides if both run at once; DOCKER_PORT=9000 overrides.
+DOCKER_PORT ?= 8080
+
+.PHONY: check/docker
+check/docker: ## Check that the Docker daemon is reachable
+	if ! docker info >/dev/null 2>&1; then
+		echo "Error: cannot talk to the Docker daemon."
+		echo "  Fix: start Docker Desktop, or install Docker from https://docs.docker.com/get-docker/"
+		exit 1
+	fi
+
+.PHONY: build/docker
+build/docker: check/docker ## Build the container image for a released version
+	if [ -z "$(BUILD_NAME)" ]; then
+		echo "Error: no git tag found to derive the Quark version from."
+		echo "  The version comes from the most recent tag, for example v0.36.2."
+		echo "  Fix: git fetch --tags"
+		echo "       or pass BUILD_NAME=X.Y.Z explicitly."
+		exit 1
+	fi
+	echo "Building $(DOCKER_IMAGE):$(BUILD_NAME)"
+	docker build --build-arg VERSION=$(BUILD_NAME) -t $(DOCKER_IMAGE):$(BUILD_NAME) .
+
 .PHONY: emulate
 emulate: ## Emulate mobile device
 ifeq ($(UNAME_S),Linux)
@@ -799,6 +840,59 @@ serve/backend: generate/backend ## Serve backend over plain HTTP on :8080 (insec
 .PHONY: serve/backend/secure
 serve/backend/secure: generate/backend ## Serve backend over HTTPS on :443 (self-signed)
 	$(SUDO) $(GO) run $(GO_LDFLAGS) $(ENTRYPOINT) serve
+
+# State persists in the $(DOCKER_VOLUME) volume between runs, on purpose: a fresh volume every
+# time would drop the account created on first launch. `docker volume rm $(DOCKER_VOLUME)` resets.
+.PHONY: serve/docker
+serve/docker: check/docker ## Serve the container image on :$(DOCKER_PORT), state in a named volume
+	if [ -z "$(BUILD_NAME)" ]; then
+		echo "Error: no git tag found to derive the Quark version from."
+		echo "  Fix: git fetch --tags, or pass BUILD_NAME=X.Y.Z explicitly."
+		exit 1
+	fi
+	# A relative -v source is not an error to docker: it quietly creates a named volume instead of
+	# mounting the directory, and Quark then comes up empty with nothing on screen to explain it.
+	data="$(DOCKER_DATA)"
+	if [ -n "$$data" ]; then
+		data="$${data/#\~/$$HOME}"
+		case "$$data" in
+			/*) ;;
+			*)
+				echo "Error: DOCKER_DATA=$(DOCKER_DATA) is not an absolute path."
+				echo "  Docker would create a named volume rather than mount the directory."
+				echo "  Fix: make serve/docker DOCKER_DATA=$$PWD/$(DOCKER_DATA)"
+				exit 1
+				;;
+		esac
+		if [ ! -d "$$data" ]; then
+			echo "Error: DOCKER_DATA=$$data is not an existing directory."
+			echo "  Fix: mkdir -p $$data"
+			exit 1
+		fi
+		echo "Data directory: $$data"
+	fi
+	if ! docker image inspect $(DOCKER_IMAGE):$(BUILD_NAME) >/dev/null 2>&1; then
+		echo "Error: no local image $(DOCKER_IMAGE):$(BUILD_NAME)."
+		echo "  Fix: make build/docker, or docker pull $(DOCKER_IMAGE):$(BUILD_NAME)"
+		exit 1
+	fi
+	# --rm does not fire if the daemon restarts or the container is killed, so a dead one can
+	# outlive its run. It holds nothing worth keeping -- the state is in the volume -- so clear it
+	# rather than making the user run a command we could run. A *running* one is someone's live
+	# session, which docker rm -f would kill, so that still stops here.
+	case "$$(docker inspect -f '{{.State.Running}}' $(DOCKER_CONTAINER) 2>/dev/null)" in
+		true)
+			echo "Error: $(DOCKER_CONTAINER) is already running at http://localhost:$(DOCKER_PORT)."
+			echo "  Fix: make clean/docker to stop it, or DOCKER_PORT=<port> to run a second one."
+			exit 1
+			;;
+		false)
+			echo "Removing the $(DOCKER_CONTAINER) container left over from an earlier run"
+			docker rm -f $(DOCKER_CONTAINER) >/dev/null
+			;;
+	esac
+	echo "Quark is at http://localhost:$(DOCKER_PORT)"
+	docker run -it --rm --name $(DOCKER_CONTAINER) -p $(DOCKER_PORT):8080 -v "$${data:-$(DOCKER_VOLUME)}:/var/lib/quark" $(DOCKER_IMAGE):$(BUILD_NAME)
 
 .PHONY: serve/frontend
 serve/frontend: serve/frontend/web ## Serve frontend
