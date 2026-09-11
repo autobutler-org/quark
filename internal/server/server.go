@@ -104,6 +104,29 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, error) {
 		}
 	}()
 
+	// Delete trashed items older than storageutil.TrashRetentionDays, once at
+	// startup and then hourly, on every managed device (#1814). The purge
+	// publishes trash_changed for each device it touched.
+	go func() {
+		purge := func() {
+			res, err := deps.StorageService().PurgeExpiredTrash(storageutil.PurgeExpiredTrashParams{
+				EventBus: deps.EventBus(),
+			})
+			if err != nil {
+				log.Printf("[trash] expired trash purge failed: %v", err)
+			}
+			if res.Purged > 0 {
+				log.Printf("[trash] purged %d expired item(s)", res.Purged)
+			}
+		}
+		purge()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			purge()
+		}
+	}()
+
 	// Give the resumable upload sessions their heartbeat. The store itself is
 	// built in deputil.NewDependencies so every dependency graph has one, but
 	// only a real server should be running a goroutine over it — an abandoned

@@ -9,6 +9,10 @@ const (
 	EventDelete    EventKind = "delete"
 	EventMove      EventKind = "move"
 	EventNewFolder EventKind = "new_folder"
+	// EventTrashChanged fires whenever a device's trash gains or loses items:
+	// a delete, a restore, a permanent delete, emptying it, or the hourly
+	// purge. DeviceSerial names the device; Path is empty.
+	EventTrashChanged EventKind = "trash_changed"
 
 	EventBackupStarted   EventKind = "backup_started"
 	EventBackupProgress  EventKind = "backup_progress"

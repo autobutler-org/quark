@@ -2,27 +2,23 @@ package fileutil
 
 import (
 	"context"
+	"errors"
 	"log"
-	"sync"
+	"path/filepath"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
-	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
-// DeleteFilesParams soft-deletes a batch of files. The filesystem half returns
-// in under a second even for a large batch; the database and event-bus cleanup
-// it leaves behind is dispatched in the background.
+// DeleteFilesParams moves a batch of files to the device's trash. The
+// filesystem half returns in under a second even for a large batch; the
+// database and event-bus cleanup it leaves behind is dispatched in the
+// background.
 type DeleteFilesParams struct {
-	// Ctx bounds the VFS deletes. The background cleanup deliberately does not
-	// use it: it outlives the request.
-	Ctx context.Context
-	// Registry deletes through the VFS when no serial routes past it.
-	Registry vfs.Registry
-	// Storage deletes for a device-scoped request, or when there is no VFS.
+	// Storage owns the files directory and the trash inside it.
 	Storage *storageutil.StorageService
-	// EventBus is told about every deleted path.
+	// EventBus is told about every deleted path, and that the trash changed.
 	EventBus *eventbus.Bus
 	// Database holds the album membership and rotation rows to clean up. Nil
 	// skips that half.
@@ -39,55 +35,24 @@ type DeleteFilesParams struct {
 // started may still be running.
 type DeleteFilesResult struct{}
 
-// DeleteFiles deletes files and starts the cleanup their absence implies.
+// DeleteFiles moves files to the trash and starts the cleanup their absence
+// implies. Every device trashes, the internal one included: the "files" VFS
+// namespace is the internal device's files directory, so trashing through the
+// StorageService with the empty serial lands where a VFS delete used to remove
+// files for good (#1814).
 func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 	// ── Phase 1: fast filesystem op (returns in < 1 s even for large batches) ─
 
-	usedVFS := false
-	if params.Serial == "" {
-		if fsys := FilesVFS(params.Registry); fsys != nil {
-			// Parallel VFS deletes — each call is independent.
-			var wg sync.WaitGroup
-			errs := make([]error, len(params.FilePaths))
-			for i, p := range params.FilePaths {
-				wg.Add(1)
-				go func(i int, p string) {
-					defer wg.Done()
-					if err := fsys.Delete(params.Ctx, p, vfs.DeleteOptions{Recursive: true}); err != nil && err != vfs.ErrNotFound {
-						errs[i] = err
-					}
-				}(i, p)
-			}
-			wg.Wait()
-			for _, err := range errs {
-				if err != nil {
-					return DeleteFilesResult{}, err
-				}
-			}
-			usedVFS = true
+	// A rename into .trash/ is a metadata-only op, microseconds on an SD card.
+	if _, err := params.Storage.TrashFiles(storageutil.TrashFilesParams{
+		RootDir:      params.RootDir,
+		FilePaths:    params.FilePaths,
+		DeviceSerial: params.Serial,
+	}); err != nil {
+		if errors.Is(err, storageutil.ErrDeviceNotFound) {
+			return DeleteFilesResult{}, notFound(err)
 		}
-	}
-
-	if !usedVFS {
-		if params.Serial != "" {
-			// Fast path: rename to .trash/ — metadata-only op, microseconds on SD card.
-			if _, err := params.Storage.TrashFiles(storageutil.TrashFilesParams{
-				RootDir:      params.RootDir,
-				FilePaths:    params.FilePaths,
-				DeviceSerial: params.Serial,
-			}); err != nil {
-				return DeleteFilesResult{}, err
-			}
-		} else {
-			// Fallback for unknown-serial callers (rare; VFS covers most of these).
-			if _, err := params.Storage.DeleteFiles(storageutil.DeleteFilesParams{
-				RootDir:      params.RootDir,
-				FilePaths:    params.FilePaths,
-				DeviceSerial: params.Serial,
-			}); err != nil {
-				return DeleteFilesResult{}, err
-			}
-		}
+		return DeleteFilesResult{}, err
 	}
 
 	// ── Phase 2: async cleanup — event bus + DB ──────────────────────────────
@@ -95,10 +60,17 @@ func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 	bus := params.EventBus
 	database := params.Database
 	serial := params.Serial
-	pathsCopy := append([]string(nil), params.FilePaths...)
+	// The paths are relative to RootDir; everything downstream (the search
+	// index, the file index, the album rows) keys on the path relative to the
+	// files directory.
+	relPaths := make([]string, len(params.FilePaths))
+	for i, p := range params.FilePaths {
+		relPaths[i] = filepath.ToSlash(filepath.Join(params.RootDir, p))
+	}
 
 	go func() {
-		for _, p := range pathsCopy {
+		bus.Publish(eventbus.Event{Kind: eventbus.EventTrashChanged, DeviceSerial: serial})
+		for _, p := range relPaths {
 			bus.Publish(eventbus.Event{
 				Kind:         eventbus.EventDelete,
 				Path:         p,

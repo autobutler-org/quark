@@ -23,6 +23,12 @@ func FindAllBooksRecursively(rootDir string) ([]RecursiveBookInfo, error) {
 		if err != nil {
 			return err
 		}
+		if path != rootDir && storageutil.IsInternalName(info.Name()) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if info.IsDir() {
 			return nil
 		}

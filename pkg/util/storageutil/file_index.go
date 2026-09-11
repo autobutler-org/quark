@@ -1,6 +1,7 @@
 package storageutil
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,7 +46,16 @@ func (idx *FileIndex) Build(devices []ManagedDevice) {
 			serial = dev.UsbInfo.GetSerial()
 		}
 		_ = filepath.WalkDir(dev.FilesDir, func(path string, d os.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
+			if err != nil {
+				return nil
+			}
+			if path != dev.FilesDir && IsInternalName(d.Name()) {
+				if d.IsDir() {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			if d.IsDir() {
 				return nil
 			}
 			rel, relErr := filepath.Rel(dev.FilesDir, path)
