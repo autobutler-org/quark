@@ -176,6 +176,12 @@ class DocumentPageFrame extends StatelessWidget {
               // starts, so it sits there static, reading as "ready to type"
               // when keystrokes go nowhere (#1853).
               showCursor: !isReadOnly,
+              // Tab indents the current block, the way it does in every other
+              // document editor. Left off — flutter_quill's default — it only
+              // indents when the caret sits at the very start of an existing
+              // list item, and drops a literal tab character everywhere else
+              // (#1855).
+              enableAlwaysIndentOnTab: true,
               // A tap on the text itself. False means "not handled here", so
               // Quill still places the caret where the user clicked — the
               // caller only learns the tap happened (#1853).
