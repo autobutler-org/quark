@@ -176,6 +176,12 @@ class DocumentPageFrame extends StatelessWidget {
               // starts, so it sits there static, reading as "ready to type"
               // when keystrokes go nowhere (#1853).
               showCursor: !isReadOnly,
+              // Tab indents the current block, the way it does in every other
+              // document editor. Left off — flutter_quill's default — it only
+              // indents when the caret sits at the very start of an existing
+              // list item, and drops a literal tab character everywhere else
+              // (#1855).
+              enableAlwaysIndentOnTab: true,
               // A tap on the text itself. False means "not handled here", so
               // Quill still places the caret where the user clicked — the
               // caller only learns the tap happened (#1853).
@@ -191,10 +197,14 @@ class DocumentPageFrame extends StatelessWidget {
               characterShortcutEvents: documentCharacterShortcuts,
               // ignore: experimental_member_use
               spaceShortcutEvents: documentSpaceShortcuts,
-              // Keeps Quill's built-in search dialog from opening on top of the
-              // inline find bar — see [quillFindKeyInterceptor].
+              // Tab in a code block indents the code, not the block — see
+              // [codeBlockTabHandler]. Everything else goes to the caller,
+              // which keeps Quill's built-in search dialog from opening on top
+              // of the inline find bar — see [quillFindKeyInterceptor].
               // ignore: experimental_member_use
-              onKeyPressed: onKeyPressed,
+              onKeyPressed: (event, node) =>
+                  codeBlockTabHandler(controller, event) ??
+                  onKeyPressed(event, node),
             ),
           ),
         ),
