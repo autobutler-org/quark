@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 
 void main() {
@@ -55,70 +56,74 @@ void main() {
       );
       expect(hasSupportedFilesEditorForPath('/Documents/photo.jpg'), isFalse);
 
-      expect(hasSupportedFilesEditorForType('qdoc'), isTrue);
-      expect(hasSupportedFilesEditorForType('qsheet'), isTrue);
-      expect(hasSupportedFilesEditorForType('image'), isFalse);
+      expect(hasSupportedFilesEditorForType(FileKind.qdoc), isTrue);
+      expect(hasSupportedFilesEditorForType(FileKind.qsheet), isTrue);
+      expect(hasSupportedFilesEditorForType(FileKind.image), isFalse);
     });
   });
 
   group('usesGenericFileViewer', () {
     test('covers the document types that had no viewer', () {
       // These reached the "No supported editor" dead end before #1184.
-      expect(usesGenericFileViewer('pdf'), isTrue);
-      expect(usesGenericFileViewer('docx'), isTrue);
-      expect(usesGenericFileViewer('slideshow'), isTrue);
-      expect(usesGenericFileViewer('epub'), isTrue);
+      expect(usesGenericFileViewer(FileKind.pdf), isTrue);
+      expect(usesGenericFileViewer(FileKind.docx), isTrue);
+      expect(usesGenericFileViewer(FileKind.slideshow), isTrue);
+      expect(usesGenericFileViewer(FileKind.epub), isTrue);
     });
 
     test('covers a raw workbook opened by URL', () {
       // The file browser offers to convert a workbook before it gets here, so
       // this is the deep-link fallback: download and "Open with", not the
       // dead end an unnamed type used to reach (#1741).
-      expect(usesGenericFileViewer('xlsx'), isTrue);
+      expect(usesGenericFileViewer(FileKind.xlsx), isTrue);
+      expect(usesGenericFileViewer(FileKind.csv), isTrue);
     });
 
     test('covers unclassified files', () {
-      expect(usesGenericFileViewer('generic'), isTrue);
-      expect(usesGenericFileViewer(''), isTrue);
-      expect(usesGenericFileViewer('  '), isTrue);
-      expect(usesGenericFileViewer('PDF'), isTrue, reason: 'case-insensitive');
+      expect(usesGenericFileViewer(FileKind.generic), isTrue);
     });
 
     test('leaves types that have a real viewer alone', () {
-      for (final type in [
-        'qdoc',
-        'qsheet',
-        'image',
-        'video',
-        'audio',
-        'text',
-        'archive',
-        'folder',
+      for (final kind in [
+        FileKind.qdoc,
+        FileKind.qsheet,
+        FileKind.image,
+        FileKind.svg,
+        FileKind.video,
+        FileKind.audio,
+        FileKind.text,
+        FileKind.code,
+        FileKind.archive,
       ]) {
-        expect(usesGenericFileViewer(type), isFalse, reason: type);
+        expect(usesGenericFileViewer(kind), isFalse, reason: kind.name);
       }
     });
   });
 
   group('opensStraightInSystemViewer', () {
-    bool opens(String type, {bool isWeb = false, TargetPlatform? platform}) =>
+    bool opens(FileKind kind, {bool isWeb = false, TargetPlatform? platform}) =>
         opensStraightInSystemViewer(
-          type,
+          kind,
           isWeb: isWeb,
           platform: platform ?? TargetPlatform.iOS,
         );
 
     test('skips the "Open with" tap for a PDF on iOS', () {
       // QuickLook is the only handler, so the tap bought nothing (#1807).
-      expect(opens('pdf'), isTrue);
-      expect(opens(' PDF '), isTrue, reason: 'case- and space-insensitive');
+      expect(opens(FileKind.pdf), isTrue);
     });
 
     test('keeps the tap where it is a real choice', () {
-      expect(opens('pdf', platform: TargetPlatform.android), isFalse);
-      expect(opens('pdf', isWeb: true), isFalse);
-      for (final type in ['docx', 'epub', 'xlsx', 'slideshow', 'generic']) {
-        expect(opens(type), isFalse, reason: type);
+      expect(opens(FileKind.pdf, platform: TargetPlatform.android), isFalse);
+      expect(opens(FileKind.pdf, isWeb: true), isFalse);
+      for (final kind in [
+        FileKind.docx,
+        FileKind.epub,
+        FileKind.xlsx,
+        FileKind.slideshow,
+        FileKind.generic,
+      ]) {
+        expect(opens(kind), isFalse, reason: kind.name);
       }
     });
   });

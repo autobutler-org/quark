@@ -260,6 +260,7 @@ definitions:
         description: Directory path containing the file, for easier client-side handling
         type: string
       fileType:
+        description: Kept for older clients; route viewers by file name instead
         type: string
       fullPath:
         type: string
@@ -284,6 +285,7 @@ definitions:
         description: Directory path containing the file, for easier client-side handling
         type: string
       fileType:
+        description: Kept for older clients; route viewers by file name instead
         type: string
       fullPath:
         type: string
@@ -299,6 +301,7 @@ definitions:
   v0_files.StatFileJSON:
     properties:
       fileType:
+        description: Kept for older clients; route viewers by file name instead
         type: string
       isDir:
         type: boolean

@@ -3513,6 +3513,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "fileType": {
+                    "description": "Kept for older clients; route viewers by file name instead",
                     "type": "string"
                 },
                 "fullPath": {
@@ -3549,6 +3550,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "fileType": {
+                    "description": "Kept for older clients; route viewers by file name instead",
                     "type": "string"
                 },
                 "fullPath": {
@@ -3572,6 +3574,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "fileType": {
+                    "description": "Kept for older clients; route viewers by file name instead",
                     "type": "string"
                 },
                 "isDir": {

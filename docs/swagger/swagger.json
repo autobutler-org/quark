@@ -3502,6 +3502,7 @@
                     "type": "string"
                 },
                 "fileType": {
+                    "description": "Kept for older clients; route viewers by file name instead",
                     "type": "string"
                 },
                 "fullPath": {
@@ -3538,6 +3539,7 @@
                     "type": "string"
                 },
                 "fileType": {
+                    "description": "Kept for older clients; route viewers by file name instead",
                     "type": "string"
                 },
                 "fullPath": {
@@ -3561,6 +3563,7 @@
             "type": "object",
             "properties": {
                 "fileType": {
+                    "description": "Kept for older clients; route viewers by file name instead",
                     "type": "string"
                 },
                 "isDir": {

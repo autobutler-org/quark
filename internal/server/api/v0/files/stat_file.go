@@ -12,7 +12,7 @@ import (
 
 type StatFileJSON struct {
 	IsDir    bool   `json:"isDir"`
-	FileType string `json:"fileType"`
+	FileType string `json:"fileType"` // Kept for older clients; route viewers by file name instead
 	Name     string `json:"name"`
 }
 
