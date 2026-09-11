@@ -86,6 +86,26 @@ void main() {
     });
   });
 
+  group('Errors.restore', () {
+    test('a 409 says the original location is taken', () {
+      expect(
+        Errors.restore(const ApiException(409), 'restore the item'),
+        Errors.restoreConflict,
+      );
+    });
+
+    test('anything else reads like Errors.message', () {
+      expect(
+        Errors.restore(const ApiException(404), 'restore the item'),
+        Errors.message(const ApiException(404), 'restore the item'),
+      );
+      expect(
+        Errors.restore(Exception('boom'), 'restore the item'),
+        "Couldn't restore the item.",
+      );
+    });
+  });
+
   group('throwApiError', () {
     test('prefers the Quark\'s message when it sent one', () {
       expect(

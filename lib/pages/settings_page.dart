@@ -630,6 +630,7 @@ class _SettingsPageState extends State<SettingsPage> {
         onTapPhotos: () {
           context.go(AppRoutes.photos);
         },
+        onTapTrash: () => context.go(AppRoutes.trash),
         onTapDocs: () {
           context.go(AppRoutes.docs);
         },

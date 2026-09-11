@@ -28,6 +28,7 @@ Journey IDs are stable — don't renumber when adding new ones.
 | [auth.md](auth.md)                       | Setup, login, logout, recovery                         |
 | [file-browser.md](file-browser.md)       | file browser (browse, upload, download, manage) |
 | [photos.md](photos.md)                   | Photos, albums, favorites                              |
+| [trash.md](trash.md)                     | Trash (browse, restore, delete permanently, empty)     |
 | [docs.md](docs.md)                       | Document editor (.qdoc files)                         |
 | [sheets.md](sheets.md)                   | Spreadsheet editor (.qsheet files)                    |
 | [vault.md](vault.md)                     | Password vault (setup, entries, import/export)         |

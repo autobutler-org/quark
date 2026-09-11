@@ -2,14 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_list_leading.dart';
+import 'package:quark/widgets/file_browser/file_browser_view/file_menu_button.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.dart';
-import 'package:quark_icons/quark_icons.dart';
-
-/// Runs one of the row's menu entries. The [BuildContext] is the one the menu
-/// item was built with, which is what the caller checks for mounting before it
-/// touches the tree.
-typedef FileMenuActionDispatch =
-    void Function(BuildContext context, FileNode item, FileMenuAction action);
 
 /// One file or folder in the list view.
 class FileBrowserListTile extends StatelessWidget {
@@ -23,6 +17,8 @@ class FileBrowserListTile extends StatelessWidget {
     required this.selectionMode,
     required this.onDispatchMenuAction,
     required this.onOpenDirectory,
+    this.menuActions = FileBrowserView.defaultMenuActions,
+    this.subtitle,
     this.onNavigateToFolder,
     this.onSelectionChanged,
     super.key,
@@ -39,7 +35,15 @@ class FileBrowserListTile extends StatelessWidget {
   final bool isSearchMode;
   final bool selectionMode;
   final FileMenuActionDispatch onDispatchMenuAction;
-  final void Function(FileNode) onOpenDirectory;
+
+  /// Opens the row. Null leaves rows inert outside selection mode.
+  final void Function(FileNode)? onOpenDirectory;
+
+  /// The entries the row's menu offers.
+  final Set<FileMenuAction> menuActions;
+
+  /// A second line under the row, or null for none.
+  final String? subtitle;
   final void Function(FileNode)? onNavigateToFolder;
   final void Function(FileNode node, {required bool enterSelectionMode})?
   onSelectionChanged;
@@ -95,76 +99,30 @@ class FileBrowserListTile extends StatelessWidget {
               ),
           ],
         ),
+        subtitle: subtitle == null
+            ? null
+            : Text(
+                subtitle!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: colors.onSurfaceVariant),
+              ),
         trailing: showFileSizeAndMenu
-            ? PopupMenuButton<FileMenuAction>(
-                icon: const Icon(QuarkIcons.more_vert),
-                itemBuilder: (context) => [
-                  PopupMenuItem<FileMenuAction>(
-                    value: FileMenuAction.download,
-                    onTap: () => onDispatchMenuAction(
-                      context,
-                      item,
-                      FileMenuAction.download,
-                    ),
-                    child: const Text('Download'),
-                  ),
-                  if (!inArchive)
-                    PopupMenuItem<FileMenuAction>(
-                      value: FileMenuAction.moveRename,
-                      onTap: () => onDispatchMenuAction(
-                        context,
-                        item,
-                        FileMenuAction.moveRename,
-                      ),
-                      child: const Text('Move/Rename'),
-                    ),
-                  if (!inArchive)
-                    PopupMenuItem<FileMenuAction>(
-                      value: FileMenuAction.delete,
-                      onTap: () => onDispatchMenuAction(
-                        context,
-                        item,
-                        FileMenuAction.delete,
-                      ),
-                      child: const Text('Delete'),
-                    ),
-                  if (!inArchive && isArchiveNode(item))
-                    PopupMenuItem<FileMenuAction>(
-                      value: FileMenuAction.extractHere,
-                      enabled: !extractingPaths.contains(item.apiPath),
-                      onTap: () => onDispatchMenuAction(
-                        context,
-                        item,
-                        FileMenuAction.extractHere,
-                      ),
-                      child: extractingPaths.contains(item.apiPath)
-                          ? const Row(
-                              children: [
-                                SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Text('Extracting...'),
-                              ],
-                            )
-                          : const Text('Extract here'),
-                    ),
-                  if (isSearchMode && onNavigateToFolder != null)
-                    PopupMenuItem<FileMenuAction>(
-                      value: FileMenuAction.navigateToFolder,
-                      onTap: () => onNavigateToFolder!(item),
-                      child: const Text('Navigate to folder'),
-                    ),
-                ],
+            ? FileMenuButton(
+                item: item,
+                menuActions: menuActions,
+                extractingPaths: extractingPaths,
+                inArchive: inArchive,
+                isSearchMode: isSearchMode,
+                onDispatchMenuAction: onDispatchMenuAction,
+                onNavigateToFolder: onNavigateToFolder,
               )
             : null,
         onTap: selectionMode
             ? () => onSelectionChanged?.call(item, enterSelectionMode: false)
-            : () => onOpenDirectory(item),
+            : onOpenDirectory == null
+            ? null
+            : () => onOpenDirectory!(item),
         onLongPress: inArchive || selectionMode
             ? null
             : () => onSelectionChanged?.call(item, enterSelectionMode: true),

@@ -3,6 +3,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_browser_list_tile.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_grid_preview.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_grid_sort_header.dart';
+import 'package:quark/widgets/file_browser/file_browser_view/file_menu_button.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_sort_header.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/folder_drop_wrapper.dart';
@@ -17,6 +18,12 @@ enum FileMenuAction {
   delete,
   navigateToFolder,
   extractHere,
+
+  /// Puts a trashed item back where it was deleted from.
+  restore,
+
+  /// Deletes a trashed item for good.
+  deletePermanently,
 }
 
 enum SortColumn { name, type, size, device }
@@ -29,6 +36,9 @@ class FileBrowserView extends StatefulWidget {
     required this.onFileMenuAction,
     required this.onOpenDirectory,
     required this.isGridView,
+    this.menuActions = defaultMenuActions,
+    this.subtitleFor,
+    this.emptyBuilder,
     required this.currentPath,
     this.initialData,
     this.isUnifiedView = true,
@@ -51,9 +61,33 @@ class FileBrowserView extends StatefulWidget {
 
   final Future<List<FileNode>> filesFuture;
   final List<FileNode>? initialData;
+
+  /// What the Files page offers on a file or folder.
+  static const Set<FileMenuAction> defaultMenuActions = {
+    FileMenuAction.download,
+    FileMenuAction.moveRename,
+    FileMenuAction.delete,
+    FileMenuAction.extractHere,
+    FileMenuAction.navigateToFolder,
+  };
+
   final Future<void> Function(FileNode, FileMenuAction) onFileMenuAction;
-  final void Function(FileNode) onOpenDirectory;
+
+  /// Opens a file or folder. Null leaves rows inert outside selection mode —
+  /// the trash lists items it will not open.
+  final void Function(FileNode)? onOpenDirectory;
   final bool isGridView;
+
+  /// The entries each item's menu may offer; an entry that does not apply to
+  /// an item (Extract on a non-archive) is still left out.
+  final Set<FileMenuAction> menuActions;
+
+  /// A second line under each list row, or null for none. The grid has no
+  /// room for one and ignores it.
+  final String? Function(FileNode node)? subtitleFor;
+
+  /// Replaces the "No files yet" state for an empty listing.
+  final WidgetBuilder? emptyBuilder;
 
   /// When true (default), files from all devices are shown merged.
   /// When false, files are grouped by device with a section header per device.
@@ -196,6 +230,9 @@ class _FileBrowserViewState extends State<FileBrowserView> {
 
         final raw = snapshot.data ?? const <FileNode>[];
         if (raw.isEmpty) {
+          if (widget.emptyBuilder != null) {
+            return widget.emptyBuilder!(context);
+          }
           return const EmptyStateWidget(
             icon: QuarkIcons.folder_open_outlined,
             headline: 'No files yet',
@@ -256,6 +293,8 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                                 selectionMode: widget.selectionMode,
                                 onDispatchMenuAction: _dispatchMenuAction,
                                 onOpenDirectory: widget.onOpenDirectory,
+                                menuActions: widget.menuActions,
+                                subtitle: widget.subtitleFor?.call(item),
                                 onNavigateToFolder: widget.onNavigateToFolder,
                                 onSelectionChanged: widget.onSelectionChanged,
                               ),
@@ -323,7 +362,9 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                                   item,
                                   enterSelectionMode: false,
                                 )
-                              : () => widget.onOpenDirectory(item),
+                              : widget.onOpenDirectory == null
+                              ? null
+                              : () => widget.onOpenDirectory!(item),
                           onLongPress: widget.inArchive || widget.selectionMode
                               ? null
                               : () => widget.onSelectionChanged?.call(
@@ -367,102 +408,16 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                                             ),
                                           ),
                                         if (widget.showFileSizeAndMenu)
-                                          PopupMenuButton<FileMenuAction>(
-                                            icon: const Icon(
-                                              QuarkIcons.more_vert,
-                                            ),
-                                            itemBuilder: (context) => [
-                                              PopupMenuItem<FileMenuAction>(
-                                                value: FileMenuAction.download,
-                                                onTap: () =>
-                                                    _dispatchMenuAction(
-                                                      context,
-                                                      item,
-                                                      FileMenuAction.download,
-                                                    ),
-                                                child: const Text('Download'),
-                                              ),
-                                              if (!widget.inArchive)
-                                                PopupMenuItem<FileMenuAction>(
-                                                  value:
-                                                      FileMenuAction.moveRename,
-                                                  onTap: () =>
-                                                      _dispatchMenuAction(
-                                                        context,
-                                                        item,
-                                                        FileMenuAction
-                                                            .moveRename,
-                                                      ),
-                                                  child: const Text(
-                                                    'Move/Rename',
-                                                  ),
-                                                ),
-                                              if (!widget.inArchive)
-                                                PopupMenuItem<FileMenuAction>(
-                                                  value: FileMenuAction.delete,
-                                                  onTap: () =>
-                                                      _dispatchMenuAction(
-                                                        context,
-                                                        item,
-                                                        FileMenuAction.delete,
-                                                      ),
-                                                  child: const Text('Delete'),
-                                                ),
-                                              if (!widget.inArchive &&
-                                                  isArchiveNode(item))
-                                                PopupMenuItem<FileMenuAction>(
-                                                  value: FileMenuAction
-                                                      .extractHere,
-                                                  enabled: !_extractingPaths
-                                                      .contains(item.apiPath),
-                                                  onTap: () =>
-                                                      _dispatchMenuAction(
-                                                        context,
-                                                        item,
-                                                        FileMenuAction
-                                                            .extractHere,
-                                                      ),
-                                                  child:
-                                                      _extractingPaths.contains(
-                                                        item.apiPath,
-                                                      )
-                                                      ? const Row(
-                                                          children: [
-                                                            SizedBox(
-                                                              width: 16,
-                                                              height: 16,
-                                                              child:
-                                                                  CircularProgressIndicator(
-                                                                    strokeWidth:
-                                                                        2,
-                                                                  ),
-                                                            ),
-                                                            SizedBox(width: 8),
-                                                            Text(
-                                                              'Extracting...',
-                                                            ),
-                                                          ],
-                                                        )
-                                                      : const Text(
-                                                          'Extract here',
-                                                        ),
-                                                ),
-                                              if (widget.isSearchMode &&
-                                                  widget.onNavigateToFolder !=
-                                                      null)
-                                                PopupMenuItem<FileMenuAction>(
-                                                  value: FileMenuAction
-                                                      .navigateToFolder,
-                                                  onTap: () =>
-                                                      widget
-                                                          .onNavigateToFolder!(
-                                                        item,
-                                                      ),
-                                                  child: const Text(
-                                                    'Navigate to folder',
-                                                  ),
-                                                ),
-                                            ],
+                                          FileMenuButton(
+                                            item: item,
+                                            menuActions: widget.menuActions,
+                                            extractingPaths: _extractingPaths,
+                                            inArchive: widget.inArchive,
+                                            isSearchMode: widget.isSearchMode,
+                                            onDispatchMenuAction:
+                                                _dispatchMenuAction,
+                                            onNavigateToFolder:
+                                                widget.onNavigateToFolder,
                                           ),
                                       ],
                                     ),
@@ -548,6 +503,8 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                       selectionMode: widget.selectionMode,
                       onDispatchMenuAction: _dispatchMenuAction,
                       onOpenDirectory: widget.onOpenDirectory,
+                      menuActions: widget.menuActions,
+                      subtitle: widget.subtitleFor?.call(item),
                       onNavigateToFolder: widget.onNavigateToFolder,
                       onSelectionChanged: widget.onSelectionChanged,
                     ),

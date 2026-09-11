@@ -200,6 +200,7 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 **Expected result:**
 
 - File no longer appears in the listing.
+- File appears in the trash, where it can be restored (JN-TR-001, JN-TR-003).
 
 ---
 
@@ -217,7 +218,7 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 
 **Expected result:**
 
-- All selected files are removed from the listing.
+- All selected files are removed from the listing and moved to the trash (JN-TR-001).
 - Unselected files remain.
 - App exits selection mode after deletion.
 

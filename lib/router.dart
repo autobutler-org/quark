@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/models/trash_item.dart';
 import 'package:quark/pages/docs_page.dart';
 import 'package:quark/pages/document_editor_page.dart';
 import 'package:quark/pages/file_browser_page.dart';
@@ -14,6 +15,7 @@ import 'package:quark/pages/sheets_page.dart';
 import 'package:quark/pages/spreadsheet_editor_page.dart';
 import 'package:quark/pages/storage_devices_page.dart';
 import 'package:quark/pages/terms_page.dart';
+import 'package:quark/pages/trash_page.dart';
 import 'package:quark/pages/vault_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
@@ -39,6 +41,7 @@ class AppRoutes {
   static const filesDeep = '/files/:path(.*)';
 
   static const photos = '/photos';
+  static const trash = '/trash';
   static const docs = '/docs';
   static const sheets = '/sheets';
   static const devices = '/devices';
@@ -105,6 +108,34 @@ class AppRoutes {
   static String filesPath(String path) {
     final clean = encodeFilePath(path);
     return clean.isEmpty ? files : '$files/$clean';
+  }
+
+  /// Build the URL of a folder in the trash: `/trash/<trashName>/<path>`,
+  /// with the device serial as a query param when non-empty, the way the
+  /// editor routes carry it. Null is the trash root.
+  /// e.g. trashFolder((serial: '', trashName: 'x_album', path: '2024'))
+  ///   → '/trash/x_album/2024'
+  static String trashFolder(TrashLocation? location) {
+    if (location == null) return trash;
+    final rest = location.path.isEmpty
+        ? location.trashName
+        : '${location.trashName}/${location.path}';
+    final base = '$trash/${encodeFilePath(rest)}';
+    return location.serial.isNotEmpty
+        ? '$base?serial=${Uri.encodeQueryComponent(location.serial)}'
+        : base;
+  }
+
+  /// Reads a [trashFolder] URL back: [rest] is everything after `/trash/`,
+  /// already decoded by go_router. Null for an empty [rest], the root.
+  static TrashLocation? parseTrashFolder(String rest, String serial) {
+    final segments = rest.split('/').where((s) => s.isNotEmpty).toList();
+    if (segments.isEmpty) return null;
+    return (
+      serial: serial,
+      trashName: segments.first,
+      path: segments.skip(1).join('/'),
+    );
   }
 
   /// Build a URL for a specific document file.
@@ -219,6 +250,25 @@ final router = GoRouter(
     GoRoute(
       path: AppRoutes.photos,
       builder: (context, state) => const PhotosPage(),
+    ),
+    GoRoute(
+      path: AppRoutes.trash,
+      builder: (context, state) => const TrashPage(),
+      routes: [
+        GoRoute(
+          // Matches /trash/<trashName>/<path inside it>, a folder being
+          // browsed in the trash. Nested like /files/:path so opening a
+          // folder, going up and the browser back button all move through
+          // go_router, and a deep link lands on the folder.
+          path: ':path(.*)',
+          builder: (context, state) => TrashPage(
+            location: AppRoutes.parseTrashFolder(
+              state.pathParameters['path'] ?? '',
+              state.uri.queryParameters['serial'] ?? '',
+            ),
+          ),
+        ),
+      ],
     ),
     GoRoute(
       path: AppRoutes.docs,

@@ -239,6 +239,7 @@ final List<GalleryEntry> registry = [
         activeSection: QuarkDrawerSection.photos,
         onTapFiles: () => log('QuarkDrawer.onTapFiles'),
         onTapPhotos: () => log('QuarkDrawer.onTapPhotos'),
+        onTapTrash: () => log('QuarkDrawer.onTapTrash'),
         onTapDocs: () => log('QuarkDrawer.onTapDocs'),
         onTapSheets: () => log('QuarkDrawer.onTapSheets'),
         onTapDevices: () => log('QuarkDrawer.onTapDevices'),
@@ -404,13 +405,30 @@ final List<GalleryEntry> registry = [
   GalleryEntry(
     name: 'FileSelectionBar',
     group: 'File browser',
-    build: (context, log) => FileSelectionBar(
-      selectedCount: 2,
-      totalCount: 7,
-      onSelectAll: () => log('FileSelectionBar.onSelectAll'),
-      onDeselectAll: () => log('FileSelectionBar.onDeselectAll'),
-      onCancel: () => log('FileSelectionBar.onCancel'),
-      onDelete: () => log('FileSelectionBar.onDelete'),
+    build: (context, log) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        FileSelectionBar(
+          selectedCount: 2,
+          totalCount: 7,
+          onSelectAll: () => log('FileSelectionBar.onSelectAll'),
+          onDeselectAll: () => log('FileSelectionBar.onDeselectAll'),
+          onCancel: () => log('FileSelectionBar.onCancel'),
+          onDelete: () => log('FileSelectionBar.onDelete'),
+        ),
+        const SizedBox(height: 16),
+        // The trash's variant: restore, and a delete that is permanent.
+        FileSelectionBar(
+          selectedCount: 2,
+          totalCount: 7,
+          onSelectAll: () => log('FileSelectionBar.onSelectAll'),
+          onDeselectAll: () => log('FileSelectionBar.onDeselectAll'),
+          onCancel: () => log('FileSelectionBar.onCancel'),
+          onRestore: () => log('FileSelectionBar.onRestore'),
+          onDelete: () => log('FileSelectionBar.onDelete'),
+          deleteTooltip: 'Delete permanently',
+        ),
+      ],
     ),
   ),
   GalleryEntry(

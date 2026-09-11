@@ -22,8 +22,19 @@ class FileMenuActionOutcome {
   final bool shouldRefresh;
 }
 
+/// Deletes [filePaths] under [rootDir] on one device — [FilesService.deleteFiles].
+typedef DeleteFilesFn =
+    Future<void> Function(
+      List<String> filePaths, {
+      String? rootDir,
+      String? deviceSerial,
+    });
+
 class FileBrowserController {
-  const FileBrowserController();
+  const FileBrowserController({this.deleteFiles = FilesService.deleteFiles});
+
+  /// The batch delete call, injectable so a test can see the batches.
+  final DeleteFilesFn deleteFiles;
 
   Future<List<FileNode>> fetchFiles(
     String currentPath, {
@@ -136,29 +147,24 @@ class FileBrowserController {
     );
   }
 
-  /// Deletes [nodes] in a single batch request per device group.
+  /// Deletes [nodes] in one batch request per device and parent folder.
+  ///
+  /// The backend resolves each name against the request's `rootDir`, so a
+  /// batch has to share a folder as well as a device. A selection can span
+  /// folders — search results, recent files, the unified view — and batching
+  /// by device alone sent every name to the first node's folder.
   Future<void> deleteNodes({required List<FileNode> nodes}) async {
-    if (nodes.isEmpty) return;
-    // Group by device serial so each batch request stays on one device.
-    final bySerial = <String, List<FileNode>>{};
+    final batches = <(String?, String), List<String>>{};
     for (final n in nodes) {
-      final key = serialOrNull(n.deviceSerial) ?? '';
-      (bySerial[key] ??= []).add(n);
-    }
-    for (final entry in bySerial.entries) {
-      final serial = entry.key.isEmpty ? null : entry.key;
-      final paths = entry.value
-          .map((n) => trimTrailingSlashes(n.name))
-          .toList();
-      // Use the parent dir of the first node as rootDir — they should all
-      // share the same directory within a batch, but the backend ignores
-      // rootDir when explicit filePaths are supplied.
-      final rootDir = toRootDir(parentPath(entry.value.first.apiPath));
-      await FilesService.deleteFiles(
-        paths,
-        rootDir: rootDir,
-        deviceSerial: serial,
+      final key = (
+        serialOrNull(n.deviceSerial),
+        toRootDir(parentPath(n.apiPath)),
       );
+      (batches[key] ??= []).add(trimTrailingSlashes(n.name));
+    }
+    for (final MapEntry(key: (serial, rootDir), value: names)
+        in batches.entries) {
+      await deleteFiles(names, rootDir: rootDir, deviceSerial: serial);
     }
   }
 
@@ -268,6 +274,10 @@ class FileBrowserController {
         // Handled via the onNavigateToFolder callback in FileBrowserView;
         // should never reach handleFileAction.
         return null;
+      case FileMenuAction.restore:
+      case FileMenuAction.deletePermanently:
+        // Trash-only actions; the Files page never offers them.
+        return null;
     }
   }
 
@@ -283,6 +293,10 @@ class FileBrowserController {
         return 'Extraction failed';
       case FileMenuAction.navigateToFolder:
         return 'Navigation failed';
+      case FileMenuAction.restore:
+        return 'Restore failed';
+      case FileMenuAction.deletePermanently:
+        return 'Delete failed';
     }
   }
 
