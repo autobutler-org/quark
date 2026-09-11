@@ -29,6 +29,7 @@ import 'package:quark/services/upload_chunk_source.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_browser_drag_config.dart';
@@ -935,43 +936,19 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     }
   }
 
-  /// Text-like extensions that the plaintext editor can handle.
-  static const _kTextExtensions = {
-    '.txt',
-    '.md',
-    '.json',
-    '.yaml',
-    '.yml',
-    '.xml',
-    '.html',
-    '.css',
-    '.js',
-    '.go',
-    '.py',
-    '.sh',
-    '.env',
-    '.toml',
-    '.ini',
-    '.cfg',
-    '.conf',
-    '.log',
-  };
-
   Future<void> _handleNewFilePressed() async {
     final fileName = await showNewFileDialog(context);
     if (fileName == null || !mounted) return;
 
     try {
       // Create empty content based on file type.
-      final String emptyContent;
-      if (fileName.endsWith('.qsheet')) {
-        emptyContent =
-            '{"tabs":[{"name":"Sheet 1","data":{"columns":[],"rows":[]}}]}';
-      } else if (fileName.endsWith('.qdoc')) {
-        emptyContent = '{"ops":[{"insert":"\\n"}]}';
-      } else {
-        emptyContent = '';
-      }
+      final kind = fileKindForName(fileName);
+      final emptyContent = switch (kind) {
+        FileKind.qsheet =>
+          '{"tabs":[{"name":"Sheet 1","data":{"columns":[],"rows":[]}}]}',
+        FileKind.qdoc => '{"ops":[{"insert":"\\n"}]}',
+        _ => '',
+      };
       final bytes = utf8.encode(emptyContent);
 
       final file = http.MultipartFile.fromBytes(
@@ -990,28 +967,16 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           ? fileName
           : '$_currentPath/$fileName';
 
-      // For generic files, only open the plaintext editor for text-like
-      // extensions; otherwise just refresh the listing.
-      final isKnownType =
-          fileName.endsWith('.qdoc') || fileName.endsWith('.qsheet');
-      if (isKnownType) {
-        _refreshFileState();
-        _openResolvedFile(
-          filePath,
-          fileName.endsWith('.qdoc') ? 'qdoc' : 'qsheet',
-          fileName,
-          justCreated: true,
-        );
-      } else {
-        final ext = filePath.contains('.')
-            ? '.${filePath.split('.').last.toLowerCase()}'
-            : '';
-        if (_kTextExtensions.contains(ext)) {
-          _refreshFileState();
+      // Open the editor for the kinds we can edit; otherwise just refresh
+      // the listing.
+      _refreshFileState();
+      switch (kind) {
+        case FileKind.qdoc || FileKind.qsheet:
+          _openResolvedFile(filePath, kind, fileName, justCreated: true);
+        case FileKind.text || FileKind.code:
           context.push(AppRoutes.plaintextEditorPath(filePath));
-        } else {
-          _refreshFileState();
-        }
+        default:
+          break;
       }
     } catch (e) {
       if (!mounted) return;
@@ -1200,7 +1165,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
       // Open the new .qsheet through the canonical files route.
       final qsheetPath = folder.isEmpty ? qsheetName : '$folder/$qsheetName';
-      _openResolvedFile(qsheetPath, 'qsheet', qsheetName);
+      _openResolvedFile(qsheetPath, FileKind.qsheet, qsheetName);
     } catch (e) {
       if (!mounted) return;
       _showMessage(Errors.message(e, 'convert the file'));
@@ -1262,7 +1227,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       // Refresh the file list so the new .qsheet appears, then open it through
       // the canonical files route.
       _refreshFileState();
-      _openResolvedFile(qsheetPath, 'qsheet', qsheetPath.split('/').last);
+      _openResolvedFile(
+        qsheetPath,
+        FileKind.qsheet,
+        qsheetPath.split('/').last,
+      );
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.statusCode == 409 && !overwrite) {
@@ -1325,7 +1294,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     final folder = parentPath(node.apiPath);
     _openResolvedFile(
       folder.isEmpty ? qsheetName : '$folder/$qsheetName',
-      'qsheet',
+      FileKind.qsheet,
       qsheetName,
     );
   }
@@ -1346,54 +1315,31 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
 
-    // Navigate into archives as virtual directories.
-    if (node.fileType == 'archive') {
-      _openArchive(node);
-      return;
-    }
-
-    final lowerName = node.name.toLowerCase();
-
-    // Quark native document format — open in the rich text editor.
-    if (lowerName.endsWith('.qdoc')) {
-      _openResolvedFile(node.apiPath, 'qdoc', node.name);
-      return;
-    }
-
-    // Quark native spreadsheet format.
-    if (lowerName.endsWith('.qsheet')) {
-      _openResolvedFile(node.apiPath, 'qsheet', node.name);
-      return;
-    }
-
-    // CSV — offer to convert to .qsheet (#1019).
-    if (lowerName.endsWith('.csv')) {
-      await _handleCsvOpen(node);
-      return;
-    }
-
-    // Excel workbooks — offer to convert to .qsheet (#1741). The legacy
-    // .xls is deliberately absent: it is a different format the Quark has no
-    // reader for, so it keeps the generic download view below.
-    if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xlsm')) {
-      await _handleXlsxOpen(node);
-      return;
-    }
-
-    // Text files — open in the plaintext editor via push so back works.
-    final ext = node.name.contains('.')
-        ? '.${node.name.split('.').last.toLowerCase()}'
-        : '';
-    if (_kTextExtensions.contains(ext)) {
-      context.push(AppRoutes.plaintextEditorPath(node.apiPath));
-      return;
+    final kind = fileKindForName(node.name);
+    switch (kind) {
+      // Navigate into archives as virtual directories.
+      case FileKind.archive:
+        _openArchive(node);
+        return;
+      // CSV — offer to convert to .qsheet (#1019).
+      case FileKind.csv:
+        return _handleCsvOpen(node);
+      // Excel workbooks — offer to convert to .qsheet (#1741).
+      case FileKind.xlsx:
+        return _handleXlsxOpen(node);
+      // Text and code — open in the plaintext editor via push so back works.
+      case FileKind.text || FileKind.code:
+        context.push(AppRoutes.plaintextEditorPath(node.apiPath));
+        return;
+      default:
+        break;
     }
 
     // Types with no in-app viewer yet — show a detail view with download and
     // "Open with" actions instead of silently failing. Named document types
     // land here too: without them a .pdf ends up worse off than an unclassified
     // file, which reaches this branch as 'generic' (#1184).
-    if (usesGenericFileViewer(node.fileType)) {
+    if (usesGenericFileViewer(kind)) {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => GenericFileViewerPage(node: node),
@@ -1405,28 +1351,14 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     // Everything else: the listing already says what the file is, so push
     // its viewer now rather than routing to the file's URL and waiting on a
     // stat first (#1564). The URL follows once the viewer is up.
-    _openResolvedFile(node.apiPath, node.fileType, node.name);
+    _openResolvedFile(node.apiPath, kind, node.name);
   }
-
-  static const _kImageExtensions = {
-    '.png',
-    '.jpg',
-    '.jpeg',
-    '.gif',
-    '.bmp',
-    '.webp',
-    '.tiff',
-    '.tif',
-  };
 
   Future<void> _openArchiveFile(FileNode node) async {
     final archive = _archiveContext!;
     final entryPath = archive.subPath.isEmpty
         ? node.name
         : '${archive.subPath}/${node.name}';
-    final ext = node.name.contains('.')
-        ? '.${node.name.split('.').last.toLowerCase()}'
-        : '';
 
     try {
       final bytes = await FilesService.downloadArchiveFileBytes(
@@ -1435,22 +1367,25 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       );
       if (bytes == null || !mounted) return;
 
-      if (_kImageExtensions.contains(ext)) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ImageViewerPage(bytes: bytes, name: node.name),
-          ),
-        );
-        return;
-      }
-
-      if (_kTextExtensions.contains(ext)) {
-        final text = utf8.decode(bytes, allowMalformed: true);
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ArchiveTextPreview(name: node.name, text: text),
-          ),
-        );
+      // Archive entries get no server-side JPEG conversion (#1851), so only
+      // formats Flutter decodes itself preview; the rest download.
+      final canDecode = clientDecodedImageExtensions.contains(
+        fileExtension(node.name),
+      );
+      final Widget? preview = switch (fileKindForName(node.name)) {
+        FileKind.image when canDecode => ImageViewerPage(
+          bytes: bytes,
+          name: node.name,
+        ),
+        FileKind.svg => SvgViewerPage(bytes: bytes, name: node.name),
+        FileKind.text || FileKind.code => ArchiveTextPreview(
+          name: node.name,
+          text: utf8.decode(bytes, allowMalformed: true),
+        ),
+        _ => null,
+      };
+      if (preview != null) {
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => preview));
         return;
       }
 
@@ -1751,14 +1686,12 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
 
-    // Stat the backend to resolve the real type.
+    // Stat the backend to learn whether the path is a folder.
     late final bool isDir;
-    late final String fileType;
     late final String fileName;
     try {
       final stat = await FilesService.statFile(filePath);
       isDir = stat.isDir;
-      fileType = stat.fileType;
       fileName = stat.name.isEmpty ? filePath.split('/').last : stat.name;
     } on FilesRequestException catch (error) {
       if (!mounted) return;
@@ -1808,16 +1741,16 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
 
-    await _openResolvedFile(filePath, fileType, fileName);
+    await _openResolvedFile(filePath, fileKindForName(fileName), fileName);
   }
 
-  /// Opens the viewer for a file whose type is already known — from a stat on
-  /// a deep link, or from the listing on a click. Every viewer is pushed
-  /// before anything about the file is downloaded, so it can show its own
-  /// loading state (#1564).
+  /// Opens the viewer for a file of [kind], classified from its name — after a
+  /// stat on a deep link, or straight from the listing on a click. Every
+  /// viewer is pushed before anything about the file is downloaded, so it can
+  /// show its own loading state (#1564).
   Future<void> _openResolvedFile(
     String filePath,
-    String fileType,
+    FileKind kind,
     String fileName, {
     bool justCreated = false,
   }) async {
@@ -1826,7 +1759,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     // Types with no in-app viewer — download + "Open with…" beats the
     // "No supported editor" dead end these used to hit (#1184). Shared with the
     // click path in _handleOpenNode so both agree.
-    if (usesGenericFileViewer(fileType)) {
+    if (usesGenericFileViewer(kind)) {
       final node = FileNode(
         name: filePath.split('/').last,
         size: 0,
@@ -1835,7 +1768,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         devicePath: '',
         deviceSerial: '',
         dirPath: filePath,
-        fileType: fileType,
       );
       FileBrowserCache.instance.markFileOpen(filePath);
       try {
@@ -1856,8 +1788,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
 
-    switch (fileType) {
-      case 'qdoc':
+    switch (kind) {
+      case FileKind.qdoc:
         await _openEditorWithUrl(
           filePath: filePath,
           builder: (targetRoute, closeRoute) => DocumentEditorPage(
@@ -1870,7 +1802,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         if (!mounted) return;
         return;
 
-      case 'qsheet':
+      case FileKind.qsheet:
         await _openEditorWithUrl(
           filePath: filePath,
           builder: (targetRoute, closeRoute) => SpreadsheetEditorPage(
@@ -1882,10 +1814,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         if (!mounted) return;
         return;
 
-      case 'code':
-      // Source/config files classified by the backend as 'code' open in
-      // the same plaintext editor for now — no syntax highlighting yet.
-      case 'text':
+      // Source and config files open in the same plaintext editor for now —
+      // no syntax highlighting yet.
+      case FileKind.text || FileKind.code:
         // Matches what clicking the row does — without this a deep link to a
         // file the browser opens happily reports "No supported editor".
         FileBrowserCache.instance.markFileOpen(filePath);
@@ -1898,7 +1829,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         context.go(AppRoutes.filesPath(parentPath(filePath)));
         return;
 
-      case 'image':
+      case FileKind.image:
         final serials = _serialsForActiveDevices();
         final serial = serials.isNotEmpty ? serials.first : null;
         await _openEditorWithUrl(
@@ -1913,7 +1844,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         context.go(AppRoutes.filesPath(parentPath(filePath)));
         return;
 
-      case 'svg':
+      case FileKind.svg:
         // SVG is XML, not a raster codec, so it needs SvgPicture rather than
         // the photo viewer's Image.memory (#1806).
         final svgSerials = _serialsForActiveDevices();
@@ -1940,8 +1871,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         context.go(AppRoutes.filesPath(parentPath(filePath)));
         return;
 
-      case 'video':
-      case 'audio':
+      case FileKind.video || FileKind.audio:
         final mediaSerials = _serialsForActiveDevices();
         final mediaSerial = mediaSerials.isNotEmpty ? mediaSerials.first : null;
         final url = FilesService.constructMediaUrl(
@@ -1952,7 +1882,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         // backdrop (#1573).
         await _openEditorWithUrl(
           filePath: filePath,
-          builder: (_, _) => fileType == 'audio'
+          builder: (_, _) => kind == FileKind.audio
               ? AudioPlayerPage(url: url, name: fileName)
               : VideoViewerPage(url: url, name: fileName),
         );
@@ -1965,7 +1895,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           _routeFailure = _FilesRouteFailure(
             requestedPath: filePath,
             isFileRoute: true,
-            isUnsupported: !hasSupportedFilesEditorForType(fileType),
+            isUnsupported: !hasSupportedFilesEditorForType(kind),
           );
         });
         break;

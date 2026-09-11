@@ -9,6 +9,7 @@ import 'package:quark/models/photo_metadata.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/web_download_stub.dart'
     if (dart.library.html) 'package:quark/utils/web_download_web.dart'
     as web_download;
@@ -636,7 +637,7 @@ class FilesService with AuthenticatedService {
     String? fileName,
   }) async {
     var uri = _buildDownloadUri(filePath, serial: serial);
-    if (_needsServerConversion(filePath)) {
+    if (serverConvertedImageExtensions.contains(fileExtension(filePath))) {
       // Not just a web concern: Flutter's built-in image decoder (Skia, via
       // Image.memory) can't decode HEIC/TIFF/BMP/RAW on any platform without
       // a dedicated codec plugin, which this app doesn't bundle. Request the
@@ -651,23 +652,6 @@ class FilesService with AuthenticatedService {
     }
 
     return response.bodyBytes;
-  }
-
-  static bool _needsServerConversion(String path) {
-    final lower = path.toLowerCase();
-    return lower.endsWith('.heic') ||
-        lower.endsWith('.heif') ||
-        lower.endsWith('.tiff') ||
-        lower.endsWith('.tif') ||
-        lower.endsWith('.bmp') ||
-        lower.endsWith('.raw') ||
-        lower.endsWith('.cr2') ||
-        lower.endsWith('.cr3') ||
-        lower.endsWith('.nef') ||
-        lower.endsWith('.arw') ||
-        lower.endsWith('.dng') ||
-        lower.endsWith('.orf') ||
-        lower.endsWith('.rw2');
   }
 
   /// Download thumbnail bytes for the specified filePath using the thumbnails endpoint.

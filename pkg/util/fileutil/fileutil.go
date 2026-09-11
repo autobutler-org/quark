@@ -40,7 +40,7 @@ type FileNode struct {
 	DirPath        string `json:"dirPath"` // Directory path containing the file, for easier client-side handling
 	FullPath       string `json:"fullPath"`
 	DeviceSerial   string `json:"deviceSerial"`
-	FileType       string `json:"fileType"`
+	FileType       string `json:"fileType"` // Kept for older clients; route viewers by file name instead
 }
 
 // FileNodeWithTime is a FileNode carrying its modification time, for the
