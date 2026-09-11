@@ -20,7 +20,7 @@ import (
 
 const hostname = "quark"
 
-const defaultControlURL = "https://network.quark.ts.autobutler.org"
+const defaultControlURL = "https://quark.ts.autobutler.org"
 
 var (
 	mu      sync.Mutex
