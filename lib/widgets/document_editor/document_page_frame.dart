@@ -14,7 +14,6 @@ DefaultStyles _quillStyles(ColorScheme cs) {
   final fg = cs.onSurface;
   final muted = cs.onSurface.withValues(alpha: 0.5);
   final codeBg = cs.surfaceContainerHighest;
-  final codeColor = cs.secondary;
   final outline = cs.outline;
 
   TextStyle base([double size = 14]) =>
@@ -89,14 +88,14 @@ DefaultStyles _quillStyles(ColorScheme cs) {
       style: TextStyle(
         fontFamily: 'monospace',
         fontSize: 13,
-        color: codeColor,
+        color: fg,
         backgroundColor: codeBg,
       ),
       backgroundColor: codeBg,
       radius: const Radius.circular(4),
     ),
     code: DefaultTextBlockStyle(
-      TextStyle(fontFamily: 'monospace', fontSize: 13, color: codeColor),
+      TextStyle(fontFamily: 'monospace', fontSize: 13, color: fg),
       const HorizontalSpacing(16, 16),
       const VerticalSpacing(8, 8),
       VerticalSpacing.zero,
