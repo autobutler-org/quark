@@ -79,6 +79,22 @@ dependencies:
   quark_widgets:
     path: packages/quark_widgets
 
+# Patched desktop_drop: upstream's web handler calls webkitGetAsEntry()! on every
+# item in a drag, but that returns null for the string items a drag carries
+# alongside its files -- dragging from the browser's downloads menu sends
+# text/uri-list and text/plain next to the file. The null assert threw before
+# catchError was attached, so nothing uploaded and the drag highlight stayed
+# stuck. See #1831, and upstream MixinNetwork/flutter-plugins#456 / #459.
+# Tracks our fork's main; pubspec.lock pins the resolved commit, so a build is
+# still reproducible -- but `pub upgrade` will take whatever main has moved to.
+# Drop this override once a release carrying the fix is on pub.dev.
+dependency_overrides:
+  desktop_drop:
+    git:
+      url: https://github.com/autobutler-org/flutter-plugins.git
+      ref: main
+      path: packages/desktop_drop
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
