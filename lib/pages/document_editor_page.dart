@@ -11,6 +11,8 @@ import 'package:http/http.dart' as http;
 import 'package:printing/printing.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/utils/clipboard_utils.dart';
+import 'package:quark/utils/document_paste.dart';
 import 'package:quark/utils/editor_focus_restore.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
@@ -43,6 +45,29 @@ KeyEventResult? quillFindKeyInterceptor(KeyEvent event, VoidCallback onToggle) {
       HardwareKeyboard.instance.isMetaPressed;
   if (!modified) return null;
   if (event is KeyDownEvent) onToggle();
+  return KeyEventResult.handled;
+}
+
+// ── Paste shortcut ────────────────────────────────────────────────────────────
+
+/// Catches Ctrl/Cmd+V inside a [QuillEditor] when flutter_quill would paste
+/// nothing and say nothing about it.
+///
+/// Runs [onIntercepted] with what should happen instead and stops the event;
+/// returns null for [DocumentPasteAction.passThrough] and for every other key,
+/// so a normal paste is still flutter_quill's to handle (#1857).
+KeyEventResult? quillPasteKeyInterceptor(
+  KeyEvent event,
+  DocumentPasteAction action,
+  ValueChanged<DocumentPasteAction> onIntercepted,
+) {
+  if (event.logicalKey != LogicalKeyboardKey.keyV) return null;
+  final modified =
+      HardwareKeyboard.instance.isControlPressed ||
+      HardwareKeyboard.instance.isMetaPressed;
+  if (!modified) return null;
+  if (action == DocumentPasteAction.passThrough) return null;
+  if (event is KeyDownEvent) onIntercepted(action);
   return KeyEventResult.handled;
 }
 
@@ -550,6 +575,13 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
               _toggleFindBar,
           const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
               _toggleFindBar,
+          // Ctrl+V / Cmd+V — the same interception the editor does, for the
+          // window between opening a document and first clicking into it,
+          // where the editor has no focus and never sees the key (#1857).
+          const SingleActivator(LogicalKeyboardKey.keyV, control: true):
+              _pasteFromShortcut,
+          const SingleActivator(LogicalKeyboardKey.keyV, meta: true):
+              _pasteFromShortcut,
           // Escape — close find bar when open
           const SingleActivator(LogicalKeyboardKey.escape): () {
             if (_showFindBar) setState(() => _showFindBar = false);
@@ -733,7 +765,38 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   }
 
   KeyEventResult? _handleEditorKey(KeyEvent event, Node? node) =>
-      quillFindKeyInterceptor(event, _toggleFindBar);
+      quillFindKeyInterceptor(event, _toggleFindBar) ??
+      quillPasteKeyInterceptor(event, _pasteAction, _handlePaste);
+
+  // ── Paste (#1857) ─────────────────────────────────────────────────────────
+
+  DocumentPasteAction get _pasteAction => documentPasteAction(
+    clipboardAvailable: isClipboardAvailable,
+    isReadOnly: _isReadOnly,
+  );
+
+  void _pasteFromShortcut() {
+    final action = _pasteAction;
+    if (action != DocumentPasteAction.passThrough) _handlePaste(action);
+  }
+
+  Future<void> _handlePaste(DocumentPasteAction action) async {
+    switch (action) {
+      case DocumentPasteAction.unavailable:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(Errors.pasteNeedsSecureContext),
+            duration: Duration(seconds: 5),
+          ),
+        );
+      case DocumentPasteAction.editThenPaste:
+        _enterEditMode();
+        // ignore: experimental_member_use
+        await _controller.clipboardPaste();
+      case DocumentPasteAction.passThrough:
+        break;
+    }
+  }
 
   Future<void> _pickBackgroundColor(
     QuillController controller,

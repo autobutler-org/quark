@@ -88,6 +88,14 @@ abstract final class Errors {
   /// this is what they read in the meantime.
   static const String sessionExpired = 'Your session expired. Sign in again.';
 
+  /// The browser will not hand the page the clipboard's contents outside a
+  /// secure context, and a Quark reached at `http://192.168.x.x` is not one.
+  /// Copying still works — the browser has a fallback for writing — so this
+  /// names pasting specifically rather than "the clipboard" (#1857).
+  static const String pasteNeedsSecureContext =
+      "Your browser won't share the clipboard over a plain http:// "
+      'connection. Open Quark over https:// or on localhost to paste.';
+
   /// The Quark answered, and what it said maps to copy worth the difference.
   /// Anything unmapped falls back to [couldNot] — a vague-but-true sentence
   /// beats a guess about a status the backend may not even return.
