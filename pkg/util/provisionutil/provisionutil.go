@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const defaultProvisioningURL = "https://network.quark.ts.autobutler.org/provision"
+const defaultProvisioningURL = "https://quark.ts.autobutler.org/provision"
 
 // provisioningSecret is stamped into release builds by .goreleaser.yaml:
 //
