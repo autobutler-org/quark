@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:quark/utils/document_markdown_shortcuts.dart';
 import 'package:quark/utils/editor_shortcuts.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -184,6 +185,12 @@ class DocumentPageFrame extends StatelessWidget {
               },
               customStyles: _quillStyles(pageCs),
               customShortcuts: editorNavigationShortcuts(),
+              // Type the markdown, get the block — see
+              // [documentSpaceShortcuts] for the whole table (#1854).
+              // ignore: experimental_member_use
+              characterShortcutEvents: documentCharacterShortcuts,
+              // ignore: experimental_member_use
+              spaceShortcutEvents: documentSpaceShortcuts,
               // Keeps Quill's built-in search dialog from opening on top of the
               // inline find bar — see [quillFindKeyInterceptor].
               // ignore: experimental_member_use
