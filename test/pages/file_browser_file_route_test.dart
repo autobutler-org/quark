@@ -5,8 +5,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/pages/file_browser_page.dart';
+import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -61,6 +63,13 @@ class _RecordingClient implements HttpClient {
           'isDir': false,
           'dirPath': '${url.queryParameters['rootDir'] ?? ''}/notes.txt',
           'fileType': 'txt',
+        },
+        {
+          'name': 'beach.jpg',
+          'size': 12,
+          'isDir': false,
+          'dirPath': '${url.queryParameters['rootDir'] ?? ''}/beach.jpg',
+          'fileType': 'image',
         },
       ]);
     }
@@ -253,6 +262,8 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 20));
       }
+      // The folder around the file is listed while it resolves (#1564).
+      await tester.pump(const Duration(milliseconds: 300));
     }, createHttpClient: overrides.createHttpClient);
   });
 
@@ -292,6 +303,74 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       expect(listingsOf(overrides.requested, 'Documents'), isNotEmpty);
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  /// Pumps the browser at [location] under a router nested like
+  /// lib/router.dart, taps beach.jpg, and returns the router once the push
+  /// animation — and the URL sync that follows it — is over.
+  Future<GoRouter> clickPhoto(WidgetTester tester, String location) async {
+    final router = GoRouter(
+      initialLocation: location,
+      routes: [
+        GoRoute(
+          path: '/files',
+          builder: (_, _) => const FileBrowserPage(),
+          routes: [
+            GoRoute(
+              path: ':path(.*)',
+              builder: (_, state) =>
+                  FileBrowserPage(initialPath: state.pathParameters['path']),
+            ),
+          ],
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    await tester.tap(find.text('beach.jpg'));
+    await tester.pump();
+    // #1564: a click routed to the photo's URL, stat-ed it and downloaded it
+    // whole before the viewer appeared. The listing already knows the type, so
+    // the viewer is built on the tap's frame (offstage only while the route
+    // sets up its hero flight) and it is the viewer that asks for the bytes.
+    expect(find.byType(ImageViewerPage, skipOffstage: false), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(
+      overrides.requested.where(
+        (u) =>
+            u.path.endsWith('/files/stat') &&
+            (u.queryParameters['filePath'] ?? '').endsWith('beach.jpg'),
+      ),
+      isEmpty,
+      reason: 'the listing already said this is an image',
+    );
+    expect(find.byType(ImageViewerPage), findsOneWidget);
+    return router;
+  }
+
+  testWidgets('clicking a photo opens its viewer, then its URL follows', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      final router = await clickPhoto(tester, '/files/photos');
+      expect(router.state.uri.path, '/files/photos/beach.jpg');
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  testWidgets('clicking a photo in the home folder keeps it on screen', (
+    tester,
+  ) async {
+    // /files/beach.jpg is a nested page under /files; syncing to it would
+    // stack a second browser over the viewer.
+    await HttpOverrides.runZoned(() async {
+      final router = await clickPhoto(tester, '/files');
+      expect(router.state.uri.path, '/files');
     }, createHttpClient: overrides.createHttpClient);
   });
 }

@@ -30,7 +30,9 @@ const _kPageAnimDuration = Duration(milliseconds: 250);
 /// A full-screen photo viewer with metadata sidebar (desktop) / bottom drawer
 /// (mobile), action toolbar, and keyboard shortcuts.
 ///
-/// Required: [bytes], [name].
+/// Required: [name]. Pass [bytes] when they are already in hand; leave them
+/// null with a [relPath] and the viewer opens at once and downloads the photo
+/// itself, so the user is not left staring at the page they came from (#1564).
 ///
 /// Optional Quark-device extras (enable metadata, download, delete, album actions):
 ///   [relPath], [serial].
@@ -42,7 +44,7 @@ const _kPageAnimDuration = Duration(milliseconds: 250);
 /// Keyboard: ← → navigate, Escape closes, i toggles sidebar, f toggles
 /// favorite, r rotates 90° CW.
 class ImageViewerPage extends StatefulWidget {
-  final Uint8List bytes;
+  final Uint8List? bytes;
   final String name;
   final int initialIndex;
   final int imageCount;
@@ -74,7 +76,7 @@ class ImageViewerPage extends StatefulWidget {
 
   const ImageViewerPage({
     super.key,
-    required this.bytes,
+    this.bytes,
     required this.name,
     this.initialIndex = 0,
     this.imageCount = 1,
@@ -94,7 +96,9 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     with SingleTickerProviderStateMixin {
   // Navigation state
   late int _currentIndex;
-  late Uint8List _currentBytes;
+  // Null until the viewer's own download of [ImageViewerPage.relPath] lands.
+  Uint8List? _currentBytes;
+  String? _loadError;
   late String _currentName;
   late String? _currentRelPath;
   late String? _currentSerial;
@@ -160,6 +164,28 @@ class _ImageViewerPageState extends State<ImageViewerPage>
 
     _initPrefs();
     _prefetchNeighbors();
+    if (_currentBytes == null) _loadOwnBytes();
+  }
+
+  /// Downloads the photo for a viewer opened without its bytes. A failure
+  /// stays on screen in place of the photo — there is no other photo to fall
+  /// back to.
+  Future<void> _loadOwnBytes() async {
+    Uint8List? bytes;
+    Object? error;
+    try {
+      bytes = await FilesService.downloadFileBytes(
+        _currentRelPath ?? '',
+        serial: _currentSerial,
+      );
+    } catch (e) {
+      error = e;
+    }
+    if (!mounted) return;
+    setState(() {
+      _currentBytes = bytes;
+      if (bytes == null) _loadError = Errors.message(error, 'load the photo');
+    });
   }
 
   @override
@@ -715,15 +741,34 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width >= 600;
     final isLive = _metadata?.isLivePhoto ?? false;
+    final bytes = _currentBytes;
+    final loadError = _loadError;
     final photoArea = PhotoArea(
-      currentPhoto: CurrentPhoto(
-        bytes: _currentBytes,
-        rotation: _rotationValue,
-        zoomController: _zoomController,
-        zoomedIn: _zoomedIn,
-        liveVideoPlaying: _liveVideoPlaying,
-        liveVideoController: _liveVideoController,
-      ),
+      currentPhoto: bytes != null
+          ? CurrentPhoto(
+              bytes: bytes,
+              rotation: _rotationValue,
+              zoomController: _zoomController,
+              zoomedIn: _zoomedIn,
+              liveVideoPlaying: _liveVideoPlaying,
+              liveVideoController: _liveVideoController,
+            )
+          : Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (loadError == null)
+                    const CircularProgressIndicator(color: Colors.white),
+                  const SizedBox(height: 16),
+                  Text(
+                    loadError ?? _currentName,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
       pageController: _pageController,
       currentIndex: _currentIndex,
       imageCount: _liveImageCount,
