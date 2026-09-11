@@ -133,7 +133,7 @@ class _DocsPageState extends State<DocsPage> with SafeSetStateMixin {
       );
       await FilesService.uploadFilesFromFormData('', [file]);
       if (!mounted) return;
-      context.push(AppRoutes.docFile(fileName));
+      context.push(AppRoutes.docFile(fileName), extra: true);
       _load();
     } catch (e) {
       if (mounted) {

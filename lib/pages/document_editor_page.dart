@@ -53,11 +53,16 @@ class DocumentEditorPage extends StatefulWidget {
   final String? overlayTargetRoute;
   final String? overlayCloseRoute;
 
+  /// Opens ready to type instead of read-only. Set by the create flows: a
+  /// document the user just made has nothing to read yet (#1568).
+  final bool startInEditMode;
+
   const DocumentEditorPage({
     required this.filePath,
     this.deviceSerial = '',
     this.overlayTargetRoute,
     this.overlayCloseRoute,
+    this.startInEditMode = false,
     super.key,
   });
 
@@ -81,7 +86,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
   bool _routeMovedExternally = false;
 
   // Read-only / edit mode (#939)
-  bool _isReadOnly = true;
+  late bool _isReadOnly = !widget.startInEditMode;
 
   // Edit button glow hint (#940)
   bool _hintEditButton = false;
@@ -276,6 +281,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
           _dirty = false;
         });
         _listenForEdits();
+        if (!_isReadOnly) _focusEditor();
         return;
       }
 
@@ -302,6 +308,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
       });
       _wordCount.value = _countWords(doc.toPlainText());
       _listenForEdits();
+      if (!_isReadOnly) _focusEditor();
     } catch (e) {
       if (!mounted) return;
       setState(() {

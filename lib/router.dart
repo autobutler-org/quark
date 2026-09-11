@@ -238,7 +238,12 @@ final router = GoRouter(
       builder: (context, state) {
         final filePath = state.pathParameters['path'] ?? '';
         final serial = state.uri.queryParameters['serial'] ?? '';
-        return DocumentEditorPage(filePath: filePath, deviceSerial: serial);
+        return DocumentEditorPage(
+          filePath: filePath,
+          deviceSerial: serial,
+          // `extra: true` from a create flow opens the new doc editable (#1568).
+          startInEditMode: state.extra == true,
+        );
       },
     ),
     GoRoute(
