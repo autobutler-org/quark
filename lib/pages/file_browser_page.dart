@@ -808,8 +808,13 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
     setStateSafely(() {
+      // Only the folder-hover flag changes here. _isWebDragging tracks whether
+      // the drag is anywhere over the page, and the page overlay is already
+      // hidden while _isHoveringFolderDropTarget is set. Clearing it here
+      // stranded it: a folder row sits inside the page's DropTarget, so the
+      // pointer never leaves that target, onDragEntered never fires again, and
+      // the page-level highlight stayed dead for the rest of the drag.
       _isHoveringFolderDropTarget = true;
-      _isWebDragging = false;
     });
   }
 
@@ -2259,13 +2264,22 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                     },
                     onDragDone: (details) async {
                       _folderDragExitTimer?.cancel();
+                      // A drop ends the drag, so reset every drag flag here.
+                      // Cancelling the timer alone stranded the folder flag:
+                      // a folder's own onDragDone schedules that timer to
+                      // clear it, and cancelling it left the flag set, which
+                      // hid the page overlay for the whole of the next drag.
+                      // Read it first -- it says whether a folder took this
+                      // drop.
+                      final droppedOnFolder = _isHoveringFolderDropTarget;
                       if (mounted) {
                         setStateSafely(() {
                           _isWebDragging = false;
+                          _isHoveringFolderDropTarget = false;
                         });
                       }
 
-                      if (_isHoveringFolderDropTarget) {
+                      if (droppedOnFolder) {
                         return;
                       }
 
