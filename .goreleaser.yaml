@@ -25,6 +25,10 @@ builds:
       - arm64
     ldflags:
       - -s -w -X github.com/autobutler-org/quark/pkg/util/versionutil.Semver={{.Version}}
+      # The key-provisioning secret (#1876). It ships in every binary, so it is not
+      # secret from anyone holding one; see pkg/util/provisionutil. `index` keeps a
+      # local run without it working: that build just cannot enable remote access.
+      - -X github.com/autobutler-org/quark/pkg/util/provisionutil.provisioningSecret={{ index .Env "QUARK_PROVISIONING_SECRET" }}
 
 archives:
   - formats: [tar.gz]

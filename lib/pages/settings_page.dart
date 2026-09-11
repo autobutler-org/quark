@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -14,6 +16,7 @@ import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/utils/remote_access_config.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark/widgets/settings/help_support_card.dart';
 import 'package:quark/widgets/settings/sbom_expansion_tile.dart';
@@ -155,6 +158,10 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isTogglingRemoteAccess = false;
   String? _remoteAccessError;
 
+  /// Re-reads the status while remote access is on but not yet connected, so
+  /// "Connecting…" resolves without a reload (#1876).
+  Timer? _remoteAccessPoll;
+
   // Connected devices state
   List<ConnectedDevice> _connectedDevices = [];
   bool _isLoadingDevices = false;
@@ -233,6 +240,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _remoteAccessError = null;
         _isLoadingRemoteAccess = false;
       });
+      _syncRemoteAccessPoll();
       return;
     }
     setState(() {
@@ -241,11 +249,17 @@ class _SettingsPageState extends State<SettingsPage> {
     });
     try {
       final status = await RemoteAccessService.getStatus();
+      if (status.error != null) {
+        debugPrint(
+          '[settings_page.dart] Remote access failing: ${status.error}',
+        );
+      }
       if (!mounted) return;
       setState(() {
         _remoteAccessStatus = status;
         _isLoadingRemoteAccess = false;
       });
+      _syncRemoteAccessPoll();
       _noteReachability(null);
     } catch (e) {
       debugPrint('[settings_page.dart] Remote access error: $e');
@@ -258,6 +272,37 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  /// Starts the status poll while remote access is on and not connected, and
+  /// stops it otherwise.
+  void _syncRemoteAccessPoll() {
+    final status = _remoteAccessStatus;
+    if (status == null || !status.enabled || status.connected) {
+      _remoteAccessPoll?.cancel();
+      _remoteAccessPoll = null;
+      return;
+    }
+    _remoteAccessPoll ??= Timer.periodic(
+      RemoteAccessConfig.statusPollInterval,
+      (_) => _pollRemoteAccess(),
+    );
+  }
+
+  /// One quiet status read: no spinner, and a failure keeps the last status
+  /// on screen for the next tick to replace.
+  Future<void> _pollRemoteAccess() async {
+    try {
+      final status = await RemoteAccessService.getStatus();
+      if (!mounted) return;
+      setState(() {
+        _remoteAccessStatus = status;
+        _remoteAccessError = null;
+      });
+      _syncRemoteAccessPoll();
+    } catch (e) {
+      debugPrint('[settings_page.dart] Remote access poll failed: $e');
+    }
+  }
+
   Future<void> _enableRemoteAccess() async {
     setState(() => _isTogglingRemoteAccess = true);
     try {
@@ -267,6 +312,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _remoteAccessStatus = status;
         _isTogglingRemoteAccess = false;
       });
+      _syncRemoteAccessPoll();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Remote access enabled')));
@@ -309,6 +355,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _remoteAccessStatus = status;
         _isTogglingRemoteAccess = false;
       });
+      _syncRemoteAccessPoll();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Remote access disabled')));
@@ -983,20 +1030,61 @@ class _SettingsPageState extends State<SettingsPage> {
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              const Icon(
-                                QuarkIcons.cloud_done_outlined,
-                                size: 16,
-                                color: Colors.green,
-                              ),
-                              const SizedBox(width: 6),
-                              const Text(
-                                'Connected via Tailscale',
-                                style: TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                            ],
-                          ),
+                          // On is the Quark's setting; on the tailnet is a
+                          // separate fact that can lag it or never arrive.
+                          if (_remoteAccessStatus!.error != null)
+                            Row(
+                              children: [
+                                Icon(
+                                  QuarkIcons.error_outline,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    Errors.remoteAccessFailing,
+                                    key: const ValueKey(
+                                      'settings_remote_access_failing',
+                                    ),
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else if (!_remoteAccessStatus!.connected)
+                            const Row(
+                              children: [
+                                Icon(QuarkIcons.cloud_sync_outlined, size: 16),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Connecting…',
+                                  key: ValueKey(
+                                    'settings_remote_access_connecting',
+                                  ),
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            )
+                          else
+                            const Row(
+                              children: [
+                                Icon(
+                                  QuarkIcons.cloud_done_outlined,
+                                  size: 16,
+                                  color: Colors.green,
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Connected via Tailscale',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
                           if (_remoteAccessStatus?.remoteUrl != null &&
                               _remoteAccessStatus!.remoteUrl!.isNotEmpty) ...[
                             const SizedBox(height: 8),
@@ -1483,6 +1571,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   void dispose() {
+    _remoteAccessPoll?.cancel();
     _accountActions.dispose();
     super.dispose();
   }

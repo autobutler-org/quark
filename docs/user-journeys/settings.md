@@ -165,23 +165,31 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-011: Enable remote access
 
-**Preconditions:** User is on the Settings page. Remote access is currently disabled.
+**Preconditions:** User is signed in as an admin and on the Settings page. Remote access is currently disabled.
 
 **Steps:**
 
 1. Scroll to the Remote Access section.
-2. Tap **Enable**.
+2. Tap **Enable remote access**.
 
 **Expected result:**
 
-- Remote access is enabled.
-- A remote URL is displayed for external connections.
+- The Quark fetches its own Tailscale key from the provisioning service; the user never sees or enters a key
+  (#1876).
+- Remote access is enabled and the section reads **Connecting…** until the node joins the tailnet, then
+  **Connected via Tailscale** with the remote URL. The section refreshes itself every few seconds while it
+  connects, so no reload is needed.
+- A non-admin is told they do not have permission.
+- A build with no provisioning secret says remote access is not available in this build, and stays off.
+- If the Quark cannot start remote access, at boot or on enable, or the tailnet rejects its key, the section
+  stays on and says it could not start; the reason is in the Quark's log.
+- After a restart the Quark reconnects with its saved enrollment and does not fetch a new key.
 
 ---
 
 ### JN-ST-012: Disable remote access
 
-**Preconditions:** Remote access is currently enabled.
+**Preconditions:** User is signed in as an admin. Remote access is currently enabled.
 
 **Steps:**
 
@@ -192,6 +200,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 - Remote access is disabled.
 - Remote URL is no longer shown.
+- The Quark logs its node out of the tailnet and forgets the enrollment, so enabling again fetches a fresh key.
 
 ---
 

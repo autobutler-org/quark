@@ -2481,6 +2481,111 @@ const docTemplate = `{
                 }
             }
         },
+        "/settings/remote-access": {
+            "get": {
+                "description": "Returns whether remote access is switched on, whether the Tailscale node has actually joined the tailnet, its remote URL once it has, and the last start failure",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Get remote access status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.RemoteAccessResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Starts a Tailscale tsnet node and proxies traffic to the local server. A Quark with no tailnet enrollment fetches a pre-auth key from the provisioning service; authKey overrides that key. The node joins the tailnet asynchronously; poll GET for connected. Admin only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Enable remote access via Tailscale",
+                "parameters": [
+                    {
+                        "description": "Optional pre-auth key override",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.RemoteAccessRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.RemoteAccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "503": {
+                        "description": "This build has no provisioning secret",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Logs the Tailscale tsnet node out, stops it, and deletes its state, so re-enabling provisions a fresh key. Admin only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Disable remote access",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.RemoteAccessResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/storage/devices/rename": {
             "patch": {
                 "description": "Sets a custom display name for a storage device identified by its serial number",
@@ -4145,6 +4250,36 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "serial": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_settings.RemoteAccessRequest": {
+            "type": "object",
+            "properties": {
+                "authKey": {
+                    "description": "AuthKey overrides the provisioned pre-auth key. It is used only when the\nQuark has no tailnet enrollment to reuse.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_settings.RemoteAccessResponse": {
+            "type": "object",
+            "properties": {
+                "connected": {
+                    "description": "Connected is true only once the node has joined the tailnet.",
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "description": "Enabled is the persisted setting: the user asked for remote access.",
+                    "type": "boolean"
+                },
+                "error": {
+                    "description": "Error is the last start failure, a diagnostic for the log reader rather\nthan copy for a user.",
+                    "type": "string"
+                },
+                "remoteUrl": {
+                    "description": "RemoteURL is set only when Connected.",
                     "type": "string"
                 }
             }

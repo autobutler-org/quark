@@ -2,6 +2,7 @@ package remoteutil
 
 import (
 	"crypto/tls"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -10,6 +11,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"tailscale.com/ipn"
+	"tailscale.com/ipn/ipnstate"
 )
 
 // newProxy builds the reverse proxy that carries tailnet traffic to the quark
@@ -34,6 +38,32 @@ func newProxy(target *url.URL, localTLS bool) *httputil.ReverseProxy {
 		}
 	}
 	return rp
+}
+
+// connectionFromStatus maps a tsnet status to whether the node is on the
+// tailnet and, if it is, the URL peers reach it at. tsnet.Server.Start returns
+// before the node authenticates, so only BackendState "Running" counts —
+// "Starting", "NeedsLogin" and the rest are not connected, whatever IP the
+// node may already hold.
+//
+// "NeedsLogin" is also a failure: tailscale's LocalBackend enters it only when
+// login cannot continue without a human (#1876). For a node given a pre-auth
+// key, that means control rejected the key or it expired.
+func connectionFromStatus(st *ipnstate.Status) StatusResult {
+	if st == nil {
+		return StatusResult{}
+	}
+	switch st.BackendState {
+	case ipn.Running.String():
+		if len(st.TailscaleIPs) == 0 {
+			return StatusResult{Connected: true}
+		}
+		return StatusResult{Connected: true, RemoteURL: fmt.Sprintf("http://%s:80", st.TailscaleIPs[0])}
+	case ipn.NeedsLogin.String():
+		return StatusResult{Error: errKeyRejected}
+	default:
+		return StatusResult{}
+	}
 }
 
 func controlURL() string {

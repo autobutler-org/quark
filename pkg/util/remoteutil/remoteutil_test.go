@@ -1,14 +1,18 @@
 package remoteutil
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"tailscale.com/ipn/ipnstate"
 )
 
 // TestControlURL_DefaultWhenEnvUnset verifies the default Headscale URL is
@@ -159,5 +163,96 @@ func TestNewProxy_SetsForwardedFor(t *testing.T) {
 
 	if want := "127.0.0.1"; got != want {
 		t.Errorf("X-Forwarded-For at the quark = %q; want %q", got, want)
+	}
+}
+
+// TestConnectionFromStatus verifies that only BackendState "Running" counts as
+// connected (#1815): tsnet.Server.Start returns before the node authenticates,
+// and a node waiting on login can already hold an IP. "NeedsLogin" is reported
+// as a rejected or expired key rather than as connecting forever (#1876).
+func TestConnectionFromStatus(t *testing.T) {
+	ip := []netip.Addr{netip.MustParseAddr("100.64.0.7")}
+	cases := []struct {
+		name string
+		st   *ipnstate.Status
+		want StatusResult
+	}{
+		{"nil status", nil, StatusResult{}},
+		{"no state yet", &ipnstate.Status{BackendState: "NoState"}, StatusResult{}},
+		{"starting", &ipnstate.Status{BackendState: "Starting", TailscaleIPs: ip}, StatusResult{}},
+		{"needs login", &ipnstate.Status{BackendState: "NeedsLogin", TailscaleIPs: ip}, StatusResult{Error: errKeyRejected}},
+		{"running without an IP yet", &ipnstate.Status{BackendState: "Running"}, StatusResult{Connected: true}},
+		{"running", &ipnstate.Status{BackendState: "Running", TailscaleIPs: ip}, StatusResult{Connected: true, RemoteURL: "http://100.64.0.7:80"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := connectionFromStatus(tc.st); got != tc.want {
+				t.Errorf("connectionFromStatus() = %+v; want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEnsureStarted_RecordsProvisionFailure verifies a failed key request is
+// reported by Status, so a boot that could not provision shows as failing.
+func TestEnsureStarted_RecordsProvisionFailure(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		if _, err := os.Stat("/var/lib/quark"); err == nil {
+			t.Skip("stateDir() is the real service dir on this machine")
+		}
+	}
+	t.Setenv("HOME", t.TempDir())
+
+	err := EnsureStarted(0, false, func() (string, error) { return "", errors.New("no secret") })
+	if err == nil || !strings.Contains(err.Error(), "no secret") {
+		t.Fatalf("EnsureStarted() = %v; want the provisioning error", err)
+	}
+	if got := Status(); !strings.Contains(got.Error, "no secret") || got.Connected {
+		t.Errorf("Status() = %+v; want the provisioning error, not connected", got)
+	}
+	if err := Disable(); err != nil {
+		t.Fatalf("Disable() = %v", err)
+	}
+}
+
+// TestStatus_ReportsProxyFailureUntilDisable verifies that a failed start is
+// recorded for GET to report, and that Disable clears it along with the tsnet
+// state dir, so HasPersistedState is false afterwards (#1815).
+func TestStatus_ReportsProxyFailureUntilDisable(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		if _, err := os.Stat("/var/lib/quark"); err == nil {
+			t.Skip("stateDir() is the real service dir on this machine; refusing to delete it")
+		}
+	}
+	// stateDir() lives under $HOME, so this keeps the test away from any real
+	// enrollment on the machine running it.
+	t.Setenv("HOME", t.TempDir())
+	dir := stateDir()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte("{}"), 0600); err != nil {
+		t.Fatalf("write state file: %v", err)
+	}
+	if !HasPersistedState() {
+		t.Fatal("HasPersistedState() = false with a state file present")
+	}
+
+	// No node is running, so the proxy has nothing to listen on.
+	if err := StartProxy(0, false); err == nil {
+		t.Fatal("StartProxy() = nil; want an error with no node started")
+	}
+	if got := Status(); got.Error == "" || got.Connected || got.RemoteURL != "" {
+		t.Errorf("Status() after a failed start = %+v; want an error and not connected", got)
+	}
+
+	if err := Disable(); err != nil {
+		t.Fatalf("Disable() = %v", err)
+	}
+	if got := Status(); got.Error != "" {
+		t.Errorf("Status().Error after Disable = %q; want empty", got.Error)
+	}
+	if HasPersistedState() {
+		t.Error("HasPersistedState() = true after Disable; want the state dir removed")
 	}
 }
