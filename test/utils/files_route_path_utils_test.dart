@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 
@@ -95,6 +96,29 @@ void main() {
         'folder',
       ]) {
         expect(usesGenericFileViewer(type), isFalse, reason: type);
+      }
+    });
+  });
+
+  group('opensStraightInSystemViewer', () {
+    bool opens(String type, {bool isWeb = false, TargetPlatform? platform}) =>
+        opensStraightInSystemViewer(
+          type,
+          isWeb: isWeb,
+          platform: platform ?? TargetPlatform.iOS,
+        );
+
+    test('skips the "Open with" tap for a PDF on iOS', () {
+      // QuickLook is the only handler, so the tap bought nothing (#1807).
+      expect(opens('pdf'), isTrue);
+      expect(opens(' PDF '), isTrue, reason: 'case- and space-insensitive');
+    });
+
+    test('keeps the tap where it is a real choice', () {
+      expect(opens('pdf', platform: TargetPlatform.android), isFalse);
+      expect(opens('pdf', isWeb: true), isFalse);
+      for (final type in ['docx', 'epub', 'xlsx', 'slideshow', 'generic']) {
+        expect(opens(type), isFalse, reason: type);
       }
     });
   });
