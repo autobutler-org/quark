@@ -36,6 +36,7 @@ import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:quark/widgets/device_upload_picker.dart';
+import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/widgets/file_browser/archive_text_preview.dart';
 import 'package:quark/widgets/file_browser/file_browser_create_fab.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
@@ -609,7 +610,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
               .toList();
       if (devices.length > 1) {
         if (!mounted) return;
-        final picked = await showDeviceUploadPicker(context, devices);
+        final picked = await showDeviceUploadPicker(context, [
+          for (final device in devices) device.toUploadTarget(),
+        ]);
         if (picked == null) return; // user cancelled
         targetSerial = picked.serial.isNotEmpty ? picked.serial : null;
       } else if (devices.length == 1) {

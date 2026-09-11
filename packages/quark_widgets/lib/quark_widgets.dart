@@ -8,6 +8,9 @@
 /// See the "Widget package rules" section of `AGENTS.md` for the contract.
 library;
 
+export 'src/albums/add_to_album_sheet.dart';
+export 'src/albums/album_picker_sheet.dart';
+export 'src/albums/album_sidebar.dart';
 export 'src/albums/album_tree_tile.dart';
 export 'src/core/copy_button.dart';
 export 'src/core/empty_state_widget.dart';
@@ -15,6 +18,7 @@ export 'src/core/password_strength_bar.dart';
 export 'src/core/quark_disconnected_state.dart';
 export 'src/core/quark_file_icon.dart';
 export 'src/core/quark_storage_bar.dart';
+export 'src/core/scroll_up_hint.dart';
 export 'src/file_browser/file_breadcrumb_bar.dart';
 export 'src/file_browser/file_browser_header.dart';
 export 'src/file_browser/file_selection_bar.dart';
@@ -30,8 +34,16 @@ export 'src/layout/quark_toolbar.dart';
 export 'src/layout/refresh_icon_button.dart';
 export 'src/layout/theme_toggle_button.dart';
 export 'src/models/album_item.dart';
+export 'src/models/photo_category_entry.dart';
+export 'src/models/photo_item.dart';
+export 'src/models/upload_target.dart';
 export 'src/photos/live_badge.dart';
+export 'src/photos/photo_category_list.dart';
+export 'src/photos/photo_grid.dart';
+export 'src/photos/photo_grid_tile.dart';
+export 'src/photos/photo_library_sidebar.dart';
 export 'src/photos/photo_selection_bar.dart';
+export 'src/storage/upload_target_picker.dart';
 export 'src/theme/quark_colors.dart';
 export 'src/theme/quark_theme.dart';
 export 'src/theme/quark_tokens.dart';

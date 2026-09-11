@@ -1,0 +1,20 @@
+# Smoke test for the photos page (#1732), driven by the quark_widgets key
+# prefixes. Needs a signed-in session on a Quark with at least one photo.
+# Photo tiles are keyed photo_tile_<serial>:<path>, which depends on the
+# library, so this enters selection through the app bar instead.
+
+test "photos page shows the library and enters selection"
+  @smoke
+  open the app
+  tap #brand_button
+  tap #drawer_photos
+  wait until #photo_columns_slider appears
+  tap #photo_columns_more
+  tap #photo_category_toggle
+  see #photo_category_favorites
+  tap #photo_category_quark
+  wait until #photo_grid appears
+  see #album_create
+  tap "Select"
+  see #photo_selection_cancel
+  tap #photo_selection_cancel

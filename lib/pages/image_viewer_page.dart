@@ -21,6 +21,7 @@ import 'package:quark/widgets/image_viewer/shortcut_row.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:quark/widgets/photos/album_picker_sheet.dart';
+import 'package:quark/utils/quark_widget_items.dart';
 
 const _kSidebarOpenKey = 'photo_viewer_sidebar_open';
 
@@ -567,7 +568,14 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   Future<void> _addToAlbum() async {
     final relPath = _currentRelPath;
     if (relPath == null) return;
-    final album = await AlbumPickerSheet.show(context, selectedCount: 1);
+    final album = await AlbumPickerSheetHost.show(
+      context,
+      selectedCount: 1,
+      loadAlbums: () async => [
+        for (final album in await AlbumService.listAlbums(tree: true))
+          album.toAlbumItem(),
+      ],
+    );
     if (album == null || !mounted) return;
     try {
       await AlbumService.addPhotoToAlbum(

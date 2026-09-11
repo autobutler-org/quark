@@ -284,7 +284,7 @@ class _AlbumPageState extends State<AlbumPage> {
               title: const Text('Add to another album'),
               onTap: () {
                 Navigator.of(ctx).pop();
-                AddToAlbumSheet.show(
+                AddToAlbumSheetHost.show(
                   context,
                   deviceSerial: item.deviceSerial,
                   relPath: item.relPath,

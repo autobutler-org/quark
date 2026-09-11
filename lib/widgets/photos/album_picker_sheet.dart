@@ -1,39 +1,52 @@
 import 'package:flutter/material.dart';
-import 'package:quark/models/photo_album.dart';
-import 'package:quark/services/album_service.dart';
 import 'package:quark/utils/error_text.dart';
-import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// Bottom sheet for picking an album to add selected photos to.
+/// Opens the package's [AlbumPickerSheet] and feeds it albums from
+/// [loadAlbums], retrying on request.
 ///
-/// Still service-coupled: it loads the album list itself. Decoupling it into
-/// the package belongs to the photos page issue (#1732).
-class AlbumPickerSheet extends StatefulWidget {
-  const AlbumPickerSheet({required this.selectedCount, super.key});
+/// The load is injected rather than called here, so this widget holds the
+/// sheet's loading state without knowing a service exists. Pops with the
+/// picked album, or null when dismissed.
+class AlbumPickerSheetHost extends StatefulWidget {
+  /// Creates the host for [selectedCount] photos.
+  const AlbumPickerSheetHost({
+    required this.selectedCount,
+    required this.loadAlbums,
+    super.key,
+  });
 
-  final int selectedCount;
-
-  static Future<PhotoAlbum?> show(
+  /// Shows the picker and answers with the album chosen, or null.
+  static Future<AlbumItem?> show(
     BuildContext context, {
     required int selectedCount,
+    required Future<List<AlbumItem>> Function() loadAlbums,
   }) {
-    return showModalBottomSheet<PhotoAlbum>(
+    return showModalBottomSheet<AlbumItem>(
       context: context,
       isScrollControlled: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(QuarkColors.radiusLg),
       ),
-      builder: (_) => AlbumPickerSheet(selectedCount: selectedCount),
+      builder: (_) => AlbumPickerSheetHost(
+        selectedCount: selectedCount,
+        loadAlbums: loadAlbums,
+      ),
     );
   }
 
+  /// How many photos are being added.
+  final int selectedCount;
+
+  /// Fetches the album tree.
+  final Future<List<AlbumItem>> Function() loadAlbums;
+
   @override
-  State<AlbumPickerSheet> createState() => _AlbumPickerSheetState();
+  State<AlbumPickerSheetHost> createState() => _AlbumPickerSheetHostState();
 }
 
-class _AlbumPickerSheetState extends State<AlbumPickerSheet> {
-  List<PhotoAlbum> _albums = [];
+class _AlbumPickerSheetHostState extends State<AlbumPickerSheetHost> {
+  List<AlbumItem> _albums = const [];
   bool _loading = true;
   String? _error;
 
@@ -49,7 +62,7 @@ class _AlbumPickerSheetState extends State<AlbumPickerSheet> {
       _error = null;
     });
     try {
-      final albums = await AlbumService.listAlbums(tree: true);
+      final albums = await widget.loadAlbums();
       if (!mounted) return;
       setState(() {
         _albums = albums;
@@ -66,76 +79,13 @@ class _AlbumPickerSheetState extends State<AlbumPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.5,
-      minChildSize: 0.3,
-      maxChildSize: 0.85,
-      builder: (ctx, sc) => Column(
-        children: [
-          const SizedBox(height: 8),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.outline,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Add ${widget.selectedCount} ${widget.selectedCount == 1 ? 'photo' : 'photos'} to...',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_error!, textAlign: TextAlign.center),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: _load,
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  )
-                : _albums.isEmpty
-                ? const Center(
-                    child: Text('No albums — create one in the Photos view'),
-                  )
-                : ListView(
-                    controller: sc,
-                    children: _buildAlbumList(_albums, 0),
-                  ),
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
+    return AlbumPickerSheet(
+      selectedCount: widget.selectedCount,
+      albums: _albums,
+      isLoading: _loading,
+      error: _error,
+      onPicked: (album) => Navigator.of(context).pop(album),
+      onRetry: _load,
     );
-  }
-
-  List<Widget> _buildAlbumList(List<PhotoAlbum> albums, int depth) {
-    final widgets = <Widget>[];
-    for (final album in albums) {
-      widgets.add(
-        ListTile(
-          contentPadding: EdgeInsets.only(left: 16.0 + depth * 16.0, right: 16),
-          leading: const Icon(QuarkIcons.photo_album_outlined),
-          title: Text(album.name),
-          subtitle: Text('${album.itemCount} photos'),
-          onTap: () => Navigator.of(context).pop(album),
-        ),
-      );
-      if (album.children.isNotEmpty) {
-        widgets.addAll(_buildAlbumList(album.children, depth + 1));
-      }
-    }
-    return widgets;
   }
 }
