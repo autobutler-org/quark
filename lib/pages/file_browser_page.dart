@@ -1000,6 +1000,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           filePath,
           fileName.endsWith('.qdoc') ? 'qdoc' : 'qsheet',
           fileName,
+          justCreated: true,
         );
       } else {
         final ext = filePath.contains('.')
@@ -1817,8 +1818,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   Future<void> _openResolvedFile(
     String filePath,
     String fileType,
-    String fileName,
-  ) async {
+    String fileName, {
+    bool justCreated = false,
+  }) async {
     if (!mounted) return;
 
     // Types with no in-app viewer — download + "Open with…" beats the
@@ -1862,6 +1864,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
             filePath: filePath,
             overlayTargetRoute: targetRoute,
             overlayCloseRoute: closeRoute,
+            startInEditMode: justCreated,
           ),
         );
         if (!mounted) return;
