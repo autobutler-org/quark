@@ -116,6 +116,7 @@ class DocumentEditorBody extends StatelessWidget {
                       editorFocus: editorFocus,
                       scrollController: scrollController,
                       darkPage: darkPage,
+                      isReadOnly: isReadOnly,
                       onTap: onEditorTap,
                       onKeyPressed: onEditorKey,
                     ),
