@@ -91,21 +91,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
   bool _handlingPendingFile = false;
 
-  /// Whether `_currentPath` is a deep link still being resolved, or one whose
-  /// viewer is on screen — either way, not a directory to list.
-  ///
-  /// All three are exact state, never a guess about the name: a folder called
-  /// `My.Folder` is listed normally, and `isLikelyFilePath` is deliberately
-  /// not consulted here for that reason. They cover consecutive windows and
-  /// all three are needed. `_pendingFileOpen` holds from mount until the open
-  /// is dispatched; `_handlingPendingFile` spans the `statFile` await, where
-  /// the path's type is genuinely unknown and the other two are both false;
-  /// `isFileOpen` covers a viewer reached without a pending open.
-  bool get _currentPathIsOpenFile =>
-      _pendingFileOpen != null ||
-      _handlingPendingFile ||
-      FileBrowserCache.instance.isFileOpen(_currentPath);
-
   _FilesRouteFailure? _routeFailure;
   bool _isGridView = false;
 
@@ -314,7 +299,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     await _loadDevices();
     if (!mounted) return;
     setState(() => _reloadFiles());
-    // `_reloadFiles` issues nothing while a deep link is still being resolved.
+    // `_reloadFiles` may issue nothing while a deep link is still resolving.
     // Awaiting the sentinel would hang the refresh, and with it the mixin's
     // in-flight flag, for the rest of the session.
     if (!identical(_filesFuture, _notLoaded)) await _filesFuture;
@@ -406,9 +391,23 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     // the file, and AutoRefreshMixin's timer reissued the doomed request every
     // refresh interval for as long as the sheet was open. Leave the listing to
     // `_openPendingFileInner`, which stats the path and knows what it is.
-    if (_currentPathIsOpenFile) {
+    //
+    // Whether `_currentPath` itself is listed is decided by exact state, never
+    // a guess about the name — a folder called `My.Folder` is listed normally.
+    // Three flags cover consecutive windows: `_pendingFileOpen` from mount
+    // until the open is dispatched, `_handlingPendingFile` across the
+    // `statFile` await, and `isFileOpen` for a viewer already on screen.
+    //
+    // While the stat is in flight, a path that looks like a file shows the
+    // folder it sits in rather than nothing (#1564). The name only picks that
+    // placeholder. A folder route gets none: listing its parent would flash
+    // the folder the user just left.
+    final resolving = _pendingFileOpen != null || _handlingPendingFile;
+    if (FileBrowserCache.instance.isFileOpen(_currentPath) ||
+        (resolving && !isLikelyFilePath(_currentPath))) {
       return;
     }
+    final listPath = resolving ? parentPath(_currentPath) : _currentPath;
 
     final generation = ++_generation;
     final serials = _serialsForActiveDevices();
@@ -423,7 +422,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       );
     } else {
       fetchFuture = _controller.fetchFiles(
-        _currentPath,
+        listPath,
         serials: serials.isEmpty ? null : serials,
       );
     }
@@ -437,7 +436,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         // Cache the listing so rebuilt pages (from context.go navigation) can
         // display it instantly while a fresh fetch is in flight.
         if (archive == null) {
-          FileBrowserCache.instance.put(_currentPath, files);
+          FileBrowserCache.instance.put(listPath, files);
         }
       }
       return files;
@@ -993,7 +992,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           fileName.endsWith('.qdoc') || fileName.endsWith('.qsheet');
       if (isKnownType) {
         _refreshFileState();
-        _openFileViaRoute(filePath);
+        _openResolvedFile(
+          filePath,
+          fileName.endsWith('.qdoc') ? 'qdoc' : 'qsheet',
+          fileName,
+        );
       } else {
         final ext = filePath.contains('.')
             ? '.${filePath.split('.').last.toLowerCase()}'
@@ -1192,7 +1195,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
       // Open the new .qsheet through the canonical files route.
       final qsheetPath = folder.isEmpty ? qsheetName : '$folder/$qsheetName';
-      _openFileViaRoute(qsheetPath);
+      _openResolvedFile(qsheetPath, 'qsheet', qsheetName);
     } catch (e) {
       if (!mounted) return;
       _showMessage(Errors.message(e, 'convert the file'));
@@ -1254,7 +1257,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       // Refresh the file list so the new .qsheet appears, then open it through
       // the canonical files route.
       _refreshFileState();
-      _openFileViaRoute(qsheetPath);
+      _openResolvedFile(qsheetPath, 'qsheet', qsheetPath.split('/').last);
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.statusCode == 409 && !overwrite) {
@@ -1315,10 +1318,18 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   /// Opens the .qsheet sitting beside [node]'s workbook.
   void _openSiblingQsheet(FileNode node, String qsheetName) {
     final folder = parentPath(node.apiPath);
-    _openFileViaRoute(folder.isEmpty ? qsheetName : '$folder/$qsheetName');
+    _openResolvedFile(
+      folder.isEmpty ? qsheetName : '$folder/$qsheetName',
+      'qsheet',
+      qsheetName,
+    );
   }
 
   Future<void> _handleOpenNode(FileNode node) async {
+    // A deep link is still resolving over the parent listing; its viewer is
+    // about to land, and a second open would race it.
+    if (_handlingPendingFile) return;
+
     if (node.isDir) {
       _openDirectory(node);
       return;
@@ -1340,13 +1351,13 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
     // Quark native document format — open in the rich text editor.
     if (lowerName.endsWith('.qdoc')) {
-      _openFileViaRoute(node.apiPath);
+      _openResolvedFile(node.apiPath, 'qdoc', node.name);
       return;
     }
 
     // Quark native spreadsheet format.
     if (lowerName.endsWith('.qsheet')) {
-      _openFileViaRoute(node.apiPath);
+      _openResolvedFile(node.apiPath, 'qsheet', node.name);
       return;
     }
 
@@ -1386,10 +1397,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
 
-    // All other file types — navigate to /files/<path> which resolves the
-    // file type via FileViewerPage and opens the correct viewer. This updates
-    // the URL bar so the link is always shareable.
-    _openFileViaRoute(node.apiPath);
+    // Everything else: the listing already says what the file is, so push
+    // its viewer now rather than routing to the file's URL and waiting on a
+    // stat first (#1564). The URL follows once the viewer is up.
+    _openResolvedFile(node.apiPath, node.fileType, node.name);
   }
 
   static const _kImageExtensions = {
@@ -1623,14 +1634,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     await _refreshFileState();
   }
 
-  /// Push a file editor overlay and sync the canonical file route when needed.
-  void _openFileViaRoute(String filePath) {
-    if (!mounted) {
-      return;
-    }
-    context.go(AppRoutes.filesPath(filePath));
-  }
-
   Future<void> _openEditorWithUrl({
     required String filePath,
     required Widget Function(String targetRoute, String closeRoute) builder,
@@ -1648,7 +1651,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     );
     final isAlreadyOnTarget =
         routeBeforeOpen == AppRoutes.canonicalRoute(targetRoute);
-    final shouldSyncRoute = !isAlreadyOnTarget;
+    // From the home folder the file's URL is a different, nested go_router
+    // page: syncing to it stacks a second browser over the viewer and hides
+    // it. Only a folder route, which go_router updates in place, can follow.
+    final shouldSyncRoute =
+        !isAlreadyOnTarget && routeBeforeOpen != AppRoutes.files;
     final closeRoute = routeBeforeOpen.isEmpty || isAlreadyOnTarget
         ? AppRoutes.filesPath(parentPath(filePath))
         : routeBeforeOpen;
@@ -1796,6 +1803,20 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
 
+    await _openResolvedFile(filePath, fileType, fileName);
+  }
+
+  /// Opens the viewer for a file whose type is already known — from a stat on
+  /// a deep link, or from the listing on a click. Every viewer is pushed
+  /// before anything about the file is downloaded, so it can show its own
+  /// loading state (#1564).
+  Future<void> _openResolvedFile(
+    String filePath,
+    String fileType,
+    String fileName,
+  ) async {
+    if (!mounted) return;
+
     // Types with no in-app viewer — download + "Open with…" beats the
     // "No supported editor" dead end these used to hit (#1184). Shared with the
     // click path in _handleOpenNode so both agree.
@@ -1873,24 +1894,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       case 'image':
         final serials = _serialsForActiveDevices();
         final serial = serials.isNotEmpty ? serials.first : null;
-        final bytes = await FilesService.downloadFileBytes(
-          filePath,
-          serial: serial,
-        );
-        if (!mounted) return;
-        if (bytes == null) {
-          setState(() {
-            _routeFailure = _FilesRouteFailure(
-              requestedPath: filePath,
-              isFileRoute: true,
-            );
-          });
-          return;
-        }
         await _openEditorWithUrl(
           filePath: filePath,
           builder: (_, _) => ImageViewerPage(
-            bytes: bytes,
             name: fileName,
             relPath: filePath,
             serial: serial,
