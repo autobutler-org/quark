@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,7 +10,11 @@ import 'package:quark/widgets/document_editor/document_page_frame.dart';
 /// theme's color, which is why a list item used to render bigger and in a
 /// different color than the body text beside it (#1748).
 void main() {
-  Future<void> pumpFrame(WidgetTester tester, Document document) async {
+  Future<void> pumpFrame(
+    WidgetTester tester,
+    Document document, {
+    bool darkPage = false,
+  }) async {
     final controller = QuillController(
       document: document,
       selection: const TextSelection.collapsed(offset: 0),
@@ -33,7 +39,7 @@ void main() {
             controller: controller,
             editorFocus: focus,
             scrollController: scroll,
-            darkPage: false,
+            darkPage: darkPage,
             isReadOnly: false,
             onTap: () {},
             onKeyPressed: (_, _) => null,
@@ -91,4 +97,36 @@ void main() {
 
     expectMatchesBodyText(tester);
   });
+
+  // WCAG 2 contrast ratio; 4.5 is the AA floor for normal-size text.
+  double contrast(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05);
+  }
+
+  // Code text used to be drawn in `secondary`, which Quark maps to the sidebar
+  // *fill*, so it nearly vanished into the code background (#1884).
+  for (final darkPage in [false, true]) {
+    testWidgets('code text is readable on its background '
+        '(darkPage: $darkPage)', (tester) async {
+      await pumpFrame(tester, Document(), darkPage: darkPage);
+
+      final styles = tester
+          .widget<QuillEditor>(find.byType(QuillEditor))
+          .config
+          .customStyles!;
+      final block = styles.code!;
+      final inline = styles.inlineCode!;
+
+      expect(
+        contrast(block.style.color!, block.decoration!.color!),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrast(inline.style.color!, inline.backgroundColor!),
+        greaterThanOrEqualTo(4.5),
+      );
+    });
+  }
 }
