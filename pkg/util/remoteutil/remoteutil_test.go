@@ -1,6 +1,9 @@
 package remoteutil
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -122,5 +125,39 @@ func TestHasPersistedState_TrueWhenFilePresent(t *testing.T) {
 	}
 	if !hasFile {
 		t.Error("expected to find a non-dir entry in temp state dir")
+	}
+}
+
+// TestNewProxy_SetsForwardedFor verifies that the remote-access proxy tells the
+// quark who the tailnet peer is. Without X-Forwarded-For every remote request
+// reaches the quark from loopback, and all tailnet peers share one login
+// rate-limit bucket. A header the client sent is dropped, not forwarded, so a
+// tailnet peer cannot name some other IP.
+func TestNewProxy_SetsForwardedFor(t *testing.T) {
+	var got string
+	backend := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("X-Forwarded-For")
+	}))
+	defer backend.Close()
+	target, err := url.Parse(backend.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := httptest.NewServer(newProxy(target, false))
+	defer proxy.Close()
+
+	req, err := http.NewRequest(http.MethodGet, proxy.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-Forwarded-For", "198.51.100.9")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+
+	if want := "127.0.0.1"; got != want {
+		t.Errorf("X-Forwarded-For at the quark = %q; want %q", got, want)
 	}
 }

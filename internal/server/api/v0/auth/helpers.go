@@ -7,6 +7,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,8 +22,10 @@ func isTLS(c *gin.Context) bool {
 	if c.Request.TLS != nil {
 		return true
 	}
-	// Honour a reverse-proxy header (e.g. nginx → Quark over plain HTTP).
-	return c.Request.Header.Get("X-Forwarded-Proto") == "https"
+	// Honor a reverse-proxy header (e.g. an ingress → Quark over plain HTTP),
+	// but only from a peer QUARK_TRUSTED_PROXIES trusts.
+	return c.Request.Header.Get("X-Forwarded-Proto") == "https" &&
+		serverutil.IsTrustedProxy(c.RemoteIP())
 }
 
 func setSessionCookie(c *gin.Context, token string) {

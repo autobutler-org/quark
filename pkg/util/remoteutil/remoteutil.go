@@ -4,12 +4,10 @@ package remoteutil
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"sync"
@@ -156,20 +154,7 @@ func StartProxy(localPort int, localTLS bool) error {
 		Scheme: scheme,
 		Host:   fmt.Sprintf("localhost:%d", localPort),
 	}
-	rp := &httputil.ReverseProxy{
-		Rewrite: func(r *httputil.ProxyRequest) {
-			r.SetURL(target)
-			r.Out.Host = target.Host
-		},
-	}
-	if localTLS {
-		// The quark presents its own self-signed cert, and this hop is a
-		// loopback connection to that same process — there is no third party to
-		// authenticate, and no CA that could vouch for the cert.
-		rp.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	}
+	rp := newProxy(target, localTLS)
 	go func() {
 		if err := http.Serve(ln, rp); err != nil {
 			log.Printf("[tsnet] proxy stopped: %v", err)
