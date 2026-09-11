@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/file_browser_controller.dart';
 import 'package:quark/models/file_node.dart';
+import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/document_editor_page.dart';
 import 'package:quark/pages/generic_file_viewer_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
@@ -1935,15 +1936,19 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
       case 'video':
       case 'audio':
-        final videoSerials = _serialsForActiveDevices();
-        final videoSerial = videoSerials.isNotEmpty ? videoSerials.first : null;
+        final mediaSerials = _serialsForActiveDevices();
+        final mediaSerial = mediaSerials.isNotEmpty ? mediaSerials.first : null;
         final url = FilesService.constructMediaUrl(
           filePath,
-          serial: videoSerial,
+          serial: mediaSerial,
         );
+        // Audio has no video track, so the video viewer paints only its black
+        // backdrop (#1573).
         await _openEditorWithUrl(
           filePath: filePath,
-          builder: (_, _) => VideoViewerPage(url: url, name: fileName),
+          builder: (_, _) => fileType == 'audio'
+              ? AudioPlayerPage(url: url, name: fileName)
+              : VideoViewerPage(url: url, name: fileName),
         );
         if (!mounted) return;
         context.go(AppRoutes.filesPath(parentPath(filePath)));

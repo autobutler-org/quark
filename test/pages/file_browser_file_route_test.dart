@@ -8,7 +8,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/pages/file_browser_page.dart';
+import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
+import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -70,6 +72,13 @@ class _RecordingClient implements HttpClient {
           'isDir': false,
           'dirPath': '${url.queryParameters['rootDir'] ?? ''}/beach.jpg',
           'fileType': 'image',
+        },
+        {
+          'name': 'song.mp3',
+          'size': 12,
+          'isDir': false,
+          'dirPath': '${url.queryParameters['rootDir'] ?? ''}/song.mp3',
+          'fileType': 'audio',
         },
       ]);
     }
@@ -307,9 +316,13 @@ void main() {
   });
 
   /// Pumps the browser at [location] under a router nested like
-  /// lib/router.dart, taps beach.jpg, and returns the router once the push
+  /// lib/router.dart, taps [name], and returns the router once the push
   /// animation — and the URL sync that follows it — is over.
-  Future<GoRouter> clickPhoto(WidgetTester tester, String location) async {
+  Future<GoRouter> clickFile(
+    WidgetTester tester,
+    String location,
+    String name,
+  ) async {
     final router = GoRouter(
       initialLocation: location,
       routes: [
@@ -331,8 +344,14 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    await tester.tap(find.text('beach.jpg'));
+    await tester.tap(find.text(name));
     await tester.pump();
+    return router;
+  }
+
+  /// [clickFile] on beach.jpg, checking the photo viewer lands without a stat.
+  Future<GoRouter> clickPhoto(WidgetTester tester, String location) async {
+    final router = await clickFile(tester, location, 'beach.jpg');
     // #1564: a click routed to the photo's URL, stat-ed it and downloaded it
     // whole before the viewer appeared. The listing already knows the type, so
     // the viewer is built on the tap's frame (offstage only while the route
@@ -371,6 +390,17 @@ void main() {
     await HttpOverrides.runZoned(() async {
       final router = await clickPhoto(tester, '/files');
       expect(router.state.uri.path, '/files');
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  testWidgets('clicking an audio file opens the audio player', (tester) async {
+    // #1573: audio shared the video case and opened VideoViewerPage, which has
+    // no track to paint and showed only its black backdrop.
+    await HttpOverrides.runZoned(() async {
+      await clickFile(tester, '/files/music', 'song.mp3');
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(AudioPlayerPage), findsOneWidget);
+      expect(find.byType(VideoViewerPage), findsNothing);
     }, createHttpClient: overrides.createHttpClient);
   });
 }
