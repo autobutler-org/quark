@@ -112,6 +112,14 @@ spec:
           image: ghcr.io/autobutler-org/quark:latest
           ports:
             - containerPort: 8080
+          env:
+            # Every request arrives from the ingress controller, so Quark has to
+            # believe its X-Forwarded-For to rate-limit logins per client rather
+            # than per ingress pod. Set this to the CIDR your ingress pods run
+            # in (often the cluster's pod CIDR), and keep loopback for remote
+            # access; see "Behind a proxy" below.
+            - name: QUARK_TRUSTED_PROXIES
+              value: "10.244.0.0/16,127.0.0.1,::1"
           volumeMounts:
             - name: data
               mountPath: /var/lib/quark
@@ -187,3 +195,20 @@ around rather than a protection.
 
 Do not expose port 8080 directly to the internet. To use Quark's own self-signed certificate
 instead, unset `QUARK_INSECURE` and set `HTTPS_PORT`.
+
+## Behind a proxy
+
+Quark rate-limits login, setup, account recovery and vault unlock per client IP. It takes that IP
+from `X-Forwarded-For`, and whether the connection was HTTPS from `X-Forwarded-Proto`, only when the
+direct peer is a trusted proxy. Anyone else could put any address in those headers.
+
+`QUARK_TRUSTED_PROXIES` is a comma-separated list of IPs and CIDRs, such as
+`10.244.0.0/16,192.168.1.10`. Unset, it is `127.0.0.1,::1`: the remote-access proxy runs inside the
+quark and connects over loopback. Setting it replaces that default rather than adding to it, so
+keep `127.0.0.1,::1` in the list if the quark uses remote access. An entry that is neither an IP nor
+a CIDR stops `quark serve` at startup with an error naming it.
+
+Behind an ingress controller or a load balancer that connects from inside your network, set it to
+that proxy's address range. Left unset, every client looks like the proxy, they all share one
+rate-limit bucket, and one client guessing passwords locks everyone else out of login. Do not set it
+wider than the proxy: a peer inside the range can claim any client IP.

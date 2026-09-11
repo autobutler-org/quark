@@ -7,9 +7,11 @@ package serverutil
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 
 	"github.com/gin-gonic/gin"
@@ -256,4 +258,57 @@ func ServerHttpsPort() int {
 		return 443
 	}
 	return n
+}
+
+// TrustedProxies returns the peers whose X-Forwarded-For and X-Forwarded-Proto
+// headers the server believes, read from the comma-separated IPs and CIDRs in
+// QUARK_TRUSTED_PROXIES. Unset or blank, it is loopback only: the tsnet
+// remote-access proxy is the one proxy a quark always has. Set, it replaces
+// that default, so a deployment behind an ingress lists the ingress range.
+// Any entry that is neither an IP nor a CIDR is an error naming it.
+func TrustedProxies() ([]*net.IPNet, error) {
+	value := os.Getenv("QUARK_TRUSTED_PROXIES")
+	if strings.TrimSpace(value) == "" {
+		value = "127.0.0.1,::1"
+	}
+	var nets []*net.IPNet
+	for _, entry := range strings.Split(value, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if _, n, err := net.ParseCIDR(entry); err == nil {
+			nets = append(nets, n)
+			continue
+		}
+		ip := net.ParseIP(entry)
+		if ip == nil {
+			return nil, fmt.Errorf("QUARK_TRUSTED_PROXIES: %q is neither an IP address nor a CIDR", entry)
+		}
+		if v4 := ip.To4(); v4 != nil {
+			ip = v4
+		}
+		bits := len(ip) * 8
+		nets = append(nets, &net.IPNet{IP: ip, Mask: net.CIDRMask(bits, bits)})
+	}
+	return nets, nil
+}
+
+// IsTrustedProxy reports whether ip is covered by TrustedProxies. An
+// unparseable address, or an invalid QUARK_TRUSTED_PROXIES, is never trusted.
+func IsTrustedProxy(ip string) bool {
+	addr := net.ParseIP(ip)
+	if addr == nil {
+		return false
+	}
+	nets, err := TrustedProxies()
+	if err != nil {
+		return false
+	}
+	for _, n := range nets {
+		if n.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }

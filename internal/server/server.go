@@ -275,6 +275,31 @@ type StartOptions struct {
 	Insecure bool
 }
 
+// newEngine builds the gin engine every route is mounted on.
+func newEngine() (*gin.Engine, error) {
+	proxies, err := serverutil.TrustedProxies()
+	if err != nil {
+		return nil, err
+	}
+	router := gin.Default()
+	// Disable automatic redirects so unmatched routes (e.g. /health, /photos)
+	// fall through to the NoRoute SPA handler instead of 301-redirecting to /.
+	router.RedirectTrailingSlash = false
+	router.RedirectFixedPath = false
+	// gin trusts X-Forwarded-For from every peer by default, which lets any
+	// client pick the IP the login rate limiter keys on. Believe it only from
+	// the configured proxies: loopback, where the tsnet proxy connects from,
+	// unless QUARK_TRUSTED_PROXIES says otherwise.
+	cidrs := make([]string, 0, len(proxies))
+	for _, n := range proxies {
+		cidrs = append(cidrs, n.String())
+	}
+	if err := router.SetTrustedProxies(cidrs); err != nil {
+		return nil, fmt.Errorf("QUARK_TRUSTED_PROXIES: %w", err)
+	}
+	return router, nil
+}
+
 func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 	if result, err := updateutil.RemoveStaleBackups(updateutil.RemoveStaleBackupsParams{}); err != nil {
 		log.Printf("[update] failed to remove stale binary backups: %v", err)
@@ -291,6 +316,11 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 	syncWorker, err := setupServices(deps)
 	if err != nil {
 		return fmt.Errorf("failed to setup services: %w", err)
+	}
+
+	router, err := newEngine()
+	if err != nil {
+		return err
 	}
 
 	// In TLS mode the server binds to HTTPS_PORT (default 443); in insecure
@@ -336,12 +366,6 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 		remoteutil.Stop()
 		os.Exit(0)
 	}()
-
-	router := gin.Default()
-	// Disable automatic redirects so unmatched routes (e.g. /health, /photos)
-	// fall through to the NoRoute SPA handler instead of 301-redirecting to /.
-	router.RedirectTrailingSlash = false
-	router.RedirectFixedPath = false
 
 	// IMPORTANT: middleware.Use MUST be called before setupRoutes
 	middleware.Use(router, deps)
