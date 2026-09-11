@@ -89,6 +89,10 @@ class _LoginPageState extends State<LoginPage> {
     context.push(AppRoutes.recover);
   }
 
+  void _goToSetup() {
+    context.push(AppRoutes.setup);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -131,6 +135,7 @@ class _LoginPageState extends State<LoginPage> {
                         },
                         onSubmit: _submit,
                         onForgotPassword: _goToRecover,
+                        onSetUpQuark: _goToSetup,
                       ),
               ),
             ),

@@ -289,6 +289,73 @@ void main() {
     });
   });
 
+  // #1827: a Quark with no accounts yet stranded the user on /login. The
+  // setup-vs-login decision only ran for a signed-out user landing on a
+  // protected route, because /login sat in publicRoutes and returned null,
+  // so the sign-in form could only ever answer "invalid credentials".
+  group('a Quark nobody has claimed yet', () {
+    setUp(() async {
+      await addUnacceptedHost();
+      await settings.acceptTerms();
+    });
+
+    // The reported bug.
+    testWidgets('sends a user landing on login to setup', (tester) async {
+      authStatusProbe = () async => const AuthStatus(setupComplete: false);
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.login);
+
+      expect(find.text('setup'), findsOneWidget);
+      expect(find.text('login'), findsNothing);
+    });
+
+    testWidgets('a set-up Quark leaves the user on login, with no loop', (
+      tester,
+    ) async {
+      authStatusProbe = () async => const AuthStatus(setupComplete: true);
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.login);
+
+      expect(find.text('login'), findsOneWidget);
+      expect(find.text('setup'), findsNothing);
+    });
+
+    // The probe is best-effort. When it cannot answer, login is still the
+    // right screen — the sign-in form's manual "set up this Quark" link is
+    // what covers this case, not a redirect.
+    testWidgets('a failed probe leaves the user on login', (tester) async {
+      authStatusProbe = () async => throw Exception('connection refused');
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.login);
+
+      expect(find.text('login'), findsOneWidget);
+      expect(find.text('setup'), findsNothing);
+    });
+
+    // The repro from the report: sitting on /login, pick an unclaimed Quark.
+    // Host selection only calls setState, so the redirect is what has to
+    // notice — activeHostNotifier is in routerRefreshListenable.
+    testWidgets('switching to it from login goes to setup', (tester) async {
+      var setupComplete = true;
+      authStatusProbe = () async => AuthStatus(setupComplete: setupComplete);
+
+      // A second Quark, terms accepted, that turns out to have no accounts.
+      await addUnacceptedHost();
+      await settings.acceptTerms();
+      await settings.setActiveIndex(0);
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.login);
+      expect(find.text('login'), findsOneWidget);
+
+      setupComplete = false;
+      await settings.setActiveIndex(1);
+      await tester.pumpAndSettle();
+
+      expect(find.text('setup'), findsOneWidget);
+      expect(find.text('login'), findsNothing);
+    });
+  });
+
   // The terms gate runs ahead of everything, so an unaccepted Quark sees terms
   // rather than the login page it would otherwise be sent to.
   testWidgets('settings still requires terms for the active Quark', (

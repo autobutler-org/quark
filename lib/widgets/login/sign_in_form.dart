@@ -22,6 +22,13 @@ class SignInForm extends StatelessWidget {
   final VoidCallback onSubmit;
   final VoidCallback onForgotPassword;
 
+  /// Manual route to the setup wizard, for a Quark that has no accounts yet.
+  ///
+  /// The gate normally detects that and redirects, but a slow, failed or
+  /// offline probe leaves the user here — so the link is always visible
+  /// rather than conditional on a status call that may never answer (#1827).
+  final VoidCallback onSetUpQuark;
+
   const SignInForm({
     super.key,
     required this.formKey,
@@ -39,6 +46,7 @@ class SignInForm extends StatelessWidget {
     required this.onTogglePassword,
     required this.onSubmit,
     required this.onForgotPassword,
+    required this.onSetUpQuark,
   });
 
   @override
@@ -158,6 +166,12 @@ class SignInForm extends StatelessWidget {
           TextButton(
             onPressed: loading ? null : onForgotPassword,
             child: const Text('Forgot password?'),
+          ),
+
+          // Escape hatch to the setup wizard for an unclaimed Quark (#1827).
+          TextButton(
+            onPressed: loading ? null : onSetUpQuark,
+            child: const Text('First time here? Set up this Quark'),
           ),
         ],
       ),

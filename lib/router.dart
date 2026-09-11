@@ -343,13 +343,24 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
   }
 
   // Routes reachable without a session.
-  const publicRoutes = {AppRoutes.setup, AppRoutes.login, AppRoutes.recover};
+  //
+  // /login is deliberately not in here (#1827). It used to be, and returning
+  // null for it meant the setup-vs-login decision only ever ran for a
+  // signed-out user landing on a *protected* route — so picking an unclaimed
+  // Quark from the login page left the user on a sign-in form that could only
+  // answer "invalid credentials". Falling through to the probe below is what
+  // sends them to /setup instead; activeHostNotifier is in
+  // routerRefreshListenable, so switching hosts re-runs this.
+  const publicRoutes = {AppRoutes.setup, AppRoutes.recover};
   if (publicRoutes.contains(location)) return null;
 
   // Already authenticated.
   if (AppSettings.instance.sessionToken != null) return null;
 
-  return destinationForSignedOutUser();
+  final destination = await destinationForSignedOutUser();
+  // /login is public, so "stay put" is a real answer here — returning the
+  // location we are already at would be a redirect loop.
+  return destination == location ? null : destination;
 }
 
 /// Where a user who has accepted terms but holds no session belongs:
@@ -362,6 +373,11 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
 /// accepted terms, if the status call happened to fail at that moment (#1624).
 /// Login is the screen they need either way, and it surfaces the connection
 /// failure when they try to sign in.
+///
+/// A user already sitting on /login therefore stays there when the probe
+/// fails, which is why the sign-in form carries a manual "set up this Quark"
+/// link as well — a failed or slow probe must never be the only way to reach
+/// /setup (#1827).
 Future<String> destinationForSignedOutUser() async {
   try {
     final status = await authStatusProbe();

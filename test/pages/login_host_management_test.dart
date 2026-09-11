@@ -115,6 +115,18 @@ void main() {
       expect(find.byType(HostManager), findsNothing);
     });
 
+    // #1827: the manual escape hatch to /setup. Always rendered, because the
+    // gate's status probe can be slow, failed or offline — it must never be
+    // the only way to reach the setup wizard.
+    testWidgets('the sign-in form offers a way to set up an unclaimed Quark', (
+      tester,
+    ) async {
+      await addAccepted('Home', 'http://quark.local');
+      await pumpLogin(tester);
+
+      expect(find.text('First time here? Set up this Quark'), findsOneWidget);
+    });
+
     testWidgets('Change reveals the host list and the add button', (
       tester,
     ) async {
