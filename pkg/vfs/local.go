@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
 // errListBudgetSpent unwinds a recursive List once MaxResults is reached.
@@ -93,6 +95,9 @@ func (v *LocalVFS) List(ctx context.Context, path string, filter *ListFilter) ([
 		for _, entry := range entries {
 			if ctx.Err() != nil {
 				return ctx.Err()
+			}
+			if storageutil.IsInternalName(entry.Name()) {
+				continue
 			}
 
 			absEntry := filepath.Join(dir, entry.Name())
@@ -208,37 +213,19 @@ func (v *LocalVFS) Write(ctx context.Context, path string, r io.Reader, opts Wri
 		}
 	}
 
-	// Ensure parent directory exists
-	dir := filepath.Dir(absPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
+	return writeAtomic(absPath, r)
+}
 
-	// Write to a temp file in the same directory for atomic rename
-	tmp, err := os.CreateTemp(dir, ".vfs-write-*")
+// MoveFileIn places the host file at srcAbs at path, renaming it rather than
+// copying it when it can. See [FileMover].
+func (v *LocalVFS) MoveFileIn(ctx context.Context, srcAbs string, path string, opts WriteOptions) error {
+	absPath, err := v.abs(path)
 	if err != nil {
 		return err
 	}
-	tmpName := tmp.Name()
-	defer func() {
-		// Clean up temp file on error
-		os.Remove(tmpName)
-	}()
-
-	if _, err := io.Copy(tmp, r); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-
-	// Atomic rename
-	if err := os.Rename(tmpName, absPath); err != nil {
-		return err
-	}
-
-	return nil
+	return moveFileIn(srcAbs, absPath, opts, func(r io.Reader) error {
+		return v.Write(ctx, path, r, opts)
+	})
 }
 
 // Delete removes the file or directory at the given path.

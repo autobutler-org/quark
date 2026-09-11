@@ -297,13 +297,18 @@ func (s *SessionStore) commit(ctx context.Context, sess *session, dest Destinati
 		return WriteChunkResult{}, fmt.Errorf("failed to rewind staged upload: %w", err)
 	}
 
+	// SourcePath lets a host-backed namespace rename the staged file into
+	// place rather than copy it (#1828). sess.file stays open across the move —
+	// on the platforms we build for an open file can be renamed — so a failed
+	// commit can still be retried, and discardLocked closes it afterwards.
 	written, err := dest.WriteFile(WriteFileParams{
-		Ctx:       ctx,
-		Reader:    sess.file,
-		RootDir:   sess.rootDir,
-		FileName:  sess.fileName,
-		Serial:    sess.serial,
-		Overwrite: sess.overwrite,
+		Ctx:        ctx,
+		Reader:     sess.file,
+		SourcePath: sess.tempPath,
+		RootDir:    sess.rootDir,
+		FileName:   sess.fileName,
+		Serial:     sess.serial,
+		Overwrite:  sess.overwrite,
 	})
 	if err != nil {
 		// The session survives so the client can retry the last chunk; the

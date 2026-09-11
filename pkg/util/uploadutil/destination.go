@@ -112,7 +112,11 @@ func (d Destination) writeToVFS(fsys vfs.VFS, params WriteFileParams, fileName s
 		// HTTP layer reports as a 400 the way the multipart endpoint does.
 		opts.IfNoneMatch = "*"
 	}
-	return fsys.Write(params.Ctx, path.Join(params.RootDir, fileName), params.Reader, opts)
+	destPath := path.Join(params.RootDir, fileName)
+	if mover, ok := fsys.(vfs.FileMover); ok && params.SourcePath != "" {
+		return mover.MoveFileIn(params.Ctx, params.SourcePath, destPath, opts)
+	}
+	return fsys.Write(params.Ctx, destPath, params.Reader, opts)
 }
 
 // writeToStorageService replays the file through the same multipart-streaming

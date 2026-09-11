@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -488,5 +490,37 @@ func TestRegistryNamespaceConflict(t *testing.T) {
 	err := reg.Register(ns, impl)
 	if !errors.Is(err, vfs.ErrNamespaceConflict) {
 		t.Errorf("expected ErrNamespaceConflict, got %v", err)
+	}
+}
+
+// A write in flight and the trash are Quark's own entries; a user's dotfile is
+// not, and hiding it would lose it from every listing-driven feature (#1828).
+func TestLocalVFSListSkipsInternalEntriesButNotDotfiles(t *testing.T) {
+	root := t.TempDir()
+	for _, rel := range []string{".vfs-write-123", ".trash/gone.txt", ".env", "docs/.vfs-write-9", "docs/a.txt"} {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte("x"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+	v, err := vfs.NewLocalVFS(root, "test-ns")
+	if err != nil {
+		t.Fatalf("NewLocalVFS: %v", err)
+	}
+
+	infos, err := v.List(context.Background(), "", &vfs.ListFilter{Recursive: true})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	var got []string
+	for _, fi := range infos {
+		got = append(got, fi.Path)
+	}
+	want := []string{".env", "docs", "docs/a.txt"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("listed %v, want %v", got, want)
 	}
 }

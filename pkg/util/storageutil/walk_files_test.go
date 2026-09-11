@@ -229,3 +229,26 @@ func TestWalkFilesInDir_SurvivesSymlinkLoop(t *testing.T) {
 		t.Error("expected entries from a tree containing a symlink loop")
 	}
 }
+
+// #1828: an upload's temp file and the trash must not surface in either
+// listing, while a user's own dotfile still does.
+func TestListingsSkipInternalEntriesButNotDotfiles(t *testing.T) {
+	root := t.TempDir()
+	seedTree(t, root, ".vfs-write-123", ".trash/gone.txt", ".env", "docs/.vfs-write-9", "docs/a.txt")
+
+	if got, want := strings.Join(relPaths(collectWalk(t, root)), ","), ".env,docs,docs/a.txt"; got != want {
+		t.Errorf("WalkFilesInDir visited %s, want %s", got, want)
+	}
+
+	files, err := storageutil.StatFilesInDir(root, "dev", "/data", "SERIAL")
+	if err != nil {
+		t.Fatalf("StatFilesInDir: %v", err)
+	}
+	names := make([]string, 0, len(files))
+	for _, f := range files {
+		names = append(names, f.Name())
+	}
+	if got, want := strings.Join(names, ","), "docs/,.env"; got != want {
+		t.Errorf("StatFilesInDir listed %s, want %s", got, want)
+	}
+}

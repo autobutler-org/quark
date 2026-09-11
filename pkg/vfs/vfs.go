@@ -29,6 +29,16 @@ type VFS interface {
 	Watch(ctx context.Context, path string) (<-chan WatchEvent, error)
 }
 
+// FileMover is implemented by namespaces backed by a host directory. A caller
+// already holding the finished file on disk — a completed chunked upload —
+// hands it over instead of copying it, so a 4 GiB file is not written twice
+// and never sits half-copied in the tree (#1828).
+type FileMover interface {
+	// MoveFileIn places the host file at srcAbs at path, honoring
+	// opts.IfNoneMatch as Write does. On success srcAbs is gone.
+	MoveFileIn(ctx context.Context, srcAbs string, path string, opts WriteOptions) error
+}
+
 type FileInfo struct {
 	Name        string    `json:"name"`
 	Path        string    `json:"path"`
