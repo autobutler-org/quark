@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quark/pages/login_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/auth_service.dart';
 import 'package:quark/widgets/host_dialog.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark/widgets/quark_connect_form.dart';
@@ -21,8 +22,16 @@ void main() {
     }
   }
 
-  setUp(clearHosts);
-  tearDown(clearHosts);
+  setUp(() async {
+    await clearHosts();
+    // The gate probes on every /login render now (#1827). Stub it so these
+    // tests exercise host management rather than a failing socket.
+    authStatusProbe = () async => const AuthStatus(setupComplete: true);
+  });
+  tearDown(() async {
+    await clearHosts();
+    authStatusProbe = AuthService.checkStatus;
+  });
 
   /// The real gate over stub pages, so the test exercises the redirects the
   /// app actually runs.
@@ -48,6 +57,10 @@ void main() {
         GoRoute(
           path: AppRoutes.terms,
           builder: (_, _) => const Scaffold(body: Text('terms')),
+        ),
+        GoRoute(
+          path: AppRoutes.setup,
+          builder: (_, _) => const Scaffold(body: Text('setup')),
         ),
       ],
     );
@@ -125,6 +138,25 @@ void main() {
       await pumpLogin(tester);
 
       expect(find.text('First time here? Set up this Quark'), findsOneWidget);
+    });
+
+    // It has to *navigate*, not push. go_router ships
+    // optionURLReflectsImperativeAPIs = false, so an imperative push renders
+    // the wizard while the address bar still reads /login — the match list's
+    // own uri is what gets reported to the browser, and it is the only thing
+    // here that tells `go` and `push` apart (the wizard shows either way).
+    testWidgets('tapping it leaves login for the setup wizard', (tester) async {
+      await addAccepted('Home', 'http://quark.local');
+      final router = await pumpLogin(tester);
+
+      await tester.tap(find.text('First time here? Set up this Quark'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('setup'), findsOneWidget);
+      expect(
+        router.routerDelegate.currentConfiguration.uri.path,
+        AppRoutes.setup,
+      );
     });
 
     testWidgets('Change reveals the host list and the add button', (
