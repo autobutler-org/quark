@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 String filesRouteDisplayPath(String path) {
   final trimmed = path.trim();
   if (trimmed.isEmpty || trimmed == '/') {
@@ -49,6 +51,20 @@ bool usesGenericFileViewer(String fileType) {
   final normalized = fileType.trim().toLowerCase();
   return normalized.isEmpty || noInAppViewer.contains(normalized);
 }
+
+/// Whether the generic viewer should hand [fileType] to the system on arrival.
+///
+/// iOS previews a PDF in QuickLook with no app picker, so the "Open with…" tap
+/// only delays what would happen anyway (#1807). Android can offer several PDF
+/// apps, so the tap stays a real choice there; web has no system open at all.
+bool opensStraightInSystemViewer(
+  String fileType, {
+  required bool isWeb,
+  required TargetPlatform platform,
+}) =>
+    !isWeb &&
+    platform == TargetPlatform.iOS &&
+    fileType.trim().toLowerCase() == 'pdf';
 
 /// The last path segment with [extension] removed, when it carries it.
 ///

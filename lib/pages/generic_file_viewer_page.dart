@@ -6,6 +6,7 @@ import 'package:quark/pages/generic_file_viewer_open_stub.dart'
     as native_open;
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -21,6 +22,18 @@ class GenericFileViewerPage extends StatefulWidget {
 class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
   bool _downloading = false;
   bool _opening = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (opensStraightInSystemViewer(
+      widget.node.fileType,
+      isWeb: kIsWeb,
+      platform: defaultTargetPlatform,
+    )) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _handleOpenWith());
+    }
+  }
 
   String get _extension {
     final name = widget.node.name;
