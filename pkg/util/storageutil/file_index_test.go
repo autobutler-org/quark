@@ -31,6 +31,8 @@ func TestBuildPopulatesIndex(t *testing.T) {
 	subDir := makeDir(t, root, "docs")
 	makeFile(t, root, "notes.txt")
 	makeFile(t, subDir, "report.pdf")
+	// Trashed files are not searchable.
+	makeFile(t, makeDir(t, root, TrashDir), "20240101T000000Z_abcd_old.txt")
 
 	dev := ManagedDevice{
 		Device:   Device{},

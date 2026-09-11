@@ -133,6 +133,10 @@ func backfillContentIndex(deps deputil.Dependencies) {
 // resolveEventPath maps an event's DeviceSerial + relative path to an
 // absolute filesystem path. Returns ("", "") when the device cannot be found.
 func resolveEventPath(deps deputil.Dependencies, evt eventbus.Event) (serial, absPath string) {
+	// Trashed files are not searchable; the backfill skips the trash too.
+	if storageutil.IsTrashPath(evt.Path) {
+		return "", ""
+	}
 	serial = evt.DeviceSerial
 	devices, err := deps.StorageService().GetManagedDevices()
 	if err != nil {
@@ -148,6 +152,5 @@ func resolveEventPath(deps deputil.Dependencies, evt eventbus.Event) (serial, ab
 			return devSerial, abs
 		}
 	}
-	_ = storageutil.TrashDir // keep storageutil imported (used elsewhere in package)
 	return "", ""
 }

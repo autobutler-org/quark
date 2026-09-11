@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
 func createTestImage(t *testing.T, path string, width, height int) {
@@ -72,6 +74,11 @@ func TestFindAllPhotosRecursively(t *testing.T) {
 	createTestImage(t, filepath.Join(subDir, "photo3.png"), 50, 50)
 
 	os.WriteFile(filepath.Join(tmpDir, "readme.txt"), []byte("text"), 0644)
+
+	// Trashed photos are not part of the library.
+	trashDir := filepath.Join(tmpDir, storageutil.TrashDir)
+	os.Mkdir(trashDir, 0755)
+	createTestImage(t, filepath.Join(trashDir, "20240101T000000Z_abcd_gone.png"), 50, 50)
 
 	photos, err := FindAllPhotosRecursively(tmpDir)
 	if err != nil {

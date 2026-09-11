@@ -13,7 +13,7 @@ import (
 
 // deleteFiles godoc
 // @Summary Delete files
-// @Description Soft-delete files via rename to trash, returning immediately. DB cleanup and events are dispatched in the background.
+// @Description Move files to the device's trash (internal storage included), returning immediately. They can be restored through /trash/restore until the hourly purge deletes them after the retention period. DB cleanup and events are dispatched in the background.
 // @Tags files
 // @Produce json
 // @Param rootDir query string false "Root directory"
@@ -35,8 +35,6 @@ func deleteFiles(c *gin.Context) *serverutil.Response {
 	}
 
 	if _, err := fileutil.DeleteFiles(fileutil.DeleteFilesParams{
-		Ctx:       c.Request.Context(),
-		Registry:  deps.VFSRegistry(),
 		Storage:   deps.StorageService(),
 		EventBus:  deps.EventBus(),
 		Database:  deps.Database(),

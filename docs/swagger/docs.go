@@ -1109,7 +1109,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Soft-delete files via rename to trash, returning immediately. DB cleanup and events are dispatched in the background.",
+                "description": "Move files to the device's trash (internal storage included), returning immediately. They can be restored through /trash/restore until the hourly purge deletes them after the retention period. DB cleanup and events are dispatched in the background.",
                 "produces": [
                     "application/json"
                 ],
@@ -2837,6 +2837,267 @@ const docTemplate = `{
                 }
             }
         },
+        "/trash": {
+            "get": {
+                "description": "Lists a device's trashed items, most recently trashed first, with how many days anything stays before the hourly purge deletes it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trash"
+                ],
+                "summary": "List the trash",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device serial; empty for internal storage",
+                        "name": "serial",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_trash.listTrashResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown device",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/trash/contents": {
+            "get": {
+                "description": "Lists what a trashed folder, or a folder inside one, holds, sorted by name. Each entry's path is relative to the trashed item and can be passed back here, to restore, or to delete. Also returns where the folder would be restored to and when the trashed item expires.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trash"
+                ],
+                "summary": "List a folder in the trash",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device serial; empty for internal storage",
+                        "name": "serial",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "The trashed item",
+                        "name": "trashName",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Path inside the trashed item; empty for the item itself",
+                        "name": "path",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_trash.listTrashContentsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Malformed trash name or path, or not a folder",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown device, trash name or path",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/trash/delete": {
+            "post": {
+                "description": "Deletes the named trashed items for good. An item with a path deletes only that file or folder from inside a trashed folder. Every item is checked first, so a batch naming an unknown item deletes nothing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trash"
+                ],
+                "summary": "Delete items from the trash permanently",
+                "parameters": [
+                    {
+                        "description": "Device serial and the items to delete: a trash name, plus a path inside a trashed folder to delete only that",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_trash.trashItemsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_trash.deletedResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown device, trash name or path",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/trash/empty": {
+            "post": {
+                "description": "Permanently deletes everything in a device's trash.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trash"
+                ],
+                "summary": "Empty the trash",
+                "parameters": [
+                    {
+                        "description": "Device serial; empty for internal storage",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_trash.emptyTrashRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_trash.deletedResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown device",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/trash/restore": {
+            "post": {
+                "description": "Moves trashed items back to where they were deleted from. An item with a path restores only that file or folder from inside a trashed folder, to the folder's original path joined with it, recreating missing parent folders; the trashed folder keeps the rest. Every item is checked first, so a batch naming an unknown item, one whose destination is now occupied, or two whose destinations overlap restores nothing; nothing is ever overwritten.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "trash"
+                ],
+                "summary": "Restore items from the trash",
+                "parameters": [
+                    {
+                        "description": "Device serial and the items to restore: a trash name, plus a path inside a trashed folder to restore only that",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_trash.trashItemsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_trash.restoreTrashResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown device, trash name or path",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Destination occupied or overlapping another in the batch, or original location unknown",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/version": {
             "get": {
                 "description": "Retrieves the installed version of the application",
@@ -3254,6 +3515,69 @@ const docTemplate = `{
                 "error": {},
                 "statusCode": {
                     "type": "integer"
+                }
+            }
+        },
+        "storageutil.TrashContentsItem": {
+            "type": "object",
+            "properties": {
+                "isDir": {
+                    "type": "boolean"
+                },
+                "modifiedAt": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "path": {
+                    "description": "Path is relative to the trashed item, and is what a contents listing,\na restore or a delete takes to address this entry.",
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                }
+            }
+        },
+        "storageutil.TrashItem": {
+            "type": "object",
+            "properties": {
+                "expiresAt": {
+                    "description": "ExpiresAt is when the hourly purge deletes the item for good.",
+                    "type": "string"
+                },
+                "isDir": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "description": "Name is the item's base name as it was before it was trashed.",
+                    "type": "string"
+                },
+                "originalPath": {
+                    "description": "OriginalPath is where a restore puts the item back, relative to the\ndevice's files directory. Empty when its metadata is missing.",
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "trashName": {
+                    "description": "TrashName addresses the item in restore and delete requests.",
+                    "type": "string"
+                },
+                "trashedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "storageutil.TrashRef": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "description": "Path is relative to the trashed item, slash-separated; empty is the\nitem itself.",
+                    "type": "string"
+                },
+                "trashName": {
+                    "type": "string"
                 }
             }
         },
@@ -3830,6 +4154,78 @@ const docTemplate = `{
             "properties": {
                 "autoUpdate": {
                     "type": "boolean"
+                }
+            }
+        },
+        "v0_trash.deletedResponse": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v0_trash.emptyTrashRequest": {
+            "type": "object",
+            "properties": {
+                "serial": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_trash.listTrashContentsResponse": {
+            "type": "object",
+            "properties": {
+                "expiresAt": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/storageutil.TrashContentsItem"
+                    }
+                },
+                "originalPath": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_trash.listTrashResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/storageutil.TrashItem"
+                    }
+                },
+                "retentionDays": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v0_trash.restoreTrashResponse": {
+            "type": "object",
+            "properties": {
+                "restoredPaths": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "v0_trash.trashItemsRequest": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/storageutil.TrashRef"
+                    }
+                },
+                "serial": {
+                    "type": "string"
                 }
             }
         },
