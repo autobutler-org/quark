@@ -20,7 +20,7 @@ import (
 
 const hostname = "quark"
 
-const defaultControlURL = "https://network.quark.ts.autobutler.org"
+const defaultControlURL = "https://quark.ts.autobutler.org"
 
 // errKeyRejected is Status's error for a node stuck in NeedsLogin.
 const errKeyRejected = "the tailnet rejected the auth key, or it expired"
