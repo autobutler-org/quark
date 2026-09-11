@@ -89,6 +89,14 @@ class _LoginPageState extends State<LoginPage> {
     context.push(AppRoutes.recover);
   }
 
+  /// Unlike [_goToRecover] this navigates rather than pushes: go_router's
+  /// `optionURLReflectsImperativeAPIs` is false, so a pushed route renders the
+  /// setup wizard while the address bar still reads /login (#1827). /setup is
+  /// a top-level page, not a drill-down, so `go` is the right call anyway.
+  void _goToSetup() {
+    context.go(AppRoutes.setup);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -131,6 +139,7 @@ class _LoginPageState extends State<LoginPage> {
                         },
                         onSubmit: _submit,
                         onForgotPassword: _goToRecover,
+                        onSetUpQuark: _goToSetup,
                       ),
               ),
             ),
