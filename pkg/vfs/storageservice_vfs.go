@@ -249,33 +249,49 @@ func (v *StorageServiceVFS) Open(_ context.Context, path string) (io.ReadCloser,
 // backs this namespace, falling back to the default files directory when no
 // device is present. Resolving the same way Stat and Open do keeps a written
 // file findable by a subsequent read (#1538).
+//
+// The bytes stream into a temp file beside the destination and are renamed
+// into place: writing straight to the real name put a growing, half-written
+// file in every listing for the length of an upload (#1828).
 func (v *StorageServiceVFS) Write(_ context.Context, path string, r io.Reader, opts WriteOptions) error {
-	filesDir, err := v.filesDir()
+	safePath, err := v.writePath(path)
 	if err != nil {
 		return err
 	}
-	// filepath.Clean before SafeJoin so static analyzers (CodeQL go/path-injection)
-	// can follow the traversal guard rather than seeing tainted data reach os.Create.
-	safePath, err := storageutil.SafeJoin(filesDir, filepath.Clean(path))
-	if err != nil {
-		return ErrPermissionDenied
-	}
-	safePath = filepath.Clean(safePath)
 	if opts.IfNoneMatch == "*" {
 		if _, statErr := os.Stat(safePath); statErr == nil {
 			return ErrConflict
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(safePath), 0o755); err != nil {
-		return err
-	}
-	f, err := os.Create(safePath) //nolint:gosec // path already validated by SafeJoin + filepath.Clean
+	return writeAtomic(safePath, r)
+}
+
+// MoveFileIn places the host file at srcAbs at path, renaming it rather than
+// copying it when it can. See [FileMover].
+func (v *StorageServiceVFS) MoveFileIn(ctx context.Context, srcAbs string, path string, opts WriteOptions) error {
+	safePath, err := v.writePath(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = io.Copy(f, r)
-	return err
+	return moveFileIn(srcAbs, safePath, opts, func(r io.Reader) error {
+		return v.Write(ctx, path, r, opts)
+	})
+}
+
+// writePath resolves a namespace path to the host path Write and MoveFileIn
+// put it at.
+func (v *StorageServiceVFS) writePath(path string) (string, error) {
+	filesDir, err := v.filesDir()
+	if err != nil {
+		return "", err
+	}
+	// filepath.Clean before SafeJoin so static analyzers (CodeQL go/path-injection)
+	// can follow the traversal guard rather than seeing tainted data reach the disk.
+	safePath, err := storageutil.SafeJoin(filesDir, filepath.Clean(path))
+	if err != nil {
+		return "", ErrPermissionDenied
+	}
+	return filepath.Clean(safePath), nil
 }
 
 // Delete removes one or more files via the StorageService.

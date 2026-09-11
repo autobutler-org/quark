@@ -128,11 +128,15 @@ type Destination struct {
 type WriteFileParams struct {
 	Ctx context.Context
 	// Reader is positioned at the first byte of the file and read to EOF.
-	Reader    io.Reader
-	RootDir   string
-	FileName  string
-	Serial    string
-	Overwrite bool
+	Reader io.Reader
+	// SourcePath, when set, is the host file Reader reads. A namespace that can
+	// take the file by rename ([vfs.FileMover]) moves it instead of copying it,
+	// and the file is gone afterwards; any other destination reads Reader.
+	SourcePath string
+	RootDir    string
+	FileName   string
+	Serial     string
+	Overwrite  bool
 }
 
 // WriteFileResult reports where the file ended up, API-relative.

@@ -688,3 +688,126 @@ func stagedCount(t *testing.T, stagingDir string) int {
 	}
 	return len(entries)
 }
+
+// newLocalDestination backs the files namespace with a host directory, the
+// shape a device has, so a commit can rename rather than copy (#1828).
+func newLocalDestination(t *testing.T) (uploadutil.Destination, string) {
+	t.Helper()
+	root := t.TempDir()
+	fsys, err := vfs.NewLocalVFS(root, "files")
+	if err != nil {
+		t.Fatalf("NewLocalVFS: %v", err)
+	}
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: "files"}, fsys); err != nil {
+		t.Fatalf("register files namespace: %v", err)
+	}
+	return uploadutil.Destination{Registry: registry, EventBus: eventbus.New()}, root
+}
+
+// stagedFile is the one file a single open session has staged.
+func stagedFile(t *testing.T, store *uploadutil.SessionStore) string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(store.StagingDir(), "*"))
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("want exactly one staged file, got %v (%v)", matches, err)
+	}
+	return matches[0]
+}
+
+func commitWhole(
+	t *testing.T,
+	store *uploadutil.SessionStore,
+	dest uploadutil.Destination,
+	name string,
+	overwrite bool,
+	content []byte,
+) (string, error) {
+	t.Helper()
+	total := int64(len(content))
+	created, err := store.CreateSession(uploadutil.CreateSessionParams{
+		Destination: dest,
+		FileName:    name,
+		TotalSize:   total,
+		Overwrite:   overwrite,
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	staged := stagedFile(t, store)
+	_, err = writeChunk(store, dest, created.SessionID, 0, total-1, total, content)
+	return staged, err
+}
+
+func TestCommitRenamesTheStagedFileIntoPlace(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, root := newLocalDestination(t)
+	content := []byte("moved, not copied")
+	total := int64(len(content))
+
+	id := openSession(t, store, dest, "big.bin", total)
+	before, err := os.Stat(stagedFile(t, store))
+	if err != nil {
+		t.Fatalf("stat staged file: %v", err)
+	}
+	if _, err := writeChunk(store, dest, id, 0, total-1, total, content); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	after, err := os.Stat(filepath.Join(root, "big.bin"))
+	if err != nil {
+		t.Fatalf("stat committed file: %v", err)
+	}
+	if !os.SameFile(before, after) {
+		t.Error("the committed file is a copy; the staged file should have been renamed into place")
+	}
+	if got, _ := os.ReadFile(filepath.Join(root, "big.bin")); !bytes.Equal(got, content) {
+		t.Errorf("committed file is %q, want %q", got, content)
+	}
+	if left, _ := os.ReadDir(store.StagingDir()); len(left) != 0 {
+		t.Errorf("staging dir still holds %d entries after the commit", len(left))
+	}
+}
+
+func TestCommitWithoutOverwriteLeavesAnExistingFileAlone(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, root := newLocalDestination(t)
+	existing := filepath.Join(root, "taken.txt")
+	if err := os.WriteFile(existing, []byte("original"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	staged, err := commitWhole(t, store, dest, "taken.txt", false, []byte("intruder"))
+	if !errors.Is(err, vfs.ErrConflict) {
+		t.Fatalf("commit over an existing file returned %v, want vfs.ErrConflict", err)
+	}
+	if got, _ := os.ReadFile(existing); string(got) != "original" {
+		t.Errorf("existing file now reads %q", got)
+	}
+	// The session survives a failed commit, so its bytes must too.
+	if _, err := os.Stat(staged); err != nil {
+		t.Errorf("staged file is gone after a refused commit: %v", err)
+	}
+}
+
+func TestCommitWithOverwriteReplacesTheFile(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, root := newLocalDestination(t)
+	existing := filepath.Join(root, "taken.txt")
+	if err := os.WriteFile(existing, []byte("original"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if _, err := commitWhole(t, store, dest, "taken.txt", true, []byte("replacement")); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if got, _ := os.ReadFile(existing); string(got) != "replacement" {
+		t.Errorf("file reads %q, want the replacement", got)
+	}
+}

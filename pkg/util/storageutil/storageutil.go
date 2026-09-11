@@ -294,6 +294,18 @@ func GetFolderSize(dir string) (int64, error) {
 	return size, nil
 }
 
+// WriteTempPrefix starts the name of the temp file a write streams into before
+// it is renamed over its destination. The temp sits in the destination's own
+// directory so the rename is atomic, which is why listings must skip it (#1828).
+const WriteTempPrefix = ".vfs-write-"
+
+// IsInternalName reports whether a directory entry is Quark's own bookkeeping
+// rather than user content: the trash, or a write still in flight. Every other
+// dotfile is the user's — a `.env` they uploaded must stay visible.
+func IsInternalName(name string) bool {
+	return name == TrashDir || strings.HasPrefix(name, WriteTempPrefix)
+}
+
 func StatFilesInDir(dir string, deviceName string, devicePath string, deviceSerial string) ([]*DeviceFileInfo, error) {
 	entries, err := os.ReadDir(dir)
 	files := make([]*DeviceFileInfo, 0, len(entries))
@@ -304,6 +316,9 @@ func StatFilesInDir(dir string, deviceName string, devicePath string, deviceSeri
 		return nil, fmt.Errorf("error reading the directory %s: %w", dir, err) // coverage: ignore - requires filesystem permission errors
 	}
 	for _, entry := range entries {
+		if IsInternalName(entry.Name()) {
+			continue
+		}
 		var fileInfo fs.FileInfo
 		fullPath := filepath.Join(dir, entry.Name())
 		if entry.IsDir() {
@@ -396,6 +411,13 @@ func WalkFilesInDir(
 			return nil // coverage: ignore - WalkDir only yields paths under root
 		}
 		rel = filepath.ToSlash(rel)
+
+		if IsInternalName(entry.Name()) {
+			if entry.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
 
 		info, infoErr := entry.Info()
 		if infoErr != nil {
