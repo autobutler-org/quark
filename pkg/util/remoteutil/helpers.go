@@ -17,14 +17,25 @@ import (
 // before the node authenticates, so only BackendState "Running" counts —
 // "Starting", "NeedsLogin" and the rest are not connected, whatever IP the
 // node may already hold.
-func connectionFromStatus(st *ipnstate.Status) (bool, string) {
-	if st == nil || st.BackendState != ipn.Running.String() {
-		return false, ""
+//
+// "NeedsLogin" is also a failure: tailscale's LocalBackend enters it only when
+// login cannot continue without a human (#1876). For a node given a pre-auth
+// key, that means control rejected the key or it expired.
+func connectionFromStatus(st *ipnstate.Status) StatusResult {
+	if st == nil {
+		return StatusResult{}
 	}
-	if len(st.TailscaleIPs) == 0 {
-		return true, ""
+	switch st.BackendState {
+	case ipn.Running.String():
+		if len(st.TailscaleIPs) == 0 {
+			return StatusResult{Connected: true}
+		}
+		return StatusResult{Connected: true, RemoteURL: fmt.Sprintf("http://%s:80", st.TailscaleIPs[0])}
+	case ipn.NeedsLogin.String():
+		return StatusResult{Error: errKeyRejected}
+	default:
+		return StatusResult{}
 	}
-	return true, fmt.Sprintf("http://%s:80", st.TailscaleIPs[0])
 }
 
 func controlURL() string {

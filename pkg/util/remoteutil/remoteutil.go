@@ -22,6 +22,9 @@ const hostname = "quark"
 
 const defaultControlURL = "https://quark.ts.autobutler.org"
 
+// errKeyRejected is Status's error for a node stuck in NeedsLogin.
+const errKeyRejected = "the tailnet rejected the auth key, or it expired"
+
 var (
 	mu      sync.Mutex
 	srv     *tsnet.Server
@@ -123,7 +126,11 @@ func Status() StatusResult {
 	if err != nil {
 		return result
 	}
-	result.Connected, result.RemoteURL = connectionFromStatus(st)
+	conn := connectionFromStatus(st)
+	result.Connected, result.RemoteURL = conn.Connected, conn.RemoteURL
+	if result.Error == "" {
+		result.Error = conn.Error
+	}
 	return result
 }
 
@@ -228,11 +235,12 @@ func StartProxy(localPort int, localTLS bool) error {
 	return nil
 }
 
-// EnsureStarted starts the tsnet node, re-provisioning if local state has been
-// wiped. provisionFn is called only when no persisted state exists; it should
-// return a fresh Headscale pre-auth key. The proxy is started against
+// EnsureStarted starts the tsnet node and its proxy. provisionFn is called
+// only when there is no persisted tsnet state: the state is the node's
+// credential, so a restart reuses it and only a first enable, or one after
+// Disable, needs a fresh Headscale pre-auth key. The proxy is started against
 // localPort after tsnet starts successfully; localTLS must match how the
-// server is serving that port.
+// server is serving that port. Every failure is recorded for Status.
 func EnsureStarted(localPort int, localTLS bool, provisionFn func() (string, error)) error {
 	if IsRunning() {
 		return nil
@@ -240,10 +248,14 @@ func EnsureStarted(localPort int, localTLS bool, provisionFn func() (string, err
 
 	authKey := ""
 	if !HasPersistedState() {
-		log.Printf("[remote] no persisted tsnet state, re-provisioning...")
+		log.Printf("[remote] no persisted tsnet state, provisioning a key")
 		key, err := provisionFn()
 		if err != nil {
-			return fmt.Errorf("re-provision: %w", err)
+			err = fmt.Errorf("provision: %w", err)
+			mu.Lock()
+			lastErr = err
+			mu.Unlock()
+			return err
 		}
 		authKey = key
 	}

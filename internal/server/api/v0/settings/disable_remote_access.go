@@ -9,7 +9,7 @@ import (
 
 // disableRemoteAccess godoc
 // @Summary Disable remote access
-// @Description Logs the Tailscale tsnet node out, stops it, and deletes its state, so re-enabling needs a fresh auth key. Admin only.
+// @Description Logs the Tailscale tsnet node out, stops it, and deletes its state, so re-enabling provisions a fresh key. Admin only.
 // @Tags settings
 // @Produce json
 // @Success 200 {object} RemoteAccessResponse
@@ -20,7 +20,7 @@ func disableRemoteAccess(c *gin.Context) *serverutil.Response {
 	if err := remoteutil.Disable(); err != nil {
 		return serverutil.InternalServerError(err)
 	}
-	if err := settingsutil.SetRemoteAccess(false, ""); err != nil {
+	if err := settingsutil.SetRemoteAccess(false); err != nil {
 		return serverutil.InternalServerError(err)
 	}
 	return serverutil.Ok().WithData(RemoteAccessResponse{

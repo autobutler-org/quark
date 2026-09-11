@@ -1,6 +1,7 @@
 package remoteutil
 
 import (
+	"errors"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -130,28 +131,50 @@ func TestHasPersistedState_TrueWhenFilePresent(t *testing.T) {
 
 // TestConnectionFromStatus verifies that only BackendState "Running" counts as
 // connected (#1815): tsnet.Server.Start returns before the node authenticates,
-// and a node waiting on login can already hold an IP.
+// and a node waiting on login can already hold an IP. "NeedsLogin" is reported
+// as a rejected or expired key rather than as connecting forever (#1876).
 func TestConnectionFromStatus(t *testing.T) {
 	ip := []netip.Addr{netip.MustParseAddr("100.64.0.7")}
 	cases := []struct {
-		name          string
-		st            *ipnstate.Status
-		wantConnected bool
-		wantURL       string
+		name string
+		st   *ipnstate.Status
+		want StatusResult
 	}{
-		{"nil status", nil, false, ""},
-		{"starting", &ipnstate.Status{BackendState: "Starting", TailscaleIPs: ip}, false, ""},
-		{"needs login", &ipnstate.Status{BackendState: "NeedsLogin", TailscaleIPs: ip}, false, ""},
-		{"running without an IP yet", &ipnstate.Status{BackendState: "Running"}, true, ""},
-		{"running", &ipnstate.Status{BackendState: "Running", TailscaleIPs: ip}, true, "http://100.64.0.7:80"},
+		{"nil status", nil, StatusResult{}},
+		{"no state yet", &ipnstate.Status{BackendState: "NoState"}, StatusResult{}},
+		{"starting", &ipnstate.Status{BackendState: "Starting", TailscaleIPs: ip}, StatusResult{}},
+		{"needs login", &ipnstate.Status{BackendState: "NeedsLogin", TailscaleIPs: ip}, StatusResult{Error: errKeyRejected}},
+		{"running without an IP yet", &ipnstate.Status{BackendState: "Running"}, StatusResult{Connected: true}},
+		{"running", &ipnstate.Status{BackendState: "Running", TailscaleIPs: ip}, StatusResult{Connected: true, RemoteURL: "http://100.64.0.7:80"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			connected, url := connectionFromStatus(tc.st)
-			if connected != tc.wantConnected || url != tc.wantURL {
-				t.Errorf("connectionFromStatus() = (%v, %q); want (%v, %q)", connected, url, tc.wantConnected, tc.wantURL)
+			if got := connectionFromStatus(tc.st); got != tc.want {
+				t.Errorf("connectionFromStatus() = %+v; want %+v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestEnsureStarted_RecordsProvisionFailure verifies a failed key request is
+// reported by Status, so a boot that could not provision shows as failing.
+func TestEnsureStarted_RecordsProvisionFailure(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		if _, err := os.Stat("/var/lib/quark"); err == nil {
+			t.Skip("stateDir() is the real service dir on this machine")
+		}
+	}
+	t.Setenv("HOME", t.TempDir())
+
+	err := EnsureStarted(0, false, func() (string, error) { return "", errors.New("no secret") })
+	if err == nil || !strings.Contains(err.Error(), "no secret") {
+		t.Fatalf("EnsureStarted() = %v; want the provisioning error", err)
+	}
+	if got := Status(); !strings.Contains(got.Error, "no secret") || got.Connected {
+		t.Errorf("Status() = %+v; want the provisioning error, not connected", got)
+	}
+	if err := Disable(); err != nil {
+		t.Fatalf("Disable() = %v", err)
 	}
 }
 

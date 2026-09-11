@@ -10,6 +10,7 @@ import 'package:quark/pages/settings_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/remote_access_config.dart';
 
 import '../support/unreachable_quark.dart';
 
@@ -54,17 +55,24 @@ void main() {
     await reset();
   });
 
-  /// Answers the remote-access status with [status]; every other section's
+  /// How many times the page has read the remote-access status.
+  var statusReads = 0;
+
+  /// Answers the remote-access status with [status], read afresh on every
+  /// request so a test can change it mid-flight; every other section's
   /// request gets a 404 it can fail on.
   Future<void> pumpWithStatus(
     WidgetTester tester,
     Map<String, dynamic> status,
   ) async {
-    sharedHttpClientFactory = () => MockClient(
-      (request) async => request.url.path == '/api/v0/settings/remote-access'
-          ? http.Response(jsonEncode(status), 200)
-          : http.Response('', 404),
-    );
+    statusReads = 0;
+    sharedHttpClientFactory = () => MockClient((request) async {
+      if (request.url.path != '/api/v0/settings/remote-access') {
+        return http.Response('', 404);
+      }
+      statusReads++;
+      return http.Response(jsonEncode(status), 200);
+    });
     await settings.addHost(
       HostEntry(name: 'Quark', hostAddress: 'https://quark.local'),
     );
@@ -88,12 +96,12 @@ void main() {
     }
   }
 
-  testWidgets('marks the section experimental', (tester) async {
+  testWidgets('offers enable with no experimental marker', (tester) async {
     await pumpWithStatus(tester, {'enabled': false, 'connected': false});
 
     expect(
       find.byKey(const ValueKey('settings_remote_access_experimental')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('Enable remote access'), findsOneWidget);
   });
@@ -129,5 +137,34 @@ void main() {
 
     expect(find.text('Connected via Tailscale'), findsOneWidget);
     expect(find.text('http://100.64.0.7:80'), findsOneWidget);
+  });
+
+  testWidgets('polls while connecting and stops once connected', (
+    tester,
+  ) async {
+    final status = <String, dynamic>{'enabled': true, 'connected': false};
+    await pumpWithStatus(tester, status);
+    expect(find.text('Connecting…'), findsOneWidget);
+
+    status
+      ..['connected'] = true
+      ..['remoteUrl'] = 'http://100.64.0.7:80';
+    await tester.pump(RemoteAccessConfig.statusPollInterval);
+    await tester.pump();
+
+    expect(find.text('Connected via Tailscale'), findsOneWidget);
+    expect(find.text('http://100.64.0.7:80'), findsOneWidget);
+
+    final readsWhenConnected = statusReads;
+    await tester.pump(RemoteAccessConfig.statusPollInterval * 3);
+    expect(statusReads, readsWhenConnected);
+  });
+
+  testWidgets('does not poll while remote access is off', (tester) async {
+    await pumpWithStatus(tester, {'enabled': false, 'connected': false});
+
+    final reads = statusReads;
+    await tester.pump(RemoteAccessConfig.statusPollInterval * 3);
+    expect(statusReads, reads);
   });
 }
