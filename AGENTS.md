@@ -65,6 +65,10 @@ commands. `make help` lists everything; these are the ones that matter day to da
 GNU make is required. On macOS the system `make` is BSD make and cannot read this Makefile — use `gmake`, which
 is what `git/hooks/pre-commit` does.
 
+A new target follows the existing naming: `serve/...` to run something, `build/...`, `check/...`, `test/...`,
+and so on. Read the neighboring targets before naming one — `run/docker` next to `serve/frontend` is the kind of
+mismatch review sends back.
+
 ### What the checks enforce
 
 `make check` is installed as a pre-commit hook (`make setup/hooks`), and `.github/workflows/check.yml` runs the
@@ -84,6 +88,41 @@ same targets, so nothing here is advisory.
 
 Markdown is not linted here — `.markdownlint.yaml` exists for the wiki, and `make check` will not reflow your
 prose. cspell does read Markdown, though.
+
+### Scope discipline
+
+- **Advice is not a request for edits.** When asked to review, explain, coach, or advise, answer in chat and
+  touch no files. Edit only when the request asks for a change.
+- **Filing an issue is not implementing it.** When asked to write up an issue or a plan, stop there.
+- **Never fork or vendor an upstream dependency without approval.** Propose the lighter options first — a
+  workaround in our code, a pinned version, an upstream issue or PR — and let the maintainer choose.
+- **Ask before a large change.** A fix that needs a new abstraction layer, a new dependency, or edits across
+  more than ~10 files gets two or three options with tradeoffs before any code is written.
+- **Build what was asked.** No mechanisms (ports, detach modes, config knobs, abstractions) nobody requested.
+
+### Root cause over symptom
+
+- **State the causal chain before writing a fix:** the user action, the line responsible, and how you will
+  prove it. Where practical, a failing test or scripted repro comes first.
+- **Fix the path the report describes.** If two paths could produce the symptom, confirm which one is live
+  before editing (see Navigation and routing for the go_router case).
+- **Sweep for siblings.** Before calling it done, ask whether the fix covers every path a user can hit — the
+  folder route as well as the file route, every file kind, every platform — and grep for other call sites
+  with the same defect.
+- **Fix the shared source of truth** (the sentinel, the table, the common function) rather than patching one
+  branch of a switch.
+- **If a symptom persists after a fix, check the environment before re-diagnosing the code** — which backend
+  the dev server points at, which build is installed, whether the hot reload actually happened.
+
+### Verification before claiming done
+
+- Run `make check` and the relevant `make test/...` targets locally before every push. CI has gone red
+  repeatedly on `gofmt`, `dart format`, cspell, and `scripts/check-go-structure.bash` — all of which run
+  locally in seconds.
+- Report exactly what was run. Never write "verified by hand", "tested manually", or the like — in a PR, a
+  commit, an issue, or an upstream project — unless that verification actually happened in this session.
+- A PR or commit never carries a Claude Code session link (`https://claude.ai/code/session_...`), and all prose
+  and new identifiers use American spelling (`color`, `behavior`, `canceled`).
 
 ### Generated code (never hand-edit)
 
@@ -451,6 +490,11 @@ yet rather than a rule violation. Decouple it with the `page-decoupler` agent in
   2. Add a `GoRoute` entry to the `router` in `lib/router.dart`
   3. Use `context.go(AppRoutes.yourRoute)` for navigation (not `Navigator.pushReplacement`)
   4. Use `context.push(AppRoutes.yourRoute)` for drill-down/detail flows that should be back-stackable
+- `context.push` does **not** update the browser address bar: `optionURLReflectsImperativeAPIs` is off, so a
+  pushed route renders without changing the URL. Anything that must be reflected in the URL (deep links,
+  reload, sharing) uses `context.go`.
+- Before fixing a navigation bug, confirm whether the broken path is a declarative go_router route (including
+  nested routes) or an imperative `Navigator.push`, and fix the one the report describes.
 - Do NOT use `Navigator.pushReplacement` or `Navigator.of(context).push` for top-level page changes — use `context.go`.
 - `Navigator.push` / `Navigator.pop` is still acceptable for modal dialogs and overlays (image/video viewers, confirmation
   dialogs).
