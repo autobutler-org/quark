@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/pages/photos_page.dart';
-import 'package:quark/widgets/photos/album_sidebar.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 // The photos view rendered nothing below 900px: the compact branch puts the
 // sidebar in a SliverToBoxAdapter, which hands its child unbounded height, and
@@ -73,60 +73,10 @@ void main() {
     });
   });
 
-  group('album sidebar', () {
-    // The same Expanded-in-a-Column bug lives one level down in AlbumSidebar.
-    // Fixing only the outer one moves the exception here.
-    testWidgets('shrink-wrapped sidebar lays out under unbounded height', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: AlbumSidebar(
-                    shrinkWrap: true,
-                    selectedAlbumId: null,
-                    onAlbumSelected: (_) {},
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(tester.takeException(), isNull);
-      expect(find.text('Albums'), findsOneWidget);
-    });
-
-    testWidgets('bounded sidebar still fills its parent', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Row(
-              children: [
-                SizedBox(
-                  width: 280,
-                  child: AlbumSidebar(
-                    selectedAlbumId: null,
-                    onAlbumSelected: (_) {},
-                  ),
-                ),
-                const Expanded(child: SizedBox()),
-              ],
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(tester.takeException(), isNull);
-      expect(find.text('Albums'), findsOneWidget);
-    });
-  });
+  // The same Expanded-in-a-Column bug lived one level down in the album
+  // sidebar. It is a package widget now, and its narrow and wide layouts,
+  // shrink-wrapped under a sliver and filling a bounded pane, are covered in
+  // packages/quark_widgets/test/albums/album_sidebar_test.dart.
 
   // _measureAndJumpNav re-posted itself every frame until the nav panel
   // reported a size. Every failure path re-posted unconditionally, so it was an

@@ -152,6 +152,20 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
+  GalleryEntry(
+    name: 'ScrollUpHint',
+    group: 'Core',
+    build: (context, log) => const SizedBox(
+      height: 120,
+      child: Stack(
+        children: [
+          Center(child: Text('Scrolled past something above')),
+          Positioned(top: 0, left: 0, right: 0, child: ScrollUpHint()),
+        ],
+      ),
+    ),
+  ),
+
   // ── Layout ────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'QuarkAppBar',
@@ -451,10 +465,247 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
+  GalleryEntry(
+    name: 'PhotoGridTile',
+    group: 'Photos',
+    build: (context, log) => Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        for (final (label, item, selectionMode, selected) in const [
+          ('plain', PhotoItem(id: 'p1', name: 'beach.jpg'), false, false),
+          (
+            'favorite, live',
+            PhotoItem(
+              id: 'p2',
+              name: 'wave.heic',
+              isFavorite: true,
+              hasLiveVideo: true,
+            ),
+            false,
+            false,
+          ),
+          ('unselected', PhotoItem(id: 'p3', name: 'dune.jpg'), true, false),
+          ('selected', PhotoItem(id: 'p4', name: 'pier.jpg'), true, true),
+        ])
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox.square(
+                dimension: 120,
+                child: PhotoGridTile(
+                  item: item,
+                  selectionMode: selectionMode,
+                  isSelected: selected,
+                  thumbnailBuilder: (context, photo) =>
+                      const ColoredBox(color: Color(0xFF7C8AA0)),
+                  onTap: () => log('PhotoGridTile.onTap(${item.id})'),
+                  onLongPress: () =>
+                      log('PhotoGridTile.onLongPress(${item.id})'),
+                  onDoubleTap: () =>
+                      log('PhotoGridTile.onDoubleTap(${item.id})'),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(label, style: const TextStyle(fontSize: 11)),
+            ],
+          ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'PhotoGrid',
+    group: 'Photos',
+    build: (context, log) => SizedBox(
+      height: 420,
+      child: CustomScrollView(
+        slivers: [
+          PhotoGrid(
+            photos: [
+              for (var i = 0; i < 14; i++)
+                PhotoItem(
+                  id: 'p$i',
+                  name: 'photo_$i.jpg',
+                  isRemote: i % 5 != 4,
+                  isFavorite: i % 4 == 1,
+                  hasLiveVideo: i % 6 == 2,
+                ),
+            ],
+            crossAxisCount: 4,
+            hasMore: true,
+            emptyState: const Center(child: Text('No photos yet')),
+            thumbnailBuilder: (context, photo) =>
+                const ColoredBox(color: Color(0xFF7C8AA0)),
+            onTap: (i) => log('PhotoGrid.onTap($i)'),
+            onLongPress: (i) => log('PhotoGrid.onLongPress($i)'),
+            onDoubleTap: (i) => log('PhotoGrid.onDoubleTap($i)'),
+          ),
+        ],
+      ),
+    ),
+  ),
+  GalleryEntry(
+    name: 'PhotoCategoryList',
+    group: 'Photos',
+    build: (context, log) => SizedBox(
+      width: 280,
+      child: PhotoCategoryList(
+        categories: _galleryCategories,
+        selectedId: 'quark',
+        expanded: true,
+        onToggleExpanded: () => log('PhotoCategoryList.onToggleExpanded'),
+        onSelected: (id) => log('PhotoCategoryList.onSelected($id)'),
+      ),
+    ),
+  ),
+  GalleryEntry(
+    name: 'PhotoLibrarySidebar',
+    group: 'Photos',
+    build: (context, log) => SizedBox(
+      width: 280,
+      height: 520,
+      child: PhotoLibrarySidebar(
+        columns: 4,
+        minColumns: 1,
+        maxColumns: 8,
+        onColumnsChanged: (c) =>
+            log('PhotoLibrarySidebar.onColumnsChanged($c)'),
+        categories: PhotoCategoryList(
+          categories: _galleryCategories,
+          selectedId: 'quark',
+          expanded: false,
+          onToggleExpanded: () => log('PhotoCategoryList.onToggleExpanded'),
+          onSelected: (id) => log('PhotoCategoryList.onSelected($id)'),
+        ),
+        albums: AlbumSidebar(
+          albums: _galleryAlbumList,
+          expandedIds: const {},
+          shrinkWrap: QuarkSplitView.isCollapsed(context),
+          onAlbumSelected: (a) =>
+              log('AlbumSidebar.onAlbumSelected(${a.name})'),
+          onToggleExpanded: (id) => log('AlbumSidebar.onToggleExpanded($id)'),
+          onCreateAlbum: () => log('AlbumSidebar.onCreateAlbum'),
+        ),
+      ),
+    ),
+  ),
+
   // ── Albums ────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'AlbumTreeTile',
     group: 'Albums',
     build: (context, log) => AlbumTreeDemo(log: log),
   ),
+  GalleryEntry(
+    name: 'AlbumSidebar',
+    group: 'Albums',
+    build: (context, log) => SizedBox(
+      width: 280,
+      height: 320,
+      child: AlbumSidebar(
+        albums: _galleryAlbumList,
+        expandedIds: const {3},
+        selectedAlbumId: 4,
+        onAlbumSelected: (a) => log('AlbumSidebar.onAlbumSelected(${a.name})'),
+        onToggleExpanded: (id) => log('AlbumSidebar.onToggleExpanded($id)'),
+        onCreateAlbum: () => log('AlbumSidebar.onCreateAlbum'),
+        onAlbumLongPress: (a) =>
+            log('AlbumSidebar.onAlbumLongPress(${a.name})'),
+      ),
+    ),
+  ),
+  GalleryEntry(
+    name: 'AlbumPickerSheet',
+    group: 'Albums',
+    build: (context, log) => SizedBox(
+      height: 420,
+      child: AlbumPickerSheet(
+        selectedCount: 3,
+        albums: _galleryAlbumList,
+        onPicked: (a) => log('AlbumPickerSheet.onPicked(${a.name})'),
+        onRetry: () => log('AlbumPickerSheet.onRetry'),
+      ),
+    ),
+  ),
+  GalleryEntry(
+    name: 'AddToAlbumSheet',
+    group: 'Albums',
+    build: (context, log) => SizedBox(
+      height: 420,
+      child: AddToAlbumSheet(
+        albums: _galleryAlbumList,
+        memberAlbumIds: const {4},
+        onToggle: (a) => log('AddToAlbumSheet.onToggle(${a.name})'),
+      ),
+    ),
+  ),
+
+  // ── Storage ───────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'UploadTargetPicker',
+    group: 'Storage',
+    build: (context, log) => UploadTargetPicker(
+      targets: _galleryTargets,
+      selected: _galleryTargets.first,
+      onSelected: (t) => log('UploadTargetPicker.onSelected(${t.name})'),
+      onCancel: () => log('UploadTargetPicker.onCancel'),
+      onConfirm: () => log('UploadTargetPicker.onConfirm'),
+    ),
+  ),
+];
+
+/// The fake photo categories the photo entries share.
+const List<PhotoCategoryEntry> _galleryCategories = [
+  PhotoCategoryEntry(
+    id: 'all',
+    label: 'All',
+    count: 142,
+    icon: QuarkIcons.photo_library,
+  ),
+  PhotoCategoryEntry(
+    id: 'quark',
+    label: 'Quark',
+    count: 128,
+    icon: QuarkIcons.cloud,
+  ),
+  PhotoCategoryEntry(
+    id: 'mobile',
+    label: 'Mobile',
+    count: 14,
+    icon: QuarkIcons.smartphone,
+  ),
+  PhotoCategoryEntry(
+    id: 'favorites',
+    label: 'Favorites',
+    count: 9,
+    icon: QuarkIcons.star_rounded,
+  ),
+];
+
+/// The fake album tree the album entries share: a system album, then a user
+/// album with sub-albums.
+const List<AlbumItem> _galleryAlbumList = [
+  AlbumItem(
+    id: 1,
+    name: 'Favorites',
+    itemCount: 9,
+    isSystem: true,
+    isFavorites: true,
+  ),
+  AlbumItem(id: 2, name: 'Recently added', itemCount: 30, isSystem: true),
+  AlbumItem(
+    id: 3,
+    name: 'Trips',
+    itemCount: 128,
+    children: [
+      AlbumItem(id: 4, name: 'Iceland', parentId: 3, itemCount: 40),
+      AlbumItem(id: 5, name: 'Japan', parentId: 3, itemCount: 88),
+    ],
+  ),
+];
+
+/// The fake upload targets: the built-in disk and a plugged-in drive.
+const List<UploadTarget> _galleryTargets = [
+  UploadTarget(serial: '', name: '', mountPoint: '/data', isInternal: true),
+  UploadTarget(serial: 'usb-1', name: 'Backup drive', mountPoint: '/mnt/usb'),
 ];
