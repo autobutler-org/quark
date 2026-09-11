@@ -9,8 +9,12 @@ type SettingsJSON struct {
 	AutoUpdate bool `json:"autoUpdate"`
 }
 
+// RemoteAccessRequest is the optional body of an enable. An empty body, or an
+// empty authKey, means the Quark fetches its own key.
 type RemoteAccessRequest struct {
-	AuthKey string `json:"authKey"`
+	// AuthKey overrides the provisioned pre-auth key. It is used only when the
+	// Quark has no tailnet enrollment to reuse.
+	AuthKey string `json:"authKey,omitempty"`
 }
 
 type RemoteAccessResponse struct {

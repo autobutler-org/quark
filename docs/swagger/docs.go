@@ -2501,7 +2501,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Starts a Tailscale tsnet node with the provided auth key and proxies traffic to the local server. The node joins the tailnet asynchronously; poll GET for connected. Admin only.",
+                "description": "Starts a Tailscale tsnet node and proxies traffic to the local server. A Quark with no tailnet enrollment fetches a pre-auth key from the provisioning service; authKey overrides that key. The node joins the tailnet asynchronously; poll GET for connected. Admin only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2514,10 +2514,9 @@ const docTemplate = `{
                 "summary": "Enable remote access via Tailscale",
                 "parameters": [
                     {
-                        "description": "Tailscale auth key",
+                        "description": "Optional pre-auth key override",
                         "name": "body",
                         "in": "body",
-                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/v0_settings.RemoteAccessRequest"
                         }
@@ -2547,11 +2546,17 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
+                    },
+                    "503": {
+                        "description": "This build has no provisioning secret",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
                     }
                 }
             },
             "delete": {
-                "description": "Logs the Tailscale tsnet node out, stops it, and deletes its state, so re-enabling needs a fresh auth key. Admin only.",
+                "description": "Logs the Tailscale tsnet node out, stops it, and deletes its state, so re-enabling provisions a fresh key. Admin only.",
                 "produces": [
                     "application/json"
                 ],
@@ -4253,6 +4258,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "authKey": {
+                    "description": "AuthKey overrides the provisioned pre-auth key. It is used only when the\nQuark has no tailnet enrollment to reuse.",
                     "type": "string"
                 }
             }

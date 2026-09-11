@@ -12,14 +12,12 @@ const settingsFileName = "settings.json"
 
 // Settings holds application-level user-configurable settings.
 type Settings struct {
-	AutoUpdate          bool `json:"autoUpdate"`
-	RemoteAccessEnabled bool `json:"remoteAccessEnabled"`
-	// RemoteAccessAuthKey is the Tailscale/Headscale pre-auth key used for
-	// initial tsnet registration. It is stored at rest so the node can
-	// reconnect after a restart before tsnet has written its own persistent
-	// state. The file is created with mode 0600 (owner-read/write only),
-	// matching the security model of SSH private keys on the same host.
-	RemoteAccessAuthKey string `json:"remoteAccessAuthKey"`
+	AutoUpdate bool `json:"autoUpdate"`
+	// RemoteAccessEnabled is the user's choice. The node's credential is its
+	// tsnet state dir, not a key kept here (#1876): files written before then
+	// still carry a remoteAccessAuthKey, which parsing ignores and the next
+	// Save drops.
+	RemoteAccessEnabled bool   `json:"remoteAccessEnabled"`
 	DevMode             bool   `json:"devMode"`
 	ActiveBranch        string `json:"activeBranch,omitempty"`
 	DeviceID            string `json:"deviceId,omitempty"`
@@ -118,17 +116,17 @@ func SetAutoUpdate(enabled bool) error {
 	return Save(s)
 }
 
-// GetRemoteAccess returns whether remote access is enabled and the stored auth key.
-func GetRemoteAccess() (bool, string) {
+// GetRemoteAccess returns whether remote access is enabled.
+func GetRemoteAccess() bool {
 	s, err := Load()
 	if err != nil {
-		return false, ""
+		return false
 	}
-	return s.RemoteAccessEnabled, s.RemoteAccessAuthKey
+	return s.RemoteAccessEnabled
 }
 
-// SetRemoteAccess sets the remote access enabled flag and auth key, and persists them.
-func SetRemoteAccess(enabled bool, authKey string) error {
+// SetRemoteAccess sets the remote access enabled flag and persists it.
+func SetRemoteAccess(enabled bool) error {
 	mu.Lock()
 	s := cached
 	mu.Unlock()
@@ -141,7 +139,6 @@ func SetRemoteAccess(enabled bool, authKey string) error {
 		s = loaded
 	}
 	s.RemoteAccessEnabled = enabled
-	s.RemoteAccessAuthKey = authKey
 	return Save(s)
 }
 

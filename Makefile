@@ -1169,31 +1169,3 @@ version: ## Print version
 help: ## Displays help info
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-env-%: ## Check for env var
-	if [ -z "$($*)" ]; then \
-		echo "Error: Environment variable '$*' is not set."; \
-		exit 1; \
-	fi
-
-# ── Azure deployment ────────────────────────────────────────────────────────
-
-## render/headscale: Embed setup-headscale.bash into ARM parameters file.
-## Usage: make render/headscale HEADSCALE_DOMAIN=network.quark.org ADMIN_EMAIL=admin.quark.org
-## Output: deploy/azure/headscale.rendered.parameters.json (gitignored)
-
-HEADSCALE_DOMAIN ?= network.quark.org
-
-deploy/azure/headscale.rendered.parameters.json: env-HEADSCALE_DOMAIN ## Render ARM parameters file for headscale deployment
-	bash deploy/azure/render.bash
-.PHONY: render/headscale
-render/headscale: deploy/azure/headscale.rendered.parameters.json ## Render ARM parameters file for headscale deployment (alias)
-
-SSH_KEY_PATH ?= ~/.ssh/id_quark-headscale.pub
-
-.PHONY: deploy/headscale
-deploy/headscale: deploy/azure/headscale.rendered.parameters.json
-	az deployment group create \
-	    --resource-group quark-headscale \
-	    --template-file ./deploy/azure/headscale.json \
-	    --parameters ./$< \
-	    --parameters adminPublicKey="$$(cat $(SSH_KEY_PATH))"

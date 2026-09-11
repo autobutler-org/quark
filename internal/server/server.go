@@ -21,6 +21,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/favoritesutil"
 	"github.com/autobutler-org/quark/pkg/util/healthutil"
+	"github.com/autobutler-org/quark/pkg/util/provisionutil"
 	"github.com/autobutler-org/quark/pkg/util/remoteutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
@@ -310,14 +311,19 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 
 	// A failure here is recorded by remoteutil and reported by GET
 	// /settings/remote-access. The setting stays on: the user asked for remote
-	// access, and Settings shows it as on but failing (#1815).
-	if enabled, authKey := settingsutil.GetRemoteAccess(); enabled && authKey != "" {
-		if err := remoteutil.Start(authKey); err != nil {
-			log.Printf("[remote] failed to start: %v", err)
-		} else if err := remoteutil.StartProxy(portNum, !opts.Insecure); err != nil {
-			log.Printf("[remote] failed to start proxy: %v", err)
-			remoteutil.Stop()
-		}
+	// access, and Settings shows it as on but failing (#1815). The persisted
+	// tsnet state is reused; a key is provisioned only when there is none
+	// (#1876). In the background, so a slow provisioning service cannot hold
+	// up the server's own listener.
+	if settingsutil.GetRemoteAccess() {
+		go func() {
+			if err := remoteutil.EnsureStarted(portNum, !opts.Insecure, func() (string, error) {
+				result, err := provisionutil.ProvisionAuthKey(provisionutil.ProvisionAuthKeyParams{})
+				return result.AuthKey, err
+			}); err != nil {
+				log.Printf("[remote] failed to start: %v", err)
+			}
+		}()
 	}
 
 	// Graceful shutdown: stop tsnet and telemetry on SIGINT/SIGTERM.

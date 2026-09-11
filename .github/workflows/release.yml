@@ -50,6 +50,9 @@ jobs:
           workdir: ${{ env.WORKING_DIR }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # Stamped into the binary for remote-access key provisioning (#1876). The
+          # Docker and Armbian images ship this same binary, so this is the one place.
+          QUARK_PROVISIONING_SECRET: ${{ secrets.QUARK_PROVISIONING_SECRET }}
       - name: Upload assets
         uses: actions/upload-artifact@v7
         with:

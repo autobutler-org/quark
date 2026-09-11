@@ -165,24 +165,25 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-011: Enable remote access
 
-**Status:** Experimental. The Quark cannot fetch its own Tailscale auth key yet, so from the app this journey
-currently ends at the error below (#1815).
-
 **Preconditions:** User is signed in as an admin and on the Settings page. Remote access is currently disabled.
 
 **Steps:**
 
-1. Scroll to the Remote Access section, which is marked **Experimental**.
+1. Scroll to the Remote Access section.
 2. Tap **Enable remote access**.
 
 **Expected result:**
 
-- Today: a snackbar says remote access needs an auth key and automatic provisioning is not available yet.
+- The Quark fetches its own Tailscale key from the provisioning service; the user never sees or enters a key
+  (#1876).
+- Remote access is enabled and the section reads **Connecting…** until the node joins the tailnet, then
+  **Connected via Tailscale** with the remote URL. The section refreshes itself every few seconds while it
+  connects, so no reload is needed.
 - A non-admin is told they do not have permission.
-- Once a key is supplied, remote access is enabled and the section reads **Connecting…** until the node joins
-  the tailnet, then **Connected via Tailscale** with the remote URL.
-- If the Quark cannot start remote access, at boot or on enable, the section stays on and says it could not
-  start; the reason is in the Quark's log.
+- A build with no provisioning secret says remote access is not available in this build, and stays off.
+- If the Quark cannot start remote access, at boot or on enable, or the tailnet rejects its key, the section
+  stays on and says it could not start; the reason is in the Quark's log.
+- After a restart the Quark reconnects with its saved enrollment and does not fetch a new key.
 
 ---
 
@@ -199,7 +200,7 @@ currently ends at the error below (#1815).
 
 - Remote access is disabled.
 - Remote URL is no longer shown.
-- The Quark logs its node out of the tailnet and forgets the enrollment, so enabling again needs a new key.
+- The Quark logs its node out of the tailnet and forgets the enrollment, so enabling again fetches a fresh key.
 
 ---
 

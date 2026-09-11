@@ -117,7 +117,6 @@ sable/
 ## ExoKomodo's personal dev context (AI co-developer workspace)
 exokomodo/
 linux/flutter/ephemeral/
-deploy/azure/headscale.rendered.parameters.json
 
 # SBOM generated at build time from pubspec.lock
 assets/sbom_flutter.json

@@ -14,8 +14,7 @@ import (
 // @Success 200 {object} RemoteAccessResponse
 // @Router /settings/remote-access [get]
 func getRemoteAccess(c *gin.Context) *serverutil.Response {
-	enabled, _ := settingsutil.GetRemoteAccess()
-	return serverutil.Ok().WithData(remoteAccessResponse(enabled))
+	return serverutil.Ok().WithData(remoteAccessResponse(settingsutil.GetRemoteAccess()))
 }
 
 var getRemoteAccessRoute = serverutil.ApiRoute("GET", "/settings/remote-access", getRemoteAccess)

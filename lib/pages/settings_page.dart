@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -14,6 +16,7 @@ import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/utils/remote_access_config.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark/widgets/settings/help_support_card.dart';
 import 'package:quark/widgets/settings/sbom_expansion_tile.dart';
@@ -155,6 +158,10 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isTogglingRemoteAccess = false;
   String? _remoteAccessError;
 
+  /// Re-reads the status while remote access is on but not yet connected, so
+  /// "Connecting…" resolves without a reload (#1876).
+  Timer? _remoteAccessPoll;
+
   // Connected devices state
   List<ConnectedDevice> _connectedDevices = [];
   bool _isLoadingDevices = false;
@@ -233,6 +240,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _remoteAccessError = null;
         _isLoadingRemoteAccess = false;
       });
+      _syncRemoteAccessPoll();
       return;
     }
     setState(() {
@@ -251,6 +259,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _remoteAccessStatus = status;
         _isLoadingRemoteAccess = false;
       });
+      _syncRemoteAccessPoll();
       _noteReachability(null);
     } catch (e) {
       debugPrint('[settings_page.dart] Remote access error: $e');
@@ -263,6 +272,37 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  /// Starts the status poll while remote access is on and not connected, and
+  /// stops it otherwise.
+  void _syncRemoteAccessPoll() {
+    final status = _remoteAccessStatus;
+    if (status == null || !status.enabled || status.connected) {
+      _remoteAccessPoll?.cancel();
+      _remoteAccessPoll = null;
+      return;
+    }
+    _remoteAccessPoll ??= Timer.periodic(
+      RemoteAccessConfig.statusPollInterval,
+      (_) => _pollRemoteAccess(),
+    );
+  }
+
+  /// One quiet status read: no spinner, and a failure keeps the last status
+  /// on screen for the next tick to replace.
+  Future<void> _pollRemoteAccess() async {
+    try {
+      final status = await RemoteAccessService.getStatus();
+      if (!mounted) return;
+      setState(() {
+        _remoteAccessStatus = status;
+        _remoteAccessError = null;
+      });
+      _syncRemoteAccessPoll();
+    } catch (e) {
+      debugPrint('[settings_page.dart] Remote access poll failed: $e');
+    }
+  }
+
   Future<void> _enableRemoteAccess() async {
     setState(() => _isTogglingRemoteAccess = true);
     try {
@@ -272,6 +312,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _remoteAccessStatus = status;
         _isTogglingRemoteAccess = false;
       });
+      _syncRemoteAccessPoll();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Remote access enabled')));
@@ -314,6 +355,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _remoteAccessStatus = status;
         _isTogglingRemoteAccess = false;
       });
+      _syncRemoteAccessPoll();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Remote access disabled')));
@@ -948,21 +990,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           if (AppSettings.instance.activeHost != null) ...[
             const SizedBox(height: 24),
-            const Row(
-              children: [
-                Text(
-                  'Remote Access',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(width: 8),
-                // #1815: it cannot be switched on from the app yet. Say so
-                // until automatic provisioning lands.
-                Chip(
-                  key: ValueKey('settings_remote_access_experimental'),
-                  label: Text('Experimental'),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
+            const Text(
+              'Remote Access',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Card(
@@ -1541,6 +1571,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   void dispose() {
+    _remoteAccessPoll?.cancel();
     _accountActions.dispose();
     super.dispose();
   }
