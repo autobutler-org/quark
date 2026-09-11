@@ -1,12 +1,31 @@
 package remoteutil
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"tailscale.com/ipn"
+	"tailscale.com/ipn/ipnstate"
 )
+
+// connectionFromStatus maps a tsnet status to whether the node is on the
+// tailnet and, if it is, the URL peers reach it at. tsnet.Server.Start returns
+// before the node authenticates, so only BackendState "Running" counts —
+// "Starting", "NeedsLogin" and the rest are not connected, whatever IP the
+// node may already hold.
+func connectionFromStatus(st *ipnstate.Status) (bool, string) {
+	if st == nil || st.BackendState != ipn.Running.String() {
+		return false, ""
+	}
+	if len(st.TailscaleIPs) == 0 {
+		return true, ""
+	}
+	return true, fmt.Sprintf("http://%s:80", st.TailscaleIPs[0])
+}
 
 func controlURL() string {
 	u := os.Getenv("QUARK_HEADSCALE_URL")

@@ -5,15 +5,33 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 
 class RemoteAccessStatus {
+  /// The Quark's setting: remote access was switched on.
   final bool enabled;
+
+  /// Whether the Tailscale node has actually joined the tailnet. An enabled
+  /// Quark that has not is still connecting, or failing — see [error].
+  final bool connected;
+
+  /// Set only when [connected].
   final String? remoteUrl;
 
-  const RemoteAccessStatus({required this.enabled, this.remoteUrl});
+  /// The Quark's last failure to start remote access, for logs only. It is a
+  /// Go error's text, so the UI shows [Errors.remoteAccessFailing] instead.
+  final String? error;
+
+  const RemoteAccessStatus({
+    required this.enabled,
+    this.connected = false,
+    this.remoteUrl,
+    this.error,
+  });
 
   factory RemoteAccessStatus.fromJson(Map<String, dynamic> json) =>
       RemoteAccessStatus(
         enabled: json['enabled'] as bool? ?? false,
+        connected: json['connected'] as bool? ?? false,
         remoteUrl: json['remoteUrl'] as String?,
+        error: json['error'] as String?,
       );
 }
 

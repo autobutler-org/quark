@@ -9,20 +9,23 @@ import (
 
 // disableRemoteAccess godoc
 // @Summary Disable remote access
-// @Description Stops the Tailscale tsnet node
+// @Description Logs the Tailscale tsnet node out, stops it, and deletes its state, so re-enabling needs a fresh auth key. Admin only.
 // @Tags settings
 // @Produce json
 // @Success 200 {object} RemoteAccessResponse
+// @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /settings/remote-access [delete]
-var disableRemoteAccessRoute = serverutil.ApiRoute(
-	"DELETE", "/settings/remote-access", func(c *gin.Context) *serverutil.Response {
-		remoteutil.Stop()
-		if err := settingsutil.SetRemoteAccess(false, ""); err != nil {
-			return serverutil.InternalServerError(err)
-		}
-		return serverutil.Ok().WithData(RemoteAccessResponse{
-			Enabled: false,
-		})
-	},
-)
+func disableRemoteAccess(c *gin.Context) *serverutil.Response {
+	if err := remoteutil.Disable(); err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if err := settingsutil.SetRemoteAccess(false, ""); err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	return serverutil.Ok().WithData(RemoteAccessResponse{
+		Enabled: false,
+	})
+}
+
+var disableRemoteAccessRoute = serverutil.ApiRoute("DELETE", "/settings/remote-access", disableRemoteAccess)

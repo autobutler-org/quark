@@ -66,6 +66,7 @@ func setupRouters(engine *gin.Engine, systemCollector *healthutil.Collector, dep
 	// Admin-only routes — wrapped with RequireAdmin middleware.
 	adminGroup := group.Group("", middleware.RequireAdmin(deps))
 	serverutil.RegisterRouterWithGroup(adminGroup, v0_admin.NewRouter())
+	serverutil.RegisterRouterWithGroup(adminGroup, v0_settings.NewAdminRouter())
 }
 
 func setupStaticRoutes(engine *gin.Engine) error {

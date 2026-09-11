@@ -516,6 +516,29 @@ definitions:
     required:
     - relPath
     type: object
+  v0_settings.RemoteAccessRequest:
+    properties:
+      authKey:
+        type: string
+    type: object
+  v0_settings.RemoteAccessResponse:
+    properties:
+      connected:
+        description: Connected is true only once the node has joined the tailnet.
+        type: boolean
+      enabled:
+        description: 'Enabled is the persisted setting: the user asked for remote
+          access.'
+        type: boolean
+      error:
+        description: |-
+          Error is the last start failure, a diagnostic for the log reader rather
+          than copy for a user.
+        type: string
+      remoteUrl:
+        description: RemoteURL is set only when Connected.
+        type: string
+    type: object
   v0_settings.SettingsJSON:
     properties:
       autoUpdate:
@@ -2377,6 +2400,77 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
       summary: Update settings
+      tags:
+      - settings
+  /settings/remote-access:
+    delete:
+      description: Logs the Tailscale tsnet node out, stops it, and deletes its state,
+        so re-enabling needs a fresh auth key. Admin only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_settings.RemoteAccessResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Disable remote access
+      tags:
+      - settings
+    get:
+      description: Returns whether remote access is switched on, whether the Tailscale
+        node has actually joined the tailnet, its remote URL once it has, and the
+        last start failure
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_settings.RemoteAccessResponse'
+      summary: Get remote access status
+      tags:
+      - settings
+    post:
+      consumes:
+      - application/json
+      description: Starts a Tailscale tsnet node with the provided auth key and proxies
+        traffic to the local server. The node joins the tailnet asynchronously; poll
+        GET for connected. Admin only.
+      parameters:
+      - description: Tailscale auth key
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_settings.RemoteAccessRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_settings.RemoteAccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Enable remote access via Tailscale
       tags:
       - settings
   /storage/devices/rename:
