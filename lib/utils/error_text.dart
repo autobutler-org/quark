@@ -84,6 +84,13 @@ abstract final class Errors {
       ? restoreConflict
       : message(error, action);
 
+  /// Remote access is switched on but the Quark could not start it. The
+  /// Quark's own reason is a diagnostic from the network layer, so it goes to
+  /// the log and the user reads this instead.
+  static const String remoteAccessFailing =
+      "Remote access is on, but your Quark couldn't start it. Its log has "
+      'the details.';
+
   /// Session gone. The router sends the user to login on the next navigation;
   /// this is what they read in the meantime.
   static const String sessionExpired = 'Your session expired. Sign in again.';

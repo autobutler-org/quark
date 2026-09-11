@@ -308,11 +308,15 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 	// protocol instead of guessing.
 	serverutil.SetServingAddr(portNum, !opts.Insecure)
 
+	// A failure here is recorded by remoteutil and reported by GET
+	// /settings/remote-access. The setting stays on: the user asked for remote
+	// access, and Settings shows it as on but failing (#1815).
 	if enabled, authKey := settingsutil.GetRemoteAccess(); enabled && authKey != "" {
 		if err := remoteutil.Start(authKey); err != nil {
 			log.Printf("[remote] failed to start: %v", err)
 		} else if err := remoteutil.StartProxy(portNum, !opts.Insecure); err != nil {
 			log.Printf("[remote] failed to start proxy: %v", err)
+			remoteutil.Stop()
 		}
 	}
 

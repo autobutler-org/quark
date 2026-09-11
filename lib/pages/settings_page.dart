@@ -241,6 +241,11 @@ class _SettingsPageState extends State<SettingsPage> {
     });
     try {
       final status = await RemoteAccessService.getStatus();
+      if (status.error != null) {
+        debugPrint(
+          '[settings_page.dart] Remote access failing: ${status.error}',
+        );
+      }
       if (!mounted) return;
       setState(() {
         _remoteAccessStatus = status;
@@ -943,9 +948,21 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           if (AppSettings.instance.activeHost != null) ...[
             const SizedBox(height: 24),
-            const Text(
-              'Remote Access',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            const Row(
+              children: [
+                Text(
+                  'Remote Access',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(width: 8),
+                // #1815: it cannot be switched on from the app yet. Say so
+                // until automatic provisioning lands.
+                Chip(
+                  key: ValueKey('settings_remote_access_experimental'),
+                  label: Text('Experimental'),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Card(
@@ -983,20 +1000,61 @@ class _SettingsPageState extends State<SettingsPage> {
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              const Icon(
-                                QuarkIcons.cloud_done_outlined,
-                                size: 16,
-                                color: Colors.green,
-                              ),
-                              const SizedBox(width: 6),
-                              const Text(
-                                'Connected via Tailscale',
-                                style: TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                            ],
-                          ),
+                          // On is the Quark's setting; on the tailnet is a
+                          // separate fact that can lag it or never arrive.
+                          if (_remoteAccessStatus!.error != null)
+                            Row(
+                              children: [
+                                Icon(
+                                  QuarkIcons.error_outline,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    Errors.remoteAccessFailing,
+                                    key: const ValueKey(
+                                      'settings_remote_access_failing',
+                                    ),
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else if (!_remoteAccessStatus!.connected)
+                            const Row(
+                              children: [
+                                Icon(QuarkIcons.cloud_sync_outlined, size: 16),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Connecting…',
+                                  key: ValueKey(
+                                    'settings_remote_access_connecting',
+                                  ),
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            )
+                          else
+                            const Row(
+                              children: [
+                                Icon(
+                                  QuarkIcons.cloud_done_outlined,
+                                  size: 16,
+                                  color: Colors.green,
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Connected via Tailscale',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
                           if (_remoteAccessStatus?.remoteUrl != null &&
                               _remoteAccessStatus!.remoteUrl!.isNotEmpty) ...[
                             const SizedBox(height: 8),

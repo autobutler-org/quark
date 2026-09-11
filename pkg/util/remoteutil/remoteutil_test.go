@@ -1,11 +1,14 @@
 package remoteutil
 
 import (
+	"net/netip"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"tailscale.com/ipn/ipnstate"
 )
 
 // TestControlURL_DefaultWhenEnvUnset verifies the default Headscale URL is
@@ -122,5 +125,74 @@ func TestHasPersistedState_TrueWhenFilePresent(t *testing.T) {
 	}
 	if !hasFile {
 		t.Error("expected to find a non-dir entry in temp state dir")
+	}
+}
+
+// TestConnectionFromStatus verifies that only BackendState "Running" counts as
+// connected (#1815): tsnet.Server.Start returns before the node authenticates,
+// and a node waiting on login can already hold an IP.
+func TestConnectionFromStatus(t *testing.T) {
+	ip := []netip.Addr{netip.MustParseAddr("100.64.0.7")}
+	cases := []struct {
+		name          string
+		st            *ipnstate.Status
+		wantConnected bool
+		wantURL       string
+	}{
+		{"nil status", nil, false, ""},
+		{"starting", &ipnstate.Status{BackendState: "Starting", TailscaleIPs: ip}, false, ""},
+		{"needs login", &ipnstate.Status{BackendState: "NeedsLogin", TailscaleIPs: ip}, false, ""},
+		{"running without an IP yet", &ipnstate.Status{BackendState: "Running"}, true, ""},
+		{"running", &ipnstate.Status{BackendState: "Running", TailscaleIPs: ip}, true, "http://100.64.0.7:80"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			connected, url := connectionFromStatus(tc.st)
+			if connected != tc.wantConnected || url != tc.wantURL {
+				t.Errorf("connectionFromStatus() = (%v, %q); want (%v, %q)", connected, url, tc.wantConnected, tc.wantURL)
+			}
+		})
+	}
+}
+
+// TestStatus_ReportsProxyFailureUntilDisable verifies that a failed start is
+// recorded for GET to report, and that Disable clears it along with the tsnet
+// state dir, so HasPersistedState is false afterwards (#1815).
+func TestStatus_ReportsProxyFailureUntilDisable(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		if _, err := os.Stat("/var/lib/quark"); err == nil {
+			t.Skip("stateDir() is the real service dir on this machine; refusing to delete it")
+		}
+	}
+	// stateDir() lives under $HOME, so this keeps the test away from any real
+	// enrollment on the machine running it.
+	t.Setenv("HOME", t.TempDir())
+	dir := stateDir()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte("{}"), 0600); err != nil {
+		t.Fatalf("write state file: %v", err)
+	}
+	if !HasPersistedState() {
+		t.Fatal("HasPersistedState() = false with a state file present")
+	}
+
+	// No node is running, so the proxy has nothing to listen on.
+	if err := StartProxy(0, false); err == nil {
+		t.Fatal("StartProxy() = nil; want an error with no node started")
+	}
+	if got := Status(); got.Error == "" || got.Connected || got.RemoteURL != "" {
+		t.Errorf("Status() after a failed start = %+v; want an error and not connected", got)
+	}
+
+	if err := Disable(); err != nil {
+		t.Fatalf("Disable() = %v", err)
+	}
+	if got := Status(); got.Error != "" {
+		t.Errorf("Status().Error after Disable = %q; want empty", got.Error)
+	}
+	if HasPersistedState() {
+		t.Error("HasPersistedState() = true after Disable; want the state dir removed")
 	}
 }

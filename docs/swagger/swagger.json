@@ -2470,6 +2470,106 @@
                 }
             }
         },
+        "/settings/remote-access": {
+            "get": {
+                "description": "Returns whether remote access is switched on, whether the Tailscale node has actually joined the tailnet, its remote URL once it has, and the last start failure",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Get remote access status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.RemoteAccessResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Starts a Tailscale tsnet node with the provided auth key and proxies traffic to the local server. The node joins the tailnet asynchronously; poll GET for connected. Admin only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Enable remote access via Tailscale",
+                "parameters": [
+                    {
+                        "description": "Tailscale auth key",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.RemoteAccessRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.RemoteAccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Logs the Tailscale tsnet node out, stops it, and deletes its state, so re-enabling needs a fresh auth key. Admin only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Disable remote access",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.RemoteAccessResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/storage/devices/rename": {
             "patch": {
                 "description": "Sets a custom display name for a storage device identified by its serial number",
@@ -4134,6 +4234,35 @@
                     "type": "integer"
                 },
                 "serial": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_settings.RemoteAccessRequest": {
+            "type": "object",
+            "properties": {
+                "authKey": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_settings.RemoteAccessResponse": {
+            "type": "object",
+            "properties": {
+                "connected": {
+                    "description": "Connected is true only once the node has joined the tailnet.",
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "description": "Enabled is the persisted setting: the user asked for remote access.",
+                    "type": "boolean"
+                },
+                "error": {
+                    "description": "Error is the last start failure, a diagnostic for the log reader rather\nthan copy for a user.",
+                    "type": "string"
+                },
+                "remoteUrl": {
+                    "description": "RemoteURL is set only when Connected.",
                     "type": "string"
                 }
             }
