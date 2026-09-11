@@ -440,6 +440,7 @@ class PhotosPageState extends State<PhotosPage>
                 activeSection: QuarkDrawerSection.photos,
                 onTapFiles: () => context.go(AppRoutes.files),
                 onTapPhotos: () => Navigator.of(context).pop(),
+                onTapTrash: () => context.go(AppRoutes.trash),
                 onTapDocs: () => context.go(AppRoutes.docs),
                 onTapSheets: () => context.go(AppRoutes.sheets),
                 onTapDevices: () => context.go(AppRoutes.devices),

@@ -34,7 +34,7 @@ datalinks/                    symlinks to system directories, an in-repo view of
 ### Where to read next
 
 - [`docs/dev-onboarding.md`](docs/dev-onboarding.md) — running it locally, the two backend modes, `AS_ROOT=1`.
-- [`docs/user-journeys/`](docs/user-journeys/README.md) — nine files of stable `JN-XXX` journeys. This is the
+- [`docs/user-journeys/`](docs/user-journeys/README.md) — ten files of stable `JN-XXX` journeys. This is the
   feature inventory; check it before claiming Quark does something.
 - [`lib/widgets/README.md`](lib/widgets/README.md) — which app widgets are still service-coupled, and why.
 - [`packages/quark_widgets/README.md`](packages/quark_widgets/README.md) — the widget API reference.

@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../theme/quark_tokens.dart';
 
 /// The top bar shown in place of the usual file chrome while multi-select is
-/// active: cancel, a count, select-all, and delete.
+/// active: cancel, a count, select-all, and delete, with restore in front of
+/// delete when [onRestore] is given (the trash offers both).
 ///
 /// This is custom chrome rather than a real [AppBar], so it consults the
 /// display insets itself: the [SafeArea] inside is what keeps the controls
@@ -11,8 +12,8 @@ import '../theme/quark_tokens.dart';
 /// sits on the outer container so the inset region is painted rather than
 /// left showing whatever is behind the bar.
 ///
-/// Key prefixes: `file_selection_cancel`, `file_selection_toggle_all`, and
-/// `file_selection_delete`.
+/// Key prefixes: `file_selection_cancel`, `file_selection_toggle_all`,
+/// `file_selection_restore`, and `file_selection_delete`.
 ///
 /// ```dart
 /// FileSelectionBar(
@@ -33,6 +34,8 @@ class FileSelectionBar extends StatelessWidget {
     required this.onDeselectAll,
     required this.onCancel,
     this.onDelete,
+    this.onRestore,
+    this.deleteTooltip = 'Delete selected',
     super.key,
   });
 
@@ -56,6 +59,14 @@ class FileSelectionBar extends StatelessWidget {
   /// Deletes the selection. Null renders the delete button disabled and dimmed,
   /// for a selection that cannot be deleted.
   final VoidCallback? onDelete;
+
+  /// Restores the selection. Null leaves the restore button out entirely,
+  /// which is every listing except the trash.
+  final VoidCallback? onRestore;
+
+  /// The delete button's tooltip, for a listing where delete means something
+  /// stronger — "Delete permanently" in the trash.
+  final String deleteTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -101,6 +112,13 @@ class FileSelectionBar extends StatelessWidget {
                   ),
                 ),
                 SizedBox(width: tokens.spacingXs),
+                if (onRestore != null)
+                  IconButton(
+                    key: const ValueKey('file_selection_restore'),
+                    icon: const Icon(Icons.restore),
+                    tooltip: 'Restore selected',
+                    onPressed: onRestore,
+                  ),
                 IconButton(
                   key: const ValueKey('file_selection_delete'),
                   icon: Icon(
@@ -109,7 +127,7 @@ class FileSelectionBar extends StatelessWidget {
                         ? colors.error
                         : colors.onSurface.withValues(alpha: 0.38),
                   ),
-                  tooltip: 'Delete selected',
+                  tooltip: deleteTooltip,
                   onPressed: onDelete,
                 ),
               ],

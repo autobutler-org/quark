@@ -173,6 +173,7 @@ class _DocsPageState extends State<DocsPage> with SafeSetStateMixin {
         activeSection: QuarkDrawerSection.docs,
         onTapFiles: () => context.go('/files'),
         onTapPhotos: () => context.go('/photos'),
+        onTapTrash: () => context.go(AppRoutes.trash),
         onTapDocs: () => Navigator.of(context).pop(),
         onTapSheets: () => context.go('/sheets'),
         onTapDevices: () => context.go('/devices'),

@@ -18,6 +18,7 @@ void main() {
     for (final label in [
       'Files',
       'Photos',
+      'Trash',
       'Docs',
       'Sheets',
       'Devices',
@@ -49,6 +50,7 @@ void main() {
         activeSection: QuarkDrawerSection.files,
         onTapFiles: () => tapped.add('files'),
         onTapPhotos: () => tapped.add('photos'),
+        onTapTrash: () => tapped.add('trash'),
         onTapDocs: () => tapped.add('docs'),
         onTapSheets: () => tapped.add('sheets'),
         onTapDevices: () => tapped.add('devices'),
@@ -60,7 +62,10 @@ void main() {
     );
 
     for (final section in QuarkDrawerSection.values) {
-      await tester.tap(find.byKey(ValueKey('drawer_${section.name}')));
+      // The narrow viewport is shorter than the drawer; it scrolls.
+      final row = find.byKey(ValueKey('drawer_${section.name}'));
+      await tester.ensureVisible(row);
+      await tester.tap(row);
       await tester.pump();
     }
 
@@ -74,7 +79,9 @@ void main() {
       size: narrowViewport,
     );
 
-    await tester.tap(find.byKey(const ValueKey('drawer_settings')));
+    final settings = find.byKey(const ValueKey('drawer_settings'));
+    await tester.ensureVisible(settings);
+    await tester.tap(settings);
     await tester.pump();
 
     expect(tester.takeException(), isNull);

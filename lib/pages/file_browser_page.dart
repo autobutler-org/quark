@@ -491,7 +491,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       builder: (ctx) => AlertDialog(
         title: const Text('Delete selected'),
         content: Text(
-          'Delete ${nodes.length} item${nodes.length == 1 ? '' : 's'}? This cannot be undone.',
+          'Delete ${nodes.length} item${nodes.length == 1 ? '' : 's'}? '
+          'You can restore ${nodes.length == 1 ? 'it' : 'them'} from Trash.',
         ),
         actions: [
           TextButton(
@@ -2029,6 +2030,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         onTapPhotos: () {
           context.go(AppRoutes.photos);
         },
+        onTapTrash: () => context.go(AppRoutes.trash),
         onTapDocs: () {
           context.go(AppRoutes.docs);
         },

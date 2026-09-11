@@ -266,7 +266,21 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
   );
 }
 
-Future<bool?> confirmDelete(BuildContext context, String itemName) async {
+Future<bool?> confirmDelete(BuildContext context, String itemName) =>
+    confirmAction(
+      context,
+      title: 'Delete',
+      message: 'Delete $itemName?',
+      confirmLabel: 'Delete',
+    );
+
+/// Asks the user to confirm [confirmLabel]; true when they did.
+Future<bool?> confirmAction(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required String confirmLabel,
+}) async {
   await Future<void>.delayed(Duration.zero);
   if (!context.mounted) {
     return null;
@@ -277,8 +291,8 @@ Future<bool?> confirmDelete(BuildContext context, String itemName) async {
     useRootNavigator: true,
     builder: (dialogContext) {
       return QuarkWidget.alertDialog(
-        title: const Text('Delete'),
-        content: Text('Delete $itemName?'),
+        title: Text(title),
+        content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -286,7 +300,7 @@ Future<bool?> confirmDelete(BuildContext context, String itemName) async {
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
+            child: Text(confirmLabel),
           ),
         ],
       );

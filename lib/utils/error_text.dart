@@ -70,6 +70,20 @@ abstract final class Errors {
       "This video format ($extension) isn't supported for in-browser "
       'playback. Download the file to watch it locally.';
 
+  /// A restore the Quark refused with a 409: the item's original path is
+  /// taken, and a restore never overwrites.
+  static const String restoreConflict =
+      'Something is already at that location. Move or rename it, then '
+      'restore again.';
+
+  /// A failed restore from the trash. A 409 gets [restoreConflict] — the
+  /// generic "it changed while you were working" would send the user to retry
+  /// something that will fail the same way. [action] is as in [message].
+  static String restore(Object? error, String action) =>
+      error is ApiException && error.statusCode == 409
+      ? restoreConflict
+      : message(error, action);
+
   /// Session gone. The router sends the user to login on the next navigation;
   /// this is what they read in the meantime.
   static const String sessionExpired = 'Your session expired. Sign in again.';

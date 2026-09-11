@@ -24,6 +24,7 @@ void main() {
     int selectedCount = 3,
     int totalCount = 3,
     bool canDelete = true,
+    bool canRestore = false,
     void Function(String event)? log,
   }) {
     void record(String event) => log?.call(event);
@@ -40,6 +41,10 @@ void main() {
               onDeselectAll: () => record('deselectAll'),
               onCancel: () => record('cancel'),
               onDelete: canDelete ? () => record('delete') : null,
+              onRestore: canRestore ? () => record('restore') : null,
+              deleteTooltip: canRestore
+                  ? 'Delete permanently'
+                  : 'Delete selected',
             ),
           ],
         ),
@@ -146,5 +151,34 @@ void main() {
       find.byKey(const ValueKey('file_selection_delete')),
     );
     expect(button.onPressed, isNull);
+  });
+
+  testWidgets('leaves restore out unless it is offered', (tester) async {
+    await pumpSelectionBar(tester);
+
+    expect(find.byKey(const ValueKey('file_selection_restore')), findsNothing);
+  });
+
+  testBothViewports('offers restore and a permanent delete in the trash', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpSelectionBar(
+      tester,
+      size: size,
+      insets: notchInsets,
+      canRestore: true,
+      log: events.add,
+    );
+
+    expect(find.byTooltip('Delete permanently'), findsOneWidget);
+    expect(find.byTooltip('Delete selected'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('file_selection_restore')));
+    await tester.tap(find.byKey(const ValueKey('file_selection_delete')));
+    await tester.pump();
+
+    expect(events, ['restore', 'delete']);
   });
 }

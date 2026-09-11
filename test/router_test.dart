@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/models/trash_item.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 
@@ -139,6 +140,65 @@ void main() {
         AppRoutes.filesPath('/odd%20name.qdoc'),
       );
       expect(seen, '/odd%20name.qdoc');
+    });
+  });
+
+  group('/trash/:path addresses a folder in the trash', () {
+    test('the root is /trash', () {
+      expect(AppRoutes.trashFolder(null), '/trash');
+      expect(AppRoutes.parseTrashFolder('', ''), isNull);
+    });
+
+    test('builds an encoded URL with the serial as a query param', () {
+      expect(
+        AppRoutes.trashFolder((
+          serial: 'USB 1',
+          trashName: '20260901T000000Z_ab_my album',
+          path: '2024/day one',
+        )),
+        '/trash/20260901T000000Z_ab_my%20album/2024/day%20one?serial=USB+1',
+      );
+      expect(
+        AppRoutes.trashFolder((serial: '', trashName: 'x_album', path: '')),
+        '/trash/x_album',
+      );
+    });
+
+    testWidgets('a built URL routes back to the same location', (tester) async {
+      const location = (
+        serial: 'USB1',
+        trashName: 'x_holiday 100%',
+        path: 'odd%20name/sub',
+      );
+      TrashLocation? seen;
+      final router = GoRouter(
+        initialLocation: AppRoutes.trash,
+        routes: [
+          GoRoute(
+            path: AppRoutes.trash,
+            builder: (_, _) => const Scaffold(body: Text('root')),
+            routes: [
+              GoRoute(
+                path: ':path(.*)',
+                builder: (_, state) {
+                  // Mirrors the real builder.
+                  seen = AppRoutes.parseTrashFolder(
+                    state.pathParameters['path'] ?? '',
+                    state.uri.queryParameters['serial'] ?? '',
+                  );
+                  return const Scaffold(body: Text('folder'));
+                },
+              ),
+            ],
+          ),
+        ],
+      );
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      router.go(AppRoutes.trashFolder(location));
+      await tester.pumpAndSettle();
+
+      expect(seen, location);
     });
   });
 

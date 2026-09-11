@@ -336,6 +336,7 @@ class _StorageDevicesPageState extends State<StorageDevicesPage>
         activeSection: QuarkDrawerSection.devices,
         onTapFiles: () => context.go(AppRoutes.files),
         onTapPhotos: () => context.go(AppRoutes.photos),
+        onTapTrash: () => context.go(AppRoutes.trash),
         onTapDocs: () => context.go(AppRoutes.docs),
         onTapSheets: () => context.go(AppRoutes.sheets),
         onTapDevices: () => Navigator.of(context).pop(),

@@ -174,6 +174,7 @@ class _SheetsPageState extends State<SheetsPage> with SafeSetStateMixin {
         activeSection: QuarkDrawerSection.sheets,
         onTapFiles: () => context.go('/files'),
         onTapPhotos: () => context.go('/photos'),
+        onTapTrash: () => context.go(AppRoutes.trash),
         onTapDocs: () => context.go('/docs'),
         onTapSheets: () => Navigator.of(context).pop(),
         onTapDevices: () => context.go('/devices'),
