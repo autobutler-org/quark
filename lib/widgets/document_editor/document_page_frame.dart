@@ -117,6 +117,9 @@ class DocumentPageFrame extends StatelessWidget {
 
   /// Page brightness, chosen independently of the global theme toggle (#938).
   final bool darkPage;
+
+  /// Read-only / edit mode (#939) — drives whether a caret is drawn at all.
+  final bool isReadOnly;
   final VoidCallback onTap;
   final DocumentEditorKeyHandler onKeyPressed;
 
@@ -125,6 +128,7 @@ class DocumentPageFrame extends StatelessWidget {
     required this.editorFocus,
     required this.scrollController,
     required this.darkPage,
+    required this.isReadOnly,
     required this.onTap,
     required this.onKeyPressed,
     super.key,
@@ -150,6 +154,9 @@ class DocumentPageFrame extends StatelessWidget {
           border: Border.all(color: pageCs.outline),
         ),
         padding: const EdgeInsets.fromLTRB(40, 24, 40, 24),
+        // The GestureDetector only ever sees taps on the page margin: the
+        // editor's own recognizer wins the arena over the text itself, which
+        // is why the config below reports those separately (#1853).
         child: GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.translucent,
@@ -162,6 +169,19 @@ class DocumentPageFrame extends StatelessWidget {
               expands: false,
               padding: EdgeInsets.zero,
               placeholder: 'Start writing…',
+              // A caret only ever appears where typing works. Left to its
+              // default, `EditableText` paints one in read-only mode too —
+              // and because the field is not focused the blink timer never
+              // starts, so it sits there static, reading as "ready to type"
+              // when keystrokes go nowhere (#1853).
+              showCursor: !isReadOnly,
+              // A tap on the text itself. False means "not handled here", so
+              // Quill still places the caret where the user clicked — the
+              // caller only learns the tap happened (#1853).
+              onTapUp: (details, getPosition) {
+                onTap();
+                return false;
+              },
               customStyles: _quillStyles(pageCs),
               customShortcuts: editorNavigationShortcuts(),
               // Keeps Quill's built-in search dialog from opening on top of the
