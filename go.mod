@@ -24,7 +24,7 @@ require (
 	golang.org/x/crypto v0.55.0
 	golang.org/x/image v0.45.0
 	golang.org/x/sys v0.47.0
-	golang.org/x/time v0.15.0
+	golang.org/x/time v0.16.0
 	howett.net/plist v1.0.1
 	modernc.org/sqlite v1.58.0
 	tailscale.com v1.102.3
