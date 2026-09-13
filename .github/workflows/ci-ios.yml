@@ -19,8 +19,10 @@ jobs:
     # release build. No upload -- nothing here consumes an App Store build number.
     runs-on: macos-26
     timeout-minutes: 45
-    # Signing secrets are not exposed to pull requests from forks, so the job would fail
-    # for reasons a contributor cannot fix. Skip it there rather than show a red X.
+    # Fork pull requests are skipped outright rather than built unsigned: a macOS runner
+    # is the most expensive thing in this repository to start, and a fork's head is code
+    # nobody here has reviewed yet. Runs that do start but have no signing material --
+    # dependabot's -- fall back to an unsigned build in the steps below.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - name: Checkout code
@@ -43,20 +45,51 @@ jobs:
           key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock', 'pubspec.lock') }}
           restore-keys: |
             pods-${{ runner.os }}-
+      # Dependabot pull requests run with the secrets withheld, so the signing material
+      # is empty and a signed build is impossible however correct the branch is. The
+      # job-level `if` above cannot see that: dependabot's branches live in this
+      # repository, so head.repo matches. Decide here instead, and build unsigned when
+      # there is nothing to sign with -- a bump that breaks the iOS build still fails,
+      # and ci-ios stops reporting a red X nobody can clear.
+      - name: Check for signing secrets
+        id: signing
+        env:
+          IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          if [[ -n "${IOS_DIST_CERT_P12_BASE64}" ]] \
+            && [[ -n "${IOS_DIST_CERT_PASSWORD}" ]] \
+            && [[ -n "${IOS_PROVISIONING_PROFILE_BASE64}" ]]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::No iOS signing secrets in this run; building unsigned."
+          fi
       - name: Prepare code signing
+        if: steps.signing.outputs.available == 'true'
         env:
           IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
           IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
         run: ./scripts/ios-ci-signing.bash
       - name: Build [ios]
+        if: steps.signing.outputs.available == 'true'
         # Fixed build number: this job verifies the build and never uploads, so it has no
         # App Store Connect credentials to query the real next number with.
         run: |
           make build/frontend/ios/ipa \
             IOS_EXPORT_OPTIONS=ios/ExportOptions.ci.plist \
             IOS_BUILD_NUMBER=1
+      - name: Build [ios] unsigned
+        if: steps.signing.outputs.available == 'false'
+        # Release mode, not the target's debug default, so this compiles the same
+        # configuration the signed path archives. There is no IPA without signing, so
+        # this stops at the .app and uploads nothing.
+        run: |
+          make build/frontend/ios FLUTTER_BUILD_MODE=release
       - name: Upload artifact
+        if: steps.signing.outputs.available == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ios-ipa-ci
