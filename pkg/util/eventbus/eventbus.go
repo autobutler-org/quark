@@ -19,6 +19,16 @@ const (
 	EventBackupCompleted EventKind = "backup_completed"
 	EventBackupFailed    EventKind = "backup_failed"
 
+	// Background job lifecycle (jobutil). Data is the jobutil.Job as it stands
+	// after the change; Path is empty. A job that changes the file tree also
+	// publishes the file event for what it changed.
+	EventJobQueued    EventKind = "job_queued"
+	EventJobStarted   EventKind = "job_started"
+	EventJobProgress  EventKind = "job_progress"
+	EventJobCompleted EventKind = "job_completed"
+	EventJobFailed    EventKind = "job_failed"
+	EventJobCanceled  EventKind = "job_canceled"
+
 	EventVaultDeviceDisconnected EventKind = "vault_device_disconnected"
 	EventVaultDeviceReconnected  EventKind = "vault_device_reconnected"
 	EventVaultStorageChanged     EventKind = "vault_storage_changed"

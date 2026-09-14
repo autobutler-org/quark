@@ -2099,6 +2099,211 @@ const docTemplate = `{
                 }
             }
         },
+        "/jobs": {
+            "get": {
+                "description": "Returns every job of the requested kinds, newest first, finished ones included. This is the source of truth for job state; the job_* events are a hint to refresh and can be dropped.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "List background jobs",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Job kinds to list; repeat for more than one (kind=video-transcode\u0026kind=...)",
+                        "name": "kind",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/jobutil.Job"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request — kind is missing, empty, or not a registered kind",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}": {
+            "get": {
+                "description": "Returns one background job by id.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Get a background job",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/jobutil.Job"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Cancels a pending or running job and returns it, now canceled. A pending job never runs; a running job is stopped and cleans up after itself.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Cancel a background job",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/jobutil.Job"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict — the job has already finished",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}/retry": {
+            "post": {
+                "description": "Resets a failed job to pending so it runs again. It keeps its id and createdAt; progress, error, startedAt, and finishedAt are cleared, and the returned jobId is the same id. A retry whose inputs no longer exist, such as a transcode of a video that was moved or deleted, is refused with 422.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "jobs"
+                ],
+                "summary": "Retry a background job",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Job ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/v0_jobs.retryJobResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict — only a failed job can be retried, and a job already reset by a retry is no longer failed",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity — the job's inputs no longer exist",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/photos": {
             "get": {
                 "description": "Finds all photos across all managed devices with pagination support.",
@@ -3502,6 +3707,96 @@ const docTemplate = `{
                 }
             }
         },
+        "/videos/transcode": {
+            "post": {
+                "description": "Queues a background job that converts the source video into a new file beside it, in any format GET /videos/transcode/formats lists. Original quality keeps the source resolution, and copies the streams without re-encoding when the format's container accepts them; small caps the height at 480 lines. Converting to the source's own format needs small quality. The output is never upscaled and never overwrites a file. Follow the job with GET /jobs/{id} or the job_* events; an upload event announces the output file.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "videos"
+                ],
+                "summary": "Queue a video transcode",
+                "parameters": [
+                    {
+                        "description": "Transcode request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_videos.transcodeVideoRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/v0_videos.transcodeVideoResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "501": {
+                        "description": "Not Implemented — ffmpeg not available",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/videos/transcode/formats": {
+            "get": {
+                "description": "Lists the video formats POST /videos/transcode can write on this device: the ones whose video and audio encoders its ffmpeg build has, in display order.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "videos"
+                ],
+                "summary": "List transcode formats",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_videos.transcodeFormatsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "501": {
+                        "description": "Not Implemented — ffmpeg not available",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/videos/trim": {
             "post": {
                 "description": "Extracts a sub-clip [startMs, endMs] from the source video using stream copy (fast, lossless). The original file is not modified.",
@@ -3575,6 +3870,83 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "jobutil.Job": {
+            "type": "object",
+            "properties": {
+                "attempts": {
+                    "description": "Attempts is how many times the job has started running: 0 before its\nfirst run. A retry leaves it alone; the next run bumps it.",
+                    "type": "integer"
+                },
+                "createdAt": {
+                    "description": "CreatedAt is when the job was queued.",
+                    "type": "string"
+                },
+                "error": {
+                    "description": "Error is diagnostic text for a failed job, not copy for a user.",
+                    "type": "string"
+                },
+                "finishedAt": {
+                    "description": "FinishedAt is null until the job completes, fails, or is canceled.",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "lane": {
+                    "description": "Lane is the concurrency lane within Kind the job runs in, such as \"copy\"\nfor a transcode that only copies streams. It is \"\" for a kind with one\nlane.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is display text, such as \"Convert vacation.mkv to MOV\".",
+                    "type": "string"
+                },
+                "params": {
+                    "description": "Params is the kind-specific JSON object the job was enqueued with, so a\nclient can build its own label from Kind and Params.",
+                    "type": "object"
+                },
+                "progress": {
+                    "type": "number"
+                },
+                "startedAt": {
+                    "description": "StartedAt is null until the job starts running.",
+                    "type": "string"
+                },
+                "status": {
+                    "enum": [
+                        "pending",
+                        "running",
+                        "completed",
+                        "failed",
+                        "canceled"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/jobutil.Status"
+                        }
+                    ]
+                }
+            }
+        },
+        "jobutil.Status": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "running",
+                "completed",
+                "failed",
+                "canceled"
+            ],
+            "x-enum-varnames": [
+                "StatusPending",
+                "StatusRunning",
+                "StatusCompleted",
+                "StatusFailed",
+                "StatusCanceled"
+            ]
         },
         "photoutil.AlbumRef": {
             "type": "object",
@@ -4229,6 +4601,14 @@ const docTemplate = `{
                 }
             }
         },
+        "v0_jobs.retryJobResponse": {
+            "type": "object",
+            "properties": {
+                "jobId": {
+                    "type": "integer"
+                }
+            }
+        },
         "v0_photos.PaginatedPhotosResponse": {
             "type": "object",
             "properties": {
@@ -4604,6 +4984,63 @@ const docTemplate = `{
             "properties": {
                 "relPath": {
                     "type": "string"
+                }
+            }
+        },
+        "v0_videos.transcodeFormatJSON": {
+            "type": "object",
+            "properties": {
+                "format": {
+                    "description": "Format is the value to send as format, the file extension without the dot.",
+                    "type": "string",
+                    "example": "mov"
+                },
+                "label": {
+                    "description": "Label is its display name.",
+                    "type": "string",
+                    "example": "MOV"
+                }
+            }
+        },
+        "v0_videos.transcodeFormatsResponse": {
+            "type": "object",
+            "properties": {
+                "formats": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v0_videos.transcodeFormatJSON"
+                    }
+                }
+            }
+        },
+        "v0_videos.transcodeVideoRequest": {
+            "type": "object",
+            "properties": {
+                "format": {
+                    "description": "Format is one of the formats GET /videos/transcode/formats lists.",
+                    "type": "string",
+                    "example": "mov"
+                },
+                "quality": {
+                    "type": "string",
+                    "enum": [
+                        "original",
+                        "small"
+                    ]
+                },
+                "relPath": {
+                    "type": "string"
+                },
+                "serial": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_videos.transcodeVideoResponse": {
+            "type": "object",
+            "properties": {
+                "jobId": {
+                    "type": "integer"
                 }
             }
         },

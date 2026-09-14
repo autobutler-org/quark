@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
+	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
@@ -26,6 +27,7 @@ type Dependencies interface {
 	FileIndex() *storageutil.FileIndex
 	HealthDatabase() *db.DatabaseRaw
 	IOSemaphore() *iosemutil.Semaphore
+	JobQueue() *jobutil.Queue
 	StorageService() *storageutil.StorageService
 	UploadSessions() *uploadutil.SessionStore
 	VaultDB() *db.DatabaseSqlc
@@ -37,6 +39,7 @@ type Dependencies interface {
 	WithFileIndex(idx *storageutil.FileIndex) Dependencies
 	WithHealthDatabase(healthDatabase *db.DatabaseRaw) Dependencies
 	WithIOSemaphore(sem *iosemutil.Semaphore) Dependencies
+	WithJobQueue(q *jobutil.Queue) Dependencies
 	MetadataStore() vfs.MetadataStore
 	VFSRegistry() vfs.Registry
 	WithMetadataStore(s vfs.MetadataStore) Dependencies
@@ -97,7 +100,11 @@ func DefaultDependencies() (Dependencies, error) {
 	deps.WithVFSRegistry(registry)                                         // coverage: ignore
 	deps.WithMetadataStore(vfs.NewSQLiteMetadataStore(deps.Database().Db)) // coverage: ignore
 	deps.WithEventBus(eventbus.New())                                      // coverage: ignore
-	deps.WithVaultSession(vaultcrypto.NewVaultSession())                   // coverage: ignore
-	deps.WithIOSemaphore(iosemutil.New())                                  // coverage: ignore
-	return deps, nil                                                       // coverage: ignore - requires database connection
+	deps.WithJobQueue(jobutil.NewQueue(jobutil.NewQueueParams{             // coverage: ignore
+		Database: deps.Database(), // coverage: ignore
+		EventBus: deps.EventBus(), // coverage: ignore
+	})) // coverage: ignore
+	deps.WithVaultSession(vaultcrypto.NewVaultSession()) // coverage: ignore
+	deps.WithIOSemaphore(iosemutil.New())                // coverage: ignore
+	return deps, nil                                     // coverage: ignore - requires database connection
 }

@@ -11,7 +11,36 @@ func (r *router) Routes() []*serverutil.Route {
 		getMetadataRoute,
 		extractFrameRoute,
 		trimVideoRoute,
+		transcodeVideoRoute,
+		listTranscodeFormatsRoute,
 	}
+}
+
+// transcodeVideoRequest is the POST body for /videos/transcode.
+type transcodeVideoRequest struct {
+	RelPath string `json:"relPath"`
+	Serial  string `json:"serial"`
+	// Format is one of the formats GET /videos/transcode/formats lists.
+	Format  string `json:"format" example:"mov"`
+	Quality string `json:"quality" enums:"original,small"`
+}
+
+// transcodeVideoResponse is returned when a transcode is queued.
+type transcodeVideoResponse struct {
+	JobID int64 `json:"jobId"`
+}
+
+// transcodeFormatsResponse lists the formats this device can transcode to.
+type transcodeFormatsResponse struct {
+	Formats []transcodeFormatJSON `json:"formats"`
+}
+
+// transcodeFormatJSON is one format a transcode can write.
+type transcodeFormatJSON struct {
+	// Format is the value to send as format, the file extension without the dot.
+	Format string `json:"format" example:"mov"`
+	// Label is its display name.
+	Label string `json:"label" example:"MOV"`
 }
 
 // extractFrameRequest is the POST body for /videos/extract-frame.

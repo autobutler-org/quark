@@ -7,6 +7,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
+	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
@@ -32,7 +33,17 @@ type dependencies struct {
 	vaultSession   *vaultcrypto.VaultSession
 	vfsRegistry    vfs.Registry
 	metadataStore  vfs.MetadataStore
+	jobQueue       *jobutil.Queue
 	worker         workerutil.Worker
+}
+
+func (d *dependencies) JobQueue() *jobutil.Queue {
+	return d.jobQueue
+}
+
+func (d *dependencies) WithJobQueue(q *jobutil.Queue) Dependencies {
+	d.jobQueue = q
+	return d
 }
 
 func (d *dependencies) WithDatabase(database *db.DatabaseSqlc) Dependencies {

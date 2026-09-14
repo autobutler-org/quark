@@ -8,6 +8,69 @@ definitions:
       id:
         type: string
     type: object
+  jobutil.Job:
+    properties:
+      attempts:
+        description: |-
+          Attempts is how many times the job has started running: 0 before its
+          first run. A retry leaves it alone; the next run bumps it.
+        type: integer
+      createdAt:
+        description: CreatedAt is when the job was queued.
+        type: string
+      error:
+        description: Error is diagnostic text for a failed job, not copy for a user.
+        type: string
+      finishedAt:
+        description: FinishedAt is null until the job completes, fails, or is canceled.
+        type: string
+      id:
+        type: integer
+      kind:
+        type: string
+      lane:
+        description: |-
+          Lane is the concurrency lane within Kind the job runs in, such as "copy"
+          for a transcode that only copies streams. It is "" for a kind with one
+          lane.
+        type: string
+      name:
+        description: Name is display text, such as "Convert vacation.mkv to MOV".
+        type: string
+      params:
+        description: |-
+          Params is the kind-specific JSON object the job was enqueued with, so a
+          client can build its own label from Kind and Params.
+        type: object
+      progress:
+        type: number
+      startedAt:
+        description: StartedAt is null until the job starts running.
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/jobutil.Status'
+        enum:
+        - pending
+        - running
+        - completed
+        - failed
+        - canceled
+    type: object
+  jobutil.Status:
+    enum:
+    - pending
+    - running
+    - completed
+    - failed
+    - canceled
+    type: string
+    x-enum-varnames:
+    - StatusPending
+    - StatusRunning
+    - StatusCompleted
+    - StatusFailed
+    - StatusCanceled
   photoutil.AlbumRef:
     properties:
       id:
@@ -452,6 +515,11 @@ definitions:
       temperatureCelsius:
         type: number
     type: object
+  v0_jobs.retryJobResponse:
+    properties:
+      jobId:
+        type: integer
+    type: object
   v0_photos.PaginatedPhotosResponse:
     properties:
       limit:
@@ -703,6 +771,46 @@ definitions:
     properties:
       relPath:
         type: string
+    type: object
+  v0_videos.transcodeFormatJSON:
+    properties:
+      format:
+        description: Format is the value to send as format, the file extension without
+          the dot.
+        example: mov
+        type: string
+      label:
+        description: Label is its display name.
+        example: MOV
+        type: string
+    type: object
+  v0_videos.transcodeFormatsResponse:
+    properties:
+      formats:
+        items:
+          $ref: '#/definitions/v0_videos.transcodeFormatJSON'
+        type: array
+    type: object
+  v0_videos.transcodeVideoRequest:
+    properties:
+      format:
+        description: Format is one of the formats GET /videos/transcode/formats lists.
+        example: mov
+        type: string
+      quality:
+        enum:
+        - original
+        - small
+        type: string
+      relPath:
+        type: string
+      serial:
+        type: string
+    type: object
+  v0_videos.transcodeVideoResponse:
+    properties:
+      jobId:
+        type: integer
     type: object
   v0_videos.trimVideoRequest:
     properties:
@@ -2159,6 +2267,149 @@ paths:
       summary: Get system health status
       tags:
       - health
+  /jobs:
+    get:
+      description: Returns every job of the requested kinds, newest first, finished
+        ones included. This is the source of truth for job state; the job_* events
+        are a hint to refresh and can be dropped.
+      parameters:
+      - collectionFormat: multi
+        description: Job kinds to list; repeat for more than one (kind=video-transcode&kind=...)
+        in: query
+        items:
+          type: string
+        name: kind
+        required: true
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/jobutil.Job'
+            type: array
+        "400":
+          description: Bad Request — kind is missing, empty, or not a registered kind
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: List background jobs
+      tags:
+      - jobs
+  /jobs/{id}:
+    delete:
+      description: Cancels a pending or running job and returns it, now canceled.
+        A pending job never runs; a running job is stopped and cleans up after itself.
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/jobutil.Job'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: Conflict — the job has already finished
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Cancel a background job
+      tags:
+      - jobs
+    get:
+      description: Returns one background job by id.
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/jobutil.Job'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Get a background job
+      tags:
+      - jobs
+  /jobs/{id}/retry:
+    post:
+      description: Resets a failed job to pending so it runs again. It keeps its id
+        and createdAt; progress, error, startedAt, and finishedAt are cleared, and
+        the returned jobId is the same id. A retry whose inputs no longer exist, such
+        as a transcode of a video that was moved or deleted, is refused with 422.
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/v0_jobs.retryJobResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: Conflict — only a failed job can be retried, and a job already
+            reset by a retry is no longer failed
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "422":
+          description: Unprocessable Entity — the job's inputs no longer exist
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Retry a background job
+      tags:
+      - jobs
   /photos:
     get:
       description: Finds all photos across all managed devices with pagination support.
@@ -3111,6 +3362,73 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
       summary: Get metadata for a single video file
+      tags:
+      - videos
+  /videos/transcode:
+    post:
+      consumes:
+      - application/json
+      description: Queues a background job that converts the source video into a new
+        file beside it, in any format GET /videos/transcode/formats lists. Original
+        quality keeps the source resolution, and copies the streams without re-encoding
+        when the format's container accepts them; small caps the height at 480 lines.
+        Converting to the source's own format needs small quality. The output is never
+        upscaled and never overwrites a file. Follow the job with GET /jobs/{id} or
+        the job_* events; an upload event announces the output file.
+      parameters:
+      - description: Transcode request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_videos.transcodeVideoRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/v0_videos.transcodeVideoResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "501":
+          description: Not Implemented — ffmpeg not available
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Queue a video transcode
+      tags:
+      - videos
+  /videos/transcode/formats:
+    get:
+      description: 'Lists the video formats POST /videos/transcode can write on this
+        device: the ones whose video and audio encoders its ffmpeg build has, in display
+        order.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_videos.transcodeFormatsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "501":
+          description: Not Implemented — ffmpeg not available
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: List transcode formats
       tags:
       - videos
   /videos/trim:
