@@ -21,6 +21,10 @@ type Settings struct {
 	DevMode             bool   `json:"devMode"`
 	ActiveBranch        string `json:"activeBranch,omitempty"`
 	DeviceID            string `json:"deviceId,omitempty"`
+	// AccessRequestsEnabled is whether people may request an account from the
+	// sign-in page (#1908). Nil means on: requests start on, and a file written
+	// before the setting existed carries no value.
+	AccessRequestsEnabled *bool `json:"accessRequestsEnabled,omitempty"`
 }
 
 var (
@@ -139,6 +143,34 @@ func SetRemoteAccess(enabled bool) error {
 		s = loaded
 	}
 	s.RemoteAccessEnabled = enabled
+	return Save(s)
+}
+
+// GetAccessRequestsEnabled returns whether account requests are on. An unset
+// value is on; settings that cannot be read are off, so a broken file does not
+// open the sign-in page to requests.
+func GetAccessRequestsEnabled() bool {
+	s, err := Load()
+	if err != nil {
+		return false
+	}
+	return s.AccessRequestsEnabled == nil || *s.AccessRequestsEnabled
+}
+
+// SetAccessRequestsEnabled turns account requests on or off and persists it.
+func SetAccessRequestsEnabled(enabled bool) error {
+	mu.Lock()
+	s := cached
+	mu.Unlock()
+
+	if s == nil {
+		loaded, err := Load()
+		if err != nil {
+			loaded = &Settings{}
+		}
+		s = loaded
+	}
+	s.AccessRequestsEnabled = &enabled
 	return Save(s)
 }
 

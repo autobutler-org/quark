@@ -12,7 +12,7 @@ import (
 // out unwrapped.
 func accountErrorResponse(err error) *serverutil.Response {
 	switch {
-	case errors.Is(err, authutil.ErrUserNotFound):
+	case errors.Is(err, authutil.ErrUserNotFound), errors.Is(err, authutil.ErrRequestNotFound):
 		return serverutil.NotFound(err)
 	case errors.Is(err, authutil.ErrLastAdmin):
 		return serverutil.Conflict(err)
