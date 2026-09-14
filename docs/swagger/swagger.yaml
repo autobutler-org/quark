@@ -845,7 +845,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a new photo album, optionally nested under a parent.
+      description: Creates a new photo album, optionally nested under a parent. The
+        name cannot contain / and must be unique among its siblings ignoring case;
+        root albums, the system Favorites album included, are siblings of each other.
       parameters:
       - description: Album name and optional parent ID
         in: body
@@ -861,11 +863,16 @@ paths:
           schema:
             $ref: '#/definitions/v0_albums.AlbumJSON'
         "400":
-          description: Bad Request
+          description: 'Bad Request: missing name, a / in the name, or parent not
+            found'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "403":
           description: 'Forbidden: system album as the parent'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: 'Conflict: an album with that name already exists here'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -1052,6 +1059,9 @@ paths:
       consumes:
       - application/json
       description: Changes the parent of an album. Pass null parentId to move to root.
+        The new parent must not already hold an album with the same name ignoring
+        case; root albums, the system Favorites album included, are siblings of each
+        other.
       parameters:
       - description: Album ID
         in: path
@@ -1083,6 +1093,10 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: 'Conflict: an album with that name already exists here'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
@@ -1094,7 +1108,9 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Updates the name of an existing album.
+      description: Updates the name of an existing album. The name cannot contain
+        / and must be unique among the album's siblings ignoring case; changing only
+        the case of the album's own name is allowed.
       parameters:
       - description: Album ID
         in: path
@@ -1115,7 +1131,7 @@ paths:
           schema:
             $ref: '#/definitions/v0_albums.AlbumJSON'
         "400":
-          description: Bad Request
+          description: 'Bad Request: invalid id, missing name, or a / in the name'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "403":
@@ -1124,6 +1140,10 @@ paths:
             $ref: '#/definitions/serverutil.Response'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: 'Conflict: an album with that name already exists here'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":

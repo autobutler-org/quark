@@ -41,6 +41,9 @@ class AppRoutes {
   static const filesDeep = '/files/:path(.*)';
 
   static const photos = '/photos';
+
+  /// The query parameter naming the album the Photos page shows.
+  static const photosAlbumParam = 'album';
   static const trash = '/trash';
   static const docs = '/docs';
   static const sheets = '/sheets';
@@ -102,6 +105,17 @@ class AppRoutes {
         ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
         : base;
   }
+
+  /// The Photos page showing the album [link] names (see `albumLink`), or All
+  /// photos for null.
+  /// e.g. photosAlbum('Summer Trip/Japan') → '/photos?album=Summer%20Trip/Japan'
+  ///
+  /// Everything but `/` is percent-encoded, so `&`, `#`, `+` and `%` in a name
+  /// survive; `/` is legal in a query and stays readable in the address bar.
+  static String photosAlbum(String? link) => link == null || link.isEmpty
+      ? photos
+      : '$photos?$photosAlbumParam='
+            '${Uri.encodeComponent(link).replaceAll('%2F', '/')}';
 
   /// Build a deep-link URL for a given files path.
   /// e.g. filesPath('photos/2024') → '/files/photos/2024'
@@ -249,7 +263,12 @@ final router = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.photos,
-      builder: (context, state) => const PhotosPage(),
+      // An album opens in place, named by the query so reload and a shared
+      // link land on it. The page resolves the value once albums load
+      // (#1916).
+      builder: (context, state) => PhotosPage(
+        album: state.uri.queryParameters[AppRoutes.photosAlbumParam],
+      ),
     ),
     GoRoute(
       path: AppRoutes.trash,

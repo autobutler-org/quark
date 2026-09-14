@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -369,5 +370,85 @@ func TestSystemAlbumGuards(t *testing.T) {
 	// A user album is still fully mutable.
 	if w := doAlbumReq(engine, http.MethodDelete, fmt.Sprintf("/api/v0/albums/%d", user.ID), ""); w.Code != http.StatusNoContent {
 		t.Errorf("deleting a user album = %d, want 204", w.Code)
+	}
+}
+
+// --- Album name rules (HTTP) ---
+
+const (
+	conflictMessage = "an album with that name already exists here"
+	slashMessage    = "album names cannot contain /"
+)
+
+// TestAlbumNameRules checks the 409 and 400 answers for create, rename and
+// move: names are unique among siblings ignoring case, root albums (Favorites
+// included) are siblings, and a name cannot contain /.
+func TestAlbumNameRules(t *testing.T) {
+	engine, q := newAlbumEngine(t)
+	ctx := context.Background()
+	if _, err := favoritesutil.EnsureFavoritesAlbum(ctx, q); err != nil {
+		t.Fatalf("EnsureFavoritesAlbum: %v", err)
+	}
+	mustCreate := func(name string, parent sql.NullInt64) db.PhotoAlbum {
+		t.Helper()
+		a, err := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: name, ParentID: parent})
+		if err != nil {
+			t.Fatalf("CreateAlbum(%q): %v", name, err)
+		}
+		return a
+	}
+	trips := mustCreate("Trips", sql.NullInt64{})
+	beach := mustCreate("Beach", sql.NullInt64{})
+	japan := mustCreate("Japan", sql.NullInt64{Int64: trips.ID, Valid: true})
+	rootJapan := mustCreate("japan", sql.NullInt64{})
+	nestedBeach := mustCreate("BEACH", sql.NullInt64{Int64: trips.ID, Valid: true})
+	nestedFavorites := mustCreate("Favorites", sql.NullInt64{Int64: trips.ID, Valid: true})
+
+	cases := []struct {
+		name, method, path, body string
+		wantCode                 int
+		wantMessage              string
+	}{
+		{"create root clash", http.MethodPost, "/api/v0/albums", `{"name":"Trips"}`, http.StatusConflict, conflictMessage},
+		{"create root case-only clash", http.MethodPost, "/api/v0/albums", `{"name":"tRiPs"}`, http.StatusConflict, conflictMessage},
+		{"create nested case-only clash", http.MethodPost, "/api/v0/albums", fmt.Sprintf(`{"name":"JAPAN","parentId":%d}`, trips.ID), http.StatusConflict, conflictMessage},
+		{"create user favorites at root", http.MethodPost, "/api/v0/albums", `{"name":"favorites"}`, http.StatusConflict, conflictMessage},
+		{"create with slash", http.MethodPost, "/api/v0/albums", `{"name":"Trips/Japan"}`, http.StatusBadRequest, slashMessage},
+		{"rename root clash", http.MethodPatch, fmt.Sprintf("/api/v0/albums/%d/rename", beach.ID), `{"name":"TRIPS"}`, http.StatusConflict, conflictMessage},
+		{"rename nested clash", http.MethodPatch, fmt.Sprintf("/api/v0/albums/%d/rename", nestedBeach.ID), `{"name":"japan"}`, http.StatusConflict, conflictMessage},
+		{"rename to favorites at root", http.MethodPatch, fmt.Sprintf("/api/v0/albums/%d/rename", beach.ID), `{"name":"favorites"}`, http.StatusConflict, conflictMessage},
+		{"rename with slash", http.MethodPatch, fmt.Sprintf("/api/v0/albums/%d/rename", beach.ID), `{"name":"a/b"}`, http.StatusBadRequest, slashMessage},
+		{"move into a folder with a clashing name", http.MethodPatch, fmt.Sprintf("/api/v0/albums/%d/move", rootJapan.ID), fmt.Sprintf(`{"parentId":%d}`, trips.ID), http.StatusConflict, conflictMessage},
+		{"move to root with a clashing name", http.MethodPatch, fmt.Sprintf("/api/v0/albums/%d/move", nestedBeach.ID), `{"parentId":null}`, http.StatusConflict, conflictMessage},
+		{"move nested Favorites to root", http.MethodPatch, fmt.Sprintf("/api/v0/albums/%d/move", nestedFavorites.ID), `{"parentId":null}`, http.StatusConflict, conflictMessage},
+		{"rename to own name in another case", http.MethodPatch, fmt.Sprintf("/api/v0/albums/%d/rename", japan.ID), `{"name":"JAPAN"}`, http.StatusOK, ""},
+		{"create same name under another parent", http.MethodPost, "/api/v0/albums", fmt.Sprintf(`{"name":"Beach","parentId":%d}`, rootJapan.ID), http.StatusCreated, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := doAlbumReq(engine, tc.method, tc.path, tc.body)
+			if w.Code != tc.wantCode {
+				t.Fatalf("%s %s = %d, want %d: %s", tc.method, tc.path, w.Code, tc.wantCode, w.Body.String())
+			}
+			if tc.wantMessage == "" {
+				return
+			}
+			var body struct {
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode %s: %v", w.Body.String(), err)
+			}
+			if body.Error != tc.wantMessage {
+				t.Errorf("error = %q, want %q", body.Error, tc.wantMessage)
+			}
+		})
+	}
+
+	if got, _ := q.GetAlbum(ctx, japan.ID); got.Name != "JAPAN" {
+		t.Errorf("case-only rename did not apply: %q", got.Name)
+	}
+	if got, _ := q.GetAlbum(ctx, rootJapan.ID); got.ParentID.Valid {
+		t.Errorf("clashing move applied: %+v", got)
 	}
 }

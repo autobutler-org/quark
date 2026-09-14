@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -58,6 +59,14 @@ class _FakeQuark {
     _album(2, 'Inbox', smartType: 'inbox'),
     _album(3, 'Favorites', smartType: 'favorites'),
   ];
+  Map<int, List<String>> albumFiles = {
+    1: ['camera/1.jpg'],
+  };
+  Object? albumItemsError;
+
+  /// Holds the album tree back until it completes, when set.
+  Future<void>? albumsGate;
+  Object? albumsError;
   final Set<String> failingAdds = {};
   final List<String> calls = [];
 
@@ -97,6 +106,9 @@ class _FakeQuark {
         Uri.parse('https://quark.local/thumb/$serial/$path'),
     listAlbums: ({bool tree = false}) async {
       calls.add('listAlbums');
+      await albumsGate;
+      final error = albumsError;
+      if (error != null) throw error;
       return albums;
     },
     createAlbum: (name, {int? parentId}) async {
@@ -119,6 +131,30 @@ class _FakeQuark {
             addedAt: DateTime(2024),
           );
         },
+    removePhotoFromAlbum:
+        (albumId, {required deviceSerial, required relPath}) async {
+          calls.add('remove($albumId, $relPath)');
+          albumFiles[albumId]?.remove(relPath);
+        },
+    listAlbumItems: (albumId) async {
+      calls.add('items($albumId)');
+      final error = albumItemsError;
+      if (error != null) throw error;
+      // Favorites mirrors the stars, the way the Quark's does (#992).
+      final paths = albumId == 3
+          ? [for (final key in favorites) key.substring('sd1:'.length)]
+          : albumFiles[albumId] ?? const <String>[];
+      return [
+        for (final (i, path) in paths.indexed)
+          PhotoAlbumItem(
+            id: i,
+            albumId: albumId,
+            deviceSerial: 'sd1',
+            relPath: path,
+            addedAt: DateTime(2024),
+          ),
+      ];
+    },
     listDevices: () async => [_device('a'), _device('b', enabled: false)],
     bytesCache: PhotoBytesCache.instance,
   );
@@ -398,6 +434,281 @@ void main() {
         controller.renameAlbum(1, 'Trip'),
         throwsA(isA<ApiException>()),
       );
+    });
+
+    test('a name clash leaves the tree alone and says why', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.loadAlbums();
+      quark.calls.clear();
+
+      Object? error;
+      try {
+        await controller.renameAlbum(1, 'Inbox');
+      } catch (e) {
+        error = e;
+      }
+
+      expect(Errors.album(error, 'rename the album'), Errors.albumNameTaken);
+      expect(quark.calls, isEmpty);
+      expect(controller.albums.map((a) => a.name), [
+        'Favorites',
+        'Inbox',
+        'Trips',
+      ]);
+    });
+
+    test('a name is taken by a sibling, ignoring ASCII case only', () async {
+      final quark = _FakeQuark()
+        ..albums = [
+          ..._FakeQuark().albums,
+          _album(4, 'Äb'),
+          PhotoAlbum(
+            id: 5,
+            name: 'Places',
+            createdAt: DateTime(2024),
+            updatedAt: DateTime(2024),
+            itemCount: 0,
+            children: [_album(6, 'Japan')],
+          ),
+        ];
+      final controller = quark.controller();
+      await controller.loadAlbums();
+
+      expect(controller.albumNameTaken(' trips '), isTrue);
+      // The top level is shared with the system albums.
+      expect(controller.albumNameTaken('FAVORITES'), isTrue);
+      expect(controller.albumNameTaken('Japan'), isFalse);
+      expect(controller.albumNameTaken('japan', parentId: 5), isTrue);
+      // SQLite folds ASCII case only, so the Quark allows this one.
+      expect(controller.albumNameTaken('äb'), isFalse);
+      // Renaming an album to another case of its own name is no clash.
+      expect(controller.albumNameTaken('TRIPS', except: 1), isFalse);
+    });
+
+    test('showing an album switches the grid to its items', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      controller.selectCategory(PhotoCategory.mobile);
+
+      await controller.showAlbum(1);
+
+      expect(quark.calls, contains('items(1)'));
+      expect(controller.selectedAlbumId, 1);
+      expect(controller.selectedAlbum?.name, 'Trips');
+      expect(controller.photos.map((p) => p.id), ['sd1:camera/1.jpg']);
+      expect(controller.photos.single.name, '1.jpg');
+      expect(controller.photoCount, 1);
+      expect(controller.hasMore, isFalse);
+      expect(
+        controller.showsCategories,
+        isFalse,
+        reason: 'the categories filter the library, not an album',
+      );
+      expect(
+        controller.thumbnailUrl('sd1:camera/1.jpg'),
+        Uri.parse('https://quark.local/thumb/sd1/camera/1.jpg'),
+      );
+      expect((await controller.openPhotoAt(0))?.$3, 'camera/1.jpg');
+    });
+
+    test('All photos brings back the category that was showing', () async {
+      final controller = _FakeQuark().controller();
+      await controller.refresh();
+      controller.selectCategory(PhotoCategory.mobile);
+      await controller.showAlbum(1);
+
+      await controller.showAlbum(null);
+
+      expect(controller.selectedAlbumId, isNull);
+      expect(controller.selectedCategory, PhotoCategory.mobile);
+      expect(controller.showsCategories, isTrue);
+      expect(controller.photos.map((p) => p.id), ['asset:dev1']);
+    });
+
+    test('a link waiting for the tree resolves once albums load', () async {
+      final gate = Completer<void>();
+      final quark = _FakeQuark()..albumsGate = gate.future;
+      final controller = quark.controller();
+      final refreshing = controller.refresh();
+
+      await controller.showAlbumLink('7');
+      await controller.showAlbumLink('trips');
+      expect(controller.albumLoading, isTrue, reason: 'waits for the tree');
+      expect(controller.albumLink, 'trips');
+      expect(quark.calls, isNot(contains('items(1)')));
+
+      gate.complete();
+      await refreshing;
+
+      expect(controller.selectedAlbumId, 1);
+      expect(controller.albumLink, 'Trips', reason: 'the canonical spelling');
+      expect(controller.photos.map((p) => p.id), ['sd1:camera/1.jpg']);
+    });
+
+    test('a failed tree load keeps the link for the next refresh', () async {
+      final quark = _FakeQuark()
+        ..albumsError = http.ClientException('Connection refused');
+      final controller = quark.controller();
+      await controller.showAlbumLink('Trips');
+
+      await controller.refresh();
+
+      expect(controller.albumLink, 'Trips', reason: 'the URL keeps the link');
+      expect(controller.selectedAlbumId, isNull);
+      expect(
+        controller.albumLoading,
+        isFalse,
+        reason: 'no album spinner while the Quark is out of reach',
+      );
+      expect(quark.calls, isNot(contains('items(1)')));
+
+      quark.albumsError = null;
+      await controller.refresh();
+
+      expect(controller.selectedAlbumId, 1);
+      expect(controller.albumLink, 'Trips');
+      expect(quark.calls, contains('items(1)'));
+      expect(controller.photos.map((p) => p.id), ['sd1:camera/1.jpg']);
+    });
+
+    test('a link by id exposes the album name', () async {
+      final controller = _FakeQuark().controller();
+      await controller.refresh();
+
+      await controller.showAlbumLink('3');
+
+      expect(controller.selectedAlbum?.name, 'Favorites');
+      expect(controller.albumLink, 'Favorites');
+      expect(controller.albumLinkFor(1), 'Trips');
+    });
+
+    test('renaming the showing album changes its link', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbumLink('Trips');
+
+      quark.albums = [_album(1, 'Voyages'), ...quark.albums.skip(1)];
+      await controller.loadAlbums();
+
+      expect(controller.selectedAlbumId, 1);
+      expect(controller.albumLink, 'Voyages');
+    });
+
+    test('a link naming no album shows All photos', () async {
+      final controller = _FakeQuark().controller();
+      await controller.refresh();
+
+      await controller.showAlbumLink('Nowhere');
+
+      expect(controller.selectedAlbumId, isNull);
+      expect(controller.albumLink, isNull);
+      expect(controller.photoCount, 3);
+    });
+
+    test('an album missing from the tree falls back to All photos', () async {
+      final controller = _FakeQuark().controller();
+      await controller.refresh();
+
+      await controller.showAlbum(42);
+
+      expect(controller.selectedAlbumId, isNull);
+      expect(controller.photoCount, 3);
+    });
+
+    test('an album that cannot be loaded says why', () async {
+      final quark = _FakeQuark()..albumItemsError = const ApiException(500);
+      final controller = quark.controller();
+      await controller.refresh();
+
+      await controller.showAlbum(1);
+
+      expect(controller.albumLoading, isFalse);
+      expect(controller.albumError, isA<ApiException>());
+      expect(controller.quarkUnreachable, isFalse);
+      expect(controller.photos, isEmpty);
+    });
+
+    test('un-starring in Favorites drops the photo from the grid', () async {
+      final quark = _FakeQuark()..favorites = {'sd1:camera/0.jpg'};
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(3);
+      expect(controller.photos.map((p) => p.id), ['sd1:camera/0.jpg']);
+
+      await controller.toggleFavorite('sd1:camera/0.jpg');
+
+      expect(controller.photos, isEmpty);
+    });
+
+    test(
+      'removing from the album drops the photo and reloads the tree',
+      () async {
+        final quark = _FakeQuark();
+        final controller = quark.controller();
+        await controller.refresh();
+        await controller.showAlbum(1);
+        quark.calls.clear();
+
+        await controller.removeFromSelectedAlbum('sd1:camera/1.jpg');
+
+        expect(quark.calls, ['remove(1, camera/1.jpg)', 'listAlbums']);
+        expect(controller.photos, isEmpty);
+      },
+    );
+
+    test('adding photos from an album returns to that album', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+
+      controller.enterSelectionMode(
+        addingTo: const AlbumItem(id: 1, name: 'Trips'),
+      );
+      expect(controller.selectedAlbumId, isNull, reason: 'picks from library');
+      controller.toggleSelection('sd1:camera/2.jpg');
+      await controller.addSelectedToAlbum(1);
+      quark.albumFiles[1]!.add('camera/2.jpg');
+      await pumpEventQueue();
+
+      expect(controller.selectionMode, isFalse);
+      expect(controller.selectedAlbumId, 1);
+      expect(quark.calls, contains('add(1, camera/2.jpg)'));
+      expect(quark.calls.last, 'items(1)');
+    });
+
+    test('canceling the add returns to the album too', () async {
+      final controller = _FakeQuark().controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+      controller.enterSelectionMode(
+        addingTo: const AlbumItem(id: 1, name: 'Trips'),
+      );
+
+      controller.exitSelectionMode();
+      await pumpEventQueue();
+
+      expect(controller.selectedAlbumId, 1);
+      expect(controller.photoCount, 1);
+    });
+
+    test('adding nothing stays in adding mode to try again', () async {
+      final quark = _FakeQuark()..failingAdds.add('camera/2.jpg');
+      final controller = quark.controller();
+      await controller.refresh();
+      controller.enterSelectionMode(
+        addingTo: const AlbumItem(id: 1, name: 'Trips'),
+      );
+      controller.toggleSelection('sd1:camera/2.jpg');
+
+      await controller.addSelectedToAlbum(1);
+
+      expect(controller.selectionMode, isTrue);
+      expect(controller.addingToAlbum?.id, 1);
+      expect(controller.selectedAlbumId, isNull);
     });
 
     test('expansion toggles', () {

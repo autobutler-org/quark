@@ -129,6 +129,12 @@ class DemoPhotosService {
     required String relPath,
   }) => _refuse();
 
+  static Future<void> removePhotoFromAlbum(
+    int albumId, {
+    required String deviceSerial,
+    required String relPath,
+  }) => _refuse();
+
   // ── Catalog ──────────────────────────────────────────────────────────────
 
   static Future<Uint8List> loadBytes(String relPath) async {

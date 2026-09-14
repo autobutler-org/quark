@@ -26,16 +26,6 @@ class AlbumService with AuthenticatedService {
         .toList();
   }
 
-  static Future<PhotoAlbum> getAlbum(int id) async {
-    final response = await instance.authenticatedGet(_apiUri('/albums/$id'));
-    if (response.statusCode != 200) {
-      throw ApiException(response.statusCode, 'Album not found');
-    }
-    return PhotoAlbum.fromJson(
-      json.decode(response.body) as Map<String, dynamic>,
-    );
-  }
-
   static Future<PhotoAlbum> createAlbum(String name, {int? parentId}) async {
     final body = <String, dynamic>{'name': name};
     if (parentId != null) body['parentId'] = parentId;
@@ -44,6 +34,10 @@ class AlbumService with AuthenticatedService {
       headers: {'Content-Type': 'application/json'},
       body: json.encode(body),
     );
+    if (response.statusCode == 400 && name.contains('/')) {
+      // A slash is the one 400 a name can earn; say so, not "Couldn't...".
+      throw const MessageException(Errors.albumNameHasSlash);
+    }
     if (response.statusCode != 201) {
       throw ApiException(response.statusCode, 'Failed to create album');
     }
@@ -58,6 +52,10 @@ class AlbumService with AuthenticatedService {
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'name': name}),
     );
+    if (response.statusCode == 400 && name.contains('/')) {
+      // A slash is the one 400 a name can earn; say so, not "Couldn't...".
+      throw const MessageException(Errors.albumNameHasSlash);
+    }
     if (response.statusCode != 200) {
       throw ApiException(response.statusCode, 'Failed to rename album');
     }

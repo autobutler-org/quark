@@ -8,7 +8,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// takes it out of whichever album is tapped.
 ///
 /// Still service-coupled: it calls [AlbumService] itself. Moving that into a
-/// controller belongs to the album page's decoupling.
+/// controller is still to do; the album page it served is gone (#1916), and
+/// the photos page opens it from a photo's menu in an album view.
 class AddToAlbumSheetHost extends StatefulWidget {
   /// Creates the host for the photo at [relPath] on [deviceSerial].
   const AddToAlbumSheetHost({

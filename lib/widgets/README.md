@@ -22,8 +22,8 @@ lib/widgets/
   layout/
     theme_toggle_button.dart    AppThemeToggle, ThemeToggleButton wired to AppSettings
   photos/
-    add_to_album_sheet.dart     AddToAlbumSheet host for the album page: calls
-                                AlbumService, shows snack bars
+    add_to_album_sheet.dart     AddToAlbumSheet host for a photo in an album
+                                view: calls AlbumService, shows snack bars
   host_dialog.dart              edits AppSettings hosts
   host_manager.dart             edits AppSettings hosts
   quark_connect_form.dart       calls the connection services
@@ -36,7 +36,9 @@ something the package does not have or are only ever used by that page:
 `photo_thumbnail.dart` (photo_manager and `Image.network`),
 `photos_selection_app_bar.dart` (`AppThemeToggle`), `photos_empty_state.dart`,
 the album dialogs and menu (`album_name_dialog.dart`,
-`delete_album_dialog.dart`, `album_actions_sheet.dart`), and
+`delete_album_dialog.dart`, `album_actions_sheet.dart`), the menu and
+confirmation for a photo in an album view (`album_item_actions_sheet.dart`,
+`remove_from_album_dialog.dart`), and
 `album_picker_sheet.dart`, which hosts the package `AlbumPickerSheet` around an
 injected loader. `device_upload_picker.dart` likewise only holds the choice for
 the package `UploadTargetPicker`.

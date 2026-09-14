@@ -1,17 +1,14 @@
-package favoritesutil
+package sqlutil_test
 
 import (
 	"database/sql"
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/autobutler-org/quark/pkg/util/sqlutil"
 )
 
-// isUniqueConstraintErr is unexported, so it can only be exercised from inside
-// the package. The external favoritesutil_test package covers the exported
-// surface; this file covers the helper that decides whether a failed insert was
-// a benign race (two callers creating the Favorites album at once) or a real
-// error worth propagating.
 func TestIsUniqueConstraintErr(t *testing.T) {
 	tests := []struct {
 		name string
@@ -24,6 +21,8 @@ func TestIsUniqueConstraintErr(t *testing.T) {
 		{"bare UNIQUE constraint failed", errors.New("UNIQUE constraint failed"), true},
 		{"driver-prefixed constraint error",
 			errors.New("constraint failed: UNIQUE constraint failed: photo_albums.name"), true},
+		{"expression index constraint error",
+			errors.New("constraint failed: UNIQUE constraint failed: index 'idx_photo_albums_sibling_name'"), true},
 		{"wrapped constraint error",
 			fmt.Errorf("ensure album: %w", errors.New("UNIQUE constraint failed: photo_albums.name")), true},
 		{"lowercase does not match", errors.New("unique constraint failed"), false},
@@ -35,8 +34,8 @@ func TestIsUniqueConstraintErr(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isUniqueConstraintErr(tt.err); got != tt.want {
-				t.Errorf("isUniqueConstraintErr(%v) = %v, want %v", tt.err, got, tt.want)
+			if got := sqlutil.IsUniqueConstraintErr(tt.err); got != tt.want {
+				t.Errorf("IsUniqueConstraintErr(%v) = %v, want %v", tt.err, got, tt.want)
 			}
 		})
 	}

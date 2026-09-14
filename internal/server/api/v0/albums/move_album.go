@@ -6,18 +6,17 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/albumutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/sqlutil"
 
 	"github.com/gin-gonic/gin"
 )
 
 // moveAlbum godoc
 // @Summary Move a photo album to a new parent
-// @Description Changes the parent of an album. Pass null parentId to move to root.
+// @Description Changes the parent of an album. Pass null parentId to move to root. The new parent must not already hold an album with the same name ignoring case; root albums, the system Favorites album included, are siblings of each other.
 // @Tags albums
 // @Accept json
 // @Produce json
@@ -27,6 +26,7 @@ import (
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden: system album, or a system album as the parent"
 // @Failure 404 {object} serverutil.Response "Not Found"
+// @Failure 409 {object} serverutil.Response "Conflict: an album with that name already exists here"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /albums/{id}/move [patch]
 func moveAlbum(c *gin.Context) *serverutil.Response {
@@ -65,30 +65,18 @@ func moveAlbum(c *gin.Context) *serverutil.Response {
 		parentID = sql.NullInt64{Int64: *req.ParentID, Valid: true}
 	}
 
-	album, err := deps.Database().Queries.MoveAlbum(context.Background(), db.MoveAlbumParams{
-		ParentID: parentID,
+	result, err := albumutil.MoveAlbum(c.Request.Context(), albumutil.MoveAlbumParams{
+		Queries:  deps.Database().Queries,
 		ID:       id,
+		ParentID: parentID,
 	})
 	if err != nil {
-		return serverutil.NotFound(err)
+		return albumWriteError(err)
 	}
 
-	var respParentID *int64
-	if album.ParentID.Valid {
-		respParentID = &album.ParentID.Int64
-	}
+	count, _ := deps.Database().Queries.CountAlbumItems(context.Background(), result.Album.ID)
 
-	count, _ := deps.Database().Queries.CountAlbumItems(context.Background(), album.ID)
-
-	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(AlbumJSON{
-		ID:        album.ID,
-		Name:      album.Name,
-		ParentID:  respParentID,
-		SmartType: sqlutil.NullStringPtr(album.SmartType),
-		CreatedAt: sqlutil.FormatTime(album.CreatedAt),
-		UpdatedAt: sqlutil.FormatTime(album.UpdatedAt),
-		ItemCount: count,
-	})
+	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(toAlbumJSON(result.Album, count))
 }
 
 var moveAlbumRoute = serverutil.ApiRoute(
