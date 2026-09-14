@@ -22,6 +22,19 @@ func (q *Queries) CountActiveAdmins(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countOtherAccounts = `-- name: CountOtherAccounts :one
+SELECT COUNT(*) FROM users WHERE id != ? AND status != 'pending'
+`
+
+// CountOtherAccounts counts the active and disabled accounts other than one.
+// Pending requests are not accounts yet, so they do not count.
+func (q *Queries) CountOtherAccounts(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countOtherAccounts, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countOtherActiveAdmins = `-- name: CountOtherActiveAdmins :one
 SELECT COUNT(*) FROM users WHERE is_admin = 1 AND status = 'active' AND id != ?
 `
@@ -33,6 +46,17 @@ func (q *Queries) CountOtherActiveAdmins(ctx context.Context, id int64) (int64, 
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const deletePendingUsers = `-- name: DeletePendingUsers :exec
+DELETE FROM users WHERE status = 'pending'
+`
+
+// DeletePendingUsers drops every account request, when the last admin deletes
+// themselves and the Quark returns to setup.
+func (q *Queries) DeletePendingUsers(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deletePendingUsers)
+	return err
 }
 
 const demoteFromAdmin = `-- name: DemoteFromAdmin :one
@@ -54,6 +78,30 @@ func (q *Queries) DemoteFromAdmin(ctx context.Context, username string) (DemoteF
 		&i.Username,
 		&i.IsAdmin,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getOldestActiveAdmin = `-- name: GetOldestActiveAdmin :one
+SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status FROM users
+WHERE is_admin = 1 AND status = 'active' AND id != ?
+ORDER BY created_at, id
+LIMIT 1
+`
+
+// GetOldestActiveAdmin is the longest-standing active admin other than one
+// account: the heir of an account that deletes itself (#1909).
+func (q *Queries) GetOldestActiveAdmin(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRowContext(ctx, getOldestActiveAdmin, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.RecoveryPhraseHash,
+		&i.CreatedAt,
+		&i.IsAdmin,
+		&i.Status,
 	)
 	return i, err
 }

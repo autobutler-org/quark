@@ -16,7 +16,13 @@ func (r *router) Routes() []*serverutil.Route {
 		denyUserRoute,
 		disableUserRoute,
 		enableUserRoute,
+		deleteUserRoute,
 	}
+}
+
+// deleteUserResponse reports how many owned paths the deleting admin inherited.
+type deleteUserResponse struct {
+	OwnerRowsReassigned int64 `json:"ownerRowsReassigned"`
 }
 
 // createUserBody is an account an admin adds.

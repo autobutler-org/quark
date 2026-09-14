@@ -8,6 +8,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
+	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
@@ -28,6 +29,7 @@ import (
 // @Failure 400 {object} serverutil.Response
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response "database, files or devices requested by a non-admin"
+// @Failure 409 {object} serverutil.Response "account=true from the only active admin while other active or disabled accounts exist; nothing is deleted"
 // @Failure 500 {object} serverutil.Response
 // @Router /auth/account [delete]
 func deleteAccount(c *gin.Context) *serverutil.Response {
@@ -114,8 +116,14 @@ func deleteAccount(c *gin.Context) *serverutil.Response {
 		DeleteFiles:    deleteFiles,
 		DeleteDevices:  deleteDevices,
 	})
+	if errors.Is(err, authutil.ErrLastAdmin) {
+		return serverutil.Conflict(err)
+	}
 	if err != nil {
 		return serverutil.InternalServerError(err)
+	}
+	if bus := (*deps).EventBus(); bus != nil && result.AccountDeleted {
+		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})
 	}
 
 	clearSessionCookie(c)

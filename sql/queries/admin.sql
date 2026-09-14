@@ -10,6 +10,24 @@ SELECT COUNT(*) FROM users WHERE is_admin = 1 AND status = 'active';
 -- name: CountOtherActiveAdmins :one
 SELECT COUNT(*) FROM users WHERE is_admin = 1 AND status = 'active' AND id != ?;
 
+-- GetOldestActiveAdmin is the longest-standing active admin other than one
+-- account: the heir of an account that deletes itself (#1909).
+-- name: GetOldestActiveAdmin :one
+SELECT * FROM users
+WHERE is_admin = 1 AND status = 'active' AND id != ?
+ORDER BY created_at, id
+LIMIT 1;
+
+-- CountOtherAccounts counts the active and disabled accounts other than one.
+-- Pending requests are not accounts yet, so they do not count.
+-- name: CountOtherAccounts :one
+SELECT COUNT(*) FROM users WHERE id != ? AND status != 'pending';
+
+-- DeletePendingUsers drops every account request, when the last admin deletes
+-- themselves and the Quark returns to setup.
+-- name: DeletePendingUsers :exec
+DELETE FROM users WHERE status = 'pending';
+
 -- name: IsUserAdmin :one
 SELECT is_admin FROM users WHERE username = ?;
 

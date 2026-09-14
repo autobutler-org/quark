@@ -131,6 +131,44 @@ func (q *Queries) MovePathAccessTree(ctx context.Context, arg MovePathAccessTree
 	return result.RowsAffected()
 }
 
+const reassignOwnerRows = `-- name: ReassignOwnerRows :execrows
+INSERT INTO
+    path_access (device_serial, rel_path, user_id, level)
+SELECT
+    device_serial,
+    rel_path,
+    CAST(?1 AS INTEGER),
+    'owner'
+FROM
+    path_access
+WHERE
+    path_access.user_id = ?2
+    AND level = 'owner' ON CONFLICT (user_id, device_serial, rel_path)
+WHERE
+    user_id IS NOT NULL DO
+UPDATE
+SET
+    level = 'owner'
+`
+
+type ReassignOwnerRowsParams struct {
+	ToUserID   int64
+	FromUserID sql.NullInt64
+}
+
+// ReassignOwnerRows gives an heir every path one user owns, before that user
+// is deleted and ON DELETE CASCADE drops the rest of their rows (#1909). A
+// path the heir already has a row on becomes theirs to own. The WHERE clause
+// is load-bearing: without one, SQLite reads the ON of the upsert as a join
+// constraint of the SELECT. The CAST gives sqlc a type for the heir's id.
+func (q *Queries) ReassignOwnerRows(ctx context.Context, arg ReassignOwnerRowsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, reassignOwnerRows, arg.ToUserID, arg.FromUserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setUserPathAccess = `-- name: SetUserPathAccess :exec
 INSERT INTO
     path_access (device_serial, rel_path, user_id, level)
