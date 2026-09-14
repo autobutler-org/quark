@@ -86,7 +86,13 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _goToRecover() {
-    context.push(AppRoutes.recover);
+    final username = _usernameController.text.trim();
+    context.push(
+      Uri(
+        path: AppRoutes.recover,
+        queryParameters: username.isEmpty ? null : {'username': username},
+      ).toString(),
+    );
   }
 
   /// Unlike [_goToRecover] this navigates rather than pushes: go_router's

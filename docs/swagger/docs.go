@@ -802,7 +802,7 @@ const docTemplate = `{
         },
         "/auth/recover": {
             "post": {
-                "description": "Resets password using recovery phrase",
+                "description": "Resets the named account's password using its recovery phrase",
                 "consumes": [
                     "application/json"
                 ],
@@ -815,7 +815,7 @@ const docTemplate = `{
                 "summary": "Recover account",
                 "parameters": [
                     {
-                        "description": "{recoveryPhrase, newPassword}",
+                        "description": "{username, recoveryPhrase, newPassword}",
                         "name": "body",
                         "in": "body",
                         "required": true,

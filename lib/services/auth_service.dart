@@ -133,8 +133,10 @@ class AuthService {
     return LoginResult(sessionToken: token);
   }
 
-  /// Resets the password using the recovery phrase and returns a new session.
+  /// Resets [username]'s password using that account's recovery phrase and
+  /// returns a new session.
   static Future<LoginResult> recover({
+    required String username,
     required String recoveryPhrase,
     required String newPassword,
   }) async {
@@ -144,6 +146,7 @@ class AuthService {
           uri,
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
+            'username': username,
             'recoveryPhrase': recoveryPhrase,
             'newPassword': newPassword,
           }),
@@ -156,6 +159,7 @@ class AuthService {
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final token = body['token'] as String;
     await AppSettings.instance.setSessionToken(token);
+    await AppSettings.instance.setUsername(username);
     return LoginResult(sessionToken: token);
   }
 

@@ -51,6 +51,7 @@ type LoginResult struct {
 
 // RecoverParams contains parameters for password recovery.
 type RecoverParams struct {
+	Username       string
 	RecoveryPhrase string
 	NewPassword    string
 }
@@ -249,16 +250,9 @@ func Recover(ctx context.Context, queries *db.Queries, params RecoverParams) (*L
 		return nil, fmt.Errorf("password must be at least 8 characters")
 	}
 
-	// We need to check the recovery phrase against all users (there's only one in single-user mode)
-	// Get all users — for now just check the first/only user
-	count, err := queries.CountUsers(ctx)
-	if err != nil || count == 0 {
-		return nil, fmt.Errorf("invalid recovery phrase")
-	}
-
-	// TODO(#350): multi-user recovery needs to match the recovery phrase to a
-	// specific user. For now, single-user mode — find the first (only) user.
-	user, err := queries.GetFirstUser(ctx)
+	// An unknown username gets the same error as a wrong phrase, so the
+	// endpoint does not reveal which usernames exist.
+	user, err := queries.GetUserByUsername(ctx, params.Username)
 	if err != nil {
 		return nil, fmt.Errorf("invalid recovery phrase")
 	}

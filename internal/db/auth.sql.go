@@ -116,24 +116,6 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID int64) error {
 	return err
 }
 
-const getFirstUser = `-- name: GetFirstUser :one
-SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin FROM users ORDER BY id ASC LIMIT 1
-`
-
-func (q *Queries) GetFirstUser(ctx context.Context) (User, error) {
-	row := q.db.QueryRowContext(ctx, getFirstUser)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Username,
-		&i.PasswordHash,
-		&i.RecoveryPhraseHash,
-		&i.CreatedAt,
-		&i.IsAdmin,
-	)
-	return i, err
-}
-
 const getSession = `-- name: GetSession :one
 SELECT s.token, s.user_id, s.expires_at, s.created_at, s.last_used_at, u.username
 FROM sessions s

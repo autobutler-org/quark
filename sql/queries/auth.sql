@@ -12,9 +12,6 @@ SELECT * FROM users WHERE id = ? LIMIT 1;
 -- name: CountUsers :one
 SELECT COUNT(*) FROM users;
 
--- name: GetFirstUser :one
-SELECT * FROM users ORDER BY id ASC LIMIT 1;
-
 -- name: UpdateUserPassword :exec
 UPDATE users
 SET password_hash = ?

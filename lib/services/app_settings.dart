@@ -136,7 +136,7 @@ class AppSettings {
   static const _demoModeKey = 'demoMode';
 
   /// Holds a JSON object of host key -> username. Absent for a session that
-  /// predates it, and for one recovered by phrase, which never names a user.
+  /// predates it.
   static const _usernamesKey = 'usernames';
 
   /// Pre-#1623 key: a single app-wide "terms accepted" bool. Read once on
@@ -276,8 +276,7 @@ class AppSettings {
   }
 
   /// The username signed in on the current [activeHost], or null when this
-  /// Quark's session predates the app recording it (or was recovered by
-  /// phrase, which never names a user).
+  /// Quark's session predates the app recording it.
   String? get username => usernameFor(activeHost);
 
   /// The username stored for [hostAddress], if any.
