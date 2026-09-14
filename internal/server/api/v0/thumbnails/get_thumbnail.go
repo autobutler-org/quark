@@ -87,7 +87,10 @@ var getThumbnailRoute = serverutil.ApiRoute(
 			filesDir = deviceDir
 		}
 
-		fullPath := filepath.Join(filesDir, filePath)
+		fullPath, err := storageutil.SafeJoin(filesDir, relPath)
+		if err != nil {
+			return serverutil.NotFound(fmt.Errorf("thumbnail not found: %s", filePath))
+		}
 
 		srcInfo, err := os.Stat(fullPath)
 		if storageutil.IsNotExist(err) {

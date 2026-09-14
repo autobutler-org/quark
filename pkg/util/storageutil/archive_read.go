@@ -41,9 +41,13 @@ func ReadArchiveEntryImpl(params ReadArchiveEntryParams, device *ManagedDevice, 
 		filesDir = device.FilesDir
 	}
 
-	fullPath := filepath.Join(filesDir, params.ArchivePath)
 	// Not-found errors wrap os.ErrNotExist so a caller can tell them from a
-	// broken archive.
+	// broken archive. A path that escapes the files directory reads as not
+	// found too.
+	fullPath, err := safeJoin(filesDir, params.ArchivePath)
+	if err != nil {
+		return nil, 0, fmt.Errorf("file not found: %s: %w", params.ArchivePath, os.ErrNotExist)
+	}
 	if _, err := os.Stat(fullPath); IsNotExist(err) {
 		return nil, 0, fmt.Errorf("file not found: %s: %w", params.ArchivePath, os.ErrNotExist)
 	}
