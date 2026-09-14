@@ -55,7 +55,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, password_hash, recovery_phrase_hash)
 VALUES (?, ?, ?)
-RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin
+RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status
 `
 
 type CreateUserParams struct {
@@ -74,6 +74,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.RecoveryPhraseHash,
 		&i.CreatedAt,
 		&i.IsAdmin,
+		&i.Status,
 	)
 	return i, err
 }
@@ -120,7 +121,7 @@ const getSession = `-- name: GetSession :one
 SELECT s.token, s.user_id, s.expires_at, s.created_at, s.last_used_at, u.username
 FROM sessions s
 JOIN users u ON s.user_id = u.id
-WHERE s.token = ? AND s.expires_at > datetime('now')
+WHERE s.token = ? AND s.expires_at > datetime('now') AND u.status = 'active'
 LIMIT 1
 `
 
@@ -133,6 +134,8 @@ type GetSessionRow struct {
 	Username   string
 }
 
+// Only an active account's session counts (#1908): a pending account has
+// never been approved, and a disabled one was turned off.
 func (q *Queries) GetSession(ctx context.Context, token string) (GetSessionRow, error) {
 	row := q.db.QueryRowContext(ctx, getSession, token)
 	var i GetSessionRow
@@ -148,7 +151,7 @@ func (q *Queries) GetSession(ctx context.Context, token string) (GetSessionRow, 
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin FROM users WHERE id = ? LIMIT 1
+SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status FROM users WHERE id = ? LIMIT 1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -161,12 +164,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.RecoveryPhraseHash,
 		&i.CreatedAt,
 		&i.IsAdmin,
+		&i.Status,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin FROM users WHERE username = ? LIMIT 1
+SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status FROM users WHERE username = ? LIMIT 1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -179,6 +183,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.RecoveryPhraseHash,
 		&i.CreatedAt,
 		&i.IsAdmin,
+		&i.Status,
 	)
 	return i, err
 }
@@ -242,6 +247,28 @@ type RenewSessionParams struct {
 func (q *Queries) RenewSession(ctx context.Context, arg RenewSessionParams) error {
 	_, err := q.db.ExecContext(ctx, renewSession, arg.ExpiresAt, arg.LastUsedAt, arg.Token)
 	return err
+}
+
+const setUserStatus = `-- name: SetUserStatus :execrows
+UPDATE users
+SET status = ?1
+WHERE username = ?2 AND status = ?3
+`
+
+type SetUserStatusParams struct {
+	ToStatus   string
+	Username   string
+	FromStatus string
+}
+
+// SetUserStatus moves an account from one status to another in one
+// conditional update, so two admins acting at once cannot both succeed.
+func (q *Queries) SetUserStatus(ctx context.Context, arg SetUserStatusParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setUserStatus, arg.ToStatus, arg.Username, arg.FromStatus)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec

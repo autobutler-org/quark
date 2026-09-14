@@ -12,6 +12,13 @@ SELECT * FROM users WHERE id = ? LIMIT 1;
 -- name: CountUsers :one
 SELECT COUNT(*) FROM users;
 
+-- SetUserStatus moves an account from one status to another in one
+-- conditional update, so two admins acting at once cannot both succeed.
+-- name: SetUserStatus :execrows
+UPDATE users
+SET status = sqlc.arg(to_status)
+WHERE username = sqlc.arg(username) AND status = sqlc.arg(from_status);
+
 -- name: UpdateUserPassword :exec
 UPDATE users
 SET password_hash = ?
@@ -22,11 +29,13 @@ INSERT INTO sessions (token, user_id, expires_at, last_used_at)
 VALUES (?, ?, ?, ?)
 RETURNING *;
 
+-- Only an active account's session counts (#1908): a pending account has
+-- never been approved, and a disabled one was turned off.
 -- name: GetSession :one
 SELECT s.*, u.username
 FROM sessions s
 JOIN users u ON s.user_id = u.id
-WHERE s.token = ? AND s.expires_at > datetime('now')
+WHERE s.token = ? AND s.expires_at > datetime('now') AND u.status = 'active'
 LIMIT 1;
 
 -- Slides a session's expiry forward on use (#1647). The new expiry is computed

@@ -10,6 +10,18 @@ import (
 	"time"
 )
 
+const countActiveAdmins = `-- name: CountActiveAdmins :one
+SELECT COUNT(*) FROM users WHERE is_admin = 1 AND status = 'active'
+`
+
+// A disabled admin cannot sign in, so only active admins count (#1908).
+func (q *Queries) CountActiveAdmins(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countActiveAdmins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const demoteFromAdmin = `-- name: DemoteFromAdmin :one
 UPDATE users SET is_admin = 0 WHERE username = ? RETURNING id, username, is_admin, created_at
 `
@@ -33,17 +45,6 @@ func (q *Queries) DemoteFromAdmin(ctx context.Context, username string) (DemoteF
 	return i, err
 }
 
-const getAdminCount = `-- name: GetAdminCount :one
-SELECT COUNT(*) FROM users WHERE is_admin = 1
-`
-
-func (q *Queries) GetAdminCount(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getAdminCount)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const isUserAdmin = `-- name: IsUserAdmin :one
 SELECT is_admin FROM users WHERE username = ?
 `
@@ -56,13 +57,14 @@ func (q *Queries) IsUserAdmin(ctx context.Context, username string) (int64, erro
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, is_admin, created_at FROM users ORDER BY created_at ASC
+SELECT id, username, is_admin, status, created_at FROM users ORDER BY created_at ASC
 `
 
 type ListUsersRow struct {
 	ID        int64
 	Username  string
 	IsAdmin   int64
+	Status    string
 	CreatedAt time.Time
 }
 
@@ -79,6 +81,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 			&i.ID,
 			&i.Username,
 			&i.IsAdmin,
+			&i.Status,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -95,7 +98,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 }
 
 const promoteToAdmin = `-- name: PromoteToAdmin :one
-UPDATE users SET is_admin = 1 WHERE username = ? RETURNING id, username, is_admin, created_at
+UPDATE users SET is_admin = 1 WHERE username = ? AND status = 'active' RETURNING id, username, is_admin, created_at
 `
 
 type PromoteToAdminRow struct {
@@ -105,6 +108,7 @@ type PromoteToAdminRow struct {
 	CreatedAt time.Time
 }
 
+// Only an active account can be promoted; anything else matches no row.
 func (q *Queries) PromoteToAdmin(ctx context.Context, username string) (PromoteToAdminRow, error) {
 	row := q.db.QueryRowContext(ctx, promoteToAdmin, username)
 	var i PromoteToAdminRow
