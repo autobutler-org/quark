@@ -183,13 +183,14 @@ func TestRestoreTrashImpl_RestoresFileAndFolder(t *testing.T) {
 	// The folder the file lived in is gone too; restore recreates it.
 	require.NoError(t, os.Remove(filepath.Join(filesDir, "media")))
 
+	photoName, albumName := trashNameFor(t, filesDir, "media/photo.jpg"), trashNameFor(t, filesDir, "album")
 	result, err := storageutil.RestoreTrashImpl(storageutil.RestoreTrashParams{
-		Items: refs(trashNameFor(t, filesDir, "media/photo.jpg"), trashNameFor(t, filesDir, "album")),
+		Items: refs(photoName, albumName),
 	}, filesDir)
 	require.NoError(t, err)
 	assert.Equal(t, []storageutil.RestoredItem{
-		{Path: "media/photo.jpg", IsDir: false},
-		{Path: "album", IsDir: true},
+		{Path: "media/photo.jpg", IsDir: false, Source: storageutil.TrashPath(photoName, "")},
+		{Path: "album", IsDir: true, Source: storageutil.TrashPath(albumName, "")},
 	}, result.Restored)
 
 	_, err = os.Stat(filepath.Join(filesDir, "media", "photo.jpg"))
@@ -458,8 +459,8 @@ func TestRestoreTrashImpl_NestedItemRecreatesParents(t *testing.T) {
 	}, filesDir)
 	require.NoError(t, err)
 	assert.Equal(t, []storageutil.RestoredItem{
-		{Path: "pics/album/2024/one.jpg"},
-		{Path: "pics/album/cover.jpg"},
+		{Path: "pics/album/2024/one.jpg", Source: storageutil.TrashPath(name, "2024/one.jpg")},
+		{Path: "pics/album/cover.jpg", Source: storageutil.TrashPath(name, "cover.jpg")},
 	}, result.Restored)
 	got, err := os.ReadFile(filepath.Join(filesDir, "pics", "album", "2024", "one.jpg"))
 	require.NoError(t, err)

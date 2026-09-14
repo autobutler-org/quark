@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
@@ -66,6 +67,10 @@ var System = Principal{IsAdmin: true}
 // ErrNoDatabase reports a write to the access table with no database to write
 // it to.
 var ErrNoDatabase = errors.New("accessutil: no database")
+
+// ErrMoveIntoItself reports a move of rows onto a path inside the one moved,
+// or out of a path onto one of its ancestors. No filesystem move can do either.
+var ErrMoveIntoItself = errors.New("accessutil: cannot move a path into itself")
 
 // Canonical spells a path the one way the access table keys it:
 // slash-separated, cleaned, no leading slash, and "" for the device root. So
@@ -317,4 +322,128 @@ func GrantOwnerIfNeeded(params GrantOwnerIfNeededParams) (GrantOwnerIfNeededResu
 		return GrantOwnerIfNeededResult{}, err
 	}
 	return GrantOwnerIfNeededResult{Granted: true}, nil
+}
+
+// MoveRowsParams carries access rows along with something that moved.
+type MoveRowsParams struct {
+	Ctx context.Context
+	// Database holds the rows. Nil does nothing.
+	Database *db.DatabaseSqlc
+	// EventBus hears access_changed when any row moved. Nil skips it.
+	EventBus  *eventbus.Bus
+	OldSerial string
+	OldPath   string
+	NewSerial string
+	NewPath   string
+}
+
+// MoveRowsResult counts the rows that moved.
+type MoveRowsResult struct {
+	Moved int64
+}
+
+// MoveRows points the rows on a path and everything beneath it at where it
+// went, including onto another device (#1905). Rows on the destination and
+// beneath it are dropped first: whatever they described has been replaced.
+// Both happen in one transaction.
+func MoveRows(params MoveRowsParams) (MoveRowsResult, error) {
+	oldPath, newPath := Canonical(params.OldPath), Canonical(params.NewPath)
+	sameDevice := params.OldSerial == params.NewSerial
+	if params.Database == nil || oldPath == "" || newPath == "" || (sameDevice && oldPath == newPath) {
+		return MoveRowsResult{}, nil
+	}
+	if sameDevice && (isBeneath(oldPath, newPath) || isBeneath(newPath, oldPath)) {
+		return MoveRowsResult{}, ErrMoveIntoItself
+	}
+
+	var moved int64
+	err := inTx(params.Ctx, params.Database, func(q *db.Queries) error {
+		if _, err := q.DeletePathAccessTree(params.Ctx, db.DeletePathAccessTreeParams{
+			DeviceSerial: params.NewSerial,
+			RelPath:      newPath,
+		}); err != nil {
+			return err
+		}
+		n, err := q.MovePathAccessTree(params.Ctx, db.MovePathAccessTreeParams{
+			NewDeviceSerial: params.NewSerial,
+			NewRelPath:      newPath,
+			OldDeviceSerial: params.OldSerial,
+			OldRelPath:      oldPath,
+		})
+		moved = n
+		return err
+	})
+	if err != nil {
+		return MoveRowsResult{}, err
+	}
+	if moved > 0 && params.EventBus != nil {
+		params.EventBus.Publish(eventbus.Event{
+			Kind:         eventbus.EventAccessChanged,
+			Path:         newPath,
+			DeviceSerial: params.NewSerial,
+		})
+	}
+	return MoveRowsResult{Moved: moved}, nil
+}
+
+// DeleteRowsParams drops the access rows of paths that are gone for good.
+type DeleteRowsParams struct {
+	Ctx context.Context
+	// Database holds the rows. Nil does nothing.
+	Database *db.DatabaseSqlc
+	// EventBus hears access_changed for each path that lost rows. Nil skips it.
+	EventBus     *eventbus.Bus
+	DeviceSerial string
+	// Paths are the deleted paths; each takes everything beneath it.
+	Paths []string
+}
+
+// DeleteRowsResult counts the rows deleted.
+type DeleteRowsResult struct {
+	Deleted int64
+}
+
+// DeleteRows drops the rows on each path and everything beneath it, in one
+// transaction, so something created at that path later starts with none
+// (#1905). A device root is never deleted, so its rows are never dropped.
+func DeleteRows(params DeleteRowsParams) (DeleteRowsResult, error) {
+	if params.Database == nil || len(params.Paths) == 0 {
+		return DeleteRowsResult{}, nil
+	}
+
+	var deleted int64
+	changed := make([]string, 0, len(params.Paths))
+	err := inTx(params.Ctx, params.Database, func(q *db.Queries) error {
+		for _, p := range params.Paths {
+			rel := Canonical(p)
+			if rel == "" {
+				continue
+			}
+			n, err := q.DeletePathAccessTree(params.Ctx, db.DeletePathAccessTreeParams{
+				DeviceSerial: params.DeviceSerial,
+				RelPath:      rel,
+			})
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				deleted += n
+				changed = append(changed, rel)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return DeleteRowsResult{}, err
+	}
+	if params.EventBus != nil {
+		for _, rel := range changed {
+			params.EventBus.Publish(eventbus.Event{
+				Kind:         eventbus.EventAccessChanged,
+				Path:         rel,
+				DeviceSerial: params.DeviceSerial,
+			})
+		}
+	}
+	return DeleteRowsResult{Deleted: deleted}, nil
 }

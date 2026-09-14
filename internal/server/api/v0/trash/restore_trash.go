@@ -1,6 +1,10 @@
 package v0_trash
 
 import (
+	"context"
+	"log/slog"
+
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -37,6 +41,21 @@ func restoreTrash(c *gin.Context) *serverutil.Response {
 		Items:        req.Items,
 		EventBus:     deps.EventBus(),
 	})
+	// Access rows come back out with each item, including the ones a failed
+	// batch restored before it stopped (#1905).
+	for _, item := range result.Restored {
+		if _, rowErr := accessutil.MoveRows(accessutil.MoveRowsParams{
+			Ctx:       context.WithoutCancel(c.Request.Context()),
+			Database:  deps.Database(),
+			EventBus:  deps.EventBus(),
+			OldSerial: req.Serial,
+			OldPath:   item.Source,
+			NewSerial: req.Serial,
+			NewPath:   item.Path,
+		}); rowErr != nil {
+			slog.Error("trash: could not carry access rows out of the trash", "from", item.Source, "to", item.Path, "err", rowErr)
+		}
+	}
 	if err != nil {
 		return trashError(err)
 	}

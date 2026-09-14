@@ -3,6 +3,8 @@ package accessutil_test
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,8 +12,121 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
+
+// keys lists every row as "serial|rel_path".
+func (f fixture) keys(t *testing.T) map[string]bool {
+	t.Helper()
+	rows, err := f.database.Db.Query(`SELECT device_serial, rel_path FROM path_access`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	keys := map[string]bool{}
+	for rows.Next() {
+		var serial, rel string
+		if err := rows.Scan(&serial, &rel); err != nil {
+			t.Fatal(err)
+		}
+		keys[serial+"|"+rel] = true
+	}
+	return keys
+}
+
+func TestMoveRowsCarriesTheTree(t *testing.T) {
+	f := newFixture(t)
+	for _, rel := range []string{"a", "a/b", "a/b/c.txt", "ab", "a_b", "A", "other"} {
+		f.grant(t, f.userID, "", rel, accessutil.Read)
+	}
+	bus := eventbus.New()
+	events, unsub := bus.Subscribe("move-rows-test")
+	defer unsub()
+
+	result, err := accessutil.MoveRows(accessutil.MoveRowsParams{
+		Ctx: context.Background(), Database: f.database, EventBus: bus,
+		OldPath: "a/", NewSerial: "USB-1", NewPath: "/moved/a",
+	})
+	if err != nil || result.Moved != 3 {
+		t.Fatalf("MoveRows = %+v, %v; want 3 rows moved", result, err)
+	}
+	want := map[string]bool{
+		"|ab": true, "|a_b": true, "|A": true, "|other": true,
+		"USB-1|moved/a": true, "USB-1|moved/a/b": true, "USB-1|moved/a/b/c.txt": true,
+	}
+	if got := f.keys(t); !maps.Equal(got, want) {
+		t.Errorf("rows = %v, want %v", got, want)
+	}
+	select {
+	case evt := <-events:
+		if evt.Kind != eventbus.EventAccessChanged || evt.Path != "moved/a" || evt.DeviceSerial != "USB-1" {
+			t.Errorf("event = %+v, want access_changed at USB-1 moved/a", evt)
+		}
+	default:
+		t.Error("MoveRows published no access_changed event")
+	}
+}
+
+func TestMoveRowsReplacesTheDestination(t *testing.T) {
+	f := newFixture(t)
+	f.grant(t, f.userID, "", "src/x.txt", accessutil.Write)
+	f.grant(t, f.userID, "", "dst", accessutil.Read)
+	f.grant(t, f.userID, "", "dst/old.txt", accessutil.Owner)
+
+	if _, err := accessutil.MoveRows(accessutil.MoveRowsParams{
+		Ctx: context.Background(), Database: f.database, OldPath: "src", NewPath: "dst",
+	}); err != nil {
+		t.Fatalf("MoveRows: %v", err)
+	}
+	if got, want := f.keys(t), map[string]bool{"|dst/x.txt": true}; !maps.Equal(got, want) {
+		t.Errorf("rows = %v, want %v", got, want)
+	}
+}
+
+func TestMoveRowsRefusesAMoveIntoItself(t *testing.T) {
+	f := newFixture(t)
+	f.grant(t, f.userID, "", "a/b", accessutil.Read)
+	for _, tc := range [][2]string{{"a", "a/b/c"}, {"a/b", "a"}} {
+		_, err := accessutil.MoveRows(accessutil.MoveRowsParams{
+			Ctx: context.Background(), Database: f.database, OldPath: tc[0], NewPath: tc[1],
+		})
+		if !errors.Is(err, accessutil.ErrMoveIntoItself) {
+			t.Errorf("MoveRows(%q → %q) = %v, want ErrMoveIntoItself", tc[0], tc[1], err)
+		}
+	}
+	if got, want := f.keys(t), map[string]bool{"|a/b": true}; !maps.Equal(got, want) {
+		t.Errorf("a refused move changed rows: %v", got)
+	}
+}
+
+func TestDeleteRowsTakesTheTree(t *testing.T) {
+	f := newFixture(t)
+	for _, rel := range []string{"", "a", "a/b", "ab"} {
+		f.grant(t, f.userID, "", rel, accessutil.Read)
+	}
+	f.grant(t, f.userID, "USB-1", "a", accessutil.Read)
+
+	result, err := accessutil.DeleteRows(accessutil.DeleteRowsParams{
+		Ctx: context.Background(), Database: f.database, Paths: []string{"a", "/", ""},
+	})
+	if err != nil || result.Deleted != 2 {
+		t.Fatalf("DeleteRows = %+v, %v; want 2 rows deleted", result, err)
+	}
+	if got, want := f.keys(t), map[string]bool{"|": true, "|ab": true, "USB-1|a": true}; !maps.Equal(got, want) {
+		t.Errorf("rows = %v, want %v", got, want)
+	}
+}
+
+func TestRowChangesWithoutADatabaseDoNothing(t *testing.T) {
+	ctx := context.Background()
+	if result, err := accessutil.MoveRows(accessutil.MoveRowsParams{Ctx: ctx, OldPath: "a", NewPath: "b"}); err != nil || result.Moved != 0 {
+		t.Errorf("MoveRows without a database = %+v, %v", result, err)
+	}
+	if result, err := accessutil.DeleteRows(accessutil.DeleteRowsParams{Ctx: ctx, Paths: []string{"a"}}); err != nil || result.Deleted != 0 {
+		t.Errorf("DeleteRows without a database = %+v, %v", result, err)
+	}
+}
 
 type fakeDetector struct {
 	mountPoint string

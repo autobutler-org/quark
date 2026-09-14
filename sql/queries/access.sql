@@ -40,3 +40,29 @@ WHERE
 UPDATE
 SET
     level = excluded.level;
+
+-- MovePathAccessTree points the rows on a path and everything beneath it at
+-- where it moved, onto another device as well. substr, not LIKE: LIKE is
+-- case-insensitive and treats _ and % as wildcards, and "foo" must not match
+-- "foobar". The CAST gives sqlc a type for the parameter inside length().
+-- name: MovePathAccessTree :execrows
+UPDATE path_access
+SET
+    device_serial = sqlc.arg(new_device_serial),
+    rel_path = sqlc.arg(new_rel_path) || substr(rel_path, length(CAST(sqlc.arg(old_rel_path) AS TEXT)) + 1)
+WHERE
+    device_serial = sqlc.arg(old_device_serial)
+    AND (
+        rel_path = sqlc.arg(old_rel_path)
+        OR substr(rel_path, 1, length(sqlc.arg(old_rel_path)) + 1) = sqlc.arg(old_rel_path) || '/'
+    );
+
+-- DeletePathAccessTree drops the rows on a path and everything beneath it.
+-- name: DeletePathAccessTree :execrows
+DELETE FROM path_access
+WHERE
+    device_serial = sqlc.arg(device_serial)
+    AND (
+        rel_path = sqlc.arg(rel_path)
+        OR substr(rel_path, 1, length(sqlc.arg(rel_path)) + 1) = sqlc.arg(rel_path) || '/'
+    );

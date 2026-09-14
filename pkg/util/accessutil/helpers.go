@@ -1,6 +1,7 @@
 package accessutil
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,20 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
+
+// inTx runs fn against queries bound to one transaction, committing only if fn
+// succeeds.
+func inTx(ctx context.Context, database *db.DatabaseSqlc, fn func(*db.Queries) error) error {
+	tx, err := database.Db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if err := fn(database.Queries.WithTx(tx)); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
 
 // levelsFromRows folds the rows into the highest level per device and path. A
 // user granted read directly and write through a group gets write.
