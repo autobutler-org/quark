@@ -1677,7 +1677,9 @@ paths:
   /files/download-archive-file:
     get:
       description: Reads the specified entry from the archive and streams it to the
-        client. No data is extracted to disk.
+        client. No data is extracted to disk. With format=jpeg an image entry other
+        than camera RAW is converted and served as image/jpeg; every other entry is
+        served as it is.
       parameters:
       - description: Path to the archive file (relative to device files directory)
         in: query
@@ -1693,8 +1695,14 @@ paths:
         in: query
         name: serial
         type: string
+      - description: Output format conversion ('jpeg' converts HEIC, TIFF, BMP and
+          other decodable images to JPEG)
+        in: query
+        name: format
+        type: string
       produces:
       - application/octet-stream
+      - image/jpeg
       responses:
         "200":
           description: File content
@@ -1710,6 +1718,10 @@ paths:
             $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "503":
+          description: Server busy converting other images
           schema:
             $ref: '#/definitions/serverutil.Response'
       summary: Download a single file from inside an archive

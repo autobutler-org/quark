@@ -11,6 +11,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -50,6 +51,21 @@ var getThumbnailRoute = serverutil.ApiRoute(
 		// relPath strips the leading '/' that the wildcard param includes.
 		relPath := strings.TrimPrefix(filePath, "/")
 
+		// The file browser inside an archive asks for /thumbnails/<archive>/<entry>.
+		archive, err := fileutil.FindArchive(fileutil.FindArchiveParams{
+			Ctx:      c.Request.Context(),
+			Registry: deps.VFSRegistry(),
+			Storage:  deps.StorageService(),
+			FilePath: relPath,
+			Serial:   serial,
+		})
+		if err != nil {
+			return serverutil.InternalServerError(err)
+		}
+		if archive.Found {
+			return getArchiveThumbnail(c, deps, archive, ext, filePath, serial, isVideo)
+		}
+
 		// VFS path: no-serial, non-RAW, non-video images only.
 		// RAW and video need OS paths for external tools (dcraw/ffmpeg).
 		if serial == "" && !isVideo && !photoutil.IsRawFile(relPath) {
@@ -74,7 +90,7 @@ var getThumbnailRoute = serverutil.ApiRoute(
 		fullPath := filepath.Join(filesDir, filePath)
 
 		srcInfo, err := os.Stat(fullPath)
-		if os.IsNotExist(err) {
+		if storageutil.IsNotExist(err) {
 			return serverutil.NotFound(fmt.Errorf("thumbnail not found: %s", filePath))
 		}
 		if err != nil {

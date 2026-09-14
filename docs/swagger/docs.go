@@ -1397,9 +1397,10 @@ const docTemplate = `{
         },
         "/files/download-archive-file": {
             "get": {
-                "description": "Reads the specified entry from the archive and streams it to the client. No data is extracted to disk.",
+                "description": "Reads the specified entry from the archive and streams it to the client. No data is extracted to disk. With format=jpeg an image entry other than camera RAW is converted and served as image/jpeg; every other entry is served as it is.",
                 "produces": [
-                    "application/octet-stream"
+                    "application/octet-stream",
+                    "image/jpeg"
                 ],
                 "tags": [
                     "files"
@@ -1425,6 +1426,12 @@ const docTemplate = `{
                         "description": "Device serial number",
                         "name": "serial",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Output format conversion ('jpeg' converts HEIC, TIFF, BMP and other decodable images to JPEG)",
+                        "name": "format",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1448,6 +1455,12 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "503": {
+                        "description": "Server busy converting other images",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

@@ -7,7 +7,15 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"syscall"
 )
+
+// IsNotExist reports whether err says a path does not exist. Unlike
+// os.IsNotExist it also counts a path that runs through a regular file
+// ("notes.txt/pic.jpg"), which the OS reports as ENOTDIR rather than ENOENT.
+func IsNotExist(err error) bool {
+	return errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
+}
 
 func getServiceDataDir() string {
 	return "/var/lib/quark/data"

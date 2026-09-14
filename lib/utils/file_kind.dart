@@ -47,8 +47,8 @@ const thumbnailImageExtensions = {
 };
 
 /// Image extensions `Image.memory` decodes on every platform without a server
-/// round trip. Archive entries get no server conversion (#1851), so only these
-/// preview from inside a zip; every other image downloads.
+/// round trip. Inside an archive, any other image previews only when the Quark
+/// sends back a JPEG of it (#1851).
 const clientDecodedImageExtensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp'};
 
 /// Image extensions `Image.memory` cannot decode, so the client asks the

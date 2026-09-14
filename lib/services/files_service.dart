@@ -604,10 +604,15 @@ class FilesService with AuthenticatedService {
   }
 
   /// Downloads a single file from inside an archive without extracting to disk.
-  static Future<Uint8List?> downloadArchiveFileBytes(
+  ///
+  /// With [convertImages], an image `Image.memory` cannot decode is requested
+  /// as a JPEG (#1851). `isJpeg` says whether one came back: an older Quark,
+  /// or a camera RAW entry, answers with the original bytes instead.
+  static Future<({Uint8List bytes, bool isJpeg})> downloadArchiveFileBytes(
     String archivePath,
     String entryPath, {
     String? serial,
+    bool convertImages = false,
   }) async {
     final querySegments = <String>[
       'filePath=${Uri.encodeQueryComponent(archivePath)}',
@@ -616,6 +621,10 @@ class FilesService with AuthenticatedService {
     final serialValue = serial?.trim() ?? '';
     if (serialValue.isNotEmpty) {
       querySegments.add('serial=${Uri.encodeQueryComponent(serialValue)}');
+    }
+    if (convertImages &&
+        serverConvertedImageExtensions.contains(fileExtension(entryPath))) {
+      querySegments.add('format=jpeg');
     }
     final endpointUri = apiBaseUri.resolve(
       '/api/v0/files/download-archive-file',
@@ -628,7 +637,11 @@ class FilesService with AuthenticatedService {
         'Failed to download archive file',
       );
     }
-    return response.bodyBytes;
+    final contentType = response.headers['content-type'] ?? '';
+    return (
+      bytes: response.bodyBytes,
+      isJpeg: contentType.startsWith('image/jpeg'),
+    );
   }
 
   static Future<Uint8List?> downloadFileBytes(

@@ -996,12 +996,12 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         final entryPath = archive.subPath.isEmpty
             ? node.name
             : '${archive.subPath}/${node.name}';
-        final bytes = await FilesService.downloadArchiveFileBytes(
+        final entry = await FilesService.downloadArchiveFileBytes(
           archive.archivePath,
           entryPath,
         );
-        if (bytes != null && mounted) {
-          await FilesService.saveBytesToFile(bytes, node.name);
+        if (mounted) {
+          await FilesService.saveBytesToFile(entry.bytes, node.name);
           _showMessage('Downloaded ${node.name}');
         }
       } catch (_) {
@@ -1362,17 +1362,20 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         : '${archive.subPath}/${node.name}';
 
     try {
-      final bytes = await FilesService.downloadArchiveFileBytes(
+      final entry = await FilesService.downloadArchiveFileBytes(
         archive.archivePath,
         entryPath,
+        convertImages: true,
       );
-      if (bytes == null || !mounted) return;
+      if (!mounted) return;
+      final bytes = entry.bytes;
 
-      // Archive entries get no server-side JPEG conversion (#1851), so only
-      // formats Flutter decodes itself preview; the rest download.
-      final canDecode = clientDecodedImageExtensions.contains(
-        fileExtension(node.name),
-      );
+      // An image previews when Flutter decodes it itself or the Quark sent a
+      // JPEG of it (#1851). Anything else — a RAW entry, or an older Quark
+      // that ignored format=jpeg — downloads.
+      final canDecode =
+          entry.isJpeg ||
+          clientDecodedImageExtensions.contains(fileExtension(node.name));
       final Widget? preview = switch (fileKindForName(node.name)) {
         FileKind.image when canDecode => ImageViewerPage(
           bytes: bytes,
