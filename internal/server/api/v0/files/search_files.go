@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
@@ -28,6 +29,10 @@ func searchFiles(c *gin.Context) *serverutil.Response {
 	if !ok {
 		return serverutil.InternalServerError(nil)
 	}
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 
 	result, err := fileutil.SearchFiles(fileutil.SearchFilesParams{
 		Ctx:      c.Request.Context(),
@@ -36,6 +41,7 @@ func searchFiles(c *gin.Context) *serverutil.Response {
 		Storage:  deps.StorageService(),
 		Query:    strings.TrimSpace(c.Query("query")),
 		Serials:  c.QueryArray("serial"),
+		Access:   access,
 	})
 	if err != nil {
 		if errors.Is(err, fileutil.ErrNoFilesNamespace) {
