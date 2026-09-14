@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
@@ -211,9 +212,7 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 		for _, t := range tokens {
 			username, userID, err := authutil.ValidateSession(ctx, db.Queries, t)
 			if err == nil {
-				c = ctxutil.With(c, "username", username)
-				c = ctxutil.With(c, "userID", userID)
-				c.Next()
+				authenticated(c, db.Queries, username, userID)
 				return
 			}
 		}
@@ -222,9 +221,7 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 		if username, password, ok := c.Request.BasicAuth(); ok {
 			validUser, userID, err := authutil.ValidateBasicAuth(ctx, db.Queries, username, password)
 			if err == nil {
-				c = ctxutil.With(c, "username", validUser)
-				c = ctxutil.With(c, "userID", userID)
-				c.Next()
+				authenticated(c, db.Queries, validUser, userID)
 				return
 			}
 		}
@@ -232,6 +229,22 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 		c.Abort()
 	}
+}
+
+// authenticated puts the validated caller on the context and runs the rest of
+// the chain. The principal is what the file routes check access against
+// (#1902); an admin lookup that fails aborts with 503 rather than guessing,
+// because guessing wrong either locks the admin out or lets a user in.
+func authenticated(c *gin.Context, queries *db.Queries, username string, userID int64) {
+	isAdmin, err := authutil.IsAdmin(c.Request.Context(), queries, username)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "service unavailable"})
+		return
+	}
+	c = ctxutil.With(c, "username", username)
+	c = ctxutil.With(c, "userID", userID)
+	c = ctxutil.With(c, "principal", accessutil.Principal{UserID: userID, IsAdmin: isAdmin})
+	c.Next()
 }
 
 func Use(router *gin.Engine, deps deputil.Dependencies) {
