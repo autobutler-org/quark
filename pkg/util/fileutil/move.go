@@ -71,10 +71,14 @@ func MoveFile(params MoveFileParams) (MoveFileResult, error) {
 		}
 	}
 
+	// The serial lets each event stream subscriber check both paths against
+	// the device they are on (#1906), and lets the file and content indexes
+	// update that device rather than the internal one.
 	params.EventBus.Publish(eventbus.Event{
-		Kind:    eventbus.EventMove,
-		Path:    params.OldFilePath,
-		NewPath: params.NewFilePath,
+		Kind:         eventbus.EventMove,
+		Path:         params.OldFilePath,
+		NewPath:      params.NewFilePath,
+		DeviceSerial: params.NewDeviceSerial,
 	})
 
 	// Access rows follow the file, announced after the move they belong to

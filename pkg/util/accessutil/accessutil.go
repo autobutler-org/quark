@@ -464,6 +464,82 @@ func DeleteRows(params DeleteRowsParams) (DeleteRowsResult, error) {
 	return DeleteRowsResult{Deleted: deleted}, nil
 }
 
+// FilterEventParams decides what one event stream subscriber hears (#1906).
+type FilterEventParams struct {
+	// Access is the subscriber's access as it stands for this event.
+	Access Access
+	// Previous is their access from before the access_changed event being
+	// filtered reloaded it. It is only read for access_changed.
+	Previous Access
+	Event    eventbus.Event
+}
+
+// FilterEventResult is what to send the subscriber, if anything.
+type FilterEventResult struct {
+	Event   eventbus.Event
+	Deliver bool
+}
+
+// FilterEvent decides whether a subscriber hears an event, and in what form.
+// It reads only the snapshots it is given, never the database.
+//
+//   - An admin hears every event unchanged.
+//   - trash_changed and account_changed carry no path and pass: each tells an
+//     open app to refetch something that answers for the caller already. The
+//     backup and vault events are appliance-wide and are dropped.
+//   - A move between two readable paths passes. A move into a readable path
+//     from an unreadable one reads as an upload into the new path's folder, and
+//     one out of a readable path into an unreadable one as a delete of the old
+//     path. A move between two unreadable paths is dropped.
+//   - access_changed passes when its path is visible to the subscriber before
+//     or after the change, so a listing that just gained or lost entries
+//     reloads.
+//   - Anything else passes when its path is readable.
+func FilterEvent(params FilterEventParams) FilterEventResult {
+	evt := params.Event
+	access := params.Access
+	if access.principal.IsAdmin {
+		return FilterEventResult{Event: evt, Deliver: true}
+	}
+	readable := func(p string) bool {
+		return access.Check(evt.DeviceSerial, p, Read).Readable
+	}
+
+	switch evt.Kind {
+	case eventbus.EventTrashChanged, eventbus.EventAccountChanged:
+		return FilterEventResult{Event: evt, Deliver: true}
+	case eventbus.EventBackupStarted, eventbus.EventBackupProgress, eventbus.EventBackupCompleted,
+		eventbus.EventBackupFailed, eventbus.EventVaultDeviceDisconnected, eventbus.EventVaultDeviceReconnected,
+		eventbus.EventVaultStorageChanged:
+		return FilterEventResult{}
+	case eventbus.EventMove:
+		oldReadable, newReadable := readable(evt.Path), readable(evt.NewPath)
+		switch {
+		case oldReadable && newReadable:
+			return FilterEventResult{Event: evt, Deliver: true}
+		case newReadable:
+			return FilterEventResult{Deliver: true, Event: eventbus.Event{
+				Kind:         eventbus.EventUpload,
+				Path:         Canonical(path.Dir(Canonical(evt.NewPath))),
+				DeviceSerial: evt.DeviceSerial,
+			}}
+		case oldReadable:
+			return FilterEventResult{Deliver: true, Event: eventbus.Event{
+				Kind:         eventbus.EventDelete,
+				Path:         evt.Path,
+				DeviceSerial: evt.DeviceSerial,
+			}}
+		default:
+			return FilterEventResult{}
+		}
+	case eventbus.EventAccessChanged:
+		visible := params.Previous.Visible(evt.DeviceSerial, evt.Path) || access.Visible(evt.DeviceSerial, evt.Path)
+		return FilterEventResult{Event: evt, Deliver: visible}
+	default:
+		return FilterEventResult{Event: evt, Deliver: readable(evt.Path)}
+	}
+}
+
 // CanSeeTrash reports whether a trashed item is shown to the principal: they
 // trashed it, they can read where it came from, or they can read where its
 // access rows sit while it is in the trash. An item that does not record who
