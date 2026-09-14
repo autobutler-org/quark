@@ -24,6 +24,8 @@ import (
 // @Param body body addPhotoRequest true "Photo reference"
 // @Success 201 {object} AlbumItemJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 403 {object} serverutil.Response "Forbidden: system album"
+// @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /albums/{id}/items [post]
 func addPhotoToAlbum(c *gin.Context) *serverutil.Response {
@@ -45,8 +47,12 @@ func addPhotoToAlbum(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
-	if _, err := deps.Database().Queries.GetAlbum(context.Background(), id); err != nil {
+	album, err := deps.Database().Queries.GetAlbum(context.Background(), id)
+	if err != nil {
 		return serverutil.NotFound(errors.New("album not found"))
+	}
+	if resp := forbidSystemAlbum(album); resp != nil {
+		return resp
 	}
 
 	item, err := deps.Database().Queries.AddPhotoToAlbum(context.Background(), db.AddPhotoToAlbumParams{

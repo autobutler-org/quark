@@ -25,6 +25,7 @@ import (
 // @Param body body moveAlbumRequest true "New parent ID (null for root)"
 // @Success 200 {object} AlbumJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 403 {object} serverutil.Response "Forbidden: system album, or a system album as the parent"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /albums/{id}/move [patch]
@@ -48,10 +49,18 @@ func moveAlbum(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
+	if resp := rejectSystemAlbum(c.Request.Context(), deps.Database().Queries, id); resp != nil {
+		return resp
+	}
+
 	var parentID sql.NullInt64
 	if req.ParentID != nil {
-		if _, err := deps.Database().Queries.GetAlbum(context.Background(), *req.ParentID); err != nil {
+		parent, err := deps.Database().Queries.GetAlbum(context.Background(), *req.ParentID)
+		if err != nil {
 			return serverutil.BadRequest(errors.New("parent album not found"))
+		}
+		if resp := forbidSystemAlbum(parent); resp != nil {
+			return resp
 		}
 		parentID = sql.NullInt64{Int64: *req.ParentID, Valid: true}
 	}

@@ -5,6 +5,7 @@ import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/pages/photos_page.dart';
 import 'package:quark/services/album_service.dart';
 import 'package:quark/services/demo_photos_service.dart';
+import 'package:quark/services/favorites_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/utils/connection_error.dart';
@@ -79,6 +80,22 @@ class _AlbumPageState extends State<AlbumPage> {
       ? DemoPhotosService.loadBytes(item.relPath)
       : FilesService.downloadFileBytes(item.relPath, serial: item.deviceSerial);
 
+  /// The Favorites album mirrors the stars, so leaving it means un-starring.
+  Future<void> _removeFromFavorites(PhotoAlbumItem item) async {
+    try {
+      await FavoritesService.toggle(
+        relPath: item.relPath,
+        serial: item.deviceSerial.isNotEmpty ? item.deviceSerial : null,
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(Errors.message(e, 'update the favorite'))),
+      );
+    }
+  }
+
   Future<void> _removeItem(PhotoAlbumItem item) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -124,11 +141,13 @@ class _AlbumPageState extends State<AlbumPage> {
       appBar: AppBar(
         title: Text(widget.album.name),
         actions: [
-          TextButton.icon(
-            onPressed: _openAddPhotosMode,
-            icon: const Icon(QuarkIcons.add_rounded, size: 18),
-            label: const Text('Add Photos'),
-          ),
+          // The Quark fills system albums itself and refuses edits (#992).
+          if (!widget.album.isSystemAlbum)
+            TextButton.icon(
+              onPressed: _openAddPhotosMode,
+              icon: const Icon(QuarkIcons.add_rounded, size: 18),
+              label: const Text('Add Photos'),
+            ),
           IconButton(
             icon: const Icon(QuarkIcons.refresh_rounded),
             tooltip: 'Refresh',
@@ -183,8 +202,9 @@ class _AlbumPageState extends State<AlbumPage> {
           ? EmptyStateWidget(
               icon: QuarkIcons.photo_album_outlined,
               headline: 'No photos yet',
-              subtext:
-                  'Add photos to "${widget.album.name}" from the Photos view.',
+              subtext: widget.album.isFavorites
+                  ? 'Star a photo to add it here.'
+                  : 'Add photos to "${widget.album.name}" from the Photos view.',
             )
           : RefreshIndicator(
               onRefresh: _load,
@@ -216,7 +236,9 @@ class _AlbumPageState extends State<AlbumPage> {
                               imageCount: _items.length,
                               relPath: isDemo ? null : item.relPath,
                               serial: isDemo ? null : item.deviceSerial,
-                              sourceAlbum: isDemo ? null : widget.album,
+                              sourceAlbum: isDemo || widget.album.isSystemAlbum
+                                  ? null
+                                  : widget.album,
                               getImageCount: () async => _items.length,
                               onLoadImage: (newIdx) async {
                                 if (newIdx >= _items.length) {
@@ -309,20 +331,30 @@ class _AlbumPageState extends State<AlbumPage> {
                 );
               },
             ),
-            ListTile(
-              leading: Icon(
-                QuarkIcons.remove_circle_outline,
-                color: Theme.of(ctx).colorScheme.error,
+            if (widget.album.isFavorites)
+              ListTile(
+                leading: const Icon(QuarkIcons.star_rounded),
+                title: const Text('Remove from favorites'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _removeFromFavorites(item);
+                },
+              )
+            else if (!widget.album.isSystemAlbum)
+              ListTile(
+                leading: Icon(
+                  QuarkIcons.remove_circle_outline,
+                  color: Theme.of(ctx).colorScheme.error,
+                ),
+                title: Text(
+                  'Remove from album',
+                  style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+                ),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _removeItem(item);
+                },
               ),
-              title: Text(
-                'Remove from album',
-                style: TextStyle(color: Theme.of(ctx).colorScheme.error),
-              ),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _removeItem(item);
-              },
-            ),
           ],
         ),
       ),

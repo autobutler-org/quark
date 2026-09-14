@@ -97,8 +97,11 @@ func (q *Queries) DeleteAlbum(ctx context.Context, id int64) error {
 const deletePhotoFromAllAlbums = `-- name: DeletePhotoFromAllAlbums :exec
 DELETE FROM photo_album_items
 WHERE
-    device_serial = ?
-    AND rel_path = ?
+    device_serial = ?1
+    AND (
+        rel_path = ?2
+        OR substr(rel_path, 1, length(?2) + 1) = ?2 || '/'
+    )
 `
 
 type DeletePhotoFromAllAlbumsParams struct {
@@ -106,6 +109,9 @@ type DeletePhotoFromAllAlbumsParams struct {
 	RelPath      string
 }
 
+// DeletePhotoFromAllAlbums drops every album row for the path, and for
+// everything under it when the path is a folder. substr rather than LIKE, so a
+// '%' or '_' in a file name is not a wildcard.
 func (q *Queries) DeletePhotoFromAllAlbums(ctx context.Context, arg DeletePhotoFromAllAlbumsParams) error {
 	_, err := q.db.ExecContext(ctx, deletePhotoFromAllAlbums, arg.DeviceSerial, arg.RelPath)
 	return err
@@ -373,6 +379,39 @@ func (q *Queries) MoveAlbum(ctx context.Context, arg MoveAlbumParams) (PhotoAlbu
 		&i.SmartType,
 	)
 	return i, err
+}
+
+const moveAlbumItems = `-- name: MoveAlbumItems :exec
+UPDATE OR IGNORE photo_album_items
+SET
+    device_serial = ?1,
+    rel_path = ?2 || substr(rel_path, length(CAST(?3 AS TEXT)) + 1)
+WHERE
+    device_serial = ?4
+    AND (
+        rel_path = ?3
+        OR substr(rel_path, 1, length(?3) + 1) = ?3 || '/'
+    )
+`
+
+type MoveAlbumItemsParams struct {
+	NewDeviceSerial string
+	NewRelPath      string
+	OldRelPath      string
+	OldDeviceSerial string
+}
+
+// MoveAlbumItems points album rows at a moved file, or at everything under a
+// moved folder. OR IGNORE skips a row whose destination the album already
+// holds; DeletePhotoFromAllAlbums on the old path clears those leftovers.
+func (q *Queries) MoveAlbumItems(ctx context.Context, arg MoveAlbumItemsParams) error {
+	_, err := q.db.ExecContext(ctx, moveAlbumItems,
+		arg.NewDeviceSerial,
+		arg.NewRelPath,
+		arg.OldRelPath,
+		arg.OldDeviceSerial,
+	)
+	return err
 }
 
 const removePhotoFromAlbum = `-- name: RemovePhotoFromAlbum :exec

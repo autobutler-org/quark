@@ -864,6 +864,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: 'Forbidden: system album as the parent'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
@@ -890,6 +894,10 @@ paths:
             $ref: '#/definitions/serverutil.Response'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: 'Forbidden: system album'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -958,6 +966,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: 'Forbidden: system album'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
@@ -1020,6 +1032,14 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: 'Forbidden: system album'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
@@ -1053,6 +1073,10 @@ paths:
             $ref: '#/definitions/v0_albums.AlbumJSON'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: 'Forbidden: system album, or a system album as the parent'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
@@ -1092,6 +1116,10 @@ paths:
             $ref: '#/definitions/v0_albums.AlbumJSON'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: 'Forbidden: system album'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":

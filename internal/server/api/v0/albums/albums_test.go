@@ -1,12 +1,21 @@
 package v0_albums
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
+	"github.com/autobutler-org/quark/pkg/util/ctxutil"
+	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/favoritesutil"
+	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/gin-gonic/gin"
 	_ "modernc.org/sqlite"
 )
 
@@ -274,5 +283,91 @@ func TestListChildAlbums(t *testing.T) {
 	}
 	if len(children) != 2 {
 		t.Errorf("expected 2 children, got %d", len(children))
+	}
+}
+
+// --- System album guards (HTTP) ---
+
+func newAlbumEngine(t *testing.T) (*gin.Engine, *db.Queries) {
+	t.Helper()
+	database := dbtest.NewDB(t)
+	deps := deputil.NewDependencies().WithDatabase(database)
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c = ctxutil.With(c, "deps", deps)
+		c.Next()
+	})
+	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), NewRouter())
+	return engine, database.Queries
+}
+
+func doAlbumReq(engine *gin.Engine, method, path, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, req)
+	return w
+}
+
+// TestSystemAlbumGuards checks that every album mutation refuses the Favorites
+// album, both as the album acted on and as a parent to nest under.
+func TestSystemAlbumGuards(t *testing.T) {
+	engine, q := newAlbumEngine(t)
+	ctx := context.Background()
+	fav, err := favoritesutil.EnsureFavoritesAlbum(ctx, q)
+	if err != nil {
+		t.Fatalf("EnsureFavoritesAlbum: %v", err)
+	}
+	user, err := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Trips"})
+	if err != nil {
+		t.Fatalf("CreateAlbum: %v", err)
+	}
+	photo := `{"deviceSerial":"","relPath":"a.jpg"}`
+
+	cases := []struct {
+		name, method, path, body string
+	}{
+		{"delete", http.MethodDelete, fmt.Sprintf("/api/v0/albums/%d", fav.ID), ""},
+		{"rename", http.MethodPatch, fmt.Sprintf("/api/v0/albums/%d/rename", fav.ID), `{"name":"Mine"}`},
+		{"move system album", http.MethodPatch, fmt.Sprintf("/api/v0/albums/%d/move", fav.ID), fmt.Sprintf(`{"parentId":%d}`, user.ID)},
+		{"move under system album", http.MethodPatch, fmt.Sprintf("/api/v0/albums/%d/move", user.ID), fmt.Sprintf(`{"parentId":%d}`, fav.ID)},
+		{"create under system album", http.MethodPost, "/api/v0/albums", fmt.Sprintf(`{"name":"Child","parentId":%d}`, fav.ID)},
+		{"add item", http.MethodPost, fmt.Sprintf("/api/v0/albums/%d/items", fav.ID), photo},
+		{"remove item", http.MethodDelete, fmt.Sprintf("/api/v0/albums/%d/items", fav.ID), photo},
+	}
+	// Seed the item so a successful remove would be observable.
+	if _, err := favoritesutil.ToggleFavorite(ctx, q, "", "a.jpg"); err != nil {
+		t.Fatalf("ToggleFavorite: %v", err)
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if w := doAlbumReq(engine, tc.method, tc.path, tc.body); w.Code != http.StatusForbidden {
+				t.Fatalf("%s %s = %d, want 403: %s", tc.method, tc.path, w.Code, w.Body.String())
+			}
+		})
+	}
+
+	got, err := q.GetAlbum(ctx, fav.ID)
+	if err != nil {
+		t.Fatalf("Favorites album is gone: %v", err)
+	}
+	if got.Name != "Favorites" || got.ParentID.Valid {
+		t.Errorf("Favorites album changed: %+v", got)
+	}
+	if n, _ := q.CountAlbumItems(ctx, fav.ID); n != 1 {
+		t.Errorf("Favorites items = %d, want 1", n)
+	}
+	if u, _ := q.GetAlbum(ctx, user.ID); u.ParentID.Valid {
+		t.Errorf("user album was moved under Favorites")
+	}
+	children, _ := q.ListChildAlbums(ctx, sql.NullInt64{Int64: fav.ID, Valid: true})
+	if len(children) != 0 {
+		t.Errorf("album created under Favorites: %+v", children)
+	}
+
+	// A user album is still fully mutable.
+	if w := doAlbumReq(engine, http.MethodDelete, fmt.Sprintf("/api/v0/albums/%d", user.ID), ""); w.Code != http.StatusNoContent {
+		t.Errorf("deleting a user album = %d, want 204", w.Code)
 	}
 }

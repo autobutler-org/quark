@@ -2,9 +2,48 @@ package fileutil
 
 import (
 	"archive/zip"
+	"context"
 	"fmt"
 	"io"
+	"path"
+	"path/filepath"
+	"strings"
+
+	"github.com/autobutler-org/quark/internal/db"
 )
+
+// dbRelPath spells a path the way the photo tables key it: slash-separated,
+// cleaned, no leading slash. The file routes resolve "/a.jpg" and "a.jpg" to
+// the same file, so the rows have to be matched on one spelling.
+func dbRelPath(p string) string {
+	return strings.TrimPrefix(path.Clean("/"+filepath.ToSlash(p)), "/")
+}
+
+// movePhotoRows points favorites and album items at a moved file, or at
+// everything under a moved folder. A row whose destination already exists is
+// left behind by the update and dropped afterwards: the file it named is gone.
+func movePhotoRows(ctx context.Context, q *db.Queries, oldSerial, oldPath, newSerial, newPath string) error {
+	oldPath, newPath = dbRelPath(oldPath), dbRelPath(newPath)
+	if oldPath == "" || newPath == "" || (oldSerial == newSerial && oldPath == newPath) {
+		return nil
+	}
+	if err := q.MoveFavorites(ctx, db.MoveFavoritesParams{
+		OldDeviceSerial: oldSerial, OldRelPath: oldPath,
+		NewDeviceSerial: newSerial, NewRelPath: newPath,
+	}); err != nil {
+		return err
+	}
+	if err := q.DeleteFavoritesUnder(ctx, db.DeleteFavoritesUnderParams{DeviceSerial: oldSerial, RelPath: oldPath}); err != nil {
+		return err
+	}
+	if err := q.MoveAlbumItems(ctx, db.MoveAlbumItemsParams{
+		OldDeviceSerial: oldSerial, OldRelPath: oldPath,
+		NewDeviceSerial: newSerial, NewRelPath: newPath,
+	}); err != nil {
+		return err
+	}
+	return q.DeletePhotoFromAllAlbums(ctx, db.DeletePhotoFromAllAlbumsParams{DeviceSerial: oldSerial, RelPath: oldPath})
+}
 
 // notFound marks an error as a 404 for the handler.
 func notFound(err error) error { return &NotFoundError{Err: err} }

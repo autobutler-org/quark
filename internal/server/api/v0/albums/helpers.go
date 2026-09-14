@@ -1,5 +1,40 @@
 package v0_albums
 
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"net/http"
+
+	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/serverutil"
+)
+
+// errSystemAlbum is why a system album (Favorites) refuses a user edit. Its
+// contents follow photo_favorites, which only favoritesutil writes.
+var errSystemAlbum = errors.New("system albums cannot be changed")
+
+// forbidSystemAlbum answers 403 for a system album and nil for a user one.
+func forbidSystemAlbum(album db.PhotoAlbum) *serverutil.Response {
+	if !album.SmartType.Valid {
+		return nil
+	}
+	return serverutil.NewResponse().WithStatusCode(http.StatusForbidden).WithError(errSystemAlbum)
+}
+
+// rejectSystemAlbum loads the album and applies forbidSystemAlbum. A missing
+// album passes, so each handler keeps the not-found answer it already gave.
+func rejectSystemAlbum(ctx context.Context, q *db.Queries, id int64) *serverutil.Response {
+	album, err := q.GetAlbum(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	return forbidSystemAlbum(album)
+}
+
 // buildTree converts a flat album list into a nested tree.
 // Uses a child-index map to avoid value-copy aliasing issues when building
 // multi-level hierarchies.

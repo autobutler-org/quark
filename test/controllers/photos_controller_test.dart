@@ -20,14 +20,15 @@ wire.PhotoItem _wirePhoto(int i, {String serial = 'sd1'}) => wire.PhotoItem(
   hasLiveVideo: i == 0,
 );
 
-PhotoAlbum _album(int id, String name, {String? smartType}) => PhotoAlbum(
-  id: id,
-  name: name,
-  smartType: smartType,
-  createdAt: DateTime(2024),
-  updatedAt: DateTime(2024),
-  itemCount: 0,
-);
+PhotoAlbum _album(int id, String name, {String? smartType, int count = 0}) =>
+    PhotoAlbum(
+      id: id,
+      name: name,
+      smartType: smartType,
+      createdAt: DateTime(2024),
+      updatedAt: DateTime(2024),
+      itemCount: count,
+    );
 
 StorageDevice _device(String serial, {bool enabled = true}) => StorageDevice(
   name: serial,
@@ -281,6 +282,24 @@ void main() {
       expect(controller.photos[1].isFavorite, isFalse);
     });
 
+    test(
+      'toggling reloads the albums so the Favorites count follows',
+      () async {
+        final quark = _FakeQuark();
+        final controller = quark.controller();
+        await controller.refresh();
+        quark.calls.clear();
+        quark.albums = [
+          _album(3, 'Favorites', smartType: 'favorites', count: 1),
+        ];
+
+        await controller.toggleFavorite('sd1:camera/1.jpg');
+
+        expect(quark.calls, ['toggle(camera/1.jpg)', 'listAlbums']);
+        expect(controller.albums.single.itemCount, 1);
+      },
+    );
+
     test('device photos cannot be favorited', () async {
       final quark = _FakeQuark();
       final controller = quark.controller();
@@ -352,6 +371,14 @@ void main() {
       ]);
       expect(controller.albums.first.isFavorites, isTrue);
       expect(controller.albumById(1)?.name, 'Trips');
+    });
+
+    test('the add-to-album picker leaves out system albums', () async {
+      final controller = _FakeQuark().controller();
+
+      final picked = await controller.fetchAlbums();
+
+      expect(picked.map((a) => a.name), ['Trips']);
     });
 
     test('creating reloads the tree', () async {

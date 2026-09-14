@@ -51,8 +51,8 @@ class DemoPhotosService {
     'sailboat.jpg',
   ];
 
+  /// The hand-picked albums. Favorites is not here: it follows [_favorites].
   static final Map<int, List<String>> _albumFiles = {
-    favoritesAlbumId: _favoriteFiles,
     summerTripAlbumId: [
       'beach-day.jpg',
       'sailboat.jpg',
@@ -152,7 +152,7 @@ class DemoPhotosService {
   ]);
 
   static List<PhotoAlbumItem> listAlbumItems(int albumId) {
-    final files = _albumFiles[albumId] ?? const <String>[];
+    final files = _filesIn(albumId);
     return List.unmodifiable([
       for (final (index, file) in files.indexed)
         PhotoAlbumItem(
@@ -172,6 +172,16 @@ class DemoPhotosService {
 
   static String _relPath(String file) => '$assetDir/$file';
 
+  /// The files in [albumId]. Favorites mirrors the current stars, in catalog
+  /// order, the way the Quark's own Favorites album does (#992).
+  static List<String> _filesIn(int albumId) => albumId == favoritesAlbumId
+      ? [
+          for (final photo in photos)
+            if (_favorites.contains(selectionKey(photo.relPath)))
+              photo.fileName,
+        ]
+      : _albumFiles[albumId] ?? const [];
+
   static PhotoItem _photo(String file, int size, DateTime taken) => PhotoItem(
     relPath: _relPath(file),
     fileName: file,
@@ -187,6 +197,6 @@ class DemoPhotosService {
         smartType: smartType,
         createdAt: _albumDate,
         updatedAt: _albumDate,
-        itemCount: _albumFiles[id]?.length ?? 0,
+        itemCount: _filesIn(id).length,
       );
 }

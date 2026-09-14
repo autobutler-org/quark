@@ -23,6 +23,7 @@ import (
 // @Param body body createAlbumRequest true "Album name and optional parent ID"
 // @Success 201 {object} AlbumJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 403 {object} serverutil.Response "Forbidden: system album as the parent"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /albums [post]
 func createAlbum(c *gin.Context) *serverutil.Response {
@@ -38,8 +39,12 @@ func createAlbum(c *gin.Context) *serverutil.Response {
 
 	var parentID sql.NullInt64
 	if req.ParentID != nil {
-		if _, err := deps.Database().Queries.GetAlbum(context.Background(), *req.ParentID); err != nil {
+		parent, err := deps.Database().Queries.GetAlbum(context.Background(), *req.ParentID)
+		if err != nil {
 			return serverutil.BadRequest(errors.New("parent album not found"))
+		}
+		if resp := forbidSystemAlbum(parent); resp != nil {
+			return resp
 		}
 		parentID = sql.NullInt64{Int64: *req.ParentID, Valid: true}
 	}

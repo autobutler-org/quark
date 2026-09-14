@@ -521,7 +521,8 @@ class PhotosController extends ChangeNotifier {
 
   // ── Favorites ──────────────────────────────────────────────────────────────
 
-  /// Flips whether the Quark photo [id] is a favorite. Device photos cannot be
+  /// Flips whether the Quark photo [id] is a favorite, then reloads the album
+  /// tree so the Favorites album's count follows. Device photos cannot be
   /// favorited and are ignored. Throws what the Quark threw.
   Future<void> toggleFavorite(String id) async {
     final photo = _byId(id);
@@ -538,6 +539,7 @@ class PhotosController extends ChangeNotifier {
       _favoriteKeys.remove(id);
     }
     notifyListeners();
+    await loadAlbums();
   }
 
   // ── Selection ──────────────────────────────────────────────────────────────
@@ -627,11 +629,10 @@ class PhotosController extends ChangeNotifier {
     }
   }
 
-  /// A fresh copy of the album tree, for a picker that loads its own. Throws
-  /// what the Quark threw.
-  Future<List<AlbumItem>> fetchAlbums() async => [
-    for (final album in await _listAlbums(tree: true)) album.toAlbumItem(),
-  ];
+  /// A fresh copy of the albums a photo can be added to, for a picker that
+  /// loads its own. System albums are left out. Throws what the Quark threw.
+  Future<List<AlbumItem>> fetchAlbums() async =>
+      (await _listAlbums(tree: true)).toUserAlbumItems();
 
   /// The app album behind [id], searched through the whole tree.
   PhotoAlbum? albumById(int id) {

@@ -20,6 +20,7 @@ import (
 // @Param id path int true "Album ID"
 // @Success 204 {object} serverutil.Response "No Content"
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 403 {object} serverutil.Response "Forbidden: system album"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /albums/{id} [delete]
 func deleteAlbum(c *gin.Context) *serverutil.Response {
@@ -31,6 +32,10 @@ func deleteAlbum(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
 	if !ok {
 		return serverutil.InternalServerError(nil)
+	}
+
+	if resp := rejectSystemAlbum(c.Request.Context(), deps.Database().Queries, id); resp != nil {
+		return resp
 	}
 
 	if err := deps.Database().Queries.DeleteAlbum(context.Background(), id); err != nil {
