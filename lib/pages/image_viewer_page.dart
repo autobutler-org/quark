@@ -3,10 +3,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/photo_bytes_cache.dart';
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/models/photo_metadata.dart';
-import 'package:quark/pages/album_page.dart';
+import 'package:quark/router.dart';
 import 'package:quark/services/album_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/favorites_service.dart';
@@ -623,26 +624,10 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     }
   }
 
-  Future<void> _navigateToAlbum(AlbumRef ref) async {
-    // An AlbumRef carries no smartType, and AlbumPage needs it to keep the
-    // add and remove actions off a system album (#992). If the fetch fails,
-    // a minimal album still opens the page; the Quark refuses the edits.
-    final album = await AlbumService.getAlbum(ref.id).then<PhotoAlbum>(
-      (album) => album,
-      onError: (Object _) => PhotoAlbum(
-        id: ref.id,
-        name: ref.name,
-        parentId: null,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        itemCount: 0,
-      ),
-    );
-    if (!mounted) return;
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => AlbumPage(album: album)));
-  }
+  /// Opens the album in place on the Photos page (#1916). Only the id is known
+  /// here; the page rewrites the URL to the album's name once it resolves.
+  void _navigateToAlbum(AlbumRef ref) =>
+      context.go(AppRoutes.photosAlbum('${ref.id}'));
 
   Future<void> _makeACopy() async {
     final relPath = _currentRelPath;

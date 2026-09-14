@@ -106,6 +106,32 @@ void main() {
     });
   });
 
+  group('Errors.album', () {
+    test('a 409 says a sibling already has the name', () {
+      expect(
+        Errors.album(const ApiException(409), 'rename the album'),
+        "There's already an album with that name here.",
+      );
+    });
+
+    test('the slash refusal reads as its own sentence', () {
+      expect(
+        Errors.album(
+          const MessageException(Errors.albumNameHasSlash),
+          'create the album',
+        ),
+        "Album names can't contain a slash.",
+      );
+    });
+
+    test('anything else reads like Errors.message', () {
+      expect(
+        Errors.album(const ApiException(403), 'rename the album'),
+        Errors.message(const ApiException(403), 'rename the album'),
+      );
+    });
+  });
+
   group('throwApiError', () {
     test('prefers the Quark\'s message when it sent one', () {
       expect(

@@ -360,7 +360,8 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 - The Photos page shows the bundled sample photos and albums (`assets/demo/`) instead of the quark's library, and
   makes no request to the quark for them.
-- Sample photos open in the image viewer, can be starred (locally only), and their albums open from the sidebar.
+- Sample photos open in the image viewer, can be starred (locally only), and their albums open in place on the
+  Photos page from the sidebar (JN-PH-012), with **All photos** returning to the sample library.
 - Album creation, renaming, deletion, and adding sample photos to albums are disabled.
 - The setting persists across app restarts.
 - Switching the toggle off returns the Photos page to the quark's real library with nothing from the sample set

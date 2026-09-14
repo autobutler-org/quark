@@ -2,6 +2,8 @@ package favoritesutil_test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -47,6 +49,45 @@ func TestEnsureFavoritesAlbum_Idempotent(t *testing.T) {
 	}
 	if a1.ID != a2.ID {
 		t.Errorf("expected same album ID on both calls: got %d and %d", a1.ID, a2.ID)
+	}
+}
+
+// TestEnsureFavoritesAlbum_UserAlbumHoldsName verifies that a user album at
+// the root holding the name is reported as such rather than mistaken for a
+// creation race. The raw query bypasses albumutil, which would refuse it.
+func TestEnsureFavoritesAlbum_UserAlbumHoldsName(t *testing.T) {
+	q := newTestDB(t)
+	ctx := context.Background()
+	if _, err := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "favorites"}); err != nil {
+		t.Fatalf("CreateAlbum: %v", err)
+	}
+	if _, err := favoritesutil.EnsureFavoritesAlbum(ctx, q); !errors.Is(err, favoritesutil.ErrFavoritesNameTaken) {
+		t.Fatalf("EnsureFavoritesAlbum error = %v, want ErrFavoritesNameTaken", err)
+	}
+}
+
+// TestEnsureFavoritesAlbum_NestedNameDoesNotBlock verifies that only a root
+// album clashes: Favorites nested under another album is a different sibling
+// group.
+func TestEnsureFavoritesAlbum_NestedNameDoesNotBlock(t *testing.T) {
+	q := newTestDB(t)
+	ctx := context.Background()
+	parent, err := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Trips"})
+	if err != nil {
+		t.Fatalf("CreateAlbum: %v", err)
+	}
+	if _, err := q.CreateAlbum(ctx, db.CreateAlbumParams{
+		Name:     "Favorites",
+		ParentID: sql.NullInt64{Int64: parent.ID, Valid: true},
+	}); err != nil {
+		t.Fatalf("CreateAlbum nested: %v", err)
+	}
+	album, err := favoritesutil.EnsureFavoritesAlbum(ctx, q)
+	if err != nil {
+		t.Fatalf("EnsureFavoritesAlbum: %v", err)
+	}
+	if !album.SmartType.Valid || album.ParentID.Valid {
+		t.Errorf("got %+v, want the root system album", album)
 	}
 }
 

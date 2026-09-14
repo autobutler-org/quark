@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/photos_controller.dart';
 import 'package:quark/models/photo_album.dart';
-import 'package:quark/pages/album_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -14,22 +13,26 @@ import 'package:quark/utils/photo_grid_config.dart';
 import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/widgets/device_upload_picker.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/photos/add_to_album_sheet.dart';
 import 'package:quark/widgets/photos/album_actions_sheet.dart';
+import 'package:quark/widgets/photos/album_item_actions_sheet.dart';
 import 'package:quark/widgets/photos/album_name_dialog.dart';
 import 'package:quark/widgets/photos/album_picker_sheet.dart';
 import 'package:quark/widgets/photos/delete_album_dialog.dart';
 import 'package:quark/widgets/photos/photo_thumbnail.dart';
 import 'package:quark/widgets/photos/photos_empty_state.dart';
 import 'package:quark/widgets/photos/photos_selection_app_bar.dart';
+import 'package:quark/widgets/photos/remove_from_album_dialog.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 class PhotosPage extends StatefulWidget {
-  const PhotosPage({this.addingToAlbum, super.key});
+  const PhotosPage({this.album, super.key});
 
-  /// When set, the page opens in "adding to album" mode — selection mode is
-  /// immediately active and the header shows the album name.
-  final PhotoAlbum? addingToAlbum;
+  /// The `?album=` query naming the album the grid shows — a name path or an
+  /// id, see `resolveAlbumLink` — or null for All photos. Albums open in
+  /// place rather than on a page of their own (#1916).
+  final String? album;
 
   @override
   State<PhotosPage> createState() => PhotosPageState();
@@ -72,10 +75,40 @@ class PhotosPageState extends State<PhotosPage>
     super.initState();
     _scrollController.addListener(_onScroll);
     _scheduleNavMeasure();
-    final addingTo = widget.addingToAlbum;
-    if (addingTo != null) {
-      _controller.enterSelectionMode(addingTo: addingTo.toAlbumItem());
+    _controller.addListener(_scheduleAlbumUrlSync);
+    _controller.showAlbumLink(widget.album);
+  }
+
+  /// go_router keeps this State when only the query changes, so a new
+  /// `?album=` arrives here.
+  @override
+  void didUpdateWidget(PhotosPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.album != oldWidget.album) {
+      _controller.showAlbumLink(widget.album);
+      // Another spelling of the album already showing changes nothing in the
+      // controller, so nothing else would rewrite it.
+      _scheduleAlbumUrlSync();
     }
+  }
+
+  bool _albumUrlSyncScheduled = false;
+
+  /// Points the URL at [PhotosController.albumLink] after the frame, once
+  /// the controller has changed: a link by id or in another case resolving,
+  /// the add-photos round trip leaving and returning to the album, and the
+  /// showing album being renamed or deleted. Deferred because the controller
+  /// also changes while go_router is building this page.
+  void _scheduleAlbumUrlSync() {
+    if (_albumUrlSyncScheduled) return;
+    _albumUrlSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _albumUrlSyncScheduled = false;
+      if (!mounted) return;
+      final link = _controller.albumLink;
+      // The same value is already the location, so writing it is skipped.
+      if (link != widget.album) context.go(AppRoutes.photosAlbum(link));
+    });
   }
 
   /// Frames to wait for the nav panel to report a size before giving up.
@@ -157,6 +190,7 @@ class PhotosPageState extends State<PhotosPage>
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _controller.removeListener(_scheduleAlbumUrlSync);
     _controller.dispose();
     super.dispose();
   }
@@ -215,6 +249,7 @@ class PhotosPageState extends State<PhotosPage>
     _isOpeningPhoto = true;
     try {
       final navigator = Navigator.of(context);
+      final album = _controller.selectedAlbum;
       final opened = await _controller.openPhotoAt(index);
       if (opened == null || !mounted) return;
       final (bytes, name, relPath, serial) = _forViewer(opened);
@@ -230,6 +265,9 @@ class PhotosPageState extends State<PhotosPage>
             getImageCount: () async => _controller.photoCount,
             onLoadImage: _loadPhotoAt,
             onPrefetchImage: _controller.prefetchPhotoAt,
+            // Only a user album offers "remove from this album" in the viewer;
+            // the Quark fills system albums itself (#992).
+            sourceAlbum: _demo || (album?.isSystemAlbum ?? true) ? null : album,
           ),
         ),
       );
@@ -297,14 +335,6 @@ class PhotosPageState extends State<PhotosPage>
 
   // ── Selection ──────────────────────────────────────────────────────────────
 
-  /// Leaves selection mode, and the page too when it was opened to add to an
-  /// album.
-  void _cancelSelection() {
-    final wasAdding = _controller.addingToAlbum != null;
-    _controller.exitSelectionMode();
-    if (wasAdding) Navigator.of(context).pop();
-  }
-
   Future<void> _pickAlbumForSelection() async {
     final album = await AlbumPickerSheetHost.show(
       context,
@@ -316,7 +346,6 @@ class PhotosPageState extends State<PhotosPage>
   }
 
   Future<void> _addSelectedTo(AlbumItem album) async {
-    final wasAdding = _controller.addingToAlbum != null;
     final outcome = await _controller.addSelectedToAlbum(album.id);
     if (!mounted) return;
 
@@ -332,28 +361,82 @@ class PhotosPageState extends State<PhotosPage>
     } else {
       _snack(Errors.message(outcome.error, 'add photos to "${album.name}"'));
     }
-
-    // Stay in adding mode when nothing was added, so the user can try again.
-    if (wasAdding && added > 0) Navigator.of(context).pop();
   }
 
   // ── Albums ─────────────────────────────────────────────────────────────────
 
-  void _openAlbum(AlbumItem item) {
-    final album = _controller.albumById(item.id);
-    if (album == null) return;
-    Navigator.of(
+  /// Shows the album [id] in place, or All photos for null, at its canonical
+  /// link. [didUpdateWidget] hands the new URL to the controller.
+  void _showAlbum(int? id) {
+    context.go(
+      AppRoutes.photosAlbum(id == null ? null : _controller.albumLinkFor(id)),
+    );
+    _scrollToGrid();
+  }
+
+  /// The collapsed layout stacks the sidebar above the grid, so a tap on a
+  /// sidebar row would change a grid scrolled out of sight. Bring it back.
+  void _scrollToGrid() {
+    if (!_compactLayout || !_scrollController.hasClients) return;
+    final box = _navPanelKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    _scrollController.animateTo(
+      box.size.height,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  /// Switches to All photos to pick photos for [album], and back to the album
+  /// once they are added or the selection is canceled.
+  void _addPhotosTo(AlbumItem album) {
+    _controller.enterSelectionMode(addingTo: album);
+    _showAlbum(null);
+  }
+
+  /// What a long press does while an album shows: that photo's menu.
+  /// Selection stays a library feature. Demo albums refuse edits, so they
+  /// get no menu, as before.
+  void _showAlbumItemActions(PhotoAlbum album, String id) {
+    final path = _controller.quarkPathOf(id);
+    if (_demo || path == null) return;
+    AlbumItemActionsSheet.show(
       context,
-    ).push(MaterialPageRoute(builder: (_) => AlbumPage(album: album)));
+      onAddToAnotherAlbum: () => AddToAlbumSheetHost.show(
+        context,
+        deviceSerial: path.serial,
+        relPath: path.relPath,
+      ),
+      onRemoveFromFavorites: album.isFavorites
+          ? () => _toggleFavorite(id)
+          : null,
+      onRemoveFromAlbum: album.isSystemAlbum
+          ? null
+          : () => _removeFromAlbum(id),
+    );
+  }
+
+  Future<void> _removeFromAlbum(String id) async {
+    if (!await RemoveFromAlbumDialog.show(context)) return;
+    try {
+      await _controller.removeFromSelectedAlbum(id);
+    } catch (e) {
+      if (mounted) _snack(Errors.message(e, 'remove the photo from the album'));
+    }
   }
 
   Future<void> _createAlbum({int? parentId}) async {
-    final name = await AlbumNameDialog.show(context, title: 'New album');
+    final name = await AlbumNameDialog.show(
+      context,
+      title: 'New album',
+      isNameTaken: (name) =>
+          _controller.albumNameTaken(name, parentId: parentId),
+    );
     if (name == null || name.isEmpty) return;
     try {
       await _controller.createAlbum(name, parentId: parentId);
     } catch (e) {
-      if (mounted) _snack(Errors.message(e, 'create the album'));
+      if (mounted) _snack(Errors.album(e, 'create the album'));
     }
   }
 
@@ -362,12 +445,17 @@ class PhotosPageState extends State<PhotosPage>
       context,
       title: 'Rename album',
       initial: album.name,
+      isNameTaken: (name) => _controller.albumNameTaken(
+        name,
+        parentId: album.parentId,
+        except: album.id,
+      ),
     );
     if (name == null || name.isEmpty || name == album.name) return;
     try {
       await _controller.renameAlbum(album.id, name);
     } catch (e) {
-      if (mounted) _snack(Errors.message(e, 'rename the album'));
+      if (mounted) _snack(Errors.album(e, 'rename the album'));
     }
   }
 
@@ -403,7 +491,7 @@ class PhotosPageState extends State<PhotosPage>
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): () {
-          if (_controller.selectionMode) _cancelSelection();
+          if (_controller.selectionMode) _controller.exitSelectionMode();
         },
       },
       child: Focus(
@@ -414,6 +502,8 @@ class PhotosPageState extends State<PhotosPage>
             final c = _controller;
             final photos = c.photos;
             final selectedIds = c.selectedIds;
+            final album = c.selectedAlbum;
+            final albumError = c.albumError;
 
             return QuarkPageScaffold(
               title: 'Photos',
@@ -430,10 +520,19 @@ class PhotosPageState extends State<PhotosPage>
                   tooltip: 'Upload photos',
                   onPressed: c.isUploading ? null : _uploadPhotos,
                 ),
-                TextButton(
-                  onPressed: c.enterSelectionMode,
-                  child: const Text('Select'),
-                ),
+                if (album == null)
+                  TextButton(
+                    onPressed: c.enterSelectionMode,
+                    child: const Text('Select'),
+                  ),
+                // The Quark fills system albums itself and refuses edits (#992).
+                if (album != null && !album.isSystemAlbum)
+                  TextButton.icon(
+                    key: const ValueKey('photos_add_to_album'),
+                    onPressed: () => _addPhotosTo(album.toAlbumItem()),
+                    icon: const Icon(QuarkIcons.add_rounded, size: 18),
+                    label: const Text('Add Photos'),
+                  ),
                 RefreshIconButton(
                   isRefreshing: isRefreshing,
                   onPressed: manualRefresh,
@@ -448,7 +547,7 @@ class PhotosPageState extends State<PhotosPage>
                       onConfirm: selectedIds.isNotEmpty
                           ? () => _addSelectedTo(c.addingToAlbum!)
                           : null,
-                      onCancel: _cancelSelection,
+                      onCancel: c.exitSelectionMode,
                     )
                   : null,
               drawer: QuarkDrawer(
@@ -502,7 +601,9 @@ class PhotosPageState extends State<PhotosPage>
                           isLoading: c.albumsLoading,
                           expandedIds: c.expandedAlbumIds,
                           shrinkWrap: compact,
-                          onAlbumSelected: _openAlbum,
+                          selectedAlbumId: c.selectedAlbumId,
+                          onAllPhotosSelected: () => _showAlbum(null),
+                          onAlbumSelected: (item) => _showAlbum(item.id),
                           onToggleExpanded: c.toggleAlbumExpanded,
                           onCreateAlbum: _createAlbum,
                           onAlbumLongPress: _showAlbumActions,
@@ -517,13 +618,19 @@ class PhotosPageState extends State<PhotosPage>
                           ),
                           selectedIds: selectedIds,
                           selectionMode: c.selectionMode,
-                          isLoading: isInitialLoad,
+                          isLoading: isInitialLoad || c.albumLoading,
+                          // Unreachable has its own view in the empty state.
+                          error: albumError == null || c.quarkUnreachable
+                              ? null
+                              : Errors.message(albumError, 'load the album'),
                           hasMore: c.hasMore,
                           isLoadingMore: c.isLoadingMore,
                           emptyState: PhotosEmptyState(
                             unreachable: c.quarkUnreachable,
-                            showingFavorites:
-                                c.selectedCategory == PhotoCategory.favorites,
+                            showingFavorites: album == null
+                                ? c.selectedCategory == PhotoCategory.favorites
+                                : album.isFavorites,
+                            albumName: album?.name,
                             hostAddress: c.activeHost,
                             onRetry: manualRefresh,
                             onManageHosts: () => context.go(AppRoutes.settings),
@@ -533,8 +640,9 @@ class PhotosPageState extends State<PhotosPage>
                             asset: c.assetFor(photo.id),
                           ),
                           onTap: (i) => _onPhotoTap(photos, i),
-                          onLongPress: (i) =>
-                              c.selectFromLongPress(photos[i].id),
+                          onLongPress: (i) => album == null
+                              ? c.selectFromLongPress(photos[i].id)
+                              : _showAlbumItemActions(album, photos[i].id),
                           onDoubleTap: (i) => _toggleFavorite(photos[i].id),
                         ),
                       ],

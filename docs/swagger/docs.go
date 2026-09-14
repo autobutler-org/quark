@@ -193,7 +193,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Creates a new photo album, optionally nested under a parent.",
+                "description": "Creates a new photo album, optionally nested under a parent. The name cannot contain / and must be unique among its siblings ignoring case; root albums, the system Favorites album included, are siblings of each other.",
                 "consumes": [
                     "application/json"
                 ],
@@ -223,13 +223,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad Request: missing name, a / in the name, or parent not found",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
                     "403": {
                         "description": "Forbidden: system album as the parent",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict: an album with that name already exists here",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -501,7 +507,7 @@ const docTemplate = `{
         },
         "/albums/{id}/move": {
             "patch": {
-                "description": "Changes the parent of an album. Pass null parentId to move to root.",
+                "description": "Changes the parent of an album. Pass null parentId to move to root. The new parent must not already hold an album with the same name ignoring case; root albums, the system Favorites album included, are siblings of each other.",
                 "consumes": [
                     "application/json"
                 ],
@@ -555,6 +561,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "409": {
+                        "description": "Conflict: an album with that name already exists here",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -566,7 +578,7 @@ const docTemplate = `{
         },
         "/albums/{id}/rename": {
             "patch": {
-                "description": "Updates the name of an existing album.",
+                "description": "Updates the name of an existing album. The name cannot contain / and must be unique among the album's siblings ignoring case; changing only the case of the album's own name is allowed.",
                 "consumes": [
                     "application/json"
                 ],
@@ -603,7 +615,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad Request: invalid id, missing name, or a / in the name",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -616,6 +628,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict: an album with that name already exists here",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

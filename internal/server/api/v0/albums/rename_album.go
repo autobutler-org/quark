@@ -5,27 +5,27 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/albumutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/sqlutil"
 
 	"github.com/gin-gonic/gin"
 )
 
 // renameAlbum godoc
 // @Summary Rename a photo album
-// @Description Updates the name of an existing album.
+// @Description Updates the name of an existing album. The name cannot contain / and must be unique among the album's siblings ignoring case; changing only the case of the album's own name is allowed.
 // @Tags albums
 // @Accept json
 // @Produce json
 // @Param id path int true "Album ID"
 // @Param body body renameAlbumRequest true "New album name"
 // @Success 200 {object} AlbumJSON
-// @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 400 {object} serverutil.Response "Bad Request: invalid id, missing name, or a / in the name"
 // @Failure 403 {object} serverutil.Response "Forbidden: system album"
 // @Failure 404 {object} serverutil.Response "Not Found"
+// @Failure 409 {object} serverutil.Response "Conflict: an album with that name already exists here"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /albums/{id}/rename [patch]
 func renameAlbum(c *gin.Context) *serverutil.Response {
@@ -48,30 +48,18 @@ func renameAlbum(c *gin.Context) *serverutil.Response {
 		return resp
 	}
 
-	album, err := deps.Database().Queries.RenameAlbum(context.Background(), db.RenameAlbumParams{
-		Name: req.Name,
-		ID:   id,
+	result, err := albumutil.RenameAlbum(c.Request.Context(), albumutil.RenameAlbumParams{
+		Queries: deps.Database().Queries,
+		ID:      id,
+		Name:    req.Name,
 	})
 	if err != nil {
-		return serverutil.NotFound(err)
+		return albumWriteError(err)
 	}
 
-	var parentID *int64
-	if album.ParentID.Valid {
-		parentID = &album.ParentID.Int64
-	}
+	count, _ := deps.Database().Queries.CountAlbumItems(context.Background(), result.Album.ID)
 
-	count, _ := deps.Database().Queries.CountAlbumItems(context.Background(), album.ID)
-
-	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(AlbumJSON{
-		ID:        album.ID,
-		Name:      album.Name,
-		ParentID:  parentID,
-		SmartType: sqlutil.NullStringPtr(album.SmartType),
-		CreatedAt: sqlutil.FormatTime(album.CreatedAt),
-		UpdatedAt: sqlutil.FormatTime(album.UpdatedAt),
-		ItemCount: count,
-	})
+	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(toAlbumJSON(result.Album, count))
 }
 
 var renameAlbumRoute = serverutil.ApiRoute(

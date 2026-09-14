@@ -164,23 +164,36 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 - New album appears in the sidebar.
 - Album is initially empty.
+- Album names are unique within their folder, ignoring case, and cannot contain `/`. Top-level albums share one
+  folder with Favorites and Inbox. A name already taken there (`trips` next to `Trips`) or containing `/` cannot be
+  saved: the dialog says why ("There's already an album with that name here." or "Album names can't contain a
+  slash.") and **Save** stays disabled.
+- If the Quark still refuses the name, because another device took it first, a snack bar shows the same message and
+  the sidebar is unchanged.
+- Renaming an album from its actions (**Rename**) follows the same rules. Changing only the case of its own name is
+  allowed.
 
 ---
 
 ### JN-PH-011: Add photos to an album
 
-**Preconditions:** An album exists (JN-PH-010). Photos are visible.
+**Preconditions:** A user album exists (JN-PH-010). Photos are visible.
 
 **Steps:**
 
-1. Open the album in the sidebar to enter "adding to album" mode.
-2. Select one or more photos from the grid.
-3. Confirm the selection.
+1. Open the album from the sidebar (JN-PH-012).
+2. Tap **Add Photos** in the app bar. The grid switches to All photos in "adding to album" mode, with the album
+   named in the header.
+3. Select one or more photos from the grid.
+4. Confirm the selection.
 
 **Expected result:**
 
 - Selected photos are associated with the album.
-- Album shows the correct count of photos.
+- The grid returns to the album, now showing the added photos, and the sidebar shows its new count.
+- Canceling the selection (or pressing Escape) also returns to the album, with nothing added.
+- System albums (Favorites, Inbox) show no **Add Photos** action.
+- Photos can also be added from plain selection mode: **Select**, pick photos, then **Add to album** in the bottom bar.
 
 ---
 
@@ -192,11 +205,30 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 1. Open the album sidebar.
 2. Tap an album.
+3. Tap **All photos**, the first row of the album list.
 
 **Expected result:**
 
-- App navigates to the album view (`AlbumPage`).
-- Only photos in the album are shown.
+- The album opens in place: the user stays on the Photos page, the grid shows only the album's photos, and the
+  album's row is highlighted. The column slider, sidebar, and app bar stay put; the "Showing" categories hide while
+  an album is showing.
+- The URL names the album: `/photos?album=Trips` for a top-level album, `/photos?album=Trips/Japan` for one nested
+  inside it. Reloading or sharing it lands on the same album.
+- Links by album id (`/photos?album=12`) and names in a different case (`/photos?album=trips`) open the album too, and
+  the URL is rewritten to the album's name. A name wins over an id, so an album named `2024` opens before the album
+  whose id is 2024.
+- Album names are unique within their folder, ignoring case, and cannot contain `/` (JN-PH-010), so the URL is a
+  name path. Only an album from before that rule, one that shares its path with another or has `/` in its name, is
+  linked by its id instead. An unknown name or id shows All photos at `/photos`.
+- Renaming the showing album updates the URL to its new name; deleting it returns to All photos.
+- On a narrow screen, where the sidebar sits above the grid, tapping a row scrolls the grid back into view.
+- Tapping a photo opens the viewer over the album's photos only.
+- Long-pressing a photo offers **Add to another album**, plus **Remove from album** (with a confirmation) in a user
+  album or **Remove from favorites** in Favorites.
+- An empty album says so: "Star a photo to add it here." for Favorites, and "Add photos to "<name>" from All
+  photos." for a user album. An unreachable quark shows the disconnected view instead.
+- Tapping **All photos** returns the grid to the library, in the category that was showing before, at `/photos`.
+- The album chips in the photo viewer's metadata panel open the album the same way.
 
 ---
 

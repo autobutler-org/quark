@@ -15,12 +15,16 @@ const _albums = [
   ),
 ];
 
+const _allPhotos = ValueKey('album_sidebar_all_photos');
+
 void main() {
   AlbumSidebar sidebar({
     List<AlbumItem> albums = _albums,
     bool isLoading = false,
     String? error,
     bool shrinkWrap = false,
+    int? selectedAlbumId,
+    bool withAllPhotos = false,
     List<String>? events,
   }) {
     void record(String e) => events?.add(e);
@@ -29,11 +33,13 @@ void main() {
       isLoading: isLoading,
       error: error,
       shrinkWrap: shrinkWrap,
+      selectedAlbumId: selectedAlbumId,
       expandedIds: const {2},
       onAlbumSelected: (a) => record('select:${a.id}'),
       onToggleExpanded: (id) => record('toggle:$id'),
       onCreateAlbum: () => record('create'),
       onAlbumLongPress: (a) => record('long:${a.id}'),
+      onAllPhotosSelected: withAllPhotos ? () => record('all') : null,
     );
   }
 
@@ -43,6 +49,18 @@ void main() {
       const Expanded(child: SizedBox()),
     ],
   );
+
+  /// The primary tint on the row's background, or null when unselected.
+  Color? rowTint(WidgetTester tester, Finder row) {
+    final box = tester.widget<Container>(
+      find.descendant(of: row, matching: find.byType(Container)).first,
+    );
+    final color = (box.decoration! as BoxDecoration).color;
+    return color == Colors.transparent ? null : color;
+  }
+
+  FontWeight? labelWeight(WidgetTester tester, String label) =>
+      tester.widget<Text>(find.text(label)).style?.fontWeight;
 
   testBothViewports('fills a bounded parent and emits every action', (
     tester,
@@ -70,13 +88,18 @@ void main() {
     await pumpAt(
       tester,
       CustomScrollView(
-        slivers: [SliverToBoxAdapter(child: sidebar(shrinkWrap: true))],
+        slivers: [
+          SliverToBoxAdapter(
+            child: sidebar(shrinkWrap: true, withAllPhotos: true),
+          ),
+        ],
       ),
       size: size,
     );
 
     expect(tester.takeException(), isNull);
     expect(find.text('Albums'), findsOneWidget);
+    expect(find.text('All photos'), findsOneWidget);
     expect(find.text('Trips'), findsOneWidget);
   });
 
@@ -93,25 +116,119 @@ void main() {
   });
 
   testBothViewports('shows a progress bar while loading', (tester, size) async {
-    await pumpAt(tester, bounded(sidebar(isLoading: true)), size: size);
+    await pumpAt(
+      tester,
+      bounded(sidebar(isLoading: true, withAllPhotos: true)),
+      size: size,
+    );
 
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
     expect(find.text('Trips'), findsNothing);
+    expect(find.byKey(_allPhotos), findsOneWidget);
   });
 
   testBothViewports('says so when there are no albums', (tester, size) async {
-    await pumpAt(tester, bounded(sidebar(albums: const [])), size: size);
+    await pumpAt(
+      tester,
+      bounded(sidebar(albums: const [], withAllPhotos: true)),
+      size: size,
+    );
 
     expect(find.text('No albums yet'), findsOneWidget);
+    expect(find.byKey(_allPhotos), findsOneWidget);
   });
 
   testBothViewports('shows the error', (tester, size) async {
     await pumpAt(
       tester,
-      bounded(sidebar(error: "Couldn't load your albums.")),
+      bounded(
+        sidebar(error: "Couldn't load your albums.", withAllPhotos: true),
+      ),
       size: size,
     );
 
     expect(find.text("Couldn't load your albums."), findsOneWidget);
+    expect(find.byKey(_allPhotos), findsOneWidget);
+  });
+
+  testBothViewports('leaves out All photos without its callback', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(tester, bounded(sidebar()), size: size);
+
+    expect(find.byKey(_allPhotos), findsNothing);
+    expect(find.text('All photos'), findsNothing);
+  });
+
+  testBothViewports('puts All photos first and reports a tap', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpAt(
+      tester,
+      bounded(sidebar(withAllPhotos: true, events: events)),
+      size: size,
+    );
+
+    expect(tester.takeException(), isNull);
+    final allPhotosY = tester.getTopLeft(find.byKey(_allPhotos)).dy;
+    expect(
+      allPhotosY,
+      lessThan(
+        tester.getTopLeft(find.byKey(const ValueKey('album_tile_1'))).dy,
+      ),
+    );
+    expect(find.byIcon(QuarkIcons.photo_library_outlined), findsOneWidget);
+
+    expect(tester.widget<InkWell>(find.byKey(_allPhotos)).onLongPress, isNull);
+
+    await tester.tap(find.byKey(_allPhotos));
+    await tester.pump();
+
+    expect(events, ['all']);
+  });
+
+  testBothViewports('highlights All photos when no album is selected', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(tester, bounded(sidebar(withAllPhotos: true)), size: size);
+
+    final allPhotosTint = rowTint(tester, find.byKey(_allPhotos));
+    expect(allPhotosTint, isNotNull);
+    expect(labelWeight(tester, 'All photos'), FontWeight.w600);
+    expect(rowTint(tester, find.byKey(const ValueKey('album_tile_2'))), isNull);
+
+    // Same highlight as a selected album, not merely some highlight.
+    await pumpAt(
+      tester,
+      bounded(sidebar(withAllPhotos: true, selectedAlbumId: 2)),
+      size: size,
+    );
+    expect(
+      rowTint(tester, find.byKey(const ValueKey('album_tile_2'))),
+      allPhotosTint,
+    );
+  });
+
+  testBothViewports('highlights the selected album instead', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      bounded(sidebar(withAllPhotos: true, selectedAlbumId: 2)),
+      size: size,
+    );
+
+    expect(rowTint(tester, find.byKey(_allPhotos)), isNull);
+    expect(labelWeight(tester, 'All photos'), FontWeight.normal);
+    expect(
+      rowTint(tester, find.byKey(const ValueKey('album_tile_2'))),
+      isNotNull,
+    );
+    expect(labelWeight(tester, 'Trips'), FontWeight.w600);
   });
 }

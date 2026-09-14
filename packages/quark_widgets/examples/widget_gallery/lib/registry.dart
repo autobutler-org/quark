@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import 'widgets/album_sidebar_demo.dart';
 import 'widgets/album_tree_demo.dart';
 import 'widgets/framed_viewport.dart';
 import 'widgets/password_strength_demo.dart';
@@ -595,14 +596,10 @@ final List<GalleryEntry> registry = [
           onToggleExpanded: () => log('PhotoCategoryList.onToggleExpanded'),
           onSelected: (id) => log('PhotoCategoryList.onSelected($id)'),
         ),
-        albums: AlbumSidebar(
+        albums: AlbumSidebarDemo(
           albums: _galleryAlbumList,
-          expandedIds: const {},
           shrinkWrap: QuarkSplitView.isCollapsed(context),
-          onAlbumSelected: (a) =>
-              log('AlbumSidebar.onAlbumSelected(${a.name})'),
-          onToggleExpanded: (id) => log('AlbumSidebar.onToggleExpanded($id)'),
-          onCreateAlbum: () => log('AlbumSidebar.onCreateAlbum'),
+          log: log,
         ),
       ),
     ),
@@ -619,17 +616,8 @@ final List<GalleryEntry> registry = [
     group: 'Albums',
     build: (context, log) => SizedBox(
       width: 280,
-      height: 320,
-      child: AlbumSidebar(
-        albums: _galleryAlbumList,
-        expandedIds: const {3},
-        selectedAlbumId: 4,
-        onAlbumSelected: (a) => log('AlbumSidebar.onAlbumSelected(${a.name})'),
-        onToggleExpanded: (id) => log('AlbumSidebar.onToggleExpanded($id)'),
-        onCreateAlbum: () => log('AlbumSidebar.onCreateAlbum'),
-        onAlbumLongPress: (a) =>
-            log('AlbumSidebar.onAlbumLongPress(${a.name})'),
-      ),
+      height: 360,
+      child: AlbumSidebarDemo(albums: _galleryAlbumList, log: log),
     ),
   ),
   GalleryEntry(

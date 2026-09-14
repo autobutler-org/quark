@@ -14,14 +14,19 @@ class PhotosEmptyState extends StatelessWidget {
     required this.onRetry,
     required this.onManageHosts,
     this.hostAddress,
+    this.albumName,
     super.key,
   });
 
   /// Whether the last attempt to list photos never reached the Quark.
   final bool unreachable;
 
-  /// Whether the grid is showing favorites, which get their own hint.
+  /// Whether the grid is showing favorites, the category or the album, which
+  /// get their own hint.
   final bool showingFavorites;
+
+  /// The album the grid is showing, or null for the library.
+  final String? albumName;
 
   /// Tries the Quark again, from the disconnected view.
   final VoidCallback onRetry;
@@ -39,6 +44,16 @@ class PhotosEmptyState extends StatelessWidget {
         hostAddress: hostAddress,
         onRetry: onRetry,
         onManageHosts: onManageHosts,
+      );
+    }
+    final albumName = this.albumName;
+    if (albumName != null) {
+      return EmptyStateWidget(
+        icon: QuarkIcons.photo_album_outlined,
+        headline: 'No photos yet',
+        subtext: showingFavorites
+            ? 'Star a photo to add it here.'
+            : 'Add photos to "$albumName" from All photos.',
       );
     }
     if (showingFavorites) {

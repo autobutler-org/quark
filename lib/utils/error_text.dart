@@ -70,6 +70,22 @@ abstract final class Errors {
       "This video format ($extension) isn't supported for in-browser "
       'playback. Download the file to watch it locally.';
 
+  /// An album name a sibling already has, ignoring case — what the Quark's
+  /// 409 means for creating, renaming or moving an album.
+  static const String albumNameTaken =
+      "There's already an album with that name here.";
+
+  /// An album name with a `/` in it, which the Quark refuses with a 400.
+  static const String albumNameHasSlash = "Album names can't contain a slash.";
+
+  /// A failed album create, rename or move. A 409 gets [albumNameTaken] — the
+  /// generic "it changed while you were working" would send the user to retry
+  /// a name that will clash again. [action] is as in [message].
+  static String album(Object? error, String action) =>
+      error is ApiException && error.statusCode == 409
+      ? albumNameTaken
+      : message(error, action);
+
   /// A restore the Quark refused with a 409: the item's original path is
   /// taken, and a restore never overwrites.
   static const String restoreConflict =

@@ -3,6 +3,7 @@ import 'package:quark_icons/quark_icons.dart';
 
 import '../models/album_item.dart';
 import '../theme/quark_tokens.dart';
+import 'album_sidebar/album_sidebar_all_photos_tile.dart';
 import 'album_tree_tile.dart';
 
 /// The album section of a sidebar: an "Albums" header with a create button,
@@ -18,14 +19,22 @@ import 'album_tree_tile.dart';
 /// [shrinkWrap] wherever the parent hands it unbounded height, such as a
 /// sliver, where filling is a hard layout error (#1599).
 ///
-/// Key prefixes: `album_create` on the create button, and every row's own
-/// `album_tile_<id>` and `album_expand_<id>` from [AlbumTreeTile].
+/// Give it [onAllPhotosSelected] and an "All photos" row leads the list, above
+/// every album, highlighted whenever [selectedAlbumId] is null. It stays
+/// visible while the albums load, fail, or turn out to be empty, since the
+/// library is still there to go back to.
+///
+/// Key prefixes: `album_create` on the create button,
+/// `album_sidebar_all_photos` on the "All photos" row, and every album row's
+/// own `album_tile_<id>` and `album_expand_<id>` from [AlbumTreeTile].
 ///
 /// ```dart
 /// AlbumSidebar(
 ///   albums: controller.albums,
 ///   isLoading: controller.albumsLoading,
 ///   expandedIds: controller.expandedAlbumIds,
+///   selectedAlbumId: controller.selectedAlbumId,
+///   onAllPhotosSelected: controller.showAllPhotos,
 ///   onAlbumSelected: openAlbum,
 ///   onToggleExpanded: controller.toggleAlbumExpanded,
 ///   onCreateAlbum: promptForNewAlbum,
@@ -41,6 +50,7 @@ class AlbumSidebar extends StatelessWidget {
     required this.onToggleExpanded,
     required this.onCreateAlbum,
     this.onAlbumLongPress,
+    this.onAllPhotosSelected,
     this.selectedAlbumId,
     this.isLoading = false,
     this.error,
@@ -67,7 +77,12 @@ class AlbumSidebar extends StatelessWidget {
   /// Never called for a system album.
   final ValueChanged<AlbumItem>? onAlbumLongPress;
 
-  /// The id highlighted as selected, or null for none.
+  /// Called when the "All photos" row (key `album_sidebar_all_photos`) is
+  /// tapped. Null leaves the row out entirely.
+  final VoidCallback? onAllPhotosSelected;
+
+  /// The id highlighted as selected, or null for none. With
+  /// [onAllPhotosSelected] set, null highlights the "All photos" row.
   final int? selectedAlbumId;
 
   /// Whether the albums are loading. Shows a progress bar in place of the
@@ -85,6 +100,7 @@ class AlbumSidebar extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final tokens = QuarkTokens.of(context);
     final error = this.error;
+    final onAllPhotosSelected = this.onAllPhotosSelected;
     final hint = TextStyle(
       fontSize: 13,
       color: colorScheme.onSurface.withValues(alpha: 0.4),
@@ -151,6 +167,11 @@ class AlbumSidebar extends StatelessWidget {
             ],
           ),
         ),
+        if (onAllPhotosSelected != null)
+          AlbumSidebarAllPhotosTile(
+            isSelected: selectedAlbumId == null,
+            onTap: onAllPhotosSelected,
+          ),
         if (isLoading)
           Padding(
             padding: EdgeInsets.symmetric(

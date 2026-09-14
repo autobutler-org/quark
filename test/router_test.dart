@@ -202,6 +202,30 @@ void main() {
     });
   });
 
+  group('AppRoutes.photosAlbum', () {
+    test('names the album in the query, and is /photos for All photos', () {
+      expect(AppRoutes.photosAlbum('3'), '/photos?album=3');
+      expect(AppRoutes.photosAlbum('-2'), '/photos?album=-2');
+      expect(AppRoutes.photosAlbum('Trips'), '/photos?album=Trips');
+      expect(AppRoutes.photosAlbum(null), AppRoutes.photos);
+      expect(AppRoutes.photosAlbum(''), AppRoutes.photos);
+    });
+
+    test('keeps slashes readable and encodes everything else', () {
+      expect(
+        AppRoutes.photosAlbum('Summer Trip/Japan'),
+        '/photos?album=Summer%20Trip/Japan',
+      );
+      for (final name in ['A & B', 'C+D', '100%', 'x=1#y', 'Trips/Å']) {
+        expect(
+          Uri.parse(AppRoutes.photosAlbum(name)).queryParameters['album'],
+          name,
+          reason: name,
+        );
+      }
+    });
+  });
+
   // #1623: the terms gate only re-ran when `refreshListenable` fired, and
   // `activeHost` wasn't in that list. Connecting to a Quark for the first time
   // therefore left the user on the file browser until some later navigation

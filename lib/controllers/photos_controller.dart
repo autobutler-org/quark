@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -12,6 +14,7 @@ import 'package:quark/services/demo_photos_service.dart';
 import 'package:quark/services/favorites_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/utils/album_link.dart' as link;
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/photo_grid_config.dart';
 import 'package:quark/utils/quark_widget_items.dart';
@@ -102,6 +105,15 @@ class PhotosController extends ChangeNotifier {
         })
         addPhotoToAlbum =
         AlbumService.addPhotoToAlbum,
+    Future<void> Function(
+          int albumId, {
+          required String deviceSerial,
+          required String relPath,
+        })
+        removePhotoFromAlbum =
+        AlbumService.removePhotoFromAlbum,
+    Future<List<PhotoAlbumItem>> Function(int albumId) listAlbumItems =
+        AlbumService.listAlbumItems,
     Future<List<StorageDevice>> Function() listDevices =
         StorageService.listDevices,
     Future<http.StreamedResponse> Function(
@@ -126,6 +138,8 @@ class PhotosController extends ChangeNotifier {
        _renameAlbum = renameAlbum,
        _deleteAlbum = deleteAlbum,
        _addPhotoToAlbum = addPhotoToAlbum,
+       _removePhotoFromAlbum = removePhotoFromAlbum,
+       _listAlbumItems = listAlbumItems,
        _listDevices = listDevices,
        _uploadFiles = uploadFiles,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
@@ -148,6 +162,8 @@ class PhotosController extends ChangeNotifier {
     renameAlbum: DemoPhotosService.renameAlbum,
     deleteAlbum: DemoPhotosService.deleteAlbum,
     addPhotoToAlbum: DemoPhotosService.addPhotoToAlbum,
+    removePhotoFromAlbum: DemoPhotosService.removePhotoFromAlbum,
+    listAlbumItems: (id) async => DemoPhotosService.listAlbumItems(id),
   );
 
   /// How many Quark photos one page fetches.
@@ -185,6 +201,13 @@ class PhotosController extends ChangeNotifier {
     required String relPath,
   })
   _addPhotoToAlbum;
+  final Future<void> Function(
+    int albumId, {
+    required String deviceSerial,
+    required String relPath,
+  })
+  _removePhotoFromAlbum;
+  final Future<List<PhotoAlbumItem>> Function(int albumId) _listAlbumItems;
   final Future<List<StorageDevice>> Function() _listDevices;
   final Future<http.StreamedResponse> Function(
     String uploadPath,
@@ -231,6 +254,22 @@ class PhotosController extends ChangeNotifier {
   bool _albumsLoading = true;
   final Set<int> _expandedAlbumIds = {};
 
+  /// The album the grid was asked to show, or null for the library.
+  int? _albumId;
+
+  /// An `?album=` value waiting for the tree's first successful load to be
+  /// resolved into [_albumId]. Null once resolved, and for the library. A
+  /// failed load keeps it, so an unreachable Quark never erases a shared link.
+  String? _pendingLink;
+
+  /// The items of [_albumId], null until they arrive or when they failed.
+  List<_Photo>? _albumItems;
+  Object? _albumError;
+
+  /// Bumped by every album items request, so a slow answer for an album the
+  /// user has already left cannot land on the one they moved to.
+  int _albumRequest = 0;
+
   /// The photos the grid shows for [selectedCategory], in the package's
   /// terms.
   List<PhotoItem> get photos => [
@@ -251,8 +290,10 @@ class PhotosController extends ChangeNotifier {
   PhotoCategory get selectedCategory => _category;
 
   /// Whether the category picker has anything to pick between. The web
-  /// cannot see device photos, so it shows Quark photos only.
-  bool get showsCategories => !_isWeb;
+  /// cannot see device photos, so it shows Quark photos only. The categories
+  /// filter the library, so they hide while an album shows and come back,
+  /// still on the category that was picked, with All photos.
+  bool get showsCategories => !_isWeb && !_showsAlbum;
 
   /// Every category with its count, for the category picker.
   List<PhotoCategoryEntry> get categories {
@@ -295,6 +336,7 @@ class PhotosController extends ChangeNotifier {
 
   /// Whether another page of Quark photos exists and the grid shows them.
   bool get hasMore =>
+      !_showsAlbum &&
       _quarkLoaded &&
       _quark.length < _quarkTotal &&
       (_category == PhotoCategory.quark || _category == PhotoCategory.all);
@@ -306,7 +348,13 @@ class PhotosController extends ChangeNotifier {
   ///
   /// Without this the page would render "No photos yet", telling the user
   /// their library is empty when it is simply out of reach (#1637).
-  bool get quarkUnreachable => _quarkUnreachable;
+  /// While an album is showing, it is whether its items never reached the
+  /// Quark.
+  bool get quarkUnreachable {
+    if (!_showsAlbum) return _quarkUnreachable;
+    final error = _albumError;
+    return error != null && isQuarkUnreachableError(error);
+  }
 
   /// The Quark the app is pointed at, or null when none is chosen.
   String? get activeHost => _activeHost();
@@ -345,6 +393,48 @@ class PhotosController extends ChangeNotifier {
   /// The ids of every expanded album.
   Set<int> get expandedAlbumIds => Set.unmodifiable(_expandedAlbumIds);
 
+  /// The id of the album the grid shows, or null for All photos.
+  int? get selectedAlbumId => _showsAlbum ? _albumId : null;
+
+  /// The album the grid shows, or null for All photos, or while the tree has
+  /// yet to load.
+  PhotoAlbum? get selectedAlbum {
+    final id = selectedAlbumId;
+    return id == null ? null : albumById(id);
+  }
+
+  /// Whether the showing album's items are on their way.
+  bool get albumLoading =>
+      _showsAlbum && _albumItems == null && _albumError == null;
+
+  /// Why the showing album's items could not be loaded, or null.
+  Object? get albumError => _showsAlbum ? _albumError : null;
+
+  /// The `?album=` value for what the grid shows, or null for All photos:
+  /// the value the grid was asked for while it waits for a tree to resolve
+  /// against, and the showing album's [albumLink] after. The page writes it
+  /// back to the URL, so a link by id or in the wrong case, a rename, and a
+  /// deletion all end on the canonical form, while a link the Quark could not
+  /// be asked about yet stays as it was.
+  String? get albumLink {
+    final pending = _pendingLink;
+    if (pending != null || _albumsLoading) return pending;
+    final id = selectedAlbumId;
+    return id == null ? null : albumLinkFor(id);
+  }
+
+  /// The `?album=` value naming the album [id].
+  String albumLinkFor(int id) => link.albumLink(_albums, id);
+
+  /// An album id nobody can find in a loaded tree falls back to All photos,
+  /// so a stale link or a deleted album never strands the grid. A link still
+  /// waiting for the first load counts as showing, so the grid waits with it;
+  /// once that load has failed it does not, so the grid shows the library's
+  /// own unreachable state rather than an album spinner that never ends.
+  bool get _showsAlbum => _albumsLoading
+      ? _albumId != null || _pendingLink != null
+      : _albumId != null && albumById(_albumId!) != null;
+
   // ── Loading ────────────────────────────────────────────────────────────────
 
   /// Reloads everything: the first page of Quark photos, the device photos,
@@ -367,11 +457,13 @@ class PhotosController extends ChangeNotifier {
             onError: (Object _) => null,
           );
     final albums = loadAlbums();
+    final albumItems = _loadAlbumItems();
 
     final quarkPage = await quark;
     final mobilePhotos = await mobile;
     final favoriteKeys = await favorites;
     await albums;
+    await albumItems;
     if (generation != _generation || _disposed) return;
 
     _noHostSelected = noHost;
@@ -400,6 +492,8 @@ class PhotosController extends ChangeNotifier {
   /// Fetches the next page of Quark photos, if there is one and none is
   /// already in flight.
   Future<void> loadMoreQuarkPhotos() async {
+    // Album items arrive in one call; paging is the library's alone.
+    if (_showsAlbum) return;
     if (_isLoadingMore || !_quarkLoaded || _noHostSelected) return;
     if (_quark.length >= _quarkTotal) return;
     final generation = _generation;
@@ -468,6 +562,7 @@ class PhotosController extends ChangeNotifier {
   static String? _appActiveHost() => AppSettings.instance.activeHost;
 
   List<_Photo> _visible() {
+    if (_showsAlbum) return _albumItems ?? const [];
     if (_isWeb) return _quark;
     return switch (_category) {
       PhotoCategory.quark => _quark,
@@ -481,7 +576,7 @@ class PhotosController extends ChangeNotifier {
   }
 
   _Photo? _byId(String id) {
-    for (final photo in [..._quark, ..._mobile]) {
+    for (final photo in [..._quark, ..._mobile, ...?_albumItems]) {
       if (photo.id == id) return photo;
     }
     return null;
@@ -537,6 +632,14 @@ class PhotosController extends ChangeNotifier {
       _favoriteKeys.add(id);
     } else {
       _favoriteKeys.remove(id);
+      // The Favorites album is the starred photos, so un-starring leaves it.
+      final items = _albumItems;
+      if (items != null && (selectedAlbum?.isFavorites ?? false)) {
+        _albumItems = [
+          for (final item in items)
+            if (item.id != id) item,
+        ];
+      }
     }
     notifyListeners();
     await loadAlbums();
@@ -545,20 +648,25 @@ class PhotosController extends ChangeNotifier {
   // ── Selection ──────────────────────────────────────────────────────────────
 
   /// Starts selecting photos, with nothing selected. With [addingTo], the
-  /// selection is headed for that album.
+  /// selection is headed for that album, and the grid switches to All photos
+  /// to pick from until the selection is added or canceled.
   void enterSelectionMode({AlbumItem? addingTo}) {
+    if (addingTo != null) _albumId = null;
     _selectionMode = true;
     _addingToAlbum = addingTo;
     _selectedIds.clear();
     notifyListeners();
   }
 
-  /// Stops selecting photos and forgets the selection.
+  /// Stops selecting photos and forgets the selection. When the selection was
+  /// headed for an album, the grid goes back to that album.
   void exitSelectionMode() {
+    final returnTo = _addingToAlbum;
     _selectionMode = false;
     _addingToAlbum = null;
     _selectedIds.clear();
     notifyListeners();
+    if (returnTo != null) unawaited(showAlbum(returnTo.id));
   }
 
   /// Adds [id] to the selection, or takes it out.
@@ -579,6 +687,8 @@ class PhotosController extends ChangeNotifier {
   }
 
   /// Adds every selected Quark photo to [albumId], then leaves selection mode.
+  /// When adding to an album added nothing, selection mode stays, so the user
+  /// can try again.
   ///
   /// Device photos are counted as skipped, and a photo the Quark refuses as
   /// failed, so the page can say what happened.
@@ -606,7 +716,7 @@ class PhotosController extends ChangeNotifier {
         error = e;
       }
     }
-    exitSelectionMode();
+    if (added > 0 || _addingToAlbum == null) exitSelectionMode();
     return AddToAlbumOutcome(
       added: added,
       skipped: skipped,
@@ -618,15 +728,25 @@ class PhotosController extends ChangeNotifier {
   // ── Albums ─────────────────────────────────────────────────────────────────
 
   /// Reloads the album tree. A failure leaves the last tree in place.
+  ///
+  /// A successful load also resolves an `?album=` value still pending, and
+  /// loads that album's items. A failed one leaves the value pending for the
+  /// next load, whether a manual refresh, a pull, or a resume.
   Future<void> loadAlbums() async {
+    var loaded = false;
     try {
       _albums = await _listAlbums(tree: true);
+      loaded = true;
     } catch (e) {
       debugPrint('[photos_controller.dart] Error loading albums: $e');
-    } finally {
-      _albumsLoading = false;
-      notifyListeners();
     }
+    _albumsLoading = false;
+    final pending = _pendingLink;
+    final showing = !loaded || pending == null
+        ? null
+        : showAlbum(link.resolveAlbumLink(_albums, pending)?.id);
+    notifyListeners();
+    await showing;
   }
 
   /// A fresh copy of the albums a photo can be added to, for a picker that
@@ -646,6 +766,117 @@ class PhotosController extends ChangeNotifier {
     }
 
     return search(_albums);
+  }
+
+  /// Whether an album other than [except] under [parentId] — null for the
+  /// top level, where Favorites and Inbox sit too — is already named [name].
+  ///
+  /// Case is ignored for ASCII letters only, the way the Quark's database
+  /// compares names. The tree can be stale, so the Quark's 409 stays the real
+  /// guard; this only spares the user a round trip.
+  bool albumNameTaken(String name, {int? parentId, int? except}) {
+    final siblings = parentId == null
+        ? _albums
+        : albumById(parentId)?.children ?? const <PhotoAlbum>[];
+    final wanted = _foldAscii(name.trim());
+    return siblings.any(
+      (album) => album.id != except && _foldAscii(album.name) == wanted,
+    );
+  }
+
+  /// [text] with `A`-`Z` lowered and everything else as it was, like SQLite's
+  /// case-insensitive collation.
+  static String _foldAscii(String text) => String.fromCharCodes(
+    text.codeUnits.map((c) => c >= 0x41 && c <= 0x5A ? c + 0x20 : c),
+  );
+
+  /// Shows the album [id] in the grid and loads its items, or goes back to
+  /// All photos for null, in whichever category was showing. Selection is a
+  /// library feature, so showing an album ends it.
+  Future<void> showAlbum(int? id) async {
+    _pendingLink = null;
+    if (id == _albumId) return;
+    _albumId = id;
+    _albumItems = null;
+    _albumError = null;
+    if (id != null) {
+      _selectionMode = false;
+      _addingToAlbum = null;
+      _selectedIds.clear();
+    }
+    notifyListeners();
+    await _loadAlbumItems();
+  }
+
+  /// Shows the album an `?album=` [value] names (see
+  /// `resolveAlbumLink`), or All photos for null, empty, or a value naming no
+  /// album. Before the tree has loaded, or while an earlier value still waits
+  /// on a failed load, the value replaces the one waiting.
+  Future<void> showAlbumLink(String? value) async {
+    final wanted = value == null || value.isEmpty ? null : value;
+    if (!_albumsLoading && _pendingLink == null) {
+      await showAlbum(
+        wanted == null ? null : link.resolveAlbumLink(_albums, wanted)?.id,
+      );
+      return;
+    }
+    if (wanted == _pendingLink && _albumId == null) return;
+    _pendingLink = wanted;
+    _albumId = null;
+    _albumItems = null;
+    _albumError = null;
+    notifyListeners();
+  }
+
+  /// Takes the photo [id] out of the showing album, then reloads the tree so
+  /// the album's count follows. Throws what the Quark threw.
+  Future<void> removeFromSelectedAlbum(String id) async {
+    final albumId = selectedAlbumId;
+    final photo = _byId(id);
+    final relPath = photo?.relPath;
+    if (albumId == null || relPath == null) return;
+    await _removePhotoFromAlbum(
+      albumId,
+      deviceSerial: photo!.serial ?? '',
+      relPath: relPath,
+    );
+    final items = _albumItems;
+    if (albumId == _albumId && items != null) {
+      _albumItems = [
+        for (final item in items)
+          if (item.id != id) item,
+      ];
+      notifyListeners();
+    }
+    await loadAlbums();
+  }
+
+  /// Where the Quark photo [id] is stored, or null for a device photo.
+  ({String serial, String relPath})? quarkPathOf(String id) {
+    final photo = _byId(id);
+    final relPath = photo?.relPath;
+    if (relPath == null) return null;
+    return (serial: photo!.serial ?? '', relPath: relPath);
+  }
+
+  /// Loads the items of the album being shown, if any. A failure is kept for
+  /// the page to word, in place of the items.
+  Future<void> _loadAlbumItems() async {
+    final id = _albumId;
+    if (id == null) return;
+    final request = ++_albumRequest;
+    try {
+      final items = await _listAlbumItems(id);
+      if (request != _albumRequest || _disposed) return;
+      _albumItems = items.map(_Photo.fromAlbumItem).toList(growable: false);
+      _albumError = null;
+    } catch (e) {
+      if (request != _albumRequest || _disposed) return;
+      debugPrint('[photos_controller.dart] Error loading album items: $e');
+      _albumItems = null;
+      _albumError = e;
+    }
+    notifyListeners();
   }
 
   /// Expands the album [id], or folds it.
@@ -814,6 +1045,15 @@ class _Photo {
       hasLiveVideo: photo.hasLiveVideo,
     );
   }
+
+  /// A Quark-stored photo in an album, keyed the way [_Photo.fromWire] keys
+  /// the same photo in the library.
+  factory _Photo.fromAlbumItem(PhotoAlbumItem item) => _Photo(
+    id: '${item.deviceSerial}:${item.relPath}',
+    name: item.relPath.split('/').last,
+    relPath: item.relPath,
+    serial: item.deviceSerial,
+  );
 
   /// A photo on this device.
   factory _Photo.fromAsset(AssetEntity asset) =>
