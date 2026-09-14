@@ -5,13 +5,14 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 
 	"github.com/gin-gonic/gin"
 )
 
 // getAuthStatus godoc
 // @Summary Check auth setup status
-// @Description Returns whether initial setup has been completed. For a caller with a valid session it also returns that caller's username and isAdmin flag.
+// @Description Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username and isAdmin flag.
 // @Tags auth
 // @Produce json
 // @Success 200 {object} object
@@ -35,14 +36,15 @@ func getAuthStatus(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
-	if !status.Authenticated {
-		return serverutil.Ok().WithData(gin.H{"setup": status.Setup})
+	body := gin.H{"setup": status.Setup}
+	if status.Setup {
+		body["accessRequestsEnabled"] = settingsutil.GetAccessRequestsEnabled()
 	}
-	return serverutil.Ok().WithData(gin.H{
-		"setup":    status.Setup,
-		"username": status.Username,
-		"isAdmin":  status.IsAdmin,
-	})
+	if status.Authenticated {
+		body["username"] = status.Username
+		body["isAdmin"] = status.IsAdmin
+	}
+	return serverutil.Ok().WithData(body)
 }
 
 var getAuthStatusRoute = serverutil.ApiRoute("GET", "/auth/status", getAuthStatus)

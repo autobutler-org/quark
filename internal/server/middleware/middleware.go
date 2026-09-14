@@ -24,6 +24,7 @@ var authRateLimitedPaths = map[string]bool{
 	"/api/v0/auth/login":           true,
 	"/api/v0/auth/setup":           true,
 	"/api/v0/auth/recover":         true,
+	"/api/v0/auth/request-account": true,
 	"/api/v0/storage/devices/role": true,
 }
 
@@ -90,10 +91,11 @@ func queryTokenAllowed(path string) bool {
 
 // authExemptPaths are API paths that don't require a valid session.
 var authExemptPaths = map[string]bool{
-	"/api/v0/auth/setup":   true,
-	"/api/v0/auth/login":   true,
-	"/api/v0/auth/recover": true,
-	"/api/v0/auth/status":  true,
+	"/api/v0/auth/setup":           true,
+	"/api/v0/auth/login":           true,
+	"/api/v0/auth/recover":         true,
+	"/api/v0/auth/request-account": true,
+	"/api/v0/auth/status":          true,
 }
 
 func inject(deps deputil.Dependencies) gin.HandlerFunc {

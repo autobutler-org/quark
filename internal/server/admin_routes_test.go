@@ -70,6 +70,11 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 		{http.MethodDelete, "/api/v0/devices/1"},
 		{http.MethodPost, "/api/v0/version/update"},
 		{http.MethodPost, "/api/v0/settings"},
+		// No body, so the admin stops at a 400 and the setting is untouched.
+		{http.MethodPut, "/api/v0/settings/access-requests"},
+		// Nobody has requested an account, so the admin gets a 404.
+		{http.MethodPut, "/api/v0/admin/approve/nobody"},
+		{http.MethodPut, "/api/v0/admin/deny/nobody"},
 		// confirm names neither account, so the admin stops at a 400 after the
 		// gate and nothing is deleted.
 		{http.MethodDelete, "/api/v0/auth/account?database=true&confirm=nobody"},

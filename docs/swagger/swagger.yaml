@@ -310,6 +310,21 @@ definitions:
         description: Status is pending or disabled.
         type: string
     type: object
+  v0_auth.requestAccountBody:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  v0_auth.requestAccountResponse:
+    properties:
+      recoveryPhrase:
+        type: string
+    type: object
   v0_books.BookJSON:
     properties:
       fileName:
@@ -626,6 +641,13 @@ definitions:
       autoUpdate:
         type: boolean
     type: object
+  v0_settings.accessRequestsSetting:
+    properties:
+      enabled:
+        type: boolean
+    required:
+    - enabled
+    type: object
   v0_trash.deletedResponse:
     properties:
       deleted:
@@ -842,6 +864,38 @@ definitions:
 info:
   contact: {}
 paths:
+  /admin/approve/{username}:
+    put:
+      description: Turns a pending account request into an active account that can
+        sign in. Admin-only.
+      parameters:
+      - description: Username of the pending request
+        in: path
+        name: username
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no account request has that username
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Approve an account request
+      tags:
+      - admin
   /admin/demote/{username}:
     put:
       description: Removes admin role from the given username. Refused with 409 while
@@ -882,6 +936,38 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
       summary: Demote admin to regular user
+      tags:
+      - admin
+  /admin/deny/{username}:
+    put:
+      description: Deletes a pending account request. Its username is free again at
+        once. Admin-only.
+      parameters:
+      - description: Username of the pending request
+        in: path
+        name: username
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no account request has that username
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Deny an account request
       tags:
       - admin
   /admin/promote/{username}:
@@ -1442,6 +1528,50 @@ paths:
       summary: Recover account
       tags:
       - auth
+  /auth/request-account:
+    post:
+      consumes:
+      - application/json
+      description: Creates a pending account that can sign in once an admin approves
+        it, and returns its recovery phrase this once. Needs no session and is rate-limited
+        per IP. A pending request keeps its username taken until it is denied.
+      parameters:
+      - description: The username and password to request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_auth.requestAccountBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/v0_auth.requestAccountResponse'
+        "400":
+          description: invalid username or password
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: requests are turned off, or the Quark is not set up
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: that username is taken
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Request an account
+      tags:
+      - auth
   /auth/sessions:
     delete:
       description: Deletes all active sessions for the authenticated user.
@@ -1556,8 +1686,10 @@ paths:
       - auth
   /auth/status:
     get:
-      description: Returns whether initial setup has been completed. For a caller
-        with a valid session it also returns that caller's username and isAdmin flag.
+      description: 'Returns whether initial setup has been completed and, once it
+        has, accessRequestsEnabled: whether the sign-in page may offer to request
+        an account. For a caller with a valid session it also returns that caller''s
+        username and isAdmin flag.'
       produces:
       - application/json
       responses:
@@ -2855,6 +2987,45 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
       summary: Update settings
+      tags:
+      - settings
+  /settings/access-requests:
+    put:
+      consumes:
+      - application/json
+      description: Sets whether people can request an account from the sign-in page.
+        Requests are on until an admin turns them off. Admin-only.
+      parameters:
+      - description: Whether account requests are on
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_settings.accessRequestsSetting'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_settings.accessRequestsSetting'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Turn account requests on or off
       tags:
       - settings
   /settings/remote-access:
