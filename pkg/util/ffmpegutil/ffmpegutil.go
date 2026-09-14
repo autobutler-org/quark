@@ -1,4 +1,4 @@
-// Package ffmpegutil wraps video inspection and transcoding behind the
+// Package ffmpegutil wraps video inspection, thumbnails, and trimming behind the
 // VideoProcessor interface, with CLIProcessor as the ffmpeg/ffprobe-backed
 // implementation.
 package ffmpegutil
@@ -6,16 +6,6 @@ package ffmpegutil
 import (
 	"context"
 	"time"
-)
-
-type VideoKind string
-
-const (
-	VideoKindMP4  VideoKind = "mp4"
-	VideoKindMOV  VideoKind = "mov"
-	VideoKindMKV  VideoKind = "mkv"
-	VideoKindAVI  VideoKind = "avi"
-	VideoKindWebM VideoKind = "webm"
 )
 
 type MediaInfo struct {
@@ -30,7 +20,6 @@ type MediaInfo struct {
 type VideoProcessor interface {
 	Run(ctx context.Context, args ...string) error
 	Probe(ctx context.Context, path string) (*MediaInfo, error)
-	Convert(ctx context.Context, src, dst string, from, to VideoKind) error
 	ExtractThumbnail(ctx context.Context, src, dst string, at time.Duration) error
 	Trim(ctx context.Context, src, dst string, start, end time.Duration) error
 	Available() bool

@@ -1,0 +1,74 @@
+package v0_videos
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/autobutler-org/quark/pkg/util/ctxutil"
+	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/transcodeutil"
+	"github.com/autobutler-org/quark/pkg/util/videoutil"
+	"github.com/gin-gonic/gin"
+)
+
+// transcodeVideo godoc
+// @Summary Queue a video transcode
+// @Description Queues a background job that converts the source video into a new file beside it, in any format GET /videos/transcode/formats lists. Original quality keeps the source resolution, and copies the streams without re-encoding when the format's container accepts them; small caps the height at 480 lines. Converting to the source's own format needs small quality. The output is never upscaled and never overwrites a file. Follow the job with GET /jobs/{id} or the job_* events; an upload event announces the output file.
+// @Tags videos
+// @Accept json
+// @Produce json
+// @Param body body transcodeVideoRequest true "Transcode request"
+// @Success 202 {object} transcodeVideoResponse
+// @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 404 {object} serverutil.Response "Not Found"
+// @Failure 501 {object} serverutil.Response "Not Implemented — ffmpeg not available"
+// @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Router /videos/transcode [post]
+func transcodeVideo(c *gin.Context) *serverutil.Response {
+	if !videoutil.Available() {
+		return serverutil.NewResponse().
+			WithStatusCode(http.StatusNotImplemented).
+			WithContentType(serverutil.ContentTypeJSON).
+			WithData(gin.H{"error": "ffmpeg is not installed on this device"})
+	}
+
+	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
+	if !ok {
+		return serverutil.InternalServerError(nil)
+	}
+
+	var req transcodeVideoRequest
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		return serverutil.BadRequest(fmt.Errorf("invalid request body: %w", err))
+	}
+
+	result, err := transcodeutil.Enqueue(c.Request.Context(), transcodeutil.EnqueueParams{
+		Queue:   deps.JobQueue(),
+		Storage: deps.StorageService(),
+		Params: transcodeutil.Params{
+			RelPath: req.RelPath,
+			Serial:  req.Serial,
+			Format:  videoutil.Format(req.Format),
+			Quality: videoutil.Quality(req.Quality),
+		},
+	})
+	switch {
+	case errors.Is(err, transcodeutil.ErrInvalidFormat), errors.Is(err, transcodeutil.ErrInvalidQuality),
+		errors.Is(err, transcodeutil.ErrInvalidPath):
+		return serverutil.BadRequest(err)
+	case errors.Is(err, transcodeutil.ErrSourceNotFound):
+		return serverutil.NotFound(err)
+	case err != nil:
+		return serverutil.InternalServerError(fmt.Errorf("queue transcode: %w", err))
+	}
+
+	return serverutil.Accepted().WithContentType(serverutil.ContentTypeJSON).
+		WithData(transcodeVideoResponse{JobID: result.Job.ID})
+}
+
+var transcodeVideoRoute = serverutil.ApiRoute(
+	"POST", "/videos/transcode", transcodeVideo,
+)

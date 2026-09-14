@@ -99,26 +99,6 @@ func (p *CLIProcessor) Probe(ctx context.Context, path string) (*MediaInfo, erro
 	return info, nil
 }
 
-func (p *CLIProcessor) Convert(ctx context.Context, src, dst string, from, to VideoKind) error {
-	args := []string{
-		"-i", src,
-		"-f", muxerName(to),
-		"-y",
-		dst,
-	}
-	return p.Run(ctx, args...)
-}
-
-// muxerName maps a VideoKind to the name ffmpeg's -f flag expects. Most kinds
-// share their name with the muxer; Matroska is the exception — ffmpeg has no
-// muxer called "mkv", so passing the bare extension makes the command fail.
-func muxerName(kind VideoKind) string {
-	if kind == VideoKindMKV {
-		return "matroska"
-	}
-	return string(kind)
-}
-
 func (p *CLIProcessor) ExtractThumbnail(ctx context.Context, src, dst string, at time.Duration) error {
 	args := []string{
 		"-ss", formatDuration(at),

@@ -7,9 +7,13 @@
 package videoutil
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -25,15 +29,98 @@ type VideoInfo struct {
 	Rotation   int // degrees (0, 90, 180, 270)
 }
 
-// TranscodePreset is a named output quality preset for [Transcode].
-type TranscodePreset string
+// Format is a video container Transcode writes, named by its file extension
+// without the dot, such as "mov" or "mkv".
+type Format string
+
+// Quality is how Transcode trades file size for fidelity.
+type Quality string
 
 const (
-	PresetH264720p  TranscodePreset = "h264_720p"
-	PresetH2641080p TranscodePreset = "h264_1080p"
-	PresetH264480p  TranscodePreset = "h264_480p"
-	PresetWebM720p  TranscodePreset = "webm_720p"
+	// QualityOriginal keeps the source resolution.
+	QualityOriginal Quality = "original"
+	// QualitySmall caps the height at 480 lines, never scaling up, and encodes
+	// at a lower bitrate.
+	QualitySmall Quality = "small"
 )
+
+// Formats returns every Format Transcode knows, in the order clients list
+// them. A given ffmpeg build may lack the encoders for some; see
+// [AvailableFormats].
+func Formats() []Format {
+	formats := make([]Format, 0, len(formatSpecs))
+	for _, spec := range formatSpecs {
+		formats = append(formats, spec.format)
+	}
+	return formats
+}
+
+// Valid reports whether f is a Format Transcode knows.
+func (f Format) Valid() bool {
+	_, ok := lookupFormat(f)
+	return ok
+}
+
+// Label is f's display name, such as "MOV" or "WebM", and "" for a Format
+// that is not Valid.
+func (f Format) Label() string {
+	spec, _ := lookupFormat(f)
+	return spec.label
+}
+
+// Valid reports whether q is QualityOriginal or QualitySmall.
+func (q Quality) Valid() bool {
+	return q == QualityOriginal || q == QualitySmall
+}
+
+// AvailableFormats returns the Formats whose video and audio encoders this
+// ffmpeg build has, in Formats order. A successful answer is cached for the
+// life of the process; a failure is not, so installing ffmpeg later works.
+func AvailableFormats() ([]Format, error) {
+	availableMu.Lock()
+	defer availableMu.Unlock()
+	if available != nil {
+		return available, nil
+	}
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		return nil, fmt.Errorf("ffmpeg not found: %w", err)
+	}
+	// The encoder list is a few kilobytes that ffmpeg, not a user, sizes.
+	out, err := exec.Command(ffmpegPath, "-hide_banner", "-encoders").Output()
+	if err != nil {
+		return nil, fmt.Errorf("ffmpeg -encoders: %w", err)
+	}
+	available = formatsWithEncoders(string(out))
+	return available, nil
+}
+
+// CanCopy reports whether Transcode copies the streams info describes into f
+// unchanged instead of re-encoding them. That happens only at QualityOriginal,
+// and only when f's container accepts the source's video codec and its audio
+// codec, if it has audio.
+func CanCopy(info *VideoInfo, f Format, q Quality) bool {
+	spec, ok := lookupFormat(f)
+	if !ok || q != QualityOriginal || info == nil || info.VideoCodec == "" {
+		return false
+	}
+	return slices.Contains(spec.copyVideo, info.VideoCodec) &&
+		(info.AudioCodec == "" || slices.Contains(spec.copyAudio, info.AudioCodec))
+}
+
+// TranscodeParams describes one Transcode.
+type TranscodeParams struct {
+	// Source is the video to read.
+	Source string
+	// Output is where the result is written. Its extension does not matter:
+	// the container is chosen from Format.
+	Output  string
+	Format  Format
+	Quality Quality
+	// OnProgress, when non-nil, is called with the fraction of the source
+	// written so far, in [0, 1], from the goroutine running Transcode.
+	OnProgress func(fraction float64)
+}
 
 // Available returns true if both ffmpeg and ffprobe are found on PATH.
 func Available() bool {
@@ -114,20 +201,59 @@ func Trim(ctx context.Context, filePath string, startTime, endTime time.Duration
 	return nil
 }
 
-// Transcode converts filePath to outPath using the given preset.
-func Transcode(ctx context.Context, filePath string, preset TranscodePreset, outPath string) error {
+// Transcode writes Source to Output as Format. When [CanCopy] holds it copies
+// the first video and audio streams unchanged, which takes seconds rather than
+// the hours a re-encode of a large file can; otherwise it re-encodes them with
+// Format's encoders at Quality. Only those two streams are kept, so subtitle
+// and data streams a container cannot hold never fail the run.
+func Transcode(ctx context.Context, params TranscodeParams) error {
+	spec, ok := lookupFormat(params.Format)
+	if !ok {
+		return fmt.Errorf("unknown transcode format %q", params.Format)
+	}
+	if !params.Quality.Valid() {
+		return fmt.Errorf("unknown transcode quality %q", params.Quality)
+	}
 	ffmpegPath, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		return fmt.Errorf("ffmpeg not found: %w", err)
 	}
 
-	args, err := transcodeArgs(filePath, preset, outPath)
-	if err != nil {
-		return err
+	// The probe gives the duration progress is measured against and the codecs
+	// that decide whether the streams can be copied. A source it cannot read
+	// still transcodes: re-encoded, with no progress reported.
+	info, probeErr := Probe(ctx, params.Source)
+	copyStreams := probeErr == nil && CanCopy(info, params.Format, params.Quality)
+	var total time.Duration
+	if probeErr == nil {
+		total = info.Duration
 	}
-	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("ffmpeg transcode: %w\n%s", err, out)
+
+	cmd := exec.CommandContext(ctx, ffmpegPath, transcodeArgs(params, spec, copyStreams)...)
+	stderr := &cappedBuffer{max: 16 << 10}
+	cmd.Stderr = stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("ffmpeg stdout pipe: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("ffmpeg start: %w", err)
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		pos, ok := parseProgressLine(scanner.Text())
+		if !ok || total <= 0 || params.OnProgress == nil {
+			continue
+		}
+		params.OnProgress(min(float64(pos)/float64(total), 1))
+	}
+	// Drain whatever the scanner left so ffmpeg never blocks on a full pipe
+	// before Wait closes it.
+	_, _ = io.Copy(io.Discard, stdout)
+
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("ffmpeg transcode: %w: %s", err, strings.TrimSpace(string(stderr.buf)))
 	}
 	return nil
 }

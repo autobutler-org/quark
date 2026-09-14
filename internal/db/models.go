@@ -42,6 +42,21 @@ type FileContentFt struct {
 	Extracted string
 }
 
+type Job struct {
+	ID         int64
+	Kind       string
+	Name       string
+	Status     string
+	Params     string
+	Progress   float64
+	Lane       string
+	Attempts   int64
+	Error      string
+	CreatedAt  time.Time
+	StartedAt  sql.NullTime
+	FinishedAt sql.NullTime
+}
+
 type PhotoAlbum struct {
 	ID        int64
 	Name      string

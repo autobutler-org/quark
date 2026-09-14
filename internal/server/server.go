@@ -21,12 +21,14 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/favoritesutil"
 	"github.com/autobutler-org/quark/pkg/util/healthutil"
+	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
 	"github.com/autobutler-org/quark/pkg/util/remoteutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/tlsutil"
+	"github.com/autobutler-org/quark/pkg/util/transcodeutil"
 	"github.com/autobutler-org/quark/pkg/util/updateutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/util/workerutil"
@@ -36,15 +38,36 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, error) {
+// setupServices starts the background services. The returned func stops the
+// job worker and waits for it, so a job interrupted by shutdown cleans up and
+// is marked failed before the process exits.
+func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error) {
 	if err := storageutil.SetupFilesDir(); err != nil {
-		return nil, fmt.Errorf("failed to setup files directory: %w", err)
+		return nil, nil, fmt.Errorf("failed to setup files directory: %w", err)
 	}
 	go func() {
 		if err := deps.Worker().Process(); err != nil {
 			log.Printf("[server] worker stopped: %v", err)
 		}
 	}()
+	jobs := deps.JobQueue()
+	jobs.Register(jobutil.RegisterParams{
+		Kind: transcodeutil.Kind,
+		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{
+			Storage:  deps.StorageService(),
+			EventBus: deps.EventBus(),
+		}),
+	})
+	jobsCtx, cancelJobs := context.WithCancel(context.Background())
+	jobsDone := make(chan struct{})
+	go func() {
+		defer close(jobsDone)
+		jobs.Run(jobsCtx)
+	}()
+	stopJobs := func() {
+		cancelJobs()
+		<-jobsDone
+	}
 	go func() {
 		if err := deps.Worker().LogErrors(); err != nil {
 			log.Printf("[server] worker error logger stopped: %v", err)
@@ -136,7 +159,7 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, error) {
 		sessions.StartSweeper(context.Background(), uploadutil.DefaultSweepInterval)
 	}
 
-	return syncWorker, nil
+	return syncWorker, stopJobs, nil
 }
 
 func initExternalVault(deps deputil.Dependencies) {
@@ -313,7 +336,7 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 	}
 
 	deps.WithWorker(workerutil.NewWorker(deps.StorageService()))
-	syncWorker, err := setupServices(deps)
+	syncWorker, stopJobs, err := setupServices(deps)
 	if err != nil {
 		return fmt.Errorf("failed to setup services: %w", err)
 	}
@@ -363,6 +386,7 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 		<-quit
 		log.Println("[server] shutting down...")
 		syncWorker.Stop()
+		stopJobs()
 		remoteutil.Stop()
 		os.Exit(0)
 	}()
