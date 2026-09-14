@@ -22,6 +22,26 @@ import (
 // the same as a path that does not exist, because to them it does not.
 var errNoAccess = errors.New("file not found")
 
+// errReadOnly is what a caller hears when they may see a path but not change
+// it.
+var errReadOnly = errors.New("you do not have permission to change this")
+
+// grantOwner records the caller as owner of something they just created
+// (#1903). The item already exists by then, so a failure is logged rather than
+// failing the request: the caller still reaches it through the write grant
+// that let them create it.
+func grantOwner(c *gin.Context, deps deputil.Dependencies, access accessutil.Access, serial, p string) {
+	if _, err := accessutil.GrantOwnerIfNeeded(accessutil.GrantOwnerIfNeededParams{
+		Ctx:          c.Request.Context(),
+		Database:     deps.Database(),
+		Access:       access,
+		DeviceSerial: serial,
+		Path:         p,
+	}); err != nil {
+		slog.Error("access: could not record the owner of a new item", "path", p, "serial", serial, "err", err)
+	}
+}
+
 // loadAccess reads what the caller may reach, once per request (#1903).
 // requireAuth sets the principal; a request that arrives without one gets the
 // zero principal, which is denied everything.

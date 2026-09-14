@@ -3,6 +3,7 @@ package v0_files
 import (
 	"errors"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
@@ -13,7 +14,7 @@ import (
 
 // newFolder godoc
 // @Summary Create a new folder
-// @Description Enqueue create-folder operation under the given folder directory
+// @Description Enqueue create-folder operation under the given folder directory. Needs write access on that directory; the caller owns the new folder.
 // @Tags files
 // @Accept multipart/form-data
 // @Produce json
@@ -22,11 +23,14 @@ import (
 // @Param serial query string false "Device serial number to create folder on"
 // @Success 202 {object} serverutil.Response "Ok"
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 403 {object} serverutil.Response "Forbidden"
+// @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /files/folder/{folderDir} [post]
 func newFolder(c *gin.Context) *serverutil.Response {
 	folderDir := c.Param("folderDir")
 	folderName := c.PostForm("folderName")
+	serial := c.Query("serial")
 
 	if folderDir == "" {
 		return serverutil.BadRequest(errors.New("folderDir is required"))
@@ -39,17 +43,32 @@ func newFolder(c *gin.Context) *serverutil.Response {
 	if !ok {
 		return serverutil.InternalServerError(nil)
 	}
+	access, err := loadAccess(c, deps)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	check := access.Check(serial, folderDir, accessutil.Write)
+	if !check.Readable {
+		return serverutil.NotFound(errNoAccess)
+	}
+	if !check.Allowed {
+		return serverutil.Forbidden(errReadOnly)
+	}
 
-	if _, err := fileutil.CreateFolder(fileutil.CreateFolderParams{
+	result, err := fileutil.CreateFolder(fileutil.CreateFolderParams{
 		Ctx:        c.Request.Context(),
 		Registry:   deps.VFSRegistry(),
 		Storage:    deps.StorageService(),
 		EventBus:   deps.EventBus(),
 		FolderDir:  folderDir,
 		FolderName: folderName,
-		Serial:     c.Query("serial"),
-	}); err != nil {
+		Serial:     serial,
+	})
+	if err != nil {
 		return fileError(err)
+	}
+	if result.Created {
+		grantOwner(c, deps, access, serial, result.Path)
 	}
 	return serverutil.Ok()
 }

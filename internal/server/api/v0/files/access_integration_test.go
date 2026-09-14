@@ -272,6 +272,147 @@ func TestAccess_UnknownSerialIsNotFound(t *testing.T) {
 	)
 }
 
+func (h accessHarness) move(oldPath, newPath string) *httptest.ResponseRecorder {
+	body, _ := json.Marshal(map[string]string{"oldFilePath": oldPath, "newFilePath": newPath})
+	return doRequest(h.engine, http.MethodPut, "/api/v0/files", bytes.NewReader(body), "application/json")
+}
+
+// newFolder creates name inside dir; "/" is the root.
+func (h accessHarness) newFolder(dir, name string) *httptest.ResponseRecorder {
+	return doRequest(h.engine, http.MethodPost, "/api/v0/files/folder/"+dir,
+		strings.NewReader("folderName="+url.QueryEscape(name)), "application/x-www-form-urlencoded")
+}
+
+func (h accessHarness) post(path string) *httptest.ResponseRecorder {
+	return doRequest(h.engine, http.MethodPost, path, nil, "")
+}
+
+func (h accessHarness) del(rootDir, name string) *httptest.ResponseRecorder {
+	return doRequest(h.engine, http.MethodDelete,
+		"/api/v0/files?rootDir="+url.QueryEscape(rootDir)+"&filePaths="+url.QueryEscape(name), nil, "")
+}
+
+// levels returns every row as rel_path → level.
+func (h accessHarness) levels(t *testing.T) map[string]string {
+	t.Helper()
+	rows, err := h.database.Db.Query(`SELECT rel_path, level FROM path_access`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	levels := map[string]string{}
+	for rows.Next() {
+		var rel, level string
+		if err := rows.Scan(&rel, &level); err != nil {
+			t.Fatal(err)
+		}
+		levels[rel] = level
+	}
+	return levels
+}
+
+func expectCodes(t *testing.T, want int, responses map[string]*httptest.ResponseRecorder) {
+	t.Helper()
+	for name, w := range responses {
+		if w.Code != want {
+			t.Errorf("%s = %d, want %d: %s", name, w.Code, want, w.Body.String())
+		}
+	}
+}
+
+func expectExists(t *testing.T, filesDir string, rels ...string) {
+	t.Helper()
+	for _, rel := range rels {
+		if _, err := os.Lstat(filepath.Join(filesDir, filepath.FromSlash(rel))); err != nil {
+			t.Errorf("%s is gone: %v", rel, err)
+		}
+	}
+}
+
+func TestAccess_ReadShareCannotChange(t *testing.T) {
+	h := newAccessHarness(t, false)
+	writeFixture(t, h.filesDir, "shared/f.txt")
+	writeZip(t, h.filesDir, "shared/a.zip")
+	writeFixture(t, h.filesDir, "other/o.txt")
+	h.grant(t, "shared", accessutil.Read)
+
+	expectCodes(t, http.StatusForbidden, map[string]*httptest.ResponseRecorder{
+		"move":       h.move("shared/f.txt", "shared/g.txt"),
+		"delete":     h.del("shared", "f.txt"),
+		"new folder": h.newFolder("shared", "new"),
+		"extract":    h.post("/api/v0/files/extract?filePath=shared/a.zip"),
+		"convert":    h.post("/api/v0/files/convert/xlsx?filePath=shared/book.xlsx"),
+	})
+	expectCodes(t, http.StatusNotFound, map[string]*httptest.ResponseRecorder{
+		"move from outside": h.move("other/o.txt", "shared/o.txt"),
+		"delete outside":    h.del("other", "o.txt"),
+		"folder outside":    h.newFolder("other", "new"),
+		"extract outside":   h.post("/api/v0/files/extract?filePath=other/o.zip"),
+	})
+	expectExists(t, h.filesDir, "shared/f.txt", "other/o.txt")
+	if _, err := os.Lstat(filepath.Join(h.filesDir, "shared", "a")); err == nil {
+		t.Error("a forbidden extraction wrote shared/a")
+	}
+	if n := h.rowCount(t); n != 1 {
+		t.Errorf("rows = %d, want only the share", n)
+	}
+}
+
+func TestAccess_WriteShareOwnsWhatItCreates(t *testing.T) {
+	h := newAccessHarness(t, false)
+	writeFixture(t, h.filesDir, "shared/f.txt")
+	writeZip(t, h.filesDir, "shared/a.zip")
+	writeFixture(t, h.filesDir, "shared/existing/e.txt")
+	writeFixture(t, h.filesDir, "other/o.txt")
+	h.grant(t, "shared", accessutil.Write)
+
+	expectCodes(t, http.StatusOK, map[string]*httptest.ResponseRecorder{
+		"new folder":      h.newFolder("shared", "new"),
+		"existing folder": h.newFolder("shared", "existing"),
+		"extract":         h.post("/api/v0/files/extract?filePath=shared/a.zip"),
+	})
+	if w := h.move("shared/f.txt", "shared/new/f.txt"); w.Code != http.StatusOK {
+		t.Fatalf("move within the share = %d: %s", w.Code, w.Body.String())
+	}
+	expectCodes(t, http.StatusNotFound, map[string]*httptest.ResponseRecorder{
+		"move out of the share": h.move("shared/new/f.txt", "other/f.txt"),
+	})
+	expectExists(t, h.filesDir, "shared/new/f.txt", "shared/a/inside.txt")
+
+	want := map[string]string{"shared": "write", "shared/new": "owner", "shared/a": "owner"}
+	if got := h.levels(t); len(got) != len(want) || got["shared"] != want["shared"] ||
+		got["shared/new"] != want["shared/new"] || got["shared/a"] != want["shared/a"] {
+		t.Errorf("rows = %v, want %v", got, want)
+	}
+
+	if w := h.del("shared/new", "f.txt"); w.Code != http.StatusOK {
+		t.Errorf("delete within the share = %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// The single-admin regression: an admin's mutations behave as before and
+// never write a row.
+func TestAccess_AdminMutationsWriteNoRows(t *testing.T) {
+	h := newAccessHarness(t, true)
+	writeFixture(t, h.filesDir, "f.txt")
+	writeZip(t, h.filesDir, "a.zip")
+
+	expectCodes(t, http.StatusOK, map[string]*httptest.ResponseRecorder{
+		"new folder": h.newFolder("/", "new"),
+		"extract":    h.post("/api/v0/files/extract?filePath=a.zip"),
+	})
+	if w := h.move("f.txt", "new/f.txt"); w.Code != http.StatusOK {
+		t.Fatalf("move = %d: %s", w.Code, w.Body.String())
+	}
+	if w := h.del("new", "f.txt"); w.Code != http.StatusOK {
+		t.Errorf("delete = %d: %s", w.Code, w.Body.String())
+	}
+	expectExists(t, h.filesDir, "new", "a/inside.txt")
+	if n := h.rowCount(t); n != 0 {
+		t.Errorf("path_access rows after admin mutations = %d, want 0", n)
+	}
+}
+
 func TestAccess_AdminSeesEverything(t *testing.T) {
 	h := newAccessHarness(t, true)
 	writeFixture(t, h.filesDir, "a.txt")
