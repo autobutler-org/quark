@@ -10,7 +10,7 @@ import (
 
 // listTrashContents godoc
 // @Summary List a folder in the trash
-// @Description Lists what a trashed folder, or a folder inside one, holds, sorted by name. Each entry's path is relative to the trashed item and can be passed back here, to restore, or to delete. Also returns where the folder would be restored to and when the trashed item expires.
+// @Description Lists what a trashed folder, or a folder inside one, holds, sorted by name. Each entry's path is relative to the trashed item and can be passed back here, to restore, or to delete. Also returns where the folder would be restored to and when the trashed item expires. A trashed item the caller cannot see is not found.
 // @Tags trash
 // @Produce json
 // @Param serial query string false "Device serial; empty for internal storage"
@@ -26,10 +26,27 @@ func listTrashContents(c *gin.Context) *serverutil.Response {
 	if !ok {
 		return serverutil.InternalServerError(nil)
 	}
+	access, err := loadAccess(c, deps)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	serial := c.Query("serial")
+	trashName := c.Query("trashName")
+
+	recorded, err := deps.StorageService().ReadTrashEntry(storageutil.ReadTrashEntryParams{
+		DeviceSerial: serial,
+		TrashName:    trashName,
+	})
+	if err != nil {
+		return trashError(err)
+	}
+	if !access.CanSeeTrash(serial, trashName, recorded.Entry.OriginalPath, recorded.Entry.TrashedBy) {
+		return serverutil.NotFound(storageutil.ErrTrashItemNotFound)
+	}
 
 	result, err := deps.StorageService().ListTrashContents(storageutil.ListTrashContentsParams{
-		DeviceSerial: c.Query("serial"),
-		TrashName:    c.Query("trashName"),
+		DeviceSerial: serial,
+		TrashName:    trashName,
 		Path:         c.Query("path"),
 	})
 	if err != nil {
