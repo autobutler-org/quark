@@ -5,7 +5,36 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 )
+
+// usernamePattern is what a new account's username must match. A username
+// also names a folder and a URL path segment, so it cannot hold a slash, start
+// with a dot, or be ".." (#1908). Accounts created before the rule keep theirs.
+var usernamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,31}$`)
+
+// validateUsername returns ErrInvalidUsername for a username a new account
+// cannot have.
+func validateUsername(username string) error {
+	if !usernamePattern.MatchString(username) {
+		return ErrInvalidUsername
+	}
+	return nil
+}
+
+// statusError is the error a sign-in gets for an account's status, nil for an
+// active account. A status the table's CHECK should keep out is refused like a
+// disabled one.
+func statusError(status string) error {
+	switch status {
+	case StatusActive:
+		return nil
+	case StatusPending:
+		return ErrAccountPending
+	default:
+		return ErrAccountDisabled
+	}
+}
 
 // mountsDirName is the directory under the data directory where external
 // devices are mounted.

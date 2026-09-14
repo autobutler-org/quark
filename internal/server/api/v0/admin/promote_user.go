@@ -2,7 +2,6 @@ package v0_admin
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
@@ -15,13 +14,14 @@ import (
 
 // promoteUser godoc
 // @Summary Promote user to admin
-// @Description Grants admin role to the given username. Admin-only.
+// @Description Grants admin role to the given username. Only an active account can be promoted. Admin-only.
 // @Tags admin
 // @Param username path string true "Username to promote"
 // @Success 200 {object} serverutil.Response
 // @Failure 400 {object} serverutil.Response
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response
+// @Failure 404 {object} serverutil.Response "no active account has that username"
 // @Failure 500 {object} serverutil.Response
 // @Router /admin/promote/{username} [put]
 func promoteUser(c *gin.Context) *serverutil.Response {
@@ -40,7 +40,7 @@ func promoteUser(c *gin.Context) *serverutil.Response {
 	}
 
 	if err := authutil.PromoteToAdmin(c.Request.Context(), database.Queries, target); err != nil {
-		return serverutil.InternalServerError(fmt.Errorf("promote user: %w", err))
+		return accountErrorResponse(err)
 	}
 	if bus := deps.EventBus(); bus != nil {
 		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})

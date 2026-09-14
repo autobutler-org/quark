@@ -11,13 +11,14 @@ import (
 
 // loginUser godoc
 // @Summary Login
-// @Description Authenticates with username and password, returns a session token
+// @Description Authenticates with username and password, returns a session token. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Param body body object true "{username, password}"
 // @Success 200 {object} object
 // @Failure 401 {object} serverutil.Response
+// @Failure 403 {object} accountRefusal "status is pending or disabled"
 // @Router /auth/login [post]
 func loginUser(c *gin.Context) *serverutil.Response {
 	deps, ok := getQueries(c)
@@ -37,6 +38,9 @@ func loginUser(c *gin.Context) *serverutil.Response {
 		Username: req.Username,
 		Password: req.Password,
 	})
+	if refusal := accountRefusalResponse(err); refusal != nil {
+		return refusal
+	}
 	if err != nil {
 		return serverutil.NewResponse().WithStatusCode(http.StatusUnauthorized).WithError(err)
 	}

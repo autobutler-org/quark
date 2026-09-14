@@ -2,7 +2,6 @@ package v0_admin
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
@@ -15,13 +14,15 @@ import (
 
 // demoteUser godoc
 // @Summary Demote admin to regular user
-// @Description Removes admin role from the given username. Fails if they are the last admin. Admin-only.
+// @Description Removes admin role from the given username. Refused with 409 while the Quark has at most one active admin. Admin-only.
 // @Tags admin
 // @Param username path string true "Username to demote"
 // @Success 200 {object} serverutil.Response
 // @Failure 400 {object} serverutil.Response
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response
+// @Failure 404 {object} serverutil.Response "no account has that username"
+// @Failure 409 {object} serverutil.Response "the last active admin"
 // @Failure 500 {object} serverutil.Response
 // @Router /admin/demote/{username} [put]
 func demoteUser(c *gin.Context) *serverutil.Response {
@@ -40,8 +41,7 @@ func demoteUser(c *gin.Context) *serverutil.Response {
 	}
 
 	if err := authutil.DemoteFromAdmin(c.Request.Context(), database.Queries, target); err != nil {
-		// DemoteFromAdmin returns a clear user-facing error for "last admin" case
-		return serverutil.BadRequest(fmt.Errorf("demote user: %w", err))
+		return accountErrorResponse(err)
 	}
 	if bus := deps.EventBus(); bus != nil {
 		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})

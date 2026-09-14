@@ -15,8 +15,10 @@ func (r *router) Routes() []*serverutil.Route {
 }
 
 type userSummary struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	IsAdmin   bool   `json:"isAdmin"`
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	IsAdmin  bool   `json:"isAdmin"`
+	// Status is pending, active or disabled.
+	Status    string `json:"status"`
 	CreatedAt string `json:"createdAt"`
 }

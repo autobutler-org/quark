@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/admin/demote/{username}": {
             "put": {
-                "description": "Removes admin role from the given username. Fails if they are the last admin. Admin-only.",
+                "description": "Removes admin role from the given username. Refused with 409 while the Quark has at most one active admin. Admin-only.",
                 "tags": [
                     "admin"
                 ],
@@ -56,6 +56,18 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "404": {
+                        "description": "no account has that username",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the last active admin",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -67,7 +79,7 @@ const docTemplate = `{
         },
         "/admin/promote/{username}": {
             "put": {
-                "description": "Grants admin role to the given username. Admin-only.",
+                "description": "Grants admin role to the given username. Only an active account can be promoted. Admin-only.",
                 "tags": [
                     "admin"
                 ],
@@ -102,6 +114,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no active account has that username",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -748,7 +766,7 @@ const docTemplate = `{
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticates with username and password, returns a session token",
+                "description": "Authenticates with username and password, returns a session token. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.",
                 "consumes": [
                     "application/json"
                 ],
@@ -781,6 +799,12 @@ const docTemplate = `{
                         "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "status is pending or disabled",
+                        "schema": {
+                            "$ref": "#/definitions/v0_auth.accountRefusal"
                         }
                     }
                 }
@@ -841,6 +865,12 @@ const docTemplate = `{
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "status is pending or disabled",
+                        "schema": {
+                            "$ref": "#/definitions/v0_auth.accountRefusal"
                         }
                     }
                 }
@@ -4341,6 +4371,10 @@ const docTemplate = `{
                 "isAdmin": {
                     "type": "boolean"
                 },
+                "status": {
+                    "description": "Status is pending, active or disabled.",
+                    "type": "string"
+                },
                 "username": {
                     "type": "string"
                 }
@@ -4438,6 +4472,18 @@ const docTemplate = `{
             ],
             "properties": {
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_auth.accountRefusal": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status is pending or disabled.",
                     "type": "string"
                 }
             }

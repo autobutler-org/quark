@@ -269,6 +269,50 @@ func TestRequireAuth_InvalidTokenReturns401(t *testing.T) {
 	}
 }
 
+// TestRequireAuth_DisabledAccountReturns401 verifies a session and a password
+// that worked while the account was active stop working once an admin turns
+// the account off (#1908).
+func TestRequireAuth_DisabledAccountReturns401(t *testing.T) {
+	sqlDB, queries := newMiddlewareTestDB(t)
+	ctx := context.Background()
+	result, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+		Username: "admin",
+		Password: "SecurePass1!",
+	})
+	if err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{Db: sqlDB, Queries: queries})
+	engine := newMiddlewareEngine(t, deps)
+
+	bearer := func() *http.Request {
+		req := httptest.NewRequest(http.MethodGet, "/api/v0/protected", nil)
+		req.Header.Set("Authorization", "Bearer "+result.SessionToken)
+		return req
+	}
+	basic := func() *http.Request {
+		req := httptest.NewRequest(http.MethodGet, "/api/v0/protected", nil)
+		req.SetBasicAuth("admin", "SecurePass1!")
+		return req
+	}
+	if w := doMiddlewareReq(engine, bearer()); w.Code != http.StatusOK {
+		t.Fatalf("active account bearer = %d, want 200", w.Code)
+	}
+
+	if _, err := queries.SetUserStatus(ctx, db.SetUserStatusParams{
+		Username:   "admin",
+		FromStatus: authutil.StatusActive,
+		ToStatus:   authutil.StatusDisabled,
+	}); err != nil {
+		t.Fatalf("SetUserStatus: %v", err)
+	}
+	for name, req := range map[string]*http.Request{"bearer": bearer(), "basic": basic()} {
+		if w := doMiddlewareReq(engine, req); w.Code != http.StatusUnauthorized {
+			t.Errorf("disabled account %s = %d, want 401", name, w.Code)
+		}
+	}
+}
+
 // TestRequireAuth_BasicAuthGrantsAccess verifies HTTP Basic Auth works as a
 // fallback authentication method.
 func TestRequireAuth_BasicAuthGrantsAccess(t *testing.T) {
