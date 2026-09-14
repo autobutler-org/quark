@@ -1,12 +1,101 @@
 package fileutil
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
+
+// usbDetector presents a single USB device rooted at a temp dir.
+type usbDetector struct {
+	mountPoint string
+	serial     string
+}
+
+func (d *usbDetector) DetectDevices() ([]storageutil.Device, error) {
+	return []storageutil.Device{{
+		Name:       "USB Disk",
+		MountPoint: d.mountPoint,
+		UsbInfo:    &serialOnlyUsbDevice{serial: d.serial},
+	}}, nil
+}
+
+// serialOnlyUsbDevice implements only GetSerial; any other call panics on the
+// nil embedded interface.
+type serialOnlyUsbDevice struct {
+	storageutil.UsbDevice
+	serial string
+}
+
+func (u *serialOnlyUsbDevice) GetSerial() string { return u.serial }
+
+// TestVFSListingsCarryTheDevice is the regression for #1867: every listing
+// served through the VFS registry dropped the device name, path and serial.
+func TestVFSListingsCarryTheDevice(t *testing.T) {
+	const serial = "USB-1867"
+	mountPoint := t.TempDir()
+	filesDir := filepath.Join(mountPoint, "quark", "data", "files")
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filesDir, "photo.jpg"), []byte("jpg"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: serial})
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, vfs.NewStorageServiceVFS(svc, filesNamespace)); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	listed, err := ListFiles(ListFilesParams{Ctx: ctx, Registry: registry, Storage: svc})
+	if err != nil {
+		t.Fatalf("ListFiles failed: %v", err)
+	}
+	searched, err := SearchFiles(SearchFilesParams{Ctx: ctx, Registry: registry, Storage: svc, Query: "photo"})
+	if err != nil {
+		t.Fatalf("SearchFiles failed: %v", err)
+	}
+	recent, err := ListRecent(ListRecentParams{Ctx: ctx, Registry: registry, Storage: svc})
+	if err != nil {
+		t.Fatalf("ListRecent failed: %v", err)
+	}
+	byType, err := ListByType(ListByTypeParams{Ctx: ctx, Registry: registry, Storage: svc, FileType: storageutil.FileTypeImage})
+	if err != nil {
+		t.Fatalf("ListByType failed: %v", err)
+	}
+
+	cases := map[string][]FileNode{
+		"ListFiles":   listed.Files,
+		"SearchFiles": searched.Files,
+		"ListRecent":  nodesOf(recent.Files),
+		"ListByType":  nodesOf(byType.Files),
+	}
+	for name, files := range cases {
+		if len(files) != 1 {
+			t.Errorf("%s: expected 1 file, got %+v", name, files)
+			continue
+		}
+		f := files[0]
+		if f.DeviceSerial != serial || f.DeviceName != "USB Disk" || f.DevicePath == "" {
+			t.Errorf("%s: device fields not carried through, got serial=%q name=%q path=%q",
+				name, f.DeviceSerial, f.DeviceName, f.DevicePath)
+		}
+	}
+}
+
+func nodesOf(files []FileNodeWithTime) []FileNode {
+	nodes := make([]FileNode, len(files))
+	for i, f := range files {
+		nodes[i] = f.FileNode
+	}
+	return nodes
+}
 
 // makeManagedDevice creates a ManagedDevice backed by a real temp directory,
 // matching the pattern used in storageutil tests.
