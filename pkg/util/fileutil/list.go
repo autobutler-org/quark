@@ -408,9 +408,23 @@ func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 		serialSet[s] = true
 	}
 
+	// The index records only the device's files directory and serial, so the
+	// name and path come from the managed device that owns that directory.
+	devicesByFilesDir := make(map[string]storageutil.ManagedDevice)
+	if params.Storage != nil {
+		devices, err := params.Storage.GetManagedDevices()
+		if err != nil {
+			return SearchFilesResult{}, err
+		}
+		for _, device := range devices {
+			devicesByFilesDir[device.FilesDir] = device
+		}
+	}
+
 	matches := params.Index.Search(params.Query, serialSet)
 	allFiles := make([]FileNode, 0, len(matches))
 	for _, f := range matches {
+		device := devicesByFilesDir[f.FilesDir]
 		// DirPath must be the full relative path (e.g. "docs/notes.txt"), not
 		// just the parent dir. The Flutter FileNode.apiPath getter uses
 		// DirPath as the full API path, consistent with how the directory
@@ -419,7 +433,10 @@ func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 			Name:         f.Name,
 			DirPath:      f.RelPath,
 			IsDir:        false,
+			DeviceName:   device.Name,
+			DevicePath:   device.DataDir,
 			DeviceSerial: f.DeviceSerial,
+			FileType:     string(storageutil.DetermineFileTypeFromPath(f.RelPath)),
 		})
 	}
 	return SearchFilesResult{Files: allFiles}, nil
@@ -446,6 +463,7 @@ func searchFilesVFS(params SearchFilesParams) (SearchFilesResult, error) {
 		result = append(result, FileNode{
 			Name:         fi.Name,
 			DirPath:      fi.Path,
+			FileType:     string(storageutil.DetermineFileTypeFromPath(fi.Path)),
 			IsDir:        false,
 			DeviceName:   fi.DeviceName,
 			DevicePath:   fi.DevicePath,

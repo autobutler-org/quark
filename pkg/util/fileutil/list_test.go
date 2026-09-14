@@ -69,12 +69,24 @@ func TestVFSListingsCarryTheDevice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListByType failed: %v", err)
 	}
+	// Indexed search (#1896) only knew the serial.
+	devices, err := svc.GetManagedDevices()
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := storageutil.NewFileIndex()
+	index.Build(devices)
+	indexed, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Storage: svc, Query: "photo"})
+	if err != nil {
+		t.Fatalf("indexed SearchFiles failed: %v", err)
+	}
 
 	cases := map[string][]FileNode{
-		"ListFiles":   listed.Files,
-		"SearchFiles": searched.Files,
-		"ListRecent":  nodesOf(recent.Files),
-		"ListByType":  nodesOf(byType.Files),
+		"ListFiles":           listed.Files,
+		"SearchFiles":         searched.Files,
+		"ListRecent":          nodesOf(recent.Files),
+		"ListByType":          nodesOf(byType.Files),
+		"indexed SearchFiles": indexed.Files,
 	}
 	for name, files := range cases {
 		if len(files) != 1 {
@@ -85,6 +97,9 @@ func TestVFSListingsCarryTheDevice(t *testing.T) {
 		if f.DeviceSerial != serial || f.DeviceName != "USB Disk" || f.DevicePath == "" {
 			t.Errorf("%s: device fields not carried through, got serial=%q name=%q path=%q",
 				name, f.DeviceSerial, f.DeviceName, f.DevicePath)
+		}
+		if f.FileType != string(storageutil.FileTypeImage) {
+			t.Errorf("%s: expected file type %q, got %q", name, storageutil.FileTypeImage, f.FileType)
 		}
 	}
 }
