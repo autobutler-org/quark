@@ -396,7 +396,9 @@ func TestDeleteAccount_AccountOnly(t *testing.T) {
 
 // TestDeleteAccount_AccountLeavesOtherUsersAlone is the isolation property that
 // separates this from a factory reset: deleting one account must not touch
-// anyone else's row or their sessions.
+// anyone else's row or their sessions. The other account is an admin, because
+// the only active admin cannot delete themselves while another account remains
+// (#1909); that refusal has its own test.
 func TestDeleteAccount_AccountLeavesOtherUsersAlone(t *testing.T) {
 	engine, sqlDB, _ := newDeleteAccountEngine(t)
 
@@ -419,6 +421,9 @@ func TestDeleteAccount_AccountLeavesOtherUsersAlone(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("create second user: %v", err)
+	}
+	if err := authutil.PromoteToAdmin(context.Background(), database.Queries, otherUser); err != nil {
+		t.Fatalf("promote second user: %v", err)
 	}
 	if userCount(t, sqlDB) != 2 {
 		t.Fatalf("expected 2 users before the delete, got %d", userCount(t, sqlDB))

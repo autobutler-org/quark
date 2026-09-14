@@ -41,6 +41,30 @@ UPDATE
 SET
     level = excluded.level;
 
+-- ReassignOwnerRows gives an heir every path one user owns, before that user
+-- is deleted and ON DELETE CASCADE drops the rest of their rows (#1909). A
+-- path the heir already has a row on becomes theirs to own. The WHERE clause
+-- is load-bearing: without one, SQLite reads the ON of the upsert as a join
+-- constraint of the SELECT. The CAST gives sqlc a type for the heir's id.
+-- name: ReassignOwnerRows :execrows
+INSERT INTO
+    path_access (device_serial, rel_path, user_id, level)
+SELECT
+    device_serial,
+    rel_path,
+    CAST(sqlc.arg(to_user_id) AS INTEGER),
+    'owner'
+FROM
+    path_access
+WHERE
+    path_access.user_id = sqlc.arg(from_user_id)
+    AND level = 'owner' ON CONFLICT (user_id, device_serial, rel_path)
+WHERE
+    user_id IS NOT NULL DO
+UPDATE
+SET
+    level = 'owner';
+
 -- MovePathAccessTree points the rows on a path and everything beneath it at
 -- where it moved, onto another device as well. substr, not LIKE: LIKE is
 -- case-insensitive and treats _ and % as wildcards, and "foo" must not match

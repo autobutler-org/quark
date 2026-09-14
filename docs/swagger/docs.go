@@ -436,6 +436,71 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/users/{username}": {
+            "delete": {
+                "description": "Deletes an account, its sessions, its shares and its group memberships. Its files stay where they are, and every path it owned becomes owned by the admin deleting it. An admin cannot delete their own account here, and the only active admin cannot be deleted. Admin-only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Delete an account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Username to delete",
+                        "name": "username",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_admin.deleteUserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "the caller's own account",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no account has that username",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the only active admin",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/albums": {
             "get": {
                 "description": "Returns all photo albums as a flat list. Use ?tree=true to get a nested tree.",
@@ -1013,6 +1078,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "database, files or devices requested by a non-admin",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "account=true from the only active admin while other active or disabled accounts exist; nothing is deleted",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -4759,6 +4830,14 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "v0_admin.deleteUserResponse": {
+            "type": "object",
+            "properties": {
+                "ownerRowsReassigned": {
+                    "type": "integer"
                 }
             }
         },
