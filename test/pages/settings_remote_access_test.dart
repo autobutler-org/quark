@@ -40,6 +40,7 @@ void main() {
       await settings.removeHost(settings.hosts.length - 1);
     }
     await settings.setSessionToken(null);
+    settings.isAdmin.value = false;
   }
 
   setUp(() async {
@@ -61,10 +62,14 @@ void main() {
   /// Answers the remote-access status with [status], read afresh on every
   /// request so a test can change it mid-flight; every other section's
   /// request gets a 404 it can fail on.
+  ///
+  /// Signs in as an admin unless [isAdmin] is false: turning remote access on
+  /// and off is admin-only (#1899).
   Future<void> pumpWithStatus(
     WidgetTester tester,
-    Map<String, dynamic> status,
-  ) async {
+    Map<String, dynamic> status, {
+    bool isAdmin = true,
+  }) async {
     statusReads = 0;
     sharedHttpClientFactory = () => MockClient((request) async {
       if (request.url.path != '/api/v0/settings/remote-access') {
@@ -77,6 +82,7 @@ void main() {
       HostEntry(name: 'Quark', hostAddress: 'https://quark.local'),
     );
     await settings.setSessionToken('a-session');
+    settings.isAdmin.value = isAdmin;
 
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
@@ -104,6 +110,25 @@ void main() {
       findsNothing,
     );
     expect(find.text('Enable remote access'), findsOneWidget);
+  });
+
+  testWidgets('offers a non-admin no way to turn it on', (tester) async {
+    await pumpWithStatus(tester, {
+      'enabled': false,
+      'connected': false,
+    }, isAdmin: false);
+
+    expect(find.text('Enable remote access'), findsNothing);
+  });
+
+  testWidgets('offers a non-admin no way to turn it off', (tester) async {
+    await pumpWithStatus(tester, {
+      'enabled': true,
+      'connected': true,
+    }, isAdmin: false);
+
+    expect(find.text('Connected via Tailscale'), findsOneWidget);
+    expect(find.text('Disable'), findsNothing);
   });
 
   testWidgets('shows connecting while on but not on the tailnet', (

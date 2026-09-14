@@ -19,3 +19,9 @@ type ConnectedDeviceJSON struct {
 func NewRouter() serverutil.Router {
 	return &router{}
 }
+
+// NewAdminRouter returns the route that deletes connected-device records.
+// Mount it behind middleware.RequireAdmin.
+func NewAdminRouter() serverutil.Router {
+	return &adminRouter{}
+}

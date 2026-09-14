@@ -35,7 +35,7 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 
 ### JN-SD-003: Mount an unmounted device
 
-**Preconditions:** A storage device is connected but not yet mounted.
+**Preconditions:** User is signed in as an admin. A storage device is connected but not yet mounted.
 
 **Steps:**
 
@@ -82,7 +82,7 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 
 ### JN-SD-006: Rename a storage device
 
-**Preconditions:** At least one storage device is listed.
+**Preconditions:** User is signed in as an admin. At least one storage device is listed.
 
 **Steps:**
 
@@ -114,7 +114,7 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 
 ### JN-SD-008: Start a backup job
 
-**Preconditions:** A storage device capable of backup is connected.
+**Preconditions:** User is signed in as an admin. A storage device capable of backup is connected.
 
 **Steps:**
 

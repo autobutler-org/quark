@@ -18,6 +18,8 @@ func newVersionEngine(t *testing.T) *gin.Engine {
 	engine := gin.New()
 	group := engine.Group("/api/v0")
 	serverutil.RegisterRouterWithGroup(group, v0_version.NewRouter())
+	// routes.go mounts this one behind RequireAdmin.
+	serverutil.RegisterRouterWithGroup(group, v0_version.NewAdminRouter())
 	return engine
 }
 

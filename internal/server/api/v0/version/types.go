@@ -46,9 +46,17 @@ type router struct{}
 
 func (r *router) Routes() []*serverutil.Route {
 	return []*serverutil.Route{
-		doUpdateRoute,
 		getInstalledVersionRoute,
 		getSbomRoute,
 		listVersionsRoute,
+	}
+}
+
+// adminRouter holds the route that installs a version and restarts the Quark.
+type adminRouter struct{}
+
+func (r *adminRouter) Routes() []*serverutil.Route {
+	return []*serverutil.Route{
+		doUpdateRoute,
 	}
 }
