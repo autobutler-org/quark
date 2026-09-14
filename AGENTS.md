@@ -94,6 +94,11 @@ prose. cspell does read Markdown, though.
 - **Advice is not a request for edits.** When asked to review, explain, coach, or advise, answer in chat and
   touch no files. Edit only when the request asks for a change.
 - **Filing an issue is not implementing it.** When asked to write up an issue or a plan, stop there.
+- **An issue belongs to its epic as a sub-issue, not a link.** A `Parent: #N` line or a row in the epic's task
+  table is a reading aid; GitHub's sub-issue relationship is the link. Attach it with
+  `gh api -X POST repos/autobutler-org/quark/issues/<epic>/sub_issues -F sub_issue_id=<id>` — `<id>` is the child's
+  database id from `gh api repos/autobutler-org/quark/issues/<N> --jq .id`, not its number — and confirm with
+  `gh api repos/autobutler-org/quark/issues/<N>/parent`.
 - **Never fork or vendor an upstream dependency without approval.** Propose the lighter options first — a
   workaround in our code, a pinned version, an upstream issue or PR — and let the maintainer choose.
 - **Ask before a large change.** A fix that needs a new abstraction layer, a new dependency, or edits across
