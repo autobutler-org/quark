@@ -109,6 +109,13 @@ class AppSettings {
   /// The router listens to this to redirect to login when a 401 clears the token.
   final ValueNotifier<String?> sessionTokenNotifier = ValueNotifier(null);
 
+  /// Whether the user signed in on the current [activeHost] is an admin.
+  ///
+  /// Kept current by [AuthService.watchAccount] from `GET /auth/status`. It
+  /// only decides what the app shows (the Quark enforces admin-only routes
+  /// itself), so it is not persisted: every launch asks again.
+  final ValueNotifier<bool> isAdmin = ValueNotifier(false);
+
   /// Whether terms have been accepted **for the current [activeHost]**.
   ///
   /// Derived state — never assign to it directly. It is recomputed by
