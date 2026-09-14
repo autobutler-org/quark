@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"slices"
 )
 
 // ResetDatabase drops every object the application owns and re-runs the
@@ -57,15 +58,18 @@ func ResetRawDatabase(database *DatabaseRaw) error {
 // each statement is IF EXISTS: the shadow rows are still in the snapshot of
 // sqlite_master this read from.
 //
-// It needs no ordering and no deferred-constraint dance under PRAGMA
-// foreign_keys=on: sqlite_master lists tables in creation order, which is
-// parent-before-child, and every reference in the schema is ON DELETE CASCADE
-// or SET NULL, so the implicit DELETE a DROP TABLE performs resolves rather
-// than rejects. Verified against a populated database by the delete-account
-// tests, which reset one holding a user and a live session.
+// It needs no deferred-constraint dance under PRAGMA foreign_keys=on. Virtual
+// tables go first, in the order sqlite_master lists them, because an FTS5
+// table cannot be dropped once its shadow tables are gone. Everything else
+// goes in reverse creation order, so every child is gone before its parents:
+// creation order alone is not enough once a table has two parents
+// (path_access references both users and groups), because dropping the second
+// parent cascades into a child whose first parent no longer exists, and
+// SQLite rejects that. Verified against a populated database by the
+// delete-account tests, which reset one holding a user and a live session.
 func dropAllObjects(sqlDB *sql.DB) error {
 	const listObjects = `
-		SELECT type, name FROM sqlite_master
+		SELECT type, name, COALESCE(sql LIKE 'CREATE VIRTUAL TABLE%', 0) FROM sqlite_master
 		WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'`
 
 	rows, err := sqlDB.Query(listObjects)
@@ -73,11 +77,14 @@ func dropAllObjects(sqlDB *sql.DB) error {
 		return fmt.Errorf("failed to list database objects: %w", err)
 	}
 
-	type object struct{ kind, name string }
+	type object struct {
+		kind, name string
+		virtual    bool
+	}
 	objects := make([]object, 0)
 	for rows.Next() {
 		var o object
-		if err := rows.Scan(&o.kind, &o.name); err != nil {
+		if err := rows.Scan(&o.kind, &o.name, &o.virtual); err != nil {
 			rows.Close()
 			return fmt.Errorf("failed to read database object: %w", err)
 		}
@@ -91,7 +98,19 @@ func dropAllObjects(sqlDB *sql.DB) error {
 		return fmt.Errorf("failed to close object listing: %w", err)
 	}
 
+	ordered := make([]object, 0, len(objects))
 	for _, o := range objects {
+		if o.virtual {
+			ordered = append(ordered, o)
+		}
+	}
+	for _, o := range slices.Backward(objects) {
+		if !o.virtual {
+			ordered = append(ordered, o)
+		}
+	}
+
+	for _, o := range ordered {
 		// The kind is one of the two literals in listObjects and the name comes
 		// from sqlite_master, so neither is caller-controlled; DDL takes no
 		// bound parameters for identifiers in any case.

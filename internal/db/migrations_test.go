@@ -151,6 +151,7 @@ func TestMigrationsApplyCleanly(t *testing.T) {
 		"vault_config", "vault_folders", "vault_entries", "vault_location",
 		"file_content", "file_content_fts",
 		"vfs_metadata", "vfs_db_entries",
+		"groups", "group_members", "path_access",
 	}
 	for _, table := range tables {
 		var count int
