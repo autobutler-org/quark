@@ -74,6 +74,81 @@ func writeChunk(
 	})
 }
 
+// A session belongs to the user who opened it (#1903). To anyone else it does
+// not exist, on every verb, and their attempt leaves it untouched for its owner.
+func TestSessionBelongsToItsOpener(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, _ := newTestDestination(t)
+	const owner, stranger = int64(7), int64(8)
+	created, err := store.CreateSession(uploadutil.CreateSessionParams{
+		Destination: dest, FileName: "mine.bin", TotalSize: 4, UserID: owner,
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	id := created.SessionID
+
+	if _, err := store.DescribeSession(uploadutil.DescribeSessionParams{SessionID: id, UserID: stranger}); !errors.Is(err, uploadutil.ErrSessionNotFound) {
+		t.Errorf("a stranger described the session: %v", err)
+	}
+	if _, err := store.WriteChunk(uploadutil.WriteChunkParams{
+		Ctx: context.Background(), Destination: dest, SessionID: id, UserID: stranger,
+		Range: uploadutil.ContentRange{Start: 0, End: 3, Total: 4}, Body: bytes.NewReader([]byte("abcd")),
+	}); !errors.Is(err, uploadutil.ErrSessionNotFound) {
+		t.Errorf("a stranger wrote to the session: %v", err)
+	}
+	if _, err := store.DeleteSession(uploadutil.DeleteSessionParams{SessionID: id, UserID: stranger}); !errors.Is(err, uploadutil.ErrSessionNotFound) {
+		t.Errorf("a stranger deleted the session: %v", err)
+	}
+
+	described, err := store.DescribeSession(uploadutil.DescribeSessionParams{SessionID: id, UserID: owner})
+	if err != nil || described.Offset != 0 {
+		t.Fatalf("the owner lost the session: %+v, %v", described, err)
+	}
+	if _, err := store.DeleteSession(uploadutil.DeleteSessionParams{SessionID: id, UserID: owner}); err != nil {
+		t.Errorf("the owner could not delete the session: %v", err)
+	}
+}
+
+// The access layer grants ownership only on a file an upload created, so a
+// commit has to say whether it replaced one (#1903).
+func TestCommitReportsWhetherTheFileIsNew(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, root := newLocalDestination(t)
+	if err := os.WriteFile(filepath.Join(root, "taken.txt"), []byte("old"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	content := []byte("data")
+	total := int64(len(content))
+
+	for _, tc := range []struct {
+		name      string
+		overwrite bool
+		created   bool
+	}{
+		{name: "new.txt", created: true},
+		{name: "taken.txt", overwrite: true, created: false},
+	} {
+		opened, err := store.CreateSession(uploadutil.CreateSessionParams{
+			Destination: dest, FileName: tc.name, TotalSize: total, Overwrite: tc.overwrite,
+		})
+		if err != nil {
+			t.Fatalf("create session for %s: %v", tc.name, err)
+		}
+		result, err := writeChunk(store, dest, opened.SessionID, 0, total-1, total, content)
+		if err != nil {
+			t.Fatalf("commit %s: %v", tc.name, err)
+		}
+		if !result.Complete || result.Path != tc.name || result.Created != tc.created {
+			t.Errorf("commit %s = %+v, want path %q created=%v", tc.name, result, tc.name, tc.created)
+		}
+	}
+}
+
 func TestParseContentRange(t *testing.T) {
 	t.Parallel()
 

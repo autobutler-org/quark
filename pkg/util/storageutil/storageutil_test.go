@@ -1695,7 +1695,7 @@ func TestUploadFilesStreamed_SingleFile(t *testing.T) {
 	content := []byte("hello world")
 	body, contentType := makeMultipartBody(t, "files", "test.txt", content)
 	r := multipart.NewReader(body, boundaryFromContentType(t, contentType))
-	err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
+	_, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
 		Reader:       r,
 		RootDir:      "",
 		DeviceSerial: "",
@@ -1722,7 +1722,7 @@ func TestUploadFilesStreamed_ConflictRename(t *testing.T) {
 	content := []byte("new content")
 	body, contentType := makeMultipartBody(t, "files", "file.txt", content)
 	r := multipart.NewReader(body, boundaryFromContentType(t, contentType))
-	err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
+	_, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
 		Reader:       r,
 		RootDir:      "",
 		DeviceSerial: "",
@@ -1749,7 +1749,7 @@ func TestUploadFilesStreamed_SubDirectory(t *testing.T) {
 	content := []byte("nested file")
 	body, contentType := makeMultipartBody(t, "files", "notes.txt", content)
 	r := multipart.NewReader(body, boundaryFromContentType(t, contentType))
-	err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
+	_, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
 		Reader:       r,
 		RootDir:      "docs/2024",
 		DeviceSerial: "",
@@ -1764,6 +1764,41 @@ func TestUploadFilesStreamed_SubDirectory(t *testing.T) {
 	}
 	if string(got) != string(content) {
 		t.Errorf("Expected content %q, got %q", content, got)
+	}
+}
+
+// TestUploadFilesStreamed_ReportsWhatItWrote pins the names the access layer
+// grants ownership on (#1903): a conflict rename reports the name the file
+// really landed under, and an overwrite reports that it created nothing.
+func TestUploadFilesStreamed_ReportsWhatItWrote(t *testing.T) {
+	device := makeManagedDeviceForImpl(t, "test-device")
+	if err := os.MkdirAll(filepath.Join(device.FilesDir, "docs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(device.FilesDir, "docs", "file.txt"), []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	upload := func(overwrite bool) UploadFilesStreamedResult {
+		t.Helper()
+		body, contentType := makeMultipartBody(t, "files", "file.txt", []byte("new"))
+		result, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
+			Reader:    multipart.NewReader(body, boundaryFromContentType(t, contentType)),
+			RootDir:   "docs",
+			Overwrite: overwrite,
+		}, device, device.FilesDir)
+		if err != nil {
+			t.Fatalf("UploadFilesStreamedImpl failed: %v", err)
+		}
+		return result
+	}
+
+	renamed := upload(false)
+	if want := (UploadedFile{Path: "docs/file_(1).txt", Created: true}); len(renamed.Written) != 1 || renamed.Written[0] != want {
+		t.Errorf("rename upload wrote %+v, want [%+v]", renamed.Written, want)
+	}
+	replaced := upload(true)
+	if want := (UploadedFile{Path: "docs/file.txt", Created: false}); len(replaced.Written) != 1 || replaced.Written[0] != want {
+		t.Errorf("overwrite upload wrote %+v, want [%+v]", replaced.Written, want)
 	}
 }
 

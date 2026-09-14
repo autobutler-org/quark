@@ -31,6 +31,8 @@ type session struct {
 	totalSize int64
 	serial    string
 	overwrite bool
+	// userID is who opened the session; nobody else can see or use it.
+	userID    int64
 	tempPath  string
 	createdAt time.Time
 	expiresAt time.Time
@@ -87,6 +89,7 @@ func (s *SessionStore) CreateSession(params CreateSessionParams) (CreateSessionR
 		totalSize: params.TotalSize,
 		serial:    params.Serial,
 		overwrite: params.Overwrite,
+		userID:    params.UserID,
 		tempPath:  file.Name(),
 		createdAt: now,
 		expiresAt: now.Add(s.ttl),
@@ -110,7 +113,7 @@ func (s *SessionStore) CreateSession(params CreateSessionParams) (CreateSessionR
 // exactly at the committed offset is refused with that offset attached, so the
 // client resyncs rather than punching a hole in the file.
 func (s *SessionStore) WriteChunk(params WriteChunkParams) (WriteChunkResult, error) {
-	sess, err := s.lookup(params.SessionID)
+	sess, err := s.lookup(params.SessionID, params.UserID)
 	if err != nil {
 		return WriteChunkResult{}, err
 	}
@@ -156,7 +159,7 @@ func (s *SessionStore) WriteChunk(params WriteChunkParams) (WriteChunkResult, er
 // DescribeSession is the resync path: after a dropped connection the client
 // asks what landed instead of guessing.
 func (s *SessionStore) DescribeSession(params DescribeSessionParams) (DescribeSessionResult, error) {
-	sess, err := s.lookup(params.SessionID)
+	sess, err := s.lookup(params.SessionID, params.UserID)
 	if err != nil {
 		return DescribeSessionResult{}, err
 	}
@@ -180,7 +183,12 @@ func (s *SessionStore) DescribeSession(params DescribeSessionParams) (DescribeSe
 func (s *SessionStore) DeleteSession(params DeleteSessionParams) (DeleteSessionResult, error) {
 	s.mu.Lock()
 	sess, ok := s.sessions[params.SessionID]
-	delete(s.sessions, params.SessionID)
+	// Someone else's session is left alone and reported as missing, the same
+	// as one that never existed.
+	ok = ok && sess.userID == params.UserID
+	if ok {
+		delete(s.sessions, params.SessionID)
+	}
 	s.mu.Unlock()
 
 	if !ok {
@@ -264,13 +272,15 @@ func (s *SessionStore) StagingDir() string {
 	return s.stagingDir
 }
 
-// lookup resolves a session id, expiring the session on the way past if its
-// deadline has gone by. Lazy expiry means a session cannot be resumed between
-// its deadline and the next sweep, which would otherwise be a window of up to
-// DefaultSweepInterval.
-func (s *SessionStore) lookup(id string) (*session, error) {
+// lookup resolves a session id for the user asking, expiring the session on
+// the way past if its deadline has gone by. Lazy expiry means a session cannot
+// be resumed between its deadline and the next sweep, which would otherwise be
+// a window of up to DefaultSweepInterval. A session opened by someone else is
+// not found, and is neither expired nor touched on their behalf.
+func (s *SessionStore) lookup(id string, userID int64) (*session, error) {
 	s.mu.Lock()
 	sess, ok := s.sessions[id]
+	ok = ok && sess.userID == userID
 	expired := ok && time.Now().After(sess.expiresAt)
 	if expired {
 		delete(s.sessions, id)
@@ -327,6 +337,8 @@ func (s *SessionStore) commit(ctx context.Context, sess *session, dest Destinati
 		Offset:    sess.offset,
 		Complete:  true,
 		Path:      written.Path,
+		Serial:    sess.serial,
+		Created:   written.Created,
 	}, nil
 }
 
