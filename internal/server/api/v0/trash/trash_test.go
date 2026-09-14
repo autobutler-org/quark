@@ -13,6 +13,7 @@ import (
 
 	v0_files "github.com/autobutler-org/quark/internal/server/api/v0/files"
 	v0_trash "github.com/autobutler-org/quark/internal/server/api/v0/trash"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
@@ -71,6 +72,7 @@ func newHarness(t *testing.T) harness {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", accessutil.System)
 		c.Next()
 	})
 	group := engine.Group("/api/v0")

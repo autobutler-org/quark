@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -221,7 +222,12 @@ func ZipDir(w io.Writer, fullPath string) error {
 // ZipVFSDir streams a zip of a VFS directory onto w. Entry paths are stored
 // relative to basePath, so the archive unpacks as the folder the client asked
 // for rather than the whole path to it.
-func ZipVFSDir(ctx context.Context, fsys vfs.VFS, basePath string, w io.Writer) error {
+//
+// Only entries access can read go in. The walk does not descend into a
+// symlinked folder, but it does list a symlinked file, and opening it follows
+// the link — so a link inside a shared folder would otherwise carry whatever
+// it points at into the archive (#1903).
+func ZipVFSDir(ctx context.Context, fsys vfs.VFS, basePath string, access accessutil.Access, w io.Writer) error {
 	zipWriter := zip.NewWriter(w)
 	defer zipWriter.Close()
 
@@ -230,7 +236,7 @@ func ZipVFSDir(ctx context.Context, fsys vfs.VFS, basePath string, w io.Writer) 
 		return fmt.Errorf("failed to list folder: %w", err)
 	}
 	for _, entry := range entries {
-		if entry.IsDir {
+		if entry.IsDir || !access.Check(entry.DeviceSerial, entry.Path, accessutil.Read).Readable {
 			continue
 		}
 		r, err := fsys.Open(ctx, entry.Path)

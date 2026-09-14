@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -155,8 +156,12 @@ func TestZipVFSDirStoresPathsRelativeToTheFolder(t *testing.T) {
 	writeMem(t, fsys, "folder/one.txt", "one")
 	writeMem(t, fsys, "folder/sub/two.txt", "two")
 
+	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		t.Fatal(err)
+	}
 	var buf bytes.Buffer
-	if err := fileutil.ZipVFSDir(context.Background(), fsys, "folder", &buf); err != nil {
+	if err := fileutil.ZipVFSDir(context.Background(), fsys, "folder", system.Access, &buf); err != nil {
 		t.Fatalf("ZipVFSDir failed: %v", err)
 	}
 
