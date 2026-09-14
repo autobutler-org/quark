@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/paginated_photos_response.dart';
 import 'package:quark/models/photo_metadata.dart';
+import 'package:quark/models/transcode_format.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -941,6 +942,51 @@ class FilesService with AuthenticatedService {
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return data['relPath'] as String;
+  }
+
+  /// Queues a conversion of [relPath] into [format] (one of
+  /// [listTranscodeFormats]) at [quality] (`original` or `small`) and returns
+  /// the job's id, which `JobsService` can look up. A 501 means the Quark has
+  /// no ffmpeg.
+  static Future<int> transcodeVideo(
+    String relPath, {
+    String? serial,
+    required String format,
+    required String quality,
+  }) async {
+    final uri = apiBaseUri.resolve('/api/v0/videos/transcode');
+    final body = jsonEncode({
+      'relPath': relPath,
+      'serial': serial?.trim() ?? '',
+      'format': format,
+      'quality': quality,
+    });
+    final response = await instance.authenticatedPost(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: body,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Failed to start transcode');
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return (data['jobId'] as num).toInt();
+  }
+
+  /// The formats this Quark's ffmpeg can convert a video to, in the order to
+  /// offer them. A 501 means the Quark has no ffmpeg.
+  static Future<List<TranscodeFormat>> listTranscodeFormats() async {
+    final uri = apiBaseUri.resolve('/api/v0/videos/transcode/formats');
+    final response = await instance.authenticatedGet(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        response.statusCode,
+        'Failed to list transcode formats',
+      );
+    }
+    return TranscodeFormat.listFromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   static Future<void> updateToVersion(String version) async {

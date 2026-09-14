@@ -100,6 +100,29 @@ abstract final class Errors {
       ? restoreConflict
       : message(error, action);
 
+  /// Converting a video runs ffmpeg on the Quark, which answers 501 when it
+  /// isn't installed. Nothing the user retries will change that.
+  static const String ffmpegMissing =
+      "Converting videos needs ffmpeg, which isn't installed on your Quark.";
+
+  /// A conversion that could not be started. A 501 gets [ffmpegMissing]
+  /// rather than the generic "doesn't support that yet".
+  static String transcode(Object? error) =>
+      error is ApiException && error.statusCode == 501
+      ? ffmpegMissing
+      : message(error, 'convert the video');
+
+  /// A retry the Quark refused. Only a failed job can be retried, so a 409
+  /// means this one didn't fail; a 422 means the file it used is gone; a 404
+  /// means the Quark no longer knows the job. Retrying again would fail the
+  /// same way.
+  static String retryJob(Object? error) => switch (error) {
+    ApiException(statusCode: 409) => "That job can't be retried.",
+    ApiException(statusCode: 422) => 'The file this job used no longer exists.',
+    ApiException(statusCode: 404) => 'That job no longer exists.',
+    _ => message(error, 'retry the job'),
+  };
+
   /// Remote access is switched on but the Quark could not start it. The
   /// Quark's own reason is a diagnostic from the network layer, so it goes to
   /// the log and the user reads this instead.
