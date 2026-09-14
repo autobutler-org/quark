@@ -42,8 +42,10 @@ func ReadArchiveEntryImpl(params ReadArchiveEntryParams, device *ManagedDevice, 
 	}
 
 	fullPath := filepath.Join(filesDir, params.ArchivePath)
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		return nil, 0, fmt.Errorf("file not found: %s", params.ArchivePath)
+	// Not-found errors wrap os.ErrNotExist so a caller can tell them from a
+	// broken archive.
+	if _, err := os.Stat(fullPath); IsNotExist(err) {
+		return nil, 0, fmt.Errorf("file not found: %s: %w", params.ArchivePath, os.ErrNotExist)
 	}
 
 	entryPath := normalizeSubPath(params.EntryPath)
@@ -101,7 +103,7 @@ func ReadArchiveEntryImpl(params ReadArchiveEntryParams, device *ManagedDevice, 
 
 	if found == nil {
 		f.Close()
-		return nil, 0, fmt.Errorf("entry not found in archive: %s", entryPath)
+		return nil, 0, fmt.Errorf("entry not found in archive: %s: %w", entryPath, os.ErrNotExist)
 	}
 
 	// Wrap the reader to close the archive file when the entry reader is closed.

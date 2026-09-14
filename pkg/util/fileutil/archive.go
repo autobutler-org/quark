@@ -4,13 +4,19 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
+	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
+	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -194,6 +200,8 @@ type OpenArchiveEntryParams struct {
 	EntryPath string
 	// Serial identifies the device, empty for the internal one.
 	Serial string
+	// WantsJPEG asks for an image entry to come back as JPEG.
+	WantsJPEG bool
 }
 
 // OpenArchiveEntryResult is the entry's stream. The caller closes the reader.
@@ -202,10 +210,133 @@ type OpenArchiveEntryResult struct {
 	Reader io.ReadCloser
 	// Size is the entry's length, negative when the archive does not say.
 	Size int64
+	// Kind is DownloadJPEG when the entry has to be converted, otherwise
+	// DownloadContents.
+	Kind DownloadKind
+	// FileName is the name the client is offered in Content-Disposition.
+	FileName string
+	// ContentType is the type to serve.
+	ContentType string
 }
 
-// OpenArchiveEntry opens a single entry inside an archive for streaming.
+// OpenArchiveEntry opens a single entry inside an archive for streaming, and
+// says whether it has to be converted to JPEG on the way out.
 func OpenArchiveEntry(params OpenArchiveEntryParams) (OpenArchiveEntryResult, error) {
+	entry, err := openArchiveEntryStream(params)
+	if err != nil {
+		return OpenArchiveEntryResult{}, err
+	}
+
+	// RAW previews come from an external tool that needs an OS path, and an
+	// entry is only a stream, so RAW entries are served as they are (#1851).
+	if params.WantsJPEG &&
+		storageutil.DetermineFileTypeFromPath(params.EntryPath) == storageutil.FileTypeImage &&
+		!photoutil.IsRawFile(params.EntryPath) {
+		entry.Kind = DownloadJPEG
+		entry.FileName = JPEGFileName(params.EntryPath)
+		entry.ContentType = "image/jpeg"
+		return entry, nil
+	}
+
+	entry.Kind = DownloadContents
+	entry.FileName = filepath.Base(params.EntryPath)
+	entry.ContentType = "application/octet-stream"
+	return entry, nil
+}
+
+// FindArchiveParams asks whether a files path names an entry inside an archive.
+type FindArchiveParams struct {
+	// Ctx bounds the VFS stat.
+	Ctx context.Context
+	// Registry serves the stat when no serial routes past it.
+	Registry vfs.Registry
+	// Storage resolves the path for a device-scoped request.
+	Storage *storageutil.StorageService
+	// FilePath is the requested path, relative to the device files directory.
+	FilePath string
+	// Serial identifies the device, empty for the internal one.
+	Serial string
+}
+
+// FindArchiveResult is the archive and entry a files path names.
+type FindArchiveResult struct {
+	// Found is false when no folder segment of the path is an archive file.
+	Found bool
+	// ArchivePath is the archive, relative to the device files directory.
+	ArchivePath string
+	// EntryPath is the entry inside the archive.
+	EntryPath string
+	// ModTime is the archive's modification time.
+	ModTime time.Time
+}
+
+// FindArchive reports whether a files path names an entry inside an archive:
+// "a/photos.zip/pics/red.png" is the entry "pics/red.png" of "a/photos.zip"
+// when that is a file. A folder only named like an archive does not count, nor
+// does a path that does not exist. The archive is stat-ed rather than opened,
+// so a cache keyed on its modification time stays cheap to check.
+func FindArchive(params FindArchiveParams) (FindArchiveResult, error) {
+	segments := strings.Split(strings.Trim(filepath.ToSlash(params.FilePath), "/"), "/")
+	for i, segment := range segments[:len(segments)-1] {
+		// path.Ext of "x.tar.gz" is ".gz", which is in the set as well.
+		if !slices.Contains(storageutil.SupportedArchiveExts(), strings.ToLower(path.Ext(segment))) {
+			continue
+		}
+		archivePath := strings.Join(segments[:i+1], "/")
+		info, err := statFilesPath(params, archivePath)
+		if err != nil || info == nil {
+			return FindArchiveResult{}, err
+		}
+		if info.IsDir {
+			continue
+		}
+		return FindArchiveResult{
+			Found:       true,
+			ArchivePath: archivePath,
+			EntryPath:   strings.Join(segments[i+1:], "/"),
+			ModTime:     info.ModTime,
+		}, nil
+	}
+	return FindArchiveResult{}, nil
+}
+
+// statFilesPath stats a files path the way OpenArchiveEntry reads it: through
+// the VFS when no serial routes past it, otherwise through the StorageService.
+// A path that does not resolve is nil with no error; the caller's own lookup
+// of the full path reports it.
+func statFilesPath(params FindArchiveParams, filePath string) (*vfs.FileInfo, error) {
+	if params.Serial == "" {
+		if fsys := FilesVFS(params.Registry); fsys != nil {
+			info, err := fsys.Stat(params.Ctx, filePath)
+			if errors.Is(err, vfs.ErrNotFound) || storageutil.IsNotExist(err) {
+				return nil, nil
+			}
+			if err != nil {
+				return nil, fmt.Errorf("failed to stat %s: %w", filePath, err)
+			}
+			return &info, nil
+		}
+	}
+
+	resolved, err := params.Storage.DownloadFile(storageutil.DownloadFileParams{
+		FilePath:     filePath,
+		DeviceSerial: params.Serial,
+	})
+	if err != nil {
+		return nil, nil
+	}
+	info, err := os.Stat(resolved.FullPath)
+	if storageutil.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat %s: %w", filePath, err)
+	}
+	return &vfs.FileInfo{IsDir: info.IsDir(), ModTime: info.ModTime()}, nil
+}
+
+// openArchiveEntryStream finds an entry and opens its decompressed stream.
+func openArchiveEntryStream(params OpenArchiveEntryParams) (OpenArchiveEntryResult, error) {
 	// VFS path: only when no serial is provided.
 	if params.Serial == "" {
 		if fsys := FilesVFS(params.Registry); fsys != nil {
@@ -221,6 +352,9 @@ func OpenArchiveEntry(params OpenArchiveEntryParams) (OpenArchiveEntryResult, er
 	})
 	if err != nil {
 		log.Printf("[files] ReadArchiveEntry failed: path=%q entry=%q err=%v", params.ArchivePath, params.EntryPath, err)
+		if errors.Is(err, fs.ErrNotExist) {
+			return OpenArchiveEntryResult{}, notFound(err)
+		}
 		return OpenArchiveEntryResult{}, err
 	}
 	return OpenArchiveEntryResult{Reader: reader, Size: size}, nil

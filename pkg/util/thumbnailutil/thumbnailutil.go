@@ -37,6 +37,13 @@ var ErrFFmpegUnavailable = errors.New("video thumbnails require ffmpeg (not inst
 // (the VFS path falling back to the storage service) use it to fall through.
 var ErrUnsupportedSource = errors.New("unsupported thumbnail source")
 
+// MaxBufferedSourceBytes caps a source that cannot seek, such as an archive
+// entry. Decoding reads EXIF back out of the stream, so [GenerateFromReader]
+// holds such a source in memory whole.
+// ponytail: a larger entry gets no thumbnail; spool it to a temp file if big
+// scans inside archives need one.
+const MaxBufferedSourceBytes int64 = 64 << 20
+
 // PrepareParams describes a thumbnail request far enough to locate its cache
 // entry: which file, at which size, and how stale the entry may be.
 type PrepareParams struct {

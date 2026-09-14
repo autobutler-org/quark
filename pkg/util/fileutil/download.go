@@ -91,7 +91,7 @@ func OpenDownload(params OpenDownloadParams) (OpenDownloadResult, error) {
 
 	f, err := os.Open(resolved.FullPath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if storageutil.IsNotExist(err) {
 			return OpenDownloadResult{}, notFoundf("file not found: %s", params.FilePath)
 		}
 		return OpenDownloadResult{}, fmt.Errorf("failed to open file: %w", err)
