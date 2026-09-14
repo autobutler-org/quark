@@ -5,6 +5,11 @@ UPDATE users SET is_admin = ? WHERE username = ?;
 -- name: CountActiveAdmins :one
 SELECT COUNT(*) FROM users WHERE is_admin = 1 AND status = 'active';
 
+-- CountOtherActiveAdmins counts the active admins other than one account, so a
+-- change to that account can tell whether it would leave the Quark with none.
+-- name: CountOtherActiveAdmins :one
+SELECT COUNT(*) FROM users WHERE is_admin = 1 AND status = 'active' AND id != ?;
+
 -- name: IsUserAdmin :one
 SELECT is_admin FROM users WHERE username = ?;
 
