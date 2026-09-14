@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -62,7 +64,32 @@ var (
 	ErrAccessRequestsOff = errors.New("this Quark isn't taking account requests right now")
 	// ErrPasswordTooShort refuses a password under eight characters.
 	ErrPasswordTooShort = errors.New("password must be at least 8 characters")
+	// ErrFolderExists refuses a home under users/ that would hand an existing
+	// folder's contents to a new account. It never reports the shared users
+	// parent every home sits in, only a home that is already taken.
+	ErrFolderExists = errors.New("a folder with that name already exists")
 )
+
+// CreateUserParams is an account an admin adds (#1873).
+type CreateUserParams struct {
+	Database *db.DatabaseSqlc
+	Username string
+	Password string
+	// CreateFolder makes the account's home at users/<username> under FilesDir
+	// and makes the account its owner.
+	CreateFolder bool
+	// FilesDir is the internal device's files directory.
+	FilesDir string
+}
+
+// CreateUserResult is the account that was added.
+type CreateUserResult struct {
+	UserID    int64
+	CreatedAt time.Time
+	// FolderPath is the home's path relative to FilesDir — users/<username> —
+	// empty when none was asked for.
+	FolderPath string
+}
 
 // RequestAccountParams asks for an account from the sign-in page (#1908).
 type RequestAccountParams struct {
@@ -114,6 +141,10 @@ type LoginParams struct {
 // LoginResult contains the result of a successful login.
 type LoginResult struct {
 	SessionToken string
+	// RecoveryPhrase is set only on the first sign-in of an account an admin
+	// created, which had no phrase until now. It is not stored anywhere the
+	// caller can ask for it again.
+	RecoveryPhrase string
 }
 
 // GetAuthStatusParams contains parameters for GetAuthStatus.
@@ -394,13 +425,105 @@ func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*Login
 	if err := statusError(user.Status); err != nil {
 		return nil, err
 	}
+	recoveryPhrase, err := firstRecoveryPhrase(ctx, queries, user)
+	if err != nil {
+		return nil, err
+	}
 
 	token, err := newSession(ctx, queries, user.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	return &LoginResult{SessionToken: token}, nil
+	return &LoginResult{SessionToken: token, RecoveryPhrase: recoveryPhrase}, nil
+}
+
+// CreateUser adds an active account for an admin, with no recovery phrase
+// until its first sign-in, and optionally a home at users/<username> that it
+// owns (#2016). Homes live under users/ so that a username and a top-level
+// folder name are different namespaces: a Quark with a family/ folder can
+// still have an account named family. It returns ErrInvalidUsername,
+// ErrPasswordTooShort, ErrUsernameTaken, or ErrFolderExists when that home is
+// already taken; a refused account leaves no row behind, and no folder except
+// the shared users parent.
+func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult, error) {
+	if err := validateUsername(params.Username); err != nil {
+		return CreateUserResult{}, err
+	}
+	if len(params.Password) < 8 {
+		return CreateUserResult{}, ErrPasswordTooShort
+	}
+	if params.Database == nil {
+		return CreateUserResult{}, errors.New("database not initialized")
+	}
+	passwordHash, err := HashPassword(params.Password)
+	if err != nil {
+		return CreateUserResult{}, err
+	}
+
+	var result CreateUserResult
+	folder := ""
+	err = inTx(ctx, params.Database, func(q *db.Queries) error {
+		// An empty hash is "no phrase yet": bcrypt never matches it, so recovery
+		// fails like a wrong phrase until Login fills it in.
+		user, err := q.CreateUser(ctx, db.CreateUserParams{
+			Username:     params.Username,
+			PasswordHash: passwordHash,
+		})
+		if sqlutil.IsUniqueConstraintErr(err) {
+			return ErrUsernameTaken
+		}
+		if err != nil {
+			return fmt.Errorf("create account: %w", err)
+		}
+		result.UserID, result.CreatedAt = user.ID, user.CreatedAt
+		if !params.CreateFolder {
+			return nil
+		}
+
+		// The users parent is shared by every home, so MkdirAll it: it already
+		// existing is not a conflict.
+		if err := os.MkdirAll(filepath.Join(params.FilesDir, usersDirName), 0o755); err != nil {
+			return fmt.Errorf("create users folder: %w", err)
+		}
+		// The username is validated, so it is one path segment and cannot climb
+		// out of FilesDir. Mkdir, not MkdirAll, for the home itself: an existing
+		// home is refused rather than handed to the new account.
+		home := filepath.Join(params.FilesDir, usersDirName, params.Username)
+		if err := os.Mkdir(home, 0o755); err != nil {
+			if errors.Is(err, os.ErrExist) {
+				return ErrFolderExists
+			}
+			return fmt.Errorf("create private folder: %w", err)
+		}
+		folder = home
+		// The grant is on the home alone. users/ gets none: breadcrumb
+		// visibility already shows the path to someone granted beneath it, and
+		// it stays admin-only otherwise.
+		//
+		// Written directly: GrantOwnerIfNeeded acts for the caller, and the
+		// caller here is the admin, who needs no row.
+		relPath := path.Join(usersDirName, params.Username)
+		if err := q.SetUserPathAccess(ctx, db.SetUserPathAccessParams{
+			RelPath: relPath,
+			UserID:  sql.NullInt64{Int64: user.ID, Valid: true},
+			Level:   "owner",
+		}); err != nil {
+			return fmt.Errorf("grant private folder: %w", err)
+		}
+		result.FolderPath = relPath
+		return nil
+	})
+	if err != nil {
+		if folder != "" {
+			// Best-effort, and only the account's own home: the users parent
+			// may hold other people's. The home is new and empty, and the error
+			// that got here is the one worth reporting.
+			_ = os.Remove(folder)
+		}
+		return CreateUserResult{}, err
+	}
+	return result, nil
 }
 
 // ValidateSession checks a session token and returns the username and user id

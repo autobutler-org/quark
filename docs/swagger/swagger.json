@@ -255,6 +255,68 @@
                         }
                     }
                 }
+            },
+            "post": {
+                "description": "Creates an active account with the given password. The admin never sees its recovery phrase: the account gets one on its first sign-in. With createFolder, the account's home is made under users/ on the internal device, named after the account, and the account owns it; an existing home of that name is refused rather than handed over, while a top-level folder of that name does not collide. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Add an account",
+                "parameters": [
+                    {
+                        "description": "The account to add",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_admin.createUserBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/v0_admin.userSummary"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid username or password",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "that username is taken, or a folder with that name already exists",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
             }
         },
         "/albums": {
@@ -849,7 +911,7 @@
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticates with username and password, returns a session token. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.",
+                "description": "Authenticates with username and password, returns a session token. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.",
                 "consumes": [
                     "application/json"
                 ],
@@ -875,7 +937,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/v0_auth.loginResponse"
                         }
                     },
                     "401": {
@@ -4564,6 +4626,25 @@
                 }
             }
         },
+        "v0_admin.createUserBody": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "createFolder": {
+                    "description": "CreateFolder makes a private folder named after the account, owned by it.",
+                    "type": "boolean"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "v0_admin.userSummary": {
             "type": "object",
             "properties": {
@@ -4689,6 +4770,18 @@
                 },
                 "status": {
                     "description": "Status is pending or disabled.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_auth.loginResponse": {
+            "type": "object",
+            "properties": {
+                "recoveryPhrase": {
+                    "description": "RecoveryPhrase is present only on the first sign-in of an account an\nadmin created.",
+                    "type": "string"
+                },
+                "token": {
                     "type": "string"
                 }
             }
