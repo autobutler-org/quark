@@ -49,6 +49,28 @@ func (q *Queries) CreateFavoritesAlbum(ctx context.Context) (PhotoAlbum, error) 
 	return i, err
 }
 
+const deleteFavoritesUnder = `-- name: DeleteFavoritesUnder :exec
+DELETE FROM photo_favorites
+WHERE
+    device_serial = ?1
+    AND (
+        rel_path = ?2
+        OR substr(rel_path, 1, length(?2) + 1) = ?2 || '/'
+    )
+`
+
+type DeleteFavoritesUnderParams struct {
+	DeviceSerial string
+	RelPath      string
+}
+
+// DeleteFavoritesUnder drops the favorite for a deleted path, and every
+// favorite under it when the path is a folder.
+func (q *Queries) DeleteFavoritesUnder(ctx context.Context, arg DeleteFavoritesUnderParams) error {
+	_, err := q.db.ExecContext(ctx, deleteFavoritesUnder, arg.DeviceSerial, arg.RelPath)
+	return err
+}
+
 const getFavoritesAlbum = `-- name: GetFavoritesAlbum :one
 SELECT
     id, name, parent_id, created_at, updated_at, smart_type
@@ -131,6 +153,39 @@ func (q *Queries) ListFavorites(ctx context.Context) ([]PhotoFavorite, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const moveFavorites = `-- name: MoveFavorites :exec
+UPDATE OR IGNORE photo_favorites
+SET
+    device_serial = ?1,
+    rel_path = ?2 || substr(rel_path, length(CAST(?3 AS TEXT)) + 1)
+WHERE
+    device_serial = ?4
+    AND (
+        rel_path = ?3
+        OR substr(rel_path, 1, length(?3) + 1) = ?3 || '/'
+    )
+`
+
+type MoveFavoritesParams struct {
+	NewDeviceSerial string
+	NewRelPath      string
+	OldRelPath      string
+	OldDeviceSerial string
+}
+
+// MoveFavorites points favorites at a moved file or folder. OR IGNORE skips
+// a row whose destination is already a favorite; DeleteFavoritesUnder on the
+// old path clears those leftovers.
+func (q *Queries) MoveFavorites(ctx context.Context, arg MoveFavoritesParams) error {
+	_, err := q.db.ExecContext(ctx, moveFavorites,
+		arg.NewDeviceSerial,
+		arg.NewRelPath,
+		arg.OldRelPath,
+		arg.OldDeviceSerial,
+	)
+	return err
 }
 
 const removeFavorite = `-- name: RemoveFavorite :exec

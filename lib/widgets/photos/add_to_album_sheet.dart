@@ -60,7 +60,7 @@ class _AddToAlbumSheetHostState extends State<AddToAlbumSheetHost> {
       final albums = await AlbumService.listAlbums(tree: true);
       if (!mounted) return;
       setState(() {
-        _albums = [for (final album in albums) album.toAlbumItem()];
+        _albums = albums.toUserAlbumItems();
         _loading = false;
       });
     } catch (_) {

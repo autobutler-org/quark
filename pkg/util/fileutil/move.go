@@ -2,8 +2,10 @@ package fileutil
 
 import (
 	"context"
+	"log"
 	"path"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -19,6 +21,9 @@ type MoveFileParams struct {
 	Storage *storageutil.StorageService
 	// EventBus is told where the file went.
 	EventBus *eventbus.Bus
+	// Database holds the favorites and album items that follow the file. Nil
+	// skips that half.
+	Database *db.DatabaseSqlc
 	// OldFilePath and NewFilePath are the paths moved between.
 	OldFilePath string
 	NewFilePath string
@@ -52,6 +57,16 @@ func MoveFile(params MoveFileParams) (MoveFileResult, error) {
 			NewDeviceSerial: params.NewDeviceSerial,
 		}); err != nil {
 			return MoveFileResult{}, err
+		}
+	}
+
+	// The file has already moved, so a failure here is logged rather than
+	// reported as a failed move; the request's cancellation must not stop it.
+	if params.Database != nil {
+		if err := movePhotoRows(context.WithoutCancel(params.Ctx), params.Database.Queries,
+			params.OldDeviceSerial, params.OldFilePath, params.NewDeviceSerial, params.NewFilePath); err != nil {
+			log.Printf("quark: move cleanup: carry favorites and album items from %q to %q: %v",
+				params.OldFilePath, params.NewFilePath, err)
 		}
 	}
 

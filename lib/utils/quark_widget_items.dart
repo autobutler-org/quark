@@ -19,6 +19,16 @@ extension PhotoAlbumToItem on PhotoAlbum {
   );
 }
 
+/// The albums a photo can be put into, for an add-to-album picker.
+extension PhotoAlbumsToPickerItems on Iterable<PhotoAlbum> {
+  /// Every user album as the package's [AlbumItem]. System albums are left
+  /// out: the Quark fills them itself and refuses edits to them (#992).
+  List<AlbumItem> toUserAlbumItems() => [
+    for (final album in this)
+      if (!album.isSystemAlbum) album.toAlbumItem(),
+  ];
+}
+
 /// Maps an app [StorageDevice] onto the package's [UploadTarget].
 extension StorageDeviceToTarget on StorageDevice {
   /// The package's view of this device as somewhere to upload to.

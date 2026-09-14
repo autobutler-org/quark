@@ -35,6 +35,7 @@ func moveFile(c *gin.Context) *serverutil.Response {
 		Registry:        deps.VFSRegistry(),
 		Storage:         deps.StorageService(),
 		EventBus:        deps.EventBus(),
+		Database:        deps.Database(),
 		OldFilePath:     req.OldFilePath,
 		NewFilePath:     req.NewFilePath,
 		OldDeviceSerial: req.OldDeviceSerial,

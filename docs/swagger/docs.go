@@ -228,6 +228,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden: system album as the parent",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -310,6 +316,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: system album",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -409,6 +421,18 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden: system album",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -456,6 +480,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: system album",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -509,6 +539,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: system album, or a system album as the parent",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -568,6 +604,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: system album",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

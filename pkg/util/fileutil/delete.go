@@ -20,7 +20,7 @@ type DeleteFilesParams struct {
 	Storage *storageutil.StorageService
 	// EventBus is told about every deleted path, and that the trash changed.
 	EventBus *eventbus.Bus
-	// Database holds the album membership and rotation rows to clean up. Nil
+	// Database holds the album membership, favorite and rotation rows to clean up. Nil
 	// skips that half.
 	Database *db.DatabaseSqlc
 	// RootDir is the directory the paths are relative to.
@@ -80,15 +80,24 @@ func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 				continue
 			}
 			ctx := context.Background()
+			key := dbRelPath(p)
+			// Both match the path and everything under it, so a deleted
+			// folder takes its contents' rows with it.
 			if err := database.Queries.DeletePhotoFromAllAlbums(ctx, db.DeletePhotoFromAllAlbumsParams{
 				DeviceSerial: serial,
-				RelPath:      p,
+				RelPath:      key,
 			}); err != nil {
 				log.Printf("quark: delete cleanup: remove album items for %q (serial=%q): %v", p, serial, err)
 			}
+			if err := database.Queries.DeleteFavoritesUnder(ctx, db.DeleteFavoritesUnderParams{
+				DeviceSerial: serial,
+				RelPath:      key,
+			}); err != nil {
+				log.Printf("quark: delete cleanup: remove favorites for %q (serial=%q): %v", p, serial, err)
+			}
 			if err := database.Queries.DeletePhotoRotation(ctx, db.DeletePhotoRotationParams{
 				DeviceSerial: serial,
-				RelPath:      p,
+				RelPath:      key,
 			}); err != nil {
 				log.Printf("quark: delete cleanup: remove rotation for %q (serial=%q): %v", p, serial, err)
 			}

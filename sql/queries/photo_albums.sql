@@ -84,11 +84,32 @@ WHERE
     AND device_serial = ?
     AND rel_path = ?;
 
+-- DeletePhotoFromAllAlbums drops every album row for the path, and for
+-- everything under it when the path is a folder. substr rather than LIKE, so a
+-- '%' or '_' in a file name is not a wildcard.
 -- name: DeletePhotoFromAllAlbums :exec
 DELETE FROM photo_album_items
 WHERE
-    device_serial = ?
-    AND rel_path = ?;
+    device_serial = sqlc.arg(device_serial)
+    AND (
+        rel_path = sqlc.arg(rel_path)
+        OR substr(rel_path, 1, length(sqlc.arg(rel_path)) + 1) = sqlc.arg(rel_path) || '/'
+    );
+
+-- MoveAlbumItems points album rows at a moved file, or at everything under a
+-- moved folder. OR IGNORE skips a row whose destination the album already
+-- holds; DeletePhotoFromAllAlbums on the old path clears those leftovers.
+-- name: MoveAlbumItems :exec
+UPDATE OR IGNORE photo_album_items
+SET
+    device_serial = sqlc.arg(new_device_serial),
+    rel_path = sqlc.arg(new_rel_path) || substr(rel_path, length(CAST(sqlc.arg(old_rel_path) AS TEXT)) + 1)
+WHERE
+    device_serial = sqlc.arg(old_device_serial)
+    AND (
+        rel_path = sqlc.arg(old_rel_path)
+        OR substr(rel_path, 1, length(sqlc.arg(old_rel_path)) + 1) = sqlc.arg(old_rel_path) || '/'
+    );
 
 -- name: ListAlbumItems :many
 SELECT

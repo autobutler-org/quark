@@ -474,6 +474,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       // as changed so the caller refreshes (e.g. removes from Favorites tab).
       setState(() => _isFavorite = nowFav);
       _listChanged = true;
+      _loadMetadata(); // the Favorites album joins or leaves the sidebar
     } catch (e) {
       if (!mounted) return;
       // Roll back and surface the error.
@@ -571,10 +572,8 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     final album = await AlbumPickerSheetHost.show(
       context,
       selectedCount: 1,
-      loadAlbums: () async => [
-        for (final album in await AlbumService.listAlbums(tree: true))
-          album.toAlbumItem(),
-      ],
+      loadAlbums: () async =>
+          (await AlbumService.listAlbums(tree: true)).toUserAlbumItems(),
     );
     if (album == null || !mounted) return;
     try {
@@ -625,15 +624,19 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   }
 
   Future<void> _navigateToAlbum(AlbumRef ref) async {
-    // Construct a minimal PhotoAlbum from the AlbumRef already in hand —
-    // no extra fetch needed since AlbumPage only needs id + name.
-    final album = PhotoAlbum(
-      id: ref.id,
-      name: ref.name,
-      parentId: null,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      itemCount: 0,
+    // An AlbumRef carries no smartType, and AlbumPage needs it to keep the
+    // add and remove actions off a system album (#992). If the fetch fails,
+    // a minimal album still opens the page; the Quark refuses the edits.
+    final album = await AlbumService.getAlbum(ref.id).then<PhotoAlbum>(
+      (album) => album,
+      onError: (Object _) => PhotoAlbum(
+        id: ref.id,
+        name: ref.name,
+        parentId: null,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        itemCount: 0,
+      ),
     );
     if (!mounted) return;
     await Navigator.of(

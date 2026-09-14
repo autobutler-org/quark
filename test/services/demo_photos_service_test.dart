@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/photos_controller.dart';
+import 'package:quark/models/photo_album.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/demo_photos_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -101,6 +102,44 @@ void main() {
       DemoPhotosService.favoriteKeys(),
     );
   });
+
+  test(
+    'a star moves a photo into Favorites, and taking it off moves it out',
+    () async {
+      PhotoAlbum favorites() =>
+          DemoPhotosService.albums().singleWhere((a) => a.isFavorites);
+      Set<String> items() => {
+        for (final item in DemoPhotosService.listAlbumItems(favorites().id))
+          item.relPath,
+      };
+      final starred = DemoPhotosService.favoriteKeys();
+      final photo = photos.firstWhere(
+        (p) => !starred.contains(DemoPhotosService.selectionKey(p.relPath)),
+      );
+      final before = favorites().itemCount;
+      // The stars are static, so a failure midway must not leak into the rest.
+      addTearDown(() async {
+        final key = DemoPhotosService.selectionKey(photo.relPath);
+        if ((await DemoPhotosService.listFavoriteKeys()).contains(key)) {
+          await DemoPhotosService.toggleFavorite(relPath: photo.relPath);
+        }
+      });
+
+      expect(
+        await DemoPhotosService.toggleFavorite(relPath: photo.relPath),
+        isTrue,
+      );
+      expect(items(), contains(photo.relPath));
+      expect(favorites().itemCount, before + 1);
+
+      expect(
+        await DemoPhotosService.toggleFavorite(relPath: photo.relPath),
+        isFalse,
+      );
+      expect(items(), isNot(contains(photo.relPath)));
+      expect(favorites().itemCount, before);
+    },
+  );
 
   test('an unknown album is empty rather than an error', () {
     expect(DemoPhotosService.listAlbumItems(42), isEmpty);
