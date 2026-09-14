@@ -3712,7 +3712,7 @@ const docTemplate = `{
         },
         "/videos/extract-frame": {
             "post": {
-                "description": "Extracts a JPEG frame at the given timestamp and saves it alongside the source video.",
+                "description": "Extracts a JPEG frame at the given timestamp and saves it alongside the source video. Needs read access on the video and write access on its folder; the caller owns the new frame.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3743,6 +3743,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -3919,7 +3925,7 @@ const docTemplate = `{
         },
         "/videos/trim": {
             "post": {
-                "description": "Extracts a sub-clip [startMs, endMs] from the source video using stream copy (fast, lossless). The original file is not modified.",
+                "description": "Extracts a sub-clip [startMs, endMs] from the source video using stream copy (fast, lossless). The original file is not modified. Needs read access on the video and write access on its folder; the caller owns the new clip.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3950,6 +3956,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

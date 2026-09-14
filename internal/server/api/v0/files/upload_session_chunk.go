@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -55,7 +56,7 @@ func uploadSessionChunk(c *gin.Context) *serverutil.Response {
 	// The write check happened when the session was opened; a grant revoked
 	// mid-upload does not stop the commit.
 	if result.Complete && result.Created {
-		access, err := loadAccess(c, deps)
+		access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
 		if err != nil {
 			slog.Error("access: could not load access to record the owner of an upload", "path", result.Path, "err", err)
 		} else {

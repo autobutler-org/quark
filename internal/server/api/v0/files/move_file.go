@@ -34,7 +34,7 @@ func moveFile(c *gin.Context) *serverutil.Response {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		return serverutil.BadRequest(err)
 	}
-	access, err := loadAccess(c, deps)
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}

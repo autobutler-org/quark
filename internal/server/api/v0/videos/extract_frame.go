@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -19,13 +20,14 @@ import (
 
 // extractFrame godoc
 // @Summary Extract a still frame from a video
-// @Description Extracts a JPEG frame at the given timestamp and saves it alongside the source video.
+// @Description Extracts a JPEG frame at the given timestamp and saves it alongside the source video. Needs read access on the video and write access on its folder; the caller owns the new frame.
 // @Tags videos
 // @Accept json
 // @Produce json
 // @Param body body extractFrameRequest true "Extract frame request"
 // @Success 200 {object} extractFrameResponse
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 501 {object} serverutil.Response "Not Implemented — ffmpeg not available"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
@@ -49,6 +51,14 @@ func extractFrame(c *gin.Context) *serverutil.Response {
 	}
 	if req.RelPath == "" {
 		return serverutil.BadRequest(fmt.Errorf("relPath is required"))
+	}
+
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if resp := checkEdit(access, req.Serial, req.RelPath); resp != nil {
+		return resp
 	}
 
 	// Resolve files directory.
@@ -86,6 +96,9 @@ func extractFrame(c *gin.Context) *serverutil.Response {
 	if err := videoutil.ExtractFrame(extractCtx, fullPath, ts, outFull); err != nil {
 		return serverutil.InternalServerError(fmt.Errorf("extract frame: %w", err))
 	}
+	// GetNonConflictingPath picked a name nothing had, so the frame is always a
+	// new file and never takes ownership of one that was already there.
+	grantOwner(c, deps, access, req.Serial, outRel)
 
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).
 		WithData(extractFrameResponse{RelPath: outRel})
