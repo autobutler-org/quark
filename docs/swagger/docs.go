@@ -2460,7 +2460,7 @@ const docTemplate = `{
         },
         "/photos/copy": {
             "post": {
-                "description": "Creates a copy of the photo in the same directory with a non-conflicting name (e.g. photo_copy.jpg).",
+                "description": "Creates a copy of the photo in the same directory with a non-conflicting name (e.g. photo_copy.jpg). Needs read access on the photo and write access on its folder; the caller owns the copy.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2491,6 +2491,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2727,7 +2733,7 @@ const docTemplate = `{
         },
         "/photos/rotate": {
             "post": {
-                "description": "Persists the viewer rotation (0/1/2/3 × 90° CW) for a photo server-side.",
+                "description": "Persists the viewer rotation (0/1/2/3 × 90° CW) for a photo server-side. Needs write access on the photo.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2758,6 +2764,18 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

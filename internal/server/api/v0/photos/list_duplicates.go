@@ -3,6 +3,7 @@ package v0_photos
 import (
 	"fmt"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
@@ -25,10 +26,15 @@ func listDuplicates(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(fmt.Errorf("dependencies not found in context"))
 	}
 
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 	result, err := photoutil.ListDuplicates(photoutil.ListDuplicatesParams{
 		Ctx:       c.Request.Context(),
 		Queries:   deps.Database().Queries,
 		Threshold: photoutil.ParseDuplicateThreshold(c.Query("threshold")),
+		Access:    access,
 	})
 	if err != nil {
 		return serverutil.InternalServerError(err)

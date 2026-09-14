@@ -3,7 +3,9 @@ package v0_photos
 import (
 	"errors"
 	"fmt"
+	"path"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
@@ -15,13 +17,14 @@ import (
 
 // copyPhoto godoc
 // @Summary Duplicate a photo file
-// @Description Creates a copy of the photo in the same directory with a non-conflicting name (e.g. photo_copy.jpg).
+// @Description Creates a copy of the photo in the same directory with a non-conflicting name (e.g. photo_copy.jpg). Needs read access on the photo and write access on its folder; the caller owns the copy.
 // @Tags photos
 // @Accept json
 // @Produce json
 // @Param body body copyPhotoRequest true "Copy request"
 // @Success 200 {object} copyPhotoResponse
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /photos/copy [post]
@@ -36,6 +39,20 @@ func copyPhoto(c *gin.Context) *serverutil.Response {
 		return serverutil.BadRequest(fmt.Errorf("invalid request: %w", err))
 	}
 
+	// The copy lands beside the original, so it needs read on the photo and
+	// write on its folder. Both writers pick a name nothing had, so the copy is
+	// always new and its owner row never lands on an existing file (#1904).
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if !access.Check(req.Serial, req.RelPath, accessutil.Read).Readable {
+		return serverutil.NotFound(errNoAccess)
+	}
+	if !access.Check(req.Serial, path.Dir(accessutil.Canonical(req.RelPath)), accessutil.Write).Allowed {
+		return serverutil.Forbidden(errReadOnly)
+	}
+
 	// VFS path: no-serial copies go through VFS.Open + VFS.Write.
 	if req.Serial == "" {
 		if reg := deps.VFSRegistry(); reg != nil {
@@ -47,6 +64,7 @@ func copyPhoto(c *gin.Context) *serverutil.Response {
 					}
 					return serverutil.InternalServerError(err)
 				}
+				grantOwner(c, deps, access, req.Serial, newRelPath)
 				return serverutil.Ok().
 					WithContentType(serverutil.ContentTypeJSON).
 					WithData(copyPhotoResponse{RelPath: newRelPath})
@@ -65,6 +83,7 @@ func copyPhoto(c *gin.Context) *serverutil.Response {
 		}
 		return serverutil.InternalServerError(err)
 	}
+	grantOwner(c, deps, access, req.Serial, result.NewRelPath)
 
 	return serverutil.Ok().
 		WithContentType(serverutil.ContentTypeJSON).
