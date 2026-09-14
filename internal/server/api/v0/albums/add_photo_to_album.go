@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -16,7 +17,7 @@ import (
 
 // addPhotoToAlbum godoc
 // @Summary Add a photo to an album
-// @Description Adds a photo (by device serial + relative path) to an album. Idempotent.
+// @Description Adds a photo (by device serial + relative path) to an album. Idempotent. Needs read access on the photo.
 // @Tags albums
 // @Accept json
 // @Produce json
@@ -45,6 +46,14 @@ func addPhotoToAlbum(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
 	if !ok {
 		return serverutil.InternalServerError(nil)
+	}
+
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if !access.Check(req.DeviceSerial, req.RelPath, accessutil.Read).Readable {
+		return serverutil.NotFound(errNoAccess)
 	}
 
 	album, err := deps.Database().Queries.GetAlbum(context.Background(), id)

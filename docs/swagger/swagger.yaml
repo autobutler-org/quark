@@ -1124,6 +1124,7 @@ paths:
       consumes:
       - application/json
       description: Adds a photo (by device serial + relative path) to an album. Idempotent.
+        Needs read access on the photo.
       parameters:
       - description: Album ID
         in: path
@@ -2596,6 +2597,7 @@ paths:
   /photos/favorite:
     get:
       description: Returns whether the specified photo is in the user's favorites.
+        Needs read access on the photo.
       parameters:
       - description: Device serial
         in: query
@@ -2617,6 +2619,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
@@ -2628,7 +2634,7 @@ paths:
       consumes:
       - application/json
       description: Adds the photo to favorites if not already favorited; removes it
-        otherwise.
+        otherwise. Needs read access on the photo.
       parameters:
       - description: Photo reference
         in: body
@@ -2645,6 +2651,10 @@ paths:
             $ref: '#/definitions/v0_favorites.favoriteResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":

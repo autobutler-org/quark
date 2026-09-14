@@ -385,7 +385,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Adds a photo (by device serial + relative path) to an album. Idempotent.",
+                "description": "Adds a photo (by device serial + relative path) to an album. Idempotent. Needs read access on the photo.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2560,7 +2560,7 @@ const docTemplate = `{
         },
         "/photos/favorite": {
             "get": {
-                "description": "Returns whether the specified photo is in the user's favorites.",
+                "description": "Returns whether the specified photo is in the user's favorites. Needs read access on the photo.",
                 "produces": [
                     "application/json"
                 ],
@@ -2596,6 +2596,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -2605,7 +2611,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Adds the photo to favorites if not already favorited; removes it otherwise.",
+                "description": "Adds the photo to favorites if not already favorited; removes it otherwise. Needs read access on the photo.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2636,6 +2642,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

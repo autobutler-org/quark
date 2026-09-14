@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -34,6 +35,10 @@ func listAlbumItems(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 	items, err := deps.Database().Queries.ListAlbumItems(context.Background(), id)
 	if err != nil {
 		return serverutil.InternalServerError(err)
@@ -41,6 +46,9 @@ func listAlbumItems(c *gin.Context) *serverutil.Response {
 
 	result := make([]AlbumItemJSON, 0, len(items))
 	for _, item := range items {
+		if !access.Check(item.DeviceSerial, item.RelPath, accessutil.Read).Readable {
+			continue
+		}
 		result = append(result, AlbumItemJSON{
 			ID:           item.ID,
 			AlbumID:      item.AlbumID,

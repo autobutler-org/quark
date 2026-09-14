@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -36,17 +37,21 @@ func getAlbum(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 	album, err := deps.Database().Queries.GetAlbum(context.Background(), id)
 	if err != nil {
 		return serverutil.NotFound(err)
 	}
 
-	count, _ := deps.Database().Queries.CountAlbumItems(context.Background(), id)
+	count := countItems(deps.Database().Queries, access, id)
 
 	children, _ := deps.Database().Queries.ListChildAlbums(context.Background(), sql.NullInt64{Int64: album.ID, Valid: true})
 	childJSON := make([]AlbumJSON, 0, len(children))
 	for _, ch := range children {
-		chCount, _ := deps.Database().Queries.CountAlbumItems(context.Background(), ch.ID)
+		chCount := countItems(deps.Database().Queries, access, ch.ID)
 		var chParentID *int64
 		if ch.ParentID.Valid {
 			chParentID = &ch.ParentID.Int64

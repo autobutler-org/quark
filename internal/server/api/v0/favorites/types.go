@@ -1,8 +1,14 @@
 package v0_favorites
 
 import (
+	"errors"
+
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 )
+
+// errNoAccess is what a caller hears about a photo they may not see. It reads
+// the same as a photo that does not exist, because to them it does not.
+var errNoAccess = errors.New("photo not found")
 
 type router struct{}
 

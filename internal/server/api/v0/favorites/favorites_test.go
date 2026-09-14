@@ -11,6 +11,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	v0_favorites "github.com/autobutler-org/quark/internal/server/api/v0/favorites"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -31,6 +32,7 @@ func newFavoritesEngine(t *testing.T, sqlDB *sql.DB, queries *db.Queries) *gin.E
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", accessutil.System)
 		c.Next()
 	})
 	group := engine.Group("/api/v0")
