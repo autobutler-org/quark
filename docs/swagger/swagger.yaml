@@ -2133,7 +2133,8 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: Upload one or more files via multipart/form-data
+      description: Upload one or more files via multipart/form-data. Needs write access
+        on the top-level directory; the caller owns each file the upload creates.
       parameters:
       - description: Device serial number to upload to
         in: query
@@ -2155,6 +2156,14 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
       summary: Upload files to the top-level directory
       tags:
       - files
@@ -2162,7 +2171,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Reserve a session for one file; the bytes follow as chunks on PUT
+      description: 'Reserve a session for one file; the bytes follow as chunks on
+        PUT. Needs write access on the directory the file lands in. The session belongs
+        to the caller: it is not found for anyone else.'
       parameters:
       - description: File the session will carry
         in: body
@@ -2179,6 +2190,14 @@ paths:
             $ref: '#/definitions/v0_files.createUploadSessionResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -2237,7 +2256,8 @@ paths:
       consumes:
       - application/octet-stream
       description: Append the chunk named by Content-Range; the last one commits the
-        file
+        file, and the caller owns it if it is new. A session opened by someone else
+        is not found.
       parameters:
       - description: Upload session id
         in: path
@@ -2275,7 +2295,8 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: Upload one or more files via multipart/form-data
+      description: Upload one or more files via multipart/form-data. Needs write access
+        on the directory; the caller owns each file the upload creates.
       parameters:
       - description: Directory to upload into
         in: path
@@ -2300,6 +2321,14 @@ paths:
             $ref: '#/definitions/serverutil.Response'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
       summary: Upload files to a nested directory

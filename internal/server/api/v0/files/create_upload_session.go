@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -14,13 +15,15 @@ import (
 
 // createUploadSession godoc
 // @Summary Open a resumable upload session
-// @Description Reserve a session for one file; the bytes follow as chunks on PUT
+// @Description Reserve a session for one file; the bytes follow as chunks on PUT. Needs write access on the directory the file lands in. The session belongs to the caller: it is not found for anyone else.
 // @Tags files
 // @Accept json
 // @Produce json
 // @Param session body createUploadSessionRequest true "File the session will carry"
 // @Success 200 {object} createUploadSessionResponse "OK"
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 403 {object} serverutil.Response "Forbidden"
+// @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /files/upload-session [post]
 func createUploadSession(c *gin.Context) *serverutil.Response {
@@ -37,6 +40,17 @@ func createUploadSession(c *gin.Context) *serverutil.Response {
 	if err := c.ShouldBindJSON(&request); err != nil {
 		return serverutil.BadRequest(err)
 	}
+	access, err := loadAccess(c, deps)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	check := access.Check(request.Serial, request.RootDir, accessutil.Write)
+	if !check.Readable {
+		return serverutil.NotFound(errNoAccess)
+	}
+	if !check.Allowed {
+		return serverutil.Forbidden(errReadOnly)
+	}
 
 	result, err := store.CreateSession(uploadutil.CreateSessionParams{
 		Destination: uploadDestination(deps),
@@ -45,6 +59,7 @@ func createUploadSession(c *gin.Context) *serverutil.Response {
 		TotalSize:   request.TotalSize,
 		Serial:      request.Serial,
 		Overwrite:   request.Overwrite,
+		UserID:      access.Principal().UserID,
 	})
 	if err != nil {
 		return uploadSessionError(c, err)

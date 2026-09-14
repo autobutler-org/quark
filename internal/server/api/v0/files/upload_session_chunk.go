@@ -2,6 +2,7 @@ package v0_files
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
@@ -14,7 +15,7 @@ import (
 
 // uploadSessionChunk godoc
 // @Summary Send one chunk of a resumable upload
-// @Description Append the chunk named by Content-Range; the last one commits the file
+// @Description Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A session opened by someone else is not found.
 // @Tags files
 // @Accept octet-stream
 // @Produce json
@@ -44,11 +45,22 @@ func uploadSessionChunk(c *gin.Context) *serverutil.Response {
 		Ctx:         c.Request.Context(),
 		Destination: uploadDestination(deps),
 		SessionID:   c.Param(sessionIDParam),
+		UserID:      callerID(c),
 		Range:       chunk,
 		Body:        c.Request.Body,
 	})
 	if err != nil {
 		return uploadSessionError(c, err)
+	}
+	// The write check happened when the session was opened; a grant revoked
+	// mid-upload does not stop the commit.
+	if result.Complete && result.Created {
+		access, err := loadAccess(c, deps)
+		if err != nil {
+			slog.Error("access: could not load access to record the owner of an upload", "path", result.Path, "err", err)
+		} else {
+			grantOwner(c, deps, access, result.Serial, result.Path)
+		}
 	}
 	return serverutil.Ok().WithData(uploadChunkResponse{
 		SessionID: result.SessionID,

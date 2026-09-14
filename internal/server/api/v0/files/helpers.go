@@ -13,6 +13,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
@@ -40,6 +41,23 @@ func grantOwner(c *gin.Context, deps deputil.Dependencies, access accessutil.Acc
 	}); err != nil {
 		slog.Error("access: could not record the owner of a new item", "path", p, "serial", serial, "err", err)
 	}
+}
+
+// grantOwners records the caller as owner of every file an upload created. A
+// file the upload replaced keeps the rows it had (#1903).
+func grantOwners(c *gin.Context, deps deputil.Dependencies, access accessutil.Access, serial string, written []storageutil.UploadedFile) {
+	for _, file := range written {
+		if file.Created {
+			grantOwner(c, deps, access, serial, file.Path)
+		}
+	}
+}
+
+// callerID is the signed-in user an upload session belongs to. A request with
+// no principal is user 0, and the routes that open sessions refuse it first.
+func callerID(c *gin.Context) int64 {
+	principal, _ := ctxutil.Get[accessutil.Principal](c, "principal")
+	return principal.UserID
 }
 
 // loadAccess reads what the caller may reach, once per request (#1903).
