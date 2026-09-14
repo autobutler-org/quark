@@ -16,6 +16,7 @@ import (
 // @Tags files
 // @Produce json
 // @Success 200 {array} FileNodeJSON
+// @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Param rootDir query string false "File dir to list"
 // @Param serial query string false "Device serial number to filter by"
@@ -25,11 +26,16 @@ func listFiles(c *gin.Context) *serverutil.Response {
 	if !ok {
 		return serverutil.InternalServerError(nil)
 	}
+	access, err := loadAccess(c, deps)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 
 	result, err := fileutil.ListFiles(fileutil.ListFilesParams{
 		Ctx:      c.Request.Context(),
 		Registry: deps.VFSRegistry(),
 		Storage:  deps.StorageService(),
+		Access:   access,
 		RootDir:  c.Query("rootDir"),
 		Serials:  c.QueryArray("serial"),
 	})
