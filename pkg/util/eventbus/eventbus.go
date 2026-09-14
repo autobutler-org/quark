@@ -32,6 +32,10 @@ const (
 	EventVaultDeviceDisconnected EventKind = "vault_device_disconnected"
 	EventVaultDeviceReconnected  EventKind = "vault_device_reconnected"
 	EventVaultStorageChanged     EventKind = "vault_storage_changed"
+
+	// EventAccountChanged fires when an account's role changes (promoted or
+	// demoted), so signed-in apps refetch what they are allowed to show.
+	EventAccountChanged EventKind = "account_changed"
 )
 
 type Event struct {

@@ -7,6 +7,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
 	"github.com/gin-gonic/gin"
@@ -40,6 +41,9 @@ func promoteUser(c *gin.Context) *serverutil.Response {
 
 	if err := authutil.PromoteToAdmin(c.Request.Context(), database.Queries, target); err != nil {
 		return serverutil.InternalServerError(fmt.Errorf("promote user: %w", err))
+	}
+	if bus := deps.EventBus(); bus != nil {
+		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})
 	}
 	return serverutil.Ok()
 }

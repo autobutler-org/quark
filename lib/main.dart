@@ -5,6 +5,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/local_trust_overrides_stub.dart'
     if (dart.library.io) 'package:quark/services/local_trust_overrides_io.dart';
 import 'package:quark/widgets/jobs/job_finish_announcer.dart';
@@ -20,6 +21,7 @@ Future<void> main() async {
   installLocalTrustHttpOverrides();
   // Finish announcements and the jobs list outlive every page.
   JobsController.instance.start();
+  AuthService.watchAccount();
   runApp(const QuarkApp());
 }
 

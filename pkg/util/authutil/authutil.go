@@ -49,6 +49,22 @@ type LoginResult struct {
 	SessionToken string
 }
 
+// GetAuthStatusParams contains parameters for GetAuthStatus.
+type GetAuthStatusParams struct {
+	// SessionToken is the caller's session token, empty for an anonymous caller.
+	SessionToken string
+}
+
+// GetAuthStatusResult describes the Quark's setup state and, for a caller
+// with a valid session, who that caller is.
+type GetAuthStatusResult struct {
+	Setup bool
+	// Authenticated is true only when SessionToken named a valid session.
+	Authenticated bool
+	Username      string
+	IsAdmin       bool
+}
+
 // RecoverParams contains parameters for password recovery.
 type RecoverParams struct {
 	Username       string
@@ -126,6 +142,32 @@ func IsSetupComplete(ctx context.Context, queries *db.Queries) (bool, error) {
 		return false, fmt.Errorf("failed to count users: %w", err)
 	}
 	return count > 0, nil
+}
+
+// GetAuthStatus reports whether setup is complete and, when the session token
+// is valid, the caller's username and admin flag. An invalid or missing token
+// is not an error: the caller is simply anonymous.
+func GetAuthStatus(ctx context.Context, queries *db.Queries, params GetAuthStatusParams) (GetAuthStatusResult, error) {
+	setup, err := IsSetupComplete(ctx, queries)
+	if err != nil {
+		return GetAuthStatusResult{}, err
+	}
+	result := GetAuthStatusResult{Setup: setup}
+	if params.SessionToken == "" {
+		return result, nil
+	}
+	username, _, err := ValidateSession(ctx, queries, params.SessionToken)
+	if err != nil {
+		return result, nil
+	}
+	isAdmin, err := IsAdmin(ctx, queries, username)
+	if err != nil {
+		return GetAuthStatusResult{}, err
+	}
+	result.Authenticated = true
+	result.Username = username
+	result.IsAdmin = isAdmin
+	return result, nil
 }
 
 // Setup creates the first user and returns a session token + recovery phrase.
