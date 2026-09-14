@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
@@ -44,11 +45,31 @@ func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 	// ── Phase 1: fast filesystem op (returns in < 1 s even for large batches) ─
 
 	// A rename into .trash/ is a metadata-only op, microseconds on an SD card.
-	if _, err := params.Storage.TrashFiles(storageutil.TrashFilesParams{
+	trashed, err := params.Storage.TrashFiles(storageutil.TrashFilesParams{
 		RootDir:      params.RootDir,
 		FilePaths:    params.FilePaths,
 		DeviceSerial: params.Serial,
-	}); err != nil {
+	})
+	// Access rows follow each item into the trash before this returns, so
+	// nothing created at the old path afterwards inherits them (#1905). That
+	// includes the items a failed batch moved before it stopped.
+	if trashed != nil {
+		for _, item := range trashed.Trashed {
+			if _, rowErr := accessutil.MoveRows(accessutil.MoveRowsParams{
+				Ctx:       context.Background(),
+				Database:  params.Database,
+				EventBus:  params.EventBus,
+				OldSerial: params.Serial,
+				OldPath:   item.OriginalPath,
+				NewSerial: params.Serial,
+				NewPath:   storageutil.TrashPath(item.TrashName, ""),
+			}); rowErr != nil {
+				log.Printf("quark: delete cleanup: move access rows for %q into the trash (serial=%q): %v",
+					item.OriginalPath, params.Serial, rowErr)
+			}
+		}
+	}
+	if err != nil {
 		if errors.Is(err, storageutil.ErrDeviceNotFound) {
 			return DeleteFilesResult{}, notFound(err)
 		}

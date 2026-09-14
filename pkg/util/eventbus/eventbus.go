@@ -36,6 +36,11 @@ const (
 	// EventAccountChanged fires when an account's role changes (promoted or
 	// demoted), so signed-in apps refetch what they are allowed to show.
 	EventAccountChanged EventKind = "account_changed"
+
+	// EventAccessChanged fires when access rows moved with a path or were
+	// deleted with it (#1905). Path and DeviceSerial name where the rows are
+	// now, or where they were deleted from.
+	EventAccessChanged EventKind = "access_changed"
 )
 
 type Event struct {

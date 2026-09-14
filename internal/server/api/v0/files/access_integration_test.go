@@ -510,6 +510,36 @@ func TestAccess_UploadSessionBelongsToItsOpener(t *testing.T) {
 	}
 }
 
+// Rows follow a folder rename, and then the file into the trash, so nothing
+// is left behind at a path that no longer exists (#1905).
+func TestAccess_RowsFollowARenameAndADelete(t *testing.T) {
+	h := newAccessHarness(t, false)
+	writeFixture(t, h.filesDir, "shared/a/x.txt")
+	h.grant(t, "shared", accessutil.Write)
+	h.grant(t, "shared/a/x.txt", accessutil.Owner)
+
+	if w := h.move("shared/a", "shared/b"); w.Code != http.StatusOK {
+		t.Fatalf("rename = %d: %s", w.Code, w.Body.String())
+	}
+	if got, want := h.levels(t), map[string]string{"shared": "write", "shared/b/x.txt": "owner"}; !maps.Equal(got, want) {
+		t.Fatalf("rows after the rename = %v, want %v", got, want)
+	}
+
+	if w := h.del("shared/b", "x.txt"); w.Code != http.StatusOK {
+		t.Fatalf("delete = %d: %s", w.Code, w.Body.String())
+	}
+	got := h.levels(t)
+	trashed := 0
+	for rel, level := range got {
+		if strings.HasPrefix(rel, ".trash/") && strings.HasSuffix(rel, "_x.txt") && level == "owner" {
+			trashed++
+		}
+	}
+	if len(got) != 2 || got["shared"] != "write" || trashed != 1 {
+		t.Errorf("rows after the delete = %v, want the share and the owner row under .trash", got)
+	}
+}
+
 // The single-admin regression for uploads: they behave as before and never
 // write a row.
 func TestAccess_AdminUploadsWriteNoRows(t *testing.T) {
