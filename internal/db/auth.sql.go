@@ -292,6 +292,28 @@ func (q *Queries) RenewSession(ctx context.Context, arg RenewSessionParams) erro
 	return err
 }
 
+const setRecoveryPhraseIfUnset = `-- name: SetRecoveryPhraseIfUnset :execrows
+UPDATE users
+SET recovery_phrase_hash = ?
+WHERE id = ? AND recovery_phrase_hash = ''
+`
+
+type SetRecoveryPhraseIfUnsetParams struct {
+	RecoveryPhraseHash string
+	ID                 int64
+}
+
+// SetRecoveryPhraseIfUnset gives an admin-created account its recovery phrase
+// on its first sign-in (#1873). Only an empty hash matches, so two sign-ins at
+// once cannot both hand out a phrase.
+func (q *Queries) SetRecoveryPhraseIfUnset(ctx context.Context, arg SetRecoveryPhraseIfUnsetParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setRecoveryPhraseIfUnset, arg.RecoveryPhraseHash, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setUserStatus = `-- name: SetUserStatus :execrows
 UPDATE users
 SET status = ?1

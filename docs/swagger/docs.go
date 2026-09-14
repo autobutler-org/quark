@@ -266,6 +266,68 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "post": {
+                "description": "Creates an active account with the given password. The admin never sees its recovery phrase: the account gets one on its first sign-in. With createFolder, a folder named after the account is made on the internal device and the account owns it; an existing folder of that name is refused rather than handed over. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Add an account",
+                "parameters": [
+                    {
+                        "description": "The account to add",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_admin.createUserBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/v0_admin.userSummary"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid username or password",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "that username is taken, or a folder with that name already exists",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
             }
         },
         "/albums": {
@@ -860,7 +922,7 @@ const docTemplate = `{
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticates with username and password, returns a session token. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.",
+                "description": "Authenticates with username and password, returns a session token. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.",
                 "consumes": [
                     "application/json"
                 ],
@@ -886,7 +948,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/v0_auth.loginResponse"
                         }
                     },
                     "401": {
@@ -4575,6 +4637,25 @@ const docTemplate = `{
                 }
             }
         },
+        "v0_admin.createUserBody": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "createFolder": {
+                    "description": "CreateFolder makes a private folder named after the account, owned by it.",
+                    "type": "boolean"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "v0_admin.userSummary": {
             "type": "object",
             "properties": {
@@ -4700,6 +4781,18 @@ const docTemplate = `{
                 },
                 "status": {
                     "description": "Status is pending or disabled.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_auth.loginResponse": {
+            "type": "object",
+            "properties": {
+                "recoveryPhrase": {
+                    "description": "RecoveryPhrase is present only on the first sign-in of an account an\nadmin created.",
+                    "type": "string"
+                },
+                "token": {
                     "type": "string"
                 }
             }
