@@ -83,7 +83,10 @@ func ExtractFileImpl(params ExtractFileParams, device *ManagedDevice, defaultFil
 		filesDir = device.FilesDir
 	}
 
-	fullPath := filepath.Join(filesDir, params.FilePath)
+	fullPath, err := safeJoin(filesDir, params.FilePath)
+	if err != nil {
+		return nil, fmt.Errorf("file not found: %s", params.FilePath)
+	}
 
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("file not found: %s", params.FilePath)
