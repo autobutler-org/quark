@@ -13,12 +13,21 @@ class FileEvent {
   final String path;
   final String? newPath;
 
-  const FileEvent({required this.kind, required this.path, this.newPath});
+  /// The event's payload, as decoded JSON: the Job for a `job_*` event.
+  final Object? data;
+
+  const FileEvent({
+    required this.kind,
+    required this.path,
+    this.newPath,
+    this.data,
+  });
 
   factory FileEvent.fromJson(Map<String, dynamic> json) => FileEvent(
     kind: json['kind'] as String? ?? '',
     path: json['path'] as String? ?? '',
     newPath: json['newPath'] as String?,
+    data: json['data'],
   );
 }
 

@@ -123,6 +123,25 @@ abstract final class Errors {
     _ => message(error, 'retry the job'),
   };
 
+  /// A cancel the Quark refused: a 409 means the job had already finished, a
+  /// 404 that the Quark no longer knows it.
+  static String cancelJob(Object? error) => switch (error) {
+    ApiException(statusCode: 409) => 'That job has already finished.',
+    ApiException(statusCode: 404) => 'That job no longer exists.',
+    _ => message(error, 'cancel the job'),
+  };
+
+  /// A job that failed on the Quark. [action] is what it was doing, as in
+  /// [message]: `'convert vacation.mkv to MOV'`. A kind the app has no words
+  /// for passes null and the job's own [name] is used instead. The job's
+  /// error text is a diagnostic and never reaches this copy.
+  static String jobFailed({required String? action, required String name}) =>
+      action != null
+      ? couldNot(action)
+      : name.isEmpty
+      ? couldNot('finish a job')
+      : "$name didn't finish.";
+
   /// Remote access is switched on but the Quark could not start it. The
   /// Quark's own reason is a diagnostic from the network layer, so it goes to
   /// the log and the user reads this instead.

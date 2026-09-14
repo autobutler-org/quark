@@ -77,6 +77,7 @@ class FileTopBarRow extends StatelessWidget {
               tooltip: 'Settings',
             ),
             const AppThemeToggle(),
+            ...QuarkAppBarTrailing.of(context),
           ],
         ),
       ),

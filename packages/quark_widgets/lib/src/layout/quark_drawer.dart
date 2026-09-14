@@ -29,6 +29,9 @@ enum QuarkDrawerSection {
   /// The encrypted vault.
   vault,
 
+  /// Long-running jobs on the Quark, such as video conversions.
+  jobs,
+
   /// App settings.
   settings,
 }
@@ -59,6 +62,7 @@ class QuarkDrawer extends StatelessWidget {
     this.onTapDevices,
     this.onTapHealth,
     this.onTapVault,
+    this.onTapJobs,
     this.onTapSettings,
     super.key,
   });
@@ -89,6 +93,9 @@ class QuarkDrawer extends StatelessWidget {
 
   /// Called when the Vault row is tapped.
   final FutureOr<void> Function()? onTapVault;
+
+  /// Called when the Jobs row is tapped.
+  final FutureOr<void> Function()? onTapJobs;
 
   /// Called when the Settings row is tapped.
   final FutureOr<void> Function()? onTapSettings;
@@ -172,6 +179,12 @@ class QuarkDrawer extends StatelessWidget {
             QuarkIcons.lock_outline,
             'Vault',
             onTapVault,
+          ),
+          row(
+            QuarkDrawerSection.jobs,
+            QuarkIcons.pending_actions_outlined,
+            'Jobs',
+            onTapJobs,
           ),
           row(
             QuarkDrawerSection.settings,

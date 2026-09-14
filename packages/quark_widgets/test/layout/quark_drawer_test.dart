@@ -15,6 +15,15 @@ void main() {
       size: size,
     );
 
+    final photos = tester.widget<ListTile>(
+      find.byKey(const ValueKey('drawer_photos')),
+    );
+    expect(photos.selected, isTrue);
+    final files = tester.widget<ListTile>(
+      find.byKey(const ValueKey('drawer_files')),
+    );
+    expect(files.selected, isFalse);
+
     for (final label in [
       'Files',
       'Photos',
@@ -24,19 +33,14 @@ void main() {
       'Devices',
       'Health',
       'Vault',
+      'Jobs',
       'Settings',
     ]) {
+      // The narrow viewport is shorter than the drawer, and its list only
+      // builds the rows near the screen.
+      await tester.scrollUntilVisible(find.text(label), 50);
       expect(find.text(label), findsOneWidget, reason: '$label is missing');
     }
-
-    final photos = tester.widget<ListTile>(
-      find.byKey(const ValueKey('drawer_photos')),
-    );
-    expect(photos.selected, isTrue);
-    final files = tester.widget<ListTile>(
-      find.byKey(const ValueKey('drawer_files')),
-    );
-    expect(files.selected, isFalse);
   });
 
   testBothViewports('calls back for the row that was tapped', (
@@ -56,6 +60,7 @@ void main() {
         onTapDevices: () => tapped.add('devices'),
         onTapHealth: () => tapped.add('health'),
         onTapVault: () => tapped.add('vault'),
+        onTapJobs: () => tapped.add('jobs'),
         onTapSettings: () => tapped.add('settings'),
       ),
       size: size,
@@ -80,7 +85,7 @@ void main() {
     );
 
     final settings = find.byKey(const ValueKey('drawer_settings'));
-    await tester.ensureVisible(settings);
+    await tester.scrollUntilVisible(settings, 50);
     await tester.tap(settings);
     await tester.pump();
 

@@ -19,6 +19,11 @@ lib/widgets/
     file_storage_footer.dart    capacity row, calls StorageService
     recent_files_section.dart   calls FilesService
     new_file_dialog.dart        one-line wrapper that pops NewFileDialog
+  jobs/
+    job_finish_announcer.dart   shows a snack bar for every job JobsController
+                                announces finished, and navigates its action
+    jobs_badge_host.dart        provides the QuarkAppBarTrailing scope with a
+                                JobsBadge fed by JobsController
   layout/
     theme_toggle_button.dart    AppThemeToggle, ThemeToggleButton wired to AppSettings
   photos/

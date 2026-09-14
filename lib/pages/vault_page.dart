@@ -200,6 +200,7 @@ class _VaultPageState extends State<VaultPage> {
         onTapDevices: () => context.go(AppRoutes.devices),
         onTapHealth: () => context.go(AppRoutes.health),
         onTapVault: () => Navigator.pop(context),
+        onTapJobs: () => context.go(AppRoutes.jobs),
         onTapSettings: () => context.go(AppRoutes.settings),
       ),
       body: _buildBody(),
