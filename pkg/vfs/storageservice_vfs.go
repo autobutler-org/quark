@@ -341,5 +341,9 @@ func deviceFileInfoToVFS(f *storageutil.DeviceFileInfo, nsID, dirPath, relPath s
 		MimeType:  mimeType,
 		ModTime:   f.ModTime(),
 		Namespace: nsID,
+
+		DeviceSerial: f.DeviceSerial,
+		DeviceName:   f.DeviceName,
+		DevicePath:   f.DevicePath,
 	}
 }

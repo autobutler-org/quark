@@ -48,6 +48,10 @@ type FileInfo struct {
 	ModTime     time.Time `json:"mod_time"`
 	ContentHash string    `json:"content_hash"`
 	Namespace   string    `json:"namespace"`
+	// Device fields are set only by namespaces that span storage devices.
+	DeviceSerial string `json:"device_serial,omitempty"`
+	DeviceName   string `json:"device_name,omitempty"`
+	DevicePath   string `json:"device_path,omitempty"`
 }
 
 type Namespace struct {

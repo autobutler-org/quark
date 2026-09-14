@@ -76,12 +76,15 @@ func listFilesVFS(ctx context.Context, registry vfs.Registry, rootDir string, se
 	result := make([]FileNode, len(infos))
 	for i, fi := range infos {
 		result[i] = FileNode{
-			Name:     fi.Name,
-			Size:     fi.Size,
-			IsDir:    fi.IsDir,
-			DirPath:  fi.Path,
-			FullPath: fi.Path,
-			FileType: string(storageutil.DetermineFileTypeFromPath(fi.Path)),
+			Name:         fi.Name,
+			Size:         fi.Size,
+			IsDir:        fi.IsDir,
+			DeviceName:   fi.DeviceName,
+			DevicePath:   fi.DevicePath,
+			DirPath:      fi.Path,
+			FullPath:     fi.Path,
+			DeviceSerial: fi.DeviceSerial,
+			FileType:     string(storageutil.DetermineFileTypeFromPath(fi.Path)),
 		}
 	}
 	return result, nil
@@ -194,12 +197,15 @@ func ListRecent(params ListRecentParams) (ListRecentResult, error) {
 			}
 			allFiles = append(allFiles, FileNodeWithTime{
 				FileNode: FileNode{
-					Name:     fi.Name,
-					Size:     fi.Size,
-					IsDir:    false,
-					DirPath:  fi.Path,
-					FullPath: fi.Path,
-					FileType: string(storageutil.DetermineFileTypeFromPath(fi.Path)),
+					Name:         fi.Name,
+					Size:         fi.Size,
+					IsDir:        false,
+					DeviceName:   fi.DeviceName,
+					DevicePath:   fi.DevicePath,
+					DirPath:      fi.Path,
+					FullPath:     fi.Path,
+					DeviceSerial: fi.DeviceSerial,
+					FileType:     string(storageutil.DetermineFileTypeFromPath(fi.Path)),
 				},
 				ModifiedAt: fi.ModTime,
 			})
@@ -309,12 +315,15 @@ func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
 			}
 			allFiles = append(allFiles, FileNodeWithTime{
 				FileNode: FileNode{
-					Name:     fi.Name,
-					Size:     fi.Size,
-					IsDir:    false,
-					DirPath:  fi.Path,
-					FullPath: fi.Path,
-					FileType: string(params.FileType),
+					Name:         fi.Name,
+					Size:         fi.Size,
+					IsDir:        false,
+					DeviceName:   fi.DeviceName,
+					DevicePath:   fi.DevicePath,
+					DirPath:      fi.Path,
+					FullPath:     fi.Path,
+					DeviceSerial: fi.DeviceSerial,
+					FileType:     string(params.FileType),
 				},
 				ModifiedAt: fi.ModTime,
 			})
@@ -435,9 +444,12 @@ func searchFilesVFS(params SearchFilesParams) (SearchFilesResult, error) {
 			continue
 		}
 		result = append(result, FileNode{
-			Name:    fi.Name,
-			DirPath: fi.Path,
-			IsDir:   false,
+			Name:         fi.Name,
+			DirPath:      fi.Path,
+			IsDir:        false,
+			DeviceName:   fi.DeviceName,
+			DevicePath:   fi.DevicePath,
+			DeviceSerial: fi.DeviceSerial,
 		})
 	}
 	return SearchFilesResult{Files: result}, nil
