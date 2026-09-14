@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	v0_thumbnails "github.com/autobutler-org/quark/internal/server/api/v0/thumbnails"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -45,6 +46,7 @@ func TestGetThumbnail_PathEscapingFilesDir(t *testing.T) {
 	engine.Use(gin.Recovery())
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", accessutil.System)
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_thumbnails.NewRouter())

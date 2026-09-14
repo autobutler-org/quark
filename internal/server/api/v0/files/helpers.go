@@ -60,20 +60,6 @@ func callerID(c *gin.Context) int64 {
 	return principal.UserID
 }
 
-// loadAccess reads what the caller may reach, once per request (#1903).
-// requireAuth sets the principal; a request that arrives without one gets the
-// zero principal, which is denied everything.
-func loadAccess(c *gin.Context, deps deputil.Dependencies) (accessutil.Access, error) {
-	principal, _ := ctxutil.Get[accessutil.Principal](c, "principal")
-	result, err := accessutil.Load(accessutil.LoadParams{
-		Ctx:       c.Request.Context(),
-		Database:  deps.Database(),
-		Storage:   deps.StorageService(),
-		Principal: principal,
-	})
-	return result.Access, err
-}
-
 // fileError maps what fileutil reports onto the status codes the client
 // contract is written against. A path none of the sources could produce is the
 // only failure that is not the server's fault; the message travels unchanged

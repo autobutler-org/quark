@@ -19,8 +19,10 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/gin-gonic/gin"
 )
 
 // Level is how much a principal may do with a path. Levels are ordered, so a
@@ -131,6 +133,20 @@ func Load(params LoadParams) (LoadResult, error) {
 	access.levels = levelsFromRows(rows)
 	access.filesDirs = filesDirsBySerial(devices)
 	return LoadResult{Access: access}, nil
+}
+
+// LoadRequest loads the access of whoever a request acts as, once per request.
+// requireAuth puts the principal on the context; a request that arrives without
+// one gets the zero principal, which is denied everything.
+func LoadRequest(c *gin.Context, database *db.DatabaseSqlc, storage *storageutil.StorageService) (Access, error) {
+	principal, _ := ctxutil.Get[Principal](c, "principal")
+	result, err := Load(LoadParams{
+		Ctx:       c.Request.Context(),
+		Database:  database,
+		Storage:   storage,
+		Principal: principal,
+	})
+	return result.Access, err
 }
 
 // Principal is who the access was loaded for.
