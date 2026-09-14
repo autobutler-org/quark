@@ -34,6 +34,7 @@ void main() {
             editorFocus: focus,
             scrollController: scroll,
             darkPage: false,
+            isReadOnly: false,
             onTap: () {},
             onKeyPressed: (_, _) => null,
           ),

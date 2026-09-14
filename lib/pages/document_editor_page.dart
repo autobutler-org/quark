@@ -248,10 +248,16 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
     }
   }
 
-  // ── Edit button glow hint (#940) ──────────────────────────────────────────
-
-  void _onEditorTappedInReadOnly() {
+  /// Tapping the page starts editing, the way any text editor behaves.
+  ///
+  /// This used to only glow the Edit button for 1.5s (#940), which made a tap
+  /// on the body — the "Start writing…" placeholder above all — a dead click
+  /// that pointed at a button somewhere else in the app bar (#1853). The glow
+  /// stays, but now it confirms the switch that just happened and shows where
+  /// the Done toggle lives.
+  void _onEditorTapped() {
     if (!_isReadOnly) return;
+    _enterEditMode();
     _hintTimer?.cancel();
     setState(() => _hintEditButton = true);
     _hintTimer = Timer(const Duration(milliseconds: 1500), () {
@@ -548,7 +554,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
               onPickBackgroundColor: _pickBackgroundColor,
               darkPage: _editorDarkPage,
               onToggleDarkPage: _toggleDarkPage,
-              onEditorTap: _onEditorTappedInReadOnly,
+              onEditorTap: _onEditorTapped,
               onEditorKey: _handleEditorKey,
               wordCount: _wordCount,
               dirty: _dirty,
