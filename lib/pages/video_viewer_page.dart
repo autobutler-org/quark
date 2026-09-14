@@ -11,6 +11,7 @@ import 'package:quark/utils/web_download_stub.dart'
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/video_viewer/fullscreen_video_page.dart';
 import 'package:quark/widgets/video_viewer/inline_video_player.dart';
+import 'package:quark/widgets/video_viewer/transcode_dialog_host.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:video_player/video_player.dart';
 
@@ -310,6 +311,37 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
     }
   }
 
+  Future<void> _convert() async {
+    final params = widget.url.queryParameters;
+    final relPath = params['filePath'] ?? '';
+    final fileName = relPath.split('/').last;
+    final dot = fileName.lastIndexOf('.');
+    final choice = await TranscodeDialogHost.show(
+      context,
+      loadFormats: FilesService.listTranscodeFormats,
+      sourceFormat: dot <= 0 ? null : fileName.substring(dot + 1),
+    );
+    if (choice == null || !mounted) return;
+    final (format, quality) = choice;
+    try {
+      await FilesService.transcodeVideo(
+        relPath,
+        serial: params['serial'],
+        format: format,
+        quality: quality.name,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Conversion started')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(Errors.transcode(e))));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
@@ -352,10 +384,21 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
               onSelected: (action) {
                 if (action == 'saveFrame') _saveFrame();
                 if (action == 'trim') _enterTrimMode();
+                if (action == 'convert') _convert();
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'saveFrame', child: Text('Save Frame')),
-                PopupMenuItem(value: 'trim', child: Text('Trim Clip')),
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'saveFrame',
+                  child: Text('Save Frame'),
+                ),
+                const PopupMenuItem(value: 'trim', child: Text('Trim Clip')),
+                // Converting is most useful for a format the player cannot
+                // open, so it is offered whether or not playback started.
+                if ((widget.url.queryParameters['filePath'] ?? '').isNotEmpty)
+                  const PopupMenuItem(
+                    value: 'convert',
+                    child: Text('Convert…'),
+                  ),
               ],
             )
           else

@@ -132,6 +132,46 @@ void main() {
     });
   });
 
+  group('Errors.transcode', () {
+    test('a 501 says ffmpeg is missing', () {
+      expect(Errors.transcode(const ApiException(501)), Errors.ffmpegMissing);
+    });
+
+    test('anything else reads like Errors.message', () {
+      expect(
+        Errors.transcode(const ApiException(404)),
+        Errors.message(const ApiException(404), 'convert the video'),
+      );
+    });
+  });
+
+  group('Errors.retryJob', () {
+    test('a 409 says the job cannot be retried', () {
+      expect(
+        Errors.retryJob(const ApiException(409)),
+        "That job can't be retried.",
+      );
+    });
+
+    test('a 422 says the file is gone', () {
+      expect(
+        Errors.retryJob(const ApiException(422)),
+        'The file this job used no longer exists.',
+      );
+    });
+
+    test('a 404 says the job is gone', () {
+      expect(
+        Errors.retryJob(const ApiException(404)),
+        'That job no longer exists.',
+      );
+    });
+
+    test('anything else reads like Errors.message', () {
+      expect(Errors.retryJob(Exception('boom')), "Couldn't retry the job.");
+    });
+  });
+
   group('throwApiError', () {
     test('prefers the Quark\'s message when it sent one', () {
       expect(

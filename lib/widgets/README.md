@@ -24,6 +24,9 @@ lib/widgets/
   photos/
     add_to_album_sheet.dart     AddToAlbumSheet host for a photo in an album
                                 view: calls AlbumService, shows snack bars
+  video_viewer/
+    transcode_dialog_host.dart  hosts TranscodeDialog around an injected
+                                formats loader
   host_dialog.dart              edits AppSettings hosts
   host_manager.dart             edits AppSettings hosts
   quark_connect_form.dart       calls the connection services

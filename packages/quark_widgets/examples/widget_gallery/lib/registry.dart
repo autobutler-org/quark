@@ -658,6 +658,26 @@ final List<GalleryEntry> registry = [
       onConfirm: () => log('UploadTargetPicker.onConfirm'),
     ),
   ),
+
+  // ── Video ─────────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'TranscodeDialog',
+    group: 'Video',
+    build: (context, log) => TranscodeDialog(
+      formats: const [
+        TranscodeFormatOption(format: 'mp4', label: 'MP4'),
+        TranscodeFormatOption(format: 'mov', label: 'MOV'),
+        TranscodeFormatOption(format: 'mkv', label: 'MKV'),
+        TranscodeFormatOption(format: 'webm', label: 'WebM'),
+        TranscodeFormatOption(format: 'avi', label: 'AVI'),
+      ],
+      sourceFormat: 'mov',
+      onConvert: (format, quality) =>
+          log('TranscodeDialog.onConvert($format, ${quality.name})'),
+      onCancel: () => log('TranscodeDialog.onCancel'),
+      onRetry: () => log('TranscodeDialog.onRetry'),
+    ),
+  ),
 ];
 
 /// The fake photo categories the photo entries share.
