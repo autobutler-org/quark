@@ -98,19 +98,21 @@ Covers first-boot setup, login, logout, and password recovery.
 
 **Steps:**
 
-1. Navigate to `/login`.
+1. Navigate to `/login`, optionally typing a username.
 2. Tap **Forgot password** (or equivalent link).
-3. App navigates to `/recover`.
-4. Enter the recovery phrase.
-5. Enter a new password.
-6. Confirm the new password.
-7. Tap **Reset password**.
+3. App navigates to `/recover`, with the username field prefilled from the login form when one was typed.
+4. Enter or confirm the username.
+5. Enter that account's recovery phrase.
+6. Enter a new password.
+7. Confirm the new password.
+8. Tap **Reset password**.
 
 **Expected result:**
 
 - App navigates to `/login` (or directly to `/files` on auto-login).
-- User can log in with the new password.
-- Old password no longer works.
+- The named account can log in with the new password.
+- That account's old password no longer works.
+- Every other account's password is unchanged.
 
 ---
 
@@ -120,14 +122,15 @@ Covers first-boot setup, login, logout, and password recovery.
 
 **Steps:**
 
-1. Enter an incorrect recovery phrase.
+1. Enter a username with a recovery phrase that is not that account's, or a username that does not exist.
 2. Enter a new password and confirm.
 3. Tap **Reset password**.
 
 **Expected result:**
 
-- An error message appears.
-- Password is not changed.
+- An error message appears. It is the same for an unknown username and a wrong phrase, so it does not reveal
+  which usernames exist.
+- No account's password is changed.
 - User remains on the recover page.
 
 ---
