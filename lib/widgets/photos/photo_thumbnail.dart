@@ -2,9 +2,12 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:quark/services/demo_photos_service.dart';
 
 /// The picture inside a photo tile: a Quark photo's thumbnail over the
 /// network, or a device photo's straight off disk through photo_manager.
+/// A [url] with [DemoPhotosService.assetScheme] names a bundled sample photo,
+/// drawn from the asset bundle with no request at all.
 ///
 /// App-side because both sources need something the widget package does not
 /// depend on. Pass exactly one of [url] and [asset]; either way a grey box
@@ -24,6 +27,9 @@ class PhotoThumbnail extends StatelessWidget {
   Widget build(BuildContext context) {
     final placeholder = ColoredBox(color: Colors.grey.shade300);
     final url = this.url;
+    if (url != null && url.scheme == DemoPhotosService.assetScheme) {
+      return Image.asset(url.path, fit: BoxFit.cover);
+    }
     if (url != null) {
       return Image.network(
         url.toString(),

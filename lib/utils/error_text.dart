@@ -91,6 +91,11 @@ abstract final class Errors {
       "Remote access is on, but your Quark couldn't start it. Its log has "
       'the details.';
 
+  /// Demo mode's sample albums are bundled with the app, so there is no Quark
+  /// to change them on.
+  static const String demoModeReadOnly =
+      "Sample albums can't be changed in demo mode.";
+
   /// Session gone. The router sends the user to login on the next navigation;
   /// this is what they read in the meantime.
   static const String sessionExpired = 'Your session expired. Sign in again.';
