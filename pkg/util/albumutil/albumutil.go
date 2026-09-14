@@ -15,6 +15,7 @@ import (
 	"errors"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 )
 
 // Sentinel errors the caller maps onto a status code. Their text is the copy a
@@ -63,6 +64,40 @@ type MoveAlbumParams struct {
 // MoveAlbumResult carries the moved album.
 type MoveAlbumResult struct {
 	Album db.PhotoAlbum
+}
+
+// CountItemsParams counts the items of one album that a caller can see.
+type CountItemsParams struct {
+	Queries *db.Queries
+	// Access leaves out the items the caller cannot read (#1904).
+	Access  accessutil.Access
+	AlbumID int64
+}
+
+// CountItemsResult carries the count.
+type CountItemsResult struct {
+	Count int64
+}
+
+// CountItems counts an album's items the caller can read, so an album they can
+// see does not reveal how many photos it holds that they cannot. An admin's
+// count is one COUNT query, as before.
+func CountItems(ctx context.Context, params CountItemsParams) (CountItemsResult, error) {
+	if params.Access.Principal().IsAdmin {
+		count, err := params.Queries.CountAlbumItems(ctx, params.AlbumID)
+		return CountItemsResult{Count: count}, err
+	}
+	items, err := params.Queries.ListAlbumItems(ctx, params.AlbumID)
+	if err != nil {
+		return CountItemsResult{}, err
+	}
+	var count int64
+	for _, item := range items {
+		if params.Access.Check(item.DeviceSerial, item.RelPath, accessutil.Read).Readable {
+			count++
+		}
+	}
+	return CountItemsResult{Count: count}, nil
 }
 
 // CreateAlbum creates an album, refusing a name with '/' or one a sibling

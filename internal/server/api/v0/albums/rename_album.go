@@ -1,10 +1,10 @@
 package v0_albums
 
 import (
-	"context"
 	"errors"
 	"strconv"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/albumutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
@@ -57,7 +57,11 @@ func renameAlbum(c *gin.Context) *serverutil.Response {
 		return albumWriteError(err)
 	}
 
-	count, _ := deps.Database().Queries.CountAlbumItems(context.Background(), result.Album.ID)
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	count := countItems(deps.Database().Queries, access, result.Album.ID)
 
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(toAlbumJSON(result.Album, count))
 }

@@ -9,6 +9,9 @@ import (
 	"testing"
 
 	v0_books "github.com/autobutler-org/quark/internal/server/api/v0/books"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/ctxutil"
+	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/gin-gonic/gin"
@@ -28,8 +31,14 @@ func newBooksEngine(t *testing.T) (*gin.Engine, string) {
 		t.Fatalf("failed to resolve files dir: %v", err)
 	}
 
+	deps := deputil.NewDependencies()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", accessutil.System)
+		c.Next()
+	})
 	group := engine.Group("/api/v0")
 	serverutil.RegisterRouterWithGroup(group, v0_books.NewRouter())
 	return engine, filesDir
