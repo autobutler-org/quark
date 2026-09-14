@@ -447,3 +447,60 @@ func DeleteRows(params DeleteRowsParams) (DeleteRowsResult, error) {
 	}
 	return DeleteRowsResult{Deleted: deleted}, nil
 }
+
+// CanSeeTrash reports whether a trashed item is shown to the principal: they
+// trashed it, they can read where it came from, or they can read where its
+// access rows sit while it is in the trash. An item that does not record who
+// trashed it predates the per-user trash and is admin-only (#1905).
+func (a Access) CanSeeTrash(serial, trashName, originalPath string, trashedBy int64) bool {
+	if a.principal.IsAdmin {
+		return true
+	}
+	if trashedBy == 0 {
+		return false
+	}
+	if trashedBy == a.principal.UserID {
+		return true
+	}
+	if originalPath != "" && a.Level(serial, originalPath) >= Read {
+		return true
+	}
+	return a.Level(serial, storageutil.TrashPath(trashName, "")) >= Read
+}
+
+// CanDeleteTrash reports whether the principal may delete a trashed item for
+// good: they trashed it, they can write the folder it came from, or they are
+// an admin (#1905).
+func (a Access) CanDeleteTrash(serial, originalPath string, trashedBy int64) bool {
+	if a.principal.IsAdmin {
+		return true
+	}
+	if trashedBy != 0 && trashedBy == a.principal.UserID {
+		return true
+	}
+	return originalPath != "" && a.Level(serial, path.Dir(Canonical(originalPath))) >= Write
+}
+
+// VisibleTrashParams filters a trash listing.
+type VisibleTrashParams struct {
+	Access       Access
+	DeviceSerial string
+	Items        []storageutil.TrashItem
+}
+
+// VisibleTrashResult is the trash the principal may see.
+type VisibleTrashResult struct {
+	Items []storageutil.TrashItem
+}
+
+// VisibleTrash keeps the trash items CanSeeTrash shows. It never returns a nil
+// slice, so an empty listing serializes as [].
+func VisibleTrash(params VisibleTrashParams) VisibleTrashResult {
+	kept := make([]storageutil.TrashItem, 0, len(params.Items))
+	for _, item := range params.Items {
+		if params.Access.CanSeeTrash(params.DeviceSerial, item.TrashName, item.OriginalPath, item.TrashedBy) {
+			kept = append(kept, item)
+		}
+	}
+	return VisibleTrashResult{Items: kept}
+}

@@ -59,6 +59,9 @@ var (
 type TrashEntry struct {
 	OriginalPath string    `json:"originalPath"` // relative to FilesDir
 	TrashedAt    time.Time `json:"trashedAt"`
+	// TrashedBy is the user who trashed the item. It is zero on sidecars
+	// written before the trash was per user, which only admins see (#1905).
+	TrashedBy int64 `json:"trashedBy,omitempty"`
 }
 
 // trashMetaFile returns the path of the JSON metadata sidecar for a trashed item.
@@ -120,6 +123,8 @@ type TrashFilesParams struct {
 	RootDir      string
 	FilePaths    []string
 	DeviceSerial string
+	// TrashedBy is recorded in each item's sidecar as the user who trashed it.
+	TrashedBy int64
 }
 
 // TrashedItem is one file or folder a trash call moved into the trash.
@@ -196,6 +201,7 @@ func TrashFilesImpl(params TrashFilesParams, filesDir string) (*TrashFilesResult
 		metaBytes, _ := json.Marshal(TrashEntry{
 			OriginalPath: originalPath,
 			TrashedAt:    now,
+			TrashedBy:    params.TrashedBy,
 		})
 		if err := os.WriteFile(trashMetaFile(trashDest), metaBytes, 0o600); err != nil {
 			_ = os.Rename(trashDest, fullPath)
@@ -221,6 +227,9 @@ type TrashItem struct {
 	TrashedAt    time.Time `json:"trashedAt"`
 	// ExpiresAt is when the hourly purge deletes the item for good.
 	ExpiresAt time.Time `json:"expiresAt"`
+	// TrashedBy is who trashed the item. It decides who sees the item, and
+	// stays out of the response.
+	TrashedBy int64 `json:"-"`
 }
 
 // ListTrashParams lists what is in the trash for a given device.
@@ -282,6 +291,7 @@ func ListTrashImpl(filesDir string) ([]TrashItem, error) {
 		if metaErr == nil {
 			item.OriginalPath = meta.OriginalPath
 			item.Name = filepath.Base(meta.OriginalPath)
+			item.TrashedBy = meta.TrashedBy
 		}
 		item.TrashedAt = trashedAt(name, meta, info.ModTime())
 		item.ExpiresAt = item.TrashedAt.AddDate(0, 0, TrashRetentionDays)
@@ -352,6 +362,38 @@ func resolveTrashItem(trashRoot, name string) (string, error) {
 		}
 	}
 	return itemPath, nil
+}
+
+// ReadTrashEntryParams names one trashed item.
+type ReadTrashEntryParams struct {
+	DeviceSerial string
+	TrashName    string
+}
+
+// ReadTrashEntryResult is what the trash recorded about the item. An item
+// whose sidecar is missing comes back with the zero entry: no original
+// location and nobody recorded as having trashed it.
+type ReadTrashEntryResult struct {
+	Entry TrashEntry
+}
+
+// ReadTrashEntry reads one item's sidecar, validating its name the way
+// restore and delete do, so a caller can decide who may act on the item before
+// anything is touched (#1905).
+func (s *StorageService) ReadTrashEntry(params ReadTrashEntryParams) (ReadTrashEntryResult, error) {
+	filesDir, err := s.trashFilesDir(params.DeviceSerial)
+	if err != nil {
+		return ReadTrashEntryResult{}, err
+	}
+	itemPath, err := resolveTrashItem(filepath.Join(filesDir, TrashDir), params.TrashName)
+	if err != nil {
+		return ReadTrashEntryResult{}, err
+	}
+	entry, err := readTrashEntry(itemPath)
+	if err != nil && !os.IsNotExist(err) {
+		return ReadTrashEntryResult{}, err
+	}
+	return ReadTrashEntryResult{Entry: entry}, nil
 }
 
 // TrashRef addresses a trashed item, or something inside a trashed folder.

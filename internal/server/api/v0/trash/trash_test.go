@@ -56,6 +56,9 @@ type harness struct {
 	filesDir string
 	events   <-chan eventbus.Event
 	database *db.DatabaseSqlc
+	// principal is who requests act as; it starts as an admin and as()
+	// switches it.
+	principal *accessutil.Principal
 }
 
 // newHarness mounts the trash and files routers over an internal device in a
@@ -79,15 +82,17 @@ func newHarness(t *testing.T) harness {
 
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
+	system := accessutil.System
+	principal := &system
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
-		c = ctxutil.With(c, "principal", accessutil.System)
+		c = ctxutil.With(c, "principal", *principal)
 		c.Next()
 	})
 	group := engine.Group("/api/v0")
 	serverutil.RegisterRouterWithGroup(group, v0_trash.NewRouter())
 	serverutil.RegisterRouterWithGroup(group, v0_files.NewRouter())
-	return harness{engine: engine, filesDir: filesDir, events: events, database: database}
+	return harness{engine: engine, filesDir: filesDir, events: events, database: database, principal: principal}
 }
 
 // rows lists every access row's path, sorted.
@@ -195,6 +200,167 @@ func TestTrashWritesNoAccessRowsForAnAdmin(t *testing.T) {
 	}
 	if got := h.rows(t); len(got) != 0 {
 		t.Errorf("path_access rows after admin trash operations = %v, want none", got)
+	}
+}
+
+// as switches who the harness's requests act as.
+func (h harness) as(principal accessutil.Principal) {
+	*h.principal = principal
+}
+
+// user creates an account holding the given grants and returns it as a
+// principal.
+func (h harness) user(t *testing.T, name string, grants map[string]accessutil.Level) accessutil.Principal {
+	t.Helper()
+	ctx := context.Background()
+	created, err := h.database.Queries.CreateUser(ctx, db.CreateUserParams{
+		Username: name, PasswordHash: "h", RecoveryPhraseHash: "r",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rel, level := range grants {
+		if err := h.database.Queries.SetUserPathAccess(ctx, db.SetUserPathAccessParams{
+			RelPath: rel, UserID: sql.NullInt64{Int64: created.ID, Valid: true}, Level: level.String(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return accessutil.Principal{UserID: created.ID}
+}
+
+// originals lists where the trash the current principal sees came from,
+// sorted.
+func (h harness) originals(t *testing.T) []string {
+	t.Helper()
+	paths := []string{}
+	for _, item := range h.list(t).Items {
+		paths = append(paths, item.OriginalPath)
+	}
+	slices.Sort(paths)
+	return paths
+}
+
+func expectTrashCodes(t *testing.T, want int, responses map[string]*httptest.ResponseRecorder) {
+	t.Helper()
+	for name, w := range responses {
+		if w.Code != want {
+			t.Errorf("%s = %d, want %d: %s", name, w.Code, want, w.Body.String())
+		}
+	}
+}
+
+// Two users each see only their own trash; an admin sees both (#1905).
+func TestTrashIsPerUser(t *testing.T) {
+	h := newHarness(t)
+	admin := *h.principal
+	bob := h.user(t, "bob", map[string]accessutil.Level{"bob": accessutil.Write})
+	eve := h.user(t, "eve", map[string]accessutil.Level{"eve": accessutil.Write})
+	h.write(t, "bob/a.txt", "a")
+	h.write(t, "bob/dir/c.txt", "c")
+	h.write(t, "eve/b.txt", "b")
+
+	h.as(bob)
+	h.deleteFile(t, "bob", "a.txt")
+	h.deleteFile(t, "bob", "dir")
+	h.as(eve)
+	h.deleteFile(t, "eve", "b.txt")
+	h.as(admin)
+	bobFile, bobDir := h.trashNameOf(t, "bob/a.txt"), h.trashNameOf(t, "bob/dir")
+
+	for _, tc := range []struct {
+		who       string
+		principal accessutil.Principal
+		want      []string
+	}{
+		{"bob", bob, []string{"bob/a.txt", "bob/dir"}},
+		{"eve", eve, []string{"eve/b.txt"}},
+		{"the admin", admin, []string{"bob/a.txt", "bob/dir", "eve/b.txt"}},
+	} {
+		h.as(tc.principal)
+		if got := h.originals(t); !slices.Equal(got, tc.want) {
+			t.Errorf("%s sees %v, want %v", tc.who, got, tc.want)
+		}
+	}
+
+	h.as(eve)
+	expectTrashCodes(t, http.StatusNotFound, map[string]*httptest.ResponseRecorder{
+		"eve restoring bob's file": h.do(http.MethodPost, "/api/v0/trash/restore", map[string]any{"items": refs(bobFile)}),
+		"eve deleting bob's file":  h.do(http.MethodPost, "/api/v0/trash/delete", map[string]any{"items": refs(bobFile)}),
+		"eve opening bob's folder": h.do(http.MethodGet, "/api/v0/trash/contents?trashName="+url.QueryEscape(bobDir), nil),
+	})
+	w := h.do(http.MethodPost, "/api/v0/trash/empty", map[string]any{"serial": ""})
+	if w.Code != http.StatusOK || !bytes.Contains(w.Body.Bytes(), []byte(`"deleted":1`)) {
+		t.Fatalf("eve's empty returned %d: %s", w.Code, w.Body.String())
+	}
+
+	h.as(admin)
+	if got, want := h.originals(t), []string{"bob/a.txt", "bob/dir"}; !slices.Equal(got, want) {
+		t.Errorf("after eve emptied her trash it holds %v, want %v", got, want)
+	}
+
+	h.as(bob)
+	expectTrashCodes(t, http.StatusOK, map[string]*httptest.ResponseRecorder{
+		"bob opening his folder": h.do(http.MethodGet, "/api/v0/trash/contents?trashName="+url.QueryEscape(bobDir), nil),
+		"bob restoring his file": h.do(http.MethodPost, "/api/v0/trash/restore", map[string]any{"items": refs(bobFile)}),
+	})
+}
+
+// In a shared folder a reader sees what was trashed from it but cannot put it
+// back or delete it, a writer can do both for someone else's item, and an item
+// trashed before the trash was per user is the admin's alone (#1905).
+func TestTrashInASharedFolder(t *testing.T) {
+	h := newHarness(t)
+	admin := *h.principal
+	bob := h.user(t, "bob", map[string]accessutil.Level{"shared": accessutil.Write})
+	carol := h.user(t, "carol", map[string]accessutil.Level{"shared": accessutil.Read})
+	dave := h.user(t, "dave", map[string]accessutil.Level{"shared": accessutil.Write})
+	h.write(t, "shared/c.txt", "c")
+	h.write(t, "shared/d.txt", "d")
+	h.write(t, "shared/legacy.txt", "old")
+
+	h.as(bob)
+	h.deleteFile(t, "shared", "c.txt")
+	h.deleteFile(t, "shared", "d.txt")
+	// A sidecar written before the trash was per user records nobody as having
+	// trashed the item.
+	if _, err := storageutil.TrashFilesImpl(storageutil.TrashFilesParams{
+		RootDir: "shared", FilePaths: []string{"legacy.txt"},
+	}, h.filesDir); err != nil {
+		t.Fatal(err)
+	}
+	h.as(admin)
+	c, d, legacy := h.trashNameOf(t, "shared/c.txt"), h.trashNameOf(t, "shared/d.txt"), h.trashNameOf(t, "shared/legacy.txt")
+
+	h.as(carol)
+	if got, want := h.originals(t), []string{"shared/c.txt", "shared/d.txt"}; !slices.Equal(got, want) {
+		t.Errorf("the reader sees %v, want %v", got, want)
+	}
+	expectTrashCodes(t, http.StatusForbidden, map[string]*httptest.ResponseRecorder{
+		"the reader restoring": h.do(http.MethodPost, "/api/v0/trash/restore", map[string]any{"items": refs(c)}),
+		"the reader deleting":  h.do(http.MethodPost, "/api/v0/trash/delete", map[string]any{"items": refs(c)}),
+	})
+	expectTrashCodes(t, http.StatusNotFound, map[string]*httptest.ResponseRecorder{
+		"the reader restoring the legacy item": h.do(http.MethodPost, "/api/v0/trash/restore", map[string]any{"items": refs(legacy)}),
+	})
+	if w := h.do(http.MethodPost, "/api/v0/trash/empty", map[string]any{"serial": ""}); w.Code != http.StatusOK ||
+		!bytes.Contains(w.Body.Bytes(), []byte(`"deleted":0`)) {
+		t.Errorf("the reader's empty returned %d: %s", w.Code, w.Body.String())
+	}
+
+	h.as(dave)
+	expectTrashCodes(t, http.StatusOK, map[string]*httptest.ResponseRecorder{
+		"a writer restoring someone else's item": h.do(http.MethodPost, "/api/v0/trash/restore", map[string]any{"items": refs(c)}),
+		"a writer deleting someone else's item":  h.do(http.MethodPost, "/api/v0/trash/delete", map[string]any{"items": refs(d)}),
+	})
+
+	h.as(bob)
+	if got := h.originals(t); len(got) != 0 {
+		t.Errorf("bob still sees %v; the legacy item is not his to see", got)
+	}
+	h.as(admin)
+	if got, want := h.originals(t), []string{"shared/legacy.txt"}; !slices.Equal(got, want) {
+		t.Errorf("the admin sees %v, want %v", got, want)
 	}
 }
 
