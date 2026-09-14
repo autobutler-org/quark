@@ -3,8 +3,10 @@ package photoutil
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 )
 
 const (
@@ -39,6 +41,9 @@ type ListDuplicatesParams struct {
 	Queries *db.Queries
 	// Threshold is the Hamming distance under which two dHashes are grouped.
 	Threshold int
+	// Access drops the photos the caller cannot read from every group, and
+	// with them any group left with fewer than two.
+	Access accessutil.Access
 }
 
 // ListDuplicatesResult is the set of duplicate groups found.
@@ -65,6 +70,9 @@ func ParseDuplicateThreshold(raw string) int {
 // thumbnail yet cannot appear in a group.
 func ListDuplicates(params ListDuplicatesParams) (ListDuplicatesResult, error) {
 	var groups []DuplicateGroup
+	readable := func(serial, relPath string) bool {
+		return params.Access.Check(serial, relPath, accessutil.Read).Readable
+	}
 
 	// --- Exact duplicates (same SHA-256 content hash) ---
 	exactRows, err := params.Queries.ListExactDuplicates(params.Ctx)
@@ -75,7 +83,7 @@ func ListDuplicates(params ListDuplicatesParams) (ListDuplicatesResult, error) {
 	// Group rows by content_hash.
 	exactGroups := map[string][]DuplicatePhoto{}
 	for _, row := range exactRows {
-		if !row.ContentHash.Valid {
+		if !row.ContentHash.Valid || !readable(row.DeviceSerial, row.RelPath) {
 			continue
 		}
 		key := row.ContentHash.String
@@ -125,6 +133,11 @@ func ListDuplicates(params ListDuplicatesParams) (ListDuplicatesResult, error) {
 				seen[j] = true
 			}
 		}
+		// Clustered over every photo, then trimmed to what the caller can read,
+		// so a group means the same thing to everyone who can see it.
+		group = slices.DeleteFunc(group, func(p DuplicatePhoto) bool {
+			return !readable(p.DeviceSerial, p.RelPath)
+		})
 		if len(group) > 1 {
 			groups = append(groups, DuplicateGroup{Kind: "near", Photos: group})
 		}

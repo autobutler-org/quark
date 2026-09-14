@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -32,6 +33,9 @@ type ListPhotosParams struct {
 	Storage *storageutil.StorageService
 	// Serial restricts the listing to one device, empty for all of them.
 	Serial string
+	// Access drops the photos the caller cannot read, before sorting and
+	// paging, so a page stays full and Total counts only what they can see.
+	Access accessutil.Access
 	// Offset and Limit page the sorted result.
 	Offset int
 	Limit  int
@@ -83,7 +87,7 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 			return ListPhotosResult{}, listErr
 		}
 		for _, fi := range infos {
-			if fi.IsDir {
+			if fi.IsDir || !params.Access.Check(fi.DeviceSerial, fi.Path, accessutil.Read).Readable {
 				continue
 			}
 			allPhotos = append(allPhotos, PhotoSummary{
@@ -91,6 +95,7 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 				FileName: fi.Name,
 				Size:     fi.Size,
 				MTime:    fi.ModTime.Unix(),
+				Serial:   fi.DeviceSerial,
 			})
 		}
 	} else {
@@ -122,6 +127,9 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 				continue
 			}
 			for _, photo := range photos {
+				if !params.Access.Check(deviceSerial, photo.RelPath, accessutil.Read).Readable {
+					continue
+				}
 				info := photo.FileInfo
 				allPhotos = append(allPhotos, PhotoSummary{
 					RelPath:      photo.RelPath,
