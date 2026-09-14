@@ -37,8 +37,12 @@ func TestExtractZipVFSStreamsFromASeekableSource(t *testing.T) {
 		t.Fatalf("NewLocalVFS failed: %v", err)
 	}
 
-	if err := fileutil.ExtractZipVFS(context.Background(), fsys, "bundle.zip"); err != nil {
+	extracted, err := fileutil.ExtractZipVFS(context.Background(), fsys, "bundle.zip")
+	if err != nil {
 		t.Fatalf("ExtractZipVFS failed: %v", err)
+	}
+	if extracted.DestDir != "bundle" || !extracted.Created {
+		t.Errorf("ExtractZipVFS = %+v, want a newly created bundle folder", extracted)
 	}
 
 	for name, want := range entries {
@@ -96,7 +100,7 @@ func TestExtractZipVFSRejectsUnsupportedCompression(t *testing.T) {
 	fsys := vfs.NewMemVFS("files")
 	writeMem(t, fsys, "bundle.zip", zipWithMethod(t, "audio.mp3", "payload", 9))
 
-	err := fileutil.ExtractZipVFS(context.Background(), fsys, "bundle.zip")
+	_, err := fileutil.ExtractZipVFS(context.Background(), fsys, "bundle.zip")
 	if err == nil {
 		t.Fatal("extracting a Deflate64 archive should fail")
 	}

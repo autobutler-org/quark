@@ -47,6 +47,11 @@ type ExtractFileParams struct {
 // ExtractFileResult contains the result of an extraction operation.
 type ExtractFileResult struct {
 	DestDir string
+	// CreatedPath is the new top-level item, files-relative: the folder an
+	// archive was extracted into, or the file a bare compressed stream was
+	// decompressed to. Both are given names nothing else has, so it is always
+	// new.
+	CreatedPath string
 }
 
 // SupportedArchiveExts returns the sorted list of archive extensions that can
@@ -103,7 +108,16 @@ func ExtractFileImpl(params ExtractFileParams, device *ManagedDevice, defaultFil
 			ext, strings.Join(SupportedArchiveExts(), ", "))
 	}
 
-	return extractArchive(fullPath)
+	result, err := extractArchive(fullPath)
+	if err != nil {
+		return nil, err
+	}
+	// The extractors know the absolute path they created; callers address
+	// files relative to the files directory.
+	if rel, relErr := filepath.Rel(filepath.Clean(filesDir), result.CreatedPath); relErr == nil {
+		result.CreatedPath = filepath.ToSlash(rel)
+	}
+	return result, nil
 }
 
 // extractArchive opens the archive at fullPath, identifies its format via
@@ -150,7 +164,7 @@ func extractArchive(fullPath string) (*ExtractFileResult, error) {
 		return nil, err
 	}
 
-	return &ExtractFileResult{DestDir: destDir}, nil
+	return &ExtractFileResult{DestDir: destDir, CreatedPath: destDir}, nil
 }
 
 // extractDecompressed handles bare compression formats (e.g. bare .gz not
@@ -183,7 +197,7 @@ func extractDecompressed(decomp archiver.Decompressor, r io.Reader, fullPath str
 		return nil, fmt.Errorf("decompressed output exceeds maximum allowed size of %d bytes", MaxArchiveEntryBytes)
 	}
 
-	return &ExtractFileResult{DestDir: filepath.Dir(outPath)}, nil
+	return &ExtractFileResult{DestDir: filepath.Dir(outPath), CreatedPath: outPath}, nil
 }
 
 // extractArchiveEntry writes a single archiver.FileInfo into destDir, applying

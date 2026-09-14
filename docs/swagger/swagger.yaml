@@ -1604,6 +1604,14 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
@@ -1647,7 +1655,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Enqueue a file move operation between paths/devices
+      description: Enqueue a file move operation between paths/devices. Needs write
+        access on the file and on the folder it moves into.
       parameters:
       - description: Move file request
         in: body
@@ -1664,6 +1673,14 @@ paths:
             $ref: '#/definitions/serverutil.Response'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -1715,7 +1732,8 @@ paths:
       description: Reads an .xlsx or .xlsm workbook and writes it back as a sibling
         .qsheet, the format the Sheets editor opens. The workbook itself is left untouched.
         Answers 409 when a .qsheet of that name already exists and overwrite was not
-        asked for.
+        asked for. Needs read access on the workbook and write access on its directory;
+        the caller owns a newly created .qsheet.
       parameters:
       - description: Path to the .xlsx or .xlsm file to convert
         in: query
@@ -1739,6 +1757,10 @@ paths:
             $ref: '#/definitions/v0_files.ConvertXlsxJSON'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
@@ -1847,7 +1869,8 @@ paths:
   /files/extract:
     post:
       description: Extracts a zip file into a subdirectory named after the archive
-        (without its extension) in the same directory
+        (without its extension) in the same directory. Needs read access on the archive
+        and write access on its directory; the caller owns what is extracted.
       parameters:
       - description: Path to the zip file to extract
         in: query
@@ -1869,6 +1892,14 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
@@ -1880,7 +1911,8 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: Enqueue create-folder operation under the given folder directory
+      description: Enqueue create-folder operation under the given folder directory.
+        Needs write access on that directory; the caller owns the new folder.
       parameters:
       - description: Folder directory
         in: path
@@ -1905,6 +1937,14 @@ paths:
             $ref: '#/definitions/serverutil.Response'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
