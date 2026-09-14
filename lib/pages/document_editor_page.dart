@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:printing/printing.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/utils/editor_focus_restore.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
@@ -70,7 +71,8 @@ class DocumentEditorPage extends StatefulWidget {
   State<DocumentEditorPage> createState() => _DocumentEditorPageState();
 }
 
-class _DocumentEditorPageState extends State<DocumentEditorPage> {
+class _DocumentEditorPageState extends State<DocumentEditorPage>
+    with WidgetsBindingObserver {
   late QuillController _controller;
   final FocusNode _editorFocus = FocusNode();
   final ScrollController _scrollController = ScrollController();
@@ -113,11 +115,15 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
   // In-document find bar (#1046)
   bool _showFindBar = false;
 
+  // Focus restoration across a browser tab switch (#1856)
+  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
+
   late String _displayName;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _displayName = _nameFromPath(widget.filePath);
     _controller = QuillController.basic()..readOnly = _isReadOnly;
     if (widget.overlayTargetRoute != null) {
@@ -129,6 +135,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _autoSaveTimer?.cancel();
     _hintTimer?.cancel();
     _wordCountTimer?.cancel();
@@ -263,6 +270,23 @@ class _DocumentEditorPageState extends State<DocumentEditorPage> {
     _hintTimer = Timer(const Duration(milliseconds: 1500), () {
       if (mounted) setState(() => _hintEditButton = false);
     });
+  }
+
+  // ── Focus restoration across a tab switch (#1856) ─────────────────────────
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final previous = _lifecycleState;
+    _lifecycleState = state;
+    if (shouldRefocusEditorOnResume(
+      previous: previous,
+      current: state,
+      isWeb: kIsWeb,
+      isEditing: !_isReadOnly,
+      findBarOpen: _showFindBar,
+    )) {
+      _focusEditor();
+    }
   }
 
   // ── Document ───────────────────────────────────────────────────────────────
