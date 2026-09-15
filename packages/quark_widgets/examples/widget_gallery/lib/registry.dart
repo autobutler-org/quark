@@ -809,6 +809,28 @@ final List<GalleryEntry> registry = [
       onCancel: () => log('CreateUserDialog.onCancel'),
     ),
   ),
+  GalleryEntry(
+    name: 'GroupList',
+    group: 'Users',
+    build: (context, log) => GroupList(
+      groups: const [
+        GroupItem(id: 1, name: 'everyone', isBuiltin: true),
+        GroupItem(
+          id: 2,
+          name: 'Family',
+          members: [
+            PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
+            PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
+          ],
+        ),
+        GroupItem(id: 3, name: 'Book club'),
+      ],
+      onCreate: () => log('GroupList.onCreate'),
+      onMembers: (id) => log('GroupList.onMembers($id)'),
+      onRename: (id) => log('GroupList.onRename($id)'),
+      onDelete: (id) => log('GroupList.onDelete($id)'),
+    ),
+  ),
 
   // ── Video─────────────────────────────────────────────────────────────────
   GalleryEntry(
