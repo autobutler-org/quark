@@ -11,8 +11,8 @@ import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// The admin-only Users page (#1662): every account on the Quark, and what an
-/// admin can do with each.
+/// The admin-only Users page (#1662): account requests waiting for approval,
+/// every account on the Quark, and whether the Quark takes requests at all.
 ///
 /// The router only opens it for an admin, and the Quark refuses its requests
 /// from anyone else.
@@ -34,7 +34,8 @@ class _UsersPageState extends State<UsersPage>
   void initState() {
     super.initState();
     EventsService.instance.start();
-    // Another admin's change, from any client, shows up here without a reload.
+    // Another admin's change, or a new request, from any client, shows up here
+    // without a reload.
     _eventSub = EventsService.instance.events.listen((event) {
       if (event.kind == 'account_changed' || event.kind == 'access_changed') {
         manualRefresh();
@@ -69,6 +70,12 @@ class _UsersPageState extends State<UsersPage>
       builder: (context, _) {
         final c = _controller;
         final loadError = c.error;
+        final isLoading = !c.hasLoaded && loadError == null;
+        // A failed refresh keeps the last good rows on screen.
+        final shownError = c.hasLoaded || loadError == null
+            ? null
+            : Errors.message(loadError, 'load the accounts');
+        final accessRequestsEnabled = c.accessRequestsEnabled;
         return QuarkPageScaffold(
           title: 'Users',
           icon: QuarkIcons.person_outline,
@@ -84,15 +91,39 @@ class _UsersPageState extends State<UsersPage>
             padding: const EdgeInsets.all(16),
             children: [
               QuarkSection(
+                title: 'Requests',
+                child: PendingRequestList(
+                  requests: c.pending,
+                  isLoading: isLoading,
+                  error: shownError,
+                  busyUsernames: c.busyUsernames,
+                  onApprove: (username) => _report(
+                    c.approve(username),
+                    "approve $username's request",
+                  ),
+                  onDeny: (username) =>
+                      _report(c.deny(username), "deny $username's request"),
+                ),
+              ),
+              if (accessRequestsEnabled != null)
+                AccessRequestsTile(
+                  enabled: accessRequestsEnabled,
+                  isBusy: c.isSavingAccessRequests,
+                  onChanged: (enabled) => _report(
+                    c.setAccessRequestsEnabled(enabled),
+                    enabled
+                        ? 'turn account requests on'
+                        : 'turn account requests off',
+                  ),
+                ),
+              const SizedBox(height: 24),
+              QuarkSection(
                 title: 'Accounts',
                 child: UserList(
                   users: c.accounts,
                   selfUsername: c.selfUsername,
-                  isLoading: !c.hasLoaded && loadError == null,
-                  // A failed refresh keeps the last good rows on screen.
-                  error: c.hasLoaded || loadError == null
-                      ? null
-                      : Errors.message(loadError, 'load the accounts'),
+                  isLoading: isLoading,
+                  error: shownError,
                   busyUsernames: c.busyUsernames,
                   onPromote: (username) =>
                       _report(c.promote(username), 'make $username an admin'),

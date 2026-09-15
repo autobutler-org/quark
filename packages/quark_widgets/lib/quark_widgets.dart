@@ -54,5 +54,7 @@ export 'src/storage/upload_target_picker.dart';
 export 'src/theme/quark_colors.dart';
 export 'src/theme/quark_theme.dart';
 export 'src/theme/quark_tokens.dart';
+export 'src/users/access_requests_tile.dart';
+export 'src/users/pending_request_list.dart';
 export 'src/users/user_list.dart';
 export 'src/video/transcode_dialog.dart';
