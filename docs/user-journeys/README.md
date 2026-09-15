@@ -35,6 +35,7 @@ Journey IDs are stable — don't renumber when adding new ones.
 | [health.md](health.md)                   | System health dashboard                                |
 | [storage-devices.md](storage-devices.md) | Storage device management                              |
 | [settings.md](settings.md)               | App settings, hosts, updates, remote access            |
+| [users.md](users.md)                     | Admin-only Users page (accounts, admin roles)          |
 
 ## Conventions
 
