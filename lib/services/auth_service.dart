@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/error_text.dart';
 
 /// Result of a successful [AuthService.checkStatus] call.
@@ -12,7 +13,20 @@ class AuthStatus {
   /// Whether the quark has been set up with a local account.
   final bool setupComplete;
 
-  const AuthStatus({required this.setupComplete});
+  /// The signed-in username, or null when the call carried no valid session.
+  final String? username;
+
+  /// Whether the signed-in user is an admin. False without a valid session.
+  ///
+  /// Only decides what the app shows; the Quark still refuses admin-only
+  /// requests from anyone else.
+  final bool isAdmin;
+
+  const AuthStatus({
+    required this.setupComplete,
+    this.username,
+    this.isAdmin = false,
+  });
 }
 
 /// Result of [AuthService.setup] — shown once, must be surfaced to the user.
@@ -66,17 +80,62 @@ http.Client Function() authHttpClientFactory = () => sharedHttpClient;
 class AuthService {
   static Uri get _baseUri => Uri.parse(apiBaseUrl);
 
-  /// Checks whether initial setup has been completed on the quark.
+  /// Checks whether initial setup has been completed on the quark and, when
+  /// this app holds a session, who is signed in.
   static Future<AuthStatus> checkStatus() async {
     final uri = _baseUri.resolve('/api/v0/auth/status');
+    final token = AppSettings.instance.sessionToken;
     final response = await authHttpClientFactory()
-        .get(uri)
+        .get(
+          uri,
+          headers: token == null ? null : {'Authorization': 'Bearer $token'},
+        )
         .timeout(kAuthRequestTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, 'Failed to check auth status');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    return AuthStatus(setupComplete: body['setup'] as bool? ?? false);
+    return AuthStatus(
+      setupComplete: body['setup'] as bool? ?? false,
+      username: body['username'] as String?,
+      isAdmin: body['isAdmin'] as bool? ?? false,
+    );
+  }
+
+  /// Fetches the signed-in user's admin flag again into [AppSettings.isAdmin].
+  ///
+  /// Without a session there is no admin. A failed call keeps the last known
+  /// value: it only decides what the app shows, and the Quark still refuses
+  /// admin-only requests from a non-admin.
+  static Future<void> refreshAccount() async {
+    final settings = AppSettings.instance;
+    if (settings.sessionToken == null) {
+      settings.isAdmin.value = false;
+      return;
+    }
+    try {
+      final status = await checkStatus();
+      settings.isAdmin.value = status.isAdmin;
+      if (status.username != null) {
+        await settings.setUsername(status.username);
+      }
+    } catch (e) {
+      debugPrint('[auth_service.dart] refreshAccount failed: $e');
+    }
+  }
+
+  /// Keeps [AppSettings.isAdmin] current for the life of the app.
+  ///
+  /// Refreshes now, whenever the session changes (sign-in, sign-out, a 401,
+  /// switching Quarks), and whenever the Quark reports an account's role
+  /// changed, so a demoted admin loses admin-only entries without signing out.
+  static void watchAccount() {
+    AppSettings.instance.sessionTokenNotifier.addListener(refreshAccount);
+    EventsService.instance.events.listen((event) {
+      if (event.kind == 'account_changed') refreshAccount();
+    });
+    EventsService.instance.start();
+    refreshAccount();
   }
 
   /// Creates the owner account on first boot.

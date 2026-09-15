@@ -1009,7 +1009,7 @@ const docTemplate = `{
         },
         "/auth/status": {
             "get": {
-                "description": "Returns whether initial setup has been completed",
+                "description": "Returns whether initial setup has been completed. For a caller with a valid session it also returns that caller's username and isAdmin flag.",
                 "produces": [
                     "application/json"
                 ],
