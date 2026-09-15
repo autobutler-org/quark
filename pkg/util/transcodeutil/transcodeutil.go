@@ -64,6 +64,9 @@ type EnqueueParams struct {
 	Queue   *jobutil.Queue
 	Storage *storageutil.StorageService
 	Params  Params
+	// UserID is the account queueing the transcode, which the job runs as. 0
+	// records none.
+	UserID int64
 }
 
 // EnqueueResult carries the queued job.
@@ -97,6 +100,7 @@ func Enqueue(ctx context.Context, params EnqueueParams) (EnqueueResult, error) {
 			Format:  params.Params.Format,
 			Quality: params.Params.Quality,
 		},
+		UserID: params.UserID,
 	})
 	if err != nil {
 		return EnqueueResult{}, err

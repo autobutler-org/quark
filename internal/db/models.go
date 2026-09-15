@@ -66,6 +66,7 @@ type Job struct {
 	CreatedAt  time.Time
 	StartedAt  sql.NullTime
 	FinishedAt sql.NullTime
+	UserID     sql.NullInt64
 }
 
 type PathAccess struct {
