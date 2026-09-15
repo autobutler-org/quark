@@ -44,10 +44,24 @@ class SetupResult {
   const SetupResult({required this.sessionToken, required this.recoveryPhrase});
 }
 
-/// Result of [AuthService.login].
+/// Result of [AuthService.login] and [AuthService.recover].
 class LoginResult {
   final String sessionToken;
-  const LoginResult({required this.sessionToken});
+
+  /// The account the session is for.
+  final String username;
+
+  /// The account's recovery phrase, returned only on the first sign-in of an
+  /// account an admin created (#1873). Non-null means the session has not
+  /// been stored yet: the caller shows the phrase, then calls
+  /// [AuthService.acceptSession] once it has been acknowledged.
+  final String? recoveryPhrase;
+
+  const LoginResult({
+    required this.sessionToken,
+    required this.username,
+    this.recoveryPhrase,
+  });
 }
 
 /// Result of [AuthService.deleteAccount] and [AuthService.resetQuark].
@@ -195,10 +209,26 @@ class AuthService {
       throwApiError(response.statusCode, body, 'Login failed');
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final token = body['token'] as String;
-    await AppSettings.instance.setSessionToken(token);
-    await AppSettings.instance.setUsername(username);
-    return LoginResult(sessionToken: token);
+    final result = LoginResult(
+      sessionToken: body['token'] as String,
+      username: username,
+      recoveryPhrase: body['recoveryPhrase'] as String?,
+    );
+    // The first sign-in of an account an admin created carries its recovery
+    // phrase, which is never returned again (#1873). Storing the token now
+    // would let the router swap the login page for /files before the phrase
+    // was shown, so the caller stores it with [acceptSession] once the phrase
+    // has been acknowledged.
+    if (result.recoveryPhrase == null) await acceptSession(result);
+    return result;
+  }
+
+  /// Stores [result]'s session and username, which is what signs the app in.
+  ///
+  /// [login] does this itself unless the result carries a recovery phrase.
+  static Future<void> acceptSession(LoginResult result) async {
+    await AppSettings.instance.setSessionToken(result.sessionToken);
+    await AppSettings.instance.setUsername(result.username);
   }
 
   /// Resets [username]'s password using that account's recovery phrase and
@@ -232,7 +262,7 @@ class AuthService {
     final token = body['token'] as String;
     await AppSettings.instance.setSessionToken(token);
     await AppSettings.instance.setUsername(username);
-    return LoginResult(sessionToken: token);
+    return LoginResult(sessionToken: token, username: username);
   }
 
   /// Asks this Quark for an account (#1908) and returns the new account's

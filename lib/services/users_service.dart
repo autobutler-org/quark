@@ -82,6 +82,28 @@ class UsersService with AuthenticatedService {
     return body is Map ? body['enabled'] as bool? ?? enabled : enabled;
   }
 
+  /// Creates an active account named [username] with the initial [password]
+  /// (#1873), and a home at `users/<username>` that only it and the admins
+  /// can open. Returns the new account.
+  ///
+  /// The account has no recovery phrase until its first sign-in, which is
+  /// when the Quark returns one. A taken username or an existing home is a
+  /// 409 whose text the Quark writes, passed on as is.
+  static Future<UserAccount> create({
+    required String username,
+    required String password,
+  }) async {
+    final response = await instance.authenticatedPost(
+      apiBaseUri.resolve('/api/v0/admin/users'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'username': username, 'password': password}),
+    );
+    _check(response, 'create $username');
+    return UserAccount.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   /// [path] with [username] as its last segment, encoded.
   static Uri _accountUri(String path, String username) =>
       apiBaseUri.resolve('$path/${Uri.encodeComponent(username)}');

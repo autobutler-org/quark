@@ -7,10 +7,15 @@ typedef ListUsersFn = Future<List<UserAccount>> Function();
 typedef AccountActionFn = Future<void> Function(String username);
 typedef ReadAccessRequestsFn = Future<bool> Function();
 typedef SetAccessRequestsFn = Future<bool> Function(bool enabled);
+typedef CreateUserFn =
+    Future<UserAccount> Function({
+      required String username,
+      required String password,
+    });
 
 /// State behind the Users page (#1662): the accounts and pending requests on
-/// the Quark, whether it takes requests, and the admin actions on one account
-/// at a time.
+/// the Quark, whether it takes requests, creating an account, and the admin
+/// actions on one account at a time.
 ///
 /// Service calls arrive as function parameters defaulting to [UsersService],
 /// so a test passes fakes without a mocking library. Actions hand back the
@@ -28,13 +33,15 @@ class UsersController extends ChangeNotifier {
         UsersService.accessRequestsEnabled,
     SetAccessRequestsFn setAccessRequests =
         UsersService.setAccessRequestsEnabled,
+    CreateUserFn createUser = UsersService.create,
   }) : _listUsers = listUsers,
        _promoteUser = promoteUser,
        _demoteUser = demoteUser,
        _approveRequest = approveRequest,
        _denyRequest = denyRequest,
        _readAccessRequests = readAccessRequests,
-       _setAccessRequests = setAccessRequests;
+       _setAccessRequests = setAccessRequests,
+       _createUser = createUser;
 
   /// The signed-in account, which the list offers no actions on.
   final String? selfUsername;
@@ -46,10 +53,13 @@ class UsersController extends ChangeNotifier {
   final AccountActionFn _denyRequest;
   final ReadAccessRequestsFn _readAccessRequests;
   final SetAccessRequestsFn _setAccessRequests;
+  final CreateUserFn _createUser;
 
   List<UserAccount> _users = const [];
   bool? _accessRequestsEnabled;
   bool _isSavingAccessRequests = false;
+  bool _isCreating = false;
+  Object? _createError;
   bool _hasLoaded = false;
   bool _isLoading = false;
   Object? _error;
@@ -76,6 +86,13 @@ class UsersController extends ChangeNotifier {
 
   /// Whether a change to [accessRequestsEnabled] is being saved.
   bool get isSavingAccessRequests => _isSavingAccessRequests;
+
+  /// Whether an account is being created.
+  bool get isCreating => _isCreating;
+
+  /// Why the last create was refused, or null. Raw; the page composes the
+  /// copy, and the open dialog shows it.
+  Object? get createError => _createError;
 
   /// Whether a load is in flight.
   bool get isLoading => _isLoading;
@@ -144,6 +161,34 @@ class UsersController extends ChangeNotifier {
   /// failure.
   Future<Object?> deny(String username) =>
       _act(username, () => _denyRequest(username));
+
+  /// Creates the account [input] describes (#1873). True when it was created
+  /// and the list reloaded; false when [createError] now says why not.
+  /// Ignored while another create is in flight.
+  Future<bool> create(CreateUserInput input) async {
+    if (_isCreating) return false;
+    _isCreating = true;
+    _createError = null;
+    _notify();
+    try {
+      await _createUser(username: input.username, password: input.password);
+      await load();
+      return true;
+    } catch (error) {
+      if (!_disposed) _createError = error;
+      return false;
+    } finally {
+      _isCreating = false;
+      _notify();
+    }
+  }
+
+  /// Forgets the last create refusal, for a dialog opened fresh.
+  void clearCreateError() {
+    if (_createError == null) return;
+    _createError = null;
+    notifyListeners();
+  }
 
   /// Turns account requests on or off. Null on success, otherwise the
   /// failure, in which case the setting is left as it was.
