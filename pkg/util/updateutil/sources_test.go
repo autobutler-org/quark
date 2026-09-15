@@ -128,14 +128,14 @@ func TestUpdate_MissingArchiveDoesNotBlameTheChecksum(t *testing.T) {
 	}
 }
 
-// A 404 on the .sha256 companion still means exactly what it used to.
+// A 404 on the checksums file still means exactly what it used to.
 func TestVerifyChecksum_404StillMeansChecksumUnavailable(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer server.Close()
 
-	err := verifyChecksumOf(sha256Of([]byte("payload")), server.URL+"/archive.tar.gz.sha256")
+	err := verifyChecksumOf(sha256Of([]byte("payload")), server.URL+"/quark_1.0.0_checksums.txt", "archive.tar.gz")
 	if !errors.Is(err, errChecksumUnavailable) {
 		t.Errorf("expected errChecksumUnavailable, got %v", err)
 	}

@@ -268,12 +268,11 @@ func UpdateFromDefaultSources(version string) error {
 	return fmt.Errorf("failed to update from all default sources: %v", errs)
 }
 
-// Update downloads and installs a new version of the application.
-// If a companion .sha256 file is available at the same URL prefix, the
-// archive is verified against it before replacing the running binary.
-// A missing checksum file is treated as a warning (logged) rather than a
-// hard failure, to keep compatibility with update sources that don't yet
-// publish checksums.
+// Update downloads and installs a new version of the application. The archive
+// is verified against the checksums file the release publishes beside it, on
+// the same source, before the running binary is replaced. Verification is
+// required: a missing checksums file, a missing entry or a mismatch all stop
+// the update.
 func Update(source *UpdateSource, version string) error {
 	if source == nil {
 		return UpdateFromDefaultSources(version)
@@ -315,16 +314,13 @@ func Update(source *UpdateSource, version string) error {
 	}
 	defer body.Close()
 
-	// A 404 on the .sha256 file is treated as "checksum unavailable" (warning
-	// only) to stay compatible with release assets that predate this feature.
-	checksumURL := url + ".sha256"
+	// GoReleaser publishes one checksums file per release, not a .sha256 per
+	// archive. Every release with a quark_<Os>_<arch> archive has one, on both
+	// sources, so there is no release this fails closed on.
+	checksumsURL := fmt.Sprintf("%s/%s/%s", baseUrl, version, checksumsFileName(version))
 	verify := func(sum []byte) error {
-		if err := verifyChecksumOf(sum, checksumURL); err != nil {
-			if errors.Is(err, errChecksumUnavailable) {
-				fmt.Println("Warning: no checksum file available at", checksumURL, "— skipping verification")
-				return nil
-			}
-			return fmt.Errorf("checksum verification failed: %w", err)
+		if err := verifyChecksumOf(sum, checksumsURL, archiveName); err != nil {
+			return fmt.Errorf("checksum verification against %s failed: %w", checksumsURL, err)
 		}
 		return nil
 	}
@@ -344,8 +340,8 @@ func Update(source *UpdateSource, version string) error {
 // not found" and sent readers looking at release assets (#1610).
 var errNotFound = errors.New("not found (HTTP 404)")
 
-// errChecksumUnavailable means the archive downloaded fine but no .sha256
-// companion file was published alongside it.
+// errChecksumUnavailable means the archive downloaded fine but the release's
+// checksums file was not found beside it.
 var errChecksumUnavailable = errors.New("checksum file not found")
 
 // allowHTTPInFetchURL relaxes the HTTPS-only restriction in fetchURL.

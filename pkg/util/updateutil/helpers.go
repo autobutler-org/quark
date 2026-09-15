@@ -27,8 +27,8 @@ func init() {
 }
 
 // maxMetadataBytes caps what fetchURL will hold in memory. It only ever
-// retrieves small companion files — a .sha256 digest is 64 bytes — while the
-// release archive itself goes through fetchStream and is never buffered.
+// retrieves a release's checksums file — one short line per archive — while
+// the release archive itself goes through fetchStream and is never buffered.
 const maxMetadataBytes = 64 * 1024
 
 // fetchURL performs a GET and returns the response body as bytes, refusing
@@ -136,17 +136,23 @@ func isAllowedUpdateHost(host string) bool {
 	return ok
 }
 
-// verifyChecksumOf fetches a .sha256 file from checksumURL and compares it
-// against sum, the SHA-256 digest of the archive. It takes the digest rather
-// than the archive so the caller can compute it while streaming to disk — the
-// archive used to be held in memory purely to be hashed here (#1723).
+// checksumsFileName is the checksums file GoReleaser publishes with a release:
+// quark_<version>_checksums.txt, the version without its leading "v".
+func checksumsFileName(version string) string {
+	return fmt.Sprintf("%s_%s_checksums.txt", binaryName, strings.TrimPrefix(version, "v"))
+}
+
+// verifyChecksumOf fetches the release checksums file at checksumsURL and
+// checks its entry for archiveName against sum, the SHA-256 digest of the
+// archive. It takes the digest rather than the archive so the caller can
+// compute it while streaming to disk — the archive used to be held in memory
+// purely to be hashed here (#1723).
 //
-// The .sha256 file may contain the bare hex digest or a line in the format
-// produced by sha256sum(1):
-//
-//	<hex>  <filename>
-func verifyChecksumOf(sum []byte, checksumURL string) error {
-	checksumBytes, err := fetchURL(checksumURL)
+// The file is sha256sum(1) output, one "<hex>  <filename>" line per archive.
+// Anything short of a matching entry is an error: this is what stands between
+// a download and the running binary.
+func verifyChecksumOf(sum []byte, checksumsURL, archiveName string) error {
+	checksums, err := fetchURL(checksumsURL)
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			// Only *here* does a 404 mean "no checksum was published".
@@ -155,21 +161,21 @@ func verifyChecksumOf(sum []byte, checksumURL string) error {
 		return err
 	}
 
-	line := strings.TrimSpace(string(checksumBytes))
-	// sha256sum(1) format: "<hex>  <filename>" — take only the hex part.
-	parts := strings.Fields(line)
-	if len(parts) == 0 {
-		return errors.New("checksum file is empty")
+	for _, line := range strings.Split(string(checksums), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 || fields[1] != archiveName {
+			continue
+		}
+		expected, err := hex.DecodeString(fields[0])
+		if err != nil {
+			return fmt.Errorf("invalid checksum for %s: %w", archiveName, err)
+		}
+		if !hmacEqual(sum, expected) {
+			return fmt.Errorf("checksum mismatch for %s: expected %x, got %x", archiveName, expected, sum)
+		}
+		return nil
 	}
-	expected, err := hex.DecodeString(parts[0])
-	if err != nil {
-		return fmt.Errorf("invalid checksum format: %w", err)
-	}
-
-	if !hmacEqual(sum, expected) {
-		return fmt.Errorf("checksum mismatch: expected %x, got %x", expected, sum)
-	}
-	return nil
+	return fmt.Errorf("checksums file lists no entry for %s", archiveName)
 }
 
 // hmacEqual is a constant-time comparison of two byte slices.
@@ -197,8 +203,8 @@ func isStaleBackupName(name string) bool {
 // accepts what landed, extracts the binary and atomically replaces the running
 // executable.
 //
-// verify receives the SHA-256 of the bytes written and may be nil when no
-// checksum was published. Hashing happens as the archive streams to the temp
+// verify receives the SHA-256 of the bytes written. Update always passes one;
+// nil skips verification and exists for tests. Hashing happens as the archive streams to the temp
 // file, so a 100 MB release never sits in memory — it used to be downloaded
 // into a []byte purely so it could be hashed before this call (#1723).
 // Extraction only begins after verify returns, so an archive that fails the
