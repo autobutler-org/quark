@@ -141,3 +141,25 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 **Expected result:**
 
 - The device holding vault data is visually marked (icon or label).
+
+---
+
+### JN-SD-010: A non-admin sees drives without drive actions
+
+**Preconditions:** User is signed in to an account that is not an admin. At least one storage device is connected,
+including one that is not mounted.
+
+**Steps:**
+
+1. Navigate to `/devices`.
+
+**Expected result:**
+
+- The device list, usage bars and badges are shown as they are for an admin.
+- No **Mount**, **Set Role**, **Back Up** or **Verify** button is offered on any device.
+
+**Notes:**
+
+- Every drive action is admin-only on the Quark (#1899). The page hides the buttons (#1928), and the Quark still
+  refuses the requests.
+- The drawer has no Vault entry for this account either (see JN-VT-000 in vault.md).

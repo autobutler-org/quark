@@ -207,6 +207,9 @@ final Listenable routerRefreshListenable = Listenable.merge([
   // Connecting to (or switching) a Quark re-runs the terms/login gate right
   // away instead of on the next unrelated navigation (#1623).
   AppSettings.instance.activeHostNotifier,
+  // An admin demoted while on an admin-only page is moved off it: the flag
+  // changing re-runs the gate, which asks the Quark again (#1928).
+  AppSettings.instance.isAdmin,
 ]);
 
 final router = GoRouter(
@@ -392,6 +395,20 @@ final router = GoRouter(
 @visibleForTesting
 Future<AuthStatus> Function() authStatusProbe = AuthService.checkStatus;
 
+/// Pages only an admin can use. [authRedirect] sends anyone else to
+/// [AppRoutes.files]; the Quark refuses their requests either way.
+const adminRoutes = {AppRoutes.vault};
+
+/// Whether the Quark says the signed-in caller is an admin. False when it
+/// cannot say.
+Future<bool> _callerIsAdmin() async {
+  try {
+    return (await authStatusProbe()).isAdmin;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// Top-level redirect — handles auth gating.
 /// The app's auth/terms gate. Exported so tests can drive the real rules
 /// without mounting every page in the app.
@@ -438,6 +455,15 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
   // routerRefreshListenable, so switching hosts re-runs this.
   const publicRoutes = {AppRoutes.setup, AppRoutes.recover};
   if (publicRoutes.contains(location)) return null;
+
+  // Admin-only pages (#1928). [AppSettings.isAdmin] is not persisted and
+  // starts false on every launch, so trusting it would bounce an admin who
+  // opens one of these from a link; the Quark is asked instead. A failed call
+  // counts as no: the page could only render refusals.
+  if (AppSettings.instance.sessionToken != null &&
+      adminRoutes.contains(location)) {
+    return await _callerIsAdmin() ? null : AppRoutes.files;
+  }
 
   // Already authenticated.
   if (AppSettings.instance.sessionToken != null) return null;
