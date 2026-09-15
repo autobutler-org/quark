@@ -753,6 +753,14 @@ final List<GalleryEntry> registry = [
       onChanged: (enabled) => log('AccessRequestsTile.onChanged($enabled)'),
     ),
   ),
+  GalleryEntry(
+    name: 'CreateUserDialog',
+    group: 'Users',
+    build: (context, log) => CreateUserDialog(
+      onSubmit: (input) => log('CreateUserDialog.onSubmit(${input.username})'),
+      onCancel: () => log('CreateUserDialog.onCancel'),
+    ),
+  ),
 
   // ── Video─────────────────────────────────────────────────────────────────
   GalleryEntry(
