@@ -50,24 +50,39 @@ Future<List<String>> _menuFor(
 }
 
 /// A member may not move or delete a home folder itself (#2016), so the menu
-/// does not offer to; the Quark refuses it either way.
+/// does not offer to; the Quark refuses it either way. Nobody is offered Share
+/// on the `users` folder, since a grant there would expose every home.
 void main() {
   testWidgets("hides Move/Rename and Delete on a member's home", (
     tester,
   ) async {
-    expect(await _menuFor(tester, _folder('users/bob')), ['Download']);
+    expect(await _menuFor(tester, _folder('users/bob')), [
+      'Download',
+      'Share…',
+    ]);
   });
 
-  testWidgets('hides Move/Rename and Delete on the users folder for a member', (
+  testWidgets('offers only Download on the users folder to a member', (
     tester,
   ) async {
     expect(await _menuFor(tester, _folder('users')), ['Download']);
   });
 
-  testWidgets('keeps them on the users folder for an admin', (tester) async {
+  testWidgets('keeps them on the users folder for an admin, without Share', (
+    tester,
+  ) async {
     expect(await _menuFor(tester, _folder('users'), isAdmin: true), [
       'Download',
       'Move/Rename',
+      'Delete',
+    ]);
+  });
+
+  testWidgets('offers Share on a users folder on a USB drive', (tester) async {
+    expect(await _menuFor(tester, _folder('users', serial: 'USB1')), [
+      'Download',
+      'Move/Rename',
+      'Share…',
       'Delete',
     ]);
   });
@@ -76,6 +91,7 @@ void main() {
     expect(await _menuFor(tester, _folder('users/bob/Documents')), [
       'Download',
       'Move/Rename',
+      'Share…',
       'Delete',
     ]);
   });
@@ -84,6 +100,7 @@ void main() {
     expect(await _menuFor(tester, _folder('users/bob'), isAdmin: true), [
       'Download',
       'Move/Rename',
+      'Share…',
       'Delete',
     ]);
   });
@@ -92,6 +109,7 @@ void main() {
     expect(await _menuFor(tester, _folder('users/bob', serial: 'USB1')), [
       'Download',
       'Move/Rename',
+      'Share…',
       'Delete',
     ]);
   });

@@ -19,6 +19,9 @@ enum FileMenuAction {
   navigateToFolder,
   extractHere,
 
+  /// Opens the share sheet for a file or folder (#1911).
+  share,
+
   /// Puts a trashed item back where it was deleted from.
   restore,
 
@@ -67,6 +70,7 @@ class FileBrowserView extends StatefulWidget {
   static const Set<FileMenuAction> defaultMenuActions = {
     FileMenuAction.download,
     FileMenuAction.moveRename,
+    FileMenuAction.share,
     FileMenuAction.delete,
     FileMenuAction.extractHere,
     FileMenuAction.navigateToFolder,
