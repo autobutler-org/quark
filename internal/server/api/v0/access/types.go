@@ -11,6 +11,7 @@ func (r *router) Routes() []*serverutil.Route {
 		listAccessRoute,
 		setAccessRoute,
 		revokeAccessRoute,
+		listPrincipalsRoute,
 	}
 }
 
