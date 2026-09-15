@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -92,7 +91,7 @@ func TestPromoteToAdmin_Idempotent(t *testing.T) {
 	if err != nil || !isAdmin {
 		t.Errorf("expected admin after repeated promote, got %v (err %v)", isAdmin, err)
 	}
-	count, err := q.GetAdminCount(ctx)
+	count, err := q.CountActiveAdmins(ctx)
 	if err != nil {
 		t.Fatalf("count: %v", err)
 	}
@@ -136,7 +135,7 @@ func TestDemoteFromAdmin_AllowsWhenAnotherAdminExists(t *testing.T) {
 	if isAdmin {
 		t.Error("expected 'a' to be demoted")
 	}
-	count, err := q.GetAdminCount(ctx)
+	count, err := q.CountActiveAdmins(ctx)
 	if err != nil {
 		t.Fatalf("count: %v", err)
 	}
@@ -165,14 +164,14 @@ func TestDemoteFromAdmin_NonAdminTargetBlockedByGuard(t *testing.T) {
 	if err == nil {
 		t.Skip("guard now checks the target — bug fixed, update this test")
 	}
-	if !strings.Contains(err.Error(), "last admin") {
+	if !errors.Is(err, authutil.ErrLastAdmin) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	t.Logf("KNOWN BUG: demoting non-admin %q rejected with %q", "peon", err)
 
 	// The admin count is untouched, confirming the operation was a no-op that
 	// still reported failure.
-	count, cErr := q.GetAdminCount(ctx)
+	count, cErr := q.CountActiveAdmins(ctx)
 	if cErr != nil {
 		t.Fatalf("count: %v", cErr)
 	}
@@ -194,7 +193,7 @@ func TestDemoteFromAdmin_UnknownUserSucceedsSilently(t *testing.T) {
 	if err != nil {
 		t.Logf("demote of unknown user returned: %v", err)
 	}
-	count, cErr := q.GetAdminCount(ctx)
+	count, cErr := q.CountActiveAdmins(ctx)
 	if cErr != nil {
 		t.Fatalf("count: %v", cErr)
 	}

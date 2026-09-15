@@ -166,7 +166,7 @@ func TestMigrationsApplyCleanly(t *testing.T) {
 	}
 
 	columns := map[string][]string{
-		"users":        {"is_admin"},
+		"users":        {"is_admin", "status"},
 		"sessions":     {"last_used_at"},
 		"photo_hashes": {"dhash", "content_hash"},
 	}
@@ -191,5 +191,62 @@ func TestMigrationsApplyCleanly(t *testing.T) {
 	}
 	if located != 1 {
 		t.Errorf("vault_location seed row missing, got %d rows", located)
+	}
+}
+
+// userStatusVersion is 011_user_status, the migration that adds users.status.
+const userStatusVersion = 11
+
+// TestUserStatusMigration checks an account that existed before 011 comes out
+// active, the column refuses a status it does not know, and the migration
+// rolls back cleanly.
+func TestUserStatusMigration(t *testing.T) {
+	conn, err := sql.Open("sqlite", DSN(filepath.Join(t.TempDir(), "quark.db")))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer conn.Close()
+	migrationSource, err := newMigrationSource()
+	if err != nil {
+		t.Fatalf("source: %v", err)
+	}
+	driver, err := sqlite.WithInstance(conn, &sqlite.Config{})
+	if err != nil {
+		t.Fatalf("driver: %v", err)
+	}
+	m, err := migrate.NewWithInstance("iofs", migrationSource, "sqlite", driver)
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := m.Migrate(userStatusVersion - 1); err != nil {
+		t.Fatalf("migrate to %d: %v", userStatusVersion-1, err)
+	}
+	if _, err := conn.Exec(`INSERT INTO users (username, password_hash, recovery_phrase_hash) VALUES ('founder', 'h', 'r')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(userStatusVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", userStatusVersion, err)
+	}
+	var status string
+	if err := conn.QueryRow(`SELECT status FROM users WHERE username = 'founder'`).Scan(&status); err != nil {
+		t.Fatalf("read status: %v", err)
+	}
+	if status != "active" {
+		t.Errorf("existing account status = %q, want active", status)
+	}
+	if _, err := conn.Exec(`UPDATE users SET status = 'banned' WHERE username = 'founder'`); err == nil {
+		t.Error("status accepted a value outside pending, active and disabled")
+	}
+
+	if err := m.Migrate(userStatusVersion - 1); err != nil {
+		t.Fatalf("roll back to %d: %v", userStatusVersion-1, err)
+	}
+	var columns int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name = 'status'`).Scan(&columns); err != nil {
+		t.Fatalf("inspect users: %v", err)
+	}
+	if columns != 0 {
+		t.Error("users.status survived the down migration")
 	}
 }

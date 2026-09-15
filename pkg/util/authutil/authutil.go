@@ -1,11 +1,12 @@
-// Package authutil handles single-user authentication: password hashing,
-// recovery phrases, first-boot setup, login, session issue and validation,
-// and admin role management.
+// Package authutil handles authentication: password hashing, recovery
+// phrases, first-boot setup, login, session issue and validation, account
+// status, and admin role management.
 package authutil
 
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -24,6 +25,32 @@ const (
 	bcryptCost       = 12
 	sessionTokenSize = 32 // bytes → 64 hex chars
 	recoveryWords    = 6
+)
+
+// Account statuses, as the users table spells them (#1908).
+const (
+	// StatusPending is an account request an admin has not approved yet.
+	StatusPending = "pending"
+	// StatusActive is an account that may sign in.
+	StatusActive = "active"
+	// StatusDisabled is an account an admin turned off. It keeps what it owns.
+	StatusDisabled = "disabled"
+)
+
+// Errors a handler passes to the app unchanged. Their text is what a person
+// reads, so they are returned bare rather than wrapped.
+var (
+	// ErrAccountPending refuses a sign-in to an account nobody has approved.
+	ErrAccountPending = errors.New("your account request is waiting for approval")
+	// ErrAccountDisabled refuses a sign-in to an account an admin turned off.
+	ErrAccountDisabled = errors.New("this account is turned off")
+	// ErrInvalidUsername refuses a username a new account cannot have.
+	ErrInvalidUsername = errors.New("a username has up to 32 lowercase letters, numbers, dots, dashes or underscores, and starts with a letter or number")
+	// ErrLastAdmin refuses a change that would leave no active admin.
+	ErrLastAdmin = errors.New("this Quark needs at least one active admin")
+	// ErrUserNotFound reports a username that names no account the action
+	// applies to.
+	ErrUserNotFound = errors.New("no account has that username")
 )
 
 // SetupParams contains parameters for first-boot user setup.
@@ -173,8 +200,8 @@ func GetAuthStatus(ctx context.Context, queries *db.Queries, params GetAuthStatu
 // Setup creates the first user and returns a session token + recovery phrase.
 // Returns an error if setup has already been completed.
 func Setup(ctx context.Context, queries *db.Queries, params SetupParams) (*SetupResult, error) {
-	if params.Username == "" {
-		return nil, fmt.Errorf("username is required")
+	if err := validateUsername(params.Username); err != nil {
+		return nil, err
 	}
 	if len(params.Password) < 8 {
 		return nil, fmt.Errorf("password must be at least 8 characters")
@@ -231,7 +258,10 @@ func Setup(ctx context.Context, queries *db.Queries, params SetupParams) (*Setup
 	}, nil
 }
 
-// Login validates credentials and returns a session token.
+// Login validates credentials and returns a session token. The password is
+// checked before the account's status, so ErrAccountPending and
+// ErrAccountDisabled reach only someone who knows the password, and a wrong
+// password reveals nothing about which usernames exist.
 func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*LoginResult, error) {
 	user, err := queries.GetUserByUsername(ctx, params.Username)
 	if err != nil {
@@ -241,6 +271,9 @@ func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*Login
 
 	if !CheckPassword(params.Password, user.PasswordHash) {
 		return nil, fmt.Errorf("invalid credentials")
+	}
+	if err := statusError(user.Status); err != nil {
+		return nil, err
 	}
 
 	token, err := newSession(ctx, queries, user.ID)
@@ -278,6 +311,9 @@ func ValidateBasicAuth(ctx context.Context, queries *db.Queries, username, passw
 	if !CheckPassword(password, user.PasswordHash) {
 		return "", 0, fmt.Errorf("invalid credentials")
 	}
+	if err := statusError(user.Status); err != nil {
+		return "", 0, err
+	}
 	return user.Username, user.ID, nil
 }
 
@@ -302,6 +338,11 @@ func Recover(ctx context.Context, queries *db.Queries, params RecoverParams) (*L
 	normalized := NormalizeRecoveryPhrase(params.RecoveryPhrase)
 	if !CheckPassword(normalized, user.RecoveryPhraseHash) {
 		return nil, fmt.Errorf("invalid recovery phrase")
+	}
+	// After the phrase, for the same reason Login checks status after the
+	// password.
+	if err := statusError(user.Status); err != nil {
+		return nil, err
 	}
 
 	newHash, err := HashPassword(params.NewPassword)
@@ -397,25 +438,33 @@ func IsAdmin(ctx context.Context, queries *db.Queries, username string) (bool, e
 	return val != 0, nil
 }
 
-// PromoteToAdmin grants admin to the given username.
+// PromoteToAdmin grants admin to the given username. Only an active account
+// can be promoted; any other username returns ErrUserNotFound.
 func PromoteToAdmin(ctx context.Context, queries *db.Queries, username string) error {
 	if _, err := queries.PromoteToAdmin(ctx, username); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrUserNotFound
+		}
 		return fmt.Errorf("promote %q to admin: %w", username, err)
 	}
 	return nil
 }
 
-// DemoteFromAdmin removes admin from the given username, refusing if they are
-// the last admin.
+// DemoteFromAdmin removes admin from the given username. It returns
+// ErrLastAdmin while at most one active admin exists, and ErrUserNotFound for a
+// username with no account.
 func DemoteFromAdmin(ctx context.Context, queries *db.Queries, username string) error {
-	count, err := queries.GetAdminCount(ctx)
+	count, err := queries.CountActiveAdmins(ctx)
 	if err != nil {
 		return fmt.Errorf("count admins: %w", err)
 	}
 	if count <= 1 {
-		return errors.New("cannot demote the last admin")
+		return ErrLastAdmin
 	}
 	if _, err := queries.DemoteFromAdmin(ctx, username); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrUserNotFound
+		}
 		return fmt.Errorf("demote %q: %w", username, err)
 	}
 	return nil
