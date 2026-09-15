@@ -166,3 +166,79 @@ Covers first-boot setup, login, logout, and password recovery.
 
 - App navigates to `/terms` before any other protected route.
 - User must accept before accessing `/files` or any other feature.
+
+---
+
+### JN-AUTH-009: Request an account
+
+**Preconditions:** Quark is set up and takes account requests (the default). User is not signed in and has no
+account on this Quark.
+
+**Steps:**
+
+1. Navigate to `/login`.
+2. Tap **Need an account? Request one**.
+3. App navigates to `/request-account`.
+4. Enter a username, for example `bob`.
+5. Enter a password, and enter it again to confirm.
+6. Tap **Send request**.
+7. The recovery phrase for the new account is displayed.
+8. Check the acknowledgment checkbox.
+9. Tap **Continue**.
+
+**Expected result:**
+
+- A **Request sent** state explains that an admin of this Quark needs to approve the request.
+- **Back to sign in** returns to `/login`.
+- The request appears on an admin's Users page.
+
+**Notes:**
+
+- A username must be up to 32 lowercase letters, numbers, dots, dashes or underscores, starting with a letter or
+  number. The form says so before sending, and does not lowercase what was typed. The same rule applies on
+  `/setup`.
+- A username already taken, including by another pending request, is refused with "That username is taken."
+- The admin never sees the recovery phrase.
+
+---
+
+### JN-AUTH-010: Sign in while the request is pending
+
+**Preconditions:** JN-AUTH-009 complete. No admin has approved the request.
+
+**Steps:**
+
+1. Navigate to `/login`.
+2. Enter the requested username and its password.
+3. Tap **Sign in**.
+
+**Expected result:**
+
+- The form shows "Your account request hasn't been approved yet. Ask an admin of this Quark."
+- User remains on the login page, with no session.
+
+**Notes:**
+
+- A wrong password for a pending account still shows "Invalid username or password.", so a sign-in attempt does
+  not reveal which usernames have been requested.
+
+---
+
+### JN-AUTH-014: Sign in to a turned-off account
+
+**Preconditions:** An admin has turned the account off.
+
+**Steps:**
+
+1. Navigate to `/login`.
+2. Enter that account's username and password.
+3. Tap **Sign in**.
+
+**Expected result:**
+
+- The form shows "This account is turned off. Ask an admin of this Quark."
+- User remains on the login page, with no session.
+
+**Notes:**
+
+- Recovering the account with its phrase is refused the same way.

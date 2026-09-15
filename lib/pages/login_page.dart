@@ -18,7 +18,15 @@ import 'package:quark/widgets/quark_connect_form.dart';
 class LoginPage extends StatefulWidget {
   final VoidCallback onLoginSuccess;
 
-  const LoginPage({super.key, required this.onLoginSuccess});
+  /// Asks the active Quark for its status, which says whether it takes
+  /// account requests. Injectable so a test can answer without a Quark.
+  final Future<AuthStatus> Function() checkStatus;
+
+  const LoginPage({
+    super.key,
+    required this.onLoginSuccess,
+    this.checkStatus = AuthService.checkStatus,
+  });
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -48,8 +56,26 @@ class _LoginPageState extends State<LoginPage> {
   /// would be torn down mid-transition (#1623).
   bool _managingHosts = false;
 
+  /// Whether the active Quark takes account requests, which is what shows the
+  /// request link (#1908). False until the Quark says otherwise.
+  bool _accessRequestsEnabled = false;
+
+  /// Bumped by every status check, so an answer from a Quark the user has
+  /// since switched away from cannot set the link.
+  int _statusGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    AppSettings.instance.activeHostNotifier.addListener(_checkAccessRequests);
+    _checkAccessRequests();
+  }
+
   @override
   void dispose() {
+    AppSettings.instance.activeHostNotifier.removeListener(
+      _checkAccessRequests,
+    );
     _usernameController.dispose();
     _passwordController.dispose();
     _usernameFocus.dispose();
@@ -84,6 +110,27 @@ class _LoginPageState extends State<LoginPage> {
       // Announce error to screen readers
     }
   }
+
+  /// Asks the active Quark whether it takes account requests. A Quark that
+  /// cannot say gets no link: a request to it would only fail.
+  Future<void> _checkAccessRequests() async {
+    final generation = ++_statusGeneration;
+    var enabled = false;
+    if (AppSettings.instance.activeHost != null) {
+      try {
+        enabled = (await widget.checkStatus()).accessRequestsEnabled;
+      } catch (e) {
+        debugPrint('[login_page.dart] status check failed: $e');
+      }
+    }
+    if (!mounted || generation != _statusGeneration) return;
+    if (enabled == _accessRequestsEnabled) return;
+    setState(() => _accessRequestsEnabled = enabled);
+  }
+
+  /// Navigates rather than pushes, like [_goToSetup]: a pushed route would
+  /// leave the address bar reading /login.
+  void _goToRequestAccount() => context.go(AppRoutes.requestAccount);
 
   void _goToRecover() {
     final username = _usernameController.text.trim();
@@ -146,6 +193,9 @@ class _LoginPageState extends State<LoginPage> {
                         onSubmit: _submit,
                         onForgotPassword: _goToRecover,
                         onSetUpQuark: _goToSetup,
+                        onRequestAccess: _accessRequestsEnabled
+                            ? _goToRequestAccount
+                            : null,
                       ),
               ),
             ),
