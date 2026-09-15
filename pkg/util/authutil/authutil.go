@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/sqlutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"golang.org/x/crypto/bcrypt"
@@ -51,7 +52,46 @@ var (
 	// ErrUserNotFound reports a username that names no account the action
 	// applies to.
 	ErrUserNotFound = errors.New("no account has that username")
+	// ErrRequestNotFound reports a username that names no pending request.
+	ErrRequestNotFound = errors.New("no account request has that username")
+	// ErrUsernameTaken refuses a new account whose username an account or a
+	// pending request already holds.
+	ErrUsernameTaken = errors.New("that username is taken")
+	// ErrAccessRequestsOff refuses an account request while an admin has
+	// turned requests off, or before the Quark is set up.
+	ErrAccessRequestsOff = errors.New("this Quark isn't taking account requests right now")
+	// ErrPasswordTooShort refuses a password under eight characters.
+	ErrPasswordTooShort = errors.New("password must be at least 8 characters")
 )
+
+// RequestAccountParams asks for an account from the sign-in page (#1908).
+type RequestAccountParams struct {
+	Username string
+	Password string
+	// RequestsEnabled is the admin's access-request setting.
+	RequestsEnabled bool
+}
+
+// RequestAccountResult carries the requester's recovery phrase, shown once.
+type RequestAccountResult struct {
+	RecoveryPhrase string
+}
+
+// ApproveRequestParams names the pending request an admin approves.
+type ApproveRequestParams struct {
+	Username string
+}
+
+// ApproveRequestResult is empty; approval has nothing to report.
+type ApproveRequestResult struct{}
+
+// DenyRequestParams names the pending request an admin denies.
+type DenyRequestParams struct {
+	Username string
+}
+
+// DenyRequestResult is empty; a denial has nothing to report.
+type DenyRequestResult struct{}
 
 // SetupParams contains parameters for first-boot user setup.
 type SetupParams struct {
@@ -204,7 +244,7 @@ func Setup(ctx context.Context, queries *db.Queries, params SetupParams) (*Setup
 		return nil, err
 	}
 	if len(params.Password) < 8 {
-		return nil, fmt.Errorf("password must be at least 8 characters")
+		return nil, ErrPasswordTooShort
 	}
 
 	complete, err := IsSetupComplete(ctx, queries)
@@ -256,6 +296,85 @@ func Setup(ctx context.Context, queries *db.Queries, params SetupParams) (*Setup
 		SessionToken:   token,
 		RecoveryPhrase: recoveryPhrase,
 	}, nil
+}
+
+// RequestAccount creates a pending account that can sign in once an admin
+// approves it, and returns its recovery phrase. It returns
+// ErrAccessRequestsOff while requests are off or before setup, and
+// ErrInvalidUsername, ErrPasswordTooShort or ErrUsernameTaken for a request
+// that cannot be taken. A pending request holds its username until it is
+// denied.
+func RequestAccount(ctx context.Context, queries *db.Queries, params RequestAccountParams) (RequestAccountResult, error) {
+	if !params.RequestsEnabled {
+		return RequestAccountResult{}, ErrAccessRequestsOff
+	}
+	complete, err := IsSetupComplete(ctx, queries)
+	if err != nil {
+		return RequestAccountResult{}, err
+	}
+	if !complete {
+		return RequestAccountResult{}, ErrAccessRequestsOff
+	}
+	if err := validateUsername(params.Username); err != nil {
+		return RequestAccountResult{}, err
+	}
+	if len(params.Password) < 8 {
+		return RequestAccountResult{}, ErrPasswordTooShort
+	}
+
+	passwordHash, err := HashPassword(params.Password)
+	if err != nil {
+		return RequestAccountResult{}, err
+	}
+	recoveryPhrase, err := GenerateRecoveryPhrase()
+	if err != nil {
+		return RequestAccountResult{}, err
+	}
+	recoveryHash, err := HashPassword(recoveryPhrase)
+	if err != nil {
+		return RequestAccountResult{}, err
+	}
+	if _, err := queries.CreatePendingUser(ctx, db.CreatePendingUserParams{
+		Username:           params.Username,
+		PasswordHash:       passwordHash,
+		RecoveryPhraseHash: recoveryHash,
+	}); err != nil {
+		if sqlutil.IsUniqueConstraintErr(err) {
+			return RequestAccountResult{}, ErrUsernameTaken
+		}
+		return RequestAccountResult{}, fmt.Errorf("create account request: %w", err)
+	}
+	return RequestAccountResult{RecoveryPhrase: recoveryPhrase}, nil
+}
+
+// ApproveRequest makes a pending request an active account. It returns
+// ErrRequestNotFound when the username names no pending request.
+func ApproveRequest(ctx context.Context, queries *db.Queries, params ApproveRequestParams) (ApproveRequestResult, error) {
+	approved, err := queries.SetUserStatus(ctx, db.SetUserStatusParams{
+		Username:   params.Username,
+		FromStatus: StatusPending,
+		ToStatus:   StatusActive,
+	})
+	if err != nil {
+		return ApproveRequestResult{}, fmt.Errorf("approve %q: %w", params.Username, err)
+	}
+	if approved == 0 {
+		return ApproveRequestResult{}, ErrRequestNotFound
+	}
+	return ApproveRequestResult{}, nil
+}
+
+// DenyRequest deletes a pending request, which frees its username at once. It
+// returns ErrRequestNotFound when the username names no pending request.
+func DenyRequest(ctx context.Context, queries *db.Queries, params DenyRequestParams) (DenyRequestResult, error) {
+	denied, err := queries.DeletePendingUser(ctx, params.Username)
+	if err != nil {
+		return DenyRequestResult{}, fmt.Errorf("deny %q: %w", params.Username, err)
+	}
+	if denied == 0 {
+		return DenyRequestResult{}, ErrRequestNotFound
+	}
+	return DenyRequestResult{}, nil
 }
 
 // Login validates credentials and returns a session token. The password is
@@ -325,7 +444,7 @@ func Logout(ctx context.Context, queries *db.Queries, token string) error {
 // Recover resets a user's password using their recovery phrase.
 func Recover(ctx context.Context, queries *db.Queries, params RecoverParams) (*LoginResult, error) {
 	if len(params.NewPassword) < 8 {
-		return nil, fmt.Errorf("password must be at least 8 characters")
+		return nil, ErrPasswordTooShort
 	}
 
 	// An unknown username gets the same error as a wrong phrase, so the

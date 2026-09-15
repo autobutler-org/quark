@@ -21,6 +21,35 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const createPendingUser = `-- name: CreatePendingUser :one
+INSERT INTO users (username, password_hash, recovery_phrase_hash, status)
+VALUES (?, ?, ?, 'pending')
+RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status
+`
+
+type CreatePendingUserParams struct {
+	Username           string
+	PasswordHash       string
+	RecoveryPhraseHash string
+}
+
+// CreatePendingUser records an account request from the sign-in page (#1908).
+// It cannot sign in until an admin approves it.
+func (q *Queries) CreatePendingUser(ctx context.Context, arg CreatePendingUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, createPendingUser, arg.Username, arg.PasswordHash, arg.RecoveryPhraseHash)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.RecoveryPhraseHash,
+		&i.CreatedAt,
+		&i.IsAdmin,
+		&i.Status,
+	)
+	return i, err
+}
+
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (token, user_id, expires_at, last_used_at)
 VALUES (?, ?, ?, ?)
@@ -86,6 +115,20 @@ DELETE FROM sessions WHERE expires_at <= datetime('now')
 func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, deleteExpiredSessions)
 	return err
+}
+
+const deletePendingUser = `-- name: DeletePendingUser :execrows
+DELETE FROM users WHERE username = ? AND status = 'pending'
+`
+
+// DeletePendingUser denies an account request. Only a pending row matches, so
+// a request that was already approved is left alone.
+func (q *Queries) DeletePendingUser(ctx context.Context, username string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deletePendingUser, username)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const deleteSession = `-- name: DeleteSession :exec

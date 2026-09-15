@@ -4,6 +4,53 @@
         "contact": {}
     },
     "paths": {
+        "/admin/approve/{username}": {
+            "put": {
+                "description": "Turns a pending account request into an active account that can sign in. Admin-only.",
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Approve an account request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Username of the pending request",
+                        "name": "username",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no account request has that username",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/demote/{username}": {
             "put": {
                 "description": "Removes admin role from the given username. Refused with 409 while the Quark has at most one active admin. Admin-only.",
@@ -53,6 +100,53 @@
                     },
                     "409": {
                         "description": "the last active admin",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/deny/{username}": {
+            "put": {
+                "description": "Deletes a pending account request. Its username is free again at once. Admin-only.",
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Deny an account request",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Username of the pending request",
+                        "name": "username",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no account request has that username",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -865,6 +959,70 @@
                 }
             }
         },
+        "/auth/request-account": {
+            "post": {
+                "description": "Creates a pending account that can sign in once an admin approves it, and returns its recovery phrase this once. Needs no session and is rate-limited per IP. A pending request keeps its username taken until it is denied.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Request an account",
+                "parameters": [
+                    {
+                        "description": "The username and password to request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_auth.requestAccountBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/v0_auth.requestAccountResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid username or password",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "requests are turned off, or the Quark is not set up",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "that username is taken",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/sessions": {
             "get": {
                 "description": "Returns all non-expired sessions for the authenticated user. Each session is identified by the SHA-256 hash of its token — pass this ID to DELETE /auth/sessions/{id} to revoke a specific session.",
@@ -1034,7 +1192,7 @@
         },
         "/auth/status": {
             "get": {
-                "description": "Returns whether initial setup has been completed. For a caller with a valid session it also returns that caller's username and isAdmin flag.",
+                "description": "Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username and isAdmin flag.",
                 "produces": [
                     "application/json"
                 ],
@@ -2916,6 +3074,64 @@
                 }
             }
         },
+        "/settings/access-requests": {
+            "put": {
+                "description": "Sets whether people can request an account from the sign-in page. Requests are on until an admin turns them off. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Turn account requests on or off",
+                "parameters": [
+                    {
+                        "description": "Whether account requests are on",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.accessRequestsSetting"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.accessRequestsSetting"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/settings/remote-access": {
             "get": {
                 "description": "Returns whether remote access is switched on, whether the Tailscale node has actually joined the tailnet, its remote URL once it has, and the last start failure",
@@ -4477,6 +4693,29 @@
                 }
             }
         },
+        "v0_auth.requestAccountBody": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_auth.requestAccountResponse": {
+            "type": "object",
+            "properties": {
+                "recoveryPhrase": {
+                    "type": "string"
+                }
+            }
+        },
         "v0_books.BookJSON": {
             "type": "object",
             "properties": {
@@ -4938,6 +5177,17 @@
             "type": "object",
             "properties": {
                 "autoUpdate": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "v0_settings.accessRequestsSetting": {
+            "type": "object",
+            "required": [
+                "enabled"
+            ],
+            "properties": {
+                "enabled": {
                     "type": "boolean"
                 }
             }

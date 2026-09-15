@@ -47,5 +47,12 @@ func (r *adminRouter) Routes() []*serverutil.Route {
 		postSettingsRoute,
 		enableRemoteAccessRoute,
 		disableRemoteAccessRoute,
+		updateAccessRequestsRoute,
 	}
+}
+
+// accessRequestsSetting is whether the sign-in page takes account requests.
+// A pointer, so a body that leaves it out is refused rather than read as off.
+type accessRequestsSetting struct {
+	Enabled *bool `json:"enabled" binding:"required"`
 }
