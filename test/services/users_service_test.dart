@@ -8,8 +8,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/users_service.dart';
 import 'package:quark/utils/error_text.dart';
 
-/// The admin account routes the Users page calls (#1662), and which refusals
-/// get the app's copy rather than the Quark's.
+/// The admin account routes the Users page calls (#1662, #1908), and which
+/// refusals get the app's copy rather than the Quark's.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -58,14 +58,20 @@ void main() {
     expect(users.last.status, UserAccount.pending);
   });
 
-  test('promotes through the account route', () async {
-    answer(200, {});
+  for (final (name, call, path) in [
+    ('promotes', UsersService.promote, '/api/v0/admin/promote/bob.smith'),
+    ('approves', UsersService.approve, '/api/v0/admin/approve/bob.smith'),
+    ('denies', UsersService.deny, '/api/v0/admin/deny/bob.smith'),
+  ]) {
+    test('$name through the account route', () async {
+      answer(200, {});
 
-    await UsersService.promote('bob.smith');
+      await call('bob.smith');
 
-    expect(requests.single.method, 'PUT');
-    expect(requests.single.url.path, '/api/v0/admin/promote/bob.smith');
-  });
+      expect(requests.single.method, 'PUT');
+      expect(requests.single.url.path, path);
+    });
+  }
 
   test('a 409 from demote is the last-admin sentence', () async {
     answer(409, {'error': 'this Quark needs at least one active admin'});
@@ -84,15 +90,15 @@ void main() {
   });
 
   test("a refusal the Quark explains passes the Quark's text on", () async {
-    answer(404, {'error': 'no account has that username'});
+    answer(404, {'error': 'no account request has that username'});
 
     await expectLater(
-      UsersService.promote('nobody'),
+      UsersService.approve('nobody'),
       throwsA(
         isA<MessageException>().having(
           (e) => e.message,
           'message',
-          'no account has that username',
+          'no account request has that username',
         ),
       ),
     );
@@ -105,5 +111,27 @@ void main() {
       UsersService.list(),
       throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 403)),
     );
+  });
+
+  test(
+    'saves the access-requests setting and returns what was saved',
+    () async {
+      answer(200, {'enabled': false});
+
+      final saved = await UsersService.setAccessRequestsEnabled(false);
+
+      expect(saved, isFalse);
+      final request = requests.single;
+      expect(request.method, 'PUT');
+      expect(request.url.path, '/api/v0/settings/access-requests');
+      expect(jsonDecode(request.body), {'enabled': false});
+    },
+  );
+
+  test('reads the access-requests setting from the auth status', () async {
+    answer(200, {'setup': true, 'accessRequestsEnabled': true});
+
+    expect(await UsersService.accessRequestsEnabled(), isTrue);
+    expect(requests.single.url.path, '/api/v0/auth/status');
   });
 }
