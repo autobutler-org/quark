@@ -10,6 +10,7 @@ import 'package:quark/pages/login_page.dart';
 import 'package:quark/pages/photos_page.dart';
 import 'package:quark/pages/plaintext_editor_page.dart';
 import 'package:quark/pages/recover_page.dart';
+import 'package:quark/pages/request_account_page.dart';
 import 'package:quark/pages/settings_page.dart';
 import 'package:quark/pages/setup_page.dart';
 import 'package:quark/pages/sheets_page.dart';
@@ -60,6 +61,9 @@ class AppRoutes {
   static const setup = '/setup';
   static const login = '/login';
   static const recover = '/recover';
+
+  /// Asking this Quark for an account (#1908). Reachable without a session.
+  static const requestAccount = '/request-account';
   static const terms = '/terms';
   static const plaintextEditor = '/edit';
 
@@ -380,6 +384,10 @@ final router = GoRouter(
       builder: (context, state) =>
           RecoverPage(initialUsername: state.uri.queryParameters['username']),
     ),
+    GoRoute(
+      path: AppRoutes.requestAccount,
+      builder: (context, state) => const RequestAccountPage(),
+    ),
     GoRoute(path: AppRoutes.terms, builder: (context, _) => const TermsPage()),
     GoRoute(
       // Matches /edit/<anything including slashes> — opens the plaintext editor.
@@ -461,7 +469,11 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
   // answer "invalid credentials". Falling through to the probe below is what
   // sends them to /setup instead; activeHostNotifier is in
   // routerRefreshListenable, so switching hosts re-runs this.
-  const publicRoutes = {AppRoutes.setup, AppRoutes.recover};
+  const publicRoutes = {
+    AppRoutes.setup,
+    AppRoutes.recover,
+    AppRoutes.requestAccount,
+  };
   if (publicRoutes.contains(location)) return null;
 
   // Admin-only pages (#1928). [AppSettings.isAdmin] is not persisted and

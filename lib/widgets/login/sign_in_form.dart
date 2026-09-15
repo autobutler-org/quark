@@ -29,6 +29,10 @@ class SignInForm extends StatelessWidget {
   /// rather than conditional on a status call that may never answer (#1827).
   final VoidCallback onSetUpQuark;
 
+  /// Opens the request-account page. Null hides the link: the login page
+  /// passes it only while the Quark says it takes account requests (#1908).
+  final VoidCallback? onRequestAccess;
+
   const SignInForm({
     super.key,
     required this.formKey,
@@ -47,6 +51,7 @@ class SignInForm extends StatelessWidget {
     required this.onSubmit,
     required this.onForgotPassword,
     required this.onSetUpQuark,
+    this.onRequestAccess,
   });
 
   @override
@@ -167,6 +172,14 @@ class SignInForm extends StatelessWidget {
             onPressed: loading ? null : onForgotPassword,
             child: const Text('Forgot password?'),
           ),
+
+          // A second person asks this Quark for an account (#1908).
+          if (onRequestAccess != null)
+            TextButton(
+              key: const ValueKey('sign_in_request_access'),
+              onPressed: loading ? null : onRequestAccess,
+              child: const Text('Need an account? Request one'),
+            ),
 
           // Escape hatch to the setup wizard for an unclaimed Quark (#1827).
           TextButton(
