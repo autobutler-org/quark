@@ -20,7 +20,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
-	"github.com/autobutler-org/quark/pkg/util/favoritesutil"
 	"github.com/autobutler-org/quark/pkg/util/healthutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
@@ -74,13 +73,6 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 			log.Printf("[server] worker error logger stopped: %v", err)
 		}
 	}()
-	if _, err := favoritesutil.EnsureFavoritesAlbum(
-		context.Background(),
-		deps.Database().Queries,
-	); err != nil {
-		log.Printf("[server] warning: could not ensure Favorites album: %v", err)
-	}
-
 	syncWorker := backup.NewSyncWorker(backup.SyncWorkerParams{
 		Bus:         deps.EventBus(),
 		Storage:     deps.StorageService(),

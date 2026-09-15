@@ -11,7 +11,7 @@ import (
 
 // listFavorites godoc
 // @Summary List all favorited photos
-// @Description Returns all photos the user has favorited, newest first.
+// @Description Returns the photos the caller has favorited and can still read, newest first. Every account has its own favorites, admins included.
 // @Tags favorites
 // @Produce json
 // @Success 200 {array} favoriteItemJSON
@@ -27,7 +27,7 @@ func listFavorites(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
-	items, err := deps.Database().Queries.ListFavorites(c.Request.Context())
+	items, err := deps.Database().Queries.ListFavorites(c.Request.Context(), access.Principal().UserID)
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
