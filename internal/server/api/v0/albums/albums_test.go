@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -139,7 +141,7 @@ func TestCreateAndListAlbums(t *testing.T) {
 		t.Errorf("expected 'Vacation', got %q", a.Name)
 	}
 
-	all, err := q.ListAlbums(ctx)
+	all, err := q.ListAlbums(ctx, owner)
 	if err != nil {
 		t.Fatalf("ListAlbums: %v", err)
 	}
@@ -153,10 +155,10 @@ func TestDeleteAlbum(t *testing.T) {
 	ctx := context.Background()
 
 	a, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "ToDelete"})
-	if err := q.DeleteAlbum(ctx, a.ID); err != nil {
+	if err := q.DeleteAlbum(ctx, db.DeleteAlbumParams{ID: a.ID, UserID: owner}); err != nil {
 		t.Fatalf("DeleteAlbum: %v", err)
 	}
-	all, _ := q.ListAlbums(ctx)
+	all, _ := q.ListAlbums(ctx, owner)
 	if len(all) != 0 {
 		t.Errorf("expected 0 albums after delete, got %d", len(all))
 	}
@@ -167,7 +169,7 @@ func TestRenameAlbum(t *testing.T) {
 	ctx := context.Background()
 
 	a, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "Old"})
-	renamed, err := q.RenameAlbum(ctx, db.RenameAlbumParams{Name: "New", ID: a.ID})
+	renamed, err := q.RenameAlbum(ctx, db.RenameAlbumParams{Name: "New", ID: a.ID, UserID: owner})
 	if err != nil {
 		t.Fatalf("RenameAlbum: %v", err)
 	}
@@ -242,7 +244,7 @@ func TestDeleteAlbum_CascadesItems(t *testing.T) {
 	q.AddPhotoToAlbum(ctx, db.AddPhotoToAlbumParams{AlbumID: album.ID, RelPath: "a.jpg"})
 	q.AddPhotoToAlbum(ctx, db.AddPhotoToAlbumParams{AlbumID: album.ID, RelPath: "b.jpg"})
 
-	if err := q.DeleteAlbum(ctx, album.ID); err != nil {
+	if err := q.DeleteAlbum(ctx, db.DeleteAlbumParams{ID: album.ID, UserID: owner}); err != nil {
 		t.Fatalf("DeleteAlbum: %v", err)
 	}
 	items, _ := q.ListAlbumItems(ctx, album.ID)
@@ -276,7 +278,7 @@ func TestListRootAlbums(t *testing.T) {
 		ParentID: sql.NullInt64{Int64: root.ID, Valid: true},
 	})
 
-	roots, err := q.ListRootAlbums(ctx)
+	roots, err := q.ListRootAlbums(ctx, owner)
 	if err != nil {
 		t.Fatalf("ListRootAlbums: %v", err)
 	}
@@ -366,7 +368,7 @@ func TestSystemAlbumGuards(t *testing.T) {
 		})
 	}
 
-	got, err := q.GetAlbum(ctx, fav.ID)
+	got, err := q.GetAlbum(ctx, db.GetAlbumParams{ID: fav.ID, UserID: owner})
 	if err != nil {
 		t.Fatalf("Favorites album is gone: %v", err)
 	}
@@ -376,7 +378,7 @@ func TestSystemAlbumGuards(t *testing.T) {
 	if n, _ := q.CountAlbumItems(ctx, fav.ID); n != 1 {
 		t.Errorf("Favorites items = %d, want 1", n)
 	}
-	if u, _ := q.GetAlbum(ctx, user.ID); u.ParentID.Valid {
+	if u, _ := q.GetAlbum(ctx, db.GetAlbumParams{ID: user.ID, UserID: owner}); u.ParentID.Valid {
 		t.Errorf("user album was moved under Favorites")
 	}
 	children, _ := q.ListChildAlbums(ctx, sql.NullInt64{Int64: fav.ID, Valid: true})
@@ -462,10 +464,119 @@ func TestAlbumNameRules(t *testing.T) {
 		})
 	}
 
-	if got, _ := q.GetAlbum(ctx, japan.ID); got.Name != "JAPAN" {
+	if got, _ := q.GetAlbum(ctx, db.GetAlbumParams{ID: japan.ID, UserID: owner}); got.Name != "JAPAN" {
 		t.Errorf("case-only rename did not apply: %q", got.Name)
 	}
-	if got, _ := q.GetAlbum(ctx, rootJapan.ID); got.ParentID.Valid {
+	if got, _ := q.GetAlbum(ctx, db.GetAlbumParams{ID: rootJapan.ID, UserID: owner}); got.ParentID.Valid {
 		t.Errorf("clashing move applied: %+v", got)
+	}
+}
+
+// --- Albums per account (HTTP) ---
+
+// TestAlbums_PerUser checks albums belong to one account (#1912): two admins
+// each own a root Trips and see only their own albums, and one gets 404 for
+// every route on the other's album id and 400 for the other's album as a
+// parent.
+func TestAlbums_PerUser(t *testing.T) {
+	database := dbtest.NewDB(t)
+	q := database.Queries
+	ctx := context.Background()
+	ids := map[string]int64{}
+	for _, name := range []string{"ann", "ben"} {
+		user, err := q.CreateUser(ctx, db.CreateUserParams{Username: name, PasswordHash: "h", RecoveryPhraseHash: "r"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[name] = user.ID
+	}
+	deps := deputil.NewDependencies().WithDatabase(database)
+	principal := accessutil.Principal{}
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", principal)
+		c.Next()
+	})
+	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), NewRouter())
+
+	as := func(name string) { principal = accessutil.Principal{UserID: ids[name], IsAdmin: true} }
+	create := func(body string) AlbumJSON {
+		t.Helper()
+		w := doAlbumReq(engine, http.MethodPost, "/api/v0/albums", body)
+		var album AlbumJSON
+		if err := json.Unmarshal(w.Body.Bytes(), &album); w.Code != http.StatusCreated || err != nil {
+			t.Fatalf("create %s = %d %s: %v", body, w.Code, w.Body.String(), err)
+		}
+		return album
+	}
+	names := func() []string {
+		t.Helper()
+		w := doAlbumReq(engine, http.MethodGet, "/api/v0/albums", "")
+		var albums []AlbumJSON
+		if err := json.Unmarshal(w.Body.Bytes(), &albums); w.Code != http.StatusOK || err != nil {
+			t.Fatalf("list = %d %s: %v", w.Code, w.Body.String(), err)
+		}
+		got := []string{}
+		for _, a := range albums {
+			got = append(got, a.Name)
+		}
+		slices.Sort(got)
+		return got
+	}
+
+	as("ann")
+	annTrips := create(`{"name":"Trips"}`)
+	annJapan := create(fmt.Sprintf(`{"name":"Japan","parentId":%d}`, annTrips.ID))
+	if _, err := q.AddPhotoToAlbum(ctx, db.AddPhotoToAlbumParams{AlbumID: annTrips.ID, RelPath: "a.jpg"}); err != nil {
+		t.Fatal(err)
+	}
+	as("ben")
+	benTrips := create(`{"name":"trips"}`)
+	if got, want := names(), []string{"Favorites", "trips"}; !slices.Equal(got, want) {
+		t.Errorf("ben's albums = %v, want %v", got, want)
+	}
+
+	annPath := fmt.Sprintf("/api/v0/albums/%d", annTrips.ID)
+	photo := `{"deviceSerial":"","relPath":"a.jpg"}`
+	cases := []struct {
+		name, method, path, body string
+		want                     int
+	}{
+		{"get", http.MethodGet, annPath, "", http.StatusNotFound},
+		{"rename", http.MethodPatch, annPath + "/rename", `{"name":"Mine"}`, http.StatusNotFound},
+		{"move", http.MethodPatch, annPath + "/move", `{"parentId":null}`, http.StatusNotFound},
+		{"delete", http.MethodDelete, annPath, "", http.StatusNotFound},
+		{"list items", http.MethodGet, annPath + "/items", "", http.StatusNotFound},
+		{"add item", http.MethodPost, annPath + "/items", photo, http.StatusNotFound},
+		{"remove item", http.MethodDelete, annPath + "/items", photo, http.StatusNotFound},
+		{"create under", http.MethodPost, "/api/v0/albums", fmt.Sprintf(`{"name":"Child","parentId":%d}`, annTrips.ID), http.StatusBadRequest},
+		{"move under", http.MethodPatch, fmt.Sprintf("/api/v0/albums/%d/move", benTrips.ID), fmt.Sprintf(`{"parentId":%d}`, annTrips.ID), http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := doAlbumReq(engine, tc.method, tc.path, tc.body)
+			if w.Code != tc.want {
+				t.Fatalf("%s %s = %d, want %d: %s", tc.method, tc.path, w.Code, tc.want, w.Body.String())
+			}
+			if tc.want == http.StatusBadRequest && !strings.Contains(w.Body.String(), "parent album not found") {
+				t.Errorf("%s %s error = %s, want parent album not found", tc.method, tc.path, w.Body.String())
+			}
+		})
+	}
+
+	as("ann")
+	if got, want := names(), []string{"Favorites", "Japan", "Trips"}; !slices.Equal(got, want) {
+		t.Errorf("ann's albums = %v, want %v", got, want)
+	}
+	if got, err := q.GetAlbum(ctx, db.GetAlbumParams{ID: annJapan.ID, UserID: ids["ann"]}); err != nil || got.ParentID.Int64 != annTrips.ID {
+		t.Errorf("ann's Japan = %+v, %v; want it still under Trips", got, err)
+	}
+	if n, _ := q.CountAlbumItems(ctx, annTrips.ID); n != 1 {
+		t.Errorf("ann's Trips holds %d items, want 1", n)
+	}
+	if got, err := q.GetAlbum(ctx, db.GetAlbumParams{ID: benTrips.ID, UserID: ids["ben"]}); err != nil || got.ParentID.Valid {
+		t.Errorf("ben's trips = %+v, %v; want it still at the root", got, err)
 	}
 }
