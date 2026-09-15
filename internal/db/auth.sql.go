@@ -273,6 +273,40 @@ func (q *Queries) ListActiveSessionsForUser(ctx context.Context, userID int64) (
 	return items, nil
 }
 
+const listActiveUsers = `-- name: ListActiveUsers :many
+SELECT id, username FROM users WHERE status = 'active' ORDER BY username
+`
+
+type ListActiveUsersRow struct {
+	ID       int64
+	Username string
+}
+
+// ListActiveUsers lists the accounts a file or folder can be shared with
+// (#1911): active ones only, and nothing about them beyond their names.
+func (q *Queries) ListActiveUsers(ctx context.Context) ([]ListActiveUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveUsersRow
+	for rows.Next() {
+		var i ListActiveUsersRow
+		if err := rows.Scan(&i.ID, &i.Username); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const renewSession = `-- name: RenewSession :exec
 UPDATE sessions
 SET expires_at = ?, last_used_at = ?

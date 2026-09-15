@@ -134,6 +134,8 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 		{http.MethodGet, "/api/v0/version/available"},
 		{http.MethodGet, "/api/v0/devices"},
 		{http.MethodGet, "/api/v0/storage/devices/status"},
+		// Anyone who can share needs to know who they can share with.
+		{http.MethodGet, "/api/v0/access/principals"},
 		// Account-only deletion stays self-service; the wrong confirm keeps the
 		// member's account in place.
 		{http.MethodDelete, "/api/v0/auth/account?account=true&confirm=nobody"},
