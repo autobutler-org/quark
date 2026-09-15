@@ -575,30 +575,43 @@ func TestListPossibleUpdates_FilteredToEmpty_ReturnsEmptySliceNotNil(t *testing.
 
 // --- verifyChecksumOf / fetchURL ---
 
-func TestVerifyChecksum_Match(t *testing.T) {
+// serveChecksums serves body as a release checksums file.
+func serveChecksums(t *testing.T, body string) string {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, body)
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/quark_1.0.0_checksums.txt"
+}
+
+func TestChecksumsFileName(t *testing.T) {
+	for _, version := range []string{"v0.38.0", "0.38.0"} {
+		if got := checksumsFileName(version); got != "quark_0.38.0_checksums.txt" {
+			t.Errorf("checksumsFileName(%q) = %q, want the name GoReleaser publishes", version, got)
+		}
+	}
+}
+
+// The shape GoReleaser publishes: one sha256sum(1) line per archive. The entry
+// for this archive must be picked out, not whichever line comes first.
+func TestVerifyChecksum_MatchesTheArchiveEntry(t *testing.T) {
 	data := []byte("hello, quark")
 	sum := sha256.Sum256(data)
-	hexSum := hex.EncodeToString(sum[:])
+	url := serveChecksums(t, fmt.Sprintf(
+		"%s  quark_Linux_x86_64.tar.gz\n%s  quark_Linux_arm64.tar.gz\n",
+		strings.Repeat("0", 64), hex.EncodeToString(sum[:]),
+	))
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, hexSum)
-	}))
-	defer server.Close()
-
-	if err := verifyChecksumOf(sha256Of(data), server.URL+"/checksum"); err != nil {
+	if err := verifyChecksumOf(sha256Of(data), url, "quark_Linux_arm64.tar.gz"); err != nil {
 		t.Errorf("expected no error for matching checksum, got %v", err)
 	}
 }
 
 func TestVerifyChecksum_Mismatch(t *testing.T) {
-	data := []byte("hello, quark")
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Return a completely wrong checksum.
-		fmt.Fprint(w, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
-	}))
-	defer server.Close()
+	url := serveChecksums(t, strings.Repeat("de", 32)+"  quark_Linux_arm64.tar.gz\n")
 
-	err := verifyChecksumOf(sha256Of(data), server.URL+"/checksum")
+	err := verifyChecksumOf(sha256Of([]byte("hello, quark")), url, "quark_Linux_arm64.tar.gz")
 	if err == nil {
 		t.Error("expected error for mismatched checksum")
 	}
@@ -607,59 +620,72 @@ func TestVerifyChecksum_Mismatch(t *testing.T) {
 	}
 }
 
-func TestVerifyChecksum_Sha256sumFormat(t *testing.T) {
-	// sha256sum(1) format: "<hex>  <filename>"
-	data := []byte("sha256sum format test")
+// A file that verifies some other archive verifies nothing about this one.
+func TestVerifyChecksum_MissingEntryFails(t *testing.T) {
+	data := []byte("data")
 	sum := sha256.Sum256(data)
-	hexSum := hex.EncodeToString(sum[:])
+	url := serveChecksums(t, hex.EncodeToString(sum[:])+"  quark_Linux_x86_64.tar.gz\n")
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "%s  quark-linux-arm64.tar.gz\n", hexSum)
-	}))
-	defer server.Close()
-
-	if err := verifyChecksumOf(sha256Of(data), server.URL+"/checksum"); err != nil {
-		t.Errorf("expected no error for sha256sum-format checksum, got %v", err)
+	if err := verifyChecksumOf(sha256Of(data), url, "quark_Linux_arm64.tar.gz"); err == nil {
+		t.Error("expected error when the checksums file has no entry for the archive")
 	}
 }
 
 func TestVerifyChecksum_Unavailable(t *testing.T) {
-	data := []byte("data")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer server.Close()
 
-	err := verifyChecksumOf(sha256Of(data), server.URL+"/checksum.sha256")
+	err := verifyChecksumOf(sha256Of([]byte("data")), server.URL+"/quark_1.0.0_checksums.txt", "quark_Linux_arm64.tar.gz")
 	if !errors.Is(err, errChecksumUnavailable) {
 		t.Errorf("expected errChecksumUnavailable for 404, got %v", err)
 	}
 }
 
 func TestVerifyChecksum_EmptyFile(t *testing.T) {
-	data := []byte("data")
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		// Empty body
-	}))
-	defer server.Close()
-
-	err := verifyChecksumOf(sha256Of(data), server.URL+"/checksum")
-	if err == nil {
+	url := serveChecksums(t, "")
+	if err := verifyChecksumOf(sha256Of([]byte("data")), url, "quark_Linux_arm64.tar.gz"); err == nil {
 		t.Error("expected error for empty checksum file")
 	}
 }
 
 func TestVerifyChecksum_InvalidHex(t *testing.T) {
-	data := []byte("data")
+	url := serveChecksums(t, "not-a-hex-string  quark_Linux_arm64.tar.gz\n")
+	if err := verifyChecksumOf(sha256Of([]byte("data")), url, "quark_Linux_arm64.tar.gz"); err == nil {
+		t.Error("expected error for invalid hex checksum")
+	}
+}
+
+// The update used to warn and install anyway when its checksum was missing,
+// and it looked for a .sha256 file no release publishes, so every update
+// skipped verification. It must now ask for the release's checksums file and
+// stop when that is not there.
+func TestUpdate_FailsClosedWithoutChecksumsFile(t *testing.T) {
+	archiveName := ConstructArchiveName()
+	var checksumsRequested bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "not-a-hex-string")
+		switch r.URL.Path {
+		case "/v1.0.0/" + archiveName:
+			fmt.Fprint(w, "not really an archive")
+		case "/v1.0.0/quark_1.0.0_checksums.txt":
+			checksumsRequested = true
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
 	}))
 	defer server.Close()
 
-	err := verifyChecksumOf(sha256Of(data), server.URL+"/checksum")
-	if err == nil {
-		t.Error("expected error for invalid hex checksum")
+	source := NewUpdateSource(UpdateSourceKindGithub, "autobutler-org", "quark")
+	source.BaseURLOverride = server.URL
+
+	err := Update(source, "v1.0.0")
+	if !checksumsRequested {
+		t.Error("Update did not request the release's checksums file")
+	}
+	if !errors.Is(err, errChecksumUnavailable) {
+		t.Errorf("expected the update to stop on the missing checksums file, got %v", err)
 	}
 }
 
