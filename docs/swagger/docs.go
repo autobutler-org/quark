@@ -1085,7 +1085,7 @@ const docTemplate = `{
         },
         "/albums": {
             "get": {
-                "description": "Returns all photo albums as a flat list. Use ?tree=true to get a nested tree.",
+                "description": "Returns the caller's own photo albums as a flat list, creating their Favorites album on first use. Admins see only their own albums too. Use ?tree=true to get a nested tree.",
                 "produces": [
                     "application/json"
                 ],
@@ -1120,7 +1120,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Creates a new photo album, optionally nested under a parent. The name cannot contain / and must be unique among its siblings ignoring case; root albums, the system Favorites album included, are siblings of each other.",
+                "description": "Creates a photo album owned by the caller, optionally nested under one of the caller's albums. The name cannot contain / and must be unique among its siblings ignoring case; the caller's root albums, their Favorites album included, are siblings of each other.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1150,7 +1150,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request: missing name, a / in the name, or parent not found",
+                        "description": "Bad Request: missing name, a / in the name, or parent not found among the caller's albums",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1178,7 +1178,7 @@ const docTemplate = `{
         },
         "/albums/{id}": {
             "get": {
-                "description": "Returns a single album with its item count and direct children.",
+                "description": "Returns one of the caller's albums with its item count and direct children.",
                 "produces": [
                     "application/json"
                 ],
@@ -1209,7 +1209,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Not Found: no album of the caller's has that id",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1223,7 +1223,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Deletes an album and all its children (cascades). Does not delete photos from disk.",
+                "description": "Deletes one of the caller's albums and all its children (cascades). Does not delete photos from disk.",
                 "produces": [
                     "application/json"
                 ],
@@ -1259,6 +1259,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "404": {
+                        "description": "Not Found: no album of the caller's has that id",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -1270,7 +1276,7 @@ const docTemplate = `{
         },
         "/albums/{id}/items": {
             "get": {
-                "description": "Returns all photo items (pointers) in the given album.",
+                "description": "Returns the photo items (pointers) the caller can read in one of the caller's albums.",
                 "produces": [
                     "application/json"
                 ],
@@ -1299,6 +1305,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found: no album of the caller's has that id",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1423,6 +1435,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "404": {
+                        "description": "Not Found: no album of the caller's has that id",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -1434,7 +1452,7 @@ const docTemplate = `{
         },
         "/albums/{id}/move": {
             "patch": {
-                "description": "Changes the parent of an album. Pass null parentId to move to root. The new parent must not already hold an album with the same name ignoring case; root albums, the system Favorites album included, are siblings of each other.",
+                "description": "Changes the parent of one of the caller's albums. Pass null parentId to move to root. The new parent must be the caller's own and must not already hold an album with the same name ignoring case; the caller's root albums, their Favorites album included, are siblings of each other.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1471,7 +1489,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad Request: invalid id or body, or parent not found among the caller's albums",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1483,7 +1501,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Not Found: no album of the caller's has that id",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1505,7 +1523,7 @@ const docTemplate = `{
         },
         "/albums/{id}/rename": {
             "patch": {
-                "description": "Updates the name of an existing album. The name cannot contain / and must be unique among the album's siblings ignoring case; changing only the case of the album's own name is allowed.",
+                "description": "Updates the name of one of the caller's albums. The name cannot contain / and must be unique among the album's siblings ignoring case; changing only the case of the album's own name is allowed.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1554,7 +1572,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Not Found: no album of the caller's has that id",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

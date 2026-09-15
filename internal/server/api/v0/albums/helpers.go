@@ -9,8 +9,10 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/albumutil"
+	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/sqlutil"
+	"github.com/gin-gonic/gin"
 )
 
 // albumWriteError maps an albumutil create, rename or move error onto its
@@ -73,12 +75,23 @@ func forbidSystemAlbum(album db.PhotoAlbum) *serverutil.Response {
 	return serverutil.NewResponse().WithStatusCode(http.StatusForbidden).WithError(errSystemAlbum)
 }
 
-// rejectSystemAlbum loads the album and applies forbidSystemAlbum. A missing
-// album passes, so each handler keeps the not-found answer it already gave.
-func rejectSystemAlbum(ctx context.Context, q *db.Queries, id int64) *serverutil.Response {
-	album, err := q.GetAlbum(ctx, id)
+// errAlbumNotFound is what a caller hears about an album that does not exist
+// or belongs to another account (#1912).
+var errAlbumNotFound = errors.New("album not found")
+
+// callerID is the user id of the account the request acts as. Albums belong
+// to it, admins included.
+func callerID(c *gin.Context) int64 {
+	principal, _ := ctxutil.Get[accessutil.Principal](c, "principal")
+	return principal.UserID
+}
+
+// rejectSystemAlbum loads the caller's album and applies forbidSystemAlbum. A
+// missing album, or another account's, answers 404.
+func rejectSystemAlbum(ctx context.Context, q *db.Queries, userID, id int64) *serverutil.Response {
+	album, err := q.GetAlbum(ctx, db.GetAlbumParams{ID: id, UserID: userID})
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil
+		return serverutil.NotFound(errAlbumNotFound)
 	}
 	if err != nil {
 		return serverutil.InternalServerError(err)

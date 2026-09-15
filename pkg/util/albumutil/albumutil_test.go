@@ -103,7 +103,7 @@ func TestRenameAlbum(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := albumutil.RenameAlbum(ctx, albumutil.RenameAlbumParams{Queries: q, ID: tt.id, Name: tt.album})
+			_, err := albumutil.RenameAlbum(ctx, albumutil.RenameAlbumParams{Queries: q, UserID: owner, ID: tt.id, Name: tt.album})
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("RenameAlbum(%d, %q) error = %v, want %v", tt.id, tt.album, err, tt.want)
 			}
@@ -135,10 +135,30 @@ func TestMoveAlbum(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := albumutil.MoveAlbum(ctx, albumutil.MoveAlbumParams{Queries: q, ID: tt.id, ParentID: tt.parent})
+			_, err := albumutil.MoveAlbum(ctx, albumutil.MoveAlbumParams{Queries: q, UserID: owner, ID: tt.id, ParentID: tt.parent})
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("MoveAlbum(%d) error = %v, want %v", tt.id, err, tt.want)
 			}
 		})
+	}
+}
+
+// TestAlbumsPerAccount checks two accounts each name their own root albums and
+// cannot reach each other's albums by id (#1912).
+func TestAlbumsPerAccount(t *testing.T) {
+	q, owner := newOwnedQueries(t)
+	ctx := context.Background()
+	other, err := q.CreateUser(ctx, db.CreateUserParams{Username: "other", PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine := create(t, q, owner, "Trips", sql.NullInt64{})
+	create(t, q, other.ID, "trips", sql.NullInt64{})
+
+	if _, err := albumutil.RenameAlbum(ctx, albumutil.RenameAlbumParams{Queries: q, UserID: other.ID, ID: mine.ID, Name: "Mine"}); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("renaming another account's album: error = %v, want sql.ErrNoRows", err)
+	}
+	if _, err := albumutil.MoveAlbum(ctx, albumutil.MoveAlbumParams{Queries: q, UserID: other.ID, ID: mine.ID}); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("moving another account's album: error = %v, want sql.ErrNoRows", err)
 	}
 }

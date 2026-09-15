@@ -15,7 +15,7 @@ import (
 
 // listAlbums godoc
 // @Summary List all photo albums
-// @Description Returns all photo albums as a flat list. Use ?tree=true to get a nested tree.
+// @Description Returns the caller's own photo albums as a flat list, creating their Favorites album on first use. Admins see only their own albums too. Use ?tree=true to get a nested tree.
 // @Tags albums
 // @Produce json
 // @Param tree query bool false "Return as nested tree (default false)"
@@ -37,7 +37,7 @@ func listAlbums(c *gin.Context) *serverutil.Response {
 	if _, err := favoritesutil.EnsureFavoritesAlbum(c.Request.Context(), deps.Database().Queries, access.Principal().UserID); err != nil {
 		_ = c.Error(err)
 	}
-	albums, err := deps.Database().Queries.ListAlbums(context.Background())
+	albums, err := deps.Database().Queries.ListAlbums(context.Background(), access.Principal().UserID)
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
