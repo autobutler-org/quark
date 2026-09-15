@@ -12,6 +12,7 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 
 	// Registers the "sqlite" driver these connections use.
 	_ "modernc.org/sqlite"
@@ -36,7 +37,16 @@ func NewDB(t *testing.T) *db.DatabaseSqlc {
 	if err != nil {
 		t.Fatalf("dbtest: open database: %v", err)
 	}
-	t.Cleanup(func() { sqlDB.Close() })
+	// Close does not wait for a connection still in use, such as a goroutine the
+	// code under test started and did not join. Wait for it here, or it writes
+	// the journal while t.TempDir's cleanup is removing the directory.
+	t.Cleanup(func() {
+		sqlDB.Close()
+		deadline := time.Now().Add(10 * time.Second)
+		for sqlDB.Stats().OpenConnections > 0 && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+	})
 
 	database := &db.DatabaseSqlc{Db: sqlDB, Queries: db.New(sqlDB)}
 	// The file is empty, so the drop half is a no-op and this is just "run
