@@ -46,9 +46,12 @@ class _TrashPageState extends State<TrashPage>
     super.initState();
     _controller.addListener(_followController);
     EventsService.instance.start();
-    // Every trash mutation, from any client, and the hourly purge.
+    // Every trash mutation, from any client, and the hourly purge; and a
+    // sharing change, which decides which trashed items this account sees.
     _eventSub = EventsService.instance.events.listen((evt) {
-      if (evt.kind == 'trash_changed') manualRefresh();
+      if (evt.kind == 'trash_changed' || evt.kind == 'access_changed') {
+        manualRefresh();
+      }
     });
   }
 
