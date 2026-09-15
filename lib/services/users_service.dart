@@ -3,11 +3,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:quark/models/user_account.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 
-/// The account routes an admin uses, under `/api/v0/admin`. The Quark answers
-/// anyone else with 403.
+/// The account routes an admin uses, under `/api/v0/admin`, and the
+/// access-requests setting. The Quark answers anyone else with 403.
 ///
 /// A refusal the Quark explains in its own words, such as "no account has
 /// that username", goes through [throwApiError], which passes that text on.
@@ -45,6 +46,40 @@ class UsersService with AuthenticatedService {
       _accountUri('/api/v0/admin/demote', username),
     );
     _check(response, 'demote $username', lastAdminGuard: true);
+  }
+
+  /// Approves the pending request from [username], who can then sign in.
+  static Future<void> approve(String username) async {
+    final response = await instance.authenticatedPut(
+      _accountUri('/api/v0/admin/approve', username),
+    );
+    _check(response, 'approve $username');
+  }
+
+  /// Denies the pending request from [username]. The username is free again.
+  static Future<void> deny(String username) async {
+    final response = await instance.authenticatedPut(
+      _accountUri('/api/v0/admin/deny', username),
+    );
+    _check(response, 'deny $username');
+  }
+
+  /// Whether the Quark's sign-in page offers to request an account, as
+  /// `GET /auth/status` reports it.
+  static Future<bool> accessRequestsEnabled() async =>
+      (await AuthService.checkStatus()).accessRequestsEnabled;
+
+  /// Turns account requests on or off, and returns the setting the Quark
+  /// saved.
+  static Future<bool> setAccessRequestsEnabled(bool enabled) async {
+    final response = await instance.authenticatedPut(
+      apiBaseUri.resolve('/api/v0/settings/access-requests'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'enabled': enabled}),
+    );
+    _check(response, 'set access requests');
+    final body = jsonDecode(response.body);
+    return body is Map ? body['enabled'] as bool? ?? enabled : enabled;
   }
 
   /// [path] with [username] as its last segment, encoded.

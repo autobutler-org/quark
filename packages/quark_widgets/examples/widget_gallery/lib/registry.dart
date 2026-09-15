@@ -732,6 +732,27 @@ final List<GalleryEntry> registry = [
       onDemote: (username) => log('UserList.onDemote($username)'),
     ),
   ),
+  GalleryEntry(
+    name: 'PendingRequestList',
+    group: 'Users',
+    build: (context, log) => PendingRequestList(
+      requests: const [
+        UserAccountItem(username: 'dee', status: UserAccountStatus.pending),
+        UserAccountItem(username: 'eli', status: UserAccountStatus.pending),
+      ],
+      busyUsernames: const {'eli'},
+      onApprove: (username) => log('PendingRequestList.onApprove($username)'),
+      onDeny: (username) => log('PendingRequestList.onDeny($username)'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'AccessRequestsTile',
+    group: 'Users',
+    build: (context, log) => AccessRequestsTile(
+      enabled: true,
+      onChanged: (enabled) => log('AccessRequestsTile.onChanged($enabled)'),
+    ),
+  ),
 
   // ── Video─────────────────────────────────────────────────────────────────
   GalleryEntry(

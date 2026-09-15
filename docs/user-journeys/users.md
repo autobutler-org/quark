@@ -101,3 +101,58 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 - The Quark enforces the same rule: removing the last active admin is refused with 409, which the app shows as "This
   Quark needs at least one admin. Make someone else an admin first."
+
+---
+
+### JN-USR-008: Approve an account request
+
+**Preconditions:** Someone has requested an account (JN-AUTH-009).
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. In **Requests**, find the requested username.
+3. Tap **Approve**.
+
+**Expected result:**
+
+- The request leaves **Requests** and the account appears in **Accounts**.
+- The requester can sign in (JN-AUTH-011).
+
+**Notes:**
+
+- The list refreshes on its own when a new request arrives, on any client.
+
+---
+
+### JN-USR-009: Deny an account request
+
+**Preconditions:** Someone has requested an account (JN-AUTH-009).
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. In **Requests**, find the requested username.
+3. Tap **Deny**.
+
+**Expected result:**
+
+- The request leaves **Requests** and no account is created.
+- The username is free again at once: a new request or an admin-created account can take it.
+
+---
+
+### JN-USR-010: Turn account requests off
+
+**Preconditions:** Account requests are on (the default).
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. Turn off **Allow account requests**.
+
+**Expected result:**
+
+- The switch stays off after a refresh.
+- The sign-in page no longer offers to request an account (JN-AUTH-012).
+- Requests already waiting stay in **Requests** and can still be approved or denied.
