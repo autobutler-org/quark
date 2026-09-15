@@ -83,6 +83,7 @@ func TestListPhotos_VFS_ListsImagesOnly(t *testing.T) {
 	result, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
 		Ctx:    context.Background(),
 		FS:     mem,
+		Access: systemAccess(t),
 		Offset: 0,
 		Limit:  50,
 	})
@@ -103,7 +104,7 @@ func TestListPhotos_VFS_Paginates(t *testing.T) {
 	mem := newPhotoMemVFS(t, "a.jpg", "b.jpg", "c.jpg")
 
 	page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
-		Ctx: context.Background(), FS: mem, Offset: 1, Limit: 1,
+		Ctx: context.Background(), FS: mem, Access: systemAccess(t), Offset: 1, Limit: 1,
 	})
 	if err != nil {
 		t.Fatalf("ListPhotos: %v", err)
@@ -118,7 +119,7 @@ func TestListPhotos_VFS_OffsetBeyondTotal(t *testing.T) {
 	mem := newPhotoMemVFS(t, "a.jpg")
 
 	page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
-		Ctx: context.Background(), FS: mem, Offset: 99, Limit: 50,
+		Ctx: context.Background(), FS: mem, Access: systemAccess(t), Offset: 99, Limit: 50,
 	})
 	if err != nil {
 		t.Fatalf("ListPhotos: %v", err)

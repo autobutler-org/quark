@@ -1,6 +1,7 @@
 package v0_photos
 
 import (
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
@@ -36,6 +37,10 @@ func listPhotos(c *gin.Context) *serverutil.Response {
 	}
 
 	offset, limit := photoutil.ParsePagination(c.Query("offset"), c.Query("limit"))
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 
 	// VFS path when the registry has the files namespace, walking the managed
 	// devices otherwise.
@@ -51,6 +56,7 @@ func listPhotos(c *gin.Context) *serverutil.Response {
 		FS:      fsys,
 		Storage: deps.StorageService(),
 		Serial:  c.Query("serial"),
+		Access:  access,
 		Offset:  offset,
 		Limit:   limit,
 	})
