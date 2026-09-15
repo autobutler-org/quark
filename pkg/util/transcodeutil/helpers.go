@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/videoutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -141,6 +145,9 @@ func (h handler) run(ctx context.Context, raw json.RawMessage, report func(float
 	if err != nil {
 		return err
 	}
+	if _, err := h.checkCreator(ctx, p, src); err != nil {
+		return err
+	}
 
 	ext := "." + string(p.Format)
 	staging, err := prepareStaging(src.filesDir)
@@ -170,9 +177,30 @@ func (h handler) run(ctx context.Context, raw json.RawMessage, report func(float
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	// Hours may have passed since the job started, so the creator is checked
+	// again before anything lands in the files tree.
+	creator, err := h.checkCreator(ctx, p, src)
+	if err != nil {
+		return err
+	}
 	final, err := moveIntoPlace(ctx, src, staged, ext)
 	if err != nil {
 		return err
+	}
+	output := relPath(src.filesDir, final)
+
+	// The creator owns the output, as they would a file they uploaded (#1904).
+	// It has already landed, so a failure is logged rather than failing the
+	// job: the creator still reaches it through the write access that let it
+	// land.
+	if _, err := accessutil.GrantOwnerIfNeeded(accessutil.GrantOwnerIfNeededParams{
+		Ctx:          context.WithoutCancel(ctx),
+		Database:     h.database,
+		Access:       creator,
+		DeviceSerial: p.Serial,
+		Path:         output,
+	}); err != nil {
+		slog.Error("access: could not record the owner of a converted video", "path", output, "serial", p.Serial, "err", err)
 	}
 
 	// The event a restored or uploaded file publishes, so open file browsers,
@@ -180,11 +208,32 @@ func (h handler) run(ctx context.Context, raw json.RawMessage, report func(float
 	if h.bus != nil {
 		h.bus.Publish(eventbus.Event{
 			Kind:         eventbus.EventUpload,
-			Path:         relPath(src.filesDir, final),
+			Path:         output,
 			DeviceSerial: p.Serial,
 		})
 	}
 	return nil
+}
+
+// checkCreator loads the access of the account that queued the job, as it
+// stands now, and requires read on the source and write on its folder
+// (#1979). A job with no creator runs as the system.
+func (h handler) checkCreator(ctx context.Context, p Params, src source) (accessutil.Access, error) {
+	result, err := accessutil.LoadCreator(accessutil.LoadCreatorParams{
+		Ctx:      ctx,
+		Database: h.database,
+		Storage:  h.storage,
+		UserID:   jobutil.UserID(ctx),
+	})
+	if err != nil {
+		return accessutil.Access{}, err
+	}
+	creator := result.Access
+	if !creator.Check(p.Serial, src.relPath, accessutil.Read).Readable ||
+		!creator.Check(p.Serial, path.Dir(accessutil.Canonical(src.relPath)), accessutil.Write).Allowed {
+		return accessutil.Access{}, ErrCreatorForbidden
+	}
+	return creator, nil
 }
 
 // prepareStaging returns the staging directory for the device whose files dir
