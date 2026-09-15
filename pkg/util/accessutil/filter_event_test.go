@@ -55,6 +55,10 @@ func TestFilterEvent(t *testing.T) {
 			event: eventbus.Event{Kind: eventbus.EventAccessChanged, Path: "shared"},
 		},
 		{
+			name: "access changed with no path", access: stranger, previous: stranger,
+			event: eventbus.Event{Kind: eventbus.EventAccessChanged},
+		},
+		{
 			name: "access changed elsewhere", access: after, previous: before,
 			event: eventbus.Event{Kind: eventbus.EventAccessChanged, Path: "private"}, want: &eventbus.Event{},
 		},

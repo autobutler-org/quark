@@ -9,6 +9,7 @@ import (
 	"errors"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/sqlutil"
 )
 
@@ -24,6 +25,8 @@ var (
 	ErrInvalidGroupName = errors.New("a group name has 1 to 64 characters and no line breaks or tabs")
 	// ErrBuiltinGroup reports a change to the everyone group.
 	ErrBuiltinGroup = errors.New("the everyone group always includes every account")
+	// ErrNotMember reports removing an account that is not in the group.
+	ErrNotMember = errors.New("that account isn't in this group")
 )
 
 // Member is an account in a group.
@@ -159,4 +162,65 @@ func DeleteGroup(ctx context.Context, params DeleteGroupParams) (DeleteGroupResu
 		return DeleteGroupResult{}, ErrGroupNotFound
 	}
 	return DeleteGroupResult{}, nil
+}
+
+// AddMemberParams puts an account in a group.
+type AddMemberParams struct {
+	Database *db.DatabaseSqlc
+	GroupID  int64
+	UserID   int64
+}
+
+// AddMemberResult reports whether the account was not already a member.
+type AddMemberResult struct {
+	Added bool
+}
+
+// AddMember puts an active account in a group. Only an active account can
+// join; a disabled one keeps the memberships it already has. Adding a member
+// again is not an error. For an account that is missing, pending or disabled
+// it returns authutil.ErrUserNotFound.
+func AddMember(ctx context.Context, params AddMemberParams) (AddMemberResult, error) {
+	queries := params.Database.Queries
+	if _, err := changeableGroup(ctx, queries, params.GroupID); err != nil {
+		return AddMemberResult{}, err
+	}
+	user, err := queries.GetUserByID(ctx, params.UserID)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && user.Status != authutil.StatusActive) {
+		return AddMemberResult{}, authutil.ErrUserNotFound
+	}
+	if err != nil {
+		return AddMemberResult{}, err
+	}
+	n, err := queries.AddGroupMember(ctx, db.AddGroupMemberParams{GroupID: params.GroupID, UserID: params.UserID})
+	if err != nil {
+		return AddMemberResult{}, err
+	}
+	return AddMemberResult{Added: n > 0}, nil
+}
+
+// RemoveMemberParams takes an account out of a group.
+type RemoveMemberParams struct {
+	Database *db.DatabaseSqlc
+	GroupID  int64
+	UserID   int64
+}
+
+// RemoveMemberResult is empty: a removal either happens or returns an error.
+type RemoveMemberResult struct{}
+
+// RemoveMember takes an account out of a group, whatever its status.
+func RemoveMember(ctx context.Context, params RemoveMemberParams) (RemoveMemberResult, error) {
+	queries := params.Database.Queries
+	if _, err := changeableGroup(ctx, queries, params.GroupID); err != nil {
+		return RemoveMemberResult{}, err
+	}
+	n, err := queries.RemoveGroupMember(ctx, db.RemoveGroupMemberParams{GroupID: params.GroupID, UserID: params.UserID})
+	if err != nil {
+		return RemoveMemberResult{}, err
+	}
+	if n == 0 {
+		return RemoveMemberResult{}, ErrNotMember
+	}
+	return RemoveMemberResult{}, nil
 }
