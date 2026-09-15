@@ -383,22 +383,38 @@ type UploadFilesStreamedParams struct {
 	Overwrite bool
 }
 
+// UploadedFile is one file an upload wrote.
+type UploadedFile struct {
+	// Path is where the file landed, files-relative, after any file_(1) rename.
+	Path string
+	// Created is false when the upload replaced a file that was already there.
+	Created bool
+}
+
+// UploadFilesStreamedResult lists the files an upload wrote, in the order they
+// arrived. When the upload fails partway it still lists the files that landed
+// before the failure.
+type UploadFilesStreamedResult struct {
+	Written []UploadedFile
+}
+
 // UploadFilesStreamed streams multipart file uploads directly to disk
-func (s *StorageService) UploadFilesStreamed(params UploadFilesStreamedParams) error {
+func (s *StorageService) UploadFilesStreamed(params UploadFilesStreamedParams) (UploadFilesStreamedResult, error) {
 	device, err := s.FindManagedDeviceBySerial(params.DeviceSerial)
 	if err != nil {
-		return fmt.Errorf("device not found: %w", err)
+		return UploadFilesStreamedResult{}, fmt.Errorf("device not found: %w", err)
 	}
 	defaultFilesDir, err := GetFilesDir()
 	if err != nil {
-		return fmt.Errorf("failed to get files directory: %w", err)
+		return UploadFilesStreamedResult{}, fmt.Errorf("failed to get files directory: %w", err)
 	}
 	return UploadFilesStreamedImpl(params, device, defaultFilesDir)
 }
 
 // UploadFilesStreamedImpl streams file uploads using pre-resolved device and files directory.
 // Use this in tests to inject test devices without hitting the real filesystem detector.
-func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDevice, defaultFilesDir string) error {
+func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDevice, defaultFilesDir string) (UploadFilesStreamedResult, error) {
+	var result UploadFilesStreamedResult
 	filesDir := defaultFilesDir
 	if device != nil {
 		filesDir = device.FilesDir
@@ -410,7 +426,7 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 			break
 		}
 		if err != nil {
-			return err
+			return result, err
 		}
 
 		formName := part.FormName()
@@ -421,17 +437,22 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 			destDir, err := safeJoin(filesDir, params.RootDir)
 			if err != nil {
 				part.Close()
-				return fmt.Errorf("invalid upload directory: %w", err)
+				return result, fmt.Errorf("invalid upload directory: %w", err)
 			}
 			if err := os.MkdirAll(destDir, 0755); err != nil {
 				part.Close()
-				return fmt.Errorf("failed to create directory: %w", err)
+				return result, fmt.Errorf("failed to create directory: %w", err)
 			}
 			destPath, err := safeJoin(destDir, fileName)
 			if err != nil {
 				part.Close()
-				return fmt.Errorf("invalid file name: %w", err)
+				return result, fmt.Errorf("invalid file name: %w", err)
 			}
+
+			// Overwriting a file that is already there creates nothing new, so the
+			// caller keeps whatever access rows it had (#1903).
+			_, statErr := os.Stat(destPath)
+			existed := params.Overwrite && statErr == nil
 
 			// Handle file name conflicts.
 			// When Overwrite is true, keep destPath as-is (the atomic rename below
@@ -446,7 +467,7 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 						newDestPath, joinErr := safeJoin(destDir, newFileName)
 						if joinErr != nil {
 							part.Close()
-							return fmt.Errorf("invalid candidate path: %w", joinErr)
+							return result, fmt.Errorf("invalid candidate path: %w", joinErr)
 						}
 						destPath = newDestPath
 						if _, err := os.Stat(destPath); os.IsNotExist(err) {
@@ -468,21 +489,21 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 			tmpBase := filepath.Join(dataDir, "tmp")
 			if err := os.MkdirAll(tmpBase, 0755); err != nil {
 				part.Close()
-				return fmt.Errorf("failed to create tmp directory: %w", err)
+				return result, fmt.Errorf("failed to create tmp directory: %w", err)
 			}
 
 			// Create a temp file and write the uploaded content to it
 			tmpFile, err := os.CreateTemp(tmpBase, "upload-*")
 			if err != nil {
 				part.Close()
-				return fmt.Errorf("failed to create temp file: %w", err)
+				return result, fmt.Errorf("failed to create temp file: %w", err)
 			}
 			tmpPath := tmpFile.Name()
 			if _, err := io.Copy(tmpFile, part); err != nil {
 				tmpFile.Close()
 				os.Remove(tmpPath)
 				part.Close()
-				return fmt.Errorf("failed to write temp file: %w", err)
+				return result, fmt.Errorf("failed to write temp file: %w", err)
 			}
 			tmpFile.Close()
 
@@ -502,7 +523,7 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 				if joinErr != nil {
 					os.Remove(tmpPath)
 					part.Close()
-					return fmt.Errorf("invalid candidate path: %w", joinErr)
+					return result, fmt.Errorf("invalid candidate path: %w", joinErr)
 				}
 
 				if params.Overwrite {
@@ -515,21 +536,21 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 					if rerr != nil {
 						os.Remove(tmpPath)
 						part.Close()
-						return fmt.Errorf("failed to open temp file for fallback copy: %w", rerr)
+						return result, fmt.Errorf("failed to open temp file for fallback copy: %w", rerr)
 					}
 					dst, derr := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 					if derr != nil {
 						tmpR.Close()
 						os.Remove(tmpPath)
 						part.Close()
-						return fmt.Errorf("failed to open destination for overwrite: %w", derr)
+						return result, fmt.Errorf("failed to open destination for overwrite: %w", derr)
 					}
 					if _, cerr := io.Copy(dst, tmpR); cerr != nil {
 						dst.Close()
 						tmpR.Close()
 						os.Remove(tmpPath)
 						part.Close()
-						return fmt.Errorf("failed to copy temp to destination: %w", cerr)
+						return result, fmt.Errorf("failed to copy temp to destination: %w", cerr)
 					}
 					dst.Close()
 					tmpR.Close()
@@ -556,7 +577,7 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 				if rerr != nil {
 					os.Remove(tmpPath)
 					part.Close()
-					return fmt.Errorf("failed to open temp file for fallback copy: %w", rerr)
+					return result, fmt.Errorf("failed to open temp file for fallback copy: %w", rerr)
 				}
 				dst, derr := os.OpenFile(destPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 				if derr == nil {
@@ -566,7 +587,7 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 						tmpR.Close()
 						os.Remove(tmpPath)
 						part.Close()
-						return fmt.Errorf("failed to copy temp to destination: %w", cerr)
+						return result, fmt.Errorf("failed to copy temp to destination: %w", cerr)
 					}
 					dst.Close()
 					tmpR.Close()
@@ -583,14 +604,19 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 				// Unknown error creating destination
 				os.Remove(tmpPath)
 				part.Close()
-				return fmt.Errorf("failed to move uploaded file into place: linkErr=%v createErr=%v", linkErr, derr)
+				return result, fmt.Errorf("failed to move uploaded file into place: linkErr=%v createErr=%v", linkErr, derr)
 			}
 			part.Close()
+			rel, relErr := filepath.Rel(filepath.Clean(filesDir), destPath)
+			if relErr != nil {
+				return result, fmt.Errorf("failed to locate the uploaded file: %w", relErr)
+			}
+			result.Written = append(result.Written, UploadedFile{Path: filepath.ToSlash(rel), Created: !existed})
 		} else {
 			part.Close()
 		}
 	}
-	return nil
+	return result, nil
 }
 
 // StatFileParams contains parameters for stat-ing a file or directory

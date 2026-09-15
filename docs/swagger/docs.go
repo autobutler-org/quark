@@ -1889,7 +1889,7 @@ const docTemplate = `{
         },
         "/files/upload": {
             "post": {
-                "description": "Upload one or more files via multipart/form-data",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -1927,13 +1927,25 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
                     }
                 }
             }
         },
         "/files/upload-session": {
             "post": {
-                "description": "Reserve a session for one file; the bytes follow as chunks on PUT",
+                "description": "Reserve a session for one file; the bytes follow as chunks on PUT. Needs write access on the directory the file lands in. The session belongs to the caller: it is not found for anyone else.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1964,6 +1976,18 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2012,7 +2036,7 @@ const docTemplate = `{
                 }
             },
             "put": {
-                "description": "Append the chunk named by Content-Range; the last one commits the file",
+                "description": "Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A session opened by someone else is not found.",
                 "consumes": [
                     "application/octet-stream"
                 ],
@@ -2102,7 +2126,7 @@ const docTemplate = `{
         },
         "/files/upload/{rootDir}": {
             "post": {
-                "description": "Upload one or more files via multipart/form-data",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -2144,6 +2168,18 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

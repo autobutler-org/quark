@@ -1,7 +1,10 @@
 package uploadutil
 
 import (
+	"context"
+	"errors"
 	"io"
+	"io/fs"
 	"mime/multipart"
 	"path"
 	"path/filepath"
@@ -15,6 +18,10 @@ import (
 // by deputil.DefaultDependencies; absent in older deployments and in tests that
 // exercise the StorageService directly.
 const filesNamespace = "files"
+
+// errNothingWritten reports a storage upload that finished without writing the
+// one file it was given.
+var errNothingWritten = errors.New("uploadutil: the upload wrote no file")
 
 // FilesVFS returns the VFS backing the local namespace, or nil when the write
 // has to go through the StorageService instead: a named device serial routes
@@ -40,11 +47,12 @@ func (d Destination) Writable(serial string) bool {
 // namespace. Parts that are not files under the "files" form name are skipped,
 // and each one is written straight from the wire — the body is never buffered.
 // The caller publishes the upload event once, after the last part lands.
-func WriteMultipartVFS(params WriteMultipartParams) error {
+func WriteMultipartVFS(params WriteMultipartParams) (WriteMultipartResult, error) {
+	var result WriteMultipartResult
 	// Ensure the destination directory exists.
 	if params.RootDir != "" {
 		if err := params.FS.MkdirAll(params.Ctx, params.RootDir); err != nil {
-			return err
+			return result, err
 		}
 	}
 
@@ -66,15 +74,17 @@ func WriteMultipartVFS(params WriteMultipartParams) error {
 		if !params.Overwrite {
 			opts.IfNoneMatch = "*"
 		}
+		created := !params.Overwrite || !vfsExists(params.Ctx, params.FS, destPath)
 
 		if err := params.FS.Write(params.Ctx, destPath, part, opts); err != nil {
 			part.Close()
-			return err
+			return result, err
 		}
 		part.Close()
+		result.Written = append(result.Written, storageutil.UploadedFile{Path: destPath, Created: created})
 	}
 
-	return nil
+	return result, nil
 }
 
 // WriteFile streams one file into the destination and publishes the upload
@@ -83,11 +93,14 @@ func (d Destination) WriteFile(params WriteFileParams) (WriteFileResult, error) 
 	// The client-supplied name never carries structure; rootDir does (#1603).
 	fileName := filepath.Base(params.FileName)
 
+	var written storageutil.UploadedFile
+	var err error
 	if fsys := d.FilesVFS(params.Serial); fsys != nil {
-		if err := d.writeToVFS(fsys, params, fileName); err != nil {
-			return WriteFileResult{}, err
-		}
-	} else if err := d.writeToStorageService(params, fileName); err != nil {
+		written, err = d.writeToVFS(fsys, params, fileName)
+	} else {
+		written, err = d.writeToStorageService(params, fileName)
+	}
+	if err != nil {
 		return WriteFileResult{}, err
 	}
 
@@ -97,13 +110,13 @@ func (d Destination) WriteFile(params WriteFileParams) (WriteFileResult, error) 
 			Path: params.RootDir,
 		})
 	}
-	return WriteFileResult{Path: path.Join(params.RootDir, fileName)}, nil
+	return WriteFileResult{Path: written.Path, Created: written.Created}, nil
 }
 
-func (d Destination) writeToVFS(fsys vfs.VFS, params WriteFileParams, fileName string) error {
+func (d Destination) writeToVFS(fsys vfs.VFS, params WriteFileParams, fileName string) (storageutil.UploadedFile, error) {
 	if params.RootDir != "" {
 		if err := fsys.MkdirAll(params.Ctx, params.RootDir); err != nil {
-			return err
+			return storageutil.UploadedFile{}, err
 		}
 	}
 	opts := vfs.WriteOptions{}
@@ -113,10 +126,14 @@ func (d Destination) writeToVFS(fsys vfs.VFS, params WriteFileParams, fileName s
 		opts.IfNoneMatch = "*"
 	}
 	destPath := path.Join(params.RootDir, fileName)
-	if mover, ok := fsys.(vfs.FileMover); ok && params.SourcePath != "" {
-		return mover.MoveFileIn(params.Ctx, params.SourcePath, destPath, opts)
+	written := storageutil.UploadedFile{
+		Path:    destPath,
+		Created: !params.Overwrite || !vfsExists(params.Ctx, fsys, destPath),
 	}
-	return fsys.Write(params.Ctx, destPath, params.Reader, opts)
+	if mover, ok := fsys.(vfs.FileMover); ok && params.SourcePath != "" {
+		return written, mover.MoveFileIn(params.Ctx, params.SourcePath, destPath, opts)
+	}
+	return written, fsys.Write(params.Ctx, destPath, params.Reader, opts)
 }
 
 // writeToStorageService replays the file through the same multipart-streaming
@@ -124,7 +141,7 @@ func (d Destination) writeToVFS(fsys vfs.VFS, params WriteFileParams, fileName s
 // (file_(1).ext) stay in one implementation instead of being copied here and
 // drifting. The pipe keeps it streaming: only the copy buffer is ever in
 // memory, which matters because this path exists for multi-gigabyte files.
-func (d Destination) writeToStorageService(params WriteFileParams, fileName string) error {
+func (d Destination) writeToStorageService(params WriteFileParams, fileName string) (storageutil.UploadedFile, error) {
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 
@@ -142,10 +159,27 @@ func (d Destination) writeToStorageService(params WriteFileParams, fileName stri
 	}()
 	defer pr.Close()
 
-	return d.Storage.UploadFilesStreamed(storageutil.UploadFilesStreamedParams{
+	result, err := d.Storage.UploadFilesStreamed(storageutil.UploadFilesStreamedParams{
 		Reader:       multipart.NewReader(pr, mw.Boundary()),
 		RootDir:      params.RootDir,
 		DeviceSerial: params.Serial,
 		Overwrite:    params.Overwrite,
 	})
+	if err != nil {
+		return storageutil.UploadedFile{}, err
+	}
+	// The storage service may have renamed the file to file_(1).ext, so the
+	// name it reports is the one the file really landed under.
+	if len(result.Written) == 0 {
+		return storageutil.UploadedFile{}, errNothingWritten
+	}
+	return result.Written[0], nil
+}
+
+// vfsExists reports whether something occupies a path. Only a definite "not
+// found" counts as absent: an upload that cannot tell is treated as replacing
+// a file, which grants nothing, rather than creating one, which would.
+func vfsExists(ctx context.Context, fsys vfs.VFS, p string) bool {
+	_, err := fsys.Stat(ctx, p)
+	return !errors.Is(err, vfs.ErrNotFound) && !errors.Is(err, fs.ErrNotExist)
 }

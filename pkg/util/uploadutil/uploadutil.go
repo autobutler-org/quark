@@ -142,6 +142,8 @@ type WriteFileParams struct {
 // WriteFileResult reports where the file ended up, API-relative.
 type WriteFileResult struct {
 	Path string
+	// Created is false when the write replaced a file that was already there.
+	Created bool
 }
 
 // WriteMultipartParams is a whole multipart body on its way into the
@@ -157,6 +159,13 @@ type WriteMultipartParams struct {
 	RootDir string
 	// Overwrite lets a part replace a file that is already there.
 	Overwrite bool
+}
+
+// WriteMultipartResult lists the files a multipart body wrote, in the order
+// they arrived. When the write fails partway it still lists the files that
+// landed before the failure.
+type WriteMultipartResult struct {
+	Written []storageutil.UploadedFile
 }
 
 // OffsetMismatchError is the resync signal. The client asked to append at a
@@ -228,6 +237,9 @@ type CreateSessionParams struct {
 	TotalSize   int64
 	Serial      string
 	Overwrite   bool
+	// UserID is who opened the session. Every later call on it has to come
+	// from the same user; anyone else is told it does not exist (#1903).
+	UserID int64
 }
 
 // CreateSessionResult is what the client needs to start sending.
@@ -242,6 +254,7 @@ type WriteChunkParams struct {
 	Ctx         context.Context
 	Destination Destination
 	SessionID   string
+	UserID      int64
 	Range       ContentRange
 	// Body carries exactly Range.Length() bytes. Anything else is a 400.
 	Body io.Reader
@@ -254,11 +267,16 @@ type WriteChunkResult struct {
 	Offset    int64
 	Complete  bool
 	Path      string
+	// Serial is the device the finished file went to.
+	Serial string
+	// Created is false when the finished file replaced one already there.
+	Created bool
 }
 
 // DescribeSessionParams asks what a session has committed.
 type DescribeSessionParams struct {
 	SessionID string
+	UserID    int64
 }
 
 // DescribeSessionResult is everything a resuming client needs to pick up where
@@ -275,6 +293,7 @@ type DescribeSessionResult struct {
 // DeleteSessionParams abandons a session.
 type DeleteSessionParams struct {
 	SessionID string
+	UserID    int64
 }
 
 // DeleteSessionResult is empty; the call either found the session or did not.

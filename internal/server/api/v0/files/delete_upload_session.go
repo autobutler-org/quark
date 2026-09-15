@@ -33,6 +33,7 @@ func deleteUploadSession(c *gin.Context) *serverutil.Response {
 
 	if _, err := store.DeleteSession(uploadutil.DeleteSessionParams{
 		SessionID: c.Param(sessionIDParam),
+		UserID:    callerID(c),
 	}); err != nil {
 		return uploadSessionError(c, err)
 	}
