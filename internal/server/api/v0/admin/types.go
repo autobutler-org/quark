@@ -17,7 +17,16 @@ func (r *router) Routes() []*serverutil.Route {
 		disableUserRoute,
 		enableUserRoute,
 		deleteUserRoute,
+		listGroupsRoute,
+		createGroupRoute,
+		renameGroupRoute,
+		deleteGroupRoute,
 	}
+}
+
+// groupNameBody names a group being created or renamed.
+type groupNameBody struct {
+	Name string `json:"name"`
 }
 
 // deleteUserResponse reports how many owned paths the deleting admin inherited.
