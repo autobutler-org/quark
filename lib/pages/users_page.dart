@@ -12,7 +12,8 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The admin-only Users page (#1662): account requests waiting for approval,
-/// every account on the Quark, and whether the Quark takes requests at all.
+/// every account on the Quark, adding an account, and whether the Quark takes
+/// requests at all.
 ///
 /// The router only opens it for an admin, and the Quark refuses its requests
 /// from anyone else.
@@ -61,6 +62,33 @@ class _UsersPageState extends State<UsersPage>
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text(Errors.message(error, failure))));
+  }
+
+  /// Opens the add-account dialog. It rebuilds with the controller, so a
+  /// refusal such as a taken name shows in the open dialog, and it closes
+  /// once the account exists.
+  Future<void> _openCreateDialog() async {
+    _controller.clearCreateError();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => ListenableBuilder(
+        listenable: _controller,
+        builder: (dialogContext, _) {
+          final error = _controller.createError;
+          return CreateUserDialog(
+            isSubmitting: _controller.isCreating,
+            error: error == null ? null : Errors.message(error, 'add the user'),
+            onCancel: () => Navigator.of(dialogContext).pop(),
+            onSubmit: (input) async {
+              final created = await _controller.create(input);
+              if (created && dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+            },
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -119,6 +147,14 @@ class _UsersPageState extends State<UsersPage>
               const SizedBox(height: 24),
               QuarkSection(
                 title: 'Accounts',
+                actions: [
+                  FilledButton.icon(
+                    key: const ValueKey('users_add'),
+                    onPressed: _openCreateDialog,
+                    icon: const Icon(QuarkIcons.add),
+                    label: const Text('Add user'),
+                  ),
+                ],
                 child: UserList(
                   users: c.accounts,
                   selfUsername: c.selfUsername,
