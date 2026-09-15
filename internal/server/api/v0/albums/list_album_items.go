@@ -2,9 +2,11 @@ package v0_albums
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strconv"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
@@ -16,12 +18,13 @@ import (
 
 // listAlbumItems godoc
 // @Summary List photos in an album
-// @Description Returns all photo items (pointers) in the given album.
+// @Description Returns the photo items (pointers) the caller can read in one of the caller's albums.
 // @Tags albums
 // @Produce json
 // @Param id path int true "Album ID"
 // @Success 200 {array} AlbumItemJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 404 {object} serverutil.Response "Not Found: no album of the caller's has that id"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /albums/{id}/items [get]
 func listAlbumItems(c *gin.Context) *serverutil.Response {
@@ -36,6 +39,13 @@ func listAlbumItems(c *gin.Context) *serverutil.Response {
 	}
 
 	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	_, err = deps.Database().Queries.GetAlbum(context.Background(), db.GetAlbumParams{ID: id, UserID: access.Principal().UserID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return serverutil.NotFound(errAlbumNotFound)
+	}
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
