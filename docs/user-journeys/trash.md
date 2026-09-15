@@ -162,7 +162,7 @@ trashed folder it would read as emptying that folder.
 - The file appears in the first client's trash without a manual refresh.
 
 **Notes:** Driven by the `trash_changed` event on `/api/v0/events`, which also fires when the hourly purge removes
-expired items.
+expired items. The page also refreshes on `access_changed` (JN-TR-013).
 
 ---
 
@@ -224,3 +224,23 @@ expired items.
 
 **Notes:** The same happens when the hourly purge removes the trashed folder, or when a deep link names a folder that
 is not in the trash.
+
+---
+
+### JN-TR-013: The trash follows sharing changes
+
+**Preconditions:** Two accounts. The owner of the folder `Family` shared it with a second, non-admin account, then
+deleted a file from `Family`. The second account has `/trash` open.
+
+**Steps:**
+
+1. As the owner, or as an admin, stop sharing `Family` with the second account.
+2. Share it with them again.
+
+**Expected result:**
+
+- After step 1 the file leaves the second account's trash without a manual refresh.
+- After step 2 it comes back, the same way.
+
+**Notes:** A non-admin sees a trashed item they deleted themselves, or one from a place they can read. A sharing
+change publishes `access_changed`, which the Trash page refreshes on alongside `trash_changed`.
