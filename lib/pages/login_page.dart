@@ -7,6 +7,7 @@ import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/login/sign_in_form.dart';
 import 'package:quark/widgets/quark_connect_form.dart';
+import 'package:quark/widgets/setup/recovery_phrase_step.dart';
 
 /// The app's landing page (#1639).
 ///
@@ -64,6 +65,14 @@ class _LoginPageState extends State<LoginPage> {
   /// since switched away from cannot set the link.
   int _statusGeneration = 0;
 
+  /// A sign-in that came back with the account's recovery phrase. Its session
+  /// is not stored until the phrase is acknowledged (#1873). While set, the
+  /// phrase step replaces the sign-in form.
+  LoginResult? _pendingLogin;
+
+  /// Whether the held phrase has been acknowledged.
+  bool _phraseAcknowledged = false;
+
   @override
   void initState() {
     super.initState();
@@ -91,11 +100,20 @@ class _LoginPageState extends State<LoginPage> {
       _disconnected = false;
     });
     try {
-      await AuthService.login(
+      final result = await AuthService.login(
         username: _usernameController.text.trim(),
         password: _passwordController.text,
       );
       if (!mounted) return;
+      // The first sign-in of an admin-created account carries its recovery
+      // phrase, and no stored session yet (#1873).
+      if (result.recoveryPhrase != null) {
+        setState(() {
+          _pendingLogin = result;
+          _loading = false;
+        });
+        return;
+      }
       widget.onLoginSuccess();
     } catch (e) {
       debugPrint('[login_page.dart] Error: $e');
@@ -109,6 +127,16 @@ class _LoginPageState extends State<LoginPage> {
       });
       // Announce error to screen readers
     }
+  }
+
+  /// Stores the held session once its phrase has been acknowledged, which
+  /// signs the app in (#1873).
+  Future<void> _acceptPendingLogin() async {
+    final result = _pendingLogin;
+    if (result == null || !_phraseAcknowledged) return;
+    await AuthService.acceptSession(result);
+    if (!mounted) return;
+    widget.onLoginSuccess();
   }
 
   /// Asks the active Quark whether it takes account requests. A Quark that
@@ -170,6 +198,18 @@ class _LoginPageState extends State<LoginPage> {
                         onConnected: () {
                           if (mounted) setState(() {});
                         },
+                      )
+                    // A held first sign-in shows its recovery phrase until
+                    // it is acknowledged; nothing is stored before then, so
+                    // the router keeps this page up (#1873).
+                    : _pendingLogin != null
+                    ? RecoveryPhraseStep(
+                        phrase: _pendingLogin!.recoveryPhrase!,
+                        acknowledged: _phraseAcknowledged,
+                        onAcknowledgedChanged: (value) => setState(
+                          () => _phraseAcknowledged = value ?? false,
+                        ),
+                        onContinue: _acceptPendingLogin,
                       )
                     : SignInForm(
                         formKey: _formKey,

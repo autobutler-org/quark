@@ -128,6 +128,51 @@ void main() {
     },
   );
 
+  test('creates an account with its folder choice', () async {
+    answer(201, {
+      'id': 5,
+      'username': 'bob',
+      'isAdmin': false,
+      'status': 'active',
+      'createdAt': '2026-09-14T12:00:00Z',
+    });
+
+    final created = await UsersService.create(
+      username: 'bob',
+      password: 'hunter2hunter2',
+      createFolder: true,
+    );
+
+    expect(created.username, 'bob');
+    final request = requests.single;
+    expect(request.method, 'POST');
+    expect(request.url.path, '/api/v0/admin/users');
+    expect(jsonDecode(request.body), {
+      'username': 'bob',
+      'password': 'hunter2hunter2',
+      'createFolder': true,
+    });
+  });
+
+  test("a folder that already exists passes the Quark's text on", () async {
+    answer(409, {'error': 'a folder with that name already exists'});
+
+    await expectLater(
+      UsersService.create(
+        username: 'bob',
+        password: 'hunter2hunter2',
+        createFolder: true,
+      ),
+      throwsA(
+        isA<MessageException>().having(
+          (e) => e.message,
+          'message',
+          'a folder with that name already exists',
+        ),
+      ),
+    );
+  });
+
   test('reads the access-requests setting from the auth status', () async {
     answer(200, {'setup': true, 'accessRequestsEnabled': true});
 

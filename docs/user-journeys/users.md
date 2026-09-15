@@ -104,6 +104,55 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 ---
 
+### JN-USR-006: Add a user with a private folder
+
+**Preconditions:** No account or folder named `dee` exists.
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. Tap **Add user**.
+3. Enter `dee` as the username, and an initial password twice.
+4. Leave **Create a private folder for this person** checked.
+5. Tap **Add user** in the dialog.
+
+**Expected result:**
+
+- The dialog closes and `dee` appears in **Accounts**.
+- A folder named `dee` exists at the top of Files, owned by `dee`.
+- `dee` can sign in with that password, and sees their recovery phrase once (JN-AUTH-013).
+
+**Notes:**
+
+- The admin never sees the recovery phrase.
+- A username must be up to 32 lowercase letters, numbers, dots, dashes or underscores, starting with a letter or
+  number. The dialog says so before sending.
+
+---
+
+### JN-USR-007: Adding a user whose folder already exists
+
+**Preconditions:** A folder named `eli` exists at the top of Files. No account is named `eli`.
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. Tap **Add user**, and enter `eli` with a password.
+3. Leave **Create a private folder for this person** checked.
+4. Tap **Add user** in the dialog.
+
+**Expected result:**
+
+- The dialog stays open with what was typed, and shows "A folder with that name already exists."
+- No account is created, and the existing folder is not handed to anyone.
+
+**Notes:**
+
+- Clearing the checkbox creates the account without a folder.
+- A taken username shows "That username is taken." the same way.
+
+---
+
 ### JN-USR-008: Approve an account request
 
 **Preconditions:** Someone has requested an account (JN-AUTH-009).
