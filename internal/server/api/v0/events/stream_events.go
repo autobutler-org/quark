@@ -16,7 +16,7 @@ import (
 
 // streamEvents godoc
 // @Summary Stream real-time file/device events
-// @Description Upgrades the connection to WebSocket and pushes JSON events for file system mutations (upload, delete, move, new_folder). Each connection hears only events about paths its user can read; admins hear every event. A connection closes once its account is turned off or deleted.
+// @Description Upgrades the connection to WebSocket and pushes JSON events for file system mutations (upload, delete, move, new_folder). Each connection hears only events about paths its user can read; admins hear every event. A connection closes once its account is turned off, deleted, promoted or demoted.
 // @Tags events
 // @Produce json
 // @Success 101 {string} string "Switching Protocols"
@@ -68,9 +68,11 @@ func streamEvents(c *gin.Context) {
 				return
 			}
 			// requireAuth checked the account only when the socket opened, so
-			// an account turned off or deleted since stops hearing events here.
-			// The app reconnects and is refused.
-			if evt.Kind == eventbus.EventAccountChanged && !stillActive(ctx, deps, access) {
+			// an account turned off, deleted, promoted or demoted since stops
+			// hearing events here. The app reconnects and is refused, or is
+			// filtered for its new role.
+			if (evt.Kind == eventbus.EventAccountChanged || evt.Kind == eventbus.EventAccessChanged) &&
+				!stillActive(ctx, deps, access) {
 				return
 			}
 			// Rows changed somewhere, so what this subscriber can read may have

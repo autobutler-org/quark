@@ -717,6 +717,21 @@ func IsActive(ctx context.Context, queries *db.Queries, userID int64) (bool, err
 	return user.Status == StatusActive, nil
 }
 
+// IsActiveAs reports whether the account with the given id exists, may sign
+// in, and is still an admin exactly when isAdmin says so. An open event stream
+// asks this to find out that its account was turned off, deleted, promoted or
+// demoted since it connected. A missing account is not an error.
+func IsActiveAs(ctx context.Context, queries *db.Queries, userID int64, isAdmin bool) (bool, error) {
+	user, err := queries.GetUserByID(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("look up account: %w", err)
+	}
+	return user.Status == StatusActive && (user.IsAdmin != 0) == isAdmin, nil
+}
+
 // DisableUser turns an account off (#1909): it can no longer sign in, and every
 // session it holds ends in the same transaction. It keeps everything it owns,
 // so EnableUser restores it as it was. It returns ErrSelfAction for the acting
