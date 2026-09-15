@@ -18,6 +18,9 @@ const (
 	progressStep     = 0.01
 )
 
+// userIDKey is the context key WithUserID stores the job's account under.
+type userIDKey struct{}
+
 // laneKey names a lane. Lanes belong to a kind: one kind's "copy" is not
 // another's.
 type laneKey struct {
