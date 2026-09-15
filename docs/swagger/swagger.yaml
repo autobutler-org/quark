@@ -8,6 +8,26 @@ definitions:
       id:
         type: string
     type: object
+  grouputil.Group:
+    properties:
+      builtin:
+        type: boolean
+      id:
+        type: integer
+      members:
+        items:
+          $ref: '#/definitions/grouputil.Member'
+        type: array
+      name:
+        type: string
+    type: object
+  grouputil.Member:
+    properties:
+      id:
+        type: integer
+      username:
+        type: string
+    type: object
   jobutil.Job:
     properties:
       attempts:
@@ -240,6 +260,11 @@ definitions:
     properties:
       ownerRowsReassigned:
         type: integer
+    type: object
+  v0_admin.groupNameBody:
+    properties:
+      name:
+        type: string
     type: object
   v0_admin.userSummary:
     properties:
@@ -1073,6 +1098,167 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
       summary: Turn an account back on
+      tags:
+      - admin
+  /admin/groups:
+    get:
+      description: 'Returns every group with its members, the built-in everyone group
+        first and the rest by name. everyone lists no members: it includes every active
+        account. Admin-only.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/grouputil.Group'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: List groups
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: Creates an empty group. The name is trimmed, has 1 to 64 characters
+        and no control characters, and is unique ignoring case. Publishes account_changed.
+        Admin-only.
+      parameters:
+      - description: The group's name
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_admin.groupNameBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/grouputil.Group'
+        "400":
+          description: invalid name
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: a group with that name already exists
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Create a group
+      tags:
+      - admin
+  /admin/groups/{id}:
+    delete:
+      description: Deletes a group, its memberships and every share made to it, so
+        its members lose what only the group gave them. The everyone group can't be
+        deleted. Publishes access_changed with no path. Admin-only.
+      parameters:
+      - description: Group id
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: the everyone group
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no group has that id
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Delete a group
+      tags:
+      - admin
+    put:
+      consumes:
+      - application/json
+      description: Renames a group under the same rules a new name follows; a group
+        may take its own name in another case. The everyone group can't be renamed.
+        The response lists no members. Publishes account_changed. Admin-only.
+      parameters:
+      - description: Group id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: The group's new name
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_admin.groupNameBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/grouputil.Group'
+        "400":
+          description: invalid name, or the everyone group
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no group has that id
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: a group with that name already exists
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Rename a group
       tags:
       - admin
   /admin/promote/{username}:
