@@ -166,8 +166,8 @@ func TestDemoteUser_LastActiveAdminIsConflict(t *testing.T) {
 	if w := h.do(http.MethodPut, "/api/v0/admin/demote/deputy"); w.Code != http.StatusOK {
 		t.Errorf("demote with two active admins = %d: %s", w.Code, w.Body.String())
 	}
-	if w := h.do(http.MethodPut, "/api/v0/admin/demote/deputy"); w.Code != http.StatusConflict {
-		t.Errorf("demote after the second admin is gone = %d, want 409", w.Code)
+	if w := h.do(http.MethodPut, "/api/v0/admin/demote/admin"); w.Code != http.StatusConflict {
+		t.Errorf("demote the only active admin once the second is gone = %d, want 409", w.Code)
 	}
 }
 

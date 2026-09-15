@@ -25,6 +25,23 @@ func inTx(ctx context.Context, database *db.DatabaseSqlc, fn func(*db.Queries) e
 	return tx.Commit()
 }
 
+// ensureAnotherActiveAdmin returns ErrLastAdmin when target is the only active
+// admin, so demoting, disabling or deleting it would leave the Quark with none
+// (#1909). Any other target passes, including a non-admin or a disabled admin.
+func ensureAnotherActiveAdmin(ctx context.Context, queries *db.Queries, target db.User) error {
+	if target.IsAdmin == 0 || target.Status != StatusActive {
+		return nil
+	}
+	others, err := queries.CountOtherActiveAdmins(ctx, target.ID)
+	if err != nil {
+		return fmt.Errorf("count admins: %w", err)
+	}
+	if others == 0 {
+		return ErrLastAdmin
+	}
+	return nil
+}
+
 // firstRecoveryPhrase gives an account with no recovery phrase one, and
 // returns it; an account that already has one gets "". Only the sign-in whose
 // write lands returns the phrase, so two at once cannot both show it.

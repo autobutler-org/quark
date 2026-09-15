@@ -994,6 +994,80 @@ paths:
       summary: Deny an account request
       tags:
       - admin
+  /admin/disable/{username}:
+    put:
+      description: Stops an account from signing in, and ends its sessions and open
+        event streams. The account keeps its files and shares, so turning it back
+        on restores it. An admin cannot turn off their own account, and the only active
+        admin cannot be turned off. Admin-only.
+      parameters:
+      - description: Username to turn off
+        in: path
+        name: username
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: the caller's own account
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no active account has that username
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: the only active admin
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Turn an account off
+      tags:
+      - admin
+  /admin/enable/{username}:
+    put:
+      description: Lets a disabled account sign in again, with everything it owned
+        when it was turned off. Admin-only.
+      parameters:
+      - description: Username to turn back on
+        in: path
+        name: username
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no disabled account has that username
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Turn an account back on
+      tags:
+      - admin
   /admin/promote/{username}:
     put:
       description: Grants admin role to the given username. Only an active account
@@ -1796,6 +1870,7 @@ paths:
       description: Upgrades the connection to WebSocket and pushes JSON events for
         file system mutations (upload, delete, move, new_folder). Each connection
         hears only events about paths its user can read; admins hear every event.
+        A connection closes once its account is turned off or deleted.
       produces:
       - application/json
       responses:

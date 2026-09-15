@@ -144,33 +144,24 @@ func TestDemoteFromAdmin_AllowsWhenAnotherAdminExists(t *testing.T) {
 	}
 }
 
-// TestDemoteFromAdmin_NonAdminTargetBlockedByGuard documents a real bug.
-//
-// The last-admin guard counts ALL admins but never checks whether the TARGET is
-// one. With exactly one admin and a separate non-admin user, demoting the
-// NON-ADMIN is rejected with "cannot demote the last admin" — a confusing error
-// about an account the caller did not name, for an operation that would not have
-// changed the admin count at all.
-//
-// The guard should compare against the target's own admin status, e.g. refuse
-// only when the target is an admin AND the count is 1.
-func TestDemoteFromAdmin_NonAdminTargetBlockedByGuard(t *testing.T) {
+// TestDemoteFromAdmin_GuardChecksTheTarget checks the last-admin guard looks at
+// the account named. It used to count every admin and refuse any demote while
+// only one existed, so demoting a non-admin beside a single admin failed with
+// an error about an account the caller did not name. The shared guard (#1909)
+// refuses only when the target itself is the only active admin.
+func TestDemoteFromAdmin_GuardChecksTheTarget(t *testing.T) {
 	q := newTestDB(t)
 	ctx := context.Background()
 	mkUser(t, q, "boss", true)
 	mkUser(t, q, "peon", false)
 
-	err := authutil.DemoteFromAdmin(ctx, q, "peon")
-	if err == nil {
-		t.Skip("guard now checks the target — bug fixed, update this test")
+	if err := authutil.DemoteFromAdmin(ctx, q, "peon"); err != nil {
+		t.Errorf("demote a non-admin beside one admin = %v, want nil", err)
 	}
-	if !errors.Is(err, authutil.ErrLastAdmin) {
-		t.Fatalf("unexpected error: %v", err)
+	if err := authutil.DemoteFromAdmin(ctx, q, "boss"); !errors.Is(err, authutil.ErrLastAdmin) {
+		t.Errorf("demote the only admin = %v, want ErrLastAdmin", err)
 	}
-	t.Logf("KNOWN BUG: demoting non-admin %q rejected with %q", "peon", err)
 
-	// The admin count is untouched, confirming the operation was a no-op that
-	// still reported failure.
 	count, cErr := q.CountActiveAdmins(ctx)
 	if cErr != nil {
 		t.Fatalf("count: %v", cErr)
