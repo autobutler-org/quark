@@ -3,6 +3,7 @@ package fileutil
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -80,6 +81,14 @@ func visibleFiles(access accessutil.Access, files []FileNode) []FileNode {
 		Children: files,
 		Locate:   func(f FileNode) (string, string) { return f.DeviceSerial, f.DirPath },
 	}).Children
+}
+
+// readableNodes keeps the files the caller can read. Unlike a folder listing, a
+// flat result across the tree has no breadcrumbs to keep (#1907).
+func readableNodes(access accessutil.Access, files []FileNode) []FileNode {
+	return slices.DeleteFunc(files, func(f FileNode) bool {
+		return !access.Check(f.DeviceSerial, f.DirPath, accessutil.Read).Readable
+	})
 }
 
 // listFilesVFS lists files via the VFS registry, optionally scoped to specific device serials.
@@ -194,6 +203,8 @@ type ListRecentParams struct {
 	Storage *storageutil.StorageService
 	// Serials scopes the listing to those devices, empty for all of them.
 	Serials []string
+	// Access drops the files the caller cannot read, before the limit applies.
+	Access accessutil.Access
 	// Limit caps how many files come back.
 	Limit int
 }
@@ -232,7 +243,7 @@ func ListRecent(params ListRecentParams) (ListRecentResult, error) {
 				ModifiedAt: fi.ModTime,
 			})
 		}
-		return ListRecentResult{Files: sortNewestFirst(allFiles, params.Limit)}, nil
+		return ListRecentResult{Files: readableNewestFirst(params.Access, allFiles, params.Limit)}, nil
 	}
 
 	// Fallback: walk devices via StorageService.
@@ -276,12 +287,17 @@ func ListRecent(params ListRecentParams) (ListRecentResult, error) {
 		}
 	}
 
-	return ListRecentResult{Files: sortNewestFirst(allFiles, params.Limit)}, nil
+	return ListRecentResult{Files: readableNewestFirst(params.Access, allFiles, params.Limit)}, nil
 }
 
-// sortNewestFirst orders files by modification time descending and truncates
-// to limit. A limit of zero or less leaves the listing whole.
-func sortNewestFirst(files []FileNodeWithTime, limit int) []FileNodeWithTime {
+// readableNewestFirst drops the files the caller cannot read, orders the rest
+// by modification time descending, and truncates to limit, in that order so a
+// page of recent files stays full (#1907). A limit of zero or less leaves the
+// listing whole.
+func readableNewestFirst(access accessutil.Access, files []FileNodeWithTime, limit int) []FileNodeWithTime {
+	files = slices.DeleteFunc(files, func(f FileNodeWithTime) bool {
+		return !access.Check(f.DeviceSerial, f.DirPath, accessutil.Read).Readable
+	})
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].ModifiedAt.After(files[j].ModifiedAt)
 	})
@@ -301,6 +317,8 @@ type ListByTypeParams struct {
 	Storage *storageutil.StorageService
 	// Serials scopes the listing to those devices, empty for all of them.
 	Serials []string
+	// Access drops the files the caller cannot read.
+	Access accessutil.Access
 	// FileType is the type every returned file matches.
 	FileType storageutil.FileType
 }
@@ -350,7 +368,7 @@ func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
 				ModifiedAt: fi.ModTime,
 			})
 		}
-		return ListByTypeResult{Files: sortNewestFirst(allFiles, 0)}, nil
+		return ListByTypeResult{Files: readableNewestFirst(params.Access, allFiles, 0)}, nil
 	}
 
 	for _, device := range selectedDevices {
@@ -391,7 +409,7 @@ func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
 		}
 	}
 
-	return ListByTypeResult{Files: sortNewestFirst(allFiles, 0)}, nil
+	return ListByTypeResult{Files: readableNewestFirst(params.Access, allFiles, 0)}, nil
 }
 
 // SearchFilesParams describes a filename search across the library.
@@ -408,6 +426,8 @@ type SearchFilesParams struct {
 	Query string
 	// Serials scopes the search to those devices, empty for all of them.
 	Serials []string
+	// Access drops the matches the caller cannot read.
+	Access accessutil.Access
 }
 
 // SearchFilesResult is the set of matching files.
@@ -415,8 +435,21 @@ type SearchFilesResult struct {
 	Files []FileNode
 }
 
-// SearchFiles finds files whose name contains the query.
+// SearchFiles finds files whose name contains the query, keeping only the ones
+// the caller can read (#1907). The index stays appliance-wide; only its
+// results are filtered.
 func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
+	result, err := searchFiles(params)
+	if err != nil {
+		return SearchFilesResult{}, err
+	}
+	result.Files = readableNodes(params.Access, result.Files)
+	return result, nil
+}
+
+// searchFiles finds files whose name contains the query: from the index when
+// one has been built, from a VFS listing or a disk walk otherwise.
+func searchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 	if params.Index == nil {
 		// VFS fallback: recursive list then name-match (avoids disk-walk when VFS is registered).
 		if params.Registry != nil {
