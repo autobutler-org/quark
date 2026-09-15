@@ -34,6 +34,7 @@ export 'src/layout/quark_drawer.dart';
 export 'src/layout/quark_page_scaffold.dart';
 export 'src/layout/quark_section.dart';
 export 'src/layout/quark_split_view.dart';
+export 'src/layout/quark_tab_view.dart';
 export 'src/layout/quark_toolbar.dart';
 export 'src/layout/refresh_icon_button.dart';
 export 'src/layout/theme_toggle_button.dart';
