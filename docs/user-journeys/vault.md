@@ -2,6 +2,9 @@
 
 Covers the Vault (`/vault`) — password manager setup, entry management, folders, import/export.
 
+The vault is admin-only (#1899): every journey in this file assumes the user is signed in as an admin. Any other
+account gets an error from every vault action.
+
 ---
 
 ### JN-VT-001: Set up the vault for the first time

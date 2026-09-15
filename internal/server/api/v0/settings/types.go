@@ -34,16 +34,17 @@ type router struct{}
 func (r *router) Routes() []*serverutil.Route {
 	return []*serverutil.Route{
 		getSettingsRoute,
-		postSettingsRoute,
 		getRemoteAccessRoute,
 	}
 }
 
-// adminRouter holds the routes that change the Quark's network exposure.
+// adminRouter holds the routes that change appliance-wide settings or the
+// Quark's network exposure.
 type adminRouter struct{}
 
 func (r *adminRouter) Routes() []*serverutil.Route {
 	return []*serverutil.Route{
+		postSettingsRoute,
 		enableRemoteAccessRoute,
 		disableRemoteAccessRoute,
 	}
