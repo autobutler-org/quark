@@ -3,6 +3,7 @@ package v0_jobs
 import (
 	"errors"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
@@ -12,7 +13,7 @@ import (
 
 // listJobs godoc
 // @Summary List background jobs
-// @Description Returns every job of the requested kinds, newest first, finished ones included. This is the source of truth for job state; the job_* events are a hint to refresh and can be dropped.
+// @Description Returns the jobs of the requested kinds the caller may see, newest first, finished ones included. An admin sees every job; anyone else sees the jobs they queued whose file they can still read, with error left blank. This is the source of truth for job state; the job_* events are a hint to refresh and can be dropped.
 // @Tags jobs
 // @Produce json
 // @Param kind query []string true "Job kinds to list; repeat for more than one (kind=video-transcode&kind=...)" collectionFormat(multi)
@@ -25,6 +26,10 @@ func listJobs(c *gin.Context) *serverutil.Response {
 	if !ok {
 		return serverutil.InternalServerError(nil)
 	}
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 	result, err := deps.JobQueue().List(c.Request.Context(), jobutil.ListParams{Kinds: c.QueryArray("kind")})
 	switch {
 	case errors.Is(err, jobutil.ErrKindRequired), errors.Is(err, jobutil.ErrUnknownKind):
@@ -32,7 +37,8 @@ func listJobs(c *gin.Context) *serverutil.Response {
 	case err != nil:
 		return serverutil.InternalServerError(err)
 	}
-	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(result.Jobs)
+	visible := accessutil.VisibleJobs(accessutil.VisibleJobsParams{Access: access, Jobs: result.Jobs})
+	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(visible.Jobs)
 }
 
 var listJobsRoute = serverutil.ApiRoute(

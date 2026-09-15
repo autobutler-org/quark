@@ -19,8 +19,10 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/gin-gonic/gin"
 )
@@ -495,6 +497,8 @@ type FilterEventResult struct {
 //     or after the change, so a listing that just gained or lost entries
 //     reloads. One with no path, from a group membership change or a deleted
 //     group (#1910), may have changed anything and always passes.
+//   - A job_* event carries no path and passes when CanSeeJob shows its job,
+//     with the job's error left out (#1979).
 //   - Anything else passes when its path is readable.
 func FilterEvent(params FilterEventParams) FilterEventResult {
 	evt := params.Event
@@ -537,6 +541,14 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 		visible := Canonical(evt.Path) == "" ||
 			params.Previous.Visible(evt.DeviceSerial, evt.Path) || access.Visible(evt.DeviceSerial, evt.Path)
 		return FilterEventResult{Event: evt, Deliver: visible}
+	case eventbus.EventJobQueued, eventbus.EventJobStarted, eventbus.EventJobProgress,
+		eventbus.EventJobCompleted, eventbus.EventJobFailed, eventbus.EventJobCanceled:
+		job, ok := evt.Data.(jobutil.Job)
+		if !ok || !access.CanSeeJob(job) {
+			return FilterEventResult{}
+		}
+		evt.Data = access.RedactJob(job)
+		return FilterEventResult{Event: evt, Deliver: true}
 	default:
 		return FilterEventResult{Event: evt, Deliver: readable(evt.Path)}
 	}
@@ -597,6 +609,91 @@ func VisibleTrash(params VisibleTrashParams) VisibleTrashResult {
 		}
 	}
 	return VisibleTrashResult{Items: kept}
+}
+
+// CanSeeJob reports whether a job is shown to the principal (#1979). An admin
+// sees every job. Anyone else sees only a job they queued, and only while they
+// can still read the file it works on. A job with no creator is admin-only.
+func (a Access) CanSeeJob(job jobutil.Job) bool {
+	if a.principal.IsAdmin {
+		return true
+	}
+	if job.UserID == 0 || job.UserID != a.principal.UserID {
+		return false
+	}
+	serial, relPath := job.Source()
+	return relPath == "" || a.Check(serial, relPath, Read).Readable
+}
+
+// RedactJob is a job as the principal is shown it. Only an admin sees its
+// Error, which can hold host paths and ffmpeg output.
+func (a Access) RedactJob(job jobutil.Job) jobutil.Job {
+	if !a.principal.IsAdmin {
+		job.Error = ""
+	}
+	return job
+}
+
+// VisibleJobsParams filters a job listing.
+type VisibleJobsParams struct {
+	Access Access
+	Jobs   []jobutil.Job
+}
+
+// VisibleJobsResult is the jobs the principal may see.
+type VisibleJobsResult struct {
+	Jobs []jobutil.Job
+}
+
+// VisibleJobs keeps the jobs CanSeeJob shows, each through RedactJob. It never
+// returns a nil slice, so an empty listing serializes as [].
+func VisibleJobs(params VisibleJobsParams) VisibleJobsResult {
+	kept := make([]jobutil.Job, 0, len(params.Jobs))
+	for _, job := range params.Jobs {
+		if params.Access.CanSeeJob(job) {
+			kept = append(kept, params.Access.RedactJob(job))
+		}
+	}
+	return VisibleJobsResult{Jobs: kept}
+}
+
+// ErrCreatorInactive reports a job whose creator's account was deleted or is
+// no longer active, so the job can't run as them.
+var ErrCreatorInactive = errors.New("the account that queued this job can no longer sign in")
+
+// LoadCreatorParams loads the access a job runs with.
+type LoadCreatorParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	Storage  *storageutil.StorageService
+	// UserID is the job's creator, 0 for none.
+	UserID int64
+}
+
+// LoadCreator loads the access of the account that queued a job, with its
+// status and role as they are now, since a job always runs as its creator,
+// whoever retried it. A job with no creator runs as System. A creator whose
+// account is gone or not active gets ErrCreatorInactive.
+func LoadCreator(params LoadCreatorParams) (LoadResult, error) {
+	if params.UserID == 0 {
+		return Load(LoadParams{Ctx: params.Ctx, Principal: System})
+	}
+	if params.Database == nil {
+		return LoadResult{}, ErrNoDatabase
+	}
+	user, err := params.Database.Queries.GetUserByID(params.Ctx, params.UserID)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && user.Status != authutil.StatusActive) {
+		return LoadResult{}, ErrCreatorInactive
+	}
+	if err != nil {
+		return LoadResult{}, err
+	}
+	return Load(LoadParams{
+		Ctx:       params.Ctx,
+		Database:  params.Database,
+		Storage:   params.Storage,
+		Principal: Principal{UserID: user.ID, IsAdmin: user.IsAdmin != 0},
+	})
 }
 
 // ParseLevel reads a level's spelling, as the path_access table stores it and
