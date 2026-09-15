@@ -3,8 +3,10 @@ package v0_events
 import (
 	"net/http"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -14,7 +16,7 @@ import (
 
 // streamEvents godoc
 // @Summary Stream real-time file/device events
-// @Description Upgrades the connection to WebSocket and pushes JSON events for file system mutations (upload, delete, move, new_folder)
+// @Description Upgrades the connection to WebSocket and pushes JSON events for file system mutations (upload, delete, move, new_folder). Each connection hears only events about paths its user can read; admins hear every event.
 // @Tags events
 // @Produce json
 // @Success 101 {string} string "Switching Protocols"
@@ -23,6 +25,16 @@ import (
 func streamEvents(c *gin.Context) {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
 	if !ok {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	// The filter runs here rather than in the bus: the file index, content
+	// indexer and backup sync subscribe to the same bus and must keep hearing
+	// everything (#1906). The snapshot is loaded once per connection, and an
+	// admin's load makes no query.
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -55,7 +67,25 @@ func streamEvents(c *gin.Context) {
 			if !ok {
 				return
 			}
-			if err := wsjson.Write(ctx, conn, evt); err != nil {
+			// Rows changed somewhere, so what this subscriber can read may have
+			// too: reload before filtering this event and the ones after it.
+			// A failed reload closes the stream rather than filter against a
+			// snapshot that may be stale; the app reconnects.
+			previous := access
+			if evt.Kind == eventbus.EventAccessChanged {
+				if access, err = accessutil.LoadRequest(c, deps.Database(), deps.StorageService()); err != nil {
+					return
+				}
+			}
+			filtered := accessutil.FilterEvent(accessutil.FilterEventParams{
+				Access:   access,
+				Previous: previous,
+				Event:    evt,
+			})
+			if !filtered.Deliver {
+				continue
+			}
+			if err := wsjson.Write(ctx, conn, filtered.Event); err != nil {
 				return
 			}
 		}
