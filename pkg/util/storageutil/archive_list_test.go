@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -180,6 +181,17 @@ func TestListArchiveEntriesImpl_FileNotFound(t *testing.T) {
 	_, err := ListArchiveEntriesImpl(ListArchiveParams{FilePath: "nope.zip"}, device, "")
 	if err == nil {
 		t.Fatal("expected error for missing file")
+	}
+}
+
+func TestListArchiveEntriesImpl_PathEscapingFilesDir(t *testing.T) {
+	device := makeListDevice(t)
+	data := buildZipForList(t, []struct{ name, content string }{{"file.txt", "x"}})
+	writeArchive(t, filepath.Dir(device.FilesDir), "outside.zip", data)
+
+	_, err := ListArchiveEntriesImpl(ListArchiveParams{FilePath: "../outside.zip"}, device, "")
+	if err == nil || !strings.Contains(err.Error(), "file not found") {
+		t.Fatalf("expected 'file not found' for an archive outside the files directory, got %v", err)
 	}
 }
 

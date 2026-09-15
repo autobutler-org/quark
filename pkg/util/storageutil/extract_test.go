@@ -281,6 +281,15 @@ func TestExtractFileImpl_FileNotFound(t *testing.T) {
 	}
 }
 
+func TestExtractFileImpl_PathEscapingFilesDir(t *testing.T) {
+	device := makeDevice(t)
+	writeFile(t, filepath.Dir(device.FilesDir), "outside.zip", []byte("PK"))
+	_, err := ExtractFileImpl(ExtractFileParams{FilePath: "../outside.zip"}, device, "")
+	if err == nil || !strings.Contains(err.Error(), "file not found") {
+		t.Errorf("expected 'file not found' for an archive outside the files directory, got %v", err)
+	}
+}
+
 func TestExtractFileImpl_NotAnArchive(t *testing.T) {
 	device := makeDevice(t)
 	writeFile(t, device.FilesDir, "doc.pdf", []byte("%PDF"))
