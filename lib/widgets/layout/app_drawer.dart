@@ -46,6 +46,9 @@ class AppDrawer extends StatelessWidget {
             ? goTo(QuarkDrawerSection.vault, AppRoutes.vault)
             : null,
         onTapJobs: goTo(QuarkDrawerSection.jobs, AppRoutes.jobs),
+        onTapUsers: isAdmin
+            ? goTo(QuarkDrawerSection.users, AppRoutes.users)
+            : null,
         onTapSettings: goTo(QuarkDrawerSection.settings, AppRoutes.settings),
       ),
     );

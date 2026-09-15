@@ -93,6 +93,10 @@ void main() {
           path: AppRoutes.vault,
           builder: (_, _) => const Scaffold(body: Text('vault')),
         ),
+        GoRoute(
+          path: AppRoutes.users,
+          builder: (_, _) => const Scaffold(body: Text('users')),
+        ),
         GoRoute(path: AppRoutes.terms, builder: (_, _) => const TermsPage()),
       ],
     );
@@ -432,6 +436,26 @@ void main() {
 
       expect(find.text('files'), findsOneWidget);
       expect(find.text('vault'), findsNothing);
+    });
+
+    // #1662: the Users page is admin-only too.
+    testWidgets('the users page opens for an admin', (tester) async {
+      authStatusProbe = () async =>
+          const AuthStatus(setupComplete: true, username: 'ada', isAdmin: true);
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.users);
+
+      expect(find.text('users'), findsOneWidget);
+    });
+
+    testWidgets('the users page sends a non-admin to files', (tester) async {
+      authStatusProbe = () async =>
+          const AuthStatus(setupComplete: true, username: 'bob');
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.users);
+
+      expect(find.text('files'), findsOneWidget);
+      expect(find.text('users'), findsNothing);
     });
   });
 
