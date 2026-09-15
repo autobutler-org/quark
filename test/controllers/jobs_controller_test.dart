@@ -182,6 +182,21 @@ void main() {
     expect(controller.runningCount, 0);
   });
 
+  test('fetches the list again when access or an account changes', () async {
+    served = [_job(1)];
+    final controller = build()..start();
+    await controller.load();
+
+    served = [];
+    events
+      ..add(const FileEvent(kind: 'access_changed', path: 'shared'))
+      ..add(const FileEvent(kind: 'account_changed', path: ''));
+    await pumpEventQueue();
+
+    expect(listCalls, 3);
+    expect(controller.jobs, isEmpty);
+  });
+
   test('cancel applies the returned job, or maps a refusal', () async {
     served = [_job(1)];
     final controller = build()..start();
