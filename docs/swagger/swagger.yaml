@@ -226,6 +226,20 @@ definitions:
       version:
         type: string
     type: object
+  v0_admin.createUserBody:
+    properties:
+      createFolder:
+        description: CreateFolder makes a private folder named after the account,
+          owned by it.
+        type: boolean
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
   v0_admin.userSummary:
     properties:
       createdAt:
@@ -308,6 +322,16 @@ definitions:
         type: string
       status:
         description: Status is pending or disabled.
+        type: string
+    type: object
+  v0_auth.loginResponse:
+    properties:
+      recoveryPhrase:
+        description: |-
+          RecoveryPhrase is present only on the first sign-in of an account an
+          admin created.
+        type: string
+      token:
         type: string
     type: object
   v0_auth.requestAccountBody:
@@ -1035,6 +1059,52 @@ paths:
       summary: List all users
       tags:
       - admin
+    post:
+      consumes:
+      - application/json
+      description: 'Creates an active account with the given password. The admin never
+        sees its recovery phrase: the account gets one on its first sign-in. With
+        createFolder, a folder named after the account is made on the internal device
+        and the account owns it; an existing folder of that name is refused rather
+        than handed over. Admin-only.'
+      parameters:
+      - description: The account to add
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_admin.createUserBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/v0_admin.userSummary'
+        "400":
+          description: invalid username or password
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: that username is taken, or a folder with that name already
+            exists
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Add an account
+      tags:
+      - admin
   /albums:
     get:
       description: Returns all photo albums as a flat list. Use ?tree=true to get
@@ -1458,8 +1528,10 @@ paths:
       consumes:
       - application/json
       description: Authenticates with username and password, returns a session token.
-        A pending or disabled account with the right password gets 403 with its status,
-        so the app can tell it from a wrong password.
+        On the first sign-in of an account an admin created, the response also carries
+        recoveryPhrase, which is never returned again. A pending or disabled account
+        with the right password gets 403 with its status, so the app can tell it from
+        a wrong password.
       parameters:
       - description: '{username, password}'
         in: body
@@ -1473,7 +1545,7 @@ paths:
         "200":
           description: OK
           schema:
-            type: object
+            $ref: '#/definitions/v0_auth.loginResponse'
         "401":
           description: Unauthorized
           schema:

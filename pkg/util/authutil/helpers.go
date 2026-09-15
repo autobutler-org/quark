@@ -1,12 +1,57 @@
 package authutil
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+
+	"github.com/autobutler-org/quark/internal/db"
 )
+
+// inTx runs fn against queries bound to one transaction, committing only if fn
+// succeeds.
+func inTx(ctx context.Context, database *db.DatabaseSqlc, fn func(*db.Queries) error) error {
+	tx, err := database.Db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if err := fn(database.Queries.WithTx(tx)); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+// firstRecoveryPhrase gives an account with no recovery phrase one, and
+// returns it; an account that already has one gets "". Only the sign-in whose
+// write lands returns the phrase, so two at once cannot both show it.
+func firstRecoveryPhrase(ctx context.Context, queries *db.Queries, user db.User) (string, error) {
+	if user.RecoveryPhraseHash != "" {
+		return "", nil
+	}
+	phrase, err := GenerateRecoveryPhrase()
+	if err != nil {
+		return "", err
+	}
+	hash, err := HashPassword(phrase)
+	if err != nil {
+		return "", err
+	}
+	set, err := queries.SetRecoveryPhraseIfUnset(ctx, db.SetRecoveryPhraseIfUnsetParams{
+		RecoveryPhraseHash: hash,
+		ID:                 user.ID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("store recovery phrase: %w", err)
+	}
+	if set == 0 {
+		return "", nil
+	}
+	return phrase, nil
+}
 
 // usernamePattern is what a new account's username must match. A username
 // also names a folder and a URL path segment, so it cannot hold a slash, start
