@@ -11,6 +11,7 @@ enum MoreAction {
   addToAlbum,
   removeFromAlbum,
   makeACopy,
+  share,
   delete,
 }
 
@@ -47,6 +48,10 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onAddToAlbum;
   final VoidCallback onRemoveFromAlbum;
   final VoidCallback onMakeACopy;
+
+  /// Opens the share sheet for the photo (#1911). Offered only for a photo on
+  /// the Quark.
+  final VoidCallback onShare;
   final VoidCallback onDelete;
   final VoidCallback onShowShortcuts;
 
@@ -71,6 +76,7 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onAddToAlbum,
     required this.onRemoveFromAlbum,
     required this.onMakeACopy,
+    required this.onShare,
     required this.onDelete,
     required this.onShowShortcuts,
   });
@@ -170,6 +176,8 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
                   onRemoveFromAlbum();
                 case MoreAction.makeACopy:
                   onMakeACopy();
+                case MoreAction.share:
+                  onShare();
                 case MoreAction.delete:
                   onDelete();
               }
@@ -230,6 +238,10 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
                     'Make a Copy',
                     style: TextStyle(color: Colors.white),
                   ),
+                ),
+                const PopupMenuItem(
+                  value: MoreAction.share,
+                  child: Text('Share…', style: TextStyle(color: Colors.white)),
                 ),
                 PopupMenuItem(
                   value: MoreAction.delete,
