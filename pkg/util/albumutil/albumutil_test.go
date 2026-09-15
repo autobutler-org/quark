@@ -14,10 +14,22 @@ import (
 
 func under(id int64) sql.NullInt64 { return sql.NullInt64{Int64: id, Valid: true} }
 
-func create(t *testing.T, q *db.Queries, name string, parent sql.NullInt64) db.PhotoAlbum {
+// newOwnedQueries returns queries over a fresh database and an account to own
+// albums.
+func newOwnedQueries(t *testing.T) (*db.Queries, int64) {
+	t.Helper()
+	q := dbtest.NewDB(t).Queries
+	user, err := q.CreateUser(context.Background(), db.CreateUserParams{Username: "founder", PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	return q, user.ID
+}
+
+func create(t *testing.T, q *db.Queries, owner int64, name string, parent sql.NullInt64) db.PhotoAlbum {
 	t.Helper()
 	result, err := albumutil.CreateAlbum(context.Background(), albumutil.CreateAlbumParams{
-		Queries: q, Name: name, ParentID: parent,
+		Queries: q, UserID: owner, Name: name, ParentID: parent,
 	})
 	if err != nil {
 		t.Fatalf("CreateAlbum(%q): %v", name, err)
@@ -26,10 +38,10 @@ func create(t *testing.T, q *db.Queries, name string, parent sql.NullInt64) db.P
 }
 
 func TestCreateAlbum(t *testing.T) {
-	q := dbtest.NewDB(t).Queries
+	q, owner := newOwnedQueries(t)
 	ctx := context.Background()
-	trips := create(t, q, "Trips", sql.NullInt64{})
-	create(t, q, "Japan", under(trips.ID))
+	trips := create(t, q, owner, "Trips", sql.NullInt64{})
+	create(t, q, owner, "Japan", under(trips.ID))
 
 	tests := []struct {
 		name   string
@@ -47,7 +59,7 @@ func TestCreateAlbum(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := albumutil.CreateAlbum(ctx, albumutil.CreateAlbumParams{
-				Queries: q, Name: tt.album, ParentID: tt.parent,
+				Queries: q, UserID: owner, Name: tt.album, ParentID: tt.parent,
 			})
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("CreateAlbum(%q) error = %v, want %v", tt.album, err, tt.want)
@@ -57,23 +69,23 @@ func TestCreateAlbum(t *testing.T) {
 }
 
 func TestCreateAlbum_ClashWithSystemFavorites(t *testing.T) {
-	q := dbtest.NewDB(t).Queries
-	if _, err := favoritesutil.EnsureFavoritesAlbum(context.Background(), q); err != nil {
+	q, owner := newOwnedQueries(t)
+	if _, err := favoritesutil.EnsureFavoritesAlbum(context.Background(), q, owner); err != nil {
 		t.Fatalf("EnsureFavoritesAlbum: %v", err)
 	}
-	_, err := albumutil.CreateAlbum(context.Background(), albumutil.CreateAlbumParams{Queries: q, Name: "FAVORITES"})
+	_, err := albumutil.CreateAlbum(context.Background(), albumutil.CreateAlbumParams{Queries: q, UserID: owner, Name: "FAVORITES"})
 	if !errors.Is(err, albumutil.ErrNameConflict) {
 		t.Fatalf("error = %v, want ErrNameConflict", err)
 	}
 }
 
 func TestRenameAlbum(t *testing.T) {
-	q := dbtest.NewDB(t).Queries
+	q, owner := newOwnedQueries(t)
 	ctx := context.Background()
-	trips := create(t, q, "Trips", sql.NullInt64{})
-	create(t, q, "Beach", sql.NullInt64{})
-	japan := create(t, q, "Japan", under(trips.ID))
-	create(t, q, "Kyoto", under(trips.ID))
+	trips := create(t, q, owner, "Trips", sql.NullInt64{})
+	create(t, q, owner, "Beach", sql.NullInt64{})
+	japan := create(t, q, owner, "Japan", under(trips.ID))
+	create(t, q, owner, "Kyoto", under(trips.ID))
 
 	tests := []struct {
 		name  string
@@ -100,14 +112,14 @@ func TestRenameAlbum(t *testing.T) {
 }
 
 func TestMoveAlbum(t *testing.T) {
-	q := dbtest.NewDB(t).Queries
+	q, owner := newOwnedQueries(t)
 	ctx := context.Background()
-	trips := create(t, q, "Trips", sql.NullInt64{})
-	create(t, q, "Japan", under(trips.ID))
-	rootJapan := create(t, q, "JAPAN", sql.NullInt64{})
-	nestedTrips := create(t, q, "trips", under(rootJapan.ID))
-	nestedFavorites := create(t, q, "Favorites", under(trips.ID))
-	loose := create(t, q, "Loose", under(trips.ID))
+	trips := create(t, q, owner, "Trips", sql.NullInt64{})
+	create(t, q, owner, "Japan", under(trips.ID))
+	rootJapan := create(t, q, owner, "JAPAN", sql.NullInt64{})
+	nestedTrips := create(t, q, owner, "trips", under(rootJapan.ID))
+	nestedFavorites := create(t, q, owner, "Favorites", under(trips.ID))
+	loose := create(t, q, owner, "Loose", under(trips.ID))
 
 	tests := []struct {
 		name   string

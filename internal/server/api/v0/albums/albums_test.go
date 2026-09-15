@@ -109,16 +109,29 @@ func TestBuildTree_OrphanDropped(t *testing.T) {
 
 // --- Album SQL query layer ---
 
-func newAlbumDB(t *testing.T) *db.Queries {
+// newAlbumDB returns queries over a fresh database and an account to own
+// albums.
+func newAlbumDB(t *testing.T) (*db.Queries, int64) {
 	t.Helper()
-	return dbtest.NewDB(t).Queries
+	q := dbtest.NewDB(t).Queries
+	return q, newOwner(t, q)
+}
+
+// newOwner creates the account the tests' albums belong to.
+func newOwner(t *testing.T, q *db.Queries) int64 {
+	t.Helper()
+	user, err := q.CreateUser(context.Background(), db.CreateUserParams{Username: "founder", PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	return user.ID
 }
 
 func TestCreateAndListAlbums(t *testing.T) {
-	q := newAlbumDB(t)
+	q, owner := newAlbumDB(t)
 	ctx := context.Background()
 
-	a, err := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Vacation"})
+	a, err := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "Vacation"})
 	if err != nil {
 		t.Fatalf("CreateAlbum: %v", err)
 	}
@@ -136,10 +149,10 @@ func TestCreateAndListAlbums(t *testing.T) {
 }
 
 func TestDeleteAlbum(t *testing.T) {
-	q := newAlbumDB(t)
+	q, owner := newAlbumDB(t)
 	ctx := context.Background()
 
-	a, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "ToDelete"})
+	a, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "ToDelete"})
 	if err := q.DeleteAlbum(ctx, a.ID); err != nil {
 		t.Fatalf("DeleteAlbum: %v", err)
 	}
@@ -150,10 +163,10 @@ func TestDeleteAlbum(t *testing.T) {
 }
 
 func TestRenameAlbum(t *testing.T) {
-	q := newAlbumDB(t)
+	q, owner := newAlbumDB(t)
 	ctx := context.Background()
 
-	a, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Old"})
+	a, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "Old"})
 	renamed, err := q.RenameAlbum(ctx, db.RenameAlbumParams{Name: "New", ID: a.ID})
 	if err != nil {
 		t.Fatalf("RenameAlbum: %v", err)
@@ -164,10 +177,10 @@ func TestRenameAlbum(t *testing.T) {
 }
 
 func TestAddAndListAlbumItems(t *testing.T) {
-	q := newAlbumDB(t)
+	q, owner := newAlbumDB(t)
 	ctx := context.Background()
 
-	album, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Beach"})
+	album, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "Beach"})
 	item, err := q.AddPhotoToAlbum(ctx, db.AddPhotoToAlbumParams{
 		AlbumID:      album.ID,
 		DeviceSerial: "sda1",
@@ -187,10 +200,10 @@ func TestAddAndListAlbumItems(t *testing.T) {
 }
 
 func TestAddPhotoToAlbum_Idempotent(t *testing.T) {
-	q := newAlbumDB(t)
+	q, owner := newAlbumDB(t)
 	ctx := context.Background()
 
-	album, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Summer"})
+	album, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "Summer"})
 	params := db.AddPhotoToAlbumParams{AlbumID: album.ID, RelPath: "pic.jpg"}
 	if _, err := q.AddPhotoToAlbum(ctx, params); err != nil {
 		t.Fatalf("first add: %v", err)
@@ -205,10 +218,10 @@ func TestAddPhotoToAlbum_Idempotent(t *testing.T) {
 }
 
 func TestRemovePhotoFromAlbum(t *testing.T) {
-	q := newAlbumDB(t)
+	q, owner := newAlbumDB(t)
 	ctx := context.Background()
 
-	album, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Winter"})
+	album, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "Winter"})
 	q.AddPhotoToAlbum(ctx, db.AddPhotoToAlbumParams{AlbumID: album.ID, RelPath: "snow.jpg"})
 	if err := q.RemovePhotoFromAlbum(ctx, db.RemovePhotoFromAlbumParams{
 		AlbumID: album.ID, RelPath: "snow.jpg",
@@ -222,10 +235,10 @@ func TestRemovePhotoFromAlbum(t *testing.T) {
 }
 
 func TestDeleteAlbum_CascadesItems(t *testing.T) {
-	q := newAlbumDB(t)
+	q, owner := newAlbumDB(t)
 	ctx := context.Background()
 
-	album, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Cascade"})
+	album, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "Cascade"})
 	q.AddPhotoToAlbum(ctx, db.AddPhotoToAlbumParams{AlbumID: album.ID, RelPath: "a.jpg"})
 	q.AddPhotoToAlbum(ctx, db.AddPhotoToAlbumParams{AlbumID: album.ID, RelPath: "b.jpg"})
 
@@ -239,10 +252,10 @@ func TestDeleteAlbum_CascadesItems(t *testing.T) {
 }
 
 func TestCountAlbumItems(t *testing.T) {
-	q := newAlbumDB(t)
+	q, owner := newAlbumDB(t)
 	ctx := context.Background()
 
-	album, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Count"})
+	album, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "Count"})
 	for i, path := range []string{"a.jpg", "b.jpg", "c.jpg"} {
 		q.AddPhotoToAlbum(ctx, db.AddPhotoToAlbumParams{AlbumID: album.ID, RelPath: path})
 		count, _ := q.CountAlbumItems(ctx, album.ID)
@@ -253,11 +266,12 @@ func TestCountAlbumItems(t *testing.T) {
 }
 
 func TestListRootAlbums(t *testing.T) {
-	q := newAlbumDB(t)
+	q, owner := newAlbumDB(t)
 	ctx := context.Background()
 
-	root, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Root"})
+	root, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "Root"})
 	q.CreateAlbum(ctx, db.CreateAlbumParams{
+		UserID:   owner,
 		Name:     "Child",
 		ParentID: sql.NullInt64{Int64: root.ID, Valid: true},
 	})
@@ -272,12 +286,12 @@ func TestListRootAlbums(t *testing.T) {
 }
 
 func TestListChildAlbums(t *testing.T) {
-	q := newAlbumDB(t)
+	q, owner := newAlbumDB(t)
 	ctx := context.Background()
 
-	parent, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Parent"})
-	q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "C1", ParentID: sql.NullInt64{Int64: parent.ID, Valid: true}})
-	q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "C2", ParentID: sql.NullInt64{Int64: parent.ID, Valid: true}})
+	parent, _ := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "Parent"})
+	q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "C1", ParentID: sql.NullInt64{Int64: parent.ID, Valid: true}})
+	q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "C2", ParentID: sql.NullInt64{Int64: parent.ID, Valid: true}})
 
 	children, err := q.ListChildAlbums(ctx, sql.NullInt64{Int64: parent.ID, Valid: true})
 	if err != nil {
@@ -290,19 +304,20 @@ func TestListChildAlbums(t *testing.T) {
 
 // --- System album guards (HTTP) ---
 
-func newAlbumEngine(t *testing.T) (*gin.Engine, *db.Queries) {
+func newAlbumEngine(t *testing.T) (*gin.Engine, *db.Queries, int64) {
 	t.Helper()
 	database := dbtest.NewDB(t)
+	owner := newOwner(t, database.Queries)
 	deps := deputil.NewDependencies().WithDatabase(database)
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
-		c = ctxutil.With(c, "principal", accessutil.System)
+		c = ctxutil.With(c, "principal", accessutil.Principal{UserID: owner, IsAdmin: true})
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), NewRouter())
-	return engine, database.Queries
+	return engine, database.Queries, owner
 }
 
 func doAlbumReq(engine *gin.Engine, method, path, body string) *httptest.ResponseRecorder {
@@ -316,13 +331,13 @@ func doAlbumReq(engine *gin.Engine, method, path, body string) *httptest.Respons
 // TestSystemAlbumGuards checks that every album mutation refuses the Favorites
 // album, both as the album acted on and as a parent to nest under.
 func TestSystemAlbumGuards(t *testing.T) {
-	engine, q := newAlbumEngine(t)
+	engine, q, owner := newAlbumEngine(t)
 	ctx := context.Background()
-	fav, err := favoritesutil.EnsureFavoritesAlbum(ctx, q)
+	fav, err := favoritesutil.EnsureFavoritesAlbum(ctx, q, owner)
 	if err != nil {
 		t.Fatalf("EnsureFavoritesAlbum: %v", err)
 	}
-	user, err := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Trips"})
+	user, err := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: "Trips"})
 	if err != nil {
 		t.Fatalf("CreateAlbum: %v", err)
 	}
@@ -340,7 +355,7 @@ func TestSystemAlbumGuards(t *testing.T) {
 		{"remove item", http.MethodDelete, fmt.Sprintf("/api/v0/albums/%d/items", fav.ID), photo},
 	}
 	// Seed the item so a successful remove would be observable.
-	if _, err := favoritesutil.ToggleFavorite(ctx, q, "", "a.jpg"); err != nil {
+	if _, err := favoritesutil.ToggleFavorite(ctx, q, owner, "", "a.jpg"); err != nil {
 		t.Fatalf("ToggleFavorite: %v", err)
 	}
 	for _, tc := range cases {
@@ -386,14 +401,14 @@ const (
 // move: names are unique among siblings ignoring case, root albums (Favorites
 // included) are siblings, and a name cannot contain /.
 func TestAlbumNameRules(t *testing.T) {
-	engine, q := newAlbumEngine(t)
+	engine, q, owner := newAlbumEngine(t)
 	ctx := context.Background()
-	if _, err := favoritesutil.EnsureFavoritesAlbum(ctx, q); err != nil {
+	if _, err := favoritesutil.EnsureFavoritesAlbum(ctx, q, owner); err != nil {
 		t.Fatalf("EnsureFavoritesAlbum: %v", err)
 	}
 	mustCreate := func(name string, parent sql.NullInt64) db.PhotoAlbum {
 		t.Helper()
-		a, err := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: name, ParentID: parent})
+		a, err := q.CreateAlbum(ctx, db.CreateAlbumParams{UserID: owner, Name: name, ParentID: parent})
 		if err != nil {
 			t.Fatalf("CreateAlbum(%q): %v", name, err)
 		}

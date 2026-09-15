@@ -1,8 +1,12 @@
 -- name: CreateAlbum :one
 INSERT INTO
-    photo_albums (name, parent_id)
+    photo_albums (name, parent_id, user_id)
 VALUES
-    (?, ?)
+    (
+        sqlc.arg(name),
+        sqlc.arg(parent_id),
+        CAST(sqlc.arg(user_id) AS INTEGER)
+    )
 RETURNING *;
 
 -- name: GetAlbum :one
@@ -129,6 +133,7 @@ FROM
 WHERE
     album_id = ?;
 
+-- ListAlbumsContainingPhoto lists the albums of one account that hold a photo.
 -- name: ListAlbumsContainingPhoto :many
 SELECT
     pa.*
@@ -136,7 +141,8 @@ FROM
     photo_albums pa
     JOIN photo_album_items pai ON pa.id = pai.album_id
 WHERE
-    pai.device_serial = ?
-    AND pai.rel_path = ?
+    pa.user_id = CAST(sqlc.arg(user_id) AS INTEGER)
+    AND pai.device_serial = sqlc.arg(device_serial)
+    AND pai.rel_path = sqlc.arg(rel_path)
 ORDER BY
     pa.name;

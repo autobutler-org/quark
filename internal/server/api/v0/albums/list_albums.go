@@ -6,6 +6,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/favoritesutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/sqlutil"
 
@@ -30,6 +31,11 @@ func listAlbums(c *gin.Context) *serverutil.Response {
 	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
 	if err != nil {
 		return serverutil.InternalServerError(err)
+	}
+	// Each account's Favorites album is created the first time it lists its
+	// albums. A failure only leaves it out of this listing.
+	if _, err := favoritesutil.EnsureFavoritesAlbum(c.Request.Context(), deps.Database().Queries, access.Principal().UserID); err != nil {
+		_ = c.Error(err)
 	}
 	albums, err := deps.Database().Queries.ListAlbums(context.Background())
 	if err != nil {

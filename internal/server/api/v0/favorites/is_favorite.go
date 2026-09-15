@@ -13,7 +13,7 @@ import (
 
 // isFavorite godoc
 // @Summary Check if a photo is favorited
-// @Description Returns whether the specified photo is in the user's favorites. Needs read access on the photo.
+// @Description Returns whether the specified photo is in the caller's own favorites. Needs read access on the photo.
 // @Tags favorites
 // @Produce json
 // @Param serial query string false "Device serial"
@@ -43,6 +43,7 @@ func isFavorite(c *gin.Context) *serverutil.Response {
 	}
 
 	fav, err := deps.Database().Queries.IsFavorite(c.Request.Context(), db.IsFavoriteParams{
+		UserID:       access.Principal().UserID,
 		DeviceSerial: serial,
 		RelPath:      relPath,
 	})

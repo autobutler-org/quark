@@ -29,8 +29,8 @@ func (systemDevice) DetectDevices() ([]storageutil.Device, error) {
 }
 
 // TestFavorites_Access lists, checks and toggles only the favorites a
-// non-admin can read, while an admin sees every one (#1904). Favorites stay
-// shared until #1912; only what shows up in them is filtered.
+// non-admin can read, while an admin sees every one of their own (#1904).
+// Favorites belong to each account (#1912); what shows up in them is filtered.
 func TestFavorites_Access(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	if _, err := storageutil.GetFilesDir(); err != nil {
@@ -42,15 +42,21 @@ func TestFavorites_Access(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, rel := range []string{"shared/a.jpg", "private/b.jpg"} {
-		if _, err := favoritesutil.ToggleFavorite(ctx, database.Queries, "", rel); err != nil {
-			t.Fatal(err)
+	founder, err := database.Queries.CreateUser(ctx, db.CreateUserParams{Username: "founder", PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, owner := range []int64{founder.ID, user.ID} {
+		for _, rel := range []string{"shared/a.jpg", "private/b.jpg"} {
+			if _, err := favoritesutil.ToggleFavorite(ctx, database.Queries, owner, "", rel); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	deps := deputil.NewDependencies().
 		WithStorageService(storageutil.NewStorageService(systemDevice{})).
 		WithDatabase(database)
-	principal := accessutil.System
+	principal := accessutil.Principal{UserID: founder.ID, IsAdmin: true}
 
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -112,5 +118,12 @@ func TestFavorites_Access(t *testing.T) {
 	}
 	if got := status(http.MethodPost, "/api/v0/photos/favorite", []byte(`{"relPath":"shared/a.jpg"}`)); got != http.StatusOK {
 		t.Errorf("toggle a readable photo = %d, want 200", got)
+	}
+	if got := list(); len(got) != 0 {
+		t.Errorf("favorites after removing the readable one = %v, want none", got)
+	}
+	principal = accessutil.Principal{UserID: founder.ID, IsAdmin: true}
+	if got := list(); len(got) != 2 {
+		t.Errorf("admin favorites after the user removed theirs = %v, want both", got)
 	}
 }
