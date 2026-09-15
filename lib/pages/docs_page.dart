@@ -14,6 +14,7 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/widgets/docs/docs_body.dart';
 import 'package:quark/widgets/docs/docs_search_bar.dart';
+import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 
 class DocsPage extends StatefulWidget {
@@ -169,19 +170,7 @@ class _DocsPageState extends State<DocsPage> with SafeSetStateMixin {
           const AppThemeToggle(),
         ],
       ),
-      drawer: QuarkDrawer(
-        activeSection: QuarkDrawerSection.docs,
-        onTapFiles: () => context.go('/files'),
-        onTapPhotos: () => context.go('/photos'),
-        onTapTrash: () => context.go(AppRoutes.trash),
-        onTapDocs: () => Navigator.of(context).pop(),
-        onTapSheets: () => context.go('/sheets'),
-        onTapDevices: () => context.go('/devices'),
-        onTapHealth: () => context.go('/health'),
-        onTapVault: () => context.go(AppRoutes.vault),
-        onTapJobs: () => context.go(AppRoutes.jobs),
-        onTapSettings: () => context.go('/settings'),
-      ),
+      drawer: const AppDrawer(activeSection: QuarkDrawerSection.docs),
       body: Column(
         children: [
           DocsSearchBar(controller: _searchController),
