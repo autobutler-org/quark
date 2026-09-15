@@ -23,6 +23,7 @@ import 'package:quark/widgets/settings/sbom_expansion_tile.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/settings/code_block.dart';
 import 'package:quark/widgets/settings/delete_account_dialog.dart';
@@ -678,35 +679,7 @@ class _SettingsPageState extends State<SettingsPage> {
         icon: QuarkIcons.settings_outlined,
         actions: const [AppThemeToggle()],
       ),
-      drawer: QuarkDrawer(
-        activeSection: QuarkDrawerSection.settings,
-        onTapFiles: () {
-          context.go(AppRoutes.files);
-        },
-        onTapPhotos: () {
-          context.go(AppRoutes.photos);
-        },
-        onTapTrash: () => context.go(AppRoutes.trash),
-        onTapDocs: () {
-          context.go(AppRoutes.docs);
-        },
-        onTapSheets: () {
-          context.go(AppRoutes.sheets);
-        },
-        onTapDevices: () {
-          context.go(AppRoutes.devices);
-        },
-        onTapHealth: () {
-          context.go(AppRoutes.health);
-        },
-        onTapVault: () {
-          context.go(AppRoutes.vault);
-        },
-        onTapJobs: () => context.go(AppRoutes.jobs),
-        onTapSettings: () {
-          Navigator.of(context).pop();
-        },
-      ),
+      drawer: const AppDrawer(activeSection: QuarkDrawerSection.settings),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

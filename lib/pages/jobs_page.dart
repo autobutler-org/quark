@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/jobs_controller.dart';
-import 'package:quark/router.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
+import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -51,19 +50,7 @@ class _JobsPageState extends State<JobsPage>
           ),
           const AppThemeToggle(),
         ],
-        drawer: QuarkDrawer(
-          activeSection: QuarkDrawerSection.jobs,
-          onTapFiles: () => context.go(AppRoutes.files),
-          onTapPhotos: () => context.go(AppRoutes.photos),
-          onTapTrash: () => context.go(AppRoutes.trash),
-          onTapDocs: () => context.go(AppRoutes.docs),
-          onTapSheets: () => context.go(AppRoutes.sheets),
-          onTapDevices: () => context.go(AppRoutes.devices),
-          onTapHealth: () => context.go(AppRoutes.health),
-          onTapVault: () => context.go(AppRoutes.vault),
-          onTapJobs: () => Navigator.of(context).pop(),
-          onTapSettings: () => context.go(AppRoutes.settings),
-        ),
+        drawer: const AppDrawer(activeSection: QuarkDrawerSection.jobs),
         body: JobList(
           items: controller.items,
           isLoading: isInitialLoad || controller.isLoading,

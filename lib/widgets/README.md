@@ -25,6 +25,7 @@ lib/widgets/
     jobs_badge_host.dart        provides the QuarkAppBarTrailing scope with a
                                 JobsBadge fed by JobsController
   layout/
+    app_drawer.dart             AppDrawer, QuarkDrawer wired to the router
     theme_toggle_button.dart    AppThemeToggle, ThemeToggleButton wired to AppSettings
   photos/
     add_to_album_sheet.dart     AddToAlbumSheet host for a photo in an album

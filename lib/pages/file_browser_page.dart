@@ -48,6 +48,7 @@ import 'package:quark/widgets/file_browser/folder_route_error_state.dart';
 import 'package:quark/widgets/file_browser/new_file_dialog.dart';
 import 'package:quark/widgets/file_browser/recent_files_section.dart';
 import 'package:quark/widgets/file_browser/route_resolution_loading_shell.dart';
+import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/quark_connect_form.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -2025,35 +2026,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   Widget build(BuildContext context) {
     final routeFailure = _routeFailure;
     return Scaffold(
-      drawer: QuarkDrawer(
-        activeSection: QuarkDrawerSection.files,
-        onTapFiles: () {
-          Navigator.of(context).pop();
-        },
-        onTapPhotos: () {
-          context.go(AppRoutes.photos);
-        },
-        onTapTrash: () => context.go(AppRoutes.trash),
-        onTapDocs: () {
-          context.go(AppRoutes.docs);
-        },
-        onTapSheets: () {
-          context.go(AppRoutes.sheets);
-        },
-        onTapDevices: () {
-          context.go(AppRoutes.devices);
-        },
-        onTapHealth: () {
-          context.go(AppRoutes.health);
-        },
-        onTapVault: () {
-          context.go(AppRoutes.vault);
-        },
-        onTapJobs: () => context.go(AppRoutes.jobs),
-        onTapSettings: () {
-          context.go(AppRoutes.settings);
-        },
-      ),
+      drawer: const AppDrawer(activeSection: QuarkDrawerSection.files),
       body: Column(
         children: [
           Builder(
