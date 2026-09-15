@@ -438,3 +438,125 @@ group the user is in, publishes `access_changed`.
 - **Upload files** remains available as a separate source for documents.
 
 **Notes:** iOS's document picker is the Files app and cannot see the Camera Roll. Photos is a distinct source for that reason. Other platforms keep a single Files picker, which already includes the gallery.
+
+---
+
+### JN-FB-027: Share a folder with an account
+
+**Preconditions:** User owns the folder `Recipes`, or is an admin. Another account, `bob`, can sign in.
+
+**Steps:**
+
+1. Open the context menu on `Recipes` and select **Share…**.
+2. Under **Share with**, search for `bob` and tap his row.
+3. Choose **Can edit** and tap **Share**.
+
+**Expected result:**
+
+- The share sheet opens, titled **Share Recipes**, listing who has access.
+- After step 3 **bob** is listed under **Who has access** as **Can edit**.
+- `Recipes` appears in bob's Files without a refresh (JN-FB-024), and bob can add, rename and delete inside it.
+
+**Notes:**
+
+- **Can view** lets someone open and download; **Owner** also lets them change who has access, including making other
+  owners.
+- **Share…** isn't offered inside an archive or in the trash.
+
+---
+
+### JN-FB-028: Share with a group, or with everyone
+
+**Preconditions:** User owns the folder `Recipes`. A group `Family` exists (JN-USR-016).
+
+**Steps:**
+
+1. Open **Share…** on `Recipes`.
+2. Pick **Family**, keep **Can view**, and tap **Share**.
+3. Pick **everyone** and tap **Share**.
+
+**Expected result:**
+
+- Groups are listed ahead of accounts among the choices, **everyone** first, reading **Every account**.
+- After step 2 every member of **Family** can open `Recipes`; after step 3 every account can.
+- Someone added to **Family** later gets the same access (JN-USR-018).
+
+---
+
+### JN-FB-029: Change or remove access
+
+**Preconditions:** User owns `Recipes`, which is shared with `bob` at **Can edit** and with `cy` as **Owner**.
+
+**Steps:**
+
+1. Open **Share…** on `Recipes`.
+2. Open bob's level menu and choose **Can view**.
+3. Tap the remove button on bob's row.
+4. Tap the remove button on cy's row, read the confirmation, and tap **Remove**.
+
+**Expected result:**
+
+- After step 2 bob can still open `Recipes` but no longer change it.
+- After step 3 bob is no longer listed, and `Recipes` leaves his Files.
+- Step 4 asks first, because an item with no owner left can only be managed by admins. **Cancel** changes nothing.
+- Giving an owner a lower level asks the same way.
+
+---
+
+### JN-FB-030: Access inherited from a folder
+
+**Preconditions:** The folder `Family` is shared with `bob` at **Can edit** and holds a subfolder, `Recipes`. User owns
+`Family`.
+
+**Steps:**
+
+1. Open **Share…** on `Family/Recipes`.
+2. Move `Recipes` out of `Family`, then open **Share…** on it again.
+
+**Expected result:**
+
+- After step 1 bob is listed under **Inherited access**, reading "Can edit · From Family", with no level menu and no
+  remove button: that access can only be changed on `Family`.
+- The same account can also have access set on `Recipes` itself, listed separately under **Who has access**.
+- After step 2 the inherited row is gone: an item moved out of a shared folder no longer has that folder's access.
+
+**Notes:**
+
+- Access adds up through the folders an item is in, so a subfolder can't be more private than the folder that holds
+  it.
+- Access set on a drive's root folder reads "From /".
+
+---
+
+### JN-FB-031: Only owners and admins manage sharing
+
+**Preconditions:** `Recipes` is shared with `bob` at **Can edit**. User is signed in as `bob`, who is not an admin.
+
+**Steps:**
+
+1. Open the context menu on `Recipes` and select **Share…**.
+
+**Expected result:**
+
+- The sheet reads "Only the owner or an admin can change sharing." and shows nothing else.
+
+**Notes:**
+
+- The same happens at **Can view**. Only an owner of the item, or of a folder that holds it, or an admin, sees and
+  changes who has access.
+
+---
+
+### JN-FB-032: Your own ownership stays yours
+
+**Preconditions:** User owns `Recipes` through access set on it, and is not an admin.
+
+**Steps:**
+
+1. Open **Share…** on `Recipes`.
+2. Find your own row under **Who has access**.
+
+**Expected result:**
+
+- Your row reads **Owner**, and its level menu and remove button are turned off, so you can't lock yourself out.
+- Another owner, or an admin, can still change or remove it.
