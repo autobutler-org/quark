@@ -716,7 +716,24 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
-  // ── Video ─────────────────────────────────────────────────────────────────
+  // ── Users ─────────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'UserList',
+    group: 'Users',
+    build: (context, log) => UserList(
+      users: const [
+        UserAccountItem(username: 'ada', isAdmin: true),
+        UserAccountItem(username: 'grace', isAdmin: true),
+        UserAccountItem(username: 'bob'),
+        UserAccountItem(username: 'cy', status: UserAccountStatus.disabled),
+      ],
+      selfUsername: 'ada',
+      onPromote: (username) => log('UserList.onPromote($username)'),
+      onDemote: (username) => log('UserList.onDemote($username)'),
+    ),
+  ),
+
+  // ── Video─────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'TranscodeDialog',
     group: 'Video',
