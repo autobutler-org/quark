@@ -12,6 +12,7 @@ export 'src/albums/add_to_album_sheet.dart';
 export 'src/albums/album_picker_sheet.dart';
 export 'src/albums/album_sidebar.dart';
 export 'src/albums/album_tree_tile.dart';
+export 'src/core/confirm_delete_dialog.dart';
 export 'src/core/copy_button.dart';
 export 'src/core/empty_state_widget.dart';
 export 'src/core/password_strength_bar.dart';

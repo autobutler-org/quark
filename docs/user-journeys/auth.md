@@ -299,3 +299,24 @@ account on this Quark.
 **Notes:**
 
 - Recovering the account with its phrase is refused the same way.
+
+---
+
+### JN-AUTH-015: The last admin cannot delete their account while others remain
+
+**Preconditions:** Signed in as the only active admin. At least one other active or turned-off account exists.
+
+**Steps:**
+
+1. Navigate to **Settings**.
+2. Choose to delete your account, and confirm with your username.
+
+**Expected result:**
+
+- The deletion is refused with "This Quark needs at least one admin. Make someone else an admin first."
+- Nothing is deleted, and you stay signed in.
+
+**Notes:**
+
+- When the only other accounts are pending requests, the deletion goes ahead: the requests are deleted with it, the
+  Quark returns to setup, and the files are kept.

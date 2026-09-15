@@ -134,6 +134,19 @@ final List<GalleryEntry> registry = [
     build: (context, log) => const PasswordStrengthDemo(),
   ),
   GalleryEntry(
+    name: 'ConfirmDeleteDialog',
+    group: 'Core',
+    build: (context, log) => ConfirmDeleteDialog(
+      title: 'Delete bob?',
+      body:
+          "bob won't be able to sign in again. The files they own stay on "
+          'this Quark and become yours.',
+      keyPrefix: 'delete_user',
+      onConfirm: () => log('ConfirmDeleteDialog.onConfirm'),
+      onCancel: () => log('ConfirmDeleteDialog.onCancel'),
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkDisconnectedView',
     group: 'Core',
     build: (context, log) => SizedBox(
@@ -730,6 +743,9 @@ final List<GalleryEntry> registry = [
       selfUsername: 'ada',
       onPromote: (username) => log('UserList.onPromote($username)'),
       onDemote: (username) => log('UserList.onDemote($username)'),
+      onDisable: (username) => log('UserList.onDisable($username)'),
+      onEnable: (username) => log('UserList.onEnable($username)'),
+      onDelete: (username) => log('UserList.onDelete($username)'),
     ),
   ),
   GalleryEntry(

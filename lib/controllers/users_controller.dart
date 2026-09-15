@@ -5,6 +5,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 typedef ListUsersFn = Future<List<UserAccount>> Function();
 typedef AccountActionFn = Future<void> Function(String username);
+typedef DeleteUserFn = Future<int> Function(String username);
 typedef ReadAccessRequestsFn = Future<bool> Function();
 typedef SetAccessRequestsFn = Future<bool> Function(bool enabled);
 typedef CreateUserFn =
@@ -30,6 +31,9 @@ class UsersController extends ChangeNotifier {
     AccountActionFn demoteUser = UsersService.demote,
     AccountActionFn approveRequest = UsersService.approve,
     AccountActionFn denyRequest = UsersService.deny,
+    AccountActionFn disableUser = UsersService.disable,
+    AccountActionFn enableUser = UsersService.enable,
+    DeleteUserFn deleteUser = UsersService.delete,
     ReadAccessRequestsFn readAccessRequests =
         UsersService.accessRequestsEnabled,
     SetAccessRequestsFn setAccessRequests =
@@ -40,6 +44,9 @@ class UsersController extends ChangeNotifier {
        _demoteUser = demoteUser,
        _approveRequest = approveRequest,
        _denyRequest = denyRequest,
+       _disableUser = disableUser,
+       _enableUser = enableUser,
+       _deleteUser = deleteUser,
        _readAccessRequests = readAccessRequests,
        _setAccessRequests = setAccessRequests,
        _createUser = createUser;
@@ -52,6 +59,9 @@ class UsersController extends ChangeNotifier {
   final AccountActionFn _demoteUser;
   final AccountActionFn _approveRequest;
   final AccountActionFn _denyRequest;
+  final AccountActionFn _disableUser;
+  final AccountActionFn _enableUser;
+  final DeleteUserFn _deleteUser;
   final ReadAccessRequestsFn _readAccessRequests;
   final SetAccessRequestsFn _setAccessRequests;
   final CreateUserFn _createUser;
@@ -162,6 +172,19 @@ class UsersController extends ChangeNotifier {
   /// failure.
   Future<Object?> deny(String username) =>
       _act(username, () => _denyRequest(username));
+
+  /// Turns [username] off (#1909). Null on success, otherwise the failure.
+  Future<Object?> disable(String username) =>
+      _act(username, () => _disableUser(username));
+
+  /// Turns [username] back on. Null on success, otherwise the failure.
+  Future<Object?> enable(String username) =>
+      _act(username, () => _enableUser(username));
+
+  /// Deletes [username]; the files they owned stay and become the signed-in
+  /// admin's. Null on success, otherwise the failure.
+  Future<Object?> delete(String username) =>
+      _act(username, () => _deleteUser(username));
 
   /// Creates the account [input] describes (#1873). True when it was created
   /// and the list reloaded; false when [createError] now says why not.

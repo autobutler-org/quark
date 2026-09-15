@@ -384,6 +384,12 @@ class AuthService {
       await _forgetLocalSession();
       throw const UnauthorizedException();
     }
+    // The last active admin cannot delete their account while anyone else
+    // still has one (#1909). The Quark refuses with 409 and deletes nothing,
+    // so the session stays.
+    if (response.statusCode == 409) {
+      throw const MessageException(Errors.lastAdmin);
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = _tryDecodeError(response.body);
       throwApiError(response.statusCode, body, context);
