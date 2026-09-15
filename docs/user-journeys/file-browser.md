@@ -391,10 +391,17 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 **Steps:**
 
 1. Have a second client (or the quark itself) upload a new file.
+2. As the owner of a folder, share it with the user, then stop sharing it.
 
 **Expected result:**
 
 - New file appears in the file listing without a manual refresh.
+- The shared folder appears in the user's listing, then leaves it, without a manual refresh.
+- If the user had the folder open when it stopped being shared, the page shows **Folder not found** with a way back
+  to `/files`.
+
+**Notes:** Uploads, deletes, moves and new folders each publish their own event. A sharing change, or a change to a
+group the user is in, publishes `access_changed`.
 
 ---
 
