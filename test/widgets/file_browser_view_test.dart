@@ -80,6 +80,7 @@ void main() {
       Set<FileMenuAction>? menuActions,
       void Function(FileNode)? onOpenDirectory,
       String? subtitle,
+      bool inArchive = false,
     }) async {
       final dispatched = <FileMenuAction>[];
       await tester.pumpWidget(
@@ -90,6 +91,7 @@ void main() {
               currentPath: '',
               onFileMenuAction: (_, action) async => dispatched.add(action),
               onOpenDirectory: onOpenDirectory,
+              inArchive: inArchive,
               isGridView: false,
               menuActions: menuActions ?? FileBrowserView.defaultMenuActions,
               subtitleFor: subtitle == null ? null : (_) => subtitle,
@@ -120,7 +122,7 @@ void main() {
 
       expect(find.text('Restore'), findsOneWidget);
       expect(find.text('Delete permanently'), findsOneWidget);
-      for (final label in ['Download', 'Move/Rename', 'Delete']) {
+      for (final label in ['Download', 'Move/Rename', 'Share…', 'Delete']) {
         expect(find.text(label), findsNothing, reason: '$label is offered');
       }
 
@@ -144,11 +146,29 @@ void main() {
       await tester.tap(find.byType(PopupMenuButton<FileMenuAction>));
       await tester.pumpAndSettle();
 
-      for (final label in ['Download', 'Move/Rename', 'Delete']) {
+      for (final label in ['Download', 'Move/Rename', 'Share…', 'Delete']) {
         expect(find.text(label), findsOneWidget, reason: '$label is missing');
       }
       expect(find.text('Restore'), findsNothing);
       expect(find.text('Delete permanently'), findsNothing);
+    });
+
+    testWidgets('Share is dispatched, and not offered in an archive', (
+      tester,
+    ) async {
+      final dispatched = await pumpWithActions(tester, onOpenDirectory: (_) {});
+
+      await tester.tap(find.byType(PopupMenuButton<FileMenuAction>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Share…'));
+      await tester.pumpAndSettle();
+      expect(dispatched, [FileMenuAction.share]);
+
+      await pumpWithActions(tester, onOpenDirectory: (_) {}, inArchive: true);
+      await tester.tap(find.byType(PopupMenuButton<FileMenuAction>));
+      await tester.pumpAndSettle();
+      expect(find.text('Share…'), findsNothing);
+      expect(find.text('Download'), findsOneWidget);
     });
   });
 }

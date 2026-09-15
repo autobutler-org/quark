@@ -276,3 +276,25 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 - A copy of the photo appears in the destination.
 - Original is unchanged.
+
+---
+
+### JN-PH-016: Share a photo
+
+**Preconditions:** A Quark photo is in a folder the user owns, or the user is an admin.
+
+**Steps:**
+
+1. Open the photo in the image viewer.
+2. Open the more menu and select **Share…**.
+3. Pick an account or group, choose a level, and tap **Share**.
+
+**Expected result:**
+
+- The share sheet opens for that photo, the same as **Share…** in Files (JN-FB-027).
+- The account or group can open the photo.
+
+**Notes:**
+
+- A photo from the device, rather than the Quark, has no **Share…**.
+- Albums can't be shared; share the folder that holds the photos instead.
