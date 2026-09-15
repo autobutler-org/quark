@@ -273,6 +273,7 @@
     "libexec",
     "libglu",
     "libheif",
+    "libimage",
     "libmp",
     "libopus",
     "libtheora",
