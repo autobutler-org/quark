@@ -11,6 +11,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/storage_devices/role_dialog.dart';
 import 'package:quark/widgets/storage_devices/storage_devices_body.dart';
@@ -332,19 +333,7 @@ class _StorageDevicesPageState extends State<StorageDevicesPage>
           const AppThemeToggle(),
         ],
       ),
-      drawer: QuarkDrawer(
-        activeSection: QuarkDrawerSection.devices,
-        onTapFiles: () => context.go(AppRoutes.files),
-        onTapPhotos: () => context.go(AppRoutes.photos),
-        onTapTrash: () => context.go(AppRoutes.trash),
-        onTapDocs: () => context.go(AppRoutes.docs),
-        onTapSheets: () => context.go(AppRoutes.sheets),
-        onTapDevices: () => Navigator.of(context).pop(),
-        onTapHealth: () => context.go(AppRoutes.health),
-        onTapVault: () => context.go(AppRoutes.vault),
-        onTapJobs: () => context.go(AppRoutes.jobs),
-        onTapSettings: () => context.go(AppRoutes.settings),
-      ),
+      drawer: const AppDrawer(activeSection: QuarkDrawerSection.devices),
       body: StorageDevicesBody(
         devices: _devices,
         error: _error,
