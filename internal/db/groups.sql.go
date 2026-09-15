@@ -9,6 +9,25 @@ import (
 	"context"
 )
 
+const addGroupMember = `-- name: AddGroupMember :execrows
+INSERT INTO group_members (group_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING
+`
+
+type AddGroupMemberParams struct {
+	GroupID int64
+	UserID  int64
+}
+
+// AddGroupMember puts an account in a group. Adding a member again changes
+// nothing and reports no rows.
+func (q *Queries) AddGroupMember(ctx context.Context, arg AddGroupMemberParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, addGroupMember, arg.GroupID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const createGroup = `-- name: CreateGroup :one
 INSERT INTO groups (name) VALUES (?) RETURNING id, name, builtin
 `
@@ -115,6 +134,23 @@ func (q *Queries) ListGroups(ctx context.Context) ([]Group, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const removeGroupMember = `-- name: RemoveGroupMember :execrows
+DELETE FROM group_members WHERE group_id = ? AND user_id = ?
+`
+
+type RemoveGroupMemberParams struct {
+	GroupID int64
+	UserID  int64
+}
+
+func (q *Queries) RemoveGroupMember(ctx context.Context, arg RemoveGroupMemberParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, removeGroupMember, arg.GroupID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const renameGroup = `-- name: RenameGroup :one
