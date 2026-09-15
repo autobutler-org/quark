@@ -30,6 +30,9 @@ lib/widgets/
   photos/
     add_to_album_sheet.dart     AddToAlbumSheet host for a photo in an album
                                 view: calls AlbumService, shows snack bars
+  sharing/
+    show_share_sheet.dart       opens ShareSheet around a ShareController for
+                                one file or folder; confirms owner changes
   video_viewer/
     transcode_dialog_host.dart  hosts TranscodeDialog around an injected
                                 formats loader
