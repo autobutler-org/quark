@@ -9,11 +9,14 @@ import (
 )
 
 // stillActive reports whether the account a stream belongs to may still sign
-// in (#1909). A stream with no account behind it, as background principals and
+// in (#1909), with the admin role it connected with (#1910): a demoted admin's
+// stream would otherwise stay unfiltered, and a promoted account's would stay
+// filtered. A stream with no account behind it, as background principals and
 // tests have, always may. A question the database cannot answer counts as no:
 // the stream closes, and requireAuth decides when the app reconnects.
 func stillActive(ctx context.Context, deps deputil.Dependencies, access accessutil.Access) bool {
-	userID := access.Principal().UserID
+	principal := access.Principal()
+	userID := principal.UserID
 	if userID == 0 {
 		return true
 	}
@@ -21,6 +24,6 @@ func stillActive(ctx context.Context, deps deputil.Dependencies, access accessut
 	if database == nil {
 		return false
 	}
-	active, err := authutil.IsActive(ctx, database.Queries, userID)
+	active, err := authutil.IsActiveAs(ctx, database.Queries, userID, principal.IsAdmin)
 	return err == nil && active
 }

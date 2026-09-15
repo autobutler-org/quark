@@ -87,6 +87,8 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 		// No group has that id, so the admin gets a 404.
 		{http.MethodPut, "/api/v0/admin/groups/999"},
 		{http.MethodDelete, "/api/v0/admin/groups/999"},
+		{http.MethodPut, "/api/v0/admin/groups/999/members/1"},
+		{http.MethodDelete, "/api/v0/admin/groups/999/members/1"},
 		// confirm names neither account, so the admin stops at a 400 after the
 		// gate and nothing is deleted.
 		{http.MethodDelete, "/api/v0/auth/account?database=true&confirm=nobody"},

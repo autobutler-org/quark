@@ -493,7 +493,8 @@ type FilterEventResult struct {
 //     path. A move between two unreadable paths is dropped.
 //   - access_changed passes when its path is visible to the subscriber before
 //     or after the change, so a listing that just gained or lost entries
-//     reloads.
+//     reloads. One with no path, from a group membership change or a deleted
+//     group (#1910), may have changed anything and always passes.
 //   - Anything else passes when its path is readable.
 func FilterEvent(params FilterEventParams) FilterEventResult {
 	evt := params.Event
@@ -533,7 +534,8 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 			return FilterEventResult{}
 		}
 	case eventbus.EventAccessChanged:
-		visible := params.Previous.Visible(evt.DeviceSerial, evt.Path) || access.Visible(evt.DeviceSerial, evt.Path)
+		visible := Canonical(evt.Path) == "" ||
+			params.Previous.Visible(evt.DeviceSerial, evt.Path) || access.Visible(evt.DeviceSerial, evt.Path)
 		return FilterEventResult{Event: evt, Deliver: visible}
 	default:
 		return FilterEventResult{Event: evt, Deliver: readable(evt.Path)}
