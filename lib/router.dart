@@ -366,7 +366,8 @@ final router = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.recover,
-      builder: (context, state) => const RecoverPage(),
+      builder: (context, state) =>
+          RecoverPage(initialUsername: state.uri.queryParameters['username']),
     ),
     GoRoute(path: AppRoutes.terms, builder: (context, _) => const TermsPage()),
     GoRoute(

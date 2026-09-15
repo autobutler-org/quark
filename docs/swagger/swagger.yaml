@@ -1381,9 +1381,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Resets password using recovery phrase
+      description: Resets the named account's password using its recovery phrase
       parameters:
-      - description: '{recoveryPhrase, newPassword}'
+      - description: '{username, recoveryPhrase, newPassword}'
         in: body
         name: body
         required: true

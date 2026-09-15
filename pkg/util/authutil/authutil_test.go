@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
@@ -274,6 +275,7 @@ func TestRecover_Success(t *testing.T) {
 	})
 
 	result, err := authutil.Recover(context.Background(), queries, authutil.RecoverParams{
+		Username:       "admin",
 		RecoveryPhrase: setupResult.RecoveryPhrase,
 		NewPassword:    "newpassword123",
 	})
@@ -317,11 +319,97 @@ func TestRecover_WrongPhrase(t *testing.T) {
 	})
 
 	_, err := authutil.Recover(context.Background(), queries, authutil.RecoverParams{
+		Username:       "admin",
 		RecoveryPhrase: "wrong-phrase-that-does-not-match-anything",
 		NewPassword:    "newpassword123",
 	})
 	if err == nil {
 		t.Error("Expected error for wrong recovery phrase")
+	}
+}
+
+// createUserWithPhrase adds a second account the way Setup stores the first:
+// the recovery phrase is normalized before it is hashed.
+func createUserWithPhrase(t *testing.T, queries *db.Queries, username, password, phrase string) {
+	t.Helper()
+	passwordHash, err := authutil.HashPassword(password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	phraseHash, err := authutil.HashPassword(authutil.NormalizeRecoveryPhrase(phrase))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := queries.CreateUser(context.Background(), db.CreateUserParams{
+		Username:           username,
+		PasswordHash:       passwordHash,
+		RecoveryPhraseHash: phraseHash,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestRecover_NamedAccount recovers the account the request names, not the
+// founding one: a second user's phrase resets the second user's password.
+func TestRecover_NamedAccount(t *testing.T) {
+	queries := newTestDB(t)
+	ctx := context.Background()
+	founder, err := authutil.Setup(ctx, queries, authutil.SetupParams{Username: "admin", Password: "admin-password"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const bobPhrase = "apple-bread-cloud-delta-eagle-flame"
+	createUserWithPhrase(t, queries, "bob", "bob-password", bobPhrase)
+
+	if _, err := authutil.Recover(ctx, queries, authutil.RecoverParams{
+		Username:       "bob",
+		RecoveryPhrase: bobPhrase,
+		NewPassword:    "bob-new-password",
+	}); err != nil {
+		t.Fatalf("Recover(bob, bob's phrase) failed: %v", err)
+	}
+	if _, err := authutil.Login(ctx, queries, authutil.LoginParams{Username: "bob", Password: "bob-new-password"}); err != nil {
+		t.Errorf("bob should log in with the new password: %v", err)
+	}
+	if _, err := authutil.Login(ctx, queries, authutil.LoginParams{Username: "admin", Password: "admin-password"}); err != nil {
+		t.Errorf("admin's password must be untouched: %v", err)
+	}
+
+	// The founder's phrase does not recover bob.
+	if _, err := authutil.Recover(ctx, queries, authutil.RecoverParams{
+		Username:       "bob",
+		RecoveryPhrase: founder.RecoveryPhrase,
+		NewPassword:    "hijacked123",
+	}); err == nil {
+		t.Error("Recover(bob, admin's phrase) should fail")
+	}
+}
+
+// TestRecover_UnknownUserLooksLikeWrongPhrase keeps the endpoint from
+// revealing which usernames exist.
+func TestRecover_UnknownUserLooksLikeWrongPhrase(t *testing.T) {
+	queries := newTestDB(t)
+	ctx := context.Background()
+	founder, err := authutil.Setup(ctx, queries, authutil.SetupParams{Username: "admin", Password: "admin-password"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, unknownErr := authutil.Recover(ctx, queries, authutil.RecoverParams{
+		Username:       "nobody",
+		RecoveryPhrase: founder.RecoveryPhrase,
+		NewPassword:    "newpassword123",
+	})
+	_, wrongErr := authutil.Recover(ctx, queries, authutil.RecoverParams{
+		Username:       "admin",
+		RecoveryPhrase: "wrong-phrase-that-does-not-match-anything",
+		NewPassword:    "newpassword123",
+	})
+	if unknownErr == nil || wrongErr == nil {
+		t.Fatalf("expected both to fail, got unknown=%v wrong=%v", unknownErr, wrongErr)
+	}
+	if unknownErr.Error() != wrongErr.Error() {
+		t.Errorf("unknown user error %q differs from wrong phrase error %q", unknownErr, wrongErr)
 	}
 }
 
@@ -377,6 +465,7 @@ func TestRecover_CaseInsensitive(t *testing.T) {
 	// Recovery phrase should work regardless of case
 	upperPhrase := strings.ToUpper(setupResult.RecoveryPhrase)
 	_, err := authutil.Recover(context.Background(), queries, authutil.RecoverParams{
+		Username:       "admin",
 		RecoveryPhrase: upperPhrase,
 		NewPassword:    "newpassword123",
 	})

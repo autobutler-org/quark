@@ -9,11 +9,11 @@ import (
 
 // recoverAccount godoc
 // @Summary Recover account
-// @Description Resets password using recovery phrase
+// @Description Resets the named account's password using its recovery phrase
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param body body object true "{recoveryPhrase, newPassword}"
+// @Param body body object true "{username, recoveryPhrase, newPassword}"
 // @Success 200 {object} object
 // @Failure 400 {object} serverutil.Response
 // @Router /auth/recover [post]
@@ -24,6 +24,7 @@ func recoverAccount(c *gin.Context) *serverutil.Response {
 	}
 
 	var req struct {
+		Username       string `json:"username" binding:"required"`
 		RecoveryPhrase string `json:"recoveryPhrase" binding:"required"`
 		NewPassword    string `json:"newPassword" binding:"required"`
 	}
@@ -32,6 +33,7 @@ func recoverAccount(c *gin.Context) *serverutil.Response {
 	}
 
 	result, err := authutil.Recover(c.Request.Context(), (*deps).Database().Queries, authutil.RecoverParams{
+		Username:       req.Username,
 		RecoveryPhrase: req.RecoveryPhrase,
 		NewPassword:    req.NewPassword,
 	})
