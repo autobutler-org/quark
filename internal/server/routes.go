@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	v0_access "github.com/autobutler-org/quark/internal/server/api/v0/access"
 	v0_admin "github.com/autobutler-org/quark/internal/server/api/v0/admin"
 	v0_albums "github.com/autobutler-org/quark/internal/server/api/v0/albums"
 	v0_auth "github.com/autobutler-org/quark/internal/server/api/v0/auth"
@@ -43,6 +44,7 @@ func setupRoutes(engine *gin.Engine, systemCollector *healthutil.Collector, deps
 func setupRouters(engine *gin.Engine, systemCollector *healthutil.Collector, deps deputil.Dependencies) {
 	group := engine.Group("/api/v0")
 	apiRouters := []serverutil.Router{
+		v0_access.NewRouter(),
 		v0_auth.NewRouter(),
 		v0_books.NewRouter(),
 		v0_files.NewRouter(),

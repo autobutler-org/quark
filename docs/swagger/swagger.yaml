@@ -1,4 +1,51 @@
 definitions:
+  accessutil.Grant:
+    properties:
+      builtin:
+        description: Builtin marks the everyone group.
+        type: boolean
+      from:
+        description: |-
+          From is the path the row is on. A grant whose From is not the path
+          asked about is inherited from that folder, and is changed there.
+        type: string
+      groupId:
+        description: GroupID is set for a grant to a group.
+        type: integer
+      level:
+        description: Level is read, write or owner.
+        type: string
+      name:
+        description: Name is the account's username or the group's name.
+        type: string
+      userId:
+        description: UserID is set for a grant to an account.
+        type: integer
+    type: object
+  accessutil.GrantsResult:
+    properties:
+      canGrantOwner:
+        description: |-
+          CanGrantOwner is whether the caller may grant, change or revoke owner.
+          Every owner may, so it equals CanManage.
+        type: boolean
+      canManage:
+        description: |-
+          CanManage is whether the caller may change the grants. Only a caller who
+          may manage sees them at all, so it is true in every result.
+        type: boolean
+      deviceSerial:
+        type: string
+      grants:
+        description: |-
+          Grants lists the rows on the path, then one inherited grant per principal
+          holding the highest level any parent folder gives it.
+        items:
+          $ref: '#/definitions/accessutil.Grant'
+        type: array
+      relPath:
+        type: string
+    type: object
   authutil.SessionInfo:
     properties:
       createdAt:
@@ -245,6 +292,33 @@ definitions:
         type: string
       version:
         type: string
+    type: object
+  v0_access.revokeAccessBody:
+    properties:
+      deviceSerial:
+        description: DeviceSerial names the device; empty is the internal one.
+        type: string
+      groupId:
+        type: integer
+      relPath:
+        type: string
+      userId:
+        type: integer
+    type: object
+  v0_access.setAccessBody:
+    properties:
+      deviceSerial:
+        description: DeviceSerial names the device; empty is the internal one.
+        type: string
+      groupId:
+        type: integer
+      level:
+        description: Level is read, write or owner.
+        type: string
+      relPath:
+        type: string
+      userId:
+        type: integer
     type: object
   v0_admin.createUserBody:
     properties:
@@ -914,6 +988,151 @@ definitions:
 info:
   contact: {}
 paths:
+  /access:
+    delete:
+      consumes:
+      - application/json
+      description: Removes one account's or group's grant on exactly this path and
+        returns the path's grants as they now stand. Only an owner of the path or
+        an admin may. Access a parent folder gives is removed on that folder instead.
+        A non-admin can't remove their own owner row on the path; another owner or
+        an admin may remove the last one. Publishes access_changed for the path.
+      parameters:
+      - description: The path and one account or group
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_access.revokeAccessBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/accessutil.GrantsResult'
+        "400":
+          description: a path in the trash, not exactly one account or group, or the
+            caller's own owner row
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: the caller can read the path but doesn't own it
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: the caller can't read the path, or that account or group has
+            no access to it
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: the access comes from a parent folder
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Stop sharing a file or folder
+      tags:
+      - access
+    get:
+      description: Returns the grants on a path, then one inherited grant per account
+        or group for the highest level a parent folder gives it; a grant whose from
+        is not relPath is inherited and is changed on that folder. Only an owner of
+        the path, directly or through a parent folder, or an admin may see them. canManage
+        and canGrantOwner are true in every answer.
+      parameters:
+      - description: Device serial; empty is the internal device
+        in: query
+        name: serial
+        type: string
+      - description: Path on the device
+        in: query
+        name: relPath
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/accessutil.GrantsResult'
+        "400":
+          description: a path in the trash
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: the caller can read the path but doesn't own it
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: the caller can't read the path
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: List who can reach a file or folder
+      tags:
+      - access
+    put:
+      consumes:
+      - application/json
+      description: Grants one active account or existing group read, write or owner
+        on a path, replacing the level it had there, and returns the path's grants
+        as they now stand. Only an owner of the path or an admin may share it. A non-admin
+        can't change their own owner row on the path. Publishes access_changed for
+        the path.
+      parameters:
+      - description: The path, one account or group, and the level
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_access.setAccessBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/accessutil.GrantsResult'
+        "400":
+          description: a path in the trash, not exactly one account or group, a level
+            other than read, write or owner, or the caller's own owner row
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: the caller can read the path but doesn't own it
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: the caller can't read the path, or no active account or group
+            has that id
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Share a file or folder
+      tags:
+      - access
   /admin/approve/{username}:
     put:
       description: Turns a pending account request into an active account that can
