@@ -334,20 +334,25 @@ class _StorageDevicesPageState extends State<StorageDevicesPage>
         ],
       ),
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.devices),
-      body: StorageDevicesBody(
-        devices: _devices,
-        error: _error,
-        mounting: _mounting,
-        vaultDeviceSerial: _vaultDeviceSerial,
-        backupStatus: _backupStatus,
-        activeBackupJobId: _activeBackupJobId,
-        onRefresh: refresh,
-        onRetry: manualRefresh,
-        onManageHosts: () => context.go(AppRoutes.settings),
-        onMount: _mountDevice,
-        onSetRole: _showRoleDialog,
-        onBackup: _startBackup,
-        onVerify: _verifyBackup,
+      // Every drive action is admin-only on the Quark (#1899), so anyone else
+      // gets the list without them (#1928).
+      body: ValueListenableBuilder<bool>(
+        valueListenable: AppSettings.instance.isAdmin,
+        builder: (context, isAdmin, _) => StorageDevicesBody(
+          devices: _devices,
+          error: _error,
+          mounting: _mounting,
+          vaultDeviceSerial: _vaultDeviceSerial,
+          backupStatus: _backupStatus,
+          activeBackupJobId: _activeBackupJobId,
+          onRefresh: refresh,
+          onRetry: manualRefresh,
+          onManageHosts: () => context.go(AppRoutes.settings),
+          onMount: isAdmin ? _mountDevice : null,
+          onSetRole: isAdmin ? _showRoleDialog : null,
+          onBackup: isAdmin ? _startBackup : null,
+          onVerify: isAdmin ? _verifyBackup : null,
+        ),
       ),
     );
   }

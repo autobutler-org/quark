@@ -20,10 +20,10 @@ class StorageDevicesBody extends StatelessWidget {
     required this.onRefresh,
     required this.onRetry,
     required this.onManageHosts,
-    required this.onMount,
-    required this.onSetRole,
-    required this.onBackup,
-    required this.onVerify,
+    this.onMount,
+    this.onSetRole,
+    this.onBackup,
+    this.onVerify,
     super.key,
   });
 
@@ -42,10 +42,13 @@ class StorageDevicesBody extends StatelessWidget {
   final RefreshCallback onRefresh;
   final VoidCallback onRetry;
   final VoidCallback onManageHosts;
-  final ValueChanged<StorageDevice> onMount;
-  final ValueChanged<StorageDevice> onSetRole;
-  final ValueChanged<StorageDevice> onBackup;
-  final ValueChanged<StorageDevice> onVerify;
+
+  /// The drive actions. Each is admin-only on the Quark, so the page leaves
+  /// them null for anyone else, and a null one draws no button (#1928).
+  final ValueChanged<StorageDevice>? onMount;
+  final ValueChanged<StorageDevice>? onSetRole;
+  final ValueChanged<StorageDevice>? onBackup;
+  final ValueChanged<StorageDevice>? onVerify;
 
   @override
   Widget build(BuildContext context) {
@@ -84,21 +87,29 @@ class StorageDevicesBody extends StatelessWidget {
       widgets.add(BackupProgressCard(status: backupStatus!));
     }
 
+    final onMount = this.onMount;
+    final onSetRole = this.onSetRole;
+    final onBackup = this.onBackup;
+    final onVerify = this.onVerify;
     for (final device in devices) {
       final isVaultDevice =
           (vaultDeviceSerial.isEmpty && device.isInternal) ||
           (vaultDeviceSerial.isNotEmpty && device.serial == vaultDeviceSerial);
+      final isUsb = device.serial.isNotEmpty;
+      final isBackupDrive = device.role == 'snapshot-backup';
       widgets.add(
         DeviceCard(
           device: device,
           isMounting: mounting.contains(device.serial),
           isVaultDevice: isVaultDevice,
-          onMount: device.serial.isNotEmpty ? () => onMount(device) : null,
-          onSetRole: device.serial.isNotEmpty ? () => onSetRole(device) : null,
-          onBackup: device.role == 'snapshot-backup'
+          onMount: onMount != null && isUsb ? () => onMount(device) : null,
+          onSetRole: onSetRole != null && isUsb
+              ? () => onSetRole(device)
+              : null,
+          onBackup: onBackup != null && isBackupDrive
               ? () => onBackup(device)
               : null,
-          onVerify: device.role == 'snapshot-backup'
+          onVerify: onVerify != null && isBackupDrive
               ? () => onVerify(device)
               : null,
           isBackupRunning: backupStatus?.isRunning == true,
