@@ -3230,7 +3230,7 @@ const docTemplate = `{
         },
         "/jobs": {
             "get": {
-                "description": "Returns every job of the requested kinds, newest first, finished ones included. This is the source of truth for job state; the job_* events are a hint to refresh and can be dropped.",
+                "description": "Returns the jobs of the requested kinds the caller may see, newest first, finished ones included. An admin sees every job; anyone else sees the jobs they queued whose file they can still read, with error left blank. This is the source of truth for job state; the job_* events are a hint to refresh and can be dropped.",
                 "produces": [
                     "application/json"
                 ],
@@ -3278,7 +3278,7 @@ const docTemplate = `{
         },
         "/jobs/{id}": {
             "get": {
-                "description": "Returns one background job by id.",
+                "description": "Returns one background job by id. A caller who is not an admin gets only a job they queued whose file they can still read, with error left blank; any other job is 404.",
                 "produces": [
                     "application/json"
                 ],
@@ -3323,7 +3323,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Cancels a pending or running job and returns it, now canceled. A pending job never runs; a running job is stopped and cleans up after itself.",
+                "description": "Cancels a pending or running job and returns it, now canceled. A pending job never runs; a running job is stopped and cleans up after itself. Only the account that queued the job, or an admin, may cancel it; any other caller gets 404.",
                 "produces": [
                     "application/json"
                 ],
@@ -3376,7 +3376,7 @@ const docTemplate = `{
         },
         "/jobs/{id}/retry": {
             "post": {
-                "description": "Resets a failed job to pending so it runs again. It keeps its id and createdAt; progress, error, startedAt, and finishedAt are cleared, and the returned jobId is the same id. A retry whose inputs no longer exist, such as a transcode of a video that was moved or deleted, is refused with 422.",
+                "description": "Resets a failed job to pending so it runs again. It keeps its id and createdAt; progress, error, startedAt, and finishedAt are cleared, and the returned jobId is the same id. Only the account that queued the job, or an admin, may retry it; any other caller gets 404. The job runs as the account that queued it, which must still be active and able to write the folder of the file the job works on, or the retry is refused with 403. A retry whose inputs no longer exist, such as a transcode of a video that was moved or deleted, is refused with 422.",
                 "produces": [
                     "application/json"
                 ],
@@ -3402,6 +3402,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — the account that queued the job can no longer sign in or write the folder",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
