@@ -15,7 +15,7 @@ import (
 
 // renameAlbum godoc
 // @Summary Rename a photo album
-// @Description Updates the name of an existing album. The name cannot contain / and must be unique among the album's siblings ignoring case; changing only the case of the album's own name is allowed.
+// @Description Updates the name of one of the caller's albums. The name cannot contain / and must be unique among the album's siblings ignoring case; changing only the case of the album's own name is allowed.
 // @Tags albums
 // @Accept json
 // @Produce json
@@ -24,7 +24,7 @@ import (
 // @Success 200 {object} AlbumJSON
 // @Failure 400 {object} serverutil.Response "Bad Request: invalid id, missing name, or a / in the name"
 // @Failure 403 {object} serverutil.Response "Forbidden: system album"
-// @Failure 404 {object} serverutil.Response "Not Found"
+// @Failure 404 {object} serverutil.Response "Not Found: no album of the caller's has that id"
 // @Failure 409 {object} serverutil.Response "Conflict: an album with that name already exists here"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /albums/{id}/rename [patch]
@@ -44,12 +44,14 @@ func renameAlbum(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
-	if resp := rejectSystemAlbum(c.Request.Context(), deps.Database().Queries, id); resp != nil {
+	userID := callerID(c)
+	if resp := rejectSystemAlbum(c.Request.Context(), deps.Database().Queries, userID, id); resp != nil {
 		return resp
 	}
 
 	result, err := albumutil.RenameAlbum(c.Request.Context(), albumutil.RenameAlbumParams{
 		Queries: deps.Database().Queries,
+		UserID:  userID,
 		ID:      id,
 		Name:    req.Name,
 	})

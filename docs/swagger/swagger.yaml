@@ -1772,8 +1772,9 @@ paths:
       - admin
   /albums:
     get:
-      description: Returns all photo albums as a flat list. Use ?tree=true to get
-        a nested tree.
+      description: Returns the caller's own photo albums as a flat list, creating
+        their Favorites album on first use. Admins see only their own albums too.
+        Use ?tree=true to get a nested tree.
       parameters:
       - description: Return as nested tree (default false)
         in: query
@@ -1798,9 +1799,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a new photo album, optionally nested under a parent. The
-        name cannot contain / and must be unique among its siblings ignoring case;
-        root albums, the system Favorites album included, are siblings of each other.
+      description: Creates a photo album owned by the caller, optionally nested under
+        one of the caller's albums. The name cannot contain / and must be unique among
+        its siblings ignoring case; the caller's root albums, their Favorites album
+        included, are siblings of each other.
       parameters:
       - description: Album name and optional parent ID
         in: body
@@ -1817,7 +1819,7 @@ paths:
             $ref: '#/definitions/v0_albums.AlbumJSON'
         "400":
           description: 'Bad Request: missing name, a / in the name, or parent not
-            found'
+            found among the caller''s albums'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "403":
@@ -1837,8 +1839,8 @@ paths:
       - albums
   /albums/{id}:
     delete:
-      description: Deletes an album and all its children (cascades). Does not delete
-        photos from disk.
+      description: Deletes one of the caller's albums and all its children (cascades).
+        Does not delete photos from disk.
       parameters:
       - description: Album ID
         in: path
@@ -1860,6 +1862,10 @@ paths:
           description: 'Forbidden: system album'
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: 'Not Found: no album of the caller''s has that id'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
@@ -1868,7 +1874,8 @@ paths:
       tags:
       - albums
     get:
-      description: Returns a single album with its item count and direct children.
+      description: Returns one of the caller's albums with its item count and direct
+        children.
       parameters:
       - description: Album ID
         in: path
@@ -1887,7 +1894,7 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
-          description: Not Found
+          description: 'Not Found: no album of the caller''s has that id'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -1930,6 +1937,10 @@ paths:
           description: 'Forbidden: system album'
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: 'Not Found: no album of the caller''s has that id'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
@@ -1938,7 +1949,8 @@ paths:
       tags:
       - albums
     get:
-      description: Returns all photo items (pointers) in the given album.
+      description: Returns the photo items (pointers) the caller can read in one of
+        the caller's albums.
       parameters:
       - description: Album ID
         in: path
@@ -1956,6 +1968,10 @@ paths:
             type: array
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: 'Not Found: no album of the caller''s has that id'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -2012,10 +2028,10 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Changes the parent of an album. Pass null parentId to move to root.
-        The new parent must not already hold an album with the same name ignoring
-        case; root albums, the system Favorites album included, are siblings of each
-        other.
+      description: Changes the parent of one of the caller's albums. Pass null parentId
+        to move to root. The new parent must be the caller's own and must not already
+        hold an album with the same name ignoring case; the caller's root albums,
+        their Favorites album included, are siblings of each other.
       parameters:
       - description: Album ID
         in: path
@@ -2036,7 +2052,8 @@ paths:
           schema:
             $ref: '#/definitions/v0_albums.AlbumJSON'
         "400":
-          description: Bad Request
+          description: 'Bad Request: invalid id or body, or parent not found among
+            the caller''s albums'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "403":
@@ -2044,7 +2061,7 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
-          description: Not Found
+          description: 'Not Found: no album of the caller''s has that id'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "409":
@@ -2062,9 +2079,9 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Updates the name of an existing album. The name cannot contain
-        / and must be unique among the album's siblings ignoring case; changing only
-        the case of the album's own name is allowed.
+      description: Updates the name of one of the caller's albums. The name cannot
+        contain / and must be unique among the album's siblings ignoring case; changing
+        only the case of the album's own name is allowed.
       parameters:
       - description: Album ID
         in: path
@@ -2093,7 +2110,7 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
-          description: Not Found
+          description: 'Not Found: no album of the caller''s has that id'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "409":

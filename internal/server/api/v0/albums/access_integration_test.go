@@ -32,7 +32,9 @@ func (systemDevice) DetectDevices() ([]storageutil.Device, error) {
 
 // TestAlbums_Access shows a non-admin only the album items they can read, and
 // counts only those, in every response that carries a count, while an admin's
-// albums are unchanged (#1904). Albums stay shared until #1912.
+// albums are unchanged (#1904). Albums belong to one account (#1912), so the
+// same account is checked as an admin and then as a non-admin, and another
+// admin sees none of its albums.
 func TestAlbums_Access(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	if _, err := storageutil.GetFilesDir(); err != nil {
@@ -49,12 +51,12 @@ func TestAlbums_Access(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	trip, err := albumutil.CreateAlbum(ctx, albumutil.CreateAlbumParams{UserID: founder.ID, Queries: q, Name: "trip"})
+	trip, err := albumutil.CreateAlbum(ctx, albumutil.CreateAlbumParams{UserID: user.ID, Queries: q, Name: "trip"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	day, err := albumutil.CreateAlbum(ctx, albumutil.CreateAlbumParams{
-		UserID:  founder.ID,
+		UserID:  user.ID,
 		Queries: q, Name: "day1", ParentID: sql.NullInt64{Int64: trip.Album.ID, Valid: true},
 	})
 	if err != nil {
@@ -76,7 +78,7 @@ func TestAlbums_Access(t *testing.T) {
 	deps := deputil.NewDependencies().
 		WithStorageService(storageutil.NewStorageService(systemDevice{})).
 		WithDatabase(database)
-	principal := accessutil.Principal{UserID: founder.ID, IsAdmin: true}
+	principal := accessutil.Principal{UserID: user.ID, IsAdmin: true}
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
@@ -127,6 +129,14 @@ func TestAlbums_Access(t *testing.T) {
 	}
 	if got := items(); len(got) != 2 {
 		t.Errorf("admin items = %v, want 2", got)
+	}
+
+	principal = accessutil.Principal{UserID: founder.ID, IsAdmin: true}
+	if got := counts(); len(got) != 1 || got["Favorites"] != 0 {
+		t.Errorf("another admin's albums = %v, want only their own empty Favorites", got)
+	}
+	if code := do(http.MethodGet, tripPath, "", nil); code != http.StatusNotFound {
+		t.Errorf("another admin getting the album = %d, want 404", code)
 	}
 
 	principal = accessutil.Principal{UserID: user.ID}
