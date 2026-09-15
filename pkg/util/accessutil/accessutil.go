@@ -598,3 +598,251 @@ func VisibleTrash(params VisibleTrashParams) VisibleTrashResult {
 	}
 	return VisibleTrashResult{Items: kept}
 }
+
+// ParseLevel reads a level's spelling, as the path_access table stores it and
+// the sharing API accepts it. Anything else is None.
+func ParseLevel(s string) Level {
+	switch s {
+	case "read":
+		return Read
+	case "write":
+		return Write
+	case "owner":
+		return Owner
+	default:
+		return None
+	}
+}
+
+// The sharing sentinels' text is written for the app to show, so handlers send
+// it out unwrapped (#1911).
+var (
+	// ErrShareNotFound reports a path the caller can't read, so they may not
+	// learn whether it exists.
+	ErrShareNotFound = errors.New("no file or folder is at that path")
+	// ErrShareForbidden reports a caller who can read a path but doesn't own it.
+	ErrShareForbidden = errors.New("only the owner or an admin can change sharing")
+	// ErrTrashShare reports a path in the trash.
+	ErrTrashShare = errors.New("items in the trash can't be shared")
+	// ErrSelfOwner reports a non-admin changing or removing their own owner
+	// row, which could lock them out.
+	ErrSelfOwner = errors.New("you can't remove your own ownership; ask another owner or an admin")
+	// ErrInheritedGrant reports removing access that only a parent folder
+	// gives.
+	ErrInheritedGrant = errors.New("that access comes from a parent folder; change it there")
+	// ErrGrantNotFound reports removing access nobody granted.
+	ErrGrantNotFound = errors.New("that account or group doesn't have access to this item")
+	// ErrGrantTarget reports a grant naming no principal, or both kinds.
+	ErrGrantTarget = errors.New("choose one account or group")
+	// ErrPrincipalNotFound reports a grant to an account that is missing or not
+	// active, or to a group that doesn't exist.
+	ErrPrincipalNotFound = errors.New("no active account or group has that id")
+	// ErrInvalidLevel reports a level other than read, write or owner.
+	ErrInvalidLevel = errors.New("access is read, write or owner")
+)
+
+// Grant is one principal's access to a path, as the sharing sheet shows it.
+type Grant struct {
+	// UserID is set for a grant to an account.
+	UserID int64 `json:"userId,omitempty"`
+	// GroupID is set for a grant to a group.
+	GroupID int64 `json:"groupId,omitempty"`
+	// Name is the account's username or the group's name.
+	Name string `json:"name"`
+	// Builtin marks the everyone group.
+	Builtin bool `json:"builtin"`
+	// Level is read, write or owner.
+	Level string `json:"level"`
+	// From is the path the row is on. A grant whose From is not the path
+	// asked about is inherited from that folder, and is changed there.
+	From string `json:"from"`
+}
+
+// GrantsResult is who may reach a path, for a caller who manages its sharing.
+type GrantsResult struct {
+	DeviceSerial string `json:"deviceSerial"`
+	RelPath      string `json:"relPath"`
+	// CanManage is whether the caller may change the grants. Only a caller who
+	// may manage sees them at all, so it is true in every result.
+	CanManage bool `json:"canManage"`
+	// CanGrantOwner is whether the caller may grant, change or revoke owner.
+	// Every owner may, so it equals CanManage.
+	CanGrantOwner bool `json:"canGrantOwner"`
+	// Grants lists the rows on the path, then one inherited grant per principal
+	// holding the highest level any parent folder gives it.
+	Grants []Grant `json:"grants"`
+}
+
+// ListGrantsParams asks who may reach a path.
+type ListGrantsParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// Access is the caller's access as loaded for the request.
+	Access       Access
+	DeviceSerial string
+	Path         string
+}
+
+// ListGrants lists a path's grants for an owner of it or an admin. A caller who
+// can't read the path gets ErrShareNotFound, one who can but doesn't own it
+// ErrShareForbidden, and a path in the trash ErrTrashShare.
+func ListGrants(params ListGrantsParams) (GrantsResult, error) {
+	if params.Database == nil {
+		return GrantsResult{}, ErrNoDatabase
+	}
+	rel, err := shareablePath(params.Access, params.DeviceSerial, params.Path)
+	if err != nil {
+		return GrantsResult{}, err
+	}
+	rows, err := params.Database.Queries.ListPathAccessOnAncestors(params.Ctx, db.ListPathAccessOnAncestorsParams{
+		DeviceSerial: params.DeviceSerial,
+		RelPath:      rel,
+	})
+	if err != nil {
+		return GrantsResult{}, err
+	}
+	return GrantsResult{
+		DeviceSerial:  params.DeviceSerial,
+		RelPath:       rel,
+		CanManage:     true,
+		CanGrantOwner: true,
+		Grants:        grantsFromRows(rows, rel),
+	}, nil
+}
+
+// SetGrantParams grants one principal a level on a path. Exactly one of UserID
+// and GroupID is set.
+type SetGrantParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears access_changed for the path. Nil skips it.
+	EventBus *eventbus.Bus
+	// Access is the caller's access as loaded for the request.
+	Access       Access
+	DeviceSerial string
+	Path         string
+	UserID       int64
+	GroupID      int64
+	Level        Level
+}
+
+// SetGrant adds or changes a principal's row on a path and returns the path's
+// grants as they now stand. It answers to the same callers ListGrants does, and
+// any of them may grant owner. A non-admin may not change their own owner row
+// on the path (ErrSelfOwner). The account must be active and the group must
+// exist; a grant a parent folder already covers is still recorded.
+func SetGrant(params SetGrantParams) (GrantsResult, error) {
+	if (params.UserID == 0) == (params.GroupID == 0) {
+		return GrantsResult{}, ErrGrantTarget
+	}
+	if params.Level < Read || params.Level > Owner {
+		return GrantsResult{}, ErrInvalidLevel
+	}
+	if params.Database == nil {
+		return GrantsResult{}, ErrNoDatabase
+	}
+	rel, err := shareablePath(params.Access, params.DeviceSerial, params.Path)
+	if err != nil {
+		return GrantsResult{}, err
+	}
+	queries := params.Database.Queries
+	if err := ensurePrincipal(params.Ctx, queries, params.UserID, params.GroupID); err != nil {
+		return GrantsResult{}, err
+	}
+	if params.Level != Owner {
+		if err := ensureNotSelfOwner(params.Ctx, queries, params.Access.principal, params.DeviceSerial, rel, params.UserID); err != nil {
+			return GrantsResult{}, err
+		}
+	}
+
+	if params.UserID != 0 {
+		err = queries.SetUserPathAccess(params.Ctx, db.SetUserPathAccessParams{
+			DeviceSerial: params.DeviceSerial,
+			RelPath:      rel,
+			UserID:       sql.NullInt64{Int64: params.UserID, Valid: true},
+			Level:        params.Level.String(),
+		})
+	} else {
+		err = queries.SetGroupPathAccess(params.Ctx, db.SetGroupPathAccessParams{
+			DeviceSerial: params.DeviceSerial,
+			RelPath:      rel,
+			GroupID:      sql.NullInt64{Int64: params.GroupID, Valid: true},
+			Level:        params.Level.String(),
+		})
+	}
+	if err != nil {
+		return GrantsResult{}, err
+	}
+	publishAccessChanged(params.EventBus, params.DeviceSerial, rel)
+	return ListGrants(ListGrantsParams{Ctx: params.Ctx, Database: params.Database, Access: params.Access, DeviceSerial: params.DeviceSerial, Path: rel})
+}
+
+// RevokeGrantParams removes one principal's row on a path. Exactly one of
+// UserID and GroupID is set.
+type RevokeGrantParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears access_changed for the path. Nil skips it.
+	EventBus *eventbus.Bus
+	// Access is the caller's access as loaded for the request.
+	Access       Access
+	DeviceSerial string
+	Path         string
+	UserID       int64
+	GroupID      int64
+}
+
+// RevokeGrant removes a principal's row on a path and returns the path's grants
+// as they now stand. It answers to the same callers ListGrants does. Access a
+// parent folder gives can't be removed on the path (ErrInheritedGrant), a
+// principal with no access at all is ErrGrantNotFound, and a non-admin may not
+// remove their own owner row (ErrSelfOwner). An admin or another owner may
+// remove the last owner row.
+func RevokeGrant(params RevokeGrantParams) (GrantsResult, error) {
+	if (params.UserID == 0) == (params.GroupID == 0) {
+		return GrantsResult{}, ErrGrantTarget
+	}
+	if params.Database == nil {
+		return GrantsResult{}, ErrNoDatabase
+	}
+	rel, err := shareablePath(params.Access, params.DeviceSerial, params.Path)
+	if err != nil {
+		return GrantsResult{}, err
+	}
+	queries := params.Database.Queries
+	if err := ensureNotSelfOwner(params.Ctx, queries, params.Access.principal, params.DeviceSerial, rel, params.UserID); err != nil {
+		return GrantsResult{}, err
+	}
+
+	var deleted int64
+	if params.UserID != 0 {
+		deleted, err = queries.DeleteUserPathAccess(params.Ctx, db.DeleteUserPathAccessParams{
+			UserID:       sql.NullInt64{Int64: params.UserID, Valid: true},
+			DeviceSerial: params.DeviceSerial,
+			RelPath:      rel,
+		})
+	} else {
+		deleted, err = queries.DeleteGroupPathAccess(params.Ctx, db.DeleteGroupPathAccessParams{
+			GroupID:      sql.NullInt64{Int64: params.GroupID, Valid: true},
+			DeviceSerial: params.DeviceSerial,
+			RelPath:      rel,
+		})
+	}
+	if err != nil {
+		return GrantsResult{}, err
+	}
+	if deleted == 0 {
+		result, err := ListGrants(ListGrantsParams{Ctx: params.Ctx, Database: params.Database, Access: params.Access, DeviceSerial: params.DeviceSerial, Path: rel})
+		if err != nil {
+			return GrantsResult{}, err
+		}
+		for _, grant := range result.Grants {
+			if grant.UserID == params.UserID && grant.GroupID == params.GroupID {
+				return GrantsResult{}, ErrInheritedGrant
+			}
+		}
+		return GrantsResult{}, ErrGrantNotFound
+	}
+	publishAccessChanged(params.EventBus, params.DeviceSerial, rel)
+	return ListGrants(ListGrantsParams{Ctx: params.Ctx, Database: params.Database, Access: params.Access, DeviceSerial: params.DeviceSerial, Path: rel})
+}

@@ -90,3 +90,57 @@ WHERE
         rel_path = sqlc.arg(rel_path)
         OR substr(rel_path, 1, length(sqlc.arg(rel_path)) + 1) = sqlc.arg(rel_path) || '/'
     );
+
+-- ListPathAccessOnAncestors lists the rows on a path and on every folder that
+-- holds it, with the name of the account or group each one was granted to,
+-- for the sharing sheet (#1911). substr, not LIKE, for the reason
+-- MovePathAccessTree gives. The CASTs give sqlc a type for each COALESCE.
+-- name: ListPathAccessOnAncestors :many
+SELECT
+    path_access.rel_path,
+    path_access.level,
+    path_access.user_id,
+    path_access.group_id,
+    CAST(COALESCE(users.username, groups.name) AS TEXT) AS name,
+    CAST(COALESCE(groups.builtin, 0) AS INTEGER) AS builtin
+FROM
+    path_access
+    LEFT JOIN users ON users.id = path_access.user_id
+    LEFT JOIN groups ON groups.id = path_access.group_id
+WHERE
+    path_access.device_serial = sqlc.arg(device_serial)
+    AND (
+        path_access.rel_path = ''
+        OR path_access.rel_path = sqlc.arg(rel_path)
+        OR substr(sqlc.arg(rel_path), 1, length(path_access.rel_path) + 1) = path_access.rel_path || '/'
+    );
+
+-- SetGroupPathAccess grants a group a level on a path, replacing the level any
+-- earlier grant to that group on that path carried.
+-- name: SetGroupPathAccess :exec
+INSERT INTO
+    path_access (device_serial, rel_path, group_id, level)
+VALUES
+    (?, ?, ?, ?) ON CONFLICT (group_id, device_serial, rel_path)
+WHERE
+    group_id IS NOT NULL DO
+UPDATE
+SET
+    level = excluded.level;
+
+-- DeleteUserPathAccess drops a user's row on exactly one path. Rows on the
+-- folders that hold it stay.
+-- name: DeleteUserPathAccess :execrows
+DELETE FROM path_access
+WHERE
+    user_id = ?
+    AND device_serial = ?
+    AND rel_path = ?;
+
+-- DeleteGroupPathAccess drops a group's row on exactly one path.
+-- name: DeleteGroupPathAccess :execrows
+DELETE FROM path_access
+WHERE
+    group_id = ?
+    AND device_serial = ?
+    AND rel_path = ?;
