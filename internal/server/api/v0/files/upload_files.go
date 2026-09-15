@@ -54,7 +54,7 @@ func uploadFilesNested(c *gin.Context, rootDir string) *serverutil.Response {
 	serial := c.Query("serial")
 	overwrite := c.Query("overwrite") == "true"
 	// Checked before a byte of the body is read.
-	access, err := loadAccess(c, deps)
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
@@ -50,6 +51,18 @@ var getThumbnailRoute = serverutil.ApiRoute(
 
 		// relPath strips the leading '/' that the wildcard param includes.
 		relPath := strings.TrimPrefix(filePath, "/")
+
+		// Checked before every branch, the archive one included, and before
+		// the cache, so a thumbnail generated for someone who can read the
+		// source is never served to someone who cannot (#1904). An entry
+		// inside an archive is readable when the archive is.
+		access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+		if err != nil {
+			return serverutil.InternalServerError(err)
+		}
+		if !access.Check(serial, relPath, accessutil.Read).Readable {
+			return serverutil.NotFound(fmt.Errorf("thumbnail not found: %s", filePath))
+		}
 
 		// The file browser inside an archive asks for /thumbnails/<archive>/<entry>.
 		archive, err := fileutil.FindArchive(fileutil.FindArchiveParams{

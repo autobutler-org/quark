@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -19,13 +20,14 @@ import (
 
 // trimVideo godoc
 // @Summary Trim a video clip
-// @Description Extracts a sub-clip [startMs, endMs] from the source video using stream copy (fast, lossless). The original file is not modified.
+// @Description Extracts a sub-clip [startMs, endMs] from the source video using stream copy (fast, lossless). The original file is not modified. Needs read access on the video and write access on its folder; the caller owns the new clip.
 // @Tags videos
 // @Accept json
 // @Produce json
 // @Param body body trimVideoRequest true "Trim request"
 // @Success 200 {object} trimVideoResponse
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 501 {object} serverutil.Response "Not Implemented — ffmpeg not available"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
@@ -55,6 +57,14 @@ func trimVideo(c *gin.Context) *serverutil.Response {
 	}
 	if req.EndMs <= req.StartMs {
 		return serverutil.BadRequest(fmt.Errorf("endMs must be greater than startMs"))
+	}
+
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if resp := checkEdit(access, req.Serial, req.RelPath); resp != nil {
+		return resp
 	}
 
 	// Resolve files directory.
@@ -106,6 +116,9 @@ func trimVideo(c *gin.Context) *serverutil.Response {
 	if err := videoutil.Trim(trimCtx, fullPath, start, end, outFull); err != nil {
 		return serverutil.InternalServerError(fmt.Errorf("trim video: %w", err))
 	}
+	// GetNonConflictingPath picked a name nothing had, so the clip is always a
+	// new file and never takes ownership of one that was already there.
+	grantOwner(c, deps, access, req.Serial, outRel)
 
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).
 		WithData(trimVideoResponse{RelPath: outRel})

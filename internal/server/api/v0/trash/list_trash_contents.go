@@ -1,6 +1,7 @@
 package v0_trash
 
 import (
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -26,7 +27,7 @@ func listTrashContents(c *gin.Context) *serverutil.Response {
 	if !ok {
 		return serverutil.InternalServerError(nil)
 	}
-	access, err := loadAccess(c, deps)
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}

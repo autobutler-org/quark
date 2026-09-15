@@ -3387,7 +3387,8 @@ paths:
       consumes:
       - application/json
       description: Extracts a JPEG frame at the given timestamp and saves it alongside
-        the source video.
+        the source video. Needs read access on the video and write access on its folder;
+        the caller owns the new frame.
       parameters:
       - description: Extract frame request
         in: body
@@ -3404,6 +3405,10 @@ paths:
             $ref: '#/definitions/v0_videos.extractFrameResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
@@ -3533,7 +3538,9 @@ paths:
       consumes:
       - application/json
       description: Extracts a sub-clip [startMs, endMs] from the source video using
-        stream copy (fast, lossless). The original file is not modified.
+        stream copy (fast, lossless). The original file is not modified. Needs read
+        access on the video and write access on its folder; the caller owns the new
+        clip.
       parameters:
       - description: Trim request
         in: body
@@ -3550,6 +3557,10 @@ paths:
             $ref: '#/definitions/v0_videos.trimVideoResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
