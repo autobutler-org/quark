@@ -2,9 +2,13 @@ package v0_admin
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+
+	"github.com/gin-gonic/gin"
 )
 
 // accountErrorResponse maps an error from an authutil account action to its
@@ -21,4 +25,29 @@ func accountErrorResponse(err error) *serverutil.Response {
 	default:
 		return serverutil.InternalServerError(err)
 	}
+}
+
+// groupErrorResponse maps an error from a grouputil action to its status code.
+// Like the account sentinels, the group sentinels go out unwrapped.
+func groupErrorResponse(err error) *serverutil.Response {
+	switch {
+	case errors.Is(err, grouputil.ErrGroupNotFound):
+		return serverutil.NotFound(err)
+	case errors.Is(err, grouputil.ErrGroupNameTaken):
+		return serverutil.Conflict(err)
+	case errors.Is(err, grouputil.ErrInvalidGroupName), errors.Is(err, grouputil.ErrBuiltinGroup):
+		return serverutil.BadRequest(err)
+	default:
+		return serverutil.InternalServerError(err)
+	}
+}
+
+// idParam reads a numeric id from the URL. One that is not a number names
+// nothing, so it is notFound.
+func idParam(c *gin.Context, name string, notFound error) (int64, error) {
+	id, err := strconv.ParseInt(c.Param(name), 10, 64)
+	if err != nil {
+		return 0, notFound
+	}
+	return id, nil
 }
