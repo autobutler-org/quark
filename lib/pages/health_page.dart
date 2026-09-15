@@ -88,6 +88,7 @@ class _HealthPageState extends State<HealthPage>
         onTapVault: () {
           context.go(AppRoutes.vault);
         },
+        onTapJobs: () => context.go(AppRoutes.jobs),
         onTapSettings: () {
           context.go(AppRoutes.settings);
         },

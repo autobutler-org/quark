@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'quark_app_bar_trailing.dart';
 import 'quark_brand_button.dart';
 
 /// The app bar every main page wears: a [QuarkBrandButton] on the left that
@@ -8,6 +9,9 @@ import 'quark_brand_button.dart';
 /// The theme toggle is not built in. It reads the app's settings, so the page
 /// appends its own wired copy to [actions] and the package stays free of app
 /// state.
+///
+/// App-wide controls, such as a running-jobs badge, come from a
+/// [QuarkAppBarTrailing] scope and follow [actions].
 ///
 /// Key prefixes: `brand_button`, from the [QuarkBrandButton] it renders.
 ///
@@ -35,7 +39,8 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// The glyph in the brand badge, usually the page's drawer icon.
   final IconData icon;
 
-  /// Trailing controls, rendered in order at the end of the bar.
+  /// Trailing controls, rendered in order at the end of the bar. Any
+  /// [QuarkAppBarTrailing] scope above adds its controls after these.
   final List<Widget> actions;
 
   @override
@@ -56,7 +61,7 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
       title: null,
-      actions: actions,
+      actions: [...actions, ...QuarkAppBarTrailing.of(context)],
     );
   }
 }

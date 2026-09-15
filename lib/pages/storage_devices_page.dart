@@ -342,6 +342,7 @@ class _StorageDevicesPageState extends State<StorageDevicesPage>
         onTapDevices: () => Navigator.of(context).pop(),
         onTapHealth: () => context.go(AppRoutes.health),
         onTapVault: () => context.go(AppRoutes.vault),
+        onTapJobs: () => context.go(AppRoutes.jobs),
         onTapSettings: () => context.go(AppRoutes.settings),
       ),
       body: StorageDevicesBody(

@@ -211,6 +211,7 @@ class _TrashPageState extends State<TrashPage>
             onTapDevices: () => context.go(AppRoutes.devices),
             onTapHealth: () => context.go(AppRoutes.health),
             onTapVault: () => context.go(AppRoutes.vault),
+            onTapJobs: () => context.go(AppRoutes.jobs),
             onTapSettings: () => context.go(AppRoutes.settings),
           ),
           body: Column(

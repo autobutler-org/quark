@@ -696,6 +696,7 @@ class _SettingsPageState extends State<SettingsPage> {
         onTapVault: () {
           context.go(AppRoutes.vault);
         },
+        onTapJobs: () => context.go(AppRoutes.jobs),
         onTapSettings: () {
           Navigator.of(context).pop();
         },

@@ -197,6 +197,36 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkAppBarTrailing',
+    group: 'Layout',
+    build: (context, log) => SizedBox(
+      height: 200,
+      child: QuarkAppBarTrailing(
+        actions: [
+          JobsBadge(
+            runningCount: 1,
+            onTap: () => log('QuarkAppBarTrailing JobsBadge.onTap'),
+          ),
+        ],
+        child: Scaffold(
+          appBar: QuarkAppBar(
+            label: 'Health',
+            icon: QuarkIcons.monitor_heart_outlined,
+            actions: [
+              RefreshIconButton(
+                isRefreshing: false,
+                onPressed: () => log('QuarkAppBarTrailing page refresh'),
+              ),
+            ],
+          ),
+          body: const Center(
+            child: Text('The badge comes from the scope, after the page'),
+          ),
+        ),
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkBrandButton',
     group: 'Layout',
     build: (context, log) => Align(
@@ -246,6 +276,7 @@ final List<GalleryEntry> registry = [
         onTapDevices: () => log('QuarkDrawer.onTapDevices'),
         onTapHealth: () => log('QuarkDrawer.onTapHealth'),
         onTapVault: () => log('QuarkDrawer.onTapVault'),
+        onTapJobs: () => log('QuarkDrawer.onTapJobs'),
         onTapSettings: () => log('QuarkDrawer.onTapSettings'),
       ),
     ),
@@ -438,6 +469,31 @@ final List<GalleryEntry> registry = [
     build: (context, log) => NewFileDialog(
       onCreate: (name) => log('NewFileDialog.onCreate($name)'),
       onCancel: () => log('NewFileDialog.onCancel'),
+    ),
+  ),
+
+  // ── Jobs ──────────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'JobsBadge',
+    group: 'Jobs',
+    build: (context, log) => Row(
+      children: [
+        JobsBadge(runningCount: 0, onTap: () => log('JobsBadge(0).onTap')),
+        const Text('0 hides the badge; 2 shows it:'),
+        JobsBadge(runningCount: 2, onTap: () => log('JobsBadge(2).onTap')),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'JobList',
+    group: 'Jobs',
+    build: (context, log) => SizedBox(
+      height: 360,
+      child: JobList(
+        items: _galleryJobs,
+        onCancel: (id) => log('JobList.onCancel($id)'),
+        onRetry: (id) => log('JobList.onRetry($id)'),
+      ),
     ),
   ),
 
@@ -734,4 +790,49 @@ const List<AlbumItem> _galleryAlbumList = [
 const List<UploadTarget> _galleryTargets = [
   UploadTarget(serial: '', name: '', mountPoint: '/data', isInternal: true),
   UploadTarget(serial: 'usb-1', name: 'Backup drive', mountPoint: '/mnt/usb'),
+];
+
+/// The fake jobs: one of every state the list draws.
+const List<JobItem> _galleryJobs = [
+  JobItem(
+    id: 4,
+    name: 'Convert vacation.mkv to MOV',
+    status: JobItemStatus.running,
+    progress: 0.45,
+    attempts: 1,
+    elapsed: Duration(seconds: 83),
+    canCancel: true,
+  ),
+  JobItem(
+    id: 3,
+    name: 'Convert clip.avi to MP4',
+    status: JobItemStatus.running,
+    progress: 0.9,
+    attempts: 1,
+    elapsed: Duration(seconds: 4),
+    isQuickCopy: true,
+    canCancel: true,
+  ),
+  JobItem(
+    id: 2,
+    name: 'Convert party.mov to MP4',
+    status: JobItemStatus.pending,
+    canCancel: true,
+  ),
+  JobItem(
+    id: 1,
+    name: 'Convert old.wmv to MP4',
+    status: JobItemStatus.failed,
+    attempts: 2,
+    elapsed: Duration(minutes: 12, seconds: 5),
+    canRetry: true,
+  ),
+  JobItem(
+    id: 0,
+    name: 'Convert birthday.mkv to MP4',
+    status: JobItemStatus.completed,
+    progress: 1,
+    attempts: 1,
+    elapsed: Duration(hours: 1, minutes: 2, seconds: 3),
+  ),
 ];

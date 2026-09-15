@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 abstract final class JobKinds {
   /// Converting a video to another format.
   static const String videoTranscode = 'video-transcode';
+
+  /// Every kind above, for a listing that shows them all.
+  static const List<String> all = [videoTranscode];
 }
 
 /// Where a [Job] is in its life.

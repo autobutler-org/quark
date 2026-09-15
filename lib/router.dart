@@ -5,6 +5,7 @@ import 'package:quark/pages/docs_page.dart';
 import 'package:quark/pages/document_editor_page.dart';
 import 'package:quark/pages/file_browser_page.dart';
 import 'package:quark/pages/health_page.dart';
+import 'package:quark/pages/jobs_page.dart';
 import 'package:quark/pages/login_page.dart';
 import 'package:quark/pages/photos_page.dart';
 import 'package:quark/pages/plaintext_editor_page.dart';
@@ -50,6 +51,7 @@ class AppRoutes {
   static const devices = '/devices';
   static const health = '/health';
   static const vault = '/vault';
+  static const jobs = '/jobs';
   static const settings = '/settings';
   static const setup = '/setup';
   static const login = '/login';
@@ -180,8 +182,15 @@ class AppRoutes {
   /// back to — a deep link, a pasted URL, a link someone shared. Sending those
   /// to [files] instead put the user in the home folder however deep the
   /// document lived (#1749).
-  static String containingFolder(String filePath) =>
-      filesPath(parentPath(filePath));
+  ///
+  /// [serial] names the device the file is on, carried as a query param when
+  /// non-empty the way the editor routes carry it.
+  static String containingFolder(String filePath, {String serial = ''}) {
+    final folder = filesPath(parentPath(filePath));
+    return serial.isEmpty
+        ? folder
+        : '$folder?serial=${Uri.encodeQueryComponent(serial)}';
+  }
 }
 
 /// Everything that can invalidate the [authRedirect] gate.
@@ -340,6 +349,7 @@ final router = GoRouter(
       path: AppRoutes.vault,
       builder: (context, state) => const VaultPage(),
     ),
+    GoRoute(path: AppRoutes.jobs, builder: (context, _) => JobsPage()),
     GoRoute(
       path: AppRoutes.settings,
       builder: (context, state) => const SettingsPage(),
