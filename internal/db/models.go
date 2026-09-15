@@ -85,6 +85,7 @@ type PhotoAlbum struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	SmartType sql.NullString
+	UserID    sql.NullInt64
 }
 
 type PhotoAlbumItem struct {
@@ -97,6 +98,7 @@ type PhotoAlbumItem struct {
 
 type PhotoFavorite struct {
 	ID           int64
+	UserID       int64
 	DeviceSerial string
 	RelPath      string
 	CreatedAt    time.Time

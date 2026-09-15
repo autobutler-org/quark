@@ -64,8 +64,9 @@ INSERT INTO photo_albums (id, name, parent_id, smart_type) VALUES
 		t.Fatalf("seed: %v", err)
 	}
 
-	if err := m.Up(); err != nil {
-		t.Fatalf("migrate up: %v", err)
+	// Stop at 008: 014 gives albums an owner and deletes them when there is none.
+	if err := m.Migrate(uniqueAlbumNamesVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", uniqueAlbumNamesVersion, err)
 	}
 
 	want := map[int64]string{
@@ -166,9 +167,11 @@ func TestMigrationsApplyCleanly(t *testing.T) {
 	}
 
 	columns := map[string][]string{
-		"users":        {"is_admin", "status"},
-		"sessions":     {"last_used_at"},
-		"photo_hashes": {"dhash", "content_hash"},
+		"users":           {"is_admin", "status"},
+		"sessions":        {"last_used_at"},
+		"photo_hashes":    {"dhash", "content_hash"},
+		"photo_albums":    {"user_id"},
+		"photo_favorites": {"user_id"},
 	}
 	for table, names := range columns {
 		for _, name := range names {
@@ -411,5 +414,116 @@ DELETE FROM users WHERE id = 1;`); err != nil {
 	}
 	if n := count(t, conn, `SELECT MAX(id) FROM jobs`); n != 5 {
 		t.Errorf("new job id = %d, want 5: the rebuild must not reuse ids", n)
+	}
+}
+
+// perUserPhotosVersion is 014_per_user_photos, the migration that gives
+// favorites and albums an owner (#1912).
+const perUserPhotosVersion = 14
+
+// TestPerUserPhotosMigration gives existing favorites and albums to the oldest
+// admin, lets two accounts then hold the same album name, and rolls back to
+// the oldest admin's rows.
+func TestPerUserPhotosMigration(t *testing.T) {
+	conn, m := migrateTo(t, perUserPhotosVersion-1)
+	if _, err := conn.Exec(`
+INSERT INTO users (id, username, password_hash, recovery_phrase_hash, created_at, is_admin) VALUES
+	(1, 'member',  'h', 'r', '2024-01-01 00:00:00', 0), -- oldest, but not an admin
+	(2, 'late',    'h', 'r', '2024-03-01 00:00:00', 1),
+	(3, 'founder', 'h', 'r', '2024-02-01 00:00:00', 1), -- oldest admin
+	(4, 'tie',     'h', 'r', '2024-02-01 00:00:00', 1); -- same time, higher id
+INSERT INTO photo_albums (id, name, parent_id, smart_type) VALUES
+	(1, 'Favorites', NULL, 'favorites'),
+	(2, 'Trips',     NULL, NULL),
+	(3, 'Japan',     2,    NULL);
+INSERT INTO photo_album_items (album_id, device_serial, rel_path) VALUES (1, '', 'a.jpg'), (3, '', 'b.jpg');
+INSERT INTO photo_favorites (device_serial, rel_path) VALUES ('', 'a.jpg'), ('USB', 'c.jpg');
+`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(perUserPhotosVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", perUserPhotosVersion, err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM photo_albums WHERE user_id = 3`); n != 3 {
+		t.Errorf("albums owned by the oldest admin = %d, want 3", n)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM photo_album_items`); n != 2 {
+		t.Errorf("album items after migration = %d, want both kept", n)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM photo_favorites WHERE user_id = 3`); n != 2 {
+		t.Errorf("favorites owned by the oldest admin = %d, want 2", n)
+	}
+
+	// Another account can hold its own Favorites album, root Trips and the
+	// same favorite; the same account still cannot hold two.
+	for _, stmt := range []string{
+		`INSERT INTO photo_albums (id, name, smart_type, user_id) VALUES (4, 'Favorites', 'favorites', 1)`,
+		`INSERT INTO photo_albums (id, name, user_id) VALUES (5, 'trips', 1)`,
+		`INSERT INTO photo_favorites (user_id, device_serial, rel_path) VALUES (1, '', 'a.jpg')`,
+	} {
+		if _, err := conn.Exec(stmt); err != nil {
+			t.Errorf("%s: %v", stmt, err)
+		}
+	}
+	for _, stmt := range []string{
+		`INSERT INTO photo_albums (name, smart_type, user_id) VALUES ('Favorites 2', 'favorites', 3)`,
+		`INSERT INTO photo_albums (name, user_id) VALUES ('TRIPS', 3)`,
+		`INSERT INTO photo_favorites (user_id, device_serial, rel_path) VALUES (3, '', 'a.jpg')`,
+		`INSERT INTO photo_favorites (user_id, rel_path) VALUES (99, 'x.jpg')`,
+	} {
+		if _, err := conn.Exec(stmt); err == nil {
+			t.Errorf("%s: accepted, want a constraint failure", stmt)
+		}
+	}
+
+	// Deleting an account deletes its favorites and albums.
+	if _, err := conn.Exec(`INSERT INTO users (id, username, password_hash, recovery_phrase_hash) VALUES (5, 'gone', 'h', 'r');
+INSERT INTO photo_albums (name, user_id) VALUES ('Gone', 5);
+INSERT INTO photo_favorites (user_id, rel_path) VALUES (5, 'g.jpg');
+DELETE FROM users WHERE id = 5;`); err != nil {
+		t.Fatalf("delete account: %v", err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM photo_albums WHERE name = 'Gone'`) +
+		count(t, conn, `SELECT COUNT(*) FROM photo_favorites WHERE rel_path = 'g.jpg'`); n != 0 {
+		t.Errorf("rows left after deleting their account = %d, want 0", n)
+	}
+
+	if err := m.Migrate(perUserPhotosVersion - 1); err != nil {
+		t.Fatalf("roll back to %d: %v", perUserPhotosVersion-1, err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM photo_albums`); n != 3 {
+		t.Errorf("albums after the down migration = %d, want the oldest admin's 3", n)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM photo_favorites`); n != 2 {
+		t.Errorf("favorites after the down migration = %d, want 2 with the duplicate folded", n)
+	}
+	if _, err := conn.Exec(`INSERT INTO photo_albums (name) VALUES ('TRIPS')`); err == nil {
+		t.Error("a second root TRIPS was accepted after the down migration")
+	}
+}
+
+// TestPerUserPhotosMigrationWithoutAdmin deletes favorites and albums nobody
+// can own instead of failing.
+func TestPerUserPhotosMigrationWithoutAdmin(t *testing.T) {
+	conn, m := migrateTo(t, perUserPhotosVersion-1)
+	if _, err := conn.Exec(`
+INSERT INTO photo_albums (id, name, parent_id) VALUES (1, 'Trips', NULL), (2, 'Japan', 1);
+INSERT INTO photo_album_items (album_id, device_serial, rel_path) VALUES (2, '', 'b.jpg');
+INSERT INTO photo_favorites (rel_path) VALUES ('a.jpg');
+`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(perUserPhotosVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", perUserPhotosVersion, err)
+	}
+	for _, table := range []string{"photo_albums", "photo_album_items", "photo_favorites"} {
+		if n := count(t, conn, `SELECT COUNT(*) FROM `+table); n != 0 {
+			t.Errorf("%s rows with no admin = %d, want 0", table, n)
+		}
+	}
+	if err := m.Migrate(perUserPhotosVersion - 1); err != nil {
+		t.Fatalf("roll back to %d: %v", perUserPhotosVersion-1, err)
 	}
 }

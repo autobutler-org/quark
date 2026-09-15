@@ -2,6 +2,7 @@ package v0_favorites_test
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/favoritesutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/gin-gonic/gin"
 	_ "modernc.org/sqlite"
@@ -28,11 +30,15 @@ func newFavoritesTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 func newFavoritesEngine(t *testing.T, sqlDB *sql.DB, queries *db.Queries) *gin.Engine {
 	t.Helper()
 	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{Db: sqlDB, Queries: queries})
+	founder, err := queries.CreateUser(context.Background(), db.CreateUserParams{Username: "founder", PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
-		c = ctxutil.With(c, "principal", accessutil.System)
+		c = ctxutil.With(c, "principal", accessutil.Principal{UserID: founder.ID, IsAdmin: true})
 		c.Next()
 	})
 	group := engine.Group("/api/v0")
@@ -208,5 +214,95 @@ func TestListFavorites_IncludesAddedPhoto(t *testing.T) {
 	}
 	if items[0].RelPath != "photos/mountain.jpg" {
 		t.Errorf("relPath = %q; want 'photos/mountain.jpg'", items[0].RelPath)
+	}
+}
+
+// TestFavorites_PerUser verifies two accounts star the same photo
+// independently: each has its own isFavorite, its own list and its own
+// Favorites album. Both are admins, whose access bypass covers files only
+// (#1912).
+func TestFavorites_PerUser(t *testing.T) {
+	sqlDB, q := newFavoritesTestDB(t)
+	ctx := context.Background()
+	ids := map[string]int64{}
+	for _, name := range []string{"ann", "ben"} {
+		user, err := q.CreateUser(ctx, db.CreateUserParams{Username: name, PasswordHash: "h", RecoveryPhraseHash: "r"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[name] = user.ID
+	}
+	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{Db: sqlDB, Queries: q})
+	principal := accessutil.Principal{}
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", principal)
+		c.Next()
+	})
+	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_favorites.NewRouter())
+
+	as := func(name string) { principal = accessutil.Principal{UserID: ids[name], IsAdmin: true} }
+	toggle := func() {
+		t.Helper()
+		if w := doFavReq(engine, http.MethodPost, "/api/v0/photos/favorite", []byte(`{"relPath":"beach.jpg"}`)); w.Code != http.StatusOK {
+			t.Fatalf("toggle = %d: %s", w.Code, w.Body.String())
+		}
+	}
+	isFavorite := func() bool {
+		t.Helper()
+		w := doFavReq(engine, http.MethodGet, "/api/v0/photos/favorite?relPath=beach.jpg", nil)
+		var resp struct {
+			IsFavorite bool `json:"isFavorite"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); w.Code != http.StatusOK || err != nil {
+			t.Fatalf("isFavorite = %d %s: %v", w.Code, w.Body.String(), err)
+		}
+		return resp.IsFavorite
+	}
+	listed := func() int {
+		t.Helper()
+		var items []any
+		w := doFavReq(engine, http.MethodGet, "/api/v0/photos/favorites", nil)
+		if err := json.Unmarshal(w.Body.Bytes(), &items); w.Code != http.StatusOK || err != nil {
+			t.Fatalf("list = %d %s: %v", w.Code, w.Body.String(), err)
+		}
+		return len(items)
+	}
+
+	as("ann")
+	toggle()
+	as("ben")
+	if isFavorite() || listed() != 0 {
+		t.Fatal("ben sees ann's favorite")
+	}
+	toggle()
+	as("ann")
+	toggle() // ann removes hers
+	if isFavorite() || listed() != 0 {
+		t.Error("ann's favorite survived her removing it")
+	}
+	as("ben")
+	if !isFavorite() || listed() != 1 {
+		t.Error("ann removing her favorite removed ben's")
+	}
+
+	annAlbum, err := favoritesutil.EnsureFavoritesAlbum(ctx, q, ids["ann"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	benAlbum, err := favoritesutil.EnsureFavoritesAlbum(ctx, q, ids["ben"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if annAlbum.ID == benAlbum.ID {
+		t.Fatalf("ann and ben share Favorites album %d", annAlbum.ID)
+	}
+	if n, _ := q.CountAlbumItems(ctx, benAlbum.ID); n != 1 {
+		t.Errorf("ben's Favorites album holds %d items, want 1", n)
+	}
+	if n, _ := q.CountAlbumItems(ctx, annAlbum.ID); n != 0 {
+		t.Errorf("ann's Favorites album holds %d items, want 0", n)
 	}
 }

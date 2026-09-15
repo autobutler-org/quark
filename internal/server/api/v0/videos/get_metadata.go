@@ -38,7 +38,7 @@ type VideoMetadataJSON struct {
 
 // getMetadata godoc
 // @Summary Get metadata for a single video file
-// @Description Returns duration, resolution, codec, bitrate, framerate, rotation, and album membership for the specified video.
+// @Description Returns duration, resolution, codec, bitrate, framerate, rotation, and the caller's own favorite state and album membership for the specified video.
 // @Tags videos
 // @Produce json
 // @Param serial query string false "Device serial"
@@ -109,7 +109,7 @@ func getMetadata(c *gin.Context) *serverutil.Response {
 
 	isFavorite, err := deps.Database().Queries.IsFavorite(
 		ctx,
-		db.IsFavoriteParams{DeviceSerial: serial, RelPath: relPath},
+		db.IsFavoriteParams{UserID: access.Principal().UserID, DeviceSerial: serial, RelPath: relPath},
 	)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		_ = c.Error(fmt.Errorf("check favorite for %q: %w", relPath, err))
@@ -118,6 +118,7 @@ func getMetadata(c *gin.Context) *serverutil.Response {
 	albums, err := deps.Database().Queries.ListAlbumsContainingPhoto(
 		ctx,
 		db.ListAlbumsContainingPhotoParams{
+			UserID:       access.Principal().UserID,
 			DeviceSerial: serial,
 			RelPath:      relPath,
 		},
