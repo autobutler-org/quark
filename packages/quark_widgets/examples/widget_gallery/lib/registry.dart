@@ -831,6 +831,66 @@ final List<GalleryEntry> registry = [
       onDelete: (id) => log('GroupList.onDelete($id)'),
     ),
   ),
+  GalleryEntry(
+    name: 'PrincipalPicker',
+    group: 'Users',
+    build: (context, log) => PrincipalPicker(
+      options: const [
+        PrincipalItem(
+          kind: PrincipalKind.group,
+          id: 1,
+          name: 'everyone',
+          isBuiltin: true,
+        ),
+        PrincipalItem(kind: PrincipalKind.group, id: 2, name: 'Family'),
+        PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
+        PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
+      ],
+      selected: const PrincipalItem(
+        kind: PrincipalKind.group,
+        id: 2,
+        name: 'Family',
+      ),
+      onSelected: (principal) =>
+          log('PrincipalPicker.onSelected(${principal.keySuffix})'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'GroupMembersSheet',
+    group: 'Users',
+    build: (context, log) => GroupMembersSheet(
+      group: const GroupItem(
+        id: 2,
+        name: 'Family',
+        members: [
+          PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
+          PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
+        ],
+      ),
+      candidates: const [
+        PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
+        PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
+        PrincipalItem(kind: PrincipalKind.user, id: 3, name: 'cy'),
+        PrincipalItem(kind: PrincipalKind.user, id: 4, name: 'dee'),
+      ],
+      busyIds: const {2},
+      onAdd: (userId) => log('GroupMembersSheet.onAdd($userId)'),
+      onRemove: (userId) => log('GroupMembersSheet.onRemove($userId)'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkNameDialog',
+    group: 'Core',
+    build: (context, log) => QuarkNameDialog(
+      title: 'Rename Family',
+      label: 'Group name',
+      submitLabel: 'Rename',
+      initialName: 'Family',
+      maxLength: 64,
+      onSubmit: (name) => log('QuarkNameDialog.onSubmit($name)'),
+      onCancel: () => log('QuarkNameDialog.onCancel'),
+    ),
+  ),
 
   // ── Video─────────────────────────────────────────────────────────────────
   GalleryEntry(
