@@ -1,12 +1,18 @@
 package accessutil
 
 import (
+	"cmp"
 	"context"
+	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
@@ -35,24 +41,11 @@ func levelsFromRows(rows []db.ListPathAccessForUserRow) map[string]map[string]Le
 			levels[row.DeviceSerial] = paths
 		}
 		rel := Canonical(row.RelPath)
-		paths[rel] = max(paths[rel], parseLevel(row.Level))
+		// The table's CHECK constraint keeps any other spelling out; None is
+		// the safe answer if it ever does not.
+		paths[rel] = max(paths[rel], ParseLevel(row.Level))
 	}
 	return levels
-}
-
-// parseLevel reads the level column. The table's CHECK constraint keeps
-// anything else out; None is the safe answer if it ever does not.
-func parseLevel(s string) Level {
-	switch s {
-	case "read":
-		return Read
-	case "write":
-		return Write
-	case "owner":
-		return Owner
-	default:
-		return None
-	}
 }
 
 // filesDirsBySerial maps each attached device's serial to its files
@@ -115,5 +108,117 @@ func resolveRel(filesDir, rel string) (string, bool) {
 		}
 		suffix = filepath.Join(filepath.Base(current), suffix)
 		current = filepath.Dir(current)
+	}
+}
+
+// shareablePath canonicalizes a path whose sharing the caller wants to see or
+// change, and refuses it unless the caller owns it or is an admin. The trash
+// is refused first: what sits there is on its way out, whoever owned it.
+func shareablePath(access Access, serial, p string) (string, error) {
+	rel := Canonical(p)
+	if storageutil.IsTrashPath(rel) {
+		return "", ErrTrashShare
+	}
+	check := access.Check(serial, rel, Owner)
+	if !check.Readable {
+		return "", ErrShareNotFound
+	}
+	if !check.Allowed {
+		return "", ErrShareForbidden
+	}
+	return rel, nil
+}
+
+// ensurePrincipal returns ErrPrincipalNotFound unless the user is active or
+// the group exists.
+func ensurePrincipal(ctx context.Context, queries *db.Queries, userID, groupID int64) error {
+	if userID != 0 {
+		user, err := queries.GetUserByID(ctx, userID)
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && user.Status != authutil.StatusActive) {
+			return ErrPrincipalNotFound
+		}
+		return err
+	}
+	_, err := queries.GetGroup(ctx, groupID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrPrincipalNotFound
+	}
+	return err
+}
+
+// ensureNotSelfOwner returns ErrSelfOwner when a non-admin's change would
+// touch their own owner row on exactly this path. Ownership they inherit from
+// a parent folder is not touched by it, so it doesn't count.
+func ensureNotSelfOwner(ctx context.Context, queries *db.Queries, principal Principal, serial, rel string, userID int64) error {
+	if principal.IsAdmin || userID == 0 || userID != principal.UserID {
+		return nil
+	}
+	rows, err := queries.ListPathAccessOnAncestors(ctx, db.ListPathAccessOnAncestorsParams{DeviceSerial: serial, RelPath: rel})
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if row.RelPath == rel && row.UserID.Int64 == userID && ParseLevel(row.Level) == Owner {
+			return ErrSelfOwner
+		}
+	}
+	return nil
+}
+
+// grantsFromRows turns the rows on a path and its parent folders into grants:
+// every row on the path, then one grant per principal for what the parent
+// folders give, at the highest level and from the nearest folder giving it.
+// Each part is sorted everyone first, then by name.
+func grantsFromRows(rows []db.ListPathAccessOnAncestorsRow, rel string) []Grant {
+	type principalKey struct{ userID, groupID int64 }
+	direct := make([]Grant, 0, len(rows))
+	inherited := make(map[principalKey]Grant)
+	for _, row := range rows {
+		grant := Grant{
+			UserID:  row.UserID.Int64,
+			GroupID: row.GroupID.Int64,
+			Name:    row.Name,
+			Builtin: row.Builtin != 0,
+			Level:   row.Level,
+			From:    row.RelPath,
+		}
+		if row.RelPath == rel {
+			direct = append(direct, grant)
+			continue
+		}
+		key := principalKey{grant.UserID, grant.GroupID}
+		held, ok := inherited[key]
+		level, heldLevel := ParseLevel(grant.Level), ParseLevel(held.Level)
+		if !ok || level > heldLevel || (level == heldLevel && len(grant.From) > len(held.From)) {
+			inherited[key] = grant
+		}
+	}
+	byName := func(a, b Grant) int {
+		if a.Builtin != b.Builtin {
+			if a.Builtin {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Or(
+			cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)),
+			cmp.Compare(a.UserID, b.UserID),
+			cmp.Compare(a.GroupID, b.GroupID),
+		)
+	}
+	slices.SortFunc(direct, byName)
+	fromParents := make([]Grant, 0, len(inherited))
+	for _, grant := range inherited {
+		fromParents = append(fromParents, grant)
+	}
+	slices.SortFunc(fromParents, byName)
+	return append(direct, fromParents...)
+}
+
+// publishAccessChanged tells open streams the access on a path changed. A nil
+// bus is a caller that does not care.
+func publishAccessChanged(bus *eventbus.Bus, serial, rel string) {
+	if bus != nil {
+		bus.Publish(eventbus.Event{Kind: eventbus.EventAccessChanged, Path: rel, DeviceSerial: serial})
 	}
 }
