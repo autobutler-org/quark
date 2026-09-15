@@ -892,6 +892,72 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
+  // ── Sharing ───────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'ShareSheet',
+    group: 'Sharing',
+    build: (context, log) => ShareSheet(
+      itemName: 'Recipes',
+      grants: const [
+        GrantItem(
+          principal: PrincipalItem(
+            kind: PrincipalKind.group,
+            id: 1,
+            name: 'everyone',
+            isBuiltin: true,
+          ),
+          level: AccessLevel.read,
+        ),
+        GrantItem(
+          principal: PrincipalItem(
+            kind: PrincipalKind.user,
+            id: 1,
+            name: 'ada',
+          ),
+          level: AccessLevel.owner,
+        ),
+        GrantItem(
+          principal: PrincipalItem(
+            kind: PrincipalKind.user,
+            id: 2,
+            name: 'bob',
+          ),
+          level: AccessLevel.write,
+        ),
+        GrantItem(
+          principal: PrincipalItem(
+            kind: PrincipalKind.group,
+            id: 2,
+            name: 'Family',
+          ),
+          level: AccessLevel.write,
+          inheritedFrom: 'Shared',
+        ),
+      ],
+      principals: const [
+        PrincipalItem(
+          kind: PrincipalKind.group,
+          id: 1,
+          name: 'everyone',
+          isBuiltin: true,
+        ),
+        PrincipalItem(kind: PrincipalKind.group, id: 2, name: 'Family'),
+        PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
+        PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
+        PrincipalItem(kind: PrincipalKind.user, id: 3, name: 'cy'),
+      ],
+      canManage: true,
+      canGrantOwner: true,
+      lockedKeys: const {'user_1'},
+      onAdd: (principal, level) =>
+          log('ShareSheet.onAdd(${principal.keySuffix}, ${level.name})'),
+      onSetLevel: (principal, level) =>
+          log('ShareSheet.onSetLevel(${principal.keySuffix}, ${level.name})'),
+      onRevoke: (principal) =>
+          log('ShareSheet.onRevoke(${principal.keySuffix})'),
+    ),
+  ),
+
   // ── Video─────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'TranscodeDialog',
