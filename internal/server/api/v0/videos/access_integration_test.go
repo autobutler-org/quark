@@ -66,7 +66,7 @@ func newVideoHarness(t *testing.T) videoHarness {
 	queue := jobutil.NewQueue(jobutil.NewQueueParams{Database: database})
 	queue.Register(jobutil.RegisterParams{
 		Kind:    transcodeutil.Kind,
-		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{Storage: storage}),
+		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{Storage: storage, Database: database}),
 	})
 	deps := deputil.NewDependencies().
 		WithStorageService(storage).

@@ -2,6 +2,7 @@ package transcodeutil
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,7 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -42,6 +46,8 @@ type harness struct {
 	filesDir string
 	events   <-chan eventbus.Event
 	bus      *eventbus.Bus
+	// database is nil unless a test checks a job's creator.
+	database *db.DatabaseSqlc
 }
 
 func newHarness(t *testing.T) harness {
@@ -76,7 +82,197 @@ func (h harness) exists(name string) bool {
 
 // handler builds the transcode Handler around a fake transcode func.
 func (h harness) handler(transcode TranscodeFunc) jobutil.Handler {
-	return NewHandler(NewHandlerParams{Storage: h.storage, EventBus: h.bus, Transcode: transcode})
+	return NewHandler(NewHandlerParams{Storage: h.storage, Database: h.database, EventBus: h.bus, Transcode: transcode})
+}
+
+// withAccounts gives the harness a database holding bob, who may write the
+// videos folder, and returns his id. The source is videos/clip.mov.
+func (h *harness) withAccounts(t *testing.T) int64 {
+	t.Helper()
+	h.database = dbtest.NewDB(t)
+	if err := os.MkdirAll(filepath.Join(h.filesDir, "videos"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	h.write(t, "videos/clip.mov")
+	bob := h.createAccount(t, "bob")
+	h.grant(t, bob, "videos", accessutil.Write)
+	return bob
+}
+
+func (h harness) createAccount(t *testing.T, username string) int64 {
+	t.Helper()
+	user, err := h.database.Queries.CreateUser(context.Background(), db.CreateUserParams{
+		Username: username, PasswordHash: "h", RecoveryPhraseHash: "r",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return user.ID
+}
+
+func (h harness) grant(t *testing.T, userID int64, rel string, level accessutil.Level) {
+	t.Helper()
+	if err := h.database.Queries.SetUserPathAccess(context.Background(), db.SetUserPathAccessParams{
+		DeviceSerial: testSerial,
+		RelPath:      rel,
+		UserID:       sql.NullInt64{Int64: userID, Valid: true},
+		Level:        level.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// rows lists the access rows as "path=level".
+func (h harness) rows(t *testing.T) []string {
+	t.Helper()
+	list, err := h.database.Db.Query(`SELECT rel_path, level FROM path_access ORDER BY rel_path`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer list.Close()
+	var rows []string
+	for list.Next() {
+		var rel, level string
+		if err := list.Scan(&rel, &level); err != nil {
+			t.Fatal(err)
+		}
+		rows = append(rows, rel+"="+level)
+	}
+	return rows
+}
+
+func TestRunMakesTheCreatorOwnTheOutput(t *testing.T) {
+	h := newHarness(t)
+	bob := h.withAccounts(t)
+	admin := h.createAccount(t, "root")
+	if err := h.database.Queries.SetUserAdmin(context.Background(), db.SetUserAdminParams{IsAdmin: 1, Username: "root"}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name     string
+		ctx      context.Context
+		want     string
+		wantRows []string
+	}{
+		{"an admin writes no row", jobutil.WithUserID(context.Background(), admin), "videos/clip.mp4", []string{"videos=write"}},
+		{"a job with no creator writes no row", context.Background(), "videos/clip_(1).mp4", []string{"videos=write"}},
+		{"bob owns what his job wrote", jobutil.WithUserID(context.Background(), bob), "videos/clip_(2).mp4", []string{"videos=write", "videos/clip_(2).mp4=owner"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := h.handler(writingTranscode(&[]string{})).Run(tc.ctx, params(t, "videos/clip.mov", "mp4", videoutil.QualitySmall), func(float64) {}); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case e := <-h.events:
+				// The row is written before the upload event, so a browser
+				// refreshing on it already sees the file as the creator's.
+				if e.Path != tc.want || !slices.Equal(h.rows(t), tc.wantRows) {
+					t.Errorf("upload of %q with rows %v, want %q with %v", e.Path, h.rows(t), tc.want, tc.wantRows)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("no upload event for the output")
+			}
+		})
+	}
+}
+
+func TestRunFailsWhenTheCreatorLosesAccess(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		// before runs before the job starts, during while ffmpeg runs.
+		before, during func(t *testing.T, h harness, bob int64)
+		wantErr        error
+		wantTranscode  bool
+	}{
+		{
+			name:    "read on the source is gone at the start",
+			before:  func(t *testing.T, h harness, bob int64) { h.revoke(t, bob) },
+			wantErr: ErrCreatorForbidden,
+		},
+		{
+			name:    "the creator was disabled before the start",
+			before:  func(t *testing.T, h harness, _ int64) { h.disable(t, "bob") },
+			wantErr: accessutil.ErrCreatorInactive,
+		},
+		{
+			name:          "write on the folder is revoked mid-run",
+			during:        func(t *testing.T, h harness, bob int64) { h.grant(t, bob, "videos", accessutil.Read) },
+			wantErr:       ErrCreatorForbidden,
+			wantTranscode: true,
+		},
+		{
+			name:          "the creator is disabled mid-run",
+			during:        func(t *testing.T, h harness, _ int64) { h.disable(t, "bob") },
+			wantErr:       accessutil.ErrCreatorInactive,
+			wantTranscode: true,
+		},
+		{
+			name: "the creator is deleted mid-run",
+			during: func(t *testing.T, h harness, bob int64) {
+				if _, err := h.database.Db.Exec(`DELETE FROM users WHERE id = ?`, bob); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantErr:       accessutil.ErrCreatorInactive,
+			wantTranscode: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			bob := h.withAccounts(t)
+			if tc.before != nil {
+				tc.before(t, h, bob)
+			}
+			transcoded := false
+			transcode := func(_ context.Context, p videoutil.TranscodeParams) error {
+				transcoded = true
+				if tc.during != nil {
+					tc.during(t, h, bob)
+				}
+				return os.WriteFile(p.Output, []byte("encoded"), 0o644)
+			}
+
+			err := h.handler(transcode).Run(jobutil.WithUserID(context.Background(), bob), params(t, "videos/clip.mov", "mp4", videoutil.QualitySmall), func(float64) {})
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("Run error = %v, want %v", err, tc.wantErr)
+			}
+			if transcoded != tc.wantTranscode {
+				t.Errorf("transcode ran = %v, want %v", transcoded, tc.wantTranscode)
+			}
+			if h.exists("videos/clip.mp4") {
+				t.Error("the output landed")
+			}
+			if left := entries(t, h.stagingDir()); len(left) != 0 {
+				t.Errorf("staging dir holds %v, want it empty", left)
+			}
+			select {
+			case e := <-h.events:
+				t.Errorf("published %+v for a job that failed", e)
+			default:
+			}
+		})
+	}
+}
+
+func (h harness) revoke(t *testing.T, userID int64) {
+	t.Helper()
+	if _, err := h.database.Queries.DeleteUserPathAccess(context.Background(), db.DeleteUserPathAccessParams{
+		UserID:       sql.NullInt64{Int64: userID, Valid: true},
+		DeviceSerial: testSerial,
+		RelPath:      "videos",
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (h harness) disable(t *testing.T, username string) {
+	t.Helper()
+	if _, err := h.database.Queries.SetUserStatus(context.Background(), db.SetUserStatusParams{
+		ToStatus: authutil.StatusDisabled, Username: username, FromStatus: authutil.StatusActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func params(t *testing.T, relPath string, format videoutil.Format, quality videoutil.Quality) json.RawMessage {
