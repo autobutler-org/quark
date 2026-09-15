@@ -95,6 +95,14 @@ func NotFound(err error) *Response {
 	return NewResponse().WithStatusCode(http.StatusNotFound).WithError(err)
 }
 
+// Forbidden reports a request from a caller who may see what they asked about
+// but not do what they asked — a change to a path shared with them read-only,
+// for instance (#1903). A caller who may not even see the path gets NotFound,
+// so the answer does not reveal that it exists.
+func Forbidden(err error) *Response {
+	return NewResponse().WithStatusCode(http.StatusForbidden).WithError(err)
+}
+
 func ServiceUnavailable(err error) *Response {
 	return NewResponse().WithStatusCode(http.StatusServiceUnavailable).WithError(err)
 }

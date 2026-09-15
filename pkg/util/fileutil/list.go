@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -23,6 +24,9 @@ type ListFilesParams struct {
 	Registry vfs.Registry
 	// Storage enumerates the managed devices for the device walk.
 	Storage *storageutil.StorageService
+	// Access decides what the listing may show (#1903). The zero value shows
+	// nothing.
+	Access accessutil.Access
 	// RootDir is the directory to list, empty for the storage root.
 	RootDir string
 	// Serials scopes the listing to those devices, empty for all of them.
@@ -34,15 +38,22 @@ type ListFilesResult struct {
 	Files []FileNode
 }
 
-// ListFiles returns the direct children of RootDir.
+// ListFiles returns the direct children of RootDir that the caller may see:
+// what they can read, and the folders on the way to something shared with
+// them deeper down. A folder they can see none of is reported as not found,
+// the same as one that does not exist.
 func ListFiles(params ListFilesParams) (ListFilesResult, error) {
+	if accessutil.Canonical(params.RootDir) != "" && !params.Access.VisibleOnAny(params.Serials, params.RootDir) {
+		return ListFilesResult{}, notFoundf("folder not found: %s", params.RootDir)
+	}
+
 	// Use VFS when available — passes SerialFilter so the adapter handles device scoping.
 	if params.Registry != nil {
 		files, err := listFilesVFS(params.Ctx, params.Registry, params.RootDir, params.Serials)
 		if err != nil {
 			return ListFilesResult{}, err
 		}
-		return ListFilesResult{Files: files}, nil
+		return ListFilesResult{Files: visibleFiles(params.Access, files)}, nil
 	}
 
 	devices, err := params.Storage.GetManagedDevices()
@@ -57,7 +68,18 @@ func ListFiles(params ListFilesParams) (ListFilesResult, error) {
 	if err != nil {
 		return ListFilesResult{}, err
 	}
-	return ListFilesResult{Files: files}, nil
+	return ListFilesResult{Files: visibleFiles(params.Access, files)}, nil
+}
+
+// visibleFiles keeps the listed files the caller may see. DirPath is the
+// files-relative path on both listing branches; FullPath is absolute on the
+// device walk.
+func visibleFiles(access accessutil.Access, files []FileNode) []FileNode {
+	return accessutil.VisibleChildren(accessutil.VisibleChildrenParams[FileNode]{
+		Access:   access,
+		Children: files,
+		Locate:   func(f FileNode) (string, string) { return f.DeviceSerial, f.DirPath },
+	}).Children
 }
 
 // listFilesVFS lists files via the VFS registry, optionally scoped to specific device serials.

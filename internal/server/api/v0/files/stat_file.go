@@ -1,6 +1,7 @@
 package v0_files
 
 import (
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -33,6 +34,13 @@ func statFile(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
 	if !ok {
 		return serverutil.InternalServerError(nil)
+	}
+	access, err := loadAccess(c, deps)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if !access.Check(c.Query("serial"), filePath, accessutil.Read).Readable {
+		return serverutil.NotFound(errNoAccess)
 	}
 
 	// VFS path: always preferred when available.
