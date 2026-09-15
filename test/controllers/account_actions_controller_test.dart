@@ -120,6 +120,23 @@ void main() {
     expect(controller.error, 'Confirm must match your username.');
   });
 
+  // #1909: the Quark refuses with 409 and the service maps it to lastAdmin.
+  test(
+    'the last admin deleting their account reads the last-admin copy',
+    () async {
+      final controller = controllerThat(
+        throwing: const MessageException(Errors.lastAdmin),
+      );
+
+      final destination = await controller.deleteAccount(
+        confirmUsername: 'ada',
+      );
+
+      expect(destination, isNull);
+      expect(controller.error, Errors.lastAdmin);
+    },
+  );
+
   test('an unexplained failure falls back to the generic sentence', () async {
     final controller = controllerThat(throwing: const ApiException(500));
 

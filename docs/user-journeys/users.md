@@ -205,3 +205,78 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 - The switch stays off after a refresh.
 - The sign-in page no longer offers to request an account (JN-AUTH-012).
 - Requests already waiting stay in **Requests** and can still be approved or denied.
+
+---
+
+### JN-USR-011: Turn an account off
+
+**Preconditions:** Another active account exists.
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. Tap the actions menu on that account's row.
+3. Tap **Turn off**.
+
+**Expected result:**
+
+- The row is marked **Turned off**.
+- That person is signed out everywhere, and signing in shows "This account is turned off. Ask an admin of this
+  Quark." (JN-AUTH-014).
+- Their files and shares stay as they were.
+
+---
+
+### JN-USR-012: Turn an account back on
+
+**Preconditions:** JN-USR-011 complete.
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. Tap the actions menu on the turned-off account's row.
+3. Tap **Turn on**.
+
+**Expected result:**
+
+- The row is no longer marked **Turned off**.
+- That person can sign in again, with everything they had.
+
+---
+
+### JN-USR-013: Delete an account
+
+**Preconditions:** Another account exists that owns a folder.
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. Tap the actions menu on that account's row.
+3. Tap **Delete**.
+4. Read the confirmation, and tap **Delete**.
+
+**Expected result:**
+
+- The account leaves **Accounts** and can no longer sign in.
+- The folders it owned stay where they are, and the signed-in admin now owns them, including anything of theirs in
+  the trash.
+- Tapping **Cancel** in step 4 changes nothing.
+
+---
+
+### JN-USR-014: Your own account has no actions here
+
+**Preconditions:** User is signed in as an admin.
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. Find your own row.
+
+**Expected result:**
+
+- Your row, marked **You**, has no actions menu: turning off or deleting your own account happens from Settings.
+
+**Notes:**
+
+- The Quark refuses an admin action on the caller's own account with "Use Settings to change your own account."

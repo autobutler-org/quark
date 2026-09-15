@@ -12,8 +12,8 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The admin-only Users page (#1662): account requests waiting for approval,
-/// every account on the Quark, adding an account, and whether the Quark takes
-/// requests at all.
+/// every account on the Quark with what an admin can do to each, adding an
+/// account, and whether the Quark takes requests at all.
 ///
 /// The router only opens it for an admin, and the Quark refuses its requests
 /// from anyone else.
@@ -89,6 +89,24 @@ class _UsersPageState extends State<UsersPage>
         },
       ),
     );
+  }
+
+  /// Asks before deleting [username], then deletes (#1909).
+  Future<void> _confirmDelete(String username) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => ConfirmDeleteDialog(
+        title: 'Delete $username?',
+        body:
+            "$username won't be able to sign in again. The files they own "
+            'stay on this Quark and become yours.',
+        keyPrefix: 'delete_user',
+        onConfirm: () => Navigator.of(dialogContext).pop(true),
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _report(_controller.delete(username), 'delete $username');
   }
 
   @override
@@ -167,6 +185,11 @@ class _UsersPageState extends State<UsersPage>
                     c.demote(username),
                     'remove $username as an admin',
                   ),
+                  onDisable: (username) =>
+                      _report(c.disable(username), 'turn off $username'),
+                  onEnable: (username) =>
+                      _report(c.enable(username), 'turn on $username'),
+                  onDelete: _confirmDelete,
                 ),
               ),
             ],

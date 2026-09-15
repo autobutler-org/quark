@@ -18,8 +18,9 @@ import 'user_list/user_row.dart';
 /// is left out of every menu, and a row whose menu would be empty has none.
 ///
 /// Key prefixes: `user_row_<username>` on each row, `user_menu_<username>` on
-/// its menu button, and `user_action_promote_<username>` and
-/// `user_action_demote_<username>` on the menu entries.
+/// its menu button, and `user_action_<action>_<username>` on the menu
+/// entries, where the action is `promote`, `demote`, `disable`, `enable` or
+/// `delete`.
 ///
 /// ```dart
 /// UserList(
@@ -30,6 +31,9 @@ import 'user_list/user_row.dart';
 ///   busyUsernames: controller.busyUsernames,
 ///   onPromote: promote,
 ///   onDemote: demote,
+///   onDisable: disable,
+///   onEnable: enable,
+///   onDelete: confirmDelete,
 /// );
 /// ```
 class UserList extends StatelessWidget {
@@ -42,6 +46,9 @@ class UserList extends StatelessWidget {
     this.busyUsernames = const {},
     this.onPromote,
     this.onDemote,
+    this.onDisable,
+    this.onEnable,
+    this.onDelete,
     super.key,
   });
 
@@ -71,6 +78,18 @@ class UserList extends StatelessWidget {
   /// leaves the entry out.
   final ValueChanged<String>? onDemote;
 
+  /// Called with the username to turn off. Offered on active accounts. Null
+  /// leaves the entry out.
+  final ValueChanged<String>? onDisable;
+
+  /// Called with the username to turn back on. Offered on turned-off
+  /// accounts. Null leaves the entry out.
+  final ValueChanged<String>? onEnable;
+
+  /// Called with the username to delete. Offered on every account but your
+  /// own; the caller confirms before deleting. Null leaves the entry out.
+  final ValueChanged<String>? onDelete;
+
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
@@ -95,6 +114,9 @@ class UserList extends StatelessWidget {
       );
     }
 
+    VoidCallback? bind(ValueChanged<String>? callback, String username) =>
+        callback == null ? null : () => callback(username);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -104,10 +126,11 @@ class UserList extends StatelessWidget {
             user: user,
             isSelf: user.username == selfUsername,
             isBusy: busyUsernames.contains(user.username),
-            onPromote: onPromote == null
-                ? null
-                : () => onPromote!(user.username),
-            onDemote: onDemote == null ? null : () => onDemote!(user.username),
+            onPromote: bind(onPromote, user.username),
+            onDemote: bind(onDemote, user.username),
+            onDisable: bind(onDisable, user.username),
+            onEnable: bind(onEnable, user.username),
+            onDelete: bind(onDelete, user.username),
           ),
       ],
     );

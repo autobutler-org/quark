@@ -179,6 +179,26 @@ void main() {
     expect(settings.sessionToken, 'one-token');
   });
 
+  // #1909: the last active admin cannot leave anyone else without an admin.
+  test('the last admin is told to make someone else an admin first', () async {
+    serve(
+      statusCode: 409,
+      body: '{"error":"this Quark needs at least one active admin"}',
+    );
+
+    await expectLater(
+      AuthService.deleteAccount(confirmUsername: 'ada'),
+      throwsA(
+        isA<MessageException>().having(
+          (e) => e.message,
+          'message',
+          Errors.lastAdmin,
+        ),
+      ),
+    );
+    expect(settings.sessionToken, 'one-token');
+  });
+
   test('a dead session is a sign-out, not a failed deletion', () async {
     serve(statusCode: 401, body: '{"error":"not authenticated"}');
 
