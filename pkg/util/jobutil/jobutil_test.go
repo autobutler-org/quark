@@ -157,6 +157,58 @@ func (h harness) expectEvents(t *testing.T, kinds ...eventbus.EventKind) []Job {
 	return jobs
 }
 
+func TestJobRunsAsTheAccountThatQueuedIt(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	user, err := h.database.Queries.CreateUser(ctx, db.CreateUserParams{Username: "bob", PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := make(chan int64, 2)
+	h.queue.Register(RegisterParams{Kind: "owned", Handler: Handler{
+		Run: func(ctx context.Context, _ json.RawMessage, _ func(float64)) error {
+			seen <- UserID(ctx)
+			return nil
+		},
+	}})
+	h.run(t)
+
+	for _, want := range []int64{user.ID, 0} {
+		res, err := h.queue.Enqueue(ctx, EnqueueParams{Kind: "owned", Name: "job", UserID: want})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Job.UserID != want {
+			t.Errorf("queued job UserID = %d, want %d", res.Job.UserID, want)
+		}
+		select {
+		case got := <-seen:
+			if got != want {
+				t.Errorf("UserID(ctx) in the handler = %d, want %d", got, want)
+			}
+		case <-time.After(testTimeout):
+			t.Fatal("the job did not run")
+		}
+		if stored := h.waitStatus(t, res.Job.ID, StatusCompleted).UserID; stored != want {
+			t.Errorf("stored job UserID = %d, want %d", stored, want)
+		}
+	}
+}
+
+func TestJobSource(t *testing.T) {
+	for params, want := range map[string][2]string{
+		`{"serial":"USB 1","relPath":"videos/a.mkv","format":"mov"}`: {"USB 1", "videos/a.mkv"},
+		`{"relPath":"a.mkv"}`: {"", "a.mkv"},
+		`{}`:                  {"", ""},
+		`[]`:                  {"", ""},
+	} {
+		serial, relPath := Job{Params: json.RawMessage(params)}.Source()
+		if serial != want[0] || relPath != want[1] {
+			t.Errorf("Source of %s = %q, %q, want %q, %q", params, serial, relPath, want[0], want[1])
+		}
+	}
+}
+
 func TestEnqueueRejectsUnknownKind(t *testing.T) {
 	h := newHarness(t)
 	_, err := h.queue.Enqueue(context.Background(), EnqueueParams{Kind: "nope", Name: "job"})

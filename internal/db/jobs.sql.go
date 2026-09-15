@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 )
 
@@ -18,7 +19,7 @@ SET
 WHERE
     id = ?
     AND status IN ('pending', 'running')
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
 `
 
 func (q *Queries) CancelJob(ctx context.Context, id int64) (Job, error) {
@@ -37,6 +38,7 @@ func (q *Queries) CancelJob(ctx context.Context, id int64) (Job, error) {
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.UserID,
 	)
 	return i, err
 }
@@ -50,7 +52,7 @@ SET
 WHERE
     id = ?
     AND status = 'pending'
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
 `
 
 // The status guard makes a job canceled since it was picked match no row.
@@ -70,16 +72,17 @@ func (q *Queries) ClaimJob(ctx context.Context, id int64) (Job, error) {
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.UserID,
 	)
 	return i, err
 }
 
 const createJob = `-- name: CreateJob :one
 INSERT INTO
-    jobs (kind, name, params, lane)
+    jobs (kind, name, params, lane, user_id)
 VALUES
-    (?, ?, ?, ?)
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at
+    (?, ?, ?, ?, ?)
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
 `
 
 type CreateJobParams struct {
@@ -87,6 +90,7 @@ type CreateJobParams struct {
 	Name   string
 	Params string
 	Lane   string
+	UserID sql.NullInt64
 }
 
 func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (Job, error) {
@@ -95,6 +99,7 @@ func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (Job, erro
 		arg.Name,
 		arg.Params,
 		arg.Lane,
+		arg.UserID,
 	)
 	var i Job
 	err := row.Scan(
@@ -110,6 +115,7 @@ func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (Job, erro
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.UserID,
 	)
 	return i, err
 }
@@ -124,7 +130,7 @@ SET
 WHERE
     id = ?
     AND status = 'running'
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
 `
 
 type FinishJobParams struct {
@@ -157,13 +163,14 @@ func (q *Queries) FinishJob(ctx context.Context, arg FinishJobParams) (Job, erro
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.UserID,
 	)
 	return i, err
 }
 
 const getJob = `-- name: GetJob :one
 SELECT
-    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at
+    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
 FROM
     jobs
 WHERE
@@ -188,6 +195,7 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.UserID,
 	)
 	return i, err
 }
@@ -210,7 +218,7 @@ func (q *Queries) InterruptRunningJobs(ctx context.Context, reason string) error
 
 const listJobs = `-- name: ListJobs :many
 SELECT
-    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at
+    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
 FROM
     jobs
 WHERE
@@ -251,6 +259,7 @@ func (q *Queries) ListJobs(ctx context.Context, kinds []string) ([]Job, error) {
 			&i.CreatedAt,
 			&i.StartedAt,
 			&i.FinishedAt,
+			&i.UserID,
 		); err != nil {
 			return nil, err
 		}
@@ -320,7 +329,7 @@ SET
 WHERE
     id = ?
     AND status = 'failed'
-RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at
+RETURNING id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
 `
 
 type RetryJobParams struct {
@@ -347,6 +356,7 @@ func (q *Queries) RetryJob(ctx context.Context, arg RetryJobParams) (Job, error)
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.FinishedAt,
+		&i.UserID,
 	)
 	return i, err
 }
