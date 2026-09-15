@@ -42,6 +42,17 @@ type FileContentFt struct {
 	Extracted string
 }
 
+type Group struct {
+	ID      int64
+	Name    string
+	Builtin int64
+}
+
+type GroupMember struct {
+	GroupID int64
+	UserID  int64
+}
+
 type Job struct {
 	ID         int64
 	Kind       string
@@ -55,6 +66,15 @@ type Job struct {
 	CreatedAt  time.Time
 	StartedAt  sql.NullTime
 	FinishedAt sql.NullTime
+}
+
+type PathAccess struct {
+	ID           int64
+	DeviceSerial string
+	RelPath      string
+	UserID       sql.NullInt64
+	GroupID      sql.NullInt64
+	Level        string
 }
 
 type PhotoAlbum struct {
