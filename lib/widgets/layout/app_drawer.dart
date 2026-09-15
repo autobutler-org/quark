@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/app_settings.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// [QuarkDrawer] wired to the router, so every top-level page opens the same
@@ -11,6 +12,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// page's drawer without it. Each
 /// row goes to its page with `context.go`; the row for the page the drawer
 /// was opened from closes the drawer instead.
+///
+/// Admin-only pages are offered to admins only, following
+/// [AppSettings.isAdmin]. That decides what the drawer shows and nothing
+/// more: the router checks with the Quark before it opens one of those pages,
+/// and the Quark refuses their requests from anyone else.
 class AppDrawer extends StatelessWidget {
   /// Creates the drawer for the page [activeSection] names.
   const AppDrawer({required this.activeSection, super.key});
@@ -25,18 +31,23 @@ class AppDrawer extends StatelessWidget {
         ? () => Navigator.of(context).pop()
         : () => context.go(route);
 
-    return QuarkDrawer(
-      activeSection: activeSection,
-      onTapFiles: goTo(QuarkDrawerSection.files, AppRoutes.files),
-      onTapPhotos: goTo(QuarkDrawerSection.photos, AppRoutes.photos),
-      onTapTrash: goTo(QuarkDrawerSection.trash, AppRoutes.trash),
-      onTapDocs: goTo(QuarkDrawerSection.docs, AppRoutes.docs),
-      onTapSheets: goTo(QuarkDrawerSection.sheets, AppRoutes.sheets),
-      onTapDevices: goTo(QuarkDrawerSection.devices, AppRoutes.devices),
-      onTapHealth: goTo(QuarkDrawerSection.health, AppRoutes.health),
-      onTapVault: goTo(QuarkDrawerSection.vault, AppRoutes.vault),
-      onTapJobs: goTo(QuarkDrawerSection.jobs, AppRoutes.jobs),
-      onTapSettings: goTo(QuarkDrawerSection.settings, AppRoutes.settings),
+    return ValueListenableBuilder<bool>(
+      valueListenable: AppSettings.instance.isAdmin,
+      builder: (context, isAdmin, _) => QuarkDrawer(
+        activeSection: activeSection,
+        onTapFiles: goTo(QuarkDrawerSection.files, AppRoutes.files),
+        onTapPhotos: goTo(QuarkDrawerSection.photos, AppRoutes.photos),
+        onTapTrash: goTo(QuarkDrawerSection.trash, AppRoutes.trash),
+        onTapDocs: goTo(QuarkDrawerSection.docs, AppRoutes.docs),
+        onTapSheets: goTo(QuarkDrawerSection.sheets, AppRoutes.sheets),
+        onTapDevices: goTo(QuarkDrawerSection.devices, AppRoutes.devices),
+        onTapHealth: goTo(QuarkDrawerSection.health, AppRoutes.health),
+        onTapVault: isAdmin
+            ? goTo(QuarkDrawerSection.vault, AppRoutes.vault)
+            : null,
+        onTapJobs: goTo(QuarkDrawerSection.jobs, AppRoutes.jobs),
+        onTapSettings: goTo(QuarkDrawerSection.settings, AppRoutes.settings),
+      ),
     );
   }
 }

@@ -2,8 +2,30 @@
 
 Covers the Vault (`/vault`) — password manager setup, entry management, folders, import/export.
 
-The vault is admin-only (#1899): every journey in this file assumes the user is signed in as an admin. Any other
-account gets an error from every vault action.
+The vault is admin-only (#1899): every journey in this file except JN-VT-000 assumes the user is signed in as an
+admin.
+
+---
+
+### JN-VT-000: A non-admin cannot open the vault
+
+**Preconditions:** User is signed in to an account that is not an admin.
+
+**Steps:**
+
+1. Open the navigation drawer.
+2. Type `/vault` into the address bar.
+
+**Expected result:**
+
+- The drawer has no **Vault** entry.
+- Opening `/vault` directly lands on `/files`.
+
+**Notes:**
+
+- The redirect asks the Quark whether the account is an admin, so an admin opening a `/vault` link lands on the vault
+  (#1928).
+- An admin demoted while on `/vault` is moved to `/files`.
 
 ---
 
