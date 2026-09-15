@@ -97,11 +97,21 @@ type CreateFolderParams struct {
 }
 
 // CreateFolderResult reports a created folder.
-type CreateFolderResult struct{}
+type CreateFolderResult struct {
+	// Path is the folder, files-relative.
+	Path string
+	// Created is false when the folder was already there, which creating it
+	// again does not treat as an error.
+	Created bool
+}
 
 // CreateFolder creates a folder and announces it.
 func CreateFolder(params CreateFolderParams) (CreateFolderResult, error) {
 	folderPath := path.Join(params.FolderDir, params.FolderName)
+	existed, err := fileExists(params.Ctx, params.Registry, params.Storage, params.Serial, folderPath)
+	if err != nil {
+		return CreateFolderResult{}, err
+	}
 
 	// Use VFS.MkdirAll for no-serial folder creation; fall back for device-scoped ops.
 	created := false
@@ -128,5 +138,5 @@ func CreateFolder(params CreateFolderParams) (CreateFolderResult, error) {
 		Kind: eventbus.EventNewFolder,
 		Path: folderPath,
 	})
-	return CreateFolderResult{}, nil
+	return CreateFolderResult{Path: folderPath, Created: !existed}, nil
 }

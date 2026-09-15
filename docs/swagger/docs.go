@@ -1137,7 +1137,7 @@ const docTemplate = `{
                 }
             },
             "put": {
-                "description": "Enqueue a file move operation between paths/devices",
+                "description": "Enqueue a file move operation between paths/devices. Needs write access on the file and on the folder it moves into.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1168,6 +1168,18 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1223,6 +1235,18 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1292,7 +1316,7 @@ const docTemplate = `{
         },
         "/files/convert/xlsx": {
             "post": {
-                "description": "Reads an .xlsx or .xlsm workbook and writes it back as a sibling .qsheet, the format the Sheets editor opens. The workbook itself is left untouched. Answers 409 when a .qsheet of that name already exists and overwrite was not asked for.",
+                "description": "Reads an .xlsx or .xlsm workbook and writes it back as a sibling .qsheet, the format the Sheets editor opens. The workbook itself is left untouched. Answers 409 when a .qsheet of that name already exists and overwrite was not asked for. Needs read access on the workbook and write access on its directory; the caller owns a newly created .qsheet.",
                 "produces": [
                     "application/json"
                 ],
@@ -1330,6 +1354,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1482,7 +1512,7 @@ const docTemplate = `{
         },
         "/files/extract": {
             "post": {
-                "description": "Extracts a zip file into a subdirectory named after the archive (without its extension) in the same directory",
+                "description": "Extracts a zip file into a subdirectory named after the archive (without its extension) in the same directory. Needs read access on the archive and write access on its directory; the caller owns what is extracted.",
                 "produces": [
                     "application/json"
                 ],
@@ -1518,6 +1548,18 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -1529,7 +1571,7 @@ const docTemplate = `{
         },
         "/files/folder/{folderDir}": {
             "post": {
-                "description": "Enqueue create-folder operation under the given folder directory",
+                "description": "Enqueue create-folder operation under the given folder directory. Needs write access on that directory; the caller owns the new folder.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -1571,6 +1613,18 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

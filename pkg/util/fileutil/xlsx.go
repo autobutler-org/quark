@@ -54,6 +54,9 @@ type ConvertXlsxParams struct {
 type ConvertXlsxResult struct {
 	// Path is where the new spreadsheet landed, files-relative.
 	Path string
+	// Replaced is true when an existing .qsheet was overwritten, so nothing
+	// new was created.
+	Replaced bool
 	// Tabs, Rows and Cells are what the workbook came to.
 	Tabs  int
 	Rows  int
@@ -85,12 +88,12 @@ func ConvertXlsxToQsheet(params ConvertXlsxParams) (ConvertXlsxResult, error) {
 	stem := strings.TrimSuffix(base, filepath.Ext(base))
 	target := path.Join(dir, stem+".qsheet")
 
-	if !params.Overwrite {
-		if exists, err := fileExists(params, target); err != nil {
-			return ConvertXlsxResult{}, err
-		} else if exists {
-			return ConvertXlsxResult{}, fmt.Errorf("%w: %s already exists", vfs.ErrConflict, target)
-		}
+	exists, err := fileExists(params.Ctx, params.Registry, params.Storage, params.Serial, target)
+	if err != nil {
+		return ConvertXlsxResult{}, err
+	}
+	if exists && !params.Overwrite {
+		return ConvertXlsxResult{}, fmt.Errorf("%w: %s already exists", vfs.ErrConflict, target)
 	}
 
 	source, size, closer, err := openXlsxSource(params)
@@ -161,10 +164,11 @@ func ConvertXlsxToQsheet(params ConvertXlsxParams) (ConvertXlsxResult, error) {
 	}
 
 	return ConvertXlsxResult{
-		Path:  target,
-		Tabs:  outcome.result.Tabs,
-		Rows:  outcome.result.Rows,
-		Cells: outcome.result.Cells,
+		Path:     target,
+		Replaced: exists,
+		Tabs:     outcome.result.Tabs,
+		Rows:     outcome.result.Rows,
+		Cells:    outcome.result.Cells,
 	}, nil
 }
 
@@ -203,11 +207,12 @@ func cleanRelPath(filePath string) string {
 	return strings.TrimPrefix(path.Clean("/"+filepath.ToSlash(filePath)), "/")
 }
 
-// fileExists reports whether something already occupies a files-relative path.
-func fileExists(params ConvertXlsxParams, filePath string) (bool, error) {
-	if params.Serial == "" {
-		if fsys := FilesVFS(params.Registry); fsys != nil {
-			_, err := fsys.Stat(params.Ctx, filePath)
+// fileExists reports whether something already occupies a files-relative path,
+// asking the same source a write to that serial would go through.
+func fileExists(ctx context.Context, registry vfs.Registry, storage *storageutil.StorageService, serial, filePath string) (bool, error) {
+	if serial == "" {
+		if fsys := FilesVFS(registry); fsys != nil {
+			_, err := fsys.Stat(ctx, filePath)
 			if err == nil {
 				return true, nil
 			}
@@ -217,12 +222,12 @@ func fileExists(params ConvertXlsxParams, filePath string) (bool, error) {
 			return false, err
 		}
 	}
-	if params.Storage == nil {
+	if storage == nil {
 		return false, ErrNoFilesNamespace
 	}
-	if _, err := params.Storage.StatFile(storageutil.StatFileParams{
+	if _, err := storage.StatFile(storageutil.StatFileParams{
 		FilePath:     filePath,
-		DeviceSerial: params.Serial,
+		DeviceSerial: serial,
 	}); err != nil {
 		// The storage service reports every stat failure the same way, and a
 		// missing file is the one this asked about.
