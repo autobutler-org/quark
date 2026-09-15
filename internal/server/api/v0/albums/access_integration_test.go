@@ -45,11 +45,16 @@ func TestAlbums_Access(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	trip, err := albumutil.CreateAlbum(ctx, albumutil.CreateAlbumParams{Queries: q, Name: "trip"})
+	founder, err := q.CreateUser(ctx, db.CreateUserParams{Username: "founder", PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trip, err := albumutil.CreateAlbum(ctx, albumutil.CreateAlbumParams{UserID: founder.ID, Queries: q, Name: "trip"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	day, err := albumutil.CreateAlbum(ctx, albumutil.CreateAlbumParams{
+		UserID:  founder.ID,
 		Queries: q, Name: "day1", ParentID: sql.NullInt64{Int64: trip.Album.ID, Valid: true},
 	})
 	if err != nil {
@@ -71,7 +76,7 @@ func TestAlbums_Access(t *testing.T) {
 	deps := deputil.NewDependencies().
 		WithStorageService(storageutil.NewStorageService(systemDevice{})).
 		WithDatabase(database)
-	principal := accessutil.System
+	principal := accessutil.Principal{UserID: founder.ID, IsAdmin: true}
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
