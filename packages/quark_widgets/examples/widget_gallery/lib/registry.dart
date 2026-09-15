@@ -425,6 +425,35 @@ final List<GalleryEntry> registry = [
       ],
     ),
   ),
+  GalleryEntry(
+    name: 'QuarkTabView',
+    group: 'Layout',
+    build: (context, log) => SizedBox(
+      height: 320,
+      child: QuarkTabView(
+        tabs: [
+          QuarkTab(
+            label: 'Accounts',
+            child: ListView(
+              children: const [
+                ListTile(title: Text('ada')),
+                ListTile(title: Text('bob')),
+              ],
+            ),
+          ),
+          QuarkTab(
+            label: 'Groups',
+            child: ListView(
+              children: const [
+                ListTile(title: Text('everyone')),
+                ListTile(title: Text('Family')),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
 
   // ── File browser ──────────────────────────────────────────────────────────
   GalleryEntry(
