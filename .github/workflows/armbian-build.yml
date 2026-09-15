@@ -70,10 +70,11 @@ jobs:
           echo "build_tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Resolved Quark tag: ${TAG}"
 
+      # quark-image downloads the binary for IMAGE_VERSION, which
+      # armbian_image_version sets. An env var here would not reach the extension:
+      # compile.sh relaunches itself in Docker and forwards only its own params.
       - name: Build image with embedded Quark tag
         uses: ./armbian-build
-        env:
-          IMAGE_BINARY_URL: https://quarkrelease.blob.core.windows.net/releases/quark/${{ steps.resolve-tag.outputs.build_tag }}/quark_Linux_arm64.tar.gz
         with:
           armbian_target: build
           armbian_board: ${{ matrix.board }}
