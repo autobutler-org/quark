@@ -122,9 +122,28 @@ type TrashFilesParams struct {
 	DeviceSerial string
 }
 
-// TrashFilesResult is returned on success.
+// TrashedItem is one file or folder a trash call moved into the trash.
+type TrashedItem struct {
+	// OriginalPath is where it was, relative to the device's files directory.
+	OriginalPath string
+	// TrashName addresses it in the trash.
+	TrashName string
+}
+
+// TrashFilesResult reports what was trashed.
 type TrashFilesResult struct {
 	RootDir string
+	// Trashed lists what was moved into the trash; a path that no longer
+	// existed is not in it. When TrashFiles fails partway it still lists what
+	// was moved before the failure.
+	Trashed []TrashedItem
+}
+
+// TrashPath is the files-relative path of a trashed item, or of something
+// inside a trashed folder when rel is set. An item's access rows live there
+// while it is in the trash (#1905).
+func TrashPath(trashName, rel string) string {
+	return path.Join(TrashDir, trashName, rel)
 }
 
 // TrashFiles moves files/directories into the .trash folder under the device's FilesDir.
@@ -140,19 +159,20 @@ func (s *StorageService) TrashFiles(params TrashFilesParams) (*TrashFilesResult,
 // exists is skipped, so a repeated delete succeeds the way it did when deletes
 // were permanent.
 func TrashFilesImpl(params TrashFilesParams, filesDir string) (*TrashFilesResult, error) {
+	result := &TrashFilesResult{RootDir: params.RootDir}
 	trashRoot := filepath.Join(filesDir, TrashDir)
 	if err := os.MkdirAll(trashRoot, 0o700); err != nil {
-		return nil, fmt.Errorf("failed to create trash directory: %w", err)
+		return result, fmt.Errorf("failed to create trash directory: %w", err)
 	}
 
 	for _, filePath := range params.FilePaths {
 		fullPath, err := safeJoin(filesDir, params.RootDir, filePath)
 		if err != nil {
-			return nil, fmt.Errorf("invalid file path: %w", err)
+			return result, fmt.Errorf("invalid file path: %w", err)
 		}
 		relOriginal, err := filepath.Rel(filepath.Clean(filesDir), fullPath)
 		if err != nil || relOriginal == "." || IsTrashPath(relOriginal) {
-			return nil, fmt.Errorf("invalid file path: %s", filePath)
+			return result, fmt.Errorf("invalid file path: %s", filePath)
 		}
 		if _, err := os.Lstat(fullPath); os.IsNotExist(err) {
 			continue
@@ -161,28 +181,30 @@ func TrashFilesImpl(params TrashFilesParams, filesDir string) (*TrashFilesResult
 		now := time.Now().UTC()
 		trashName, err := newTrashName(filepath.Base(fullPath), now)
 		if err != nil {
-			return nil, err // coverage: ignore - crypto/rand does not fail on supported platforms
+			return result, err // coverage: ignore - crypto/rand does not fail on supported platforms
 		}
 		trashDest := filepath.Join(trashRoot, trashName)
 
 		if err := os.Rename(fullPath, trashDest); err != nil {
-			return nil, fmt.Errorf("failed to move %s to trash: %w", filePath, err)
+			return result, fmt.Errorf("failed to move %s to trash: %w", filePath, err)
 		}
 
 		// The sidecar is the only record of where the item came from. Without
 		// it the item could never be restored, so put the item back rather
 		// than leave it stranded in the trash.
+		originalPath := filepath.ToSlash(relOriginal)
 		metaBytes, _ := json.Marshal(TrashEntry{
-			OriginalPath: filepath.ToSlash(relOriginal),
+			OriginalPath: originalPath,
 			TrashedAt:    now,
 		})
 		if err := os.WriteFile(trashMetaFile(trashDest), metaBytes, 0o600); err != nil {
 			_ = os.Rename(trashDest, fullPath)
-			return nil, fmt.Errorf("failed to record trash metadata for %s: %w", filePath, err)
+			return result, fmt.Errorf("failed to record trash metadata for %s: %w", filePath, err)
 		}
+		result.Trashed = append(result.Trashed, TrashedItem{OriginalPath: originalPath, TrashName: trashName})
 	}
 
-	return &TrashFilesResult{RootDir: params.RootDir}, nil
+	return result, nil
 }
 
 // TrashItem describes one item in the trash.
@@ -507,6 +529,8 @@ type RestoredItem struct {
 	// Path is relative to the device's files directory.
 	Path  string
 	IsDir bool
+	// Source is where the item was in the trash, as a TrashPath.
+	Source string
 }
 
 // RestoreTrashResult lists what was restored. When RestoreTrash fails partway
@@ -553,7 +577,7 @@ func RestoreTrashImpl(params RestoreTrashParams, filesDir string) (RestoreTrashR
 	trashRoot := filepath.Join(filesDir, TrashDir)
 
 	type move struct {
-		from, to, rel string
+		from, to, rel, source string
 		// whole is true when the move takes the trashed item itself, and
 		// with it the sidecar's reason to exist.
 		whole bool
@@ -585,7 +609,10 @@ func RestoreTrashImpl(params RestoreTrashParams, filesDir string) (RestoreTrashR
 				return RestoreTrashResult{}, fmt.Errorf("%w: %s and %s overlap", ErrRestoreConflict, m.rel, rel)
 			}
 		}
-		moves = append(moves, move{from: ref.target, to: restoreTo, rel: rel, whole: ref.rel == ""})
+		moves = append(moves, move{
+			from: ref.target, to: restoreTo, rel: rel, whole: ref.rel == "",
+			source: TrashPath(item.TrashName, ref.rel),
+		})
 	}
 
 	var result RestoreTrashResult
@@ -610,7 +637,7 @@ func RestoreTrashImpl(params RestoreTrashParams, filesDir string) (RestoreTrashR
 		if m.whole {
 			_ = os.Remove(trashMetaFile(m.from))
 		}
-		result.Restored = append(result.Restored, RestoredItem{Path: m.rel, IsDir: info.IsDir()})
+		result.Restored = append(result.Restored, RestoredItem{Path: m.rel, IsDir: info.IsDir(), Source: m.source})
 	}
 	return result, nil
 }
@@ -645,6 +672,9 @@ type DeleteTrashParams struct {
 // DeleteTrashResult counts the items deleted.
 type DeleteTrashResult struct {
 	Deleted int
+	// Removed lists each deleted item as a TrashPath, so what was keyed on it
+	// can go too. When DeleteTrash fails partway it still lists what went.
+	Removed []string
 }
 
 // DeleteTrash permanently deletes the named items from the device's trash.
@@ -684,6 +714,7 @@ func DeleteTrashImpl(params DeleteTrashParams, filesDir string) (DeleteTrashResu
 			return result, fmt.Errorf("failed to delete %s: %w", ref.rel, err)
 		}
 		result.Deleted++
+		result.Removed = append(result.Removed, TrashPath(filepath.Base(ref.itemPath), ref.rel))
 	}
 	return result, nil
 }
@@ -707,6 +738,8 @@ type EmptyTrashParams struct {
 // EmptyTrashResult counts the items deleted.
 type EmptyTrashResult struct {
 	Deleted int
+	// Removed lists each deleted item as a TrashPath.
+	Removed []string
 }
 
 // EmptyTrash permanently deletes everything in the device's trash.
@@ -715,45 +748,54 @@ func (s *StorageService) EmptyTrash(params EmptyTrashParams) (EmptyTrashResult, 
 	if err != nil {
 		return EmptyTrashResult{}, err
 	}
-	deleted, err := EmptyTrashImpl(filesDir)
-	if deleted > 0 {
+	removed, err := removeTrashItems(filesDir, func(TrashItem) bool { return true })
+	if len(removed) > 0 {
 		publishTrashChanged(params.EventBus, params.DeviceSerial)
 	}
-	return EmptyTrashResult{Deleted: deleted}, err
+	return EmptyTrashResult{Deleted: len(removed), Removed: removed}, err
 }
 
 // EmptyTrashImpl is the testable core of EmptyTrash.
 func EmptyTrashImpl(filesDir string) (int, error) {
-	return removeTrashItems(filesDir, func(TrashItem) bool { return true })
+	removed, err := removeTrashItems(filesDir, func(TrashItem) bool { return true })
+	return len(removed), err
 }
 
 // PurgeExpiredTrashImpl deletes the items in filesDir's trash that were
 // trashed more than TrashRetentionDays before now, returning how many it
 // deleted.
 func PurgeExpiredTrashImpl(filesDir string, now time.Time) (int, error) {
+	removed, err := purgeExpired(filesDir, now)
+	return len(removed), err
+}
+
+// purgeExpired deletes the items in filesDir's trash that have expired by now,
+// returning each one it deleted as a TrashPath.
+func purgeExpired(filesDir string, now time.Time) ([]string, error) {
 	return removeTrashItems(filesDir, func(item TrashItem) bool {
 		return !item.ExpiresAt.After(now)
 	})
 }
 
-// removeTrashItems deletes every listed trash item doom picks.
-func removeTrashItems(filesDir string, doom func(TrashItem) bool) (int, error) {
+// removeTrashItems deletes every listed trash item doom picks, returning each
+// one it deleted as a TrashPath.
+func removeTrashItems(filesDir string, doom func(TrashItem) bool) ([]string, error) {
 	items, err := ListTrashImpl(filesDir)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	trashRoot := filepath.Join(filesDir, TrashDir)
-	deleted := 0
+	var removed []string
 	for _, item := range items {
 		if !doom(item) {
 			continue
 		}
 		if err := removeTrashItem(filepath.Join(trashRoot, item.TrashName)); err != nil {
-			return deleted, err
+			return removed, err
 		}
-		deleted++
+		removed = append(removed, TrashPath(item.TrashName, ""))
 	}
-	return deleted, nil
+	return removed, nil
 }
 
 // PurgeExpiredTrashParams configures a sweep of every device's trash.
@@ -762,9 +804,18 @@ type PurgeExpiredTrashParams struct {
 	EventBus *eventbus.Bus
 }
 
+// TrashRemoval is one item a sweep deleted.
+type TrashRemoval struct {
+	DeviceSerial string
+	// Path is the item as a TrashPath.
+	Path string
+}
+
 // PurgeExpiredTrashResult counts the items the sweep deleted.
 type PurgeExpiredTrashResult struct {
 	Purged int
+	// Removed lists every item deleted, on every device.
+	Removed []TrashRemoval
 }
 
 // PurgeExpiredTrash deletes expired items from the trash of every managed
@@ -793,9 +844,12 @@ func (s *StorageService) PurgeExpiredTrash(params PurgeExpiredTrashParams) (Purg
 	var errs []error
 	now := time.Now().UTC()
 	for filesDir, serial := range serials {
-		n, err := PurgeExpiredTrashImpl(filesDir, now)
-		result.Purged += n
-		if n > 0 {
+		removed, err := purgeExpired(filesDir, now)
+		result.Purged += len(removed)
+		for _, p := range removed {
+			result.Removed = append(result.Removed, TrashRemoval{DeviceSerial: serial, Path: p})
+		}
+		if len(removed) > 0 {
 			publishTrashChanged(params.EventBus, serial)
 		}
 		if err != nil {

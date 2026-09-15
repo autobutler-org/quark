@@ -2,15 +2,20 @@ package v0_trash_test
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	v0_files "github.com/autobutler-org/quark/internal/server/api/v0/files"
 	v0_trash "github.com/autobutler-org/quark/internal/server/api/v0/trash"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
@@ -50,10 +55,12 @@ type harness struct {
 	engine   *gin.Engine
 	filesDir string
 	events   <-chan eventbus.Event
+	database *db.DatabaseSqlc
 }
 
 // newHarness mounts the trash and files routers over an internal device in a
-// temp directory, and subscribes to the event bus they publish on.
+// temp directory and a migrated database, and subscribes to the event bus they
+// publish on.
 func newHarness(t *testing.T) harness {
 	t.Helper()
 	mountPoint := t.TempDir()
@@ -64,9 +71,11 @@ func newHarness(t *testing.T) harness {
 	bus := eventbus.New()
 	events, unsub := bus.Subscribe("trash-test")
 	t.Cleanup(unsub)
+	database := dbtest.NewDB(t)
 	deps := deputil.NewDependencies().
 		WithStorageService(storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint})).
-		WithEventBus(bus)
+		WithEventBus(bus).
+		WithDatabase(database)
 
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -78,7 +87,115 @@ func newHarness(t *testing.T) harness {
 	group := engine.Group("/api/v0")
 	serverutil.RegisterRouterWithGroup(group, v0_trash.NewRouter())
 	serverutil.RegisterRouterWithGroup(group, v0_files.NewRouter())
-	return harness{engine: engine, filesDir: filesDir, events: events}
+	return harness{engine: engine, filesDir: filesDir, events: events, database: database}
+}
+
+// rows lists every access row's path, sorted.
+func (h harness) rows(t *testing.T) []string {
+	t.Helper()
+	result, err := h.database.Db.Query(`SELECT rel_path FROM path_access ORDER BY rel_path`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer result.Close()
+	paths := []string{}
+	for result.Next() {
+		var p string
+		if err := result.Scan(&p); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, p)
+	}
+	return paths
+}
+
+// trashNameOf finds the trash name of the item trashed from originalPath.
+func (h harness) trashNameOf(t *testing.T, originalPath string) string {
+	t.Helper()
+	for _, item := range h.list(t).Items {
+		if item.OriginalPath == originalPath {
+			return item.TrashName
+		}
+	}
+	t.Fatalf("nothing in the trash came from %s", originalPath)
+	return ""
+}
+
+// Access rows follow an item into the trash, back out on restore, and are
+// gone once it is deleted for good or the trash is emptied (#1905).
+func TestAccessRowsFollowTheTrash(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	user, err := h.database.Queries.CreateUser(ctx, db.CreateUserParams{
+		Username: "bob", PasswordHash: "h", RecoveryPhraseHash: "r",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range []string{"docs/notes.txt", "album", "album/one.jpg"} {
+		if err := h.database.Queries.SetUserPathAccess(ctx, db.SetUserPathAccessParams{
+			RelPath: rel, UserID: sql.NullInt64{Int64: user.ID, Valid: true}, Level: "owner",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.write(t, "docs/notes.txt", "hello")
+	h.write(t, "album/one.jpg", "1")
+
+	h.deleteFile(t, "docs", "notes.txt")
+	h.deleteFile(t, "", "album")
+	notes, album := h.trashNameOf(t, "docs/notes.txt"), h.trashNameOf(t, "album")
+	expectRows := func(step string, want ...string) {
+		t.Helper()
+		slices.Sort(want)
+		if got := h.rows(t); !slices.Equal(got, want) {
+			t.Fatalf("after %s: rows = %v, want %v", step, got, want)
+		}
+	}
+	expectRows("trashing", ".trash/"+notes, ".trash/"+album, ".trash/"+album+"/one.jpg")
+
+	if w := h.do(http.MethodPost, "/api/v0/trash/restore", map[string]any{"items": refs(notes)}); w.Code != http.StatusOK {
+		t.Fatalf("restore returned %d: %s", w.Code, w.Body.String())
+	}
+	expectRows("restoring", "docs/notes.txt", ".trash/"+album, ".trash/"+album+"/one.jpg")
+
+	h.deleteFile(t, "docs", "notes.txt")
+	notes = h.trashNameOf(t, "docs/notes.txt")
+	if w := h.do(http.MethodPost, "/api/v0/trash/delete", map[string]any{"items": refs(notes)}); w.Code != http.StatusOK {
+		t.Fatalf("delete returned %d: %s", w.Code, w.Body.String())
+	}
+	expectRows("deleting for good", ".trash/"+album, ".trash/"+album+"/one.jpg")
+
+	// A new file at the old path starts with nothing.
+	h.write(t, "docs/notes.txt", "again")
+	if w := h.do(http.MethodPost, "/api/v0/trash/empty", map[string]any{"serial": ""}); w.Code != http.StatusOK {
+		t.Fatalf("empty returned %d: %s", w.Code, w.Body.String())
+	}
+	expectRows("emptying")
+}
+
+// The single-admin regression: trashing, restoring and deleting as an admin
+// never writes a row.
+func TestTrashWritesNoAccessRowsForAnAdmin(t *testing.T) {
+	h := newHarness(t)
+	h.write(t, "a.txt", "a")
+	h.write(t, "dir/b.txt", "b")
+	h.deleteFile(t, "", "a.txt")
+	h.deleteFile(t, "", "dir")
+
+	if w := h.do(http.MethodPost, "/api/v0/trash/restore", map[string]any{"items": refs(h.trashNameOf(t, "a.txt"))}); w.Code != http.StatusOK {
+		t.Fatalf("restore returned %d: %s", w.Code, w.Body.String())
+	}
+	if w := h.do(http.MethodPost, "/api/v0/trash/delete", map[string]any{"items": refs(h.trashNameOf(t, "dir"))}); w.Code != http.StatusOK {
+		t.Fatalf("delete returned %d: %s", w.Code, w.Body.String())
+	}
+	h.deleteFile(t, "", "a.txt")
+	if w := h.do(http.MethodPost, "/api/v0/trash/empty", map[string]any{"serial": ""}); w.Code != http.StatusOK {
+		t.Fatalf("empty returned %d: %s", w.Code, w.Body.String())
+	}
+	if got := h.rows(t); len(got) != 0 {
+		t.Errorf("path_access rows after admin trash operations = %v, want none", got)
+	}
 }
 
 func (h harness) do(method, path string, body any) *httptest.ResponseRecorder {
