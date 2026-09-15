@@ -21,7 +21,8 @@ import (
 // @Param body body trashItemsRequest true "Device serial and the items to delete: a trash name, plus a path inside a trashed folder to delete only that"
 // @Success 200 {object} deletedResponse
 // @Failure 400 {object} serverutil.Response "Bad Request"
-// @Failure 404 {object} serverutil.Response "Unknown device, trash name or path"
+// @Failure 403 {object} serverutil.Response "An item the caller can see but did not trash and cannot write where it came from"
+// @Failure 404 {object} serverutil.Response "Unknown device, trash name or path, or an item the caller cannot see"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /trash/delete [post]
 func deleteTrash(c *gin.Context) *serverutil.Response {
@@ -33,6 +34,29 @@ func deleteTrash(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
 	if !ok {
 		return serverutil.InternalServerError(nil)
+	}
+	access, err := loadAccess(c, deps)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	// Deleting for good is for the user who trashed an item, anyone who can
+	// write where it came from, and admins (#1905). Every item is checked
+	// before any is deleted.
+	for _, item := range req.Items {
+		recorded, err := deps.StorageService().ReadTrashEntry(storageutil.ReadTrashEntryParams{
+			DeviceSerial: req.Serial,
+			TrashName:    item.TrashName,
+		})
+		if err != nil {
+			return trashError(err)
+		}
+		entry := recorded.Entry
+		if !access.CanSeeTrash(req.Serial, item.TrashName, entry.OriginalPath, entry.TrashedBy) {
+			return serverutil.NotFound(storageutil.ErrTrashItemNotFound)
+		}
+		if !access.CanDeleteTrash(req.Serial, entry.OriginalPath, entry.TrashedBy) {
+			return serverutil.Forbidden(errTrashReadOnly)
+		}
 	}
 
 	result, err := deps.StorageService().DeleteTrash(storageutil.DeleteTrashParams{
