@@ -92,6 +92,19 @@ class UsersController extends ChangeNotifier {
       if (user.status == UserAccount.pending) itemFor(user),
   ];
 
+  /// Every account that can sign in, for picking who joins a group (#1910).
+  /// Pending and turned-off accounts are left out: the Quark refuses to add
+  /// them.
+  List<PrincipalItem> get activeAccounts => [
+    for (final user in _users)
+      if (user.status == UserAccount.active)
+        PrincipalItem(
+          kind: PrincipalKind.user,
+          id: user.id,
+          name: user.username,
+        ),
+  ];
+
   /// Whether the Quark takes account requests. Null until the first load.
   bool? get accessRequestsEnabled => _accessRequestsEnabled;
 

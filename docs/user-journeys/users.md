@@ -17,7 +17,7 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 **Expected result:**
 
-- App navigates to `/users`.
+- App navigates to `/users`, open on the **Accounts** tab. The **Groups** tab is beside it (JN-USR-015).
 - The **Accounts** section lists every account on the Quark. Admins are marked **Admin**, and turned-off accounts
   **Turned off**.
 - The signed-in account is marked **You** and has no actions menu.
@@ -280,3 +280,104 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 **Notes:**
 
 - The Quark refuses an admin action on the caller's own account with "Use Settings to change your own account."
+
+---
+
+### JN-USR-015: See the groups
+
+**Preconditions:** User is signed in as an admin.
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. Tap the **Groups** tab.
+
+**Expected result:**
+
+- **everyone** is listed first and reads **Every account**. It has no actions menu: every account is in it, so it
+  can't be renamed or deleted, and its members can't be changed.
+- Every other group is listed by name, with how many members it has.
+
+**Notes:**
+
+- The list refreshes on its own when any admin, on any client, changes a group or who is in one.
+
+---
+
+### JN-USR-016: Create a group
+
+**Preconditions:** User is on the **Groups** tab.
+
+**Steps:**
+
+1. Tap **New group**.
+2. Type `Family` and tap **Create**.
+3. Tap **New group** again, type `family`, and tap **Create**.
+
+**Expected result:**
+
+- After step 2 the dialog closes, and **Family** is listed with **No members**.
+- After step 3 the dialog stays open and reads "A group with that name already exists.": names are unique ignoring
+  case.
+
+**Notes:**
+
+- A name has 1 to 64 characters and no line breaks or tabs.
+
+---
+
+### JN-USR-017: Rename a group
+
+**Preconditions:** A group named `Family` exists.
+
+**Steps:**
+
+1. On the **Groups** tab, tap the actions menu on **Family**'s row.
+2. Tap **Rename**, change the name to `Household`, and tap **Rename**.
+
+**Expected result:**
+
+- The row reads **Household**, with the same members.
+- Whatever was shared with the group is still shared with it.
+
+---
+
+### JN-USR-018: Add and remove group members
+
+**Preconditions:** A group named `Family` exists, along with an active account `bob` and a turned-off account `cy`.
+
+**Steps:**
+
+1. On the **Groups** tab, tap the actions menu on **Family**'s row, then **Members**.
+2. Search for `bob` and tap his row.
+3. Tap the remove button on **bob**'s row in the members list.
+
+**Expected result:**
+
+- The picker lists only accounts that can sign in and aren't already members, so `cy` isn't offered.
+- After step 2 **bob** is listed as a member, the picker stops offering him, and **Family**'s row reads **1 member**.
+- Whatever is shared with **Family** appears in bob's Files without a refresh (JN-FB-024).
+- After step 3 bob is no longer a member, and what was shared with **Family** leaves his Files.
+
+**Notes:**
+
+- If the account stops being able to sign in before it is added, the sheet reads "That account can't join a group.
+  Only accounts that can sign in can be added."
+- A turned-off account that was already a member stays one.
+
+---
+
+### JN-USR-019: Delete a group
+
+**Preconditions:** A group named `Family` exists, and a folder is shared with it.
+
+**Steps:**
+
+1. On the **Groups** tab, tap the actions menu on **Family**'s row, then **Delete**.
+2. Read the confirmation, and tap **Delete**.
+
+**Expected result:**
+
+- **Family** leaves the list.
+- Its members lose what was shared with **Family**. Their accounts and their own files stay.
+- Tapping **Cancel** in step 2 changes nothing.
