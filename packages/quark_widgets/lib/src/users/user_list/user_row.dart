@@ -19,6 +19,9 @@ class UserRow extends StatelessWidget {
     this.isBusy = false,
     this.onPromote,
     this.onDemote,
+    this.onDisable,
+    this.onEnable,
+    this.onDelete,
     super.key,
   });
 
@@ -38,25 +41,41 @@ class UserRow extends StatelessWidget {
   /// Stops the account being an admin. Offered on admins; null leaves it out.
   final VoidCallback? onDemote;
 
+  /// Turns the account off. Offered on active accounts; null leaves it out.
+  final VoidCallback? onDisable;
+
+  /// Turns the account back on. Offered on turned-off accounts; null leaves
+  /// it out.
+  final VoidCallback? onEnable;
+
+  /// Deletes the account. Offered on any account; null leaves it out.
+  final VoidCallback? onDelete;
+
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final name = user.username;
+    final isActive = user.status == UserAccountStatus.active;
+    final isDisabled = user.status == UserAccountStatus.disabled;
 
-    final actions = <(String, String, VoidCallback)>[
-      if (!isSelf &&
-          !user.isAdmin &&
-          user.status == UserAccountStatus.active &&
-          onPromote != null)
-        ('promote', 'Make admin', onPromote!),
-      if (!isSelf && user.isAdmin && onDemote != null)
-        ('demote', 'Remove admin', onDemote!),
-    ];
+    final actions = isSelf
+        ? const <(String, String, VoidCallback)>[]
+        : <(String, String, VoidCallback)>[
+            if (!user.isAdmin && isActive && onPromote != null)
+              ('promote', 'Make admin', onPromote!),
+            if (user.isAdmin && onDemote != null)
+              ('demote', 'Remove admin', onDemote!),
+            if (isActive && onDisable != null)
+              ('disable', 'Turn off', onDisable!),
+            if (isDisabled && onEnable != null)
+              ('enable', 'Turn on', onEnable!),
+            if (onDelete != null) ('delete', 'Delete', onDelete!),
+          ];
 
     final details = [
       if (isSelf) 'You',
       if (user.isAdmin) 'Admin',
-      if (user.status == UserAccountStatus.disabled) 'Turned off',
+      if (isDisabled) 'Turned off',
       if (user.status == UserAccountStatus.pending) 'Waiting for approval',
     ];
 
@@ -92,7 +111,12 @@ class UserRow extends StatelessWidget {
                   PopupMenuItem(
                     key: ValueKey('user_action_${id}_$name'),
                     value: action,
-                    child: Text(label),
+                    child: Text(
+                      label,
+                      style: id == 'delete'
+                          ? TextStyle(color: tokens.error)
+                          : null,
+                    ),
                   ),
               ],
             ),

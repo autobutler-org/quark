@@ -49,6 +49,12 @@ void main() {
       demoteUser: (u) => action('demote', u),
       approveRequest: (u) => action('approve', u),
       denyRequest: (u) => action('deny', u),
+      disableUser: (u) => action('disable', u),
+      enableUser: (u) => action('enable', u),
+      deleteUser: (u) async {
+        await action('delete', u);
+        return 2;
+      },
       readAccessRequests: () async => accessRequests,
       setAccessRequests: (enabled) async {
         calls.add('access $enabled');
@@ -142,6 +148,9 @@ void main() {
     ('demotes', 'demote', (UsersController c) => c.demote('bob')),
     ('approves', 'approve', (UsersController c) => c.approve('bob')),
     ('denies', 'deny', (UsersController c) => c.deny('bob')),
+    ('turns off', 'disable', (UsersController c) => c.disable('bob')),
+    ('turns on', 'enable', (UsersController c) => c.enable('bob')),
+    ('deletes', 'delete', (UsersController c) => c.delete('bob')),
   ]) {
     test('$name, then reloads', () async {
       final c = controller();

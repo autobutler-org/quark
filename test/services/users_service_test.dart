@@ -167,6 +167,63 @@ void main() {
     );
   });
 
+  for (final (name, call, path) in [
+    ('turns off', UsersService.disable, '/api/v0/admin/disable/bob'),
+    ('turns on', UsersService.enable, '/api/v0/admin/enable/bob'),
+  ]) {
+    test('$name through the account route', () async {
+      answer(200, {});
+
+      await call('bob');
+
+      expect(requests.single.method, 'PUT');
+      expect(requests.single.url.path, path);
+    });
+  }
+
+  test('deletes and reports how many owner rows moved', () async {
+    answer(200, {'ownerRowsReassigned': 3});
+
+    expect(await UsersService.delete('bob'), 3);
+    expect(requests.single.method, 'DELETE');
+    expect(requests.single.url.path, '/api/v0/admin/users/bob');
+  });
+
+  for (final (name, call) in [
+    ('turning off', UsersService.disable),
+    ('deleting', UsersService.delete),
+  ]) {
+    test('a 409 from $name is the last-admin sentence', () async {
+      answer(409, {'error': 'this Quark needs at least one active admin'});
+
+      await expectLater(
+        call('ada'),
+        throwsA(
+          isA<MessageException>().having(
+            (e) => e.message,
+            'message',
+            Errors.lastAdmin,
+          ),
+        ),
+      );
+    });
+  }
+
+  test("acting on your own account passes the Quark's text on", () async {
+    answer(400, {'error': 'use Settings to change your own account'});
+
+    await expectLater(
+      UsersService.disable('ada'),
+      throwsA(
+        isA<MessageException>().having(
+          (e) => e.message,
+          'message',
+          'use Settings to change your own account',
+        ),
+      ),
+    );
+  });
+
   test('reads the access-requests setting from the auth status', () async {
     answer(200, {'setup': true, 'accessRequestsEnabled': true});
 
