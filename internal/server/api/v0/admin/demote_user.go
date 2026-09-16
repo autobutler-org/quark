@@ -7,6 +7,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
 	"github.com/gin-gonic/gin"
@@ -41,6 +42,9 @@ func demoteUser(c *gin.Context) *serverutil.Response {
 	if err := authutil.DemoteFromAdmin(c.Request.Context(), database.Queries, target); err != nil {
 		// DemoteFromAdmin returns a clear user-facing error for "last admin" case
 		return serverutil.BadRequest(fmt.Errorf("demote user: %w", err))
+	}
+	if bus := deps.EventBus(); bus != nil {
+		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})
 	}
 	return serverutil.Ok()
 }
