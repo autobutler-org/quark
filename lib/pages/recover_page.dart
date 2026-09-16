@@ -11,7 +11,10 @@ import 'package:quark_icons/quark_icons.dart';
 class RecoverPage extends StatefulWidget {
   final VoidCallback? onRecoverSuccess;
 
-  const RecoverPage({super.key, this.onRecoverSuccess});
+  /// The username typed on the login form, if any, so it need not be retyped.
+  final String? initialUsername;
+
+  const RecoverPage({super.key, this.onRecoverSuccess, this.initialUsername});
 
   @override
   State<RecoverPage> createState() => _RecoverPageState();
@@ -19,6 +22,9 @@ class RecoverPage extends StatefulWidget {
 
 class _RecoverPageState extends State<RecoverPage> {
   final _formKey = GlobalKey<FormState>();
+  late final _usernameController = TextEditingController(
+    text: widget.initialUsername,
+  );
   final _phraseController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
@@ -30,6 +36,7 @@ class _RecoverPageState extends State<RecoverPage> {
 
   @override
   void dispose() {
+    _usernameController.dispose();
     _phraseController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
@@ -44,6 +51,7 @@ class _RecoverPageState extends State<RecoverPage> {
     });
     try {
       await AuthService.recover(
+        username: _usernameController.text.trim(),
         recoveryPhrase: _phraseController.text.trim(),
         newPassword: _passwordController.text,
       );
@@ -103,7 +111,7 @@ class _RecoverPageState extends State<RecoverPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Enter your recovery phrase and choose a new password.',
+                      'Enter your username and recovery phrase, then choose a new password.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurface.withValues(
                           alpha: 0.6,
@@ -117,6 +125,22 @@ class _RecoverPageState extends State<RecoverPage> {
                       ErrorBanner(message: _error!),
                       const SizedBox(height: 16),
                     ],
+
+                    TextFormField(
+                      controller: _usernameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Username',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(QuarkIcons.person_outline),
+                      ),
+                      textInputAction: TextInputAction.next,
+                      autocorrect: false,
+                      autofillHints: const [AutofillHints.username],
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Username is required'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
 
                     TextFormField(
                       controller: _phraseController,
