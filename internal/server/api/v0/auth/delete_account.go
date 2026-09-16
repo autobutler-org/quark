@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
@@ -26,6 +27,7 @@ import (
 // @Success 200 {object} object{deleted=object{account=bool,database=bool,files=bool,devices=bool},filesRetained=bool}
 // @Failure 400 {object} serverutil.Response
 // @Failure 401 {object} serverutil.Response
+// @Failure 403 {object} serverutil.Response "database, files or devices requested by a non-admin"
 // @Failure 500 {object} serverutil.Response
 // @Router /auth/account [delete]
 func deleteAccount(c *gin.Context) *serverutil.Response {
@@ -59,6 +61,17 @@ func deleteAccount(c *gin.Context) *serverutil.Response {
 	}
 	if !deleteAccount && !deleteDatabase && !deleteFiles && !deleteDevices {
 		return serverutil.BadRequest(fmt.Errorf("nothing selected: pass account=true, database=true, files=true, devices=true, or any combination"))
+	}
+	// Deleting your own account is self-service. The other aspects reset the
+	// whole appliance for every account on it, so they need an admin.
+	if deleteDatabase || deleteFiles || deleteDevices {
+		isAdmin, err := authutil.IsAdmin(c.Request.Context(), (*deps).Database().Queries, username)
+		if err != nil {
+			return serverutil.InternalServerError(err)
+		}
+		if !isAdmin {
+			return serverutil.NewResponse().WithStatusCode(http.StatusForbidden).WithError(errors.New("admin access required"))
+		}
 	}
 	if c.Query("confirm") != username {
 		return serverutil.BadRequest(fmt.Errorf("confirm must be the authenticated username"))

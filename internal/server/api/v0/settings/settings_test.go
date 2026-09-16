@@ -31,6 +31,15 @@ func newSettingsEngine(t *testing.T) *gin.Engine {
 	return engine
 }
 
+// newSettingsEngineWithAdmin adds the admin routes, which routes.go mounts
+// behind RequireAdmin, so POST /settings can be exercised directly.
+func newSettingsEngineWithAdmin(t *testing.T) *gin.Engine {
+	t.Helper()
+	engine := newSettingsEngine(t)
+	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_settings.NewAdminRouter())
+	return engine
+}
+
 func doSettingsReq(engine *gin.Engine, method, path string, body []byte) *httptest.ResponseRecorder {
 	var reqBody *bytes.Reader
 	if body != nil {
@@ -69,7 +78,7 @@ func TestGetSettings_DefaultAutoUpdate(t *testing.T) {
 // TestPostSettings_UpdateAutoUpdate verifies POST /settings persists autoUpdate=true
 // and is reflected in a subsequent GET.
 func TestPostSettings_UpdateAutoUpdate(t *testing.T) {
-	engine := newSettingsEngine(t)
+	engine := newSettingsEngineWithAdmin(t)
 
 	body, _ := json.Marshal(v0_settings.SettingsJSON{AutoUpdate: true})
 	w := doSettingsReq(engine, http.MethodPost, "/api/v0/settings", body)
@@ -101,7 +110,7 @@ func TestPostSettings_UpdateAutoUpdate(t *testing.T) {
 
 // TestPostSettings_InvalidBody verifies POST /settings returns 400 for malformed JSON.
 func TestPostSettings_InvalidBody(t *testing.T) {
-	engine := newSettingsEngine(t)
+	engine := newSettingsEngineWithAdmin(t)
 
 	w := doSettingsReq(engine, http.MethodPost, "/api/v0/settings", []byte("not-json{{{"))
 	if w.Code != http.StatusBadRequest {
@@ -112,7 +121,7 @@ func TestPostSettings_InvalidBody(t *testing.T) {
 // TestPostSettings_DisableAutoUpdate verifies toggling autoUpdate off after it
 // was enabled.
 func TestPostSettings_DisableAutoUpdate(t *testing.T) {
-	engine := newSettingsEngine(t)
+	engine := newSettingsEngineWithAdmin(t)
 
 	// Enable.
 	body, _ := json.Marshal(v0_settings.SettingsJSON{AutoUpdate: true})
@@ -192,6 +201,10 @@ func TestRemoteAccessToggle_NotOnPublicRouter(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("%s /settings/remote-access on the public router returned %d; want 404", method, w.Code)
 		}
+	}
+	// Changing settings affects every account, so it is admin-only too.
+	if w := doSettingsReq(engine, http.MethodPost, "/api/v0/settings", []byte("{}")); w.Code != http.StatusNotFound {
+		t.Errorf("POST /settings on the public router returned %d; want 404", w.Code)
 	}
 }
 

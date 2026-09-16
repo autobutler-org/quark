@@ -133,7 +133,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-009: Update to a new version
 
-**Preconditions:** A newer version is available (JN-ST-008).
+**Preconditions:** User is signed in as an admin. A newer version is available (JN-ST-008).
 
 **Steps:**
 
@@ -149,7 +149,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-010: Enable auto-update
 
-**Preconditions:** User is on the Settings page.
+**Preconditions:** User is signed in as an admin and on the Settings page.
 
 **Steps:**
 
@@ -236,7 +236,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-015: Revoke a connected device
 
-**Preconditions:** At least one connected device is listed (JN-ST-014).
+**Preconditions:** User is signed in as an admin. At least one connected device is listed (JN-ST-014).
 
 **Steps:**
 
@@ -267,7 +267,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-017: Mount a storage device from settings
 
-**Preconditions:** An unmounted device is listed in settings.
+**Preconditions:** User is signed in as an admin. An unmounted device is listed in settings.
 
 **Steps:**
 
@@ -282,7 +282,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-018: Rename a storage device from settings
 
-**Preconditions:** A storage device is listed.
+**Preconditions:** User is signed in as an admin. A storage device is listed.
 
 **Steps:**
 

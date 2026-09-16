@@ -38,6 +38,7 @@ void main() {
       await settings.removeHost(settings.hosts.length - 1);
     }
     await settings.setSessionToken(null);
+    settings.isAdmin.value = false;
   }
 
   setUp(() async {
@@ -59,6 +60,8 @@ void main() {
     );
     await settings.setSessionToken('a-session');
     await settings.setUsername('ada');
+    // The founding account, so the appliance reset is theirs to offer (#1899).
+    settings.isAdmin.value = true;
   }
 
   /// Settings never settles — its SBOM section keeps a spinner turning — so
@@ -125,6 +128,19 @@ void main() {
 
     expect(entry, findsNothing);
     expect(resetEntry, findsNothing);
+  });
+
+  // #1899: resetting the appliance is admin-only on the Quark, so a member
+  // keeps their own account deletion and never sees the reset.
+  testWidgets('offers a non-admin deletion but no reset', (tester) async {
+    await signIn();
+    settings.isAdmin.value = false;
+
+    await pumpSettings(tester);
+
+    expect(entry, findsOneWidget);
+    expect(resetEntry, findsNothing);
+    expect(find.text('Reset'), findsNothing);
   });
 
   testWidgets('asks for the username before anything is deleted', (

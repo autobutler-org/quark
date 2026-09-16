@@ -198,7 +198,13 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
+    // Admin-only actions appear and disappear as the Quark reports the role.
+    AppSettings.instance.isAdmin.addListener(_onAdminChanged);
     _load();
+  }
+
+  void _onAdminChanged() {
+    if (mounted) setState(() {});
   }
 
   void _load() {
@@ -777,31 +783,36 @@ class _SettingsPageState extends State<SettingsPage> {
             // The other intent, kept a section away from the first. Resetting
             // the appliance is not an account action and must never read like
             // one, so it gets its own heading and its own words rather than a
-            // checkbox on the deletion dialog (#1762).
-            const Text(
-              'Reset',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Card(
-              child: ListTile(
-                key: const ValueKey('settings_reset_quark'),
-                leading: Icon(
-                  Icons.restart_alt,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                title: Text(
-                  'Reset this Quark',
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-                subtitle: const Text(
-                  'Erases every account and everything stored on this Quark, '
-                  'returning it to setup',
-                ),
-                onTap: _accountActions.isWorking ? null : _resetQuark,
+            // checkbox on the deletion dialog (#1762). Only an admin may reset
+            // the appliance (#1899).
+            if (AppSettings.instance.isAdmin.value) ...[
+              const Text(
+                'Reset',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 8),
+              Card(
+                child: ListTile(
+                  key: const ValueKey('settings_reset_quark'),
+                  leading: Icon(
+                    Icons.restart_alt,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  title: Text(
+                    'Reset this Quark',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Erases every account and everything stored on this Quark, '
+                    'returning it to setup',
+                  ),
+                  onTap: _accountActions.isWorking ? null : _resetQuark,
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
           ],
           Card(
             child: Padding(
@@ -858,7 +869,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       _versionLoadError == null &&
                       AppSettings.instance.activeHost != null)
                     const Text('No updates available')
-                  else if (_availableVersions.isNotEmpty) ...[
+                  else if (_availableVersions.isNotEmpty &&
+                      AppSettings.instance.isAdmin.value) ...[
                     DropdownButtonFormField<String>(
                       initialValue: _selectedUpdateVersion,
                       items: _availableVersions
@@ -910,7 +922,8 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           const SizedBox(height: 16),
-          if (AppSettings.instance.activeHost != null)
+          if (AppSettings.instance.activeHost != null &&
+              AppSettings.instance.isAdmin.value)
             Card(
               child: _isLoadingAutoUpdate
                   ? const ListTile(
@@ -1109,27 +1122,29 @@ class _SettingsPageState extends State<SettingsPage> {
                             const SizedBox(height: 8),
                             CodeBlock(text: _remoteAccessStatus!.remoteUrl!),
                           ],
-                          const SizedBox(height: 12),
-                          OutlinedButton.icon(
-                            onPressed: _isTogglingRemoteAccess
-                                ? null
-                                : _disableRemoteAccess,
-                            icon: _isTogglingRemoteAccess
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(QuarkIcons.link_off, size: 16),
-                            label: const Text('Disable'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.error,
+                          if (AppSettings.instance.isAdmin.value) ...[
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: _isTogglingRemoteAccess
+                                  ? null
+                                  : _disableRemoteAccess,
+                              icon: _isTogglingRemoteAccess
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(QuarkIcons.link_off, size: 16),
+                              label: const Text('Disable'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.error,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       )
                     : Column(
@@ -1138,25 +1153,27 @@ class _SettingsPageState extends State<SettingsPage> {
                           const Text(
                             'Access your quark from anywhere using Tailscale.',
                           ),
-                          const SizedBox(height: 12),
-                          OutlinedButton.icon(
-                            onPressed: _isTogglingRemoteAccess
-                                ? null
-                                : _enableRemoteAccess,
-                            icon: _isTogglingRemoteAccess
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                          if (AppSettings.instance.isAdmin.value) ...[
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: _isTogglingRemoteAccess
+                                  ? null
+                                  : _enableRemoteAccess,
+                              icon: _isTogglingRemoteAccess
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      QuarkIcons.vpn_key_outlined,
+                                      size: 16,
                                     ),
-                                  )
-                                : const Icon(
-                                    QuarkIcons.vpn_key_outlined,
-                                    size: 16,
-                                  ),
-                            label: const Text('Enable remote access'),
-                          ),
+                              label: const Text('Enable remote access'),
+                            ),
+                          ],
                         ],
                       ),
               ),
@@ -1277,7 +1294,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                 '${device.usedDisplay} · ${device.usedPercent.toStringAsFixed(1)}% used · ${device.fileSystem}',
                                 style: const TextStyle(fontSize: 12),
                               ),
-                        trailing: device.isUnmounted
+                        // Mounting and renaming a drive is admin-only (#1899).
+                        trailing: !AppSettings.instance.isAdmin.value
+                            ? null
+                            : device.isUnmounted
                             ? FilledButton.tonalIcon(
                                 icon: const Icon(QuarkIcons.play_arrow_rounded),
                                 label: const Text('Mount'),
@@ -1386,11 +1406,14 @@ class _SettingsPageState extends State<SettingsPage> {
                           ],
                         ),
                         isThreeLine: device.userAgent.isNotEmpty,
-                        trailing: IconButton(
-                          icon: const Icon(QuarkIcons.delete_outline),
-                          tooltip: 'Remove',
-                          onPressed: () => _deleteDevice(device.id),
-                        ),
+                        // Removing a device record is admin-only (#1899).
+                        trailing: AppSettings.instance.isAdmin.value
+                            ? IconButton(
+                                icon: const Icon(QuarkIcons.delete_outline),
+                                tooltip: 'Remove',
+                                onPressed: () => _deleteDevice(device.id),
+                              )
+                            : null,
                       );
                     }),
                 ],
@@ -1590,6 +1613,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   void dispose() {
+    AppSettings.instance.isAdmin.removeListener(_onAdminChanged);
     _remoteAccessPoll?.cancel();
     _accountActions.dispose();
     super.dispose();

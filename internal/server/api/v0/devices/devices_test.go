@@ -36,6 +36,8 @@ func newDevicesEngine(t *testing.T, sqlDB *sql.DB, queries *db.Queries) *gin.Eng
 	})
 	group := engine.Group("/api/v0")
 	serverutil.RegisterRouterWithGroup(group, v0_devices.NewRouter())
+	// routes.go mounts this one behind RequireAdmin.
+	serverutil.RegisterRouterWithGroup(group, v0_devices.NewAdminRouter())
 	return engine
 }
 
