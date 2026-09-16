@@ -36,6 +36,10 @@ jobs:
         board:
           - rpi4b
           - odroidn2
+          - odroidc4
+          # Community-maintained board (config/boards/odroidm1s.csc); a
+          # non-interactive BOARD= build sources any board type.
+          - odroidm1s
     outputs:
       build_tag: ${{ steps.resolve-tag.outputs.build_tag }}
     steps:
