@@ -1,6 +1,7 @@
 package v0_files
 
 import (
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
@@ -19,6 +20,7 @@ import (
 // @Param serial query string false "Device serial number"
 // @Success 200 {array} FileNodeJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /files/list-archive [get]
 func listArchive(c *gin.Context) *serverutil.Response {
@@ -30,6 +32,13 @@ func listArchive(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
 	if !ok {
 		return serverutil.InternalServerError(nil)
+	}
+	access, err := loadAccess(c, deps)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if !access.Check(c.Query("serial"), filePath, accessutil.Read).Readable {
+		return serverutil.NotFound(errNoAccess)
 	}
 
 	result, err := fileutil.ListArchive(fileutil.ListArchiveParams{

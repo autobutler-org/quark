@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	v0_files "github.com/autobutler-org/quark/internal/server/api/v0/files"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
@@ -50,6 +51,7 @@ func newVFSTestEngine(t *testing.T) (*gin.Engine, string) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", accessutil.System)
 		c.Next()
 	})
 	group := engine.Group("/api/v0")

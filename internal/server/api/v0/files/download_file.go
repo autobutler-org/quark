@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
@@ -35,6 +36,13 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 	if !ok {
 		return serverutil.InternalServerError(nil)
 	}
+	access, err := loadAccess(c, deps)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if !access.Check(serial, filePath, accessutil.Read).Readable {
+		return serverutil.NotFound(errNoAccess)
+	}
 
 	// Every branch below serves file content under a URL whose only variable is
 	// the path, so an edited file reuses the URL its previous contents were
@@ -53,7 +61,7 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 	// StorageService even when VFS is present.
 	if serial == "" && (!wantsJPEG || !photoutil.IsRawFile(filePath)) {
 		if fsys := fileutil.FilesVFS(deps.VFSRegistry()); fsys != nil {
-			return downloadFileVFS(c, deps, fsys, filePath, wantsJPEG)
+			return downloadFileVFS(c, deps, fsys, access, filePath, wantsJPEG)
 		}
 	}
 

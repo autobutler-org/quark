@@ -218,6 +218,29 @@ func (a Access) Check(serial, p string, required Level) CheckResult {
 	return CheckResult{Level: level, Readable: level >= Read, Allowed: level >= required}
 }
 
+// VisibleOnAny reports whether a folder listing merged across devices may be
+// shown at all: the folder is visible on one of the serials, or on any
+// attached device when serials is empty.
+func (a Access) VisibleOnAny(serials []string, p string) bool {
+	if a.principal.IsAdmin {
+		return true
+	}
+	candidates := make([]string, 0, len(a.filesDirs))
+	if len(serials) > 0 {
+		candidates = append(candidates, serials...)
+	} else {
+		for serial := range a.filesDirs {
+			candidates = append(candidates, serial)
+		}
+	}
+	for _, serial := range candidates {
+		if a.Visible(serial, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // Visible reports whether a listing may show the path: the principal can read
 // it, or something beneath it was shared with them.
 func (a Access) Visible(serial, p string) bool {

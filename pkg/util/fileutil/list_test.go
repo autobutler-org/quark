@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -53,7 +54,11 @@ func TestVFSListingsCarryTheDevice(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	listed, err := ListFiles(ListFilesParams{Ctx: ctx, Registry: registry, Storage: svc})
+	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := ListFiles(ListFilesParams{Ctx: ctx, Registry: registry, Storage: svc, Access: system.Access})
 	if err != nil {
 		t.Fatalf("ListFiles failed: %v", err)
 	}

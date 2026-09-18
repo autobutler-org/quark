@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -15,6 +17,24 @@ import (
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
+
+// errNoAccess is what a caller hears about a path they may not see. It reads
+// the same as a path that does not exist, because to them it does not.
+var errNoAccess = errors.New("file not found")
+
+// loadAccess reads what the caller may reach, once per request (#1903).
+// requireAuth sets the principal; a request that arrives without one gets the
+// zero principal, which is denied everything.
+func loadAccess(c *gin.Context, deps deputil.Dependencies) (accessutil.Access, error) {
+	principal, _ := ctxutil.Get[accessutil.Principal](c, "principal")
+	result, err := accessutil.Load(accessutil.LoadParams{
+		Ctx:       c.Request.Context(),
+		Database:  deps.Database(),
+		Storage:   deps.StorageService(),
+		Principal: principal,
+	})
+	return result.Access, err
+}
 
 // fileError maps what fileutil reports onto the status codes the client
 // contract is written against. A path none of the sources could produce is the
@@ -34,7 +54,7 @@ func fileError(err error) *serverutil.Response {
 
 // downloadFileVFS handles file downloads via the VFS layer.
 // RAW files (needing OS path for dcraw/LibRaw) are excluded before calling this.
-func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, filePath string, wantsJPEG bool) *serverutil.Response {
+func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, access accessutil.Access, filePath string, wantsJPEG bool) *serverutil.Response {
 	ctx := c.Request.Context()
 
 	opened, err := fileutil.OpenVFSDownload(fileutil.OpenVFSDownloadParams{
@@ -52,7 +72,7 @@ func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, fi
 		// Zip and stream the directory contents.
 		c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", opened.FileName))
 		c.Writer.Header().Set("Content-Type", "application/octet-stream")
-		if err := fileutil.ZipVFSDir(ctx, fsys, filePath, c.Writer); err != nil {
+		if err := fileutil.ZipVFSDir(ctx, fsys, filePath, access, c.Writer); err != nil {
 			return serverutil.InternalServerError(err)
 		}
 		return nil
