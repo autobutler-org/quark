@@ -2,6 +2,7 @@ package fileutil
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -479,6 +480,12 @@ func searchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 	matches := params.Index.Search(params.Query, serialSet)
 	allFiles := make([]FileNode, 0, len(matches))
 	for _, f := range matches {
+		// The index holds no size, which would go stale on every write, so
+		// stat at search time. A file deleted since it was indexed is skipped.
+		info, err := os.Stat(filepath.Join(f.FilesDir, f.RelPath))
+		if err != nil {
+			continue
+		}
 		device := devicesByFilesDir[f.FilesDir]
 		// DirPath must be the full relative path (e.g. "docs/notes.txt"), not
 		// just the parent dir. The Flutter FileNode.apiPath getter uses
@@ -486,7 +493,9 @@ func searchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 		// listing populates it (filepath.Join(rootDir, file.Name())).
 		allFiles = append(allFiles, FileNode{
 			Name:         f.Name,
+			Size:         info.Size(),
 			DirPath:      f.RelPath,
+			FullPath:     f.RelPath,
 			IsDir:        false,
 			DeviceName:   device.Name,
 			DevicePath:   device.DataDir,
@@ -517,7 +526,9 @@ func searchFilesVFS(params SearchFilesParams) (SearchFilesResult, error) {
 		}
 		result = append(result, FileNode{
 			Name:         fi.Name,
+			Size:         fi.Size,
 			DirPath:      fi.Path,
+			FullPath:     fi.Path,
 			FileType:     string(storageutil.DetermineFileTypeFromPath(fi.Path)),
 			IsDir:        false,
 			DeviceName:   fi.DeviceName,

@@ -318,3 +318,63 @@ func TestFileNodeJSON_Fields(t *testing.T) {
 		t.Error("Expected non-empty FullPath")
 	}
 }
+
+// TestSearchResultsCarrySizeAndPath is the regression for #2017: the indexed
+// search and the VFS fallback left Size and FullPath empty, so every result
+// showed as 0 bytes.
+func TestSearchResultsCarrySizeAndPath(t *testing.T) {
+	mountPoint := t.TempDir()
+	filesDir := filepath.Join(mountPoint, "quark", "data", "files")
+	if err := os.MkdirAll(filepath.Join(filesDir, "docs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	const content = "twelve bytes"
+	if err := os.WriteFile(filepath.Join(filesDir, "docs", "notes.txt"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: "USB-2017"})
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, vfs.NewStorageServiceVFS(svc, filesNamespace)); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := ListFiles(ListFilesParams{Ctx: ctx, Registry: registry, Storage: svc, Access: system.Access, RootDir: "docs"})
+	if err != nil || len(listed.Files) != 1 {
+		t.Fatalf("ListFiles: %+v, %v", listed.Files, err)
+	}
+	want := listed.Files[0]
+
+	devices, err := svc.GetManagedDevices()
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := storageutil.NewFileIndex()
+	index.Build(devices)
+	indexed, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Storage: svc, Access: system.Access, Query: "notes"})
+	if err != nil {
+		t.Fatalf("indexed SearchFiles failed: %v", err)
+	}
+	viaVFS, err := SearchFiles(SearchFilesParams{Ctx: ctx, Registry: registry, Storage: svc, Access: system.Access, Query: "notes"})
+	if err != nil {
+		t.Fatalf("VFS SearchFiles failed: %v", err)
+	}
+
+	for name, files := range map[string][]FileNode{"indexed": indexed.Files, "VFS": viaVFS.Files} {
+		if len(files) != 1 {
+			t.Errorf("%s: expected 1 file, got %+v", name, files)
+			continue
+		}
+		got := files[0]
+		if got.Size != int64(len(content)) {
+			t.Errorf("%s: size = %d, want %d", name, got.Size, len(content))
+		}
+		if got.FullPath != want.FullPath {
+			t.Errorf("%s: full path = %q, want %q as listed", name, got.FullPath, want.FullPath)
+		}
+	}
+}
