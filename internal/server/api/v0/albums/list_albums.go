@@ -3,6 +3,7 @@ package v0_albums
 import (
 	"context"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -26,6 +27,10 @@ func listAlbums(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 	albums, err := deps.Database().Queries.ListAlbums(context.Background())
 	if err != nil {
 		return serverutil.InternalServerError(err)
@@ -33,7 +38,7 @@ func listAlbums(c *gin.Context) *serverutil.Response {
 
 	result := make([]AlbumJSON, 0, len(albums))
 	for _, a := range albums {
-		count, _ := deps.Database().Queries.CountAlbumItems(context.Background(), a.ID)
+		count := countItems(deps.Database().Queries, access, a.ID)
 		var parentID *int64
 		if a.ParentID.Valid {
 			parentID = &a.ParentID.Int64

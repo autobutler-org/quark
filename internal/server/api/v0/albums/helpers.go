@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/albumutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/sqlutil"
@@ -43,6 +44,21 @@ func toAlbumJSON(album db.PhotoAlbum, itemCount int64) AlbumJSON {
 		UpdatedAt: sqlutil.FormatTime(album.UpdatedAt),
 		ItemCount: itemCount,
 	}
+}
+
+// errNoAccess is what a caller hears about a photo they may not see. It reads
+// the same as a photo that does not exist, because to them it does not.
+var errNoAccess = errors.New("photo not found")
+
+// countItems counts the album's items the caller can read (#1904). A failed
+// count reads as zero, as the unfiltered count always has.
+func countItems(q *db.Queries, access accessutil.Access, albumID int64) int64 {
+	counted, _ := albumutil.CountItems(context.Background(), albumutil.CountItemsParams{
+		Queries: q,
+		Access:  access,
+		AlbumID: albumID,
+	})
+	return counted.Count
 }
 
 // errSystemAlbum is why a system album (Favorites) refuses a user edit. Its
