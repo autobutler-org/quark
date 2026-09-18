@@ -1064,7 +1064,7 @@ const docTemplate = `{
         },
         "/events": {
             "get": {
-                "description": "Upgrades the connection to WebSocket and pushes JSON events for file system mutations (upload, delete, move, new_folder)",
+                "description": "Upgrades the connection to WebSocket and pushes JSON events for file system mutations (upload, delete, move, new_folder). Each connection hears only events about paths its user can read; admins hear every event.",
                 "produces": [
                     "application/json"
                 ],
