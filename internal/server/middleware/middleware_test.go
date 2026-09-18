@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/internal/server/middleware"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
@@ -361,5 +362,63 @@ func TestRequireAuth_SetsUserIDOnContext(t *testing.T) {
 				t.Errorf(`username = %q (ok=%v), want "admin"`, gotUser, gotUserOK)
 			}
 		})
+	}
+}
+
+// TestRequireAuth_SetsPrincipalOnContext verifies requireAuth hands the file
+// routes a principal carrying the caller's id and whether they are an admin
+// (#1902). Admin status is read on every request, so a demotion takes effect
+// on the next one rather than when the session ends.
+func TestRequireAuth_SetsPrincipalOnContext(t *testing.T) {
+	sqlDB, queries := newMiddlewareTestDB(t)
+	ctx := context.Background()
+	result, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+		Username: "admin",
+		Password: "SecurePass1!",
+	})
+	if err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	user, err := queries.GetUserByUsername(ctx, "admin")
+	if err != nil {
+		t.Fatalf("GetUserByUsername: %v", err)
+	}
+
+	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{Db: sqlDB, Queries: queries})
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	middleware.Use(engine, deps)
+	var (
+		got   accessutil.Principal
+		gotOK bool
+	)
+	engine.GET("/api/v0/protected", func(c *gin.Context) {
+		got, gotOK = ctxutil.Get[accessutil.Principal](c, "principal")
+		c.Status(http.StatusOK)
+	})
+	request := func() {
+		t.Helper()
+		gotOK = false
+		req := httptest.NewRequest(http.MethodGet, "/api/v0/protected", nil)
+		req.Header.Set("Authorization", "Bearer "+result.SessionToken)
+		if w := doMiddlewareReq(engine, req); w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		if !gotOK {
+			t.Fatal(`requireAuth did not set "principal" on the context`)
+		}
+	}
+
+	request()
+	if want := (accessutil.Principal{UserID: user.ID, IsAdmin: true}); got != want {
+		t.Errorf("admin principal = %+v, want %+v", got, want)
+	}
+
+	if err := queries.SetUserAdmin(ctx, db.SetUserAdminParams{IsAdmin: 0, Username: "admin"}); err != nil {
+		t.Fatalf("SetUserAdmin: %v", err)
+	}
+	request()
+	if want := (accessutil.Principal{UserID: user.ID}); got != want {
+		t.Errorf("demoted principal = %+v, want %+v", got, want)
 	}
 }

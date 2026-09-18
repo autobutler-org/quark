@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS path_access;
+DROP TABLE IF EXISTS group_members;
+DROP TABLE IF EXISTS groups;
