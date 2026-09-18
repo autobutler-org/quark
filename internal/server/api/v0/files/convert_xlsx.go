@@ -3,7 +3,9 @@ package v0_files
 import (
 	"errors"
 	"log/slog"
+	"path"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
@@ -15,7 +17,7 @@ import (
 
 // convertXlsx godoc
 // @Summary Convert a spreadsheet to a Quark spreadsheet
-// @Description Reads an .xlsx or .xlsm workbook and writes it back as a sibling .qsheet, the format the Sheets editor opens. The workbook itself is left untouched. Answers 409 when a .qsheet of that name already exists and overwrite was not asked for.
+// @Description Reads an .xlsx or .xlsm workbook and writes it back as a sibling .qsheet, the format the Sheets editor opens. The workbook itself is left untouched. Answers 409 when a .qsheet of that name already exists and overwrite was not asked for. Needs read access on the workbook and write access on its directory; the caller owns a newly created .qsheet.
 // @Tags files
 // @Produce json
 // @Param filePath query string true "Path to the .xlsx or .xlsm file to convert"
@@ -23,6 +25,7 @@ import (
 // @Param overwrite query bool false "Replace an existing .qsheet of the same name"
 // @Success 200 {object} ConvertXlsxJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 409 {object} serverutil.Response "Conflict"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
@@ -32,10 +35,21 @@ func convertXlsx(c *gin.Context) *serverutil.Response {
 	if filePath == "" {
 		return serverutil.BadRequest(errors.New("filePath query parameter is required"))
 	}
+	serial := c.Query("serial")
 
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
 	if !ok {
 		return serverutil.InternalServerError(nil)
+	}
+	access, err := loadAccess(c, deps)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if !access.Check(serial, filePath, accessutil.Read).Readable {
+		return serverutil.NotFound(errNoAccess)
+	}
+	if !access.Check(serial, path.Dir(filePath), accessutil.Write).Allowed {
+		return serverutil.Forbidden(errReadOnly)
 	}
 
 	result, err := fileutil.ConvertXlsxToQsheet(fileutil.ConvertXlsxParams{
@@ -44,7 +58,7 @@ func convertXlsx(c *gin.Context) *serverutil.Response {
 		Storage:   deps.StorageService(),
 		EventBus:  deps.EventBus(),
 		FilePath:  filePath,
-		Serial:    c.Query("serial"),
+		Serial:    serial,
 		Overwrite: c.Query("overwrite") == "true",
 	})
 	if err != nil {
@@ -56,6 +70,9 @@ func convertXlsx(c *gin.Context) *serverutil.Response {
 			return serverutil.Conflict(err)
 		}
 		return fileError(err)
+	}
+	if !result.Replaced {
+		grantOwner(c, deps, access, serial, result.Path)
 	}
 
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(ConvertXlsxJSON{

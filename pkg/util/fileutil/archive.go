@@ -450,19 +450,37 @@ func (e entryReader) Close() error {
 	return err
 }
 
+// ExtractZipVFSResult reports where an archive was extracted.
+type ExtractZipVFSResult struct {
+	// DestDir is the files-relative folder the entries landed in.
+	DestDir string
+	// Created is false when DestDir was already there and the entries were
+	// merged into it.
+	Created bool
+}
+
 // ExtractZipVFS extracts a .zip archive via the VFS layer, streaming each entry
-// out of the archive and back through VFS.Write / VFS.MkdirAll.
-func ExtractZipVFS(ctx context.Context, fsys vfs.VFS, filePath string) error {
+// out of the archive and back through VFS.Write / VFS.MkdirAll, into a sibling
+// folder named after the archive stem.
+func ExtractZipVFS(ctx context.Context, fsys vfs.VFS, filePath string) (ExtractZipVFSResult, error) {
+	base := filepath.Base(filePath)
+	stem := strings.TrimSuffix(base, filepath.Ext(base))
+	destDir := path.Join(path.Dir(filePath), stem)
+	_, statErr := fsys.Stat(ctx, destDir)
+
+	if err := extractZipVFSInto(ctx, fsys, filePath, destDir); err != nil {
+		return ExtractZipVFSResult{}, err
+	}
+	return ExtractZipVFSResult{DestDir: destDir, Created: statErr != nil}, nil
+}
+
+// extractZipVFSInto streams every entry of the archive at filePath into destDir.
+func extractZipVFSInto(ctx context.Context, fsys vfs.VFS, filePath, destDir string) error {
 	zr, archive, err := readZipVFS(ctx, fsys, filePath)
 	if err != nil {
 		return err
 	}
 	defer archive.Close()
-
-	// Determine the destination directory: sibling dir named after the archive stem.
-	base := filepath.Base(filePath)
-	stem := strings.TrimSuffix(base, filepath.Ext(base))
-	destDir := path.Join(path.Dir(filePath), stem)
 
 	if err := fsys.MkdirAll(ctx, destDir); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
