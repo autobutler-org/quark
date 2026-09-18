@@ -1,0 +1,9 @@
+project:
+  app: org.autobutler.quark
+defaults:
+  timeout: 180s
+  platform: android
+agent:
+  dial_timeout: 120s
+  token_read_timeout: 180s
+  launch_timeout: 300s

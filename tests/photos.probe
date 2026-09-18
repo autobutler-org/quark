@@ -7,6 +7,7 @@ test "photos page shows the library and enters selection"
   @smoke
   open the app
   tap #brand_button
+  wait until #drawer_photos appears
   tap #drawer_photos
   wait until #photo_columns_slider appears
   tap #photo_columns_more

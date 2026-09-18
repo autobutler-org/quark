@@ -63,6 +63,16 @@ BUILD_NAME := $(or $(BUILD_NAME),$(shell git describe --tags --abbrev=0 2>/dev/n
 GIT_SHA := $(or $(GIT_SHA),$(shell git rev-parse --short=7 HEAD 2>/dev/null))
 FLUTTER_RUN_DEFINES := $(if $(GIT_SHA),--dart-define=GIT_SHA=$(GIT_SHA),)
 
+# Flutter Probe e2e: set PROBE_AGENT=1 (or true) to embed and start ProbeAgent.
+# Used by `make test/probe` and optional for `make serve/frontend/mobile`.
+PROBE_AGENT ?= 0
+ifeq ($(PROBE_AGENT),1)
+FLUTTER_RUN_DEFINES += --dart-define=PROBE_AGENT=true
+endif
+ifeq ($(PROBE_AGENT),true)
+FLUTTER_RUN_DEFINES += --dart-define=PROBE_AGENT=true
+endif
+
 # AS_ROOT=1 runs the backend targets under sudo. Needed for USB device mounting
 # on Linux, and for binding the privileged :443 port that the secure targets use.
 # The env assignment is placed after sudo (via `env`) rather than before it, so
@@ -911,6 +921,18 @@ PRINT_COVERAGE ?= 0
 
 .PHONY: test
 test: test/unit
+
+.PHONY: test/probe
+test/probe: setup/probe generate/frontend ## Build+install debug APK with ProbeAgent, then run tests/photos.probe
+	@command -v probe >/dev/null || (echo "probe CLI missing; run make setup/probe" >&2; exit 1)
+	@adb get-state >/dev/null 2>&1 || (echo "No Android device/emulator (adb). Start one with: make emulate/android" >&2; exit 1)
+	flutter build apk --debug $(FLUTTER_RUN_DEFINES) --dart-define=PROBE_AGENT=true
+	adb install -r build/app/outputs/flutter-apk/app-debug.apk
+	adb shell am start -n org.autobutler.quark/org.autobutler.MainActivity
+	@echo "Waiting for ProbeAgent on device..."
+	@sleep 5
+	probe test tests/photos.probe
+
 
 PERF_PORT ?= 8080
 PERF_BASE_URL ?= http://127.0.0.1:$(PERF_PORT)

@@ -528,6 +528,9 @@ The package is a separate pub package with no dependency on the app, so it canno
 - **Keys for Flutter Probe.** Every widget takes `super.key`. Every tappable part gets a deterministic `ValueKey` built
   from a documented prefix and the item id, for example `ValueKey('album_tile_$id')`. The class doc lists its prefixes
   so a `.probe` script can write `tap #album_tile_vacation`.
+- **Running Probe e2e.** Build with `--dart-define=PROBE_AGENT=true` (or `PROBE_AGENT=1 make serve/frontend/mobile` /
+  `make test/probe`) so `ProbeAgent.start` runs. Needs an Android device/emulator, a signed-in Quark with photos for
+  `tests/photos.probe`, and `make setup/probe`. Release builds leave the agent off.
 - **Layout survives narrow viewports.** No `Expanded` or `Flexible` inside slivers or other unbounded parents (#1599).
   Every test file has a narrow (360x640) and a wide (1280x800) case.
 - **Each widget ships as a set.** One file in `lib/src/<group>/` exported from the barrel; `///` docs on the class
