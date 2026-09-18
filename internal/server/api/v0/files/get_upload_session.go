@@ -33,6 +33,7 @@ func getUploadSession(c *gin.Context) *serverutil.Response {
 
 	result, err := store.DescribeSession(uploadutil.DescribeSessionParams{
 		SessionID: c.Param(sessionIDParam),
+		UserID:    callerID(c),
 	})
 	if err != nil {
 		return uploadSessionError(c, err)

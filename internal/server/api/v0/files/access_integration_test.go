@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -36,6 +37,8 @@ type accessHarness struct {
 	filesDir string
 	database *db.DatabaseSqlc
 	userID   int64
+	// principal is who requests act as; as() switches it.
+	principal *accessutil.Principal
 }
 
 func newAccessHarness(t *testing.T, admin bool) accessHarness {
@@ -57,7 +60,7 @@ func newAccessHarness(t *testing.T, admin bool) accessHarness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := accessutil.Principal{UserID: user.ID, IsAdmin: admin}
+	principal := &accessutil.Principal{UserID: user.ID, IsAdmin: admin}
 	deps := deputil.NewDependencies().
 		WithStorageService(svc).
 		WithVFSRegistry(registry).
@@ -69,11 +72,11 @@ func newAccessHarness(t *testing.T, admin bool) accessHarness {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
-		c = ctxutil.With(c, "principal", principal)
+		c = ctxutil.With(c, "principal", *principal)
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_files.NewRouter())
-	return accessHarness{engine: engine, filesDir: filesDir, database: database, userID: user.ID}
+	return accessHarness{engine: engine, filesDir: filesDir, database: database, userID: user.ID, principal: principal}
 }
 
 func (h accessHarness) grant(t *testing.T, rel string, level accessutil.Level) {
@@ -387,6 +390,142 @@ func TestAccess_WriteShareOwnsWhatItCreates(t *testing.T) {
 
 	if w := h.del("shared/new", "f.txt"); w.Code != http.StatusOK {
 		t.Errorf("delete within the share = %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// as switches who the harness's requests act as.
+func (h accessHarness) as(principal accessutil.Principal) {
+	*h.principal = principal
+}
+
+// upload sends one multipart file into dir; "" is the top-level directory.
+func (h accessHarness) upload(t *testing.T, dir, name string, overwrite bool) *httptest.ResponseRecorder {
+	t.Helper()
+	target := "/api/v0/files/upload"
+	if dir != "" {
+		target += "/" + dir
+	}
+	if overwrite {
+		target += "?overwrite=true"
+	}
+	return uploadFile(t, h.engine, target, name, "content of "+name)
+}
+
+func (h accessHarness) openSession(t *testing.T, dir, name string, size int) *httptest.ResponseRecorder {
+	t.Helper()
+	return openSession(t, h.engine, map[string]any{"rootDir": dir, "fileName": name, "totalSize": size})
+}
+
+// uploadInOneChunk sends a small file through a resumable session and fails
+// the test unless it commits.
+func (h accessHarness) uploadInOneChunk(t *testing.T, dir, name string) {
+	t.Helper()
+	opened := h.openSession(t, dir, name, 4)
+	if opened.Code != http.StatusOK {
+		t.Fatalf("open session in %q = %d: %s", dir, opened.Code, opened.Body.String())
+	}
+	w := putChunk(t, h.engine, decodeSession(t, opened).SessionID, 0, 3, 4, []byte("abcd"))
+	if w.Code != http.StatusOK || !decodeSession(t, w).Complete {
+		t.Fatalf("chunk in %q = %d: %s", dir, w.Code, w.Body.String())
+	}
+}
+
+func TestAccess_ReadShareCannotUpload(t *testing.T) {
+	h := newAccessHarness(t, false)
+	h.grant(t, "shared", accessutil.Read)
+
+	expectCodes(t, http.StatusForbidden, map[string]*httptest.ResponseRecorder{
+		"multipart": h.upload(t, "shared", "f.txt", false),
+		"session":   h.openSession(t, "shared", "f.txt", 4),
+	})
+	expectCodes(t, http.StatusNotFound, map[string]*httptest.ResponseRecorder{
+		"multipart outside": h.upload(t, "other", "f.txt", false),
+		"top level":         h.upload(t, "", "f.txt", false),
+		"session outside":   h.openSession(t, "other", "f.txt", 4),
+	})
+	for _, rel := range []string{"shared/f.txt", "other/f.txt", "f.txt"} {
+		if _, err := os.Lstat(filepath.Join(h.filesDir, filepath.FromSlash(rel))); err == nil {
+			t.Errorf("a refused upload wrote %s", rel)
+		}
+	}
+}
+
+func TestAccess_UploadOwnsOnlyNewFiles(t *testing.T) {
+	h := newAccessHarness(t, false)
+	writeFixture(t, h.filesDir, "shared/existing.txt")
+	h.grant(t, "shared", accessutil.Write)
+	h.grant(t, "mine", accessutil.Owner)
+
+	expectCodes(t, http.StatusOK, map[string]*httptest.ResponseRecorder{
+		"new file":           h.upload(t, "shared", "new.txt", false),
+		"overwrite":          h.upload(t, "shared", "existing.txt", true),
+		"into an own folder": h.upload(t, "mine", "x.txt", false),
+	})
+	h.uploadInOneChunk(t, "shared", "chunked.bin")
+
+	want := map[string]string{
+		"shared":             "write",
+		"mine":               "owner",
+		"shared/new.txt":     "owner",
+		"shared/chunked.bin": "owner",
+	}
+	if got := h.levels(t); !maps.Equal(got, want) {
+		t.Errorf("rows = %v, want %v", got, want)
+	}
+}
+
+func TestAccess_UploadSessionBelongsToItsOpener(t *testing.T) {
+	h := newAccessHarness(t, false)
+	ctx := context.Background()
+	h.grant(t, "shared", accessutil.Write)
+	bob := *h.principal
+	eve, err := h.database.Queries.CreateUser(ctx, db.CreateUserParams{
+		Username: "eve", PasswordHash: "h", RecoveryPhraseHash: "r",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.database.Queries.SetUserPathAccess(ctx, db.SetUserPathAccessParams{
+		RelPath: "shared", UserID: sql.NullInt64{Int64: eve.ID, Valid: true}, Level: accessutil.Write.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	opened := h.openSession(t, "shared", "f.bin", 4)
+	if opened.Code != http.StatusOK {
+		t.Fatalf("open session = %d: %s", opened.Code, opened.Body.String())
+	}
+	id := decodeSession(t, opened).SessionID
+
+	h.as(accessutil.Principal{UserID: eve.ID})
+	expectCodes(t, http.StatusNotFound, map[string]*httptest.ResponseRecorder{
+		"get":    getSession(t, h.engine, id),
+		"chunk":  putChunk(t, h.engine, id, 0, 3, 4, []byte("abcd")),
+		"delete": doRequest(h.engine, http.MethodDelete, "/api/v0/files/upload-session/"+id, nil, ""),
+	})
+
+	h.as(bob)
+	if w := getSession(t, h.engine, id); w.Code != http.StatusOK || decodeSession(t, w).Offset != 0 {
+		t.Errorf("the opener lost the session: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// The single-admin regression for uploads: they behave as before and never
+// write a row.
+func TestAccess_AdminUploadsWriteNoRows(t *testing.T) {
+	h := newAccessHarness(t, true)
+	writeFixture(t, h.filesDir, "existing.txt")
+
+	expectCodes(t, http.StatusOK, map[string]*httptest.ResponseRecorder{
+		"new file":  h.upload(t, "", "new.txt", false),
+		"overwrite": h.upload(t, "", "existing.txt", true),
+		"nested":    h.upload(t, "docs", "n.txt", false),
+	})
+	h.uploadInOneChunk(t, "", "chunked.bin")
+
+	expectExists(t, h.filesDir, "new.txt", "docs/n.txt", "chunked.bin")
+	if n := h.rowCount(t); n != 0 {
+		t.Errorf("path_access rows after admin uploads = %d, want 0", n)
 	}
 }
 
