@@ -42,7 +42,7 @@ func extractFile(c *gin.Context) *serverutil.Response {
 	if !ok {
 		return serverutil.InternalServerError(nil)
 	}
-	access, err := loadAccess(c, deps)
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
