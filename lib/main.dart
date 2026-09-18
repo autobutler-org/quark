@@ -11,10 +11,12 @@ import 'package:quark/services/local_trust_overrides_stub.dart'
 import 'package:quark/widgets/jobs/job_finish_announcer.dart';
 import 'package:quark/widgets/jobs/jobs_badge_host.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:quark/probe_bootstrap.dart';
 
 Future<void> main() async {
   usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
+  await maybeStartProbeAgent();
   await AppSettings.instance.load();
   // Quarks on the local network serve self-signed certificates. Install the
   // trust policy after settings load so it can consult the configured host.

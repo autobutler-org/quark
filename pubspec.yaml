@@ -79,6 +79,12 @@ dependencies:
   quark_widgets:
     path: packages/quark_widgets
 
+  # Flutter Probe on-device agent (Android/iOS e2e). Started only when the app
+  # is built with --dart-define=PROBE_AGENT=true; see lib/probe_bootstrap*.dart
+  # and `make test/probe`. Kept as a regular dependency so lib/ can import it;
+  # the dart-define + tree-shaking keep it inactive in normal/release builds.
+  flutter_probe_agent: ^0.14.0
+
 # Patched desktop_drop: upstream's web handler calls webkitGetAsEntry()! on every
 # item in a drag, but that returns null for the string items a drag carries
 # alongside its files -- dragging from the browser's downloads menu sends
