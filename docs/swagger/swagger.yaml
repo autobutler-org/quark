@@ -2527,7 +2527,8 @@ paths:
       consumes:
       - application/json
       description: Creates a copy of the photo in the same directory with a non-conflicting
-        name (e.g. photo_copy.jpg).
+        name (e.g. photo_copy.jpg). Needs read access on the photo and write access
+        on its folder; the caller owns the copy.
       parameters:
       - description: Copy request
         in: body
@@ -2544,6 +2545,10 @@ paths:
             $ref: '#/definitions/v0_photos.copyPhotoResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
@@ -2709,6 +2714,7 @@ paths:
       consumes:
       - application/json
       description: Persists the viewer rotation (0/1/2/3 × 90° CW) for a photo server-side.
+        Needs write access on the photo.
       parameters:
       - description: Rotation request
         in: body
@@ -2725,6 +2731,14 @@ paths:
             $ref: '#/definitions/serverutil.Response'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":

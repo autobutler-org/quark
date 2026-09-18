@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
@@ -51,6 +52,14 @@ func getMetadata(c *gin.Context) *serverutil.Response {
 		return serverutil.BadRequest(fmt.Errorf("relPath is required"))
 	}
 	serial := c.Query("serial")
+
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if !access.Check(serial, relPath, accessutil.Read).Readable {
+		return serverutil.NotFound(errNoAccess)
+	}
 
 	// Stat and EXIF: use VFS when available, fall back to direct disk access.
 	var fsys vfs.VFS
