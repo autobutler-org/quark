@@ -1,8 +1,11 @@
 package v0_trash
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -37,6 +40,15 @@ func emptyTrash(c *gin.Context) *serverutil.Response {
 		DeviceSerial: req.Serial,
 		EventBus:     deps.EventBus(),
 	})
+	if _, rowErr := accessutil.DeleteRows(accessutil.DeleteRowsParams{
+		Ctx:          context.WithoutCancel(c.Request.Context()),
+		Database:     deps.Database(),
+		EventBus:     deps.EventBus(),
+		DeviceSerial: req.Serial,
+		Paths:        result.Removed,
+	}); rowErr != nil {
+		slog.Error("trash: could not delete access rows", "paths", result.Removed, "err", rowErr)
+	}
 	if err != nil {
 		return trashError(err)
 	}

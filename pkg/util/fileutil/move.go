@@ -6,6 +6,7 @@ import (
 	"path"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -75,6 +76,21 @@ func MoveFile(params MoveFileParams) (MoveFileResult, error) {
 		Path:    params.OldFilePath,
 		NewPath: params.NewFilePath,
 	})
+
+	// Access rows follow the file, announced after the move they belong to
+	// (#1905). Logged, not returned, for the same reason as the photo rows.
+	if _, err := accessutil.MoveRows(accessutil.MoveRowsParams{
+		Ctx:       context.WithoutCancel(params.Ctx),
+		Database:  params.Database,
+		EventBus:  params.EventBus,
+		OldSerial: params.OldDeviceSerial,
+		OldPath:   params.OldFilePath,
+		NewSerial: params.NewDeviceSerial,
+		NewPath:   params.NewFilePath,
+	}); err != nil {
+		log.Printf("quark: move cleanup: carry access rows from %q to %q: %v",
+			params.OldFilePath, params.NewFilePath, err)
+	}
 	return MoveFileResult{}, nil
 }
 

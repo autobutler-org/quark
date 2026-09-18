@@ -16,6 +16,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/server/middleware"
 	"github.com/autobutler-org/quark/pkg/backup"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
@@ -138,6 +139,18 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 			})
 			if err != nil {
 				log.Printf("[trash] expired trash purge failed: %v", err)
+			}
+			// Rows go with what the sweep deleted for good (#1905).
+			for _, removed := range res.Removed {
+				if _, rowErr := accessutil.DeleteRows(accessutil.DeleteRowsParams{
+					Ctx:          context.Background(),
+					Database:     deps.Database(),
+					EventBus:     deps.EventBus(),
+					DeviceSerial: removed.DeviceSerial,
+					Paths:        []string{removed.Path},
+				}); rowErr != nil {
+					log.Printf("[trash] could not delete access rows for %s: %v", removed.Path, rowErr)
+				}
 			}
 			if res.Purged > 0 {
 				log.Printf("[trash] purged %d expired item(s)", res.Purged)

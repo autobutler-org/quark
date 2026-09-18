@@ -10,6 +10,30 @@ import (
 	"database/sql"
 )
 
+const deletePathAccessTree = `-- name: DeletePathAccessTree :execrows
+DELETE FROM path_access
+WHERE
+    device_serial = ?1
+    AND (
+        rel_path = ?2
+        OR substr(rel_path, 1, length(?2) + 1) = ?2 || '/'
+    )
+`
+
+type DeletePathAccessTreeParams struct {
+	DeviceSerial string
+	RelPath      string
+}
+
+// DeletePathAccessTree drops the rows on a path and everything beneath it.
+func (q *Queries) DeletePathAccessTree(ctx context.Context, arg DeletePathAccessTreeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deletePathAccessTree, arg.DeviceSerial, arg.RelPath)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const listPathAccessForUser = `-- name: ListPathAccessForUser :many
 SELECT
     device_serial,
@@ -68,6 +92,43 @@ func (q *Queries) ListPathAccessForUser(ctx context.Context, userID sql.NullInt6
 		return nil, err
 	}
 	return items, nil
+}
+
+const movePathAccessTree = `-- name: MovePathAccessTree :execrows
+UPDATE path_access
+SET
+    device_serial = ?1,
+    rel_path = ?2 || substr(rel_path, length(CAST(?3 AS TEXT)) + 1)
+WHERE
+    device_serial = ?4
+    AND (
+        rel_path = ?3
+        OR substr(rel_path, 1, length(?3) + 1) = ?3 || '/'
+    )
+`
+
+type MovePathAccessTreeParams struct {
+	NewDeviceSerial string
+	NewRelPath      string
+	OldRelPath      string
+	OldDeviceSerial string
+}
+
+// MovePathAccessTree points the rows on a path and everything beneath it at
+// where it moved, onto another device as well. substr, not LIKE: LIKE is
+// case-insensitive and treats _ and % as wildcards, and "foo" must not match
+// "foobar". The CAST gives sqlc a type for the parameter inside length().
+func (q *Queries) MovePathAccessTree(ctx context.Context, arg MovePathAccessTreeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, movePathAccessTree,
+		arg.NewDeviceSerial,
+		arg.NewRelPath,
+		arg.OldRelPath,
+		arg.OldDeviceSerial,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const setUserPathAccess = `-- name: SetUserPathAccess :exec
