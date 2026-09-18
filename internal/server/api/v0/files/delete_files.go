@@ -62,6 +62,7 @@ func deleteFiles(c *gin.Context) *serverutil.Response {
 		RootDir:   rootDir,
 		FilePaths: filePaths,
 		Serial:    serial,
+		TrashedBy: access.Principal().UserID,
 	}); err != nil {
 		return fileError(err)
 	}

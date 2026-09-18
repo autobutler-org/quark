@@ -118,6 +118,39 @@ func TestDeleteRowsTakesTheTree(t *testing.T) {
 	}
 }
 
+func TestTrashVisibility(t *testing.T) {
+	f := newFixture(t)
+	eve := createUser(t, f.database, "eve")
+	f.grant(t, f.userID, "", "shared", accessutil.Read)
+	f.grant(t, f.userID, "", "writable", accessutil.Write)
+	f.grant(t, f.userID, "", storageutil.TrashPath("T-rows", ""), accessutil.Owner)
+	bob := f.load(t, accessutil.Principal{UserID: f.userID})
+	admin := f.load(t, accessutil.System)
+
+	for _, tc := range []struct {
+		name, trashName, original string
+		trashedBy                 int64
+		see, del                  bool
+	}{
+		{"bob's own item", "T1", "private/x.txt", f.userID, true, true},
+		{"eve's item from a read share", "T2", "shared/y.txt", eve, true, false},
+		{"eve's item from a write share", "T3", "writable/z.txt", eve, true, true},
+		{"eve's private item", "T4", "private/w.txt", eve, false, false},
+		{"eve's item whose rows name bob", "T-rows", "private/v.txt", eve, true, false},
+		{"a legacy item in a read share", "T5", "shared/old.txt", 0, false, false},
+	} {
+		if got := bob.CanSeeTrash("", tc.trashName, tc.original, tc.trashedBy); got != tc.see {
+			t.Errorf("%s: CanSeeTrash = %v, want %v", tc.name, got, tc.see)
+		}
+		if got := bob.CanDeleteTrash("", tc.original, tc.trashedBy); got != tc.del {
+			t.Errorf("%s: CanDeleteTrash = %v, want %v", tc.name, got, tc.del)
+		}
+		if !admin.CanSeeTrash("", tc.trashName, tc.original, tc.trashedBy) || !admin.CanDeleteTrash("", tc.original, tc.trashedBy) {
+			t.Errorf("%s: an admin cannot see or delete it", tc.name)
+		}
+	}
+}
+
 func TestRowChangesWithoutADatabaseDoNothing(t *testing.T) {
 	ctx := context.Background()
 	if result, err := accessutil.MoveRows(accessutil.MoveRowsParams{Ctx: ctx, OldPath: "a", NewPath: "b"}); err != nil || result.Moved != 0 {

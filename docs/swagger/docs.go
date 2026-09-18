@@ -3330,7 +3330,7 @@ const docTemplate = `{
         },
         "/trash": {
             "get": {
-                "description": "Lists a device's trashed items, most recently trashed first, with how many days anything stays before the hourly purge deletes it.",
+                "description": "Lists a device's trashed items, most recently trashed first, with how many days anything stays before the hourly purge deletes it. A non-admin sees what they trashed and what was trashed from a place they can read.",
                 "produces": [
                     "application/json"
                 ],
@@ -3370,7 +3370,7 @@ const docTemplate = `{
         },
         "/trash/contents": {
             "get": {
-                "description": "Lists what a trashed folder, or a folder inside one, holds, sorted by name. Each entry's path is relative to the trashed item and can be passed back here, to restore, or to delete. Also returns where the folder would be restored to and when the trashed item expires.",
+                "description": "Lists what a trashed folder, or a folder inside one, holds, sorted by name. Each entry's path is relative to the trashed item and can be passed back here, to restore, or to delete. Also returns where the folder would be restored to and when the trashed item expires. A trashed item the caller cannot see is not found.",
                 "produces": [
                     "application/json"
                 ],
@@ -3464,8 +3464,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "403": {
+                        "description": "An item the caller can see but did not trash and cannot write where it came from",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "404": {
-                        "description": "Unknown device, trash name or path",
+                        "description": "Unknown device, trash name or path, or an item the caller cannot see",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -3481,7 +3487,7 @@ const docTemplate = `{
         },
         "/trash/empty": {
             "post": {
-                "description": "Permanently deletes everything in a device's trash.",
+                "description": "Permanently deletes everything in a device's trash. A non-admin empties only the items they could delete one at a time: the ones they trashed and the ones trashed from a folder they can write.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3568,8 +3574,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "403": {
+                        "description": "No write access on the folder an item goes back into",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "404": {
-                        "description": "Unknown device, trash name or path",
+                        "description": "Unknown device, trash name or path, or an item the caller cannot see",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

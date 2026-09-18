@@ -30,6 +30,9 @@ type DeleteFilesParams struct {
 	FilePaths []string
 	// Serial identifies the device, empty for the internal one.
 	Serial string
+	// TrashedBy is the user deleting the files, recorded so the trash shows
+	// each item to the people it concerns (#1905).
+	TrashedBy int64
 }
 
 // DeleteFilesResult reports a completed delete. The background cleanup it
@@ -49,6 +52,7 @@ func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 		RootDir:      params.RootDir,
 		FilePaths:    params.FilePaths,
 		DeviceSerial: params.Serial,
+		TrashedBy:    params.TrashedBy,
 	})
 	// Access rows follow each item into the trash before this returns, so
 	// nothing created at the old path afterwards inherits them (#1905). That

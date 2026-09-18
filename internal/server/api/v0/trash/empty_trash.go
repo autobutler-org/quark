@@ -15,7 +15,7 @@ import (
 
 // emptyTrash godoc
 // @Summary Empty the trash
-// @Description Permanently deletes everything in a device's trash.
+// @Description Permanently deletes everything in a device's trash. A non-admin empties only the items they could delete one at a time: the ones they trashed and the ones trashed from a folder they can write.
 // @Tags trash
 // @Accept json
 // @Produce json
@@ -35,25 +35,58 @@ func emptyTrash(c *gin.Context) *serverutil.Response {
 	if !ok {
 		return serverutil.InternalServerError(nil)
 	}
+	access, err := loadAccess(c, deps)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 
-	result, err := deps.StorageService().EmptyTrash(storageutil.EmptyTrashParams{
-		DeviceSerial: req.Serial,
-		EventBus:     deps.EventBus(),
-	})
+	var deleted int
+	var removed []string
+	var emptyErr error
+	if access.Principal().IsAdmin {
+		result, err := deps.StorageService().EmptyTrash(storageutil.EmptyTrashParams{
+			DeviceSerial: req.Serial,
+			EventBus:     deps.EventBus(),
+		})
+		deleted, removed, emptyErr = result.Deleted, result.Removed, err
+	} else {
+		// A non-admin empties only what they could delete one item at a time
+		// (#1905); everyone else's items stay.
+		listed, err := deps.StorageService().ListTrash(storageutil.ListTrashParams{DeviceSerial: req.Serial})
+		if err != nil {
+			return trashError(err)
+		}
+		refs := make([]storageutil.TrashRef, 0, len(listed.Items))
+		for _, item := range listed.Items {
+			if access.CanSeeTrash(req.Serial, item.TrashName, item.OriginalPath, item.TrashedBy) &&
+				access.CanDeleteTrash(req.Serial, item.OriginalPath, item.TrashedBy) {
+				refs = append(refs, storageutil.TrashRef{TrashName: item.TrashName})
+			}
+		}
+		if len(refs) > 0 {
+			result, err := deps.StorageService().DeleteTrash(storageutil.DeleteTrashParams{
+				DeviceSerial: req.Serial,
+				Items:        refs,
+				EventBus:     deps.EventBus(),
+			})
+			deleted, removed, emptyErr = result.Deleted, result.Removed, err
+		}
+	}
+
 	if _, rowErr := accessutil.DeleteRows(accessutil.DeleteRowsParams{
 		Ctx:          context.WithoutCancel(c.Request.Context()),
 		Database:     deps.Database(),
 		EventBus:     deps.EventBus(),
 		DeviceSerial: req.Serial,
-		Paths:        result.Removed,
+		Paths:        removed,
 	}); rowErr != nil {
-		slog.Error("trash: could not delete access rows", "paths", result.Removed, "err", rowErr)
+		slog.Error("trash: could not delete access rows", "paths", removed, "err", rowErr)
 	}
-	if err != nil {
-		return trashError(err)
+	if emptyErr != nil {
+		return trashError(emptyErr)
 	}
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(deletedResponse{
-		Deleted: result.Deleted,
+		Deleted: deleted,
 	})
 }
 

@@ -1,6 +1,7 @@
 package v0_trash
 
 import (
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -10,7 +11,7 @@ import (
 
 // listTrash godoc
 // @Summary List the trash
-// @Description Lists a device's trashed items, most recently trashed first, with how many days anything stays before the hourly purge deletes it.
+// @Description Lists a device's trashed items, most recently trashed first, with how many days anything stays before the hourly purge deletes it. A non-admin sees what they trashed and what was trashed from a place they can read.
 // @Tags trash
 // @Produce json
 // @Param serial query string false "Device serial; empty for internal storage"
@@ -23,16 +24,26 @@ func listTrash(c *gin.Context) *serverutil.Response {
 	if !ok {
 		return serverutil.InternalServerError(nil)
 	}
+	access, err := loadAccess(c, deps)
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	serial := c.Query("serial")
 
 	result, err := deps.StorageService().ListTrash(storageutil.ListTrashParams{
-		DeviceSerial: c.Query("serial"),
+		DeviceSerial: serial,
 	})
 	if err != nil {
 		return trashError(err)
 	}
+	visible := accessutil.VisibleTrash(accessutil.VisibleTrashParams{
+		Access:       access,
+		DeviceSerial: serial,
+		Items:        result.Items,
+	})
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(listTrashResponse{
 		RetentionDays: storageutil.TrashRetentionDays,
-		Items:         result.Items,
+		Items:         visible.Items,
 	})
 }
 
