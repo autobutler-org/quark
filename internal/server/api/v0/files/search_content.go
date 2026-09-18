@@ -3,6 +3,7 @@ package v0_files
 import (
 	"strings"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/searchutil"
@@ -55,10 +56,21 @@ func searchContent(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
-	results, err := searchutil.Search(c.Request.Context(), dbConn.Db, q, limit)
+	access, err := accessutil.LoadRequest(c, dbConn, deps.StorageService())
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
+	found, err := searchutil.SearchReadable(searchutil.SearchReadableParams{
+		Ctx:    c.Request.Context(),
+		DB:     dbConn.Db,
+		Query:  q,
+		Limit:  limit,
+		Access: access,
+	})
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	results := found.Results
 
 	out := make([]ContentSearchResult, len(results))
 	for i, r := range results {

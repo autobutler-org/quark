@@ -74,9 +74,14 @@ func TestListRecentThroughVFS(t *testing.T) {
 	writeMem(t, fsys, "docs/b.txt", "b")
 	writeMem(t, fsys, "docs/c.txt", "c")
 
+	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := fileutil.ListRecent(fileutil.ListRecentParams{
 		Ctx:      context.Background(),
 		Registry: registryWith(t, fsys),
+		Access:   system.Access,
 		Limit:    2,
 	})
 	if err != nil {

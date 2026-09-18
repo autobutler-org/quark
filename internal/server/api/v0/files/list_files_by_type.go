@@ -1,6 +1,7 @@
 package v0_files
 
 import (
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
@@ -31,12 +32,17 @@ func listFilesByType(c *gin.Context) *serverutil.Response {
 	if fileTypeParam == "" {
 		return serverutil.BadRequest(nil)
 	}
+	access, err := accessutil.LoadRequest(c, deps.Database(), deps.StorageService())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 
 	result, err := fileutil.ListByType(fileutil.ListByTypeParams{
 		Ctx:      c.Request.Context(),
 		Registry: deps.VFSRegistry(),
 		Storage:  deps.StorageService(),
 		Serials:  c.QueryArray("serial"),
+		Access:   access,
 		FileType: storageutil.FileType(fileTypeParam),
 	})
 	if err != nil {

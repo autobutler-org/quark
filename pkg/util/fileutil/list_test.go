@@ -62,15 +62,15 @@ func TestVFSListingsCarryTheDevice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListFiles failed: %v", err)
 	}
-	searched, err := SearchFiles(SearchFilesParams{Ctx: ctx, Registry: registry, Storage: svc, Query: "photo"})
+	searched, err := SearchFiles(SearchFilesParams{Ctx: ctx, Registry: registry, Storage: svc, Query: "photo", Access: system.Access})
 	if err != nil {
 		t.Fatalf("SearchFiles failed: %v", err)
 	}
-	recent, err := ListRecent(ListRecentParams{Ctx: ctx, Registry: registry, Storage: svc})
+	recent, err := ListRecent(ListRecentParams{Ctx: ctx, Registry: registry, Storage: svc, Access: system.Access})
 	if err != nil {
 		t.Fatalf("ListRecent failed: %v", err)
 	}
-	byType, err := ListByType(ListByTypeParams{Ctx: ctx, Registry: registry, Storage: svc, FileType: storageutil.FileTypeImage})
+	byType, err := ListByType(ListByTypeParams{Ctx: ctx, Registry: registry, Storage: svc, FileType: storageutil.FileTypeImage, Access: system.Access})
 	if err != nil {
 		t.Fatalf("ListByType failed: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestVFSListingsCarryTheDevice(t *testing.T) {
 	}
 	index := storageutil.NewFileIndex()
 	index.Build(devices)
-	indexed, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Storage: svc, Query: "photo"})
+	indexed, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Storage: svc, Query: "photo", Access: system.Access})
 	if err != nil {
 		t.Fatalf("indexed SearchFiles failed: %v", err)
 	}
