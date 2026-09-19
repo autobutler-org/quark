@@ -635,6 +635,15 @@ class PhotosPageState extends State<PhotosPage>
                             hostAddress: c.activeHost,
                             onRetry: manualRefresh,
                             onManageHosts: () => context.go(AppRoutes.settings),
+                            onUploadPhotos: c.isUploading
+                                ? null
+                                : _uploadPhotos,
+                            // Same action as the app bar's Add Photos, and
+                            // absent for the same albums (#992).
+                            onAddPhotosToAlbum:
+                                album != null && !album.isSystemAlbum
+                                ? () => _addPhotosTo(album.toAlbumItem())
+                                : null,
                           ),
                           thumbnailBuilder: (context, photo) => PhotoThumbnail(
                             url: c.thumbnailUrl(photo.id),
