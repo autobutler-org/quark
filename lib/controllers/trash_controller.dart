@@ -375,6 +375,20 @@ class TrashController extends ChangeNotifier {
     ];
   }
 
+  /// The folder [node] would be restored into, or null when the Quark no
+  /// longer knows where it came from.
+  ///
+  /// A restore the Quark refuses because that folder is occupied is the one
+  /// case where the user has to go and look at it (#2014), and the trash is
+  /// the only place that knows the path.
+  String? restoreFolderFor(FileNode node) {
+    final contents = _contents;
+    if (_location != null && contents != null) {
+      return contents.originalPath.isEmpty ? null : '/${contents.originalPath}';
+    }
+    return _items[node.apiPath]?.originalFolder;
+  }
+
   void _setItems(List<TrashItem> items) {
     final byPath = <String, TrashItem>{};
     final nodes = <FileNode>[];
