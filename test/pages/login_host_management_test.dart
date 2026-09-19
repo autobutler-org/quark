@@ -141,7 +141,11 @@ void main() {
       await addAccepted('Home', 'http://quark.local');
       await pumpLogin(tester);
 
-      expect(find.text('Sign in'), findsWidgets);
+      // One "Sign in" on the page: the button. The heading says something
+      // else, so a tap by visible text cannot land on it (#2025).
+      expect(find.text('Sign in'), findsOneWidget);
+      expect(find.byKey(const ValueKey('login_submit')), findsOneWidget);
+      expect(find.text('Welcome back'), findsOneWidget);
       expect(find.text('Home'), findsOneWidget);
       expect(find.text('http://quark.local'), findsOneWidget);
       expect(find.text('Change'), findsOneWidget);
