@@ -20,6 +20,7 @@ import 'package:quark/utils/remote_access_config.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark/widgets/settings/help_support_card.dart';
 import 'package:quark/widgets/settings/sbom_expansion_tile.dart';
+import 'package:quark/widgets/settings/ssh_access_section.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1180,6 +1181,17 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
           const SizedBox(height: 24),
+          // Admin-only: a shell login on the device (#2131).
+          if (AppSettings.instance.activeHost != null &&
+              AppSettings.instance.isAdmin.value) ...[
+            const Text(
+              'SSH access',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const SshAccessSection(),
+            const SizedBox(height: 24),
+          ],
           const Text(
             'Theme',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
