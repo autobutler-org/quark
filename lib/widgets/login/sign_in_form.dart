@@ -117,6 +117,10 @@ class SignInForm extends StatelessWidget {
             onFieldSubmitted: (_) {
               FocusScope.of(context).requestFocus(passwordFocus);
             },
+            // Revalidates as the user types once they have touched the
+            // field, so "Username is required" goes away when they supply
+            // one instead of sitting there until the next submit (#2020).
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Username is required' : null,
           ),
@@ -144,6 +148,7 @@ class SignInForm extends StatelessWidget {
             textInputAction: TextInputAction.done,
             autofillHints: const [AutofillHints.password],
             onFieldSubmitted: (_) => loading ? null : onSubmit(),
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             validator: (v) =>
                 (v == null || v.isEmpty) ? 'Password is required' : null,
           ),
