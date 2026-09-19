@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/top_bar_chip.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/view_grouping_copy.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/top_bar_segmented_toggle.dart';
 import 'package:quark_icons/quark_icons.dart';
 
@@ -42,6 +43,7 @@ class FileTopBarViewChips extends StatelessWidget {
               ? QuarkIcons.folder_copy_outlined
               : QuarkIcons.device_hub_outlined,
           label: isUnifiedView ? 'Unified' : 'Per-device',
+          tooltip: ViewGroupingCopy.forMode(isUnified: isUnifiedView),
           onTap: onToggleUnifiedView,
           active: isUnifiedView,
         ),
