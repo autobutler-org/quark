@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/utils/host_display.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// [QuarkDrawer] wired to the router, so every top-level page opens the same
@@ -17,6 +18,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// [AppSettings.isAdmin]. That decides what the drawer shows and nothing
 /// more: the router checks with the Quark before it opens one of those pages,
 /// and the Quark refuses their requests from anyone else.
+///
+/// The header names the active Quark (#2033).
 class AppDrawer extends StatelessWidget {
   /// Creates the drawer for the page [activeSection] names.
   const AppDrawer({required this.activeSection, super.key});
@@ -35,6 +38,8 @@ class AppDrawer extends StatelessWidget {
       valueListenable: AppSettings.instance.isAdmin,
       builder: (context, isAdmin, _) => QuarkDrawer(
         activeSection: activeSection,
+        hostName: AppSettings.instance.activeHostName,
+        hostAddress: shortHostAddress(AppSettings.instance.activeHost),
         onTapFiles: goTo(QuarkDrawerSection.files, AppRoutes.files),
         onTapPhotos: goTo(QuarkDrawerSection.photos, AppRoutes.photos),
         onTapTrash: goTo(QuarkDrawerSection.trash, AppRoutes.trash),
