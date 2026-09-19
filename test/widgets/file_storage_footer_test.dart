@@ -43,7 +43,7 @@ void main() {
     final safeBottom = screenHeight - gestureInsets.bottom;
 
     final controls = <String, Finder>{
-      'the storage readout': find.text('Storage'),
+      'the storage readout': find.text(kStorageFooterScope),
       'the progress bar': find.byType(QuarkStorageBar),
     };
     for (final entry in controls.entries) {
@@ -91,7 +91,7 @@ void main() {
       greaterThanOrEqualTo(landscapeInsets.left),
     );
     expect(
-      tester.getRect(find.text('Storage')).bottom,
+      tester.getRect(find.text(kStorageFooterScope)).bottom,
       lessThanOrEqualTo(screenHeight - landscapeInsets.bottom),
     );
   });
@@ -113,5 +113,28 @@ void main() {
       bare + gestureInsets.bottom,
       reason: 'the inset is the only thing that grows the footer',
     );
+  });
+
+  /// #2024: the footer showed "38.7 GB / 125 GB" beside "No files yet" on a
+  /// brand-new Quark, which reads as the appliance having eaten the disk
+  /// before the owner put anything on it. The figure is the whole device, and
+  /// now says so.
+  testWidgets('names the scope of the figure it shows', (tester) async {
+    await pumpFooter(tester);
+
+    expect(find.textContaining(kStorageFooterScope), findsOneWidget);
+    expect(find.byTooltip(kStorageFooterExplanation), findsOneWidget);
+  });
+
+  testWidgets('survives a phone-width bar with the scope in the label', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await pumpFooter(tester);
+
+    expect(tester.takeException(), isNull);
   });
 }
