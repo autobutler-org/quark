@@ -66,8 +66,11 @@ class SignInForm extends StatelessWidget {
             semanticLabel: 'Quark',
           ),
           const SizedBox(height: 16),
+          // Not "Sign in": the button below says that, and a heading with
+          // the same words flattens the hierarchy and gives a Probe script
+          // two things to tap for one instruction (#2025).
           Text(
-            'Sign in',
+            'Welcome back',
             style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
             ),
@@ -75,7 +78,7 @@ class SignInForm extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Enter your credentials.',
+            'Sign in to your Quark.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
@@ -151,6 +154,7 @@ class SignInForm extends StatelessWidget {
 
           // Sign in button
           FilledButton(
+            key: const ValueKey('login_submit'),
             onPressed: loading ? null : onSubmit,
             child: loading
                 ? const SizedBox(
