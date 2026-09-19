@@ -50,7 +50,7 @@ dependencies:
   flutter_file_dialog: ^3.3.2
   flutter_web_plugins:
     sdk: flutter
-  file_picker: ^12.2.0
+  file_picker: ^13.1.0
   http: ^1.5.0
   flutter_secure_storage: ^11.2.0
   shared_preferences: ^2.5.5
