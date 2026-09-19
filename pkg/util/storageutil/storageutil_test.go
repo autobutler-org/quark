@@ -218,9 +218,11 @@ func TestCalculateSummary_EmptyDevices(t *testing.T) {
 type mockDetector struct {
 	devices []Device
 	err     error
+	calls   int
 }
 
 func (m *mockDetector) DetectDevices() ([]Device, error) {
+	m.calls++
 	return m.devices, m.err
 }
 
@@ -295,6 +297,41 @@ func TestStorageService_GetManagedDevices(t *testing.T) {
 	}
 	if devices[0].Name != "test-disk" {
 		t.Errorf("expected device name 'test-disk', got %q", devices[0].Name)
+	}
+}
+
+// Device detection shells out once per volume on macOS, and every file request
+// asked for the managed devices at least twice (#2191).
+func TestStorageService_GetManagedDevices_Cached(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.MkdirAll(ConstructFilesDir(tempDir), 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	mock := &mockDetector{devices: []Device{{Name: "test-disk", MountPoint: tempDir, IsInternal: true}}}
+	svc := NewStorageService(mock)
+
+	first, err := svc.GetManagedDevices()
+	if err != nil {
+		t.Fatalf("svc.GetManagedDevices() error = %v", err)
+	}
+	first[0].Name = "changed by caller"
+	second, err := svc.GetManagedDevices()
+	if err != nil {
+		t.Fatalf("svc.GetManagedDevices() error = %v", err)
+	}
+	if mock.calls != 1 {
+		t.Errorf("expected 1 detection for 2 calls, got %d", mock.calls)
+	}
+	if second[0].Name != "test-disk" {
+		t.Errorf("a caller's edit leaked into the cache: got %q", second[0].Name)
+	}
+
+	svc.InvalidateDeviceCache()
+	if _, err := svc.GetManagedDevices(); err != nil {
+		t.Fatalf("svc.GetManagedDevices() error = %v", err)
+	}
+	if mock.calls != 2 {
+		t.Errorf("expected a fresh detection after invalidation, got %d calls", mock.calls)
 	}
 }
 
