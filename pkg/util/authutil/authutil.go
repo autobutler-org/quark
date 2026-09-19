@@ -91,6 +91,26 @@ type EnableUserParams struct {
 // EnableUserResult is empty; turning an account on has nothing to report.
 type EnableUserResult struct{}
 
+// DeleteUserParams names an account to delete (#1909).
+type DeleteUserParams struct {
+	Database *db.DatabaseSqlc
+	// ActorUserID is the admin deleting the account, who inherits what it
+	// owned. Zero means the account is deleting itself, and its longest-standing
+	// active admin inherits instead.
+	ActorUserID int64
+	Username    string
+}
+
+// DeleteUserResult reports where the deleted account's files went.
+type DeleteUserResult struct {
+	// HeirUserID owns what the account owned, zero when nobody was left to.
+	HeirUserID          int64
+	OwnerRowsReassigned int64
+	// SetupReset is true when the account was the last one, so the Quark
+	// returns to setup. Any pending requests went with it.
+	SetupReset bool
+}
+
 // CreateUserParams is an account an admin adds (#1873).
 type CreateUserParams struct {
 	Database *db.DatabaseSqlc
@@ -773,6 +793,85 @@ func EnableUser(ctx context.Context, queries *db.Queries, params EnableUserParam
 	return EnableUserResult{}, nil
 }
 
+// DeleteUser deletes an account without orphaning its files, in one
+// transaction: every path it owned is handed to an heir, then its sessions and
+// row go, and ON DELETE CASCADE takes its remaining access rows and group
+// memberships. Files stay where they are.
+//
+// An admin's delete (ActorUserID set) hands the paths to that admin and refuses
+// the admin's own account with ErrSelfAction. A self-service delete hands them
+// to the longest-standing active admin. Deleting the only active admin returns
+// ErrLastAdmin while any other active or disabled account exists; when only
+// pending requests are left, they are deleted too and the Quark returns to
+// setup. A username with no account returns ErrUserNotFound.
+func DeleteUser(ctx context.Context, params DeleteUserParams) (DeleteUserResult, error) {
+	if params.Database == nil {
+		return DeleteUserResult{}, errors.New("database not initialized")
+	}
+	var result DeleteUserResult
+	err := inTx(ctx, params.Database, func(q *db.Queries) error {
+		target, err := q.GetUserByUsername(ctx, params.Username)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrUserNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("look up %q: %w", params.Username, err)
+		}
+		if target.ID == params.ActorUserID {
+			return ErrSelfAction
+		}
+
+		if errors.Is(ensureAnotherActiveAdmin(ctx, q, target), ErrLastAdmin) {
+			others, err := q.CountOtherAccounts(ctx, target.ID)
+			if err != nil {
+				return fmt.Errorf("count accounts: %w", err)
+			}
+			if others > 0 {
+				return ErrLastAdmin
+			}
+			if err := q.DeletePendingUsers(ctx); err != nil {
+				return fmt.Errorf("delete account requests: %w", err)
+			}
+		}
+
+		heir := params.ActorUserID
+		if heir == 0 {
+			oldest, err := q.GetOldestActiveAdmin(ctx, target.ID)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("find an heir: %w", err)
+			}
+			heir = oldest.ID
+		}
+		if heir != 0 {
+			reassigned, err := q.ReassignOwnerRows(ctx, db.ReassignOwnerRowsParams{
+				ToUserID:   heir,
+				FromUserID: sql.NullInt64{Int64: target.ID, Valid: true},
+			})
+			if err != nil {
+				return fmt.Errorf("hand over owned paths: %w", err)
+			}
+			result.HeirUserID, result.OwnerRowsReassigned = heir, reassigned
+		}
+
+		if err := q.DeleteUserSessions(ctx, target.ID); err != nil {
+			return fmt.Errorf("end sessions: %w", err)
+		}
+		if err := q.DeleteUser(ctx, target.ID); err != nil {
+			return fmt.Errorf("delete %q: %w", params.Username, err)
+		}
+		remaining, err := q.CountUsers(ctx)
+		if err != nil {
+			return fmt.Errorf("count accounts: %w", err)
+		}
+		result.SetupReset = remaining == 0
+		return nil
+	})
+	if err != nil {
+		return DeleteUserResult{}, err
+	}
+	return result, nil
+}
+
 // PromoteToAdmin grants admin to the given username. Only an active account
 // can be promoted; any other username returns ErrUserNotFound.
 func PromoteToAdmin(ctx context.Context, queries *db.Queries, username string) error {
@@ -878,17 +977,21 @@ type DeleteAccountResult struct {
 //   - DeleteDevices: the quark data directory on each attached external
 //     device, which is what carries an off-appliance vault.
 //
-// Order is deliberate. Sessions go first so no client keeps operating against a
-// half-erased appliance. Deleting the users row would take them too —
-// sessions.user_id declares ON DELETE CASCADE (001_auth) and connections carry
-// _foreign_keys=on, so the cascade actually runs — but the account aspect is
-// opt-in and the other three do not touch the users table, so a factory reset
-// without it would otherwise leave every session live against the wiped
-// appliance.
+// Order is deliberate. The account goes first, through DeleteUser, because it
+// is the one aspect that can be refused: the only active admin cannot delete
+// themselves while other accounts remain (#1909), and a refusal must leave
+// everything, the caller's sessions included, as it was. DeleteUser deletes the
+// account's sessions in the same transaction as its row, so no client keeps
+// operating as a deleted account.
 //
-// The account row goes next, before the destructive filesystem work: a caller
-// who asked for their account to be deleted must not be left with it alive
-// because a later aspect failed. The databases go last because a database reset
+// Sessions go next so no client keeps operating against a half-erased
+// appliance. The account aspect is opt-in and the other three do not touch the
+// users table, so a factory reset without it would otherwise leave every
+// session live against the wiped appliance.
+//
+// Both happen before the destructive filesystem work: a caller who asked for
+// their account to be deleted must not be left with it alive because a later
+// aspect failed. The databases go last because a database reset
 // that fails after the files are gone leaves the user a working database and a
 // retry path, whereas the reverse leaves orphaned files behind a fresh database
 // with no session to retry from, and because the audit trail should outlive
@@ -922,15 +1025,22 @@ func DeleteAccount(ctx context.Context, params DeleteAccountParams) (DeleteAccou
 		"devices", params.DeleteDevices,
 	)
 
-	if err := RevokeAllSessions(ctx, params.Queries, params.UserID); err != nil {
-		return result, err
-	}
-
 	if params.DeleteAccount {
-		if err := params.Queries.DeleteUser(ctx, params.UserID); err != nil {
-			return result, fmt.Errorf("failed to delete account: %w", err)
+		// DeleteUser hands the account's owned paths to the oldest active admin
+		// and deletes its sessions and row in one transaction, or refuses with
+		// ErrLastAdmin before anything is touched. An account that is already
+		// gone is the state asked for, so a repeat call still succeeds.
+		if _, err := DeleteUser(ctx, DeleteUserParams{
+			Database: params.Database,
+			Username: params.Username,
+		}); err != nil && !errors.Is(err, ErrUserNotFound) {
+			return result, err
 		}
 		result.AccountDeleted = true
+	}
+
+	if err := RevokeAllSessions(ctx, params.Queries, params.UserID); err != nil {
+		return result, err
 	}
 
 	if params.DeleteFiles {
