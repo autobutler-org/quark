@@ -157,10 +157,7 @@ func detectRootDevice() (*Device, error) {
 		IsInternal:     true,
 	}
 
-	device.Name = filepath.Base(device.MountPoint)
-	if device.Name == "" || device.Name == "/" {
-		device.Name = "Root Volume"
-	}
+	device.Name = rootDeviceName(device.MountPoint)
 
 	device.ApplySimpleCategorization()
 	return device, nil
