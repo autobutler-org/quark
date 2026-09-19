@@ -20,7 +20,11 @@ class TermsPage extends StatelessWidget {
         children: [
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              // Extra room at the bottom so the last line of the terms ends
+              // clear of the agree bar instead of stopping flush against it,
+              // which reads as text cut off rather than text that has ended
+              // (#2007).
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
@@ -145,10 +149,24 @@ class TermsPage extends StatelessWidget {
               ),
             ),
           ),
-          const SafeArea(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: SizedBox(width: double.infinity, child: AgreeButton()),
+          // A surface of its own, with a line above it: the bar is fixed
+          // while the terms scroll behind it, so it has to look like a
+          // separate thing rather than the end of the page.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              border: Border(
+                top: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+            ),
+            child: const SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: SizedBox(width: double.infinity, child: AgreeButton()),
+              ),
             ),
           ),
         ],
