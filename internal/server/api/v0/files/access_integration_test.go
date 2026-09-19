@@ -41,14 +41,16 @@ type accessHarness struct {
 	principal *accessutil.Principal
 }
 
-func newAccessHarness(t *testing.T, admin bool) accessHarness {
+// newAccessHarness builds the harness over the internal device, plus any
+// extra devices given.
+func newAccessHarness(t *testing.T, admin bool, extra ...storageutil.Device) accessHarness {
 	t.Helper()
 	mountPoint := t.TempDir()
 	filesDir := filepath.Join(mountPoint, "quark", "data", "files")
 	if err := os.MkdirAll(filesDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	svc := storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint})
+	svc := storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint, extra: extra})
 	registry := vfs.NewRegistry()
 	if err := registry.Register(vfs.Namespace{ID: "files"}, vfs.NewStorageServiceVFS(svc, "files")); err != nil {
 		t.Fatal(err)

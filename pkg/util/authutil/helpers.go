@@ -104,16 +104,11 @@ func statusError(status string) error {
 // devices are mounted.
 const mountsDirName = "mounts"
 
-// usersDirName is the directory under the files directory that holds every
-// account's home, so a username never collides with a top-level folder name
-// (#2016).
-const usersDirName = "users"
-
 // homeRelPath is where an account's home sits: users/<username>, the path its
 // owner grant is written on. ListAccountsMissingHome spells the same path in
 // SQL, so the two have to agree.
 func homeRelPath(username string) string {
-	return path.Join(usersDirName, username)
+	return path.Join(UsersDirName, username)
 }
 
 // grantHome makes an account the owner of its home.
@@ -148,13 +143,13 @@ func createHome(ctx context.Context, queries *db.Queries, filesDir, username str
 	}
 	// The users parent is shared by every home, so MkdirAll it: it already
 	// existing is not a conflict.
-	if err := os.MkdirAll(filepath.Join(filesDir, usersDirName), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(filesDir, UsersDirName), 0o755); err != nil {
 		return "", "", fmt.Errorf("create users folder: %w", err)
 	}
 	// The username is validated, so it is one path segment and cannot climb
 	// out of filesDir. Mkdir, not MkdirAll, for the home itself: an existing
 	// home is refused rather than handed to the new account.
-	home := filepath.Join(filesDir, usersDirName, username)
+	home := filepath.Join(filesDir, UsersDirName, username)
 	if err := os.Mkdir(home, 0o755); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return "", "", ErrFolderExists
