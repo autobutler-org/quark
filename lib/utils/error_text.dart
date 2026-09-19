@@ -86,6 +86,19 @@ abstract final class Errors {
       ? albumNameTaken
       : message(error, action);
 
+  /// An upload the Quark refused with a 409: something in that folder
+  /// already has the name. The user answers it by keeping both or replacing.
+  static const String fileNameTaken =
+      "There's already a file with that name here.";
+
+  /// A failed upload or new file. A 409 gets [fileNameTaken] — the generic
+  /// "it changed while you were working" would send the user to retry a name
+  /// that will clash again. [action] is as in [message].
+  static String upload(Object? error, String action) =>
+      error is ApiException && error.statusCode == 409
+      ? fileNameTaken
+      : message(error, action);
+
   /// A restore the Quark refused with a 409: the item's original path is
   /// taken, and a restore never overwrites.
   static const String restoreConflict =

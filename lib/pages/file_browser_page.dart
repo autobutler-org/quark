@@ -21,6 +21,7 @@ import 'package:quark/pages/svg_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/models/upload_conflict.dart';
 import 'package:quark/services/upload_manager.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/health_service.dart';
@@ -42,6 +43,7 @@ import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/widgets/file_browser/archive_text_preview.dart';
 import 'package:quark/widgets/file_browser/file_browser_create_fab.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
+import 'package:quark/widgets/file_browser/upload_conflict_prompt.dart';
 import 'package:quark/widgets/file_browser/file_route_error_state.dart';
 import 'package:quark/widgets/file_browser/file_storage_footer.dart';
 import 'package:quark/widgets/file_browser/file_top_bar.dart';
@@ -197,6 +199,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     });
 
     UploadManager.instance.addListener(_onUploadProgress);
+    // The queue outlives this page, but the question it has to ask needs a
+    // screen. Whichever file browser is open answers it; with none open, the
+    // Quark's refusal stands and the file is reported as failed.
+    UploadManager.instance.conflictResolver = _askAboutNameClash;
     _uploadResultSub = UploadManager.instance.results.listen((result) {
       if (!mounted) {
         return;
@@ -216,6 +222,24 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     _isUploading = UploadManager.instance.isUploading;
     _uploadTotal = UploadManager.instance.total;
     _uploadCompleted = UploadManager.instance.completed;
+  }
+
+  /// Asks what to do about an upload whose name the Quark already has.
+  ///
+  /// Keeping both lands it under a free name; replacing overwrites the file
+  /// that is there, which needs write access and leaves its owner as it was.
+  Future<UploadConflictAnswer> _askAboutNameClash(
+    String fileName, {
+    required bool offerApplyToAll,
+  }) async {
+    if (!mounted) {
+      return const UploadConflictAnswer(choice: null);
+    }
+    return showUploadConflictDialog(
+      context,
+      fileName,
+      offerApplyToAll: offerApplyToAll,
+    );
   }
 
   /// What to tell the user once a batch is over.
@@ -239,11 +263,19 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           .trim();
     }
 
+    final declined = result.declined > 0
+        ? ', ${result.declined} not uploaded'
+        : '';
+
     if (result.hadFailures) {
       final reason = result.firstError;
       return 'Uploaded ${result.succeeded} of ${result.total} '
-          '(${result.failed} failed)$suffix'
+          '(${result.failed} failed)$declined$suffix'
           '${reason == null ? '' : '. $reason'}';
+    }
+
+    if (result.declined > 0) {
+      return 'Uploaded ${result.succeeded} of ${result.total}$declined$suffix';
     }
 
     return 'Uploaded ${result.total} files$suffix';
@@ -409,6 +441,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     _uploadResultSub?.cancel();
     // Detaching only stops us watching — the upload itself keeps running.
     UploadManager.instance.removeListener(_onUploadProgress);
+    if (UploadManager.instance.conflictResolver == _askAboutNameClash) {
+      UploadManager.instance.conflictResolver = null;
+    }
     _folderDragExitTimer?.cancel();
     _fileBrowserScrollController.dispose();
     super.dispose();
@@ -1019,7 +1054,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       }
     } catch (e) {
       if (!mounted) return;
-      _showMessage(Errors.message(e, 'create the file'));
+      _showMessage(Errors.upload(e, 'create the file'));
     }
   }
 

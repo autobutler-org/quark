@@ -530,11 +530,18 @@ class FilesService with AuthenticatedService {
     }
   }
 
+  /// Sends [formDataFiles] to [uploadPath].
+  ///
+  /// A name already in use comes back as an [ApiException] with status 409
+  /// unless the caller says what to do about it: [overwrite] replaces what is
+  /// there, [keepBoth] lands the new file under a free name. The Quark never
+  /// renames a file on its own (#2016).
   static Future<http.StreamedResponse> uploadFilesFromFormData(
     String uploadPath,
     List<http.MultipartFile> formDataFiles, {
     String? serial,
     bool overwrite = false,
+    bool keepBoth = false,
   }) async {
     final uploadEndpointPath = _joinPaths('/api/v0/files/upload', uploadPath);
     final endpointUri = apiBaseUri.resolve(uploadEndpointPath);
@@ -543,6 +550,7 @@ class FilesService with AuthenticatedService {
     final queryParams = <String, String>{
       if (serialValue.isNotEmpty) 'serial': serialValue,
       if (overwrite) 'overwrite': 'true',
+      if (keepBoth) 'keepBoth': 'true',
     };
     final uri = queryParams.isEmpty
         ? endpointUri

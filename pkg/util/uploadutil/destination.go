@@ -3,6 +3,7 @@ package uploadutil
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"mime/multipart"
@@ -69,18 +70,16 @@ func WriteMultipartVFS(params WriteMultipartParams) (WriteMultipartResult, error
 		}
 
 		// The client-supplied name never carries structure; rootDir does (#1603).
-		destPath := path.Join(params.RootDir, filepath.Base(fileName))
-		opts := vfs.WriteOptions{}
-		if !params.Overwrite {
-			opts.IfNoneMatch = "*"
-		}
-		created := !params.Overwrite || !vfsExists(params.Ctx, params.FS, destPath)
-
-		if err := params.FS.Write(params.Ctx, destPath, part, opts); err != nil {
-			part.Close()
+		opts := writeOptions(params.Overwrite)
+		var created bool
+		destPath, err := placeUnderFreeName(params.RootDir, filepath.Base(fileName), params.KeepBoth, func(p string) error {
+			created = !params.Overwrite || !vfsExists(params.Ctx, params.FS, p)
+			return params.FS.Write(params.Ctx, p, part, opts)
+		})
+		part.Close()
+		if err != nil {
 			return result, err
 		}
-		part.Close()
 		result.Written = append(result.Written, storageutil.UploadedFile{Path: destPath, Created: created})
 	}
 
@@ -119,26 +118,21 @@ func (d Destination) writeToVFS(fsys vfs.VFS, params WriteFileParams, fileName s
 			return storageutil.UploadedFile{}, err
 		}
 	}
-	opts := vfs.WriteOptions{}
-	if !params.Overwrite {
-		// vfs.ErrConflict comes back when the file already exists, which the
-		// HTTP layer reports as a 400 the way the multipart endpoint does.
-		opts.IfNoneMatch = "*"
-	}
-	destPath := path.Join(params.RootDir, fileName)
-	written := storageutil.UploadedFile{
-		Path:    destPath,
-		Created: !params.Overwrite || !vfsExists(params.Ctx, fsys, destPath),
-	}
-	if mover, ok := fsys.(vfs.FileMover); ok && params.SourcePath != "" {
-		return written, mover.MoveFileIn(params.Ctx, params.SourcePath, destPath, opts)
-	}
-	return written, fsys.Write(params.Ctx, destPath, params.Reader, opts)
+	opts := writeOptions(params.Overwrite)
+	var created bool
+	destPath, err := placeUnderFreeName(params.RootDir, fileName, params.KeepBoth, func(p string) error {
+		created = !params.Overwrite || !vfsExists(params.Ctx, fsys, p)
+		if mover, ok := fsys.(vfs.FileMover); ok && params.SourcePath != "" {
+			return mover.MoveFileIn(params.Ctx, params.SourcePath, p, opts)
+		}
+		return fsys.Write(params.Ctx, p, params.Reader, opts)
+	})
+	return storageutil.UploadedFile{Path: destPath, Created: created}, err
 }
 
 // writeToStorageService replays the file through the same multipart-streaming
 // path POST /files/upload uses, so device routing and name-conflict handling
-// (file_(1).ext) stay in one implementation instead of being copied here and
+// stay in one implementation instead of being copied here and
 // drifting. The pipe keeps it streaming: only the copy buffer is ever in
 // memory, which matters because this path exists for multi-gigabyte files.
 func (d Destination) writeToStorageService(params WriteFileParams, fileName string) (storageutil.UploadedFile, error) {
@@ -164,12 +158,17 @@ func (d Destination) writeToStorageService(params WriteFileParams, fileName stri
 		RootDir:      params.RootDir,
 		DeviceSerial: params.Serial,
 		Overwrite:    params.Overwrite,
+		KeepBoth:     params.KeepBoth,
 	})
+	if errors.Is(err, fs.ErrExist) {
+		// One sentinel for a taken name, whichever writer found it.
+		return storageutil.UploadedFile{}, fmt.Errorf("%w: %w", vfs.ErrConflict, err)
+	}
 	if err != nil {
 		return storageutil.UploadedFile{}, err
 	}
-	// The storage service may have renamed the file to file_(1).ext, so the
-	// name it reports is the one the file really landed under.
+	// Keeping both may have landed the file as file_(1).ext, so the name the
+	// storage service reports is the one the file really landed under.
 	if len(result.Written) == 0 {
 		return storageutil.UploadedFile{}, errNothingWritten
 	}
@@ -182,4 +181,43 @@ func (d Destination) writeToStorageService(params WriteFileParams, fileName stri
 func vfsExists(ctx context.Context, fsys vfs.VFS, p string) bool {
 	_, err := fsys.Stat(ctx, p)
 	return !errors.Is(err, vfs.ErrNotFound) && !errors.Is(err, fs.ErrNotExist)
+}
+
+// writeOptions is the precondition a write carries: without overwrite, a
+// taken name is vfs.ErrConflict rather than a replaced file.
+func writeOptions(overwrite bool) vfs.WriteOptions {
+	if overwrite {
+		return vfs.WriteOptions{}
+	}
+	return vfs.WriteOptions{IfNoneMatch: "*"}
+}
+
+// placeUnderFreeName calls place with dir/fileName and, when keepBoth is set
+// and that name is taken, with each numbered name in turn until one is free.
+// It returns the path place last tried. Every VFS reports a taken name before
+// it reads anything, so retrying with the same reader is safe.
+func placeUnderFreeName(dir, fileName string, keepBoth bool, place func(p string) error) (string, error) {
+	for n := 0; ; n++ {
+		p := path.Join(dir, storageutil.NumberedName(fileName, n))
+		err := place(p)
+		if !keepBoth || !errors.Is(err, vfs.ErrConflict) {
+			return p, err
+		}
+	}
+}
+
+// taken reports whether a file already sits where an upload would land, so a
+// session can be refused before its bytes are sent. Only a definite answer
+// counts: an upload that cannot tell goes ahead, and the commit decides.
+func (d Destination) taken(ctx context.Context, serial, rootDir, fileName string) bool {
+	rel := path.Join(rootDir, fileName)
+	if fsys := d.FilesVFS(serial); fsys != nil {
+		_, err := fsys.Stat(ctx, rel)
+		return err == nil
+	}
+	if d.Storage == nil {
+		return false
+	}
+	_, err := d.Storage.StatFile(storageutil.StatFileParams{FilePath: rel, DeviceSerial: serial})
+	return err == nil
 }

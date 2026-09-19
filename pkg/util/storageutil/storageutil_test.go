@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -1974,7 +1975,33 @@ func TestUploadFilesStreamed_SingleFile(t *testing.T) {
 	}
 }
 
-func TestUploadFilesStreamed_ConflictRename(t *testing.T) {
+// A taken name is the caller's to resolve (#2016): without Overwrite or
+// KeepBoth the upload is refused and nothing is written, not renamed.
+func TestUploadFilesStreamed_ConflictIsRefused(t *testing.T) {
+	device := makeManagedDeviceForImpl(t, "test-device")
+	existing := filepath.Join(device.FilesDir, "file.txt")
+	if err := os.WriteFile(existing, []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	body, contentType := makeMultipartBody(t, "files", "file.txt", []byte("new content"))
+	result, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
+		Reader: multipart.NewReader(body, boundaryFromContentType(t, contentType)),
+	}, device, device.FilesDir)
+	if !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("upload over a taken name returned %v, want fs.ErrExist", err)
+	}
+	if len(result.Written) != 0 {
+		t.Errorf("a refused upload reports writing %+v", result.Written)
+	}
+	if old, _ := os.ReadFile(existing); string(old) != "old" {
+		t.Errorf("original now reads %q", old)
+	}
+	if _, err := os.Stat(filepath.Join(device.FilesDir, "file_(1).txt")); !os.IsNotExist(err) {
+		t.Errorf("a refused upload was renamed instead: %v", err)
+	}
+}
+
+func TestUploadFilesStreamed_KeepBothRenames(t *testing.T) {
 	device := makeManagedDeviceForImpl(t, "test-device")
 	existing := filepath.Join(device.FilesDir, "file.txt")
 	if err := os.WriteFile(existing, []byte("old"), 0644); err != nil {
@@ -1982,18 +2009,15 @@ func TestUploadFilesStreamed_ConflictRename(t *testing.T) {
 	}
 	content := []byte("new content")
 	body, contentType := makeMultipartBody(t, "files", "file.txt", content)
-	r := multipart.NewReader(body, boundaryFromContentType(t, contentType))
 	_, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
-		Reader:       r,
-		RootDir:      "",
-		DeviceSerial: "",
+		Reader:   multipart.NewReader(body, boundaryFromContentType(t, contentType)),
+		KeepBoth: true,
 	}, device, device.FilesDir)
 	if err != nil {
 		t.Fatalf("UploadFilesStreamedImpl failed: %v", err)
 	}
-	old, _ := os.ReadFile(existing)
-	if string(old) != "old" {
-		t.Error("Original file was overwritten, expected conflict rename")
+	if old, _ := os.ReadFile(existing); string(old) != "old" {
+		t.Error("Original file was overwritten, expected keep both")
 	}
 	renamed := filepath.Join(device.FilesDir, "file_(1).txt")
 	got, err := os.ReadFile(renamed)
@@ -2002,6 +2026,24 @@ func TestUploadFilesStreamed_ConflictRename(t *testing.T) {
 	}
 	if string(got) != string(content) {
 		t.Errorf("Expected new content %q, got %q", content, got)
+	}
+}
+
+func TestNumberedName(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		n    int
+		want string
+	}{
+		{"a.txt", 0, "a.txt"},
+		{"a.txt", 2, "a_(2).txt"},
+		{"archive.tar.gz", 1, "archive.tar_(1).gz"},
+		{"README", 1, "README_(1)"},
+		{".env", 1, "file_(1).env"},
+	} {
+		if got := NumberedName(tc.name, tc.n); got != tc.want {
+			t.Errorf("NumberedName(%q, %d) = %q, want %q", tc.name, tc.n, got, tc.want)
+		}
 	}
 }
 
@@ -2029,8 +2071,8 @@ func TestUploadFilesStreamed_SubDirectory(t *testing.T) {
 }
 
 // TestUploadFilesStreamed_ReportsWhatItWrote pins the names the access layer
-// grants ownership on (#1903): a conflict rename reports the name the file
-// really landed under, and an overwrite reports that it created nothing.
+// grants ownership on (#1903): keeping both reports the name the file really
+// landed under, and an overwrite reports that it created nothing.
 func TestUploadFilesStreamed_ReportsWhatItWrote(t *testing.T) {
 	device := makeManagedDeviceForImpl(t, "test-device")
 	if err := os.MkdirAll(filepath.Join(device.FilesDir, "docs"), 0755); err != nil {
@@ -2046,6 +2088,7 @@ func TestUploadFilesStreamed_ReportsWhatItWrote(t *testing.T) {
 			Reader:    multipart.NewReader(body, boundaryFromContentType(t, contentType)),
 			RootDir:   "docs",
 			Overwrite: overwrite,
+			KeepBoth:  !overwrite,
 		}, device, device.FilesDir)
 		if err != nil {
 			t.Fatalf("UploadFilesStreamedImpl failed: %v", err)

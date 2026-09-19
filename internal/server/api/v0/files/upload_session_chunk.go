@@ -16,7 +16,7 @@ import (
 
 // uploadSessionChunk godoc
 // @Summary Send one chunk of a resumable upload
-// @Description Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A session opened by someone else is not found.
+// @Description Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A session opened by someone else is not found. A 409 carrying X-Upload-Offset is a chunk out of step; one without it is a name already in use.
 // @Tags files
 // @Accept octet-stream
 // @Produce json

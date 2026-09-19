@@ -378,9 +378,13 @@ type UploadFilesStreamedParams struct {
 	Reader       *multipart.Reader
 	RootDir      string
 	DeviceSerial string
-	// Overwrite, when true, replaces an existing file with the same name instead
-	// of appending a numeric suffix (e.g. file_(1).qdoc).
+	// Overwrite, when true, replaces an existing file with the same name.
 	Overwrite bool
+	// KeepBoth, when true, lands a file whose name is taken under the first
+	// free [NumberedName] instead (file_(1).qdoc). With neither set, a taken
+	// name fails with an error wrapping [fs.ErrExist] and nothing is written:
+	// the caller chooses, the server never renames on its own (#2016).
+	KeepBoth bool
 }
 
 // UploadedFile is one file an upload wrote.
@@ -454,28 +458,12 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 			_, statErr := os.Stat(destPath)
 			existed := params.Overwrite && statErr == nil
 
-			// Handle file name conflicts.
-			// When Overwrite is true, keep destPath as-is (the atomic rename below
-			// will replace the existing file). Otherwise append a numeric suffix.
-			if !params.Overwrite {
-				if _, err := os.Stat(destPath); err == nil {
-					ext := filepath.Ext(fileName)
-					name := fileName[:len(fileName)-len(ext)]
-					i := 1
-					for {
-						newFileName := fmt.Sprintf("%s_(%d)%s", name, i, ext)
-						newDestPath, joinErr := safeJoin(destDir, newFileName)
-						if joinErr != nil {
-							part.Close()
-							return result, fmt.Errorf("invalid candidate path: %w", joinErr)
-						}
-						destPath = newDestPath
-						if _, err := os.Stat(destPath); os.IsNotExist(err) {
-							break
-						}
-						i++
-					}
-				}
+			// Refused before a byte of the part is read, so a clash costs a
+			// round trip rather than the upload. The link below re-checks, for a
+			// file that appears while this one streams in.
+			if statErr == nil && !params.Overwrite && !params.KeepBoth {
+				part.Close()
+				return result, nameTaken(params.RootDir, fileName)
 			}
 
 			// Write to a temp file in data/tmp, then atomically move into place.
@@ -508,13 +496,9 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 			tmpFile.Close()
 
 			// Place the temp file at destPath.
-			// Overwrite=true: replace atomically (os.Rename) or truncate on copy.
-			// Overwrite=false: retry with numeric suffixes on conflict.
-			ext := filepath.Ext(fileName)
-			name := fileName[:len(fileName)-len(ext)]
-			if name == "" {
-				name = "file"
-			}
+			// Overwrite: replace atomically (os.Rename) or truncate on copy.
+			// KeepBoth: retry with numbered names on conflict.
+			// Neither: a conflict is the caller's to resolve.
 			candidate := fileName
 			i := 0
 			for {
@@ -566,9 +550,13 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 					break
 				}
 				if os.IsExist(linkErr) {
-					// Destination exists; pick next candidate name and retry
+					if !params.KeepBoth {
+						os.Remove(tmpPath)
+						part.Close()
+						return result, nameTaken(params.RootDir, fileName)
+					}
 					i++
-					candidate = fmt.Sprintf("%s_(%d)%s", name, i, ext)
+					candidate = NumberedName(fileName, i)
 					continue
 				}
 				// Hard link failed for another reason (e.g., EXDEV). Try exclusive create + copy.
@@ -596,9 +584,13 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 				}
 				tmpR.Close()
 				if os.IsExist(derr) {
-					// Destination exists; try next candidate name
+					if !params.KeepBoth {
+						os.Remove(tmpPath)
+						part.Close()
+						return result, nameTaken(params.RootDir, fileName)
+					}
 					i++
-					candidate = fmt.Sprintf("%s_(%d)%s", name, i, ext)
+					candidate = NumberedName(fileName, i)
 					continue
 				}
 				// Unknown error creating destination
