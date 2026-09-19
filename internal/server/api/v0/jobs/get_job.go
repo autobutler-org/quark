@@ -1,18 +1,15 @@
 package v0_jobs
 
 import (
-	"errors"
-
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
-	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/gin-gonic/gin"
 )
 
 // getJob godoc
 // @Summary Get a background job
-// @Description Returns one background job by id.
+// @Description Returns one background job by id. A caller who is not an admin gets only a job they queued whose file they can still read, with error left blank; any other job is 404.
 // @Tags jobs
 // @Produce json
 // @Param id path int true "Job ID"
@@ -26,18 +23,11 @@ func getJob(c *gin.Context) *serverutil.Response {
 	if !ok {
 		return serverutil.InternalServerError(nil)
 	}
-	id, err := parseJobID(c)
-	if err != nil {
-		return serverutil.BadRequest(err)
+	access, job, resp := loadJob(c, deps)
+	if resp != nil {
+		return resp
 	}
-	result, err := deps.JobQueue().Get(c.Request.Context(), jobutil.GetParams{ID: id})
-	switch {
-	case errors.Is(err, jobutil.ErrJobNotFound):
-		return serverutil.NotFound(err)
-	case err != nil:
-		return serverutil.InternalServerError(err)
-	}
-	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(result.Job)
+	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(access.RedactJob(job))
 }
 
 var getJobRoute = serverutil.ApiRoute(

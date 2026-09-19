@@ -16,6 +16,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	v0_videos "github.com/autobutler-org/quark/internal/server/api/v0/videos"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
@@ -68,13 +69,15 @@ func newHarness(t *testing.T) harness {
 	events, unsub := bus.Subscribe("videos-test")
 	t.Cleanup(unsub)
 	storage := storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint})
-	queue := jobutil.NewQueue(jobutil.NewQueueParams{Database: dbtest.NewDB(t), EventBus: bus})
+	database := dbtest.NewDB(t)
+	queue := jobutil.NewQueue(jobutil.NewQueueParams{Database: database, EventBus: bus})
 	queue.Register(jobutil.RegisterParams{
 		Kind:    transcodeutil.Kind,
-		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{Storage: storage, EventBus: bus}),
+		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{Storage: storage, Database: database, EventBus: bus}),
 	})
 	deps := deputil.NewDependencies().
 		WithStorageService(storage).
+		WithDatabase(database).
 		WithEventBus(bus).
 		WithJobQueue(queue)
 
@@ -82,6 +85,7 @@ func newHarness(t *testing.T) harness {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", accessutil.System)
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_videos.NewRouter())

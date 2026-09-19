@@ -145,6 +145,29 @@ void main() {
     });
   });
 
+  group('jobs refused with a 403', () {
+    test('a conversion says the folder is not writable', () {
+      expect(
+        Errors.transcode(const ApiException(403)),
+        "You can't save files in that folder.",
+      );
+    });
+
+    test('a retry says the folder is not writable', () {
+      expect(
+        Errors.retryJob(const ApiException(403)),
+        "You can't save files in that folder.",
+      );
+    });
+
+    test('a cancel gets the generic permission copy', () {
+      expect(
+        Errors.cancelJob(const ApiException(403)),
+        "You don't have permission to cancel the job.",
+      );
+    });
+  });
+
   group('Errors.retryJob', () {
     test('a 409 says the job cannot be retried', () {
       expect(

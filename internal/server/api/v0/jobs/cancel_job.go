@@ -12,7 +12,7 @@ import (
 
 // cancelJob godoc
 // @Summary Cancel a background job
-// @Description Cancels a pending or running job and returns it, now canceled. A pending job never runs; a running job is stopped and cleans up after itself.
+// @Description Cancels a pending or running job and returns it, now canceled. A pending job never runs; a running job is stopped and cleans up after itself. Only the account that queued the job, or an admin, may cancel it; any other caller gets 404.
 // @Tags jobs
 // @Produce json
 // @Param id path int true "Job ID"
@@ -27,11 +27,11 @@ func cancelJob(c *gin.Context) *serverutil.Response {
 	if !ok {
 		return serverutil.InternalServerError(nil)
 	}
-	id, err := parseJobID(c)
-	if err != nil {
-		return serverutil.BadRequest(err)
+	access, job, resp := loadJob(c, deps)
+	if resp != nil {
+		return resp
 	}
-	result, err := deps.JobQueue().Cancel(c.Request.Context(), jobutil.CancelParams{ID: id})
+	result, err := deps.JobQueue().Cancel(c.Request.Context(), jobutil.CancelParams{ID: job.ID})
 	switch {
 	case errors.Is(err, jobutil.ErrJobNotFound):
 		return serverutil.NotFound(err)
@@ -40,7 +40,7 @@ func cancelJob(c *gin.Context) *serverutil.Response {
 	case err != nil:
 		return serverutil.InternalServerError(err)
 	}
-	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(result.Job)
+	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(access.RedactJob(result.Job))
 }
 
 var cancelJobRoute = serverutil.ApiRoute(

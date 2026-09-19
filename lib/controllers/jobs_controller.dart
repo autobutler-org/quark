@@ -226,6 +226,13 @@ class JobsController extends ChangeNotifier {
   }
 
   void _onEvent(FileEvent event) {
+    // The Quark shows an account only the jobs it queued on files it can
+    // still read, so a sharing change or an account change can add or remove
+    // jobs without any job event.
+    if (event.kind == 'access_changed' || event.kind == 'account_changed') {
+      unawaited(load());
+      return;
+    }
     final data = event.data;
     if (!event.kind.startsWith('job_') || data is! Map<String, dynamic>) {
       return;
