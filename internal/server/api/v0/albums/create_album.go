@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/albumutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
@@ -49,8 +50,10 @@ func createAlbum(c *gin.Context) *serverutil.Response {
 		parentID = sql.NullInt64{Int64: *req.ParentID, Valid: true}
 	}
 
+	principal, _ := ctxutil.Get[accessutil.Principal](c, "principal")
 	result, err := albumutil.CreateAlbum(c.Request.Context(), albumutil.CreateAlbumParams{
 		Queries:  deps.Database().Queries,
+		UserID:   principal.UserID,
 		Name:     req.Name,
 		ParentID: parentID,
 	})

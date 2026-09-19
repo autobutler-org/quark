@@ -31,7 +31,9 @@ var (
 // CreateAlbumParams creates a user album.
 type CreateAlbumParams struct {
 	Queries *db.Queries
-	Name    string
+	// UserID owns the album.
+	UserID int64
+	Name   string
 	// ParentID is invalid for a root album.
 	ParentID sql.NullInt64
 }
@@ -109,6 +111,7 @@ func CreateAlbum(ctx context.Context, params CreateAlbumParams) (CreateAlbumResu
 	album, err := params.Queries.CreateAlbum(ctx, db.CreateAlbumParams{
 		Name:     params.Name,
 		ParentID: params.ParentID,
+		UserID:   params.UserID,
 	})
 	if err != nil {
 		return CreateAlbumResult{}, nameConflictOr(err)
