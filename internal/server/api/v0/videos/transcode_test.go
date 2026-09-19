@@ -69,13 +69,15 @@ func newHarness(t *testing.T) harness {
 	events, unsub := bus.Subscribe("videos-test")
 	t.Cleanup(unsub)
 	storage := storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint})
-	queue := jobutil.NewQueue(jobutil.NewQueueParams{Database: dbtest.NewDB(t), EventBus: bus})
+	database := dbtest.NewDB(t)
+	queue := jobutil.NewQueue(jobutil.NewQueueParams{Database: database, EventBus: bus})
 	queue.Register(jobutil.RegisterParams{
 		Kind:    transcodeutil.Kind,
-		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{Storage: storage, EventBus: bus}),
+		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{Storage: storage, Database: database, EventBus: bus}),
 	})
 	deps := deputil.NewDependencies().
 		WithStorageService(storage).
+		WithDatabase(database).
 		WithEventBus(bus).
 		WithJobQueue(queue)
 

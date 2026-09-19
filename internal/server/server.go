@@ -56,6 +56,7 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 		Kind: transcodeutil.Kind,
 		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{
 			Storage:  deps.StorageService(),
+			Database: deps.Database(),
 			EventBus: deps.EventBus(),
 		}),
 	})
