@@ -70,6 +70,17 @@ func TestServiceBinDirMode(t *testing.T) {
 	}
 }
 
+// A restricted bounding set caps what sudo gets too, so the service could
+// never run a sudoers rule as root (#2115).
+func TestSystemdUnit_LeavesTheBoundingSetForSudo(t *testing.T) {
+	if strings.Contains(systemdServiceContent, "CapabilityBoundingSet") {
+		t.Error("systemd unit restricts the bounding set, so sudo cannot run as root")
+	}
+	if !strings.Contains(systemdServiceContent, "AmbientCapabilities=CAP_NET_BIND_SERVICE") {
+		t.Error("systemd unit must still grant CAP_NET_BIND_SERVICE to bind 80 and 443")
+	}
+}
+
 func TestBuildServiceFile(t *testing.T) {
 	got := buildServiceFile()
 	switch runtime.GOOS {

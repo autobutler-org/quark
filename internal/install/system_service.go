@@ -30,6 +30,12 @@ const (
 
 	systemdServiceName = "quark.service"
 
+	// systemdServiceContent grants CAP_NET_BIND_SERVICE as an ambient
+	// capability and deliberately leaves the bounding set alone. The bounding
+	// set also caps what a setuid-root program started by the service gets,
+	// so restricting it to CAP_NET_BIND_SERVICE left `sudo` without the
+	// capabilities to switch groups or mount, and every `sudo mount` failed
+	// (#2115).
 	systemdServiceContent = `[Unit]
 Description=Quark Service
 After=network.target
@@ -42,7 +48,6 @@ Environment="PORT=80"
 Environment="HTTPS_PORT=443"
 Environment="GIN_MODE=release"
 AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 Restart=always
 StandardOutput=append:/var/log/quark.app
 StandardError=append:/var/log/quark.err
