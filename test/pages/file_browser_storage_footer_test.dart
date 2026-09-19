@@ -18,6 +18,9 @@ class _HealthClient implements HttpClient {
   final List<Future<String>> readings = [];
   var _served = 0;
 
+  /// Every path requested, in order.
+  final List<String> paths = [];
+
   static String reading(int usedGiB) => jsonEncode({
     'diskPercent': usedGiB,
     'diskUsedBytes': usedGiB << 30,
@@ -26,6 +29,7 @@ class _HealthClient implements HttpClient {
 
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async {
+    paths.add(url.path);
     if (url.path.endsWith('/api/v0/health')) {
       return _Request(url, readings[_served++]);
     }
@@ -159,6 +163,28 @@ void main() {
       second.complete(_HealthClient.reading(25));
       await tester.pumpAndSettle();
       expect(find.text('25.0 GB / 100.0 GB'), findsOneWidget);
+    }, createHttpClient: (_) => client);
+  });
+
+  // Health is far slower than the listing on a real Quark, and waiting on it
+  // held up every refresh of the file list (#2189).
+  testWidgets('a slow health reading does not hold up the file listing', (
+    tester,
+  ) async {
+    final client = _HealthClient();
+    final health = Completer<String>();
+    client.readings.add(health.future);
+
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(const MaterialApp(home: FileBrowserPage()));
+      await tester.pump();
+      await tester.pump();
+      expect(client.paths, contains('/api/v0/files'));
+      expect(find.text('10.0 GB / 100.0 GB'), findsNothing);
+
+      health.complete(_HealthClient.reading(10));
+      await tester.pumpAndSettle();
+      expect(find.text('10.0 GB / 100.0 GB'), findsOneWidget);
     }, createHttpClient: (_) => client);
   });
 }
