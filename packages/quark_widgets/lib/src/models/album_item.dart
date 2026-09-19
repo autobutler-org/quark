@@ -40,6 +40,14 @@ class AlbumItem {
   /// Sub-albums, rendered under this one when it is expanded.
   final List<AlbumItem> children;
 
+  /// How many photos this album holds, as a phrase: "1 photo", "4 photos".
+  ///
+  /// One place, because the count is rendered in more than one sheet and a
+  /// plural that only agrees above one is the kind of detail that makes an
+  /// app feel unfinished (#2061).
+  String get photoCountLabel =>
+      '$itemCount ${itemCount == 1 ? 'photo' : 'photos'}';
+
   /// Every album in [roots] and their descendants, parents before children,
   /// each paired with how deep it sits (zero for a root).
   ///
