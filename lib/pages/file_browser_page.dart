@@ -2107,6 +2107,14 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                 onNewFilePressed: _handleNewFilePressed,
                 uploadTotal: _uploadTotal,
                 uploadCompleted: _uploadCompleted,
+                // Inside an archive there is nothing to select: the entries
+                // are read-only and batch delete does not reach them.
+                onStartSelection: archive == null
+                    ? () => setState(() {
+                        _selectionMode = true;
+                        _selectedPaths.clear();
+                      })
+                    : null,
                 onOpenDrawer: () => Scaffold.of(context).openDrawer(),
                 onOpenSettings: () => context.go(AppRoutes.settings),
                 devices: _allDevices.length > 1 ? _allDevices : null,
