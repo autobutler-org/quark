@@ -3,6 +3,18 @@ INSERT INTO users (username, password_hash, recovery_phrase_hash)
 VALUES (?, ?, ?)
 RETURNING *;
 
+-- CreatePendingUser records an account request from the sign-in page (#1908).
+-- It cannot sign in until an admin approves it.
+-- name: CreatePendingUser :one
+INSERT INTO users (username, password_hash, recovery_phrase_hash, status)
+VALUES (?, ?, ?, 'pending')
+RETURNING *;
+
+-- DeletePendingUser denies an account request. Only a pending row matches, so
+-- a request that was already approved is left alone.
+-- name: DeletePendingUser :execrows
+DELETE FROM users WHERE username = ? AND status = 'pending';
+
 -- name: GetUserByUsername :one
 SELECT * FROM users WHERE username = ? LIMIT 1;
 

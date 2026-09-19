@@ -42,6 +42,12 @@ func postJSON(engine *gin.Engine, path string, body any) *httptest.ResponseRecor
 	return w
 }
 
+func getPath(engine *gin.Engine, path string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+	return w
+}
+
 func decodeBody(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	var body map[string]any

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db/dbtest"
@@ -13,6 +14,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -20,6 +22,7 @@ import (
 // authenticated caller who they are and whether they are an admin, and tells
 // an anonymous caller nothing beyond whether setup is done.
 func TestGetAuthStatus_ReportsCaller(t *testing.T) {
+	settingsutil.ResetForTesting(filepath.Join(t.TempDir(), "settings.json"))
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
 	founder, err := authutil.Setup(ctx, database.Queries, authutil.SetupParams{Username: "admin", Password: "admin-password"})
@@ -65,13 +68,13 @@ func TestGetAuthStatus_ReportsCaller(t *testing.T) {
 		prepare func(*http.Request)
 		want    map[string]any
 	}{
-		{"anonymous", func(*http.Request) {}, map[string]any{"setup": true}},
-		{"invalid token", bearer("not-a-session"), map[string]any{"setup": true}},
-		{"admin", bearer(founder.SessionToken), map[string]any{"setup": true, "username": "admin", "isAdmin": true}},
-		{"non-admin", bearer(bob.SessionToken), map[string]any{"setup": true, "username": "bob", "isAdmin": false}},
+		{"anonymous", func(*http.Request) {}, map[string]any{"setup": true, "accessRequestsEnabled": true}},
+		{"invalid token", bearer("not-a-session"), map[string]any{"setup": true, "accessRequestsEnabled": true}},
+		{"admin", bearer(founder.SessionToken), map[string]any{"setup": true, "accessRequestsEnabled": true, "username": "admin", "isAdmin": true}},
+		{"non-admin", bearer(bob.SessionToken), map[string]any{"setup": true, "accessRequestsEnabled": true, "username": "bob", "isAdmin": false}},
 		{"session cookie", func(r *http.Request) {
 			r.AddCookie(&http.Cookie{Name: "session", Value: bob.SessionToken})
-		}, map[string]any{"setup": true, "username": "bob", "isAdmin": false}},
+		}, map[string]any{"setup": true, "accessRequestsEnabled": true, "username": "bob", "isAdmin": false}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

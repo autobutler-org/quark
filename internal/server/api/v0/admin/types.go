@@ -11,6 +11,8 @@ func (r *router) Routes() []*serverutil.Route {
 		listUsersRoute,
 		promoteUserRoute,
 		demoteUserRoute,
+		approveUserRoute,
+		denyUserRoute,
 	}
 }
 
