@@ -84,3 +84,8 @@ ORDER BY created_at DESC;
 -- connections set _foreign_keys=on, so the user's sessions go with the row.
 -- name: DeleteUser :exec
 DELETE FROM users WHERE id = ?;
+
+-- ListActiveUsers lists the accounts a file or folder can be shared with
+-- (#1911): active ones only, and nothing about them beyond their names.
+-- name: ListActiveUsers :many
+SELECT id, username FROM users WHERE status = 'active' ORDER BY username;

@@ -199,6 +199,38 @@
                 }
             }
         },
+        "/access/principals": {
+            "get": {
+                "description": "Returns every active account by username and every group, the built-in everyone group first. Any signed-in account may ask, so each account carries only its id and username.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "access"
+                ],
+                "summary": "List who a file or folder can be shared with",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/accessutil.ListPrincipalsResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/approve/{username}": {
             "put": {
                 "description": "Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing home of that name leaves the request pending rather than making an account that cannot use it. Admin-only.",
@@ -5094,6 +5126,49 @@
                     }
                 },
                 "relPath": {
+                    "type": "string"
+                }
+            }
+        },
+        "accessutil.ListPrincipalsResult": {
+            "type": "object",
+            "properties": {
+                "groups": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/accessutil.PrincipalGroup"
+                    }
+                },
+                "users": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/accessutil.PrincipalUser"
+                    }
+                }
+            }
+        },
+        "accessutil.PrincipalGroup": {
+            "type": "object",
+            "properties": {
+                "builtin": {
+                    "description": "Builtin marks the everyone group.",
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "accessutil.PrincipalUser": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "username": {
                     "type": "string"
                 }
             }

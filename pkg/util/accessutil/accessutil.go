@@ -846,3 +846,57 @@ func RevokeGrant(params RevokeGrantParams) (GrantsResult, error) {
 	publishAccessChanged(params.EventBus, params.DeviceSerial, rel)
 	return ListGrants(ListGrantsParams{Ctx: params.Ctx, Database: params.Database, Access: params.Access, DeviceSerial: params.DeviceSerial, Path: rel})
 }
+
+// PrincipalUser is an account something can be shared with.
+type PrincipalUser struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+}
+
+// PrincipalGroup is a group something can be shared with.
+type PrincipalGroup struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	// Builtin marks the everyone group.
+	Builtin bool `json:"builtin"`
+}
+
+// ListPrincipalsParams asks who something can be shared with.
+type ListPrincipalsParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+}
+
+// ListPrincipalsResult is every active account by username and every group,
+// everyone first. Neither slice is nil.
+type ListPrincipalsResult struct {
+	Users  []PrincipalUser  `json:"users"`
+	Groups []PrincipalGroup `json:"groups"`
+}
+
+// ListPrincipals lists who something can be shared with (#1911). Any signed-in
+// account may ask, so it carries names only: no status, role or membership.
+func ListPrincipals(params ListPrincipalsParams) (ListPrincipalsResult, error) {
+	if params.Database == nil {
+		return ListPrincipalsResult{}, ErrNoDatabase
+	}
+	users, err := params.Database.Queries.ListActiveUsers(params.Ctx)
+	if err != nil {
+		return ListPrincipalsResult{}, err
+	}
+	groups, err := params.Database.Queries.ListGroups(params.Ctx)
+	if err != nil {
+		return ListPrincipalsResult{}, err
+	}
+	result := ListPrincipalsResult{
+		Users:  make([]PrincipalUser, 0, len(users)),
+		Groups: make([]PrincipalGroup, 0, len(groups)),
+	}
+	for _, user := range users {
+		result.Users = append(result.Users, PrincipalUser{ID: user.ID, Username: user.Username})
+	}
+	for _, group := range groups {
+		result.Groups = append(result.Groups, PrincipalGroup{ID: group.ID, Name: group.Name, Builtin: group.Builtin != 0})
+	}
+	return result, nil
+}
