@@ -121,6 +121,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
   // WebSocket event subscription for real-time file updates
   StreamSubscription<FileEvent>? _eventSub;
+  StreamSubscription<void>? _reconnectSub;
   StreamSubscription<UploadBatchResult>? _uploadResultSub;
 
   // Search state
@@ -177,9 +178,22 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       if (UploadManager.instance.isUploading) {
         return;
       }
-      if ({'upload', 'delete', 'move', 'new_folder'}.contains(evt.kind)) {
+      // access_changed: something was shared or unshared with this account,
+      // or its groups changed, so what it can see here may have too.
+      if ({
+        'upload',
+        'delete',
+        'move',
+        'new_folder',
+        'access_changed',
+      }.contains(evt.kind)) {
         manualRefresh();
       }
+    });
+    // Whatever changed while the socket was down sent no event we saw. An
+    // upload in progress refreshes once when it drains, as above.
+    _reconnectSub = EventsService.instance.reconnects.listen((_) {
+      if (!UploadManager.instance.isUploading) manualRefresh();
     });
 
     UploadManager.instance.addListener(_onUploadProgress);
@@ -388,6 +402,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   void dispose() {
     _coveredAnimation?.removeStatusListener(_onCoveredChanged);
     _eventSub?.cancel();
+    _reconnectSub?.cancel();
     _uploadResultSub?.cancel();
     // Detaching only stops us watching — the upload itself keeps running.
     UploadManager.instance.removeListener(_onUploadProgress);

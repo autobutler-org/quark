@@ -40,16 +40,24 @@ class _TrashPageState extends State<TrashPage>
 
   late final _controller = TrashController(location: widget.location);
   StreamSubscription<FileEvent>? _eventSub;
+  StreamSubscription<void>? _reconnectSub;
 
   @override
   void initState() {
     super.initState();
     _controller.addListener(_followController);
     EventsService.instance.start();
-    // Every trash mutation, from any client, and the hourly purge.
+    // Every trash mutation, from any client, and the hourly purge; and a
+    // sharing change, which decides which trashed items this account sees.
     _eventSub = EventsService.instance.events.listen((evt) {
-      if (evt.kind == 'trash_changed') manualRefresh();
+      if (evt.kind == 'trash_changed' || evt.kind == 'access_changed') {
+        manualRefresh();
+      }
     });
+    // Whatever changed while the socket was down sent no event we saw.
+    _reconnectSub = EventsService.instance.reconnects.listen(
+      (_) => manualRefresh(),
+    );
   }
 
   @override
@@ -80,6 +88,7 @@ class _TrashPageState extends State<TrashPage>
   @override
   void dispose() {
     _eventSub?.cancel();
+    _reconnectSub?.cancel();
     _controller
       ..removeListener(_followController)
       ..dispose();
