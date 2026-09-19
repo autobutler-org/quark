@@ -77,3 +77,15 @@ bool isHomeRoot(String serial, String path) {
       .toList();
   return segments.length == 2 && segments.first == 'users';
 }
+
+/// Whether [path] on [serial] is the `users` folder on the internal drive that
+/// holds every home. A member has no write access to it, so the Quark refuses
+/// their delete or move of it the same way it refuses one of a home (#2016).
+bool isUsersDir(String serial, String path) {
+  if (serial.trim().isNotEmpty) return false;
+  final segments = path
+      .split('/')
+      .where((s) => s.isNotEmpty && s != '.')
+      .toList();
+  return segments.length == 1 && segments.first == 'users';
+}

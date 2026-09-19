@@ -16,7 +16,7 @@ typedef FileMenuActionDispatch =
 /// Offers the entries in [menuActions] that make sense for [item]: nothing
 /// that changes a file inside an archive, Extract only on an archive,
 /// Navigate to folder only in search results, and no Move/Rename or Delete on
-/// a home folder itself unless the viewer is an admin.
+/// the `users` folder or a home folder itself unless the viewer is an admin.
 class FileMenuButton extends StatelessWidget {
   const FileMenuButton({
     required this.item,
@@ -38,8 +38,9 @@ class FileMenuButton extends StatelessWidget {
   final bool inArchive;
   final bool isSearchMode;
 
-  /// Whether the viewer is an admin, who may move or delete a home folder
-  /// (`users/<name>` on the internal drive); a member may not (#2016).
+  /// Whether the viewer is an admin, who may move or delete the `users` folder
+  /// and a home folder (`users/<name>`) on the internal drive; a member may
+  /// not (#2016).
   final bool isAdmin;
   final FileMenuActionDispatch onDispatchMenuAction;
   final void Function(FileNode)? onNavigateToFolder;
@@ -48,7 +49,10 @@ class FileMenuButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final extracting = extractingPaths.contains(item.apiPath);
     final canChange =
-        !inArchive && (isAdmin || !isHomeRoot(item.deviceSerial, item.apiPath));
+        !inArchive &&
+        (isAdmin ||
+            !(isHomeRoot(item.deviceSerial, item.apiPath) ||
+                isUsersDir(item.deviceSerial, item.apiPath)));
 
     PopupMenuItem<FileMenuAction> entry(
       FileMenuAction action,

@@ -171,4 +171,21 @@ void main() {
       });
     }
   });
+
+  // ─── isUsersDir ────────────────────────────────────────────────────
+  group('isUsersDir', () {
+    for (final (serial, path, want) in [
+      ('', 'users', true),
+      ('', '/users/', true),
+      ('', './users', true),
+      ('', 'users/bob', false),
+      ('', 'shared/users', false),
+      ('', 'users.txt', false),
+      ('USB1', 'users', false),
+    ]) {
+      test('($serial, $path) is $want', () {
+        expect(isUsersDir(serial, path), want);
+      });
+    }
+  });
 }
