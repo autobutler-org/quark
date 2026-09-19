@@ -68,7 +68,28 @@ var (
 	// folder's contents to a new account. It never reports the shared users
 	// parent every home sits in, only a home that is already taken.
 	ErrFolderExists = errors.New("a folder with that name already exists")
+	// ErrSelfAction refuses an admin action aimed at the admin's own account.
+	ErrSelfAction = errors.New("use Settings to change your own account")
 )
+
+// DisableUserParams names the account an admin turns off.
+type DisableUserParams struct {
+	Database *db.DatabaseSqlc
+	// ActorUserID is the admin acting, who cannot turn their own account off.
+	ActorUserID int64
+	Username    string
+}
+
+// DisableUserResult is empty; turning an account off has nothing to report.
+type DisableUserResult struct{}
+
+// EnableUserParams names the account an admin turns back on.
+type EnableUserParams struct {
+	Username string
+}
+
+// EnableUserResult is empty; turning an account on has nothing to report.
+type EnableUserResult struct{}
 
 // CreateUserParams is an account an admin adds (#1873).
 type CreateUserParams struct {
@@ -680,6 +701,78 @@ func IsAdmin(ctx context.Context, queries *db.Queries, username string) (bool, e
 	return val != 0, nil
 }
 
+// IsActive reports whether the account with the given id exists and may sign
+// in. A missing account is not an error; it is simply not active.
+func IsActive(ctx context.Context, queries *db.Queries, userID int64) (bool, error) {
+	user, err := queries.GetUserByID(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("look up account: %w", err)
+	}
+	return user.Status == StatusActive, nil
+}
+
+// DisableUser turns an account off (#1909): it can no longer sign in, and every
+// session it holds ends in the same transaction. It keeps everything it owns,
+// so EnableUser restores it as it was. It returns ErrSelfAction for the acting
+// admin's own account, ErrUserNotFound unless the account is active, and
+// ErrLastAdmin for the only active admin.
+func DisableUser(ctx context.Context, params DisableUserParams) (DisableUserResult, error) {
+	if params.Database == nil {
+		return DisableUserResult{}, errors.New("database not initialized")
+	}
+	err := inTx(ctx, params.Database, func(q *db.Queries) error {
+		target, err := q.GetUserByUsername(ctx, params.Username)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrUserNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("look up %q: %w", params.Username, err)
+		}
+		if target.ID == params.ActorUserID {
+			return ErrSelfAction
+		}
+		if err := ensureAnotherActiveAdmin(ctx, q, target); err != nil {
+			return err
+		}
+		disabled, err := q.SetUserStatus(ctx, db.SetUserStatusParams{
+			Username:   params.Username,
+			FromStatus: StatusActive,
+			ToStatus:   StatusDisabled,
+		})
+		if err != nil {
+			return fmt.Errorf("disable %q: %w", params.Username, err)
+		}
+		if disabled == 0 {
+			return ErrUserNotFound
+		}
+		if err := q.DeleteUserSessions(ctx, target.ID); err != nil {
+			return fmt.Errorf("end sessions of %q: %w", params.Username, err)
+		}
+		return nil
+	})
+	return DisableUserResult{}, err
+}
+
+// EnableUser turns a disabled account back on. It returns ErrUserNotFound
+// unless the account is disabled.
+func EnableUser(ctx context.Context, queries *db.Queries, params EnableUserParams) (EnableUserResult, error) {
+	enabled, err := queries.SetUserStatus(ctx, db.SetUserStatusParams{
+		Username:   params.Username,
+		FromStatus: StatusDisabled,
+		ToStatus:   StatusActive,
+	})
+	if err != nil {
+		return EnableUserResult{}, fmt.Errorf("enable %q: %w", params.Username, err)
+	}
+	if enabled == 0 {
+		return EnableUserResult{}, ErrUserNotFound
+	}
+	return EnableUserResult{}, nil
+}
+
 // PromoteToAdmin grants admin to the given username. Only an active account
 // can be promoted; any other username returns ErrUserNotFound.
 func PromoteToAdmin(ctx context.Context, queries *db.Queries, username string) error {
@@ -693,15 +786,18 @@ func PromoteToAdmin(ctx context.Context, queries *db.Queries, username string) e
 }
 
 // DemoteFromAdmin removes admin from the given username. It returns
-// ErrLastAdmin while at most one active admin exists, and ErrUserNotFound for a
-// username with no account.
+// ErrLastAdmin when the account is the only active admin, and ErrUserNotFound
+// for a username with no account.
 func DemoteFromAdmin(ctx context.Context, queries *db.Queries, username string) error {
-	count, err := queries.CountActiveAdmins(ctx)
-	if err != nil {
-		return fmt.Errorf("count admins: %w", err)
+	target, err := queries.GetUserByUsername(ctx, username)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrUserNotFound
 	}
-	if count <= 1 {
-		return ErrLastAdmin
+	if err != nil {
+		return fmt.Errorf("look up %q: %w", username, err)
+	}
+	if err := ensureAnotherActiveAdmin(ctx, queries, target); err != nil {
+		return err
 	}
 	if _, err := queries.DemoteFromAdmin(ctx, username); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

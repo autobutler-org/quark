@@ -22,6 +22,19 @@ func (q *Queries) CountActiveAdmins(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countOtherActiveAdmins = `-- name: CountOtherActiveAdmins :one
+SELECT COUNT(*) FROM users WHERE is_admin = 1 AND status = 'active' AND id != ?
+`
+
+// CountOtherActiveAdmins counts the active admins other than one account, so a
+// change to that account can tell whether it would leave the Quark with none.
+func (q *Queries) CountOtherActiveAdmins(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countOtherActiveAdmins, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const demoteFromAdmin = `-- name: DemoteFromAdmin :one
 UPDATE users SET is_admin = 0 WHERE username = ? RETURNING id, username, is_admin, created_at
 `
