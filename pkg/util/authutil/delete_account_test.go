@@ -52,7 +52,7 @@ func newDeleteAccountFixture(t *testing.T) deleteAccountFixture {
 
 	database := dbtest.NewDB(t)
 
-	if _, err := authutil.Setup(context.Background(), database.Queries, authutil.SetupParams{
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "testuser",
 		Password: "TestPassword123!",
 	}); err != nil {

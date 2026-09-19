@@ -36,9 +36,11 @@ func newRenewalTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 }
 
 // newSignedInUser sets up the first user and returns their raw session token.
-func newSignedInUser(t *testing.T, queries *db.Queries) string {
+func newSignedInUser(t *testing.T, sqlDB *sql.DB, queries *db.Queries) string {
 	t.Helper()
-	res, err := authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	res, err := authutil.Setup(context.Background(), authutil.SetupParams{
+		Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries},
+		FilesDir: t.TempDir(),
 		Username: "testuser",
 		Password: "testpassword",
 	})
@@ -101,7 +103,7 @@ func assertNear(t *testing.T, got, want time.Time, what string) {
 // The point of the whole change: using a session pushes its expiry out.
 func TestValidateSession_RenewsExpiryOnUse(t *testing.T) {
 	sqlDB, queries := newRenewalTestDB(t)
-	token := newSignedInUser(t, queries)
+	token := newSignedInUser(t, sqlDB, queries)
 	before := readSession(t, sqlDB, token)
 
 	// Past the debounce window, so the next use renews.
@@ -123,7 +125,7 @@ func TestValidateSession_RenewsExpiryOnUse(t *testing.T) {
 // Renewing on every request would make each authenticated call a write.
 func TestValidateSession_DebouncesRenewal(t *testing.T) {
 	sqlDB, queries := newRenewalTestDB(t)
-	token := newSignedInUser(t, queries)
+	token := newSignedInUser(t, sqlDB, queries)
 	before := readSession(t, sqlDB, token)
 
 	// Well inside the debounce window.
@@ -144,7 +146,7 @@ func TestValidateSession_DebouncesRenewal(t *testing.T) {
 // sessionMaxLifetime past creation, so a leaked token still dies on schedule.
 func TestValidateSession_ClampsRenewalToMaxLifetime(t *testing.T) {
 	sqlDB, queries := newRenewalTestDB(t)
-	token := newSignedInUser(t, queries)
+	token := newSignedInUser(t, sqlDB, queries)
 
 	// A long-lived session near its cap. expires_at stays in the future so
 	// GetSession still finds it.
@@ -169,7 +171,7 @@ func TestValidateSession_ClampsRenewalToMaxLifetime(t *testing.T) {
 // At the cap the expiry stops moving, and we stop writing the same value.
 func TestValidateSession_StopsRenewingAtCap(t *testing.T) {
 	sqlDB, queries := newRenewalTestDB(t)
-	token := newSignedInUser(t, queries)
+	token := newSignedInUser(t, sqlDB, queries)
 
 	// Already pinned to its cap, with the cap still a couple of days out — see
 	// the note on newRenewalTestDB about staying clear of same-day expiries.
@@ -196,7 +198,7 @@ func TestValidateSession_StopsRenewingAtCap(t *testing.T) {
 // before renewal is reached.
 func TestValidateSession_ExpiredSessionStaysExpired(t *testing.T) {
 	sqlDB, queries := newRenewalTestDB(t)
-	token := newSignedInUser(t, queries)
+	token := newSignedInUser(t, sqlDB, queries)
 
 	pinned := time.Now()
 	expired := pinned.Add(-48 * time.Hour)
@@ -218,7 +220,7 @@ func TestNewSession_UnusedSessionKeepsFixedWindow(t *testing.T) {
 
 	pinned := time.Now()
 	restore := authutil.SetNow(pinned)
-	token := newSignedInUser(t, queries)
+	token := newSignedInUser(t, sqlDB, queries)
 	restore()
 
 	row := readSession(t, sqlDB, token)

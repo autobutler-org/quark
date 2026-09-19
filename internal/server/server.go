@@ -46,6 +46,7 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	if err := storageutil.SetupFilesDir(); err != nil {
 		return nil, nil, fmt.Errorf("failed to setup files directory: %w", err)
 	}
+	repairHomes(deps)
 	go func() {
 		if err := deps.Worker().Process(); err != nil {
 			log.Printf("[server] worker stopped: %v", err)
@@ -173,6 +174,35 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	}
 
 	return syncWorker, stopJobs, nil
+}
+
+// repairHomes gives any account that has no home one, at every startup
+// (#1908). An account whose approval predates homes being created has no owner
+// row anywhere, which the access layer reads as "may write nowhere", so this
+// is what makes such an account usable again. It is idempotent, so a Quark
+// with nothing to repair pays one query for it.
+func repairHomes(deps deputil.Dependencies) {
+	database := deps.Database()
+	if database == nil {
+		return
+	}
+	filesDir, err := storageutil.GetFilesDir()
+	if err != nil {
+		log.Printf("[auth] cannot repair homes: %v", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	result, err := authutil.RepairHomes(ctx, authutil.RepairHomesParams{
+		Database: database,
+		FilesDir: filesDir,
+	})
+	if len(result.Repaired) > 0 {
+		log.Printf("[auth] gave %d account(s) their home: %v", len(result.Repaired), result.Repaired)
+	}
+	if err != nil {
+		log.Printf("[auth] home repair stopped early: %v", err)
+	}
 }
 
 func initExternalVault(deps deputil.Dependencies) {

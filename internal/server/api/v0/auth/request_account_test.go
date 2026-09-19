@@ -53,7 +53,7 @@ func TestRequestAccount_Endpoint(t *testing.T) {
 		t.Errorf("status before setup = %v, want only setup=false", body)
 	}
 
-	if _, err := authutil.Setup(ctx, database.Queries, authutil.SetupParams{Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"}); err != nil {
 		t.Fatal(err)
 	}
 	if body := statusBody(); body["accessRequestsEnabled"] != true {

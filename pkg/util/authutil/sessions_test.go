@@ -44,7 +44,8 @@ func setupUserWithSessions(t *testing.T, q *db.Queries, n int) (int64, []string)
 }
 
 func TestListActiveSessions(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
 	userID, _ := setupUserWithSessions(t, q, 3)
 
@@ -66,7 +67,8 @@ func TestListActiveSessions(t *testing.T) {
 }
 
 func TestListActiveSessions_Empty(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
 	userID, _ := setupUserWithSessions(t, q, 0)
 
@@ -80,7 +82,8 @@ func TestListActiveSessions_Empty(t *testing.T) {
 }
 
 func TestRevokeSession(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
 	userID, _ := setupUserWithSessions(t, q, 2)
 
@@ -114,7 +117,8 @@ func TestRevokeSession(t *testing.T) {
 }
 
 func TestRevokeSession_NotFound(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
 	userID, _ := setupUserWithSessions(t, q, 1)
 
@@ -128,7 +132,8 @@ func TestRevokeSession_NotFound(t *testing.T) {
 }
 
 func TestRevokeSession_WrongUser(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
 	userID, _ := setupUserWithSessions(t, q, 1)
 
@@ -146,7 +151,8 @@ func TestRevokeSession_WrongUser(t *testing.T) {
 }
 
 func TestRevokeAllSessions(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
 	userID, _ := setupUserWithSessions(t, q, 4)
 

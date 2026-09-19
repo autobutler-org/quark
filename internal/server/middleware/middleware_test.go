@@ -128,7 +128,7 @@ func TestRequireAuth_SetupNotCompletePassesThrough(t *testing.T) {
 func TestRequireAuth_UnauthorizedAfterSetup(t *testing.T) {
 	sqlDB, queries := newMiddlewareTestDB(t)
 	ctx := context.Background()
-	_, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+	_, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "SecurePass1!",
 	})
@@ -151,7 +151,7 @@ func TestRequireAuth_UnauthorizedAfterSetup(t *testing.T) {
 func TestRequireAuth_BearerTokenGrantsAccess(t *testing.T) {
 	sqlDB, queries := newMiddlewareTestDB(t)
 	ctx := context.Background()
-	result, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "SecurePass1!",
 	})
@@ -175,7 +175,7 @@ func TestRequireAuth_BearerTokenGrantsAccess(t *testing.T) {
 func TestRequireAuth_CookieGrantsAccess(t *testing.T) {
 	sqlDB, queries := newMiddlewareTestDB(t)
 	ctx := context.Background()
-	result, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "SecurePass1!",
 	})
@@ -199,7 +199,7 @@ func TestRequireAuth_CookieGrantsAccess(t *testing.T) {
 func TestRequireAuth_QueryTokenGrantsAccess(t *testing.T) {
 	sqlDB, queries := newMiddlewareTestDB(t)
 	ctx := context.Background()
-	result, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "SecurePass1!",
 	})
@@ -227,7 +227,7 @@ func TestRequireAuth_QueryTokenGrantsAccess(t *testing.T) {
 func TestRequireAuth_QueryTokenGrantsThumbnailAccess(t *testing.T) {
 	sqlDB, queries := newMiddlewareTestDB(t)
 	ctx := context.Background()
-	result, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "SecurePass1!",
 	})
@@ -250,7 +250,7 @@ func TestRequireAuth_QueryTokenGrantsThumbnailAccess(t *testing.T) {
 func TestRequireAuth_InvalidTokenReturns401(t *testing.T) {
 	sqlDB, queries := newMiddlewareTestDB(t)
 	ctx := context.Background()
-	_, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+	_, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "SecurePass1!",
 	})
@@ -275,7 +275,7 @@ func TestRequireAuth_InvalidTokenReturns401(t *testing.T) {
 func TestRequireAuth_DisabledAccountReturns401(t *testing.T) {
 	sqlDB, queries := newMiddlewareTestDB(t)
 	ctx := context.Background()
-	result, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "SecurePass1!",
 	})
@@ -318,7 +318,7 @@ func TestRequireAuth_DisabledAccountReturns401(t *testing.T) {
 func TestRequireAuth_BasicAuthGrantsAccess(t *testing.T) {
 	sqlDB, queries := newMiddlewareTestDB(t)
 	ctx := context.Background()
-	_, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+	_, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "SecurePass1!",
 	})
@@ -346,7 +346,7 @@ func TestRequireAuth_BasicAuthGrantsAccess(t *testing.T) {
 func TestRequireAuth_SetsUserIDOnContext(t *testing.T) {
 	sqlDB, queries := newMiddlewareTestDB(t)
 	ctx := context.Background()
-	result, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "SecurePass1!",
 	})
@@ -416,7 +416,7 @@ func TestRequireAuth_SetsUserIDOnContext(t *testing.T) {
 func TestRequireAuth_SetsPrincipalOnContext(t *testing.T) {
 	sqlDB, queries := newMiddlewareTestDB(t)
 	ctx := context.Background()
-	result, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "SecurePass1!",
 	})

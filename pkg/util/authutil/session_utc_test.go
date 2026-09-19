@@ -51,7 +51,7 @@ func TestValidateSession_ValidWithinUTCOffsetWindow(t *testing.T) {
 			inZone(t, zone)
 
 			sqlDB, queries := newRenewalTestDB(t)
-			token := newSignedInUser(t, queries)
+			token := newSignedInUser(t, sqlDB, queries)
 
 			// One hour of life left — well inside any UTC offset.
 			row := readSession(t, sqlDB, token)
@@ -78,7 +78,7 @@ func TestValidateSession_ExpiredWithinUTCOffsetWindow(t *testing.T) {
 			inZone(t, zone)
 
 			sqlDB, queries := newRenewalTestDB(t)
-			token := newSignedInUser(t, queries)
+			token := newSignedInUser(t, sqlDB, queries)
 
 			// Expired an hour ago.
 			row := readSession(t, sqlDB, token)
@@ -102,7 +102,7 @@ func TestSessionTimestampsStoredAsCanonicalUTC(t *testing.T) {
 	inZone(t, "America/Los_Angeles")
 
 	sqlDB, queries := newRenewalTestDB(t)
-	token := newSignedInUser(t, queries)
+	token := newSignedInUser(t, sqlDB, queries)
 
 	var raw string
 	if err := sqlDB.QueryRow(

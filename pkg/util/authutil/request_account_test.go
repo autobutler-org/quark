@@ -9,9 +9,16 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
-func setupFounder(t *testing.T, q *db.Queries) {
+// setupFounder sets a Quark up with the founding admin, whose home lands in
+// filesDir like every other account's (#1908).
+func setupFounder(t *testing.T, database *db.DatabaseSqlc, filesDir string) {
 	t.Helper()
-	if _, err := authutil.Setup(context.Background(), q, authutil.SetupParams{Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{
+		Database: database,
+		Username: "admin",
+		Password: "admin-password",
+		FilesDir: filesDir,
+	}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -28,7 +35,8 @@ func request(q *db.Queries, username, password string) (authutil.RequestAccountR
 // while the toggle is off and on a Quark nobody has set up, and that the
 // refusal leaves no row that would count as setup.
 func TestRequestAccount_RefusedWhenOffOrBeforeSetup(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
 
 	if _, err := request(q, "bob", "bob-password"); !errors.Is(err, authutil.ErrAccessRequestsOff) {
@@ -38,7 +46,7 @@ func TestRequestAccount_RefusedWhenOffOrBeforeSetup(t *testing.T) {
 		t.Fatal("a refused request completed setup")
 	}
 
-	setupFounder(t, q)
+	setupFounder(t, database, t.TempDir())
 	_, err := authutil.RequestAccount(ctx, q, authutil.RequestAccountParams{Username: "bob", Password: "bob-password"})
 	if !errors.Is(err, authutil.ErrAccessRequestsOff) {
 		t.Errorf("request with requests off = %v, want ErrAccessRequestsOff", err)
@@ -49,9 +57,10 @@ func TestRequestAccount_RefusedWhenOffOrBeforeSetup(t *testing.T) {
 // sign-in: pending and refused, approved, then signing in with the password
 // and recovering with the phrase the request returned.
 func TestRequestAccount_PendingUntilApproved(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, q)
+	setupFounder(t, database, t.TempDir())
 
 	result, err := request(q, "bob", "bob-password")
 	if err != nil {
@@ -71,7 +80,11 @@ func TestRequestAccount_PendingUntilApproved(t *testing.T) {
 		t.Errorf("login while pending = %v, want ErrAccountPending", err)
 	}
 
-	if _, err := authutil.ApproveRequest(ctx, q, authutil.ApproveRequestParams{Username: "bob"}); err != nil {
+	if _, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{
+		Database: database,
+		Username: "bob",
+		FilesDir: t.TempDir(),
+	}); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
 	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", Password: "bob-password"}); err != nil {
@@ -80,7 +93,11 @@ func TestRequestAccount_PendingUntilApproved(t *testing.T) {
 	if _, err := authutil.Recover(ctx, q, authutil.RecoverParams{Username: "bob", RecoveryPhrase: result.RecoveryPhrase, NewPassword: "new-bob-password"}); err != nil {
 		t.Errorf("recover with the request's phrase: %v", err)
 	}
-	if _, err := authutil.ApproveRequest(ctx, q, authutil.ApproveRequestParams{Username: "bob"}); !errors.Is(err, authutil.ErrRequestNotFound) {
+	if _, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{
+		Database: database,
+		Username: "bob",
+		FilesDir: t.TempDir(),
+	}); !errors.Is(err, authutil.ErrRequestNotFound) {
 		t.Errorf("approve an active account = %v, want ErrRequestNotFound", err)
 	}
 }
@@ -89,9 +106,10 @@ func TestRequestAccount_PendingUntilApproved(t *testing.T) {
 // pending request is taken, a denial frees it at once, and deny touches only
 // pending requests.
 func TestRequestAccount_TakenAndDenied(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, q)
+	setupFounder(t, database, t.TempDir())
 
 	if _, err := request(q, "admin", "whatever-password"); !errors.Is(err, authutil.ErrUsernameTaken) {
 		t.Errorf("request an existing account's name = %v, want ErrUsernameTaken", err)
@@ -119,8 +137,9 @@ func TestRequestAccount_TakenAndDenied(t *testing.T) {
 
 // TestRequestAccount_Validation checks the username rule and password length.
 func TestRequestAccount_Validation(t *testing.T) {
-	q := newTestDB(t)
-	setupFounder(t, q)
+	database := newTestDB(t)
+	q := database.Queries
+	setupFounder(t, database, t.TempDir())
 
 	for _, name := range []string{"../x", "a/b", ".trash", "Bob"} {
 		if _, err := request(q, name, "long-enough"); !errors.Is(err, authutil.ErrInvalidUsername) {
