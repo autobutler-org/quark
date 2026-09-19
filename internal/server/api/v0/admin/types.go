@@ -25,12 +25,11 @@ type deleteUserResponse struct {
 	OwnerRowsReassigned int64 `json:"ownerRowsReassigned"`
 }
 
-// createUserBody is an account an admin adds.
+// createUserBody is an account an admin adds. Every account gets a home named
+// after it, so there is nothing to ask for here (#1908).
 type createUserBody struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
-	// CreateFolder makes a private folder named after the account, owned by it.
-	CreateFolder bool `json:"createFolder"`
 }
 
 type userSummary struct {

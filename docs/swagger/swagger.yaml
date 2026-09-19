@@ -228,10 +228,6 @@ definitions:
     type: object
   v0_admin.createUserBody:
     properties:
-      createFolder:
-        description: CreateFolder makes a private folder named after the account,
-          owned by it.
-        type: boolean
       password:
         type: string
       username:
@@ -896,7 +892,9 @@ paths:
   /admin/approve/{username}:
     put:
       description: Turns a pending account request into an active account that can
-        sign in. Admin-only.
+        sign in, with a home under users/ on the internal device that it owns. An
+        existing home of that name leaves the request pending rather than making an
+        account that cannot use it. Admin-only.
       parameters:
       - description: Username of the pending request
         in: path
@@ -916,6 +914,10 @@ paths:
             $ref: '#/definitions/serverutil.Response'
         "404":
           description: no account request has that username
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: a folder with that name already exists
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -1142,11 +1144,10 @@ paths:
       consumes:
       - application/json
       description: 'Creates an active account with the given password. The admin never
-        sees its recovery phrase: the account gets one on its first sign-in. With
-        createFolder, the account''s home is made under users/ on the internal device,
-        named after the account, and the account owns it; an existing home of that
-        name is refused rather than handed over, while a top-level folder of that
-        name does not collide. Admin-only.'
+        sees its recovery phrase: the account gets one on its first sign-in. The account''s
+        home is made under users/ on the internal device, named after the account,
+        and the account owns it; an existing home of that name is refused rather than
+        handed over, while a top-level folder of that name does not collide. Admin-only.'
       parameters:
       - description: The account to add
         in: body
@@ -1865,7 +1866,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates the owner account. Can only be called once.
+      description: Creates the owner account, with a home under users/ on the internal
+        device that it owns. Can only be called once.
       parameters:
       - description: '{username, password}'
         in: body

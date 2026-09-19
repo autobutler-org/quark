@@ -15,10 +15,11 @@ import (
 func TestLoginUser_FirstLoginPhrase(t *testing.T) {
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
-	if _, err := authutil.Setup(ctx, database.Queries, authutil.SetupParams{Username: "admin", Password: "admin-password"}); err != nil {
+	filesDir := t.TempDir()
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: filesDir, Username: "admin", Password: "admin-password"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: database, Username: "bob", Password: "initial-password"}); err != nil {
+	if _, err := authutil.CreateUser(ctx, authutil.CreateUserParams{Database: database, Username: "bob", Password: "initial-password", FilesDir: filesDir}); err != nil {
 		t.Fatal(err)
 	}
 	engine := newPublicAuthEngine(t, database)

@@ -8,19 +8,21 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
 
 // approveUser godoc
 // @Summary Approve an account request
-// @Description Turns a pending account request into an active account that can sign in. Admin-only.
+// @Description Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing home of that name leaves the request pending rather than making an account that cannot use it. Admin-only.
 // @Tags admin
 // @Param username path string true "Username of the pending request"
 // @Success 200
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response
 // @Failure 404 {object} serverutil.Response "no account request has that username"
+// @Failure 409 {object} serverutil.Response "a folder with that name already exists"
 // @Failure 500 {object} serverutil.Response
 // @Router /admin/approve/{username} [put]
 func approveUser(c *gin.Context) *serverutil.Response {
@@ -32,14 +34,22 @@ func approveUser(c *gin.Context) *serverutil.Response {
 	if database == nil {
 		return serverutil.InternalServerError(errors.New("database unavailable"))
 	}
+	filesDir, err := storageutil.GetFilesDir()
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 
-	if _, err := authutil.ApproveRequest(c.Request.Context(), database.Queries, authutil.ApproveRequestParams{
+	result, err := authutil.ApproveRequest(c.Request.Context(), authutil.ApproveRequestParams{
+		Database: database,
 		Username: c.Param("username"),
-	}); err != nil {
+		FilesDir: filesDir,
+	})
+	if err != nil {
 		return accountErrorResponse(err)
 	}
 	if bus := deps.EventBus(); bus != nil {
 		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})
+		bus.Publish(eventbus.Event{Kind: eventbus.EventNewFolder, Path: result.FolderPath})
 	}
 	return serverutil.Ok()
 }

@@ -3,13 +3,16 @@ package v0_admin_test
 import (
 	"context"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
 // TestApproveUser_PendingOnly checks approving a pending request lets it sign
-// in and publishes account_changed, and approving anything else is 404.
+// in, gives it the home it owns, and publishes account_changed, and that
+// approving anything else is 404.
 func TestApproveUser_PendingOnly(t *testing.T) {
 	h := newAdminHarness(t)
 	ctx := context.Background()
@@ -24,6 +27,17 @@ func TestApproveUser_PendingOnly(t *testing.T) {
 	}
 	if _, err := authutil.Login(ctx, h.database.Queries, authutil.LoginParams{Username: "waiting", Password: "user-password"}); err != nil {
 		t.Errorf("login after approval: %v", err)
+	}
+	// The grant is what an upload is checked against, so it matters more than
+	// the directory: without it the approved account is refused every write.
+	if info, err := os.Stat(filepath.Join(h.filesDir, "users", "waiting")); err != nil || !info.IsDir() {
+		t.Errorf("home of the approved account: %v", err)
+	}
+	var level string
+	if err := h.database.Db.QueryRow(`SELECT level FROM path_access WHERE rel_path = 'users/waiting'`).Scan(&level); err != nil {
+		t.Errorf("the approved account owns no path: %v", err)
+	} else if level != "owner" {
+		t.Errorf("grant on users/waiting = %q, want owner", level)
 	}
 
 	for _, name := range []string{"waiting", "off", "admin", "nobody"} {

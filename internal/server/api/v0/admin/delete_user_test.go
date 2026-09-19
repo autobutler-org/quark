@@ -42,8 +42,17 @@ func TestDeleteUser_Endpoint(t *testing.T) {
 		t.Errorf("delete published %d account_changed events, want 1", n)
 	}
 	rows, err := h.database.Queries.ListPathAccessForUser(ctx, sql.NullInt64{Int64: h.adminID, Valid: true})
-	if err != nil || len(rows) != 1 || rows[0].RelPath != "member" || rows[0].Level != "owner" {
-		t.Errorf("admin's rows = %+v (%v), want owner of member", rows, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The admin's own home is in there too, so look for the row they inherited
+	// rather than expecting theirs to be the only one.
+	owned := map[string]string{}
+	for _, row := range rows {
+		owned[row.RelPath] = row.Level
+	}
+	if owned["member"] != "owner" {
+		t.Errorf("admin's rows = %+v, want owner of member", rows)
 	}
 
 	if w := h.do(http.MethodDelete, "/api/v0/admin/users/member"); w.Code != http.StatusNotFound {

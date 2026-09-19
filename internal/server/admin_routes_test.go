@@ -25,7 +25,7 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
-	admin, err := authutil.Setup(ctx, database.Queries, authutil.SetupParams{Username: "admin", Password: "admin-password"})
+	admin, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"})
 	if err != nil {
 		t.Fatalf("authutil.Setup: %v", err)
 	}

@@ -2,9 +2,11 @@ package authutil
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 
@@ -106,6 +108,69 @@ const mountsDirName = "mounts"
 // account's home, so a username never collides with a top-level folder name
 // (#2016).
 const usersDirName = "users"
+
+// homeRelPath is where an account's home sits: users/<username>, the path its
+// owner grant is written on. ListAccountsMissingHome spells the same path in
+// SQL, so the two have to agree.
+func homeRelPath(username string) string {
+	return path.Join(usersDirName, username)
+}
+
+// grantHome makes an account the owner of its home.
+//
+// Written straight to the table rather than through accessutil: that grants on
+// behalf of a caller, and the caller here is an admin or the Quark itself,
+// neither of which needs a row.
+func grantHome(ctx context.Context, queries *db.Queries, username string, userID int64) error {
+	if err := queries.SetUserPathAccess(ctx, db.SetUserPathAccessParams{
+		RelPath: homeRelPath(username),
+		UserID:  sql.NullInt64{Int64: userID, Valid: true},
+		Level:   "owner",
+	}); err != nil {
+		return fmt.Errorf("grant the home of %q: %w", username, err)
+	}
+	return nil
+}
+
+// createHome makes an account's home under filesDir and grants it, on every
+// path that lands an account: setup, an admin's create, and an approval
+// (#1908). The directory and the grant are made together because an account
+// with a home it does not own cannot write to it, which is the same to its
+// owner as having no home at all.
+//
+// It returns the home's path relative to filesDir and the directory it made,
+// which a caller whose transaction then fails removes. An existing home is
+// refused with ErrFolderExists rather than handed to the account; adopting one
+// is RepairHomes's job, not a new account's.
+func createHome(ctx context.Context, queries *db.Queries, filesDir, username string, userID int64) (relPath, madeDir string, err error) {
+	if filesDir == "" {
+		return "", "", errors.New("files directory not set")
+	}
+	// The users parent is shared by every home, so MkdirAll it: it already
+	// existing is not a conflict.
+	if err := os.MkdirAll(filepath.Join(filesDir, usersDirName), 0o755); err != nil {
+		return "", "", fmt.Errorf("create users folder: %w", err)
+	}
+	// The username is validated, so it is one path segment and cannot climb
+	// out of filesDir. Mkdir, not MkdirAll, for the home itself: an existing
+	// home is refused rather than handed to the new account.
+	home := filepath.Join(filesDir, usersDirName, username)
+	if err := os.Mkdir(home, 0o755); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return "", "", ErrFolderExists
+		}
+		return "", "", fmt.Errorf("create the home of %q: %w", username, err)
+	}
+	// The grant is on the home alone. users/ gets none: breadcrumb visibility
+	// already shows the path to someone granted beneath it, and it stays
+	// admin-only otherwise.
+	if err := grantHome(ctx, queries, username, userID); err != nil {
+		// The directory is reported so the caller removes it; the transaction
+		// this runs in is about to roll the grant back.
+		return "", home, err
+	}
+	return homeRelPath(username), home, nil
+}
 
 // pruneMountPoints removes the empty per-device directories under
 // <dataDir>/mounts and nothing else.

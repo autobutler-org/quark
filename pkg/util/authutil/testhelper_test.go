@@ -7,9 +7,9 @@ import (
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 )
 
-// newTestDB returns the queries handle for a database carrying the real
-// migration set. Shared by every test in this package.
-func newTestDB(t *testing.T) *db.Queries {
+// newTestDB returns a database carrying the real migration set. Shared by
+// every test in this package.
+func newTestDB(t *testing.T) *db.DatabaseSqlc {
 	t.Helper()
-	return dbtest.NewDB(t).Queries
+	return dbtest.NewDB(t)
 }

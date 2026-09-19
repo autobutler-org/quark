@@ -27,7 +27,7 @@ func TestDisableUser_EndsSessionsAndKeepsOwnership(t *testing.T) {
 	database := dbtest.NewDB(t)
 	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, q)
+	setupFounder(t, database, t.TempDir())
 	mkStatusUser(t, q, "bob", authutil.StatusActive)
 	adminID, bobID := userID(t, q, "admin"), userID(t, q, "bob")
 
@@ -90,7 +90,7 @@ func TestDisableUser_Refusals(t *testing.T) {
 	database := dbtest.NewDB(t)
 	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, q)
+	setupFounder(t, database, t.TempDir())
 	mkStatusUser(t, q, "member", authutil.StatusActive)
 	mkStatusUser(t, q, "waiting", authutil.StatusPending)
 	adminID, memberID := userID(t, q, "admin"), userID(t, q, "member")
