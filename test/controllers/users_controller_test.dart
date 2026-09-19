@@ -27,6 +27,7 @@ void main() {
     Object? actionError,
     Object? listError,
     Object? setAccessError,
+    Object? createError,
     Future<List<UserAccount>> Function()? listUsers,
     Future<void> Function(String)? promoteUser,
   }) {
@@ -53,6 +54,11 @@ void main() {
         calls.add('access $enabled');
         if (setAccessError != null) throw setAccessError;
         return enabled;
+      },
+      createUser: ({required username, required password}) async {
+        calls.add('create $username');
+        if (createError != null) throw createError;
+        return UserAccount(id: 9, username: username);
       },
     );
   }
@@ -173,6 +179,60 @@ void main() {
     gate.complete();
     await pending;
     expect(c.busyUsernames, isEmpty);
+  });
+
+  test('creates the account, then reloads', () async {
+    final c = controller();
+
+    final created = await c.create(
+      const CreateUserInput(username: 'dee', password: 'hunter2hunter2'),
+    );
+
+    expect(created, isTrue);
+    expect(calls, ['create dee', 'list']);
+    expect(c.createError, isNull);
+    expect(c.isCreating, isFalse);
+  });
+
+  test(
+    'keeps a refused create for the open dialog, reloading nothing',
+    () async {
+      const refusal = MessageException('that username is taken');
+      final c = controller(createError: refusal);
+
+      final created = await c.create(
+        const CreateUserInput(username: 'bob', password: 'hunter2hunter2'),
+      );
+
+      expect(created, isFalse);
+      expect(c.createError, same(refusal));
+      expect(calls, ['create bob']);
+
+      c.clearCreateError();
+      expect(c.createError, isNull);
+    },
+  );
+
+  test('a second create while one is in flight sends nothing', () async {
+    final gate = Completer<UserAccount>();
+    var creates = 0;
+    final c = UsersController(
+      listUsers: () async => users,
+      readAccessRequests: () async => true,
+      createUser: ({required username, required password}) {
+        creates++;
+        return gate.future;
+      },
+    );
+    const input = CreateUserInput(username: 'dee', password: 'hunter2hunter2');
+
+    final first = c.create(input);
+    expect(c.isCreating, isTrue);
+    expect(await c.create(input), isFalse);
+    gate.complete(const UserAccount(id: 9, username: 'dee'));
+    await first;
+
+    expect(creates, 1);
   });
 
   test('saves the access-requests setting the Quark returns', () async {

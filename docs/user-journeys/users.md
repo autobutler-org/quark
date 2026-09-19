@@ -104,6 +104,56 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 ---
 
+### JN-USR-006: Add a user
+
+**Preconditions:** No account named `dee` exists, and neither does a home at `users/dee`.
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. Tap **Add user**.
+3. Enter `dee` as the username, and an initial password twice.
+4. Tap **Add user** in the dialog.
+
+**Expected result:**
+
+- The dialog closes and `dee` appears in **Accounts**.
+- A folder `users/dee` exists in Files, owned by `dee`.
+- `dee` can sign in with that password, and sees their recovery phrase once (JN-AUTH-013).
+
+**Notes:**
+
+- The admin never sees the recovery phrase.
+- Homes live under `users/`, so a top-level folder named `dee` is a different thing and does not stop the account
+  being created.
+- A username must be up to 32 lowercase letters, numbers, dots, dashes or underscores, starting with a letter or
+  number. The dialog says so before sending.
+
+---
+
+### JN-USR-007: Adding a user whose folder already exists
+
+**Preconditions:** A folder `users/eli` exists. No account is named `eli`.
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. Tap **Add user**, and enter `eli` with a password.
+3. Tap **Add user** in the dialog.
+
+**Expected result:**
+
+- The dialog stays open with what was typed, and shows "A folder with that name already exists."
+- No account is created, and the existing folder is not handed to anyone.
+
+**Notes:**
+
+- Only a home at `users/eli` refuses the account. A top-level folder named `eli` is a different thing and is left
+  alone.
+- A taken username shows "That username is taken." the same way.
+
+---
+
 ### JN-USR-008: Approve an account request
 
 **Preconditions:** Someone has requested an account (JN-AUTH-009).

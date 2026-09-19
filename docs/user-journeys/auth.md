@@ -256,6 +256,31 @@ account on this Quark.
 
 ---
 
+### JN-AUTH-013: First sign-in of an account an admin added
+
+**Preconditions:** An admin added the account (JN-USR-006). It has never signed in.
+
+**Steps:**
+
+1. Navigate to `/login`.
+2. Enter the username and the initial password the admin gave you.
+3. Tap **Sign in**.
+4. The account's recovery phrase is displayed.
+5. Check the acknowledgment checkbox.
+6. Tap **Continue**.
+
+**Expected result:**
+
+- App navigates to `/files`.
+- Signing in again later goes straight to `/files`, with no phrase.
+
+**Notes:**
+
+- The app is not signed in until **Continue**. Leaving the phrase screen before then means signing in again, and the
+  phrase is not shown a second time: as with setup, a phrase lost before it was saved stays lost.
+
+---
+
 ### JN-AUTH-014: Sign in to a turned-off account
 
 **Preconditions:** An admin has turned the account off.
