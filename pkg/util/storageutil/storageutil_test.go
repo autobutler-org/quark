@@ -2,13 +2,16 @@ package storageutil
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestReadFileTrim(t *testing.T) {
@@ -214,16 +217,28 @@ func TestCalculateSummary_EmptyDevices(t *testing.T) {
 	}
 }
 
-// mockDetector is a Detector implementation for use in tests.
+// mockDetector is a Detector implementation for use in tests. The counter is
+// mutex-guarded so concurrent callers can assert on it.
 type mockDetector struct {
 	devices []Device
 	err     error
+	delay   time.Duration
+	mu      sync.Mutex
 	calls   int
 }
 
 func (m *mockDetector) DetectDevices() ([]Device, error) {
+	m.mu.Lock()
 	m.calls++
+	m.mu.Unlock()
+	time.Sleep(m.delay)
 	return m.devices, m.err
+}
+
+func (m *mockDetector) callCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.calls
 }
 
 // mockUsbDevice is a minimal UsbDevice implementation for use in tests.
@@ -319,8 +334,8 @@ func TestStorageService_GetManagedDevices_Cached(t *testing.T) {
 	if err != nil {
 		t.Fatalf("svc.GetManagedDevices() error = %v", err)
 	}
-	if mock.calls != 1 {
-		t.Errorf("expected 1 detection for 2 calls, got %d", mock.calls)
+	if mock.callCount() != 1 {
+		t.Errorf("expected 1 detection for 2 calls, got %d", mock.callCount())
 	}
 	if second[0].Name != "test-disk" {
 		t.Errorf("a caller's edit leaked into the cache: got %q", second[0].Name)
@@ -330,8 +345,8 @@ func TestStorageService_GetManagedDevices_Cached(t *testing.T) {
 	if _, err := svc.GetManagedDevices(); err != nil {
 		t.Fatalf("svc.GetManagedDevices() error = %v", err)
 	}
-	if mock.calls != 2 {
-		t.Errorf("expected a fresh detection after invalidation, got %d calls", mock.calls)
+	if mock.callCount() != 2 {
+		t.Errorf("expected a fresh detection after invalidation, got %d calls", mock.callCount())
 	}
 }
 
@@ -342,8 +357,17 @@ type rootsDetector struct {
 }
 
 func (r *rootsDetector) DetectRoots() ([]Device, error) {
+	r.mu.Lock()
 	r.rootCalls++
+	r.mu.Unlock()
+	time.Sleep(r.delay)
 	return r.devices, r.err
+}
+
+func (r *rootsDetector) rootCallCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.rootCalls
 }
 
 // File requests resolve their roots without full detection (#2195).
@@ -365,15 +389,15 @@ func TestStorageService_GetManagedRoots(t *testing.T) {
 	if _, err := svc.FindManagedDeviceBySerial(""); err != nil {
 		t.Fatalf("svc.FindManagedDeviceBySerial() error = %v", err)
 	}
-	if detector.rootCalls != 1 || detector.calls != 0 {
-		t.Errorf("expected 1 cached root detection and no full one, got %d and %d", detector.rootCalls, detector.calls)
+	if detector.rootCallCount() != 1 || detector.callCount() != 0 {
+		t.Errorf("expected 1 cached root detection and no full one, got %d and %d", detector.rootCallCount(), detector.callCount())
 	}
 	svc.InvalidateDeviceCache()
 	if _, err := svc.GetManagedRoots(); err != nil {
 		t.Fatalf("svc.GetManagedRoots() error = %v", err)
 	}
-	if detector.rootCalls != 2 {
-		t.Errorf("expected a fresh root detection after invalidation, got %d", detector.rootCalls)
+	if detector.rootCallCount() != 2 {
+		t.Errorf("expected a fresh root detection after invalidation, got %d", detector.rootCallCount())
 	}
 
 	// A Detector without DetectRoots falls back to full detection.
@@ -381,8 +405,134 @@ func TestStorageService_GetManagedRoots(t *testing.T) {
 	if roots, err := NewStorageService(fallback).GetManagedRoots(); err != nil || len(roots) != 1 {
 		t.Fatalf("fallback GetManagedRoots() = %+v, %v", roots, err)
 	}
-	if fallback.calls != 1 {
-		t.Errorf("expected the fallback to run DetectDevices once, got %d", fallback.calls)
+	if fallback.callCount() != 1 {
+		t.Errorf("expected the fallback to run DetectDevices once, got %d", fallback.callCount())
+	}
+}
+
+// Every request that missed the cache used to run its own detection, so a
+// lapse under load stampeded into one subprocess-heavy scan per request
+// (#2197). One detection per lapse serves every waiter.
+func TestStorageService_ConcurrentMissesDetectOnce(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.MkdirAll(ConstructFilesDir(tempDir), 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	detector := &rootsDetector{mockDetector: mockDetector{
+		devices: []Device{{Name: "test-disk", MountPoint: tempDir, IsInternal: true}},
+		delay:   20 * time.Millisecond,
+	}}
+	svc := NewStorageService(detector)
+
+	var wg sync.WaitGroup
+	for range 15 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if devices, err := svc.GetManagedDevices(); err != nil || len(devices) != 1 {
+				t.Errorf("svc.GetManagedDevices() = %+v, %v", devices, err)
+			}
+			if roots, err := svc.GetManagedRoots(); err != nil || len(roots) != 1 {
+				t.Errorf("svc.GetManagedRoots() = %+v, %v", roots, err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if got := detector.callCount(); got != 1 {
+		t.Errorf("expected 1 full detection for 15 concurrent callers, got %d", got)
+	}
+	if got := detector.rootCallCount(); got != 1 {
+		t.Errorf("expected 1 root detection for 15 concurrent callers, got %d", got)
+	}
+}
+
+// blockingDetector pauses inside its first detection so a test can invalidate
+// mid-flight. It reads the devices before pausing, so the paused detection
+// returns what was mounted when it started, not what the test swaps in.
+type blockingDetector struct {
+	mockDetector
+	once    sync.Once
+	started chan struct{}
+	release chan struct{}
+}
+
+func (b *blockingDetector) DetectDevices() ([]Device, error) {
+	devices, err := b.mockDetector.DetectDevices()
+	b.once.Do(func() {
+		close(b.started)
+		<-b.release
+	})
+	return devices, err
+}
+
+// A detection that started before an invalidation predates whatever the caller
+// invalidated for, so it must not be the answer later callers see.
+func TestStorageService_InvalidateDuringDetection(t *testing.T) {
+	before, after := t.TempDir(), t.TempDir()
+	for _, dir := range []string{before, after} {
+		if err := os.MkdirAll(ConstructFilesDir(dir), 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+	}
+	detector := &blockingDetector{
+		mockDetector: mockDetector{devices: []Device{{Name: "before", MountPoint: before}}},
+		started:      make(chan struct{}),
+		release:      make(chan struct{}),
+	}
+	svc := NewStorageService(detector)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := svc.GetManagedDevices(); err != nil {
+			t.Errorf("svc.GetManagedDevices() error = %v", err)
+		}
+	}()
+
+	<-detector.started
+	svc.InvalidateDeviceCache()
+	detector.devices = []Device{{Name: "after", MountPoint: after}}
+	close(detector.release)
+	<-done
+
+	devices, err := svc.GetManagedDevices()
+	if err != nil {
+		t.Fatalf("svc.GetManagedDevices() error = %v", err)
+	}
+	if len(devices) != 1 || devices[0].Name != "after" {
+		t.Errorf("svc.GetManagedDevices() = %+v, want the device detected after invalidation", devices)
+	}
+	if got := detector.callCount(); got != 2 {
+		t.Errorf("expected the invalidated detection to be discarded and re-run, got %d detections", got)
+	}
+}
+
+// A failed detection is not cached, so the next call tries again.
+func TestStorageService_DetectionErrorNotCached(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.MkdirAll(ConstructFilesDir(tempDir), 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	detector := &mockDetector{
+		devices: []Device{{Name: "test-disk", MountPoint: tempDir, IsInternal: true}},
+		err:     errors.New("detection failed"),
+	}
+	svc := NewStorageService(detector)
+
+	if _, err := svc.GetManagedDevices(); err == nil {
+		t.Fatal("svc.GetManagedDevices() = nil error, want the detector's failure")
+	}
+	detector.err = nil
+	devices, err := svc.GetManagedDevices()
+	if err != nil {
+		t.Fatalf("svc.GetManagedDevices() error = %v", err)
+	}
+	if len(devices) != 1 {
+		t.Errorf("svc.GetManagedDevices() = %+v, want the device detected after the failure", devices)
+	}
+	if got := detector.callCount(); got != 2 {
+		t.Errorf("expected the failure not to be cached, got %d detections", got)
 	}
 }
 
