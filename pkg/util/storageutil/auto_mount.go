@@ -47,7 +47,7 @@ func AutoMountDevice(device UsbDevice) (*AutoMountResult, error) {
 		return nil, fmt.Errorf("failed to create mount target %s: %w", mountTargetPath, err)
 	}
 
-	if err := partitions[0].MountCommand(mountTargetPath).Run(); err != nil {
+	if err := RunMountCommand(partitions[0].MountCommand(mountTargetPath)); err != nil {
 		return nil, fmt.Errorf("mount command failed: %w", err)
 	}
 
