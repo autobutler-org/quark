@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/error_banner.dart';
+import 'package:quark/widgets/notice_banner.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark/widgets/login/active_host_card.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -15,6 +16,12 @@ class SignInForm extends StatelessWidget {
   final bool loading;
   final bool disconnected;
   final String? error;
+
+  /// Good news from wherever the user just came from — a password they have
+  /// only just reset, say (#2029). Sits above the fields like [error], and
+  /// never at the same time as one: an error is about the attempt in front of
+  /// the user and wins.
+  final String? notice;
   final bool managingHosts;
   final VoidCallback onToggleManagingHosts;
   final VoidCallback onHostsChanged;
@@ -40,6 +47,7 @@ class SignInForm extends StatelessWidget {
     required this.loading,
     required this.disconnected,
     required this.error,
+    this.notice,
     required this.managingHosts,
     required this.onToggleManagingHosts,
     required this.onHostsChanged,
@@ -93,12 +101,15 @@ class SignInForm extends StatelessWidget {
           ],
           const SizedBox(height: 24),
 
-          // Error banner
+          // Error banner, or the notice when there is nothing wrong
           if (disconnected) ...[
             QuarkDisconnectedBanner(onRetry: loading ? null : onSubmit),
             const SizedBox(height: 16),
           ] else if (error != null) ...[
             ErrorBanner(message: error!),
+            const SizedBox(height: 16),
+          ] else if (notice != null) ...[
+            NoticeBanner(message: notice!),
             const SizedBox(height: 16),
           ],
 

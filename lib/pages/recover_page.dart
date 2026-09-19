@@ -59,7 +59,18 @@ class _RecoverPageState extends State<RecoverPage> {
       if (widget.onRecoverSuccess != null) {
         widget.onRecoverSuccess!();
       } else if (mounted) {
-        context.go(AppRoutes.login);
+        // Say it worked, and carry the username over: the user has just
+        // proved who they are twice and should not type it a third time
+        // (#2029).
+        context.go(
+          Uri(
+            path: AppRoutes.login,
+            queryParameters: {
+              'reset': '1',
+              'username': _usernameController.text.trim(),
+            },
+          ).toString(),
+        );
       }
     } catch (e) {
       debugPrint('[recover_page.dart] Error: $e');
