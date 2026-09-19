@@ -310,3 +310,106 @@ func TestGroupNameNocaseMigration(t *testing.T) {
 		t.Errorf("family still refused after the down migration: %v", err)
 	}
 }
+
+// migrateTo opens a database and applies migrations up to version.
+func migrateTo(t *testing.T, version uint) (*sql.DB, *migrate.Migrate) {
+	t.Helper()
+	conn, err := sql.Open("sqlite", DSN(filepath.Join(t.TempDir(), "quark.db")))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	migrationSource, err := newMigrationSource()
+	if err != nil {
+		t.Fatalf("source: %v", err)
+	}
+	driver, err := sqlite.WithInstance(conn, &sqlite.Config{})
+	if err != nil {
+		t.Fatalf("driver: %v", err)
+	}
+	m, err := migrate.NewWithInstance("iofs", migrationSource, "sqlite", driver)
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := m.Migrate(version); err != nil {
+		t.Fatalf("migrate to %d: %v", version, err)
+	}
+	return conn, m
+}
+
+// count runs a COUNT query.
+func count(t *testing.T, conn *sql.DB, query string, args ...any) int {
+	t.Helper()
+	var n int
+	if err := conn.QueryRow(query, args...).Scan(&n); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+	return n
+}
+
+// jobOwnerVersion is 013_job_owner, the migration that records who queued a
+// job (#1979).
+const jobOwnerVersion = 13
+
+// TestJobOwnerMigration leaves existing jobs with no owner, deletes an
+// account's jobs with it, and rolls back and forward again keeping every row.
+func TestJobOwnerMigration(t *testing.T) {
+	conn, m := migrateTo(t, jobOwnerVersion-1)
+	if _, err := conn.Exec(`
+INSERT INTO users (id, username, password_hash, recovery_phrase_hash) VALUES (1, 'bob', 'h', 'r'), (2, 'carol', 'h', 'r');
+INSERT INTO jobs (id, kind, name, status, params, lane, error) VALUES
+	(1, 'video-transcode', 'old', 'failed', '{"relPath":"a.mkv"}', 'encode', 'boom'),
+	(2, 'video-transcode', 'older', 'completed', '{}', 'copy', '');
+`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(jobOwnerVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", jobOwnerVersion, err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM jobs WHERE user_id IS NULL`); n != 2 {
+		t.Errorf("existing jobs with no owner = %d, want 2", n)
+	}
+	if _, err := conn.Exec(`INSERT INTO jobs (kind, name, user_id) VALUES ('video-transcode', 'nobody', 99)`); err == nil {
+		t.Error("a job owned by a missing account was accepted")
+	}
+	if _, err := conn.Exec(`
+INSERT INTO jobs (id, kind, name, user_id) VALUES (3, 'video-transcode', 'bob''s', 1), (4, 'video-transcode', 'carol''s', 2);
+DELETE FROM users WHERE id = 1;`); err != nil {
+		t.Fatalf("delete account: %v", err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM jobs WHERE id = 3`); n != 0 {
+		t.Error("a deleted account's job was kept")
+	}
+
+	// Down, up, and down and up once more.
+	for range 2 {
+		if err := m.Migrate(jobOwnerVersion - 1); err != nil {
+			t.Fatalf("roll back to %d: %v", jobOwnerVersion-1, err)
+		}
+		if n := count(t, conn, `SELECT COUNT(*) FROM jobs WHERE id IN (1, 2, 4)`); n != 3 {
+			t.Errorf("jobs after the down migration = %d, want 3", n)
+		}
+		if n := count(t, conn, `SELECT COUNT(*) FROM jobs WHERE id = 1 AND status = 'failed' AND error = 'boom' AND lane = 'encode'`); n != 1 {
+			t.Error("the down migration changed a job's columns")
+		}
+		if n := count(t, conn, `SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name = 'user_id'`); n != 0 {
+			t.Error("jobs.user_id is still there after the down migration")
+		}
+		if n := count(t, conn, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_jobs_status_id'`); n != 1 {
+			t.Error("idx_jobs_status_id is missing after the down migration")
+		}
+		if err := m.Migrate(jobOwnerVersion); err != nil {
+			t.Fatalf("migrate to %d again: %v", jobOwnerVersion, err)
+		}
+		if n := count(t, conn, `SELECT COUNT(*) FROM jobs WHERE user_id IS NULL`); n != 3 {
+			t.Errorf("jobs after migrating up again = %d, want 3 with no owner", n)
+		}
+	}
+	if _, err := conn.Exec(`INSERT INTO jobs (kind, name) VALUES ('video-transcode', 'new')`); err != nil {
+		t.Fatalf("insert after the round trip: %v", err)
+	}
+	if n := count(t, conn, `SELECT MAX(id) FROM jobs`); n != 5 {
+		t.Errorf("new job id = %d, want 5: the rebuild must not reuse ids", n)
+	}
+}

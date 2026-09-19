@@ -105,26 +105,35 @@ abstract final class Errors {
   static const String ffmpegMissing =
       "Converting videos needs ffmpeg, which isn't installed on your Quark.";
 
+  /// A conversion or retry refused with a 403. The output lands beside the
+  /// video, so the account has to be able to save files in its folder.
+  static const String cantSaveInFolder = "You can't save files in that folder.";
+
   /// A conversion that could not be started. A 501 gets [ffmpegMissing]
-  /// rather than the generic "doesn't support that yet".
-  static String transcode(Object? error) =>
-      error is ApiException && error.statusCode == 501
-      ? ffmpegMissing
-      : message(error, 'convert the video');
+  /// rather than the generic "doesn't support that yet", and a 403
+  /// [cantSaveInFolder].
+  static String transcode(Object? error) => switch (error) {
+    ApiException(statusCode: 501) => ffmpegMissing,
+    ApiException(statusCode: 403) => cantSaveInFolder,
+    _ => message(error, 'convert the video'),
+  };
 
   /// A retry the Quark refused. Only a failed job can be retried, so a 409
   /// means this one didn't fail; a 422 means the file it used is gone; a 404
-  /// means the Quark no longer knows the job. Retrying again would fail the
-  /// same way.
+  /// means the Quark no longer knows the job, or no longer shows it to this
+  /// account; a 403 means the account that queued it can't save files in the
+  /// folder any more. Retrying again would fail the same way.
   static String retryJob(Object? error) => switch (error) {
     ApiException(statusCode: 409) => "That job can't be retried.",
     ApiException(statusCode: 422) => 'The file this job used no longer exists.',
     ApiException(statusCode: 404) => 'That job no longer exists.',
+    ApiException(statusCode: 403) => cantSaveInFolder,
     _ => message(error, 'retry the job'),
   };
 
   /// A cancel the Quark refused: a 409 means the job had already finished, a
-  /// 404 that the Quark no longer knows it.
+  /// 404 that the Quark no longer knows it or no longer shows it to this
+  /// account. A 403 reads as the generic permission copy from [message].
   static String cancelJob(Object? error) => switch (error) {
     ApiException(statusCode: 409) => 'That job has already finished.',
     ApiException(statusCode: 404) => 'That job no longer exists.',
