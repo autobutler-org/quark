@@ -140,7 +140,7 @@ func Load(params LoadParams) (LoadResult, error) {
 	if err != nil {
 		return LoadResult{}, err
 	}
-	devices, err := params.Storage.GetManagedDevices()
+	devices, err := params.Storage.GetManagedRoots()
 	if err != nil {
 		return LoadResult{}, err
 	}

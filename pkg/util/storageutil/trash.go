@@ -864,7 +864,7 @@ type PurgeExpiredTrashResult struct {
 // device and of the default files directory. A device that fails does not stop
 // the sweep; its error is joined into the one returned.
 func (s *StorageService) PurgeExpiredTrash(params PurgeExpiredTrashParams) (PurgeExpiredTrashResult, error) {
-	devices, err := s.GetManagedDevices()
+	devices, err := s.GetManagedRoots()
 	if err != nil {
 		return PurgeExpiredTrashResult{}, err // coverage: ignore - requires device detection failure
 	}

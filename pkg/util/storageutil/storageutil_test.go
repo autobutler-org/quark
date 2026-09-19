@@ -335,6 +335,57 @@ func TestStorageService_GetManagedDevices_Cached(t *testing.T) {
 	}
 }
 
+// rootsDetector counts which detection path the service took.
+type rootsDetector struct {
+	mockDetector
+	rootCalls int
+}
+
+func (r *rootsDetector) DetectRoots() ([]Device, error) {
+	r.rootCalls++
+	return r.devices, r.err
+}
+
+// File requests resolve their roots without full detection (#2195).
+func TestStorageService_GetManagedRoots(t *testing.T) {
+	tempDir := t.TempDir()
+	devices := []Device{{MountPoint: tempDir, IsInternal: true}}
+
+	detector := &rootsDetector{mockDetector: mockDetector{devices: devices}}
+	svc := NewStorageService(detector)
+	for range 2 {
+		roots, err := svc.GetManagedRoots()
+		if err != nil {
+			t.Fatalf("svc.GetManagedRoots() error = %v", err)
+		}
+		if len(roots) != 1 || roots[0].FilesDir != ConstructFilesDir(GetDataDirForDevice(tempDir)) {
+			t.Fatalf("svc.GetManagedRoots() = %+v, want the one device at %s", roots, tempDir)
+		}
+	}
+	if _, err := svc.FindManagedDeviceBySerial(""); err != nil {
+		t.Fatalf("svc.FindManagedDeviceBySerial() error = %v", err)
+	}
+	if detector.rootCalls != 1 || detector.calls != 0 {
+		t.Errorf("expected 1 cached root detection and no full one, got %d and %d", detector.rootCalls, detector.calls)
+	}
+	svc.InvalidateDeviceCache()
+	if _, err := svc.GetManagedRoots(); err != nil {
+		t.Fatalf("svc.GetManagedRoots() error = %v", err)
+	}
+	if detector.rootCalls != 2 {
+		t.Errorf("expected a fresh root detection after invalidation, got %d", detector.rootCalls)
+	}
+
+	// A Detector without DetectRoots falls back to full detection.
+	fallback := &mockDetector{devices: devices}
+	if roots, err := NewStorageService(fallback).GetManagedRoots(); err != nil || len(roots) != 1 {
+		t.Fatalf("fallback GetManagedRoots() = %+v, %v", roots, err)
+	}
+	if fallback.calls != 1 {
+		t.Errorf("expected the fallback to run DetectDevices once, got %d", fallback.calls)
+	}
+}
+
 func TestStorageService_IsolatedFromDefault(t *testing.T) {
 	// Constructing a StorageService with a mock should return a non-nil instance.
 	mock := &mockDetector{}
