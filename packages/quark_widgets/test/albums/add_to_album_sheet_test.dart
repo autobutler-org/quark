@@ -60,4 +60,20 @@ void main() {
 
     expect(find.text('No albums — create one first'), findsOneWidget);
   });
+
+  testWidgets('renders each album\'s count in agreement with itself', (
+    tester,
+  ) async {
+    await pumpSheet(
+      tester,
+      albums: const [
+        AlbumItem(id: 1, name: 'Trips', itemCount: 1),
+        AlbumItem(id: 3, name: 'Pets', itemCount: 4),
+      ],
+      size: wideViewport,
+    );
+
+    expect(find.text('1 photo'), findsOneWidget);
+    expect(find.text('4 photos'), findsOneWidget);
+  });
 }

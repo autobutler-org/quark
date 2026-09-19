@@ -33,4 +33,22 @@ void main() {
     expect(item.isFavorites, isFalse);
     expect(item.parentId, isNull);
   });
+
+  /// #2061: the album sheets rendered "1 photos".
+  group('photoCountLabel', () {
+    test('an album holding one photo says photo, not photos', () {
+      expect(
+        const AlbumItem(id: 1, name: 'Trips', itemCount: 1).photoCountLabel,
+        '1 photo',
+      );
+    });
+
+    test('every other count is plural, empty included', () {
+      expect(const AlbumItem(id: 1, name: 'Trips').photoCountLabel, '0 photos');
+      expect(
+        const AlbumItem(id: 1, name: 'Trips', itemCount: 2).photoCountLabel,
+        '2 photos',
+      );
+    });
+  });
 }

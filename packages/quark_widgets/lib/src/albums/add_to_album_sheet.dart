@@ -105,7 +105,7 @@ class AddToAlbumSheet extends StatelessWidget {
                                 : colorScheme.onSurfaceVariant,
                           ),
                           title: Text(album.name),
-                          subtitle: Text('${album.itemCount} photos'),
+                          subtitle: Text(album.photoCountLabel),
                           onTap: () => onToggle(album),
                         ),
                     ],
