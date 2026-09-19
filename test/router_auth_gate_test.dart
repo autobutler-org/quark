@@ -89,6 +89,10 @@ void main() {
           path: AppRoutes.settings,
           builder: (_, _) => const Scaffold(body: Text('settings')),
         ),
+        GoRoute(
+          path: AppRoutes.vault,
+          builder: (_, _) => const Scaffold(body: Text('vault')),
+        ),
         GoRoute(path: AppRoutes.terms, builder: (_, _) => const TermsPage()),
       ],
     );
@@ -354,6 +358,93 @@ void main() {
       expect(find.text('setup'), findsOneWidget);
       expect(find.text('login'), findsNothing);
     });
+  });
+
+  // #1928: the vault is admin-only on the Quark, and a non-admin who typed
+  // the URL got a page that could only show refusals.
+  group('an admin-only page', () {
+    setUp(() async {
+      await addUnacceptedHost();
+      await settings.acceptTerms();
+      await settings.setSessionToken('a-token');
+    });
+
+    tearDown(() async {
+      settings.isAdmin.value = false;
+      await settings.setSessionToken(null);
+    });
+
+    testWidgets('opens for an admin', (tester) async {
+      authStatusProbe = () async =>
+          const AuthStatus(setupComplete: true, username: 'ada', isAdmin: true);
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.vault);
+
+      expect(find.text('vault'), findsOneWidget);
+    });
+
+    // Asked of the Quark, not the unpersisted flag: it is false on every
+    // launch, and an admin's deep link must still land.
+    testWidgets('opens for an admin before the app has learned the role', (
+      tester,
+    ) async {
+      settings.isAdmin.value = false;
+      authStatusProbe = () async =>
+          const AuthStatus(setupComplete: true, username: 'ada', isAdmin: true);
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.vault);
+
+      expect(find.text('vault'), findsOneWidget);
+    });
+
+    testWidgets('sends a non-admin who types the URL to files', (tester) async {
+      authStatusProbe = () async =>
+          const AuthStatus(setupComplete: true, username: 'bob');
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.vault);
+
+      expect(find.text('files'), findsOneWidget);
+      expect(find.text('vault'), findsNothing);
+    });
+
+    testWidgets('sends the user to files when the Quark cannot say', (
+      tester,
+    ) async {
+      authStatusProbe = () async => throw Exception('connection refused');
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.vault);
+
+      expect(find.text('files'), findsOneWidget);
+    });
+
+    testWidgets('moves a demoted admin off the page', (tester) async {
+      var isAdmin = true;
+      authStatusProbe = () async =>
+          AuthStatus(setupComplete: true, username: 'ada', isAdmin: isAdmin);
+      settings.isAdmin.value = true;
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.vault);
+      expect(find.text('vault'), findsOneWidget);
+
+      isAdmin = false;
+      settings.isAdmin.value = false;
+      await tester.pumpAndSettle();
+
+      expect(find.text('files'), findsOneWidget);
+      expect(find.text('vault'), findsNothing);
+    });
+  });
+
+  testWidgets('a signed-out user on an admin-only page goes to login', (
+    tester,
+  ) async {
+    await addUnacceptedHost();
+    await settings.acceptTerms();
+    authStatusProbe = () async => const AuthStatus(setupComplete: true);
+
+    await pumpGatedRouter(tester, initialLocation: AppRoutes.vault);
+
+    expect(find.text('login'), findsOneWidget);
   });
 
   // The terms gate runs ahead of everything, so an unaccepted Quark sees terms

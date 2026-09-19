@@ -2,13 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Every top-level page opens this one drawer, so what it offers and where
-/// each row goes is decided here once (#1662).
+/// each row goes is decided here once (#1662). Admin-only pages are offered to
+/// admins only (#1928).
 void main() {
+  final settings = AppSettings.instance;
   final scaffoldKey = GlobalKey<ScaffoldState>();
+
+  setUp(() => settings.isAdmin.value = false);
+  tearDown(() => settings.isAdmin.value = false);
 
   Widget page(String name, QuarkDrawerSection section) => Scaffold(
     key: name == 'files' ? scaffoldKey : null,
@@ -33,6 +39,10 @@ void main() {
           path: AppRoutes.photos,
           builder: (_, _) => page('photos', QuarkDrawerSection.photos),
         ),
+        GoRoute(
+          path: AppRoutes.vault,
+          builder: (_, _) => page('vault', QuarkDrawerSection.vault),
+        ),
       ],
     );
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
@@ -41,9 +51,10 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('offers every page and marks the one it was opened from', (
+  testWidgets('offers every page to an admin and marks the current one', (
     tester,
   ) async {
+    settings.isAdmin.value = true;
     await pumpDrawer(tester);
 
     for (final section in [
@@ -70,13 +81,37 @@ void main() {
     expect(files.selected, isTrue);
   });
 
-  testWidgets('a row goes to its page', (tester) async {
+  testWidgets('keeps the vault out of a non-admin drawer', (tester) async {
     await pumpDrawer(tester);
 
-    await tester.tap(find.byKey(const ValueKey('drawer_photos')));
+    expect(find.byKey(const ValueKey('drawer_vault')), findsNothing);
+    expect(find.byKey(const ValueKey('drawer_settings')), findsOneWidget);
+  });
+
+  testWidgets('follows the admin flag while the drawer is open', (
+    tester,
+  ) async {
+    await pumpDrawer(tester);
+    expect(find.byKey(const ValueKey('drawer_vault')), findsNothing);
+
+    settings.isAdmin.value = true;
+    await tester.pump();
+    expect(find.byKey(const ValueKey('drawer_vault')), findsOneWidget);
+
+    // A demoted admin loses the entry without signing out.
+    settings.isAdmin.value = false;
+    await tester.pump();
+    expect(find.byKey(const ValueKey('drawer_vault')), findsNothing);
+  });
+
+  testWidgets('a row goes to its page', (tester) async {
+    settings.isAdmin.value = true;
+    await pumpDrawer(tester);
+
+    await tester.tap(find.byKey(const ValueKey('drawer_vault')));
     await tester.pumpAndSettle();
 
-    expect(find.text('photos page'), findsOneWidget);
+    expect(find.text('vault page'), findsOneWidget);
     expect(find.text('files page'), findsNothing);
   });
 
