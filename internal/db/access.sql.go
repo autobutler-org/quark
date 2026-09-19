@@ -10,6 +10,29 @@ import (
 	"database/sql"
 )
 
+const deleteGroupPathAccess = `-- name: DeleteGroupPathAccess :execrows
+DELETE FROM path_access
+WHERE
+    group_id = ?
+    AND device_serial = ?
+    AND rel_path = ?
+`
+
+type DeleteGroupPathAccessParams struct {
+	GroupID      sql.NullInt64
+	DeviceSerial string
+	RelPath      string
+}
+
+// DeleteGroupPathAccess drops a group's row on exactly one path.
+func (q *Queries) DeleteGroupPathAccess(ctx context.Context, arg DeleteGroupPathAccessParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteGroupPathAccess, arg.GroupID, arg.DeviceSerial, arg.RelPath)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deletePathAccessTree = `-- name: DeletePathAccessTree :execrows
 DELETE FROM path_access
 WHERE
@@ -28,6 +51,30 @@ type DeletePathAccessTreeParams struct {
 // DeletePathAccessTree drops the rows on a path and everything beneath it.
 func (q *Queries) DeletePathAccessTree(ctx context.Context, arg DeletePathAccessTreeParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, deletePathAccessTree, arg.DeviceSerial, arg.RelPath)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deleteUserPathAccess = `-- name: DeleteUserPathAccess :execrows
+DELETE FROM path_access
+WHERE
+    user_id = ?
+    AND device_serial = ?
+    AND rel_path = ?
+`
+
+type DeleteUserPathAccessParams struct {
+	UserID       sql.NullInt64
+	DeviceSerial string
+	RelPath      string
+}
+
+// DeleteUserPathAccess drops a user's row on exactly one path. Rows on the
+// folders that hold it stay.
+func (q *Queries) DeleteUserPathAccess(ctx context.Context, arg DeleteUserPathAccessParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteUserPathAccess, arg.UserID, arg.DeviceSerial, arg.RelPath)
 	if err != nil {
 		return 0, err
 	}
@@ -151,6 +198,75 @@ func (q *Queries) ListPathAccessForUser(ctx context.Context, userID sql.NullInt6
 	return items, nil
 }
 
+const listPathAccessOnAncestors = `-- name: ListPathAccessOnAncestors :many
+SELECT
+    path_access.rel_path,
+    path_access.level,
+    path_access.user_id,
+    path_access.group_id,
+    CAST(COALESCE(users.username, groups.name) AS TEXT) AS name,
+    CAST(COALESCE(groups.builtin, 0) AS INTEGER) AS builtin
+FROM
+    path_access
+    LEFT JOIN users ON users.id = path_access.user_id
+    LEFT JOIN groups ON groups.id = path_access.group_id
+WHERE
+    path_access.device_serial = ?1
+    AND (
+        path_access.rel_path = ''
+        OR path_access.rel_path = ?2
+        OR substr(?2, 1, length(path_access.rel_path) + 1) = path_access.rel_path || '/'
+    )
+`
+
+type ListPathAccessOnAncestorsParams struct {
+	DeviceSerial string
+	RelPath      string
+}
+
+type ListPathAccessOnAncestorsRow struct {
+	RelPath string
+	Level   string
+	UserID  sql.NullInt64
+	GroupID sql.NullInt64
+	Name    string
+	Builtin int64
+}
+
+// ListPathAccessOnAncestors lists the rows on a path and on every folder that
+// holds it, with the name of the account or group each one was granted to,
+// for the sharing sheet (#1911). substr, not LIKE, for the reason
+// MovePathAccessTree gives. The CASTs give sqlc a type for each COALESCE.
+func (q *Queries) ListPathAccessOnAncestors(ctx context.Context, arg ListPathAccessOnAncestorsParams) ([]ListPathAccessOnAncestorsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPathAccessOnAncestors, arg.DeviceSerial, arg.RelPath)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPathAccessOnAncestorsRow
+	for rows.Next() {
+		var i ListPathAccessOnAncestorsRow
+		if err := rows.Scan(
+			&i.RelPath,
+			&i.Level,
+			&i.UserID,
+			&i.GroupID,
+			&i.Name,
+			&i.Builtin,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const movePathAccessTree = `-- name: MovePathAccessTree :execrows
 UPDATE path_access
 SET
@@ -224,6 +340,37 @@ func (q *Queries) ReassignOwnerRows(ctx context.Context, arg ReassignOwnerRowsPa
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const setGroupPathAccess = `-- name: SetGroupPathAccess :exec
+INSERT INTO
+    path_access (device_serial, rel_path, group_id, level)
+VALUES
+    (?, ?, ?, ?) ON CONFLICT (group_id, device_serial, rel_path)
+WHERE
+    group_id IS NOT NULL DO
+UPDATE
+SET
+    level = excluded.level
+`
+
+type SetGroupPathAccessParams struct {
+	DeviceSerial string
+	RelPath      string
+	GroupID      sql.NullInt64
+	Level        string
+}
+
+// SetGroupPathAccess grants a group a level on a path, replacing the level any
+// earlier grant to that group on that path carried.
+func (q *Queries) SetGroupPathAccess(ctx context.Context, arg SetGroupPathAccessParams) error {
+	_, err := q.db.ExecContext(ctx, setGroupPathAccess,
+		arg.DeviceSerial,
+		arg.RelPath,
+		arg.GroupID,
+		arg.Level,
+	)
+	return err
 }
 
 const setUserPathAccess = `-- name: SetUserPathAccess :exec
