@@ -23,6 +23,14 @@ func (r *router) Routes() []*serverutil.Route {
 	}
 }
 
+// loginResponse is a successful sign-in.
+type loginResponse struct {
+	Token string `json:"token"`
+	// RecoveryPhrase is present only on the first sign-in of an account an
+	// admin created.
+	RecoveryPhrase string `json:"recoveryPhrase,omitempty"`
+}
+
 // requestAccountBody is what someone asking for an account sends.
 type requestAccountBody struct {
 	Username string `json:"username" binding:"required"`

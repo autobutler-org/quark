@@ -72,6 +72,8 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 		{http.MethodPost, "/api/v0/settings"},
 		// No body, so the admin stops at a 400 and the setting is untouched.
 		{http.MethodPut, "/api/v0/settings/access-requests"},
+		// No body, so the admin stops at a 400 and no account is created.
+		{http.MethodPost, "/api/v0/admin/users"},
 		// Nobody has requested an account, so the admin gets a 404.
 		{http.MethodPut, "/api/v0/admin/approve/nobody"},
 		{http.MethodPut, "/api/v0/admin/deny/nobody"},

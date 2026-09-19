@@ -31,6 +31,14 @@ UPDATE users
 SET status = sqlc.arg(to_status)
 WHERE username = sqlc.arg(username) AND status = sqlc.arg(from_status);
 
+-- SetRecoveryPhraseIfUnset gives an admin-created account its recovery phrase
+-- on its first sign-in (#1873). Only an empty hash matches, so two sign-ins at
+-- once cannot both hand out a phrase.
+-- name: SetRecoveryPhraseIfUnset :execrows
+UPDATE users
+SET recovery_phrase_hash = ?
+WHERE id = ? AND recovery_phrase_hash = '';
+
 -- name: UpdateUserPassword :exec
 UPDATE users
 SET password_hash = ?

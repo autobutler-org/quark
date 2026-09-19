@@ -11,12 +11,12 @@ import (
 
 // loginUser godoc
 // @Summary Login
-// @Description Authenticates with username and password, returns a session token. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.
+// @Description Authenticates with username and password, returns a session token. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Param body body object true "{username, password}"
-// @Success 200 {object} object
+// @Success 200 {object} loginResponse
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} accountRefusal "status is pending or disabled"
 // @Router /auth/login [post]
@@ -46,7 +46,10 @@ func loginUser(c *gin.Context) *serverutil.Response {
 	}
 
 	setSessionCookie(c, result.SessionToken)
-	return serverutil.Ok().WithData(gin.H{"token": result.SessionToken})
+	return serverutil.Ok().WithData(loginResponse{
+		Token:          result.SessionToken,
+		RecoveryPhrase: result.RecoveryPhrase,
+	})
 }
 
 var loginUserRoute = serverutil.ApiRoute("POST", "/auth/login", loginUser)

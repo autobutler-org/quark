@@ -9,11 +9,20 @@ type router struct{}
 func (r *router) Routes() []*serverutil.Route {
 	return []*serverutil.Route{
 		listUsersRoute,
+		createUserRoute,
 		promoteUserRoute,
 		demoteUserRoute,
 		approveUserRoute,
 		denyUserRoute,
 	}
+}
+
+// createUserBody is an account an admin adds.
+type createUserBody struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+	// CreateFolder makes a private folder named after the account, owned by it.
+	CreateFolder bool `json:"createFolder"`
 }
 
 type userSummary struct {
