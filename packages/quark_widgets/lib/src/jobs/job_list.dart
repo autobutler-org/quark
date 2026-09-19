@@ -71,7 +71,12 @@ class JobList extends StatelessWidget {
       return const EmptyStateWidget(
         icon: QuarkIcons.pending_actions_outlined,
         headline: 'No jobs yet',
-        subtext: 'Conversions and other long tasks show up here.',
+        // Names the thing a household would recognize rather than the
+        // category it belongs to: "conversions" is a word for someone who
+        // already knows this page exists (#2038).
+        subtext:
+            'Work that takes a while — converting a video, say — shows up '
+            'here while your Quark gets on with it.',
       );
     }
 
