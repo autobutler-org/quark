@@ -18,6 +18,7 @@ class FileBrowserListTile extends StatelessWidget {
     required this.onDispatchMenuAction,
     required this.onOpenDirectory,
     this.menuActions = FileBrowserView.defaultMenuActions,
+    this.isAdmin = false,
     this.subtitle,
     this.onNavigateToFolder,
     this.onSelectionChanged,
@@ -26,6 +27,9 @@ class FileBrowserListTile extends StatelessWidget {
 
   final FileNode item;
   final bool isSelected;
+
+  /// Passed to [FileMenuButton.isAdmin].
+  final bool isAdmin;
 
   /// `FileNode.apiPath` values with an extraction in flight; the owner mutates
   /// this set and rebuilds, so it is read rather than copied.
@@ -114,6 +118,7 @@ class FileBrowserListTile extends StatelessWidget {
                 extractingPaths: extractingPaths,
                 inArchive: inArchive,
                 isSearchMode: isSearchMode,
+                isAdmin: isAdmin,
                 onDispatchMenuAction: onDispatchMenuAction,
                 onNavigateToFolder: onNavigateToFolder,
               )
