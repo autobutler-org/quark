@@ -542,10 +542,15 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           'Deleted ${nodes.length} item${nodes.length == 1 ? "" : "s"}',
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       if (snapshot != null) setState(() => _cachedFiles = snapshot);
-      _showMessage('Delete failed');
+      _showMessage(
+        Errors.message(
+          e,
+          nodes.length == 1 ? 'delete the item' : 'delete the items',
+        ),
+      );
     }
   }
 
@@ -1019,8 +1024,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           await FilesService.saveBytesToFile(entry.bytes, node.name);
           _showMessage('Downloaded ${node.name}');
         }
-      } catch (_) {
-        if (mounted) _showMessage('Download failed');
+      } catch (e) {
+        if (mounted) {
+          _showMessage(_controller.failureMessage(FileMenuAction.download, e));
+        }
       }
       return;
     }
@@ -1059,8 +1066,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       }
 
       _applyOutcome(outcome);
-    } catch (_) {
-      debugPrint('[file_browser_page.dart] Error in catch block');
+    } catch (e) {
+      debugPrint('[file_browser_page.dart] $action failed: $e');
       if (!mounted) {
         return;
       }
@@ -1070,11 +1077,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         setState(() => _cachedFiles = snapshot);
       }
 
-      if (action == FileMenuAction.moveRename) {
-        return;
-      }
-
-      _showMessage(_controller.failureMessage(action));
+      _showMessage(_controller.failureMessage(action, e));
     }
   }
 
