@@ -4,14 +4,40 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/pump.dart';
 
+/// The drawer draws a row only for a destination the caller offers, which is
+/// how admin-only pages stay out of a non-admin's drawer (#1662).
 void main() {
-  testBothViewports('lists every section and marks the active one', (
+  Map<QuarkDrawerSection, void Function()> everyCallback(List<String> tapped) =>
+      {
+        for (final section in QuarkDrawerSection.values)
+          section: () => tapped.add(section.name),
+      };
+
+  QuarkDrawer drawerWith(
+    QuarkDrawerSection active,
+    Map<QuarkDrawerSection, void Function()> callbacks,
+  ) => QuarkDrawer(
+    activeSection: active,
+    onTapFiles: callbacks[QuarkDrawerSection.files],
+    onTapPhotos: callbacks[QuarkDrawerSection.photos],
+    onTapTrash: callbacks[QuarkDrawerSection.trash],
+    onTapDocs: callbacks[QuarkDrawerSection.docs],
+    onTapSheets: callbacks[QuarkDrawerSection.sheets],
+    onTapDevices: callbacks[QuarkDrawerSection.devices],
+    onTapHealth: callbacks[QuarkDrawerSection.health],
+    onTapVault: callbacks[QuarkDrawerSection.vault],
+    onTapJobs: callbacks[QuarkDrawerSection.jobs],
+    onTapUsers: callbacks[QuarkDrawerSection.users],
+    onTapSettings: callbacks[QuarkDrawerSection.settings],
+  );
+
+  testBothViewports('lists every offered section and marks the active one', (
     tester,
     size,
   ) async {
     await pumpAt(
       tester,
-      const QuarkDrawer(activeSection: QuarkDrawerSection.photos),
+      drawerWith(QuarkDrawerSection.photos, everyCallback([])),
       size: size,
     );
 
@@ -24,6 +50,8 @@ void main() {
     );
     expect(files.selected, isFalse);
 
+    // Top to bottom: the narrow viewport is shorter than the drawer, and its
+    // list only builds the rows that are scrolled into view.
     for (final label in [
       'Files',
       'Photos',
@@ -34,13 +62,13 @@ void main() {
       'Health',
       'Vault',
       'Jobs',
+      'Users',
       'Settings',
     ]) {
-      // The narrow viewport is shorter than the drawer, and its list only
-      // builds the rows near the screen.
       await tester.scrollUntilVisible(find.text(label), 50);
       expect(find.text(label), findsOneWidget, reason: '$label is missing');
     }
+    expect(tester.takeException(), isNull);
   });
 
   testBothViewports('calls back for the row that was tapped', (
@@ -50,26 +78,14 @@ void main() {
     final tapped = <String>[];
     await pumpAt(
       tester,
-      QuarkDrawer(
-        activeSection: QuarkDrawerSection.files,
-        onTapFiles: () => tapped.add('files'),
-        onTapPhotos: () => tapped.add('photos'),
-        onTapTrash: () => tapped.add('trash'),
-        onTapDocs: () => tapped.add('docs'),
-        onTapSheets: () => tapped.add('sheets'),
-        onTapDevices: () => tapped.add('devices'),
-        onTapHealth: () => tapped.add('health'),
-        onTapVault: () => tapped.add('vault'),
-        onTapJobs: () => tapped.add('jobs'),
-        onTapSettings: () => tapped.add('settings'),
-      ),
+      drawerWith(QuarkDrawerSection.files, everyCallback(tapped)),
       size: size,
     );
 
     for (final section in QuarkDrawerSection.values) {
       // The narrow viewport is shorter than the drawer; it scrolls.
       final row = find.byKey(ValueKey('drawer_${section.name}'));
-      await tester.ensureVisible(row);
+      await tester.scrollUntilVisible(row, 50);
       await tester.tap(row);
       await tester.pump();
     }
@@ -77,18 +93,62 @@ void main() {
     expect(tapped, QuarkDrawerSection.values.map((s) => s.name).toList());
   });
 
-  testWidgets('tapping a row with no handler does nothing', (tester) async {
+  testBothViewports('draws no row for a section without a callback', (
+    tester,
+    size,
+  ) async {
+    final callbacks = everyCallback([])
+      ..remove(QuarkDrawerSection.users)
+      ..remove(QuarkDrawerSection.vault);
     await pumpAt(
       tester,
-      const QuarkDrawer(activeSection: QuarkDrawerSection.vault),
-      size: narrowViewport,
+      drawerWith(QuarkDrawerSection.files, callbacks),
+      size: size,
     );
 
-    final settings = find.byKey(const ValueKey('drawer_settings'));
-    await tester.scrollUntilVisible(settings, 50);
-    await tester.tap(settings);
-    await tester.pump();
-
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('drawer_settings')),
+      50,
+    );
+    expect(find.byKey(const ValueKey('drawer_users')), findsNothing);
+    expect(find.text('Users'), findsNothing);
+    expect(find.byKey(const ValueKey('drawer_vault')), findsNothing);
+    expect(find.byKey(const ValueKey('drawer_settings')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testBothViewports('draws the users row once it is offered', (
+    tester,
+    size,
+  ) async {
+    final tapped = <String>[];
+    await pumpAt(
+      tester,
+      QuarkDrawer(
+        activeSection: QuarkDrawerSection.files,
+        onTapUsers: () => tapped.add('users'),
+      ),
+      size: size,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('drawer_users')));
+    await tester.pump();
+
+    expect(tapped, ['users']);
+    expect(find.byKey(const ValueKey('drawer_files')), findsNothing);
+  });
+
+  for (final (label, brightness) in [
+    ('dark', Brightness.dark),
+    ('light', Brightness.light),
+  ]) {
+    testWidgets('$label: lays out without an exception', (tester) async {
+      await pumpAt(
+        tester,
+        drawerWith(QuarkDrawerSection.users, everyCallback([])),
+        brightness: brightness,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
