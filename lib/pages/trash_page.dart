@@ -6,6 +6,8 @@ import 'package:quark/controllers/trash_controller.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/trash_item.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/app_settings.dart';
+import 'package:quark/utils/host_display.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
@@ -203,6 +205,9 @@ class _TrashPageState extends State<TrashPage>
                 ),
           drawer: QuarkDrawer(
             activeSection: QuarkDrawerSection.trash,
+            hostName: AppSettings.instance.activeHostName,
+            hostAddress: shortHostAddress(AppSettings.instance.activeHost),
+            onTapHost: () => context.go(AppRoutes.settings),
             onTapFiles: () => context.go(AppRoutes.files),
             onTapPhotos: () => context.go(AppRoutes.photos),
             onTapTrash: () => Navigator.of(context).pop(),

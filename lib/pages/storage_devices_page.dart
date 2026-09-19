@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/utils/host_display.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/services/vault_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
@@ -334,6 +335,9 @@ class _StorageDevicesPageState extends State<StorageDevicesPage>
       ),
       drawer: QuarkDrawer(
         activeSection: QuarkDrawerSection.devices,
+        hostName: AppSettings.instance.activeHostName,
+        hostAddress: shortHostAddress(AppSettings.instance.activeHost),
+        onTapHost: () => context.go(AppRoutes.settings),
         onTapFiles: () => context.go(AppRoutes.files),
         onTapPhotos: () => context.go(AppRoutes.photos),
         onTapTrash: () => context.go(AppRoutes.trash),

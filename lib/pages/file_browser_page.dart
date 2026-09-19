@@ -21,6 +21,7 @@ import 'package:quark/pages/svg_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/utils/host_display.dart';
 import 'package:quark/services/upload_manager.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/events_service.dart';
@@ -2027,6 +2028,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     return Scaffold(
       drawer: QuarkDrawer(
         activeSection: QuarkDrawerSection.files,
+        hostName: AppSettings.instance.activeHostName,
+        hostAddress: shortHostAddress(AppSettings.instance.activeHost),
+        onTapHost: () => context.go(AppRoutes.settings),
         onTapFiles: () {
           Navigator.of(context).pop();
         },

@@ -42,11 +42,21 @@ enum QuarkDrawerSection {
 /// The drawer navigates nothing itself. Each row calls back and the page
 /// routes, so the package stays free of the router.
 ///
-/// Key prefixes: `drawer_<section>` on each row, for example `drawer_photos`.
+/// The header names the Quark on screen when [hostName] is passed (#2033).
+/// With more than one saved, the signed-in app otherwise said "Quark" and
+/// nothing else, so which device a page was reading — or an upload was about
+/// to land on — was invisible. The header is a button in that case:
+/// [onTapHost] is where the caller sends someone who wants a different one.
+///
+/// Key prefixes: `drawer_<section>` on each row, for example `drawer_photos`,
+/// and `drawer_host` on the header when it names a Quark.
 ///
 /// ```dart
 /// QuarkDrawer(
 ///   activeSection: QuarkDrawerSection.photos,
+///   hostName: 'Home',
+///   hostAddress: 'quark.home.local',
+///   onTapHost: () => context.go(AppRoutes.settings),
 ///   onTapFiles: () => context.go(AppRoutes.files),
 /// );
 /// ```
@@ -54,6 +64,9 @@ class QuarkDrawer extends StatelessWidget {
   /// Creates a drawer with [activeSection] marked as current.
   const QuarkDrawer({
     required this.activeSection,
+    this.hostName,
+    this.hostAddress,
+    this.onTapHost,
     this.onTapFiles,
     this.onTapPhotos,
     this.onTapTrash,
@@ -69,6 +82,18 @@ class QuarkDrawer extends StatelessWidget {
 
   /// The page the drawer was opened from, drawn as selected.
   final QuarkDrawerSection activeSection;
+
+  /// The nickname of the Quark being browsed, or null to show the product
+  /// name alone — which is the honest header before a Quark is chosen.
+  final String? hostName;
+
+  /// The address under [hostName], already shortened for display by the
+  /// caller. Ignored without a [hostName]: an address with no name to go with
+  /// it is a diagnostic, not an identity.
+  final String? hostAddress;
+
+  /// Called when the header is tapped. Null leaves it as a label.
+  final FutureOr<void> Function()? onTapHost;
 
   /// Called when the Files row is tapped.
   final FutureOr<void> Function()? onTapFiles;
@@ -125,12 +150,8 @@ class QuarkDrawer extends StatelessWidget {
         children: [
           DrawerHeader(
             decoration: BoxDecoration(color: theme.colorScheme.primary),
-            child: Text(
-              'Quark',
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: theme.colorScheme.onPrimary,
-              ),
-            ),
+            padding: EdgeInsets.zero,
+            child: _header(context),
           ),
           row(
             QuarkDrawerSection.files,
@@ -193,6 +214,79 @@ class QuarkDrawer extends StatelessWidget {
             onTapSettings,
           ),
         ],
+      ),
+    );
+  }
+
+  /// The header: the product name, or the Quark on screen and how to leave it.
+  Widget _header(BuildContext context) {
+    final theme = Theme.of(context);
+    final name = hostName;
+    final onPrimary = theme.colorScheme.onPrimary;
+
+    if (name == null || name.isEmpty) {
+      return Align(
+        alignment: Alignment.bottomLeft,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'Quark',
+            style: theme.textTheme.titleLarge?.copyWith(color: onPrimary),
+          ),
+        ),
+      );
+    }
+
+    final address = hostAddress ?? '';
+    return InkWell(
+      key: const ValueKey('drawer_host'),
+      onTap: onTapHost == null ? null : () => onTapHost?.call(),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Quark',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: onPrimary.withValues(alpha: 0.8),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                // One line each, clipped with an ellipsis: a nickname is whatever someone
+                // typed, and the drawer is 304dp wide on every phone.
+                Expanded(
+                  child: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: onPrimary,
+                    ),
+                  ),
+                ),
+                if (onTapHost != null)
+                  Icon(
+                    Icons.unfold_more_rounded,
+                    size: 20,
+                    color: onPrimary.withValues(alpha: 0.8),
+                  ),
+              ],
+            ),
+            if (address.isNotEmpty)
+              Text(
+                address,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: onPrimary.withValues(alpha: 0.8),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
