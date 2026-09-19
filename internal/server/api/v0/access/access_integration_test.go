@@ -216,3 +216,17 @@ func TestAccess_ShareAndUnshare(t *testing.T) {
 		t.Errorf("carol sees %v after the unshare", got)
 	}
 }
+
+// TestAccess_StructuralRootsAreRefused has bob try to share users and groups
+// themselves: a grant on either would reach every home or every group folder,
+// so both answer 400 before any ownership check (#2016).
+func TestAccess_StructuralRootsAreRefused(t *testing.T) {
+	h := newHarness(t)
+	carol := strconv.FormatInt(h.users["carol"], 10)
+	for _, rel := range []string{"users", "groups/"} {
+		code, body := h.do(t, http.MethodPut, "/api/v0/access?as=bob", `{"relPath":"`+rel+`","userId":`+carol+`,"level":"read"}`)
+		if code != http.StatusBadRequest || errorText(t, body) != accessutil.ErrStructuralShare.Error() {
+			t.Errorf("share %s = %d %s, want 400", rel, code, body)
+		}
+	}
+}

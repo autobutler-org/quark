@@ -20,6 +20,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/healthutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
@@ -172,8 +173,9 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 // repairHomes gives any account that has no home one, at every startup
 // (#1908). An account whose approval predates homes being created has no owner
 // row anywhere, which the access layer reads as "may write nowhere", so this
-// is what makes such an account usable again. It is idempotent, so a Quark
-// with nothing to repair pays one query for it.
+// is what makes such an account usable again. It then gives every group,
+// everyone included, its folder the same way (#2016). Both are idempotent, so
+// a Quark with nothing to repair pays one query for each.
 func repairHomes(deps deputil.Dependencies) {
 	database := deps.Database()
 	if database == nil {
@@ -195,6 +197,18 @@ func repairHomes(deps deputil.Dependencies) {
 	}
 	if err != nil {
 		log.Printf("[auth] home repair stopped early: %v", err)
+	}
+	// Group folders, the everyone group's included, are repaired the same way
+	// and at the same moment (#2016).
+	groups, err := grouputil.RepairGroupFolders(ctx, grouputil.RepairGroupFoldersParams{
+		Database: database,
+		FilesDir: filesDir,
+	})
+	if len(groups.Repaired) > 0 {
+		log.Printf("[groups] gave %d group(s) their folder: %v", len(groups.Repaired), groups.Repaired)
+	}
+	if err != nil {
+		log.Printf("[groups] group folder repair stopped early: %v", err)
 	}
 }
 

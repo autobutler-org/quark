@@ -119,6 +119,30 @@ WHERE
 ORDER BY
     id;
 
+-- ListGroupsMissingFolder names every group with no row of its own on its
+-- folder, groups/<name> on the internal device, which the startup repair then
+-- grants (#2016). Like ListAccountsMissingHome it keys on the row rather than
+-- the directory, and it spells the path the way grouputil does.
+-- name: ListGroupsMissingFolder :many
+SELECT
+    id,
+    name
+FROM
+    groups
+WHERE
+    NOT EXISTS (
+        SELECT
+            1
+        FROM
+            path_access
+        WHERE
+            path_access.group_id = groups.id
+            AND path_access.device_serial = ''
+            AND path_access.rel_path = 'groups/' || groups.name
+    )
+ORDER BY
+    id;
+
 -- ListPathAccessOnAncestors lists the rows on a path and on every folder that
 -- holds it, with the name of the account or group each one was granted to,
 -- for the sharing sheet (#1911). substr, not LIKE, for the reason

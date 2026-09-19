@@ -257,3 +257,33 @@ func TestGrantRefusals(t *testing.T) {
 		t.Errorf("refusals published %v", got)
 	}
 }
+
+// A grant on users or groups itself would reach every home or every group
+// folder, so nobody may make one, admins included (#2016). Folders inside them
+// share as usual, and a row already on a root can still be removed.
+func TestStructuralRootsCannotBeShared(t *testing.T) {
+	s := newSharing(t)
+	s.grant(t, s.userID, "", "users", accessutil.Owner)
+	s.grant(t, s.userID, "", "groups", accessutil.Owner)
+	bob := s.as(t, s.userID)
+	admin := s.load(t, accessutil.System)
+	carol := createUser(t, s.database, "carol")
+
+	for name, access := range map[string]accessutil.Access{"member": bob, "admin": admin} {
+		for _, rel := range []string{"users", "/groups/", "./users", "groups/."} {
+			_, err := s.set(access, rel, carol, 0, accessutil.Read)
+			expectErr(t, name+" shares "+rel, err, accessutil.ErrStructuralShare)
+		}
+	}
+	if got := s.drain(); len(got) != 0 {
+		t.Errorf("refusals published %v", got)
+	}
+	for _, rel := range []string{"users/carol", "groups/Family"} {
+		if _, err := s.set(admin, rel, carol, 0, accessutil.Read); err != nil {
+			t.Errorf("admin shares %s: %v", rel, err)
+		}
+	}
+	if _, err := s.revoke(admin, "users", s.userID, 0); err != nil {
+		t.Errorf("admin removes a row already on users: %v", err)
+	}
+}

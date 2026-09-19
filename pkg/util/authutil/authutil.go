@@ -44,6 +44,12 @@ const (
 // (#2016).
 const UsersDirName = "users"
 
+// GroupsDirName is the directory under the files directory that holds every
+// group's folder, groups/<name>, beside users/ so a group and an account may
+// share a name (#2016). grouputil makes the folders; it lives here with
+// UsersDirName because accessutil reads both and may import only authutil.
+const GroupsDirName = "groups"
+
 // Errors a handler passes to the app unchanged. Their text is what a person
 // reads, so they are returned bare rather than wrapped.
 var (

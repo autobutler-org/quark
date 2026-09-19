@@ -33,7 +33,7 @@ func groupErrorResponse(err error) *serverutil.Response {
 	switch {
 	case errors.Is(err, grouputil.ErrGroupNotFound), errors.Is(err, grouputil.ErrNotMember), errors.Is(err, authutil.ErrUserNotFound):
 		return serverutil.NotFound(err)
-	case errors.Is(err, grouputil.ErrGroupNameTaken):
+	case errors.Is(err, grouputil.ErrGroupNameTaken), errors.Is(err, grouputil.ErrGroupFolderTaken):
 		return serverutil.Conflict(err)
 	case errors.Is(err, grouputil.ErrInvalidGroupName), errors.Is(err, grouputil.ErrBuiltinGroup):
 		return serverutil.BadRequest(err)

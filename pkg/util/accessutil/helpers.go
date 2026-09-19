@@ -222,3 +222,13 @@ func publishAccessChanged(bus *eventbus.Bus, serial, rel string) {
 		bus.Publish(eventbus.Event{Kind: eventbus.EventAccessChanged, Path: rel, DeviceSerial: serial})
 	}
 }
+
+// isStructuralRoot reports whether a path is the users or groups folder on the
+// internal device, the parents of every home and every group folder.
+func isStructuralRoot(serial, p string) bool {
+	if serial != "" {
+		return false
+	}
+	rel := Canonical(p)
+	return rel == authutil.UsersDirName || rel == authutil.GroupsDirName
+}

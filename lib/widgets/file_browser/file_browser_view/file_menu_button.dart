@@ -16,10 +16,11 @@ typedef FileMenuActionDispatch =
 /// Offers the entries in [menuActions] that make sense for [item]: nothing
 /// that changes or shares a file inside an archive, Extract only on an
 /// archive, Navigate to folder only in search results, and no Move/Rename or
-/// Delete on the `users` folder or a home folder itself unless the viewer is
-/// an admin. Share is hidden on the `users` folder for everyone, admins
-/// included: access is additive down the tree, so a grant there would expose
-/// every home at once (#2016).
+/// Delete on the `users` or `groups` folder, a home folder, or a group's
+/// folder itself unless the viewer is an admin. Share is hidden on the `users`
+/// and `groups` folders for everyone, admins included: access is additive down
+/// the tree, so a grant there would expose every home or every group folder at
+/// once, and the Quark refuses it (#2016).
 class FileMenuButton extends StatelessWidget {
   const FileMenuButton({
     required this.item,
@@ -41,9 +42,9 @@ class FileMenuButton extends StatelessWidget {
   final bool inArchive;
   final bool isSearchMode;
 
-  /// Whether the viewer is an admin, who may move or delete the `users` folder
-  /// and a home folder (`users/<name>`) on the internal drive; a member may
-  /// not (#2016).
+  /// Whether the viewer is an admin, who may move or delete the `users` and
+  /// `groups` folders, a home folder (`users/<name>`) and a group's folder
+  /// (`groups/<name>`) on the internal drive; a member may not (#2016).
   final bool isAdmin;
   final FileMenuActionDispatch onDispatchMenuAction;
   final void Function(FileNode)? onNavigateToFolder;
@@ -51,11 +52,16 @@ class FileMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final extracting = extractingPaths.contains(item.apiPath);
+    final serial = item.deviceSerial;
+    final path = item.apiPath;
+    final isStructuralDir =
+        isUsersDir(serial, path) || isGroupsDir(serial, path);
     final canChange =
         !inArchive &&
         (isAdmin ||
-            !(isHomeRoot(item.deviceSerial, item.apiPath) ||
-                isUsersDir(item.deviceSerial, item.apiPath)));
+            !(isStructuralDir ||
+                isHomeRoot(serial, path) ||
+                isGroupRoot(serial, path)));
 
     PopupMenuItem<FileMenuAction> entry(
       FileMenuAction action,
@@ -77,7 +83,7 @@ class FileMenuButton extends StatelessWidget {
           entry(FileMenuAction.moveRename, const Text('Move/Rename')),
         if (menuActions.contains(FileMenuAction.share) &&
             !inArchive &&
-            !isUsersDir(item.deviceSerial, item.apiPath))
+            !isStructuralDir)
           entry(FileMenuAction.share, const Text('Share…')),
         if (menuActions.contains(FileMenuAction.delete) && canChange)
           entry(FileMenuAction.delete, const Text('Delete')),
