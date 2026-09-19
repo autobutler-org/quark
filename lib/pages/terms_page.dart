@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/terms/agree_button.dart';
+import 'package:quark/widgets/terms/terms_summary.dart';
 import 'package:quark/widgets/terms/terms_section.dart';
 
 /// Terms and Conditions acceptance gate.
@@ -33,7 +34,12 @@ class TermsPage extends StatelessWidget {
                     'Last updated: September 8, 2026',
                     style: TextStyle(color: Colors.grey),
                   ),
-                  SizedBox(height: 24),
+                  SizedBox(height: 20),
+                  // Before the document, not instead of it: a new owner
+                  // meeting a wall of legal text has no way to find the three
+                  // facts that actually shape how they use the thing (#2027).
+                  TermsSummary(),
+                  SizedBox(height: 28),
                   TermsSection(
                     title: 'Definitions',
                     body:

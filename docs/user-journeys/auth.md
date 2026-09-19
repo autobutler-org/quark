@@ -165,4 +165,6 @@ Covers first-boot setup, login, logout, and password recovery.
 **Expected result:**
 
 - App navigates to `/terms` before any other protected route.
+- The page opens with a plain-language summary — files stay on your hardware, keep your own backup, it is
+  for your household — above the full terms, marked as a summary rather than the agreement (#2027).
 - User must accept before accessing `/files` or any other feature.
