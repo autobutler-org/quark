@@ -917,6 +917,35 @@ serve/frontend/web: generate/frontend ## Serve web frontend
 		-d web-server \
 		$(FLUTTER_RUN_DEFINES)
 
+# The dashboard is the prebuilt one from the plugin's GitHub release. v2.9.0 is the
+# newest release that ships the viewer tarball; it reads the same .ua/ graph format.
+UA_DIR := .ua
+UA_VIEWER_VERSION := 2.9.0
+UA_VIEWER_URL := https://github.com/Egonex-AI/Understand-Anything/releases/download/v$(UA_VIEWER_VERSION)/understand-anything-viewer.tgz
+UA_PORT ?= 5173
+
+.PHONY: understand
+understand: ## Serve the Understand-Anything knowledge graph in .ua/ (UA_PORT, default 5173)
+	if [ ! -f $(UA_DIR)/knowledge-graph.json ]; then
+		echo "No $(UA_DIR)/knowledge-graph.json yet. Run /understand in Claude Code first (docs/architecture/tooling.md)."
+		exit 1
+	fi
+	site=$(UA_DIR)/site
+	if [ ! -f $$site/.viewer-$(UA_VIEWER_VERSION) ]; then
+		echo "Downloading the Understand-Anything viewer v$(UA_VIEWER_VERSION)"
+		rm -rf $$site
+		mkdir -p $$site
+		curl -fsSL "$(UA_VIEWER_URL)" \
+			| tar -xz -C $$site --strip-components=2 --exclude='*.json' package/dist
+		touch $$site/.viewer-$(UA_VIEWER_VERSION)
+	fi
+	for f in knowledge-graph.json domain-graph.json meta.json config.json; do
+		if [ -f $(UA_DIR)/$$f ]; then ln -sf ../$$f $$site/$$f; else rm -f $$site/$$f; fi
+	done
+	# The dashboard insists on a ?token=; a static server ignores it, so any value works.
+	echo "Understand-Anything dashboard: http://127.0.0.1:$(UA_PORT)/?token=local"
+	python3 -m http.server $(UA_PORT) --bind 127.0.0.1 --directory $$site
+
 PRINT_COVERAGE ?= 0
 
 .PHONY: test
