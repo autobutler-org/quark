@@ -62,6 +62,35 @@ type Job struct {
 	FinishedAt *time.Time `json:"finishedAt"`
 	// Error is diagnostic text for a failed job, not copy for a user.
 	Error string `json:"error"`
+	// UserID is the account that queued the job, whose access it runs with. It
+	// is 0 for a job queued by the system or before jobs recorded who queued
+	// them, which only admins see (#1979).
+	UserID int64 `json:"-"`
+}
+
+// Source is the file a job works on, read from the serial and relPath its
+// params carry. It is empty for a job whose params name no file.
+func (j Job) Source() (serial, relPath string) {
+	var source struct {
+		Serial  string `json:"serial"`
+		RelPath string `json:"relPath"`
+	}
+	// Params the job could not have been queued with decode to no source.
+	_ = json.Unmarshal(j.Params, &source)
+	return source.Serial, source.RelPath
+}
+
+// WithUserID returns ctx carrying the account a job runs as. The queue sets it
+// before calling a Handler.
+func WithUserID(ctx context.Context, userID int64) context.Context {
+	return context.WithValue(ctx, userIDKey{}, userID)
+}
+
+// UserID is the account the job a Handler is running was queued by, or 0 for
+// a job with none.
+func UserID(ctx context.Context) int64 {
+	userID, _ := ctx.Value(userIDKey{}).(int64)
+	return userID
 }
 
 // HandlerFunc does a job's work. params is the JSON the job was enqueued with.
@@ -156,11 +185,16 @@ func (q *Queue) Register(params RegisterParams) {
 
 // EnqueueParams describes a job to queue. Params is encoded as JSON and handed
 // back to the kind's Handler when the job runs. The API also returns it to any
-// authenticated client, so a kind must never store secrets in it.
+// authenticated client, so a kind must never store secrets in it. A kind whose
+// job works on a file puts it in Params as "serial" and "relPath", which is
+// what Job.Source reads.
 type EnqueueParams struct {
 	Kind   string
 	Name   string
 	Params any
+	// UserID is the account queueing the job. 0 records none, which leaves the
+	// job to admins.
+	UserID int64
 }
 
 // EnqueueResult carries the newly queued job.
@@ -189,6 +223,7 @@ func (q *Queue) Enqueue(ctx context.Context, params EnqueueParams) (EnqueueResul
 		Name:   params.Name,
 		Params: string(encoded),
 		Lane:   lane,
+		UserID: sql.NullInt64{Int64: params.UserID, Valid: params.UserID != 0},
 	})
 	if err != nil {
 		return EnqueueResult{}, fmt.Errorf("create job: %w", err)
