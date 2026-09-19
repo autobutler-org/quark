@@ -8,7 +8,7 @@ require (
 	github.com/bep/imagemeta v1.0.0
 	github.com/coder/websocket v1.8.15
 	github.com/gen2brain/heic v0.7.1
-	github.com/gin-contrib/cors v1.7.7
+	github.com/gin-contrib/cors v1.7.8
 	github.com/gin-contrib/static v1.1.6
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-migrate/migrate/v4 v4.20.1
