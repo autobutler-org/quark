@@ -250,3 +250,63 @@ func TestUserStatusMigration(t *testing.T) {
 		t.Error("users.status survived the down migration")
 	}
 }
+
+// groupNameNocaseVersion is 012_group_name_nocase, the migration that makes
+// group names unique ignoring case (#1910).
+const groupNameNocaseVersion = 12
+
+// TestGroupNameNocaseMigration checks two groups can't differ only by case
+// once 012 runs, that the everyone group and its grants survive it, and that
+// the migration rolls back cleanly.
+func TestGroupNameNocaseMigration(t *testing.T) {
+	conn, err := sql.Open("sqlite", DSN(filepath.Join(t.TempDir(), "quark.db")))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer conn.Close()
+	migrationSource, err := newMigrationSource()
+	if err != nil {
+		t.Fatalf("source: %v", err)
+	}
+	driver, err := sqlite.WithInstance(conn, &sqlite.Config{})
+	if err != nil {
+		t.Fatalf("driver: %v", err)
+	}
+	m, err := migrate.NewWithInstance("iofs", migrationSource, "sqlite", driver)
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := m.Migrate(groupNameNocaseVersion - 1); err != nil {
+		t.Fatalf("migrate to %d: %v", groupNameNocaseVersion-1, err)
+	}
+	if _, err := conn.Exec(`INSERT INTO path_access (rel_path, group_id, level) SELECT 'shared', id, 'read' FROM groups WHERE name = 'everyone'`); err != nil {
+		t.Fatalf("seed grant: %v", err)
+	}
+
+	if err := m.Migrate(groupNameNocaseVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", groupNameNocaseVersion, err)
+	}
+	var grants int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM path_access`).Scan(&grants); err != nil {
+		t.Fatalf("count grants: %v", err)
+	}
+	if grants != 1 {
+		t.Errorf("grants after migration = %d, want the everyone grant kept", grants)
+	}
+	if _, err := conn.Exec(`INSERT INTO groups (name) VALUES ('Family')`); err != nil {
+		t.Fatalf("insert Family: %v", err)
+	}
+	if _, err := conn.Exec(`INSERT INTO groups (name) VALUES ('family')`); err == nil {
+		t.Error("inserted family next to Family")
+	}
+	if _, err := conn.Exec(`INSERT INTO groups (name) VALUES ('EVERYONE')`); err == nil {
+		t.Error("inserted EVERYONE next to everyone")
+	}
+
+	if err := m.Migrate(groupNameNocaseVersion - 1); err != nil {
+		t.Fatalf("roll back to %d: %v", groupNameNocaseVersion-1, err)
+	}
+	if _, err := conn.Exec(`INSERT INTO groups (name) VALUES ('family')`); err != nil {
+		t.Errorf("family still refused after the down migration: %v", err)
+	}
+}
