@@ -1,15 +1,34 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quark/controllers/file_browser_controller.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/move_rename_result.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/utils/trash_config.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/text_controller_scope.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+
+/// The most bytes one file or folder name may take: the limit on ext4, APFS,
+/// exFAT and every other filesystem a Quark stores to.
+const int maxFileNameBytes = 255;
+
+/// Why [name] cannot name a file or folder, or null when it can. Judged as it
+/// will be sent — trimmed — so a name of only spaces is blank, and the length
+/// is counted in UTF-8 bytes, which is what the filesystem limits.
+String? fileNameProblem(String name) {
+  final trimmed = name.trim();
+  if (trimmed.isEmpty) return Errors.nameBlank;
+  if (utf8.encode(trimmed).length > maxFileNameBytes) {
+    return Errors.nameTooLong;
+  }
+  return null;
+}
 
 Future<String?> promptForFolderName(BuildContext context) async {
   final value = await _promptForText(
@@ -111,6 +130,14 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
                   : '/$normCurrent';
             }
 
+            // Checked on every rebuild — the field's onChanged rebuilds — so
+            // Save is only offered for a name the Quark can write. Saving a
+            // blank or overlong name used to close the dialog and do nothing
+            // (#2076).
+            final nameProblem = hasInvalidChar
+                ? null
+                : fileNameProblem(nameController.text);
+
             return QuarkWidget.alertDialog(
               title: const Text('Move / Rename'),
               scrollable: true,
@@ -207,6 +234,17 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
                               ),
                             ),
                           ),
+                        if (nameProblem != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6.0),
+                            child: Text(
+                              nameProblem,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ],
@@ -219,29 +257,28 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
                 ),
                 TextButton(
                   autofocus: true,
-                  onPressed: () {
-                    final name = nameController.text.trim();
-                    if (name.isEmpty || hasInvalidChar) {
-                      Navigator.of(dialogContext).pop(null);
-                      return;
-                    }
-                    final rel = relativeToStart();
-                    String out;
-                    if (rel.isEmpty) {
-                      out = name;
-                    } else {
-                      out = '$rel/$name';
-                    }
-                    final serial = selectedDevice?.serial;
-                    Navigator.of(dialogContext).pop(
-                      MoveRenameResult(
-                        targetInput: out,
-                        deviceSerial: (serial != null && serial.isNotEmpty)
-                            ? serial
-                            : null,
-                      ),
-                    );
-                  },
+                  onPressed: hasInvalidChar || nameProblem != null
+                      ? null
+                      : () {
+                          final name = nameController.text.trim();
+                          final rel = relativeToStart();
+                          String out;
+                          if (rel.isEmpty) {
+                            out = name;
+                          } else {
+                            out = '$rel/$name';
+                          }
+                          final serial = selectedDevice?.serial;
+                          Navigator.of(dialogContext).pop(
+                            MoveRenameResult(
+                              targetInput: out,
+                              deviceSerial:
+                                  (serial != null && serial.isNotEmpty)
+                                  ? serial
+                                  : null,
+                            ),
+                          );
+                        },
                   child: const Text('Save'),
                 ),
               ],
@@ -330,33 +367,61 @@ Future<String?> _promptForText({
     context,
     useRootNavigator: true,
     builder: (dialogContext) => TextControllerScope(
-      builder: (_, textController) => QuarkWidget.alertDialog(
-        title: Text(title),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 12),
-          child: QuarkWidget.textField(
-            controller: textController,
-            autofocus: true,
-            hintText: hintText,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) {
+      builder: (_, textController) => ValueListenableBuilder<TextEditingValue>(
+        valueListenable: textController,
+        builder: (context, text, _) {
+          // An empty field is where every new name starts, so a blank name
+          // only disables the button; any other problem says why. A blank
+          // name used to close the dialog with nothing created (#2074).
+          final problem = fileNameProblem(text.text);
+          void submit() {
+            if (fileNameProblem(textController.text) == null) {
               Navigator.of(dialogContext).pop(textController.text.trim());
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            autofocus: true,
-            onPressed: () {
-              Navigator.of(dialogContext).pop(textController.text.trim());
-            },
-            child: Text(confirmLabel),
-          ),
-        ],
+            }
+          }
+
+          return QuarkWidget.alertDialog(
+            title: Text(title),
+            content: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  QuarkWidget.textField(
+                    controller: textController,
+                    autofocus: true,
+                    hintText: hintText,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => submit(),
+                  ),
+                  if (problem != null && problem != Errors.nameBlank)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6.0),
+                      child: Text(
+                        problem,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                autofocus: true,
+                onPressed: problem == null ? submit : null,
+                child: Text(confirmLabel),
+              ),
+            ],
+          );
+        },
       ),
     ),
   );
@@ -398,9 +463,11 @@ Future<String?> promptForNewFileName(
         bool hasInvalidChar = false;
         return StatefulBuilder(
           builder: (context, setState) {
+            // As for a new folder: blank only disables Create.
+            final problem = fileNameProblem(nameController.text);
             void submit() {
               final name = nameController.text.trim();
-              if (name.isEmpty || name.contains('/')) return;
+              if (fileNameProblem(name) != null || name.contains('/')) return;
               Navigator.of(dialogContext).pop(name);
             }
 
@@ -417,12 +484,9 @@ Future<String?> promptForNewFileName(
                       autofocus: true,
                       hintText: hintText,
                       textInputAction: TextInputAction.done,
-                      onChanged: (v) {
-                        final invalid = v.contains('/');
-                        if (invalid != hasInvalidChar) {
-                          setState(() => hasInvalidChar = invalid);
-                        }
-                      },
+                      onChanged: (v) => setState(() {
+                        hasInvalidChar = v.contains('/');
+                      }),
                       onSubmitted: (_) => submit(),
                     ),
                     if (hasInvalidChar)
@@ -430,6 +494,17 @@ Future<String?> promptForNewFileName(
                         padding: const EdgeInsets.only(top: 6.0),
                         child: Text(
                           'The name cannot contain "/"',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
+                          ),
+                        ),
+                      )
+                    else if (problem != null && problem != Errors.nameBlank)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6.0),
+                        child: Text(
+                          problem,
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.error,
                             fontSize: 12,
@@ -446,7 +521,7 @@ Future<String?> promptForNewFileName(
                 ),
                 TextButton(
                   autofocus: true,
-                  onPressed: hasInvalidChar ? null : submit,
+                  onPressed: hasInvalidChar || problem != null ? null : submit,
                   child: Text(confirmLabel),
                 ),
               ],
