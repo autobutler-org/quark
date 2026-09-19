@@ -1056,10 +1056,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         setState(() => _cachedFiles = snapshot);
       }
 
-      if (action == FileMenuAction.moveRename) {
-        return;
-      }
-
       _showMessage(_controller.failureMessage(action));
     }
   }
