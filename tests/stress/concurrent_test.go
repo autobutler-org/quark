@@ -42,10 +42,12 @@ func TestConcurrentAuthStatusBurst(t *testing.T) {
 	}
 }
 
-// TestConcurrentLoginBurst lightly bursts login with invalid credentials.
-// 401 and 429 (rate limit) are both success for resilience; 5xx must stay low.
+// TestZZLoginBurstInvalidCredentials lightly bursts login with invalid
+// credentials. Named ZZ* so it runs after authenticated cases: a 429 from this
+// burst must not poison earlier ensureSession calls (session is also warmed in
+// TestMain). 401 and 429 are both success for resilience; 5xx must stay low.
 // Kept smaller than status burst to avoid prolonged IP lockout on shared labs.
-func TestConcurrentLoginBurst(t *testing.T) {
+func TestZZLoginBurstInvalidCredentials(t *testing.T) {
 	c := newClient(t)
 	c.requireBackend(t)
 
@@ -82,8 +84,10 @@ func TestConcurrentLoginBurst(t *testing.T) {
 	}
 }
 
-// TestConcurrentMixedPublicBurst mixes status GETs with malformed login POSTs.
-func TestConcurrentMixedPublicBurst(t *testing.T) {
+// TestZZMixedPublicBurst mixes status GETs with malformed login POSTs.
+// Runs late (ZZ*) so login rate-limit pressure does not precede authed cases.
+// 401/429 on the login half are expected and acceptable.
+func TestZZMixedPublicBurst(t *testing.T) {
 	c := newClient(t)
 	c.requireBackend(t)
 
