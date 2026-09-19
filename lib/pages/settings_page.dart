@@ -28,6 +28,7 @@ import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/settings/code_block.dart';
 import 'package:quark/widgets/settings/delete_account_dialog.dart';
 import 'package:quark/widgets/settings/reset_quark_dialog.dart';
+import 'package:quark/widgets/text_controller_scope.dart';
 
 /// The commit a `make serve/...` or `make watch/frontend` run was built from.
 ///
@@ -473,32 +474,31 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _renameStorageDevice(StorageDevice device) async {
-    final controller = TextEditingController(text: device.name);
     final newName = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Rename device'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Display name'),
-          autofocus: true,
-          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+      builder: (ctx) => TextControllerScope(
+        initialText: device.name,
+        builder: (_, controller) => AlertDialog(
+          title: const Text('Rename device'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(labelText: 'Display name'),
+            autofocus: true,
+            onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+              child: const Text('Rename'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('Rename'),
-          ),
-        ],
       ),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      controller.dispose();
-    });
     if (newName == null || newName.isEmpty) return;
     try {
       await StorageService.renameDevice(device.devicePath, newName);
