@@ -61,8 +61,7 @@ func Enable(params EnableParams) (EnableResult, error) {
 	if err := os.MkdirAll(mountTargetPath, os.ModeDir|os.ModePerm); err != nil {
 		return EnableResult{}, fmt.Errorf("failed to create mount target directory: %w", err)
 	}
-	mountCommand := partition.MountCommand(mountTargetPath)
-	if err := mountCommand.Run(); err != nil {
+	if err := storageutil.RunMountCommand(partition.MountCommand(mountTargetPath)); err != nil {
 		return EnableResult{}, fmt.Errorf("failed to execute mount command: %w", err)
 	}
 
@@ -105,8 +104,7 @@ func Disable(params DisableParams) (DisableResult, error) {
 		return DisableResult{}, invalid(errors.New("USB storage device is not mounted"))
 	}
 
-	unmountCommand := storageutil.UnmountCommand(mountPath)
-	if err := unmountCommand.Run(); err != nil {
+	if err := storageutil.RunMountCommand(storageutil.UnmountCommand(mountPath)); err != nil {
 		return DisableResult{}, fmt.Errorf("failed to execute unmount command: %w", err)
 	}
 
