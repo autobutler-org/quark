@@ -5,7 +5,7 @@ go 1.26.6
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.0
 	github.com/KononK/resize v0.0.0-20200801203131-21c514740ed6
-	github.com/bep/imagemeta v1.0.0
+	github.com/bep/imagemeta v1.0.1
 	github.com/coder/websocket v1.8.15
 	github.com/gen2brain/heic v0.7.2
 	github.com/gin-contrib/cors v1.7.7
