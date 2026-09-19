@@ -93,6 +93,16 @@ class DeviceCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
 
+            // What this drive is, in the words a household uses. The mount
+            // point and filesystem below are the same facts for whoever
+            // needs them, but they are not what the card leads with (#2047).
+            Text(
+              key: const ValueKey('device_card_kind'),
+              device.isInternal ? 'Inside your Quark' : 'Plugged-in drive',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 2),
+
             // Mount point + filesystem
             Text(
               '${device.mountPoint}  ·  ${device.fileSystem}',

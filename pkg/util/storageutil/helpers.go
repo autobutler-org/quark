@@ -36,3 +36,18 @@ func safeJoin(base string, parts ...string) (string, error) {
 	}
 	return joined, nil
 }
+
+// rootDeviceName is what the UI calls the appliance's own disk.
+//
+// The mount point's base name where there is one, and a plain-language name
+// where there is not — which on a Quark is every time, since its root is "/".
+// It used to say "Root Volume", the kind of phrase that tells a household
+// owner they are looking at a Linux admin panel rather than their own
+// storage (#2047).
+func rootDeviceName(mountPoint string) string {
+	name := filepath.Base(mountPoint)
+	if name == "" || name == "/" || name == "." {
+		return "Built-in storage"
+	}
+	return name
+}
