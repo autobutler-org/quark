@@ -414,12 +414,12 @@ final router = GoRouter(
       Scaffold(body: Center(child: Text('Page not found: ${state.uri}'))),
 );
 
-/// How the gate asks the Quark whether it has been set up yet.
+/// How the app asks the Quark whether it has been set up yet.
 ///
-/// A `var` purely so tests can make the probe fail on demand: the
-/// unreachable-Quark path below is otherwise only reachable with a real
-/// server to take down.
-@visibleForTesting
+/// Used by the gate below and by the login page, which offers its setup link
+/// only where it leads somewhere (#2030). A `var` so tests can make the probe
+/// fail on demand: the unreachable-Quark paths are otherwise only reachable
+/// with a real server to take down.
 Future<AuthStatus> Function() authStatusProbe = AuthService.checkStatus;
 
 /// Pages only an admin can use. [authRedirect] sends anyone else to

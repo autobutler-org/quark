@@ -85,17 +85,46 @@ class _LoginPageState extends State<LoginPage> {
   /// Whether the held phrase has been acknowledged.
   bool _phraseAcknowledged = false;
 
+  /// Whether this Quark already has an owner, or null while nobody has
+  /// answered — see [SignInForm.setupComplete] (#2030).
+  bool? _setupComplete;
+
   @override
   void initState() {
     super.initState();
-    AppSettings.instance.activeHostNotifier.addListener(_checkAccessRequests);
+    AppSettings.instance.activeHostNotifier.addListener(_onActiveHostChanged);
     _checkAccessRequests();
+    _checkSetupState();
+  }
+
+  /// Asks the Quark whether it has been claimed, so the setup link is offered
+  /// only where it leads somewhere. A failed or unanswered probe leaves
+  /// [_setupComplete] null, which keeps the link — the #1827 rule.
+  Future<void> _checkSetupState() async {
+    if (AppSettings.instance.activeHost == null) return;
+    try {
+      final status = await authStatusProbe();
+      if (!mounted) return;
+      setState(() => _setupComplete = status.setupComplete);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _setupComplete = null);
+    }
+  }
+
+  /// A different Quark answers both questions differently, so the old answers
+  /// are dropped before the new ones are asked for.
+  void _onActiveHostChanged() {
+    if (!mounted) return;
+    setState(() => _setupComplete = null);
+    _checkAccessRequests();
+    _checkSetupState();
   }
 
   @override
   void dispose() {
     AppSettings.instance.activeHostNotifier.removeListener(
-      _checkAccessRequests,
+      _onActiveHostChanged,
     );
     _usernameController.dispose();
     _passwordController.dispose();
@@ -249,6 +278,7 @@ class _LoginPageState extends State<LoginPage> {
                         onRequestAccess: _accessRequestsEnabled
                             ? _goToRequestAccount
                             : null,
+                        setupComplete: _setupComplete,
                       ),
               ),
             ),
