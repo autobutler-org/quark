@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -25,6 +26,72 @@ const (
 	// concurrent burst is considered a resilience failure.
 	max5xxFraction = 0.10
 )
+
+// sharedSession holds a token/cookie obtained once in TestMain when lab
+// credentials are configured. Authenticated cases reuse it so a later
+// invalid-login rate-limit burst cannot poison ensureSession logins.
+var sharedSession struct {
+	mu     sync.RWMutex
+	token  string
+	cookie string
+}
+
+// TestMain warms a shared auth session before any test runs. Login-burst
+// cases are expected to trip 429 on /auth/login; that must not break
+// authenticated cases that already hold a session.
+func TestMain(m *testing.M) {
+	if err := warmSharedSession(); err != nil {
+		log.Printf("stress: shared session warm-up skipped: %v", err)
+	}
+	os.Exit(m.Run())
+}
+
+func warmSharedSession() error {
+	token := env("QUARK_ACCESS_TOKEN", "QUARK_TOKEN")
+	if token != "" {
+		sharedSession.mu.Lock()
+		sharedSession.token = token
+		sharedSession.mu.Unlock()
+		return nil
+	}
+	user := env("QUARK_USER", "QUARK_USERNAME")
+	pass := env("QUARK_PASSWORD")
+	if user == "" || pass == "" {
+		return nil // no credentials; auth cases will skip
+	}
+	c := &client{
+		http: &http.Client{
+			Timeout: requestTimeout(),
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
+		base: baseURL(),
+		user: user,
+		pass: pass,
+	}
+	tok, cookie, err := c.loginWithRetry(6)
+	if err != nil {
+		return err
+	}
+	sharedSession.mu.Lock()
+	sharedSession.token = tok
+	sharedSession.cookie = cookie
+	sharedSession.mu.Unlock()
+	log.Printf("stress: warmed shared session for authenticated cases (token=%v cookie=%v)", tok != "", cookie != "")
+	return nil
+}
+
+func applySharedSession(c *client) {
+	sharedSession.mu.RLock()
+	defer sharedSession.mu.RUnlock()
+	if c.token == "" && sharedSession.token != "" {
+		c.token = sharedSession.token
+	}
+	if c.cookie == "" && sharedSession.cookie != "" {
+		c.cookie = sharedSession.cookie
+	}
+}
 
 // env picks the first non-empty value among keys.
 func env(keys ...string) string {
@@ -106,6 +173,7 @@ func newClient(t *testing.T) *client {
 		user:  env("QUARK_USER", "QUARK_USERNAME"),
 		pass:  env("QUARK_PASSWORD"),
 	}
+	applySharedSession(c)
 	return c
 }
 
@@ -125,51 +193,98 @@ func (c *client) hasAuth() bool {
 }
 
 // ensureSession logs in when credentials are set and no token/cookie yet.
-// Skips the calling test when auth is needed but unset.
+// Prefers the TestMain-warmed shared session so authenticated cases do not
+// depend on surviving a prior invalid-login 429 burst. Skips when auth is
+// unset. Retries with backoff if login still returns 429.
 func (c *client) ensureSession(t *testing.T) {
 	t.Helper()
+	applySharedSession(c)
 	if c.token != "" || c.cookie != "" {
 		return
 	}
 	if c.user == "" || c.pass == "" {
 		t.Skip("QUARK_USER/QUARK_PASSWORD or QUARK_ACCESS_TOKEN unset; skipping authenticated case")
 	}
+	tok, cookie, err := c.loginWithRetry(8)
+	if err != nil {
+		t.Fatalf("login failed after retries: %v", err)
+	}
+	c.token, c.cookie = tok, cookie
+	// Publish for later tests in this process (best-effort).
+	sharedSession.mu.Lock()
+	if sharedSession.token == "" && tok != "" {
+		sharedSession.token = tok
+	}
+	if sharedSession.cookie == "" && cookie != "" {
+		sharedSession.cookie = cookie
+	}
+	sharedSession.mu.Unlock()
+}
+
+// loginWithRetry POSTs valid credentials, backing off on 429 (auth rate limit).
+// Product rate limiting is expected after invalid-login bursts; the suite must
+// wait rather than treat 429 as a hard harness failure.
+func (c *client) loginWithRetry(maxAttempts int) (token, cookie string, err error) {
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
 	body, _ := json.Marshal(map[string]string{
 		"username": c.user,
 		"password": c.pass,
 	})
-	resp, err := c.do(http.MethodPost, "/api/v0/auth/login", bytes.NewReader(body), map[string]string{
-		"Content-Type": "application/json",
-	})
-	if err != nil {
-		t.Fatalf("login request failed: %v", err)
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("login returned %d: %s", resp.StatusCode, truncate(string(raw), 200))
-	}
-	for _, ck := range resp.Cookies() {
-		if ck.Name == "session" && ck.Value != "" {
-			c.cookie = ck.Value
-			break
+	var lastStatus int
+	var lastBody string
+	backoff := 200 * time.Millisecond
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		payload := bytes.NewReader(body)
+		resp, reqErr := c.do(http.MethodPost, "/api/v0/auth/login", payload, map[string]string{
+			"Content-Type": "application/json",
+		})
+		if reqErr != nil {
+			err = fmt.Errorf("login request failed: %w", reqErr)
+			return "", "", err
 		}
-	}
-	var parsed struct {
-		Data struct {
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		resp.Body.Close()
+		lastStatus = resp.StatusCode
+		lastBody = truncate(string(raw), 200)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			if attempt == maxAttempts {
+				break
+			}
+			time.Sleep(backoff)
+			if backoff < 4*time.Second {
+				backoff *= 2
+			}
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			return "", "", fmt.Errorf("login returned %d: %s", resp.StatusCode, lastBody)
+		}
+		for _, ck := range resp.Cookies() {
+			if ck.Name == "session" && ck.Value != "" {
+				cookie = ck.Value
+				break
+			}
+		}
+		var parsed struct {
+			Data struct {
+				Token string `json:"token"`
+			} `json:"data"`
 			Token string `json:"token"`
-		} `json:"data"`
-		Token string `json:"token"`
+		}
+		_ = json.Unmarshal(raw, &parsed)
+		if parsed.Data.Token != "" {
+			token = parsed.Data.Token
+		} else if parsed.Token != "" {
+			token = parsed.Token
+		}
+		if token == "" && cookie == "" {
+			return "", "", fmt.Errorf("login succeeded but no token or session cookie returned")
+		}
+		return token, cookie, nil
 	}
-	_ = json.Unmarshal(raw, &parsed)
-	if parsed.Data.Token != "" {
-		c.token = parsed.Data.Token
-	} else if parsed.Token != "" {
-		c.token = parsed.Token
-	}
-	if c.token == "" && c.cookie == "" {
-		t.Fatal("login succeeded but no token or session cookie returned")
-	}
+	return "", "", fmt.Errorf("login still rate-limited after %d attempts (last %d: %s)", maxAttempts, lastStatus, lastBody)
 }
 
 func (c *client) do(method, path string, body io.Reader, headers map[string]string) (*http.Response, error) {

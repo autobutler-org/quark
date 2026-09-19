@@ -61,6 +61,24 @@ explicit `-tags stress` invocation) runs them.
 If the backend is unreachable, the suite fails the readiness probe with a
 clear skip/fail message rather than hanging forever.
 
+## Auth sequencing / rate limits
+
+Login endpoints are per-IP rate limited (~5 rps, burst 10). Invalid-login
+bursts are **expected** to return `429`; that is a product success for the
+chaos case, not a suite failure.
+
+The suite keeps authenticated cases independent of that burst:
+
+1. `TestMain` warms a shared session when `QUARK_USER`/`QUARK_PASSWORD` or
+   `QUARK_ACCESS_TOKEN` is set, before any test runs.
+2. Authenticated cases reuse that session (or `QUARK_ACCESS_TOKEN`) and do not
+   re-login after the burst.
+3. Invalid-login / mixed login bursts are named `TestZZ…` so they run last.
+4. If a login is still needed and sees `429`, the helper retries with backoff.
+
+You can also supply `QUARK_ACCESS_TOKEN` / `QUARK_TOKEN` to skip password login
+entirely.
+
 ## Expected behaviors
 
 | Scenario | Acceptable outcomes |
@@ -68,6 +86,7 @@ clear skip/fail message rather than hanging forever.
 | Oversized JSON / long strings | `400`, `401`, `413`, `429`, or connection reset / client timeout — **not** a cascade of `5xx` |
 | Empty / whitespace / unicode edge inputs | `400` / `401` / `422` / empty success body — **not** `5xx` storms |
 | Concurrent bursts on public endpoints | Mostly `2xx`/`4xx`/`429`; `5xx` rate must stay below the documented threshold |
+| Invalid-login burst | Mostly `401` / `429` — **`429` is OK and expected** under rate limiting |
 | Unauthenticated protected routes | `401` (or skip when probing only public paths) |
 
 ## Non-goals
