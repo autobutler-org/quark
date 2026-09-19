@@ -68,10 +68,6 @@ var (
 	ErrAccessRequestsOff = errors.New("this Quark isn't taking account requests right now")
 	// ErrPasswordTooShort refuses a password under eight characters.
 	ErrPasswordTooShort = errors.New("password must be at least 8 characters")
-	// ErrFolderExists refuses a home under users/ that would hand an existing
-	// folder's contents to a new account. It never reports the shared users
-	// parent every home sits in, only a home that is already taken.
-	ErrFolderExists = errors.New("a folder with that name already exists")
 	// ErrSelfAction refuses an admin action aimed at the admin's own account.
 	ErrSelfAction = errors.New("use Settings to change your own account")
 )
@@ -463,10 +459,8 @@ func RequestAccount(ctx context.Context, queries *db.Queries, params RequestAcco
 // no home of its own, and an account with no owner row cannot write anywhere,
 // so approving without one produced an account that 403s on every upload.
 //
-// It returns ErrRequestNotFound when the username names no pending request,
-// and ErrFolderExists when a home of that name is already taken — in which
-// case the request stays pending rather than becoming an account that cannot
-// use its home.
+// It returns ErrRequestNotFound when the username names no pending request. A
+// folder already at users/<username> becomes the account's home.
 func ApproveRequest(ctx context.Context, params ApproveRequestParams) (ApproveRequestResult, error) {
 	if params.Database == nil {
 		return ApproveRequestResult{}, errors.New("database not initialized")
@@ -556,9 +550,9 @@ func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*Login
 // (#2016). Homes live under users/ so that a username and a top-level folder
 // name are different namespaces: a Quark with a family/ folder can still have
 // an account named family. It returns ErrInvalidUsername, ErrPasswordTooShort,
-// ErrUsernameTaken, or ErrFolderExists when that home is already taken; a
-// refused account leaves no row behind, and no folder except the shared users
-// parent.
+// or ErrUsernameTaken; a folder already at users/<username> becomes the
+// account's home. A refused account leaves no row behind, and no folder
+// except the shared users parent.
 func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult, error) {
 	if err := validateUsername(params.Username); err != nil {
 		return CreateUserResult{}, err
@@ -601,9 +595,9 @@ func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult,
 	})
 	if err != nil {
 		if madeDir != "" {
-			// Best-effort, and only the account's own home: the users parent
-			// may hold other people's. The home is new and empty, and the error
-			// that got here is the one worth reporting.
+			// Best-effort, and only a home this call made: the users parent
+			// may hold other people's, and an adopted home is not ours to
+			// remove. The error that got here is the one worth reporting.
 			_ = os.Remove(madeDir)
 		}
 		return CreateUserResult{}, err

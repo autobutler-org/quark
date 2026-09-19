@@ -135,8 +135,11 @@ func grantHome(ctx context.Context, queries *db.Queries, username string, userID
 //
 // It returns the home's path relative to filesDir and the directory it made,
 // which a caller whose transaction then fails removes. An existing home is
-// refused with ErrFolderExists rather than handed to the account; adopting one
-// is RepairHomes's job, not a new account's.
+// adopted, not refused: the users table is what says whether a username is
+// taken, and a folder is not an account. An admin may make users/<name> and
+// fill it before the account exists, and whoever gets that name gets that
+// folder. madeDir is empty for an adopted home, so a failed creation never
+// removes a folder it did not make.
 func createHome(ctx context.Context, queries *db.Queries, filesDir, username string, userID int64) (relPath, madeDir string, err error) {
 	if filesDir == "" {
 		return "", "", errors.New("files directory not set")
@@ -147,24 +150,29 @@ func createHome(ctx context.Context, queries *db.Queries, filesDir, username str
 		return "", "", fmt.Errorf("create users folder: %w", err)
 	}
 	// The username is validated, so it is one path segment and cannot climb
-	// out of filesDir. Mkdir, not MkdirAll, for the home itself: an existing
-	// home is refused rather than handed to the new account.
+	// out of filesDir.
 	home := filepath.Join(filesDir, UsersDirName, username)
-	if err := os.Mkdir(home, 0o755); err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return "", "", ErrFolderExists
+	switch err := os.Mkdir(home, 0o755); {
+	case err == nil:
+		madeDir = home
+	case errors.Is(err, os.ErrExist):
+		// Adopted. Mkdir rather than MkdirAll so a non-directory in the way
+		// still fails below instead of passing as a home.
+		if info, statErr := os.Stat(home); statErr != nil || !info.IsDir() {
+			return "", "", fmt.Errorf("create the home of %q: %s is not a folder", username, homeRelPath(username))
 		}
+	default:
 		return "", "", fmt.Errorf("create the home of %q: %w", username, err)
 	}
 	// The grant is on the home alone. users/ gets none: breadcrumb visibility
 	// already shows the path to someone granted beneath it, and it stays
 	// admin-only otherwise.
 	if err := grantHome(ctx, queries, username, userID); err != nil {
-		// The directory is reported so the caller removes it; the transaction
-		// this runs in is about to roll the grant back.
-		return "", home, err
+		// A directory this call made is reported so the caller removes it; the
+		// transaction this runs in is about to roll the grant back.
+		return "", madeDir, err
 	}
-	return homeRelPath(username), home, nil
+	return homeRelPath(username), madeDir, nil
 }
 
 // pruneMountPoints removes the empty per-device directories under

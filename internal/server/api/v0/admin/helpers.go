@@ -18,7 +18,7 @@ func accountErrorResponse(err error) *serverutil.Response {
 	switch {
 	case errors.Is(err, authutil.ErrUserNotFound), errors.Is(err, authutil.ErrRequestNotFound):
 		return serverutil.NotFound(err)
-	case errors.Is(err, authutil.ErrLastAdmin), errors.Is(err, authutil.ErrUsernameTaken), errors.Is(err, authutil.ErrFolderExists):
+	case errors.Is(err, authutil.ErrLastAdmin), errors.Is(err, authutil.ErrUsernameTaken):
 		return serverutil.Conflict(err)
 	case errors.Is(err, authutil.ErrInvalidUsername), errors.Is(err, authutil.ErrPasswordTooShort), errors.Is(err, authutil.ErrSelfAction):
 		return serverutil.BadRequest(err)

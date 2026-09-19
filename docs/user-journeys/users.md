@@ -106,7 +106,7 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 ### JN-USR-006: Add a user
 
-**Preconditions:** No account named `dee` exists, and neither does a home at `users/dee`.
+**Preconditions:** No account named `dee` exists.
 
 **Steps:**
 
@@ -133,7 +133,7 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 ### JN-USR-007: Adding a user whose folder already exists
 
-**Preconditions:** A folder `users/eli` exists. No account is named `eli`.
+**Preconditions:** A folder `users/eli` exists with files in it. No account is named `eli`.
 
 **Steps:**
 
@@ -143,14 +143,14 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 **Expected result:**
 
-- The dialog stays open with what was typed, and shows "A folder with that name already exists."
-- No account is created, and the existing folder is not handed to anyone.
+- The account is created, and `users/eli` becomes its home with everything already in it.
+- `eli` owns `users/eli` and can upload to it.
 
 **Notes:**
 
-- Only a home at `users/eli` refuses the account. A top-level folder named `eli` is a different thing and is left
-  alone.
-- A taken username shows "That username is taken." the same way.
+- The accounts, not the folders, decide whether a username is taken. An admin can make `users/eli` and fill it
+  before the account exists; whoever gets the name `eli` gets that folder.
+- A taken username shows "That username is taken." and the dialog stays open with what was typed.
 
 ---
 
@@ -173,8 +173,8 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 **Notes:**
 
 - The list refreshes on its own when a new request arrives, on any client.
-- A home of that name already existing leaves the request pending and shows "A folder with that name already
-  exists." An account is never approved without a home it owns.
+- A home of that name that already exists becomes theirs, with whatever is in it. An account is never approved
+  without a home it owns.
 
 ---
 
