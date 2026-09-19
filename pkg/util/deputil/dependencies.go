@@ -9,6 +9,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
+	"github.com/autobutler-org/quark/pkg/util/sshutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/util/vaultcrypto"
@@ -25,6 +26,7 @@ type dependencies struct {
 	eventBus       *eventbus.Bus
 	fileIndex      *storageutil.FileIndex
 	healthDatabase *db.DatabaseRaw
+	sshSystem      sshutil.System
 	ioSemaphore    *iosemutil.Semaphore
 	storageService *storageutil.StorageService
 	uploadSessions *uploadutil.SessionStore
@@ -43,6 +45,15 @@ func (d *dependencies) JobQueue() *jobutil.Queue {
 
 func (d *dependencies) WithJobQueue(q *jobutil.Queue) Dependencies {
 	d.jobQueue = q
+	return d
+}
+
+func (d *dependencies) SSHSystem() sshutil.System {
+	return d.sshSystem
+}
+
+func (d *dependencies) WithSSHSystem(system sshutil.System) Dependencies {
+	d.sshSystem = system
 	return d
 }
 

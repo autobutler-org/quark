@@ -29,6 +29,9 @@ lib/widgets/
   photos/
     add_to_album_sheet.dart     AddToAlbumSheet host for a photo in an album
                                 view: calls AlbumService, shows snack bars
+  settings/
+    ssh_access_section.dart     hosts SshAccessPanel around SshAccessController,
+                                with its confirmation, key and password dialogs
   video_viewer/
     transcode_dialog_host.dart  hosts TranscodeDialog around an injected
                                 formats loader
