@@ -6,6 +6,7 @@ import 'package:quark/pages/settings_page.dart';
 import 'package:quark/pages/terms_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/auth_service.dart';
 
 /// Saving a Quark from the Settings dialog changes the active host, which
 /// re-runs the router's terms gate and replaces the Settings page (#1623).
@@ -40,8 +41,16 @@ void main() {
     await settings.setSessionToken(null);
   }
 
-  setUp(reset);
-  tearDown(reset);
+  setUp(() async {
+    await reset();
+    // Saving a host checks the address first (#2032). This test is about what
+    // the dialog does to the route stack, so the Quark answers.
+    hostReachabilityProbe = (_) async => true;
+  });
+  tearDown(() async {
+    await reset();
+    hostReachabilityProbe = AuthService.isReachable;
+  });
 
   /// Whether the dialog route was still on the navigator when the active host
   /// changed. Saving from inside the dialog's own button made the terms gate

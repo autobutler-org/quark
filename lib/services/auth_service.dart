@@ -76,6 +76,23 @@ const Duration kAuthRequestTimeout = Duration(seconds: 5);
 @visibleForTesting
 http.Client Function() authHttpClientFactory = () => sharedHttpClient;
 
+/// The client a host probe goes out through, built for the host being probed
+/// rather than the active one. Overridable in tests.
+///
+/// Its caller closes what this returns, so it may not hand back the shared
+/// client.
+@visibleForTesting
+http.Client Function(String hostAddress) hostProbeHttpClientFactory =
+    buildLocalTrustHttpClient;
+
+/// The reachability check the host forms run before saving an address.
+///
+/// A `var` rather than a direct call so a widget test can answer for a Quark
+/// that is not there, and so a test about something else can say yes without
+/// standing a server up.
+Future<bool> Function(String hostAddress) hostReachabilityProbe =
+    AuthService.isReachable;
+
 /// Communicates with the quark auth API.
 class AuthService {
   static Uri get _baseUri => Uri.parse(apiBaseUrl);
@@ -91,6 +108,48 @@ class AuthService {
           headers: token == null ? null : {'Authorization': 'Bearer $token'},
         )
         .timeout(kAuthRequestTimeout);
+    return _readStatus(response);
+  }
+
+  /// Asks the Quark at [hostAddress] the same question, before that address
+  /// is the active host.
+  ///
+  /// `/auth/status` is the probe because it is the one endpoint a Quark
+  /// answers to a stranger: no session, no terms, nothing configured. A
+  /// non-Quark that answers anyway fails on the body, which is the point —
+  /// "something is listening" is not "this is your Quark".
+  ///
+  /// Throws whatever the attempt threw; the caller decides what unreachable
+  /// means for it.
+  static Future<AuthStatus> checkStatusAt(String hostAddress) async {
+    final client = hostProbeHttpClientFactory(hostAddress);
+    try {
+      final response = await client
+          .get(Uri.parse(hostAddress).resolve('/api/v0/auth/status'))
+          .timeout(kAuthRequestTimeout);
+      return _readStatus(response);
+    } finally {
+      // Built for one probe against a host that may never become active, so
+      // it is closed here rather than pooled like [sharedHttpClient].
+      client.close();
+    }
+  }
+
+  /// Whether a Quark answers at [hostAddress].
+  ///
+  /// Saving an address that nothing answers on walks the user into the rest
+  /// of onboarding against a dead host (#2032), so this runs first. It never
+  /// throws: unreachable is the answer, not a failure.
+  static Future<bool> isReachable(String hostAddress) async {
+    try {
+      await checkStatusAt(hostAddress);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static AuthStatus _readStatus(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, 'Failed to check auth status');
     }

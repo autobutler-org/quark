@@ -24,14 +24,19 @@ class UnauthorizedException implements Exception {
 const Duration kConnectTimeout = Duration(seconds: 5);
 
 /// Returns an [http.Client] that trusts self-signed certificates when the
-/// active host is a local/LAN address (see [isLocalTrustHost]).
+/// host it is built for is a local/LAN address (see [isLocalTrustHost]).
+///
+/// [hostAddress] defaults to the active host. A caller passes one only to
+/// reach a Quark that is not active yet — probing an address before it is
+/// saved (#2032) has to make the same trust decision the app would make once
+/// that address is the one in use.
 ///
 /// On web, the browser manages TLS trust natively and imposes its own connect
 /// deadline, so the default client is returned unchanged.
-http.Client buildLocalTrustHttpClient() {
+http.Client buildLocalTrustHttpClient([String? hostAddress]) {
   if (kIsWeb) return http.Client();
 
-  final host = _extractHost(AppSettings.instance.activeHost);
+  final host = _extractHost(hostAddress ?? AppSettings.instance.activeHost);
 
   final inner = HttpClient()..connectionTimeout = kConnectTimeout;
   if (isLocalTrustHost(host)) {

@@ -5,6 +5,7 @@ import 'package:quark/pages/login_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/host_dialog.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark/widgets/quark_connect_form.dart';
@@ -27,10 +28,14 @@ void main() {
     // The gate probes on every /login render now (#1827). Stub it so these
     // tests exercise host management rather than a failing socket.
     authStatusProbe = () async => const AuthStatus(setupComplete: true);
+    // Saving a host checks the address first (#2032). These tests are about
+    // host management, not reachability, so the Quark answers.
+    hostReachabilityProbe = (_) async => true;
   });
   tearDown(() async {
     await clearHosts();
     authStatusProbe = AuthService.checkStatus;
+    hostReachabilityProbe = AuthService.isReachable;
   });
 
   /// The real gate over stub pages, so the test exercises the redirects the
@@ -93,6 +98,22 @@ void main() {
       // A quark serves TLS, so a schemeless address becomes https://.
       expect(settings.hosts.single.hostAddress, 'https://my-quark.local');
       expect(settings.activeHost, 'https://my-quark.local');
+    });
+
+    // #2032: an address nothing answers on used to be saved and made active,
+    // which sent the user into terms for a Quark that was never there.
+    testWidgets('an address nothing answers on is not saved', (tester) async {
+      hostReachabilityProbe = (_) async => false;
+      await pumpLogin(tester);
+
+      await tester.enterText(find.byType(TextField), 'http://localhost:8099');
+      await tester.tap(find.text('Connect'));
+      await tester.pumpAndSettle();
+
+      expect(settings.hosts, isEmpty);
+      expect(find.byType(QuarkConnectForm), findsOneWidget);
+      expect(find.text(Errors.couldNotConnect), findsOneWidget);
+      expect(find.text('terms'), findsNothing);
     });
 
     // The gate runs terms ahead of the public-route allowance (#1631), so
