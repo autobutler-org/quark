@@ -79,9 +79,17 @@ abstract final class QuarkTheme {
           borderRadius: BorderRadius.circular(tokens.radiusMd),
           borderSide: BorderSide(color: tokens.border),
         ),
+        // Two pixels, not one. A keyboard user has no pointer to tell them
+        // where they are, and a focused field that differs from a resting one
+        // only in hue is invisible to anyone who cannot separate those two
+        // colors (#2028).
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(tokens.radiusMd),
-          borderSide: BorderSide(color: tokens.primary),
+          borderSide: BorderSide(color: tokens.primary, width: 2),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(tokens.radiusMd),
+          borderSide: BorderSide(color: tokens.error, width: 2),
         ),
         labelStyle: TextStyle(color: tokens.secondaryForeground),
         hintStyle: TextStyle(color: tokens.mutedForeground),
@@ -93,7 +101,7 @@ abstract final class QuarkTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(tokens.radiusMd),
           ),
-        ),
+        ).copyWith(side: _focusRing(tokens)),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
@@ -102,10 +110,12 @@ abstract final class QuarkTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(tokens.radiusMd),
           ),
-        ),
+        ).copyWith(side: _focusRing(tokens, resting: tokens.border)),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: tokens.primary),
+        style: TextButton.styleFrom(
+          foregroundColor: tokens.primary,
+        ).copyWith(side: _focusRing(tokens)),
       ),
       dividerTheme: DividerThemeData(color: tokens.border, thickness: 1),
       drawerTheme: DrawerThemeData(backgroundColor: tokens.sidebar),
@@ -159,4 +169,25 @@ abstract final class QuarkTheme {
       iconTheme: IconThemeData(color: tokens.secondaryForeground, size: 20),
     );
   }
+}
+
+/// The outline a button wears while it holds keyboard focus.
+///
+/// Material's own focus cue for a button is a faint overlay tint, which on a
+/// filled button sits on top of a color it barely differs from. A keyboard
+/// user needs to see where they are before they press Enter — on a sign-in
+/// form most of all, which is where this was reported (#2028).
+///
+/// [resting] is the border the button wears the rest of the time, or null for
+/// no border at all.
+WidgetStateProperty<BorderSide?> _focusRing(
+  QuarkTokens tokens, {
+  Color? resting,
+}) {
+  return WidgetStateProperty.resolveWith((states) {
+    if (states.contains(WidgetState.focused)) {
+      return BorderSide(color: tokens.primary, width: 2);
+    }
+    return resting == null ? null : BorderSide(color: resting);
+  });
 }
