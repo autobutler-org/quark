@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -14,13 +15,14 @@ import (
 
 // deleteAlbum godoc
 // @Summary Delete a photo album
-// @Description Deletes an album and all its children (cascades). Does not delete photos from disk.
+// @Description Deletes one of the caller's albums and all its children (cascades). Does not delete photos from disk.
 // @Tags albums
 // @Produce json
 // @Param id path int true "Album ID"
 // @Success 204 {object} serverutil.Response "No Content"
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden: system album"
+// @Failure 404 {object} serverutil.Response "Not Found: no album of the caller's has that id"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /albums/{id} [delete]
 func deleteAlbum(c *gin.Context) *serverutil.Response {
@@ -34,11 +36,12 @@ func deleteAlbum(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
-	if resp := rejectSystemAlbum(c.Request.Context(), deps.Database().Queries, id); resp != nil {
+	userID := callerID(c)
+	if resp := rejectSystemAlbum(c.Request.Context(), deps.Database().Queries, userID, id); resp != nil {
 		return resp
 	}
 
-	if err := deps.Database().Queries.DeleteAlbum(context.Background(), id); err != nil {
+	if err := deps.Database().Queries.DeleteAlbum(context.Background(), db.DeleteAlbumParams{ID: id, UserID: userID}); err != nil {
 		return serverutil.InternalServerError(err)
 	}
 

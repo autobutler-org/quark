@@ -1,7 +1,8 @@
 // Package albumutil holds the photo album writes that carry naming rules: an
 // album name cannot contain '/', and it is unique among its siblings ignoring
 // case. Root albums are siblings of each other, and of the system Favorites
-// album.
+// album. Albums belong to one account (#1912): the siblings are that account's
+// own, and another account's album reads as missing.
 //
 // The database enforces uniqueness with idx_photo_albums_sibling_name, so a
 // concurrent request that slips past any check still fails here as
@@ -46,8 +47,10 @@ type CreateAlbumResult struct {
 // RenameAlbumParams renames an existing album in place.
 type RenameAlbumParams struct {
 	Queries *db.Queries
-	ID      int64
-	Name    string
+	// UserID owns the album. Another account's album is missing.
+	UserID int64
+	ID     int64
+	Name   string
 }
 
 // RenameAlbumResult carries the renamed album.
@@ -58,7 +61,9 @@ type RenameAlbumResult struct {
 // MoveAlbumParams moves an existing album under a new parent.
 type MoveAlbumParams struct {
 	Queries *db.Queries
-	ID      int64
+	// UserID owns the album. Another account's album is missing.
+	UserID int64
+	ID     int64
 	// ParentID is invalid to move the album to the root.
 	ParentID sql.NullInt64
 }
@@ -121,12 +126,13 @@ func CreateAlbum(ctx context.Context, params CreateAlbumParams) (CreateAlbumResu
 
 // RenameAlbum renames an album, refusing a name with '/' or one a sibling
 // already holds. Changing only the case of the album's own name is allowed.
-// A missing album returns an error wrapping sql.ErrNoRows.
+// A missing album, or another account's, returns an error wrapping
+// sql.ErrNoRows.
 func RenameAlbum(ctx context.Context, params RenameAlbumParams) (RenameAlbumResult, error) {
 	if err := checkSlash(params.Name); err != nil {
 		return RenameAlbumResult{}, err
 	}
-	current, err := params.Queries.GetAlbum(ctx, params.ID)
+	current, err := params.Queries.GetAlbum(ctx, db.GetAlbumParams{ID: params.ID, UserID: params.UserID})
 	if err != nil {
 		return RenameAlbumResult{}, err
 	}
@@ -134,8 +140,9 @@ func RenameAlbum(ctx context.Context, params RenameAlbumParams) (RenameAlbumResu
 		return RenameAlbumResult{}, err
 	}
 	album, err := params.Queries.RenameAlbum(ctx, db.RenameAlbumParams{
-		Name: params.Name,
-		ID:   params.ID,
+		Name:   params.Name,
+		ID:     params.ID,
+		UserID: params.UserID,
 	})
 	if err != nil {
 		return RenameAlbumResult{}, nameConflictOr(err)
@@ -144,9 +151,10 @@ func RenameAlbum(ctx context.Context, params RenameAlbumParams) (RenameAlbumResu
 }
 
 // MoveAlbum moves an album, refusing a parent that already holds an album with
-// its name. A missing album returns an error wrapping sql.ErrNoRows.
+// its name. A missing album, or another account's, returns an error wrapping
+// sql.ErrNoRows.
 func MoveAlbum(ctx context.Context, params MoveAlbumParams) (MoveAlbumResult, error) {
-	current, err := params.Queries.GetAlbum(ctx, params.ID)
+	current, err := params.Queries.GetAlbum(ctx, db.GetAlbumParams{ID: params.ID, UserID: params.UserID})
 	if err != nil {
 		return MoveAlbumResult{}, err
 	}
@@ -156,6 +164,7 @@ func MoveAlbum(ctx context.Context, params MoveAlbumParams) (MoveAlbumResult, er
 	album, err := params.Queries.MoveAlbum(ctx, db.MoveAlbumParams{
 		ParentID: params.ParentID,
 		ID:       params.ID,
+		UserID:   params.UserID,
 	})
 	if err != nil {
 		return MoveAlbumResult{}, nameConflictOr(err)

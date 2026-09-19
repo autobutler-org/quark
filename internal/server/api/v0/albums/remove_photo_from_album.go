@@ -24,6 +24,7 @@ import (
 // @Success 204 {object} serverutil.Response "No Content"
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden: system album"
+// @Failure 404 {object} serverutil.Response "Not Found: no album of the caller's has that id"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /albums/{id}/items [delete]
 func removePhotoFromAlbum(c *gin.Context) *serverutil.Response {
@@ -45,7 +46,7 @@ func removePhotoFromAlbum(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
-	if resp := rejectSystemAlbum(c.Request.Context(), deps.Database().Queries, id); resp != nil {
+	if resp := rejectSystemAlbum(c.Request.Context(), deps.Database().Queries, callerID(c), id); resp != nil {
 		return resp
 	}
 
