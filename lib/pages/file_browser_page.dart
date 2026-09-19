@@ -175,7 +175,15 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       if (UploadManager.instance.isUploading) {
         return;
       }
-      if ({'upload', 'delete', 'move', 'new_folder'}.contains(evt.kind)) {
+      // access_changed: something was shared or unshared with this account,
+      // or its groups changed, so what it can see here may have too.
+      if ({
+        'upload',
+        'delete',
+        'move',
+        'new_folder',
+        'access_changed',
+      }.contains(evt.kind)) {
         manualRefresh();
       }
     });
