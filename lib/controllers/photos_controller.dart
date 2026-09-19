@@ -886,10 +886,12 @@ class PhotosController extends ChangeNotifier {
   }
 
   /// Creates an album named [name], under [parentId] when given, and reloads
-  /// the tree. Throws what the Quark threw.
-  Future<void> createAlbum(String name, {int? parentId}) async {
-    await _createAlbum(name, parentId: parentId);
+  /// the tree. Answers with the album, for a caller that has something to put
+  /// in it already (#2041). Throws what the Quark threw.
+  Future<AlbumItem> createAlbum(String name, {int? parentId}) async {
+    final album = await _createAlbum(name, parentId: parentId);
     await loadAlbums();
+    return album.toAlbumItem();
   }
 
   /// Renames the album [id] and reloads the tree. Throws what the Quark

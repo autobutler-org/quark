@@ -81,6 +81,33 @@ void main() {
   testBothViewports('says so when there are no albums', (tester, size) async {
     await pumpSheet(tester, size: size, albums: const []);
 
-    expect(find.text('No albums — create one in the Photos view'), findsOne);
+    expect(find.text('No albums yet'), findsOne);
+  });
+
+  /// #2041, the other sheet: picking an album for a selection with no albums
+  /// read "No albums — create one in the Photos view", which meant leaving
+  /// the selection behind to go and make one.
+  testBothViewports('an empty picker offers to create an album', (
+    tester,
+    size,
+  ) async {
+    var creates = 0;
+    await pumpAt(
+      tester,
+      AlbumPickerSheet(
+        selectedCount: 4,
+        albums: const [],
+        onPicked: (_) {},
+        onRetry: () {},
+        onCreateAlbum: () => creates++,
+      ),
+      size: size,
+    );
+
+    expect(find.text('No albums yet'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('album_picker_create')));
+    await tester.pump();
+
+    expect(creates, 1);
   });
 }
