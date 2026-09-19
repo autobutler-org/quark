@@ -1710,7 +1710,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         });
         return;
       }
-      _setPath(filePath);
+      _showResolvedFolder(filePath);
       return;
     } catch (error) {
       if (!mounted) return;
@@ -1724,7 +1724,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         });
         return;
       }
-      _setPath(filePath);
+      _showResolvedFolder(filePath);
       return;
     }
 
@@ -1732,21 +1732,29 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
     if (isDir) {
       // The "things.qdoc is really a folder" case this stat exists to catch.
-      // Resolution is over, so drop the in-flight flag first — it is what
-      // suppresses listings while the type is unknown, and this path needs one.
-      // _setPath no-ops when the route already points here — which for a deep
-      // link it does — and the listing was skipped on the way in, so load it
-      // directly rather than leaving the folder rendered permanently empty.
-      _handlingPendingFile = false;
-      if (normalizePath(filePath) == _currentPath) {
-        setState(_reloadFiles);
-      } else {
-        _setPath(filePath);
-      }
+      _showResolvedFolder(filePath);
       return;
     }
 
     await _openResolvedFile(filePath, fileKindForName(fileName), fileName);
+  }
+
+  /// Lists [filePath] as a folder once a deep link has resolved to one — or
+  /// failed to resolve, when the listing is what reports the folder missing.
+  ///
+  /// Resolution is over, so the in-flight flag is dropped first: it is what
+  /// suppresses listings while the type is unknown, and this path needs one.
+  /// [_setPath] no-ops when the route already points here — which for a deep
+  /// link it does — and the listing was skipped on the way in, so load it
+  /// directly. Handing a failed stat to [_setPath] alone left a missing folder
+  /// on "Opening folder" forever (#2073).
+  void _showResolvedFolder(String filePath) {
+    _handlingPendingFile = false;
+    if (normalizePath(filePath) == _currentPath) {
+      setState(_reloadFiles);
+    } else {
+      _setPath(filePath);
+    }
   }
 
   /// Opens the viewer for a file of [kind], classified from its name — after a
