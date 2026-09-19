@@ -58,6 +58,20 @@ void main() {
     expect(await _menuFor(tester, _folder('users/bob')), ['Download']);
   });
 
+  testWidgets('hides Move/Rename and Delete on the users folder for a member', (
+    tester,
+  ) async {
+    expect(await _menuFor(tester, _folder('users')), ['Download']);
+  });
+
+  testWidgets('keeps them on the users folder for an admin', (tester) async {
+    expect(await _menuFor(tester, _folder('users'), isAdmin: true), [
+      'Download',
+      'Move/Rename',
+      'Delete',
+    ]);
+  });
+
   testWidgets('keeps them on what is inside a home', (tester) async {
     expect(await _menuFor(tester, _folder('users/bob/Documents')), [
       'Download',
