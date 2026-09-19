@@ -18,7 +18,20 @@ import 'package:quark/widgets/quark_connect_form.dart';
 class LoginPage extends StatefulWidget {
   final VoidCallback onLoginSuccess;
 
-  const LoginPage({super.key, required this.onLoginSuccess});
+  const LoginPage({
+    super.key,
+    required this.onLoginSuccess,
+    this.initialUsername,
+    this.notice,
+  });
+
+  /// Fills the username field, so a user who has just proved who they are does
+  /// not type it a third time (#2029).
+  final String? initialUsername;
+
+  /// Good news from the page that sent the user here — see
+  /// [SignInForm.notice].
+  final String? notice;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -26,7 +39,9 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
+  late final _usernameController = TextEditingController(
+    text: widget.initialUsername ?? '',
+  );
   final _passwordController = TextEditingController();
   final _usernameFocus = FocusNode();
   final _passwordFocus = FocusNode();
@@ -134,6 +149,7 @@ class _LoginPageState extends State<LoginPage> {
                         loading: _loading,
                         disconnected: _disconnected,
                         error: _error,
+                        notice: widget.notice,
                         managingHosts: _managingHosts,
                         onToggleManagingHosts: () =>
                             setState(() => _managingHosts = !_managingHosts),
