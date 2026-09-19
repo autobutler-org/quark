@@ -1,0 +1,46 @@
+# .understandignore — patterns excluded from /understand analysis (gitignore syntax).
+# Keeps the graph on hand-written source: cmd/, internal/, pkg/, sql/, lib/, packages/*/lib.
+
+# Generated code (see AGENTS.md "Generated code")
+internal/server/public/
+internal/db/*.sql.go
+docs/swagger/
+assets/
+**/docs.g.dart
+**/generated_plugin_registrant.*
+**/GeneratedPluginRegistrant.*
+
+# Platform shells, build tooling and vendored trees
+android/
+ios/
+linux/
+macos/
+windows/
+web/
+app/
+armbian-build/
+datalinks/
+build/
+test-results/
+git/
+skills/
+.claude/
+.agents/
+.dart_tool/
+**/pubspec.lock
+package-lock.json
+go.sum
+packages/quark_icons/svgs/
+packages/quark_icons/fonts/
+
+# Tests
+**/*_test.go
+**/*_test.dart
+test/
+tests/
+packages/**/test/
+**/testdata/
+
+# Docs are summarized separately in ARCHITECTURE.md and docs/architecture/
+docs/
+*.md

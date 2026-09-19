@@ -39,6 +39,12 @@ dist/
 # Javascript
 node_modules/
 
+# Understand-Anything: commit the graph in .ua/, not its scratch files or the downloaded viewer
+.ua/intermediate/
+.ua/tmp/
+.ua/.trash-*
+.ua/site/
+
 # Miscellaneous
 *.class
 *.log
