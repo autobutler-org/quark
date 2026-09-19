@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/auth_service.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/utils/error_text.dart';
 
@@ -52,6 +53,20 @@ class _QuarkConnectFormState extends State<QuarkConnectForm> {
     });
 
     try {
+      // Checked before it is saved (#2032). This form's whole job is the
+      // address, and it already owns the copy for an address that does not
+      // answer — it just never asked. Saving first meant a typo became the
+      // active host and the user met terms and a sign-in form instead of
+      // this field.
+      if (!await hostReachabilityProbe(address)) {
+        if (mounted) {
+          setState(() {
+            _saving = false;
+            _error = Errors.couldNotConnect;
+          });
+        }
+        return;
+      }
       await AppSettings.instance.addHost(
         HostEntry(name: 'My Quark', hostAddress: address),
       );
