@@ -147,6 +147,7 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'meeting');
+    await tester.pump();
     await tester.tap(find.text('Create'));
     // Step through the exit transition frame by frame, the window the push
     // lands in.
