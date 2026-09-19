@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -116,10 +115,8 @@ type CreateUserParams struct {
 	Database *db.DatabaseSqlc
 	Username string
 	Password string
-	// CreateFolder makes the account's home at users/<username> under FilesDir
-	// and makes the account its owner.
-	CreateFolder bool
-	// FilesDir is the internal device's files directory.
+	// FilesDir is the internal device's files directory, where the account's
+	// home is made.
 	FilesDir string
 }
 
@@ -127,8 +124,7 @@ type CreateUserParams struct {
 type CreateUserResult struct {
 	UserID    int64
 	CreatedAt time.Time
-	// FolderPath is the home's path relative to FilesDir — users/<username> —
-	// empty when none was asked for.
+	// FolderPath is the home's path relative to FilesDir — users/<username>.
 	FolderPath string
 }
 
@@ -147,11 +143,18 @@ type RequestAccountResult struct {
 
 // ApproveRequestParams names the pending request an admin approves.
 type ApproveRequestParams struct {
+	Database *db.DatabaseSqlc
 	Username string
+	// FilesDir is the internal device's files directory, where the approved
+	// account's home is made.
+	FilesDir string
 }
 
-// ApproveRequestResult is empty; approval has nothing to report.
-type ApproveRequestResult struct{}
+// ApproveRequestResult is the approved account's home.
+type ApproveRequestResult struct {
+	// FolderPath is the home's path relative to FilesDir — users/<username>.
+	FolderPath string
+}
 
 // DenyRequestParams names the pending request an admin denies.
 type DenyRequestParams struct {
@@ -163,8 +166,12 @@ type DenyRequestResult struct{}
 
 // SetupParams contains parameters for first-boot user setup.
 type SetupParams struct {
+	Database *db.DatabaseSqlc
 	Username string
 	Password string
+	// FilesDir is the internal device's files directory, where the founding
+	// admin's home is made.
+	FilesDir string
 }
 
 // SetupResult contains the result of first-boot setup.
@@ -311,13 +318,23 @@ func GetAuthStatus(ctx context.Context, queries *db.Queries, params GetAuthStatu
 
 // Setup creates the first user and returns a session token + recovery phrase.
 // Returns an error if setup has already been completed.
-func Setup(ctx context.Context, queries *db.Queries, params SetupParams) (*SetupResult, error) {
+//
+// The founding admin gets a home at users/<username> like every other account
+// (#1908). An admin bypasses the access table only while they are an admin,
+// and demoting one is allowed as long as another is left, so the home is what
+// they still have to write to afterwards. A home that cannot be made fails
+// setup rather than leaving an account without one.
+func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
 	if err := validateUsername(params.Username); err != nil {
 		return nil, err
 	}
 	if len(params.Password) < 8 {
 		return nil, ErrPasswordTooShort
 	}
+	if params.Database == nil {
+		return nil, errors.New("database not initialized")
+	}
+	queries := params.Database.Queries
 
 	complete, err := IsSetupComplete(ctx, queries)
 	if err != nil {
@@ -342,24 +359,41 @@ func Setup(ctx context.Context, queries *db.Queries, params SetupParams) (*Setup
 		return nil, err
 	}
 
-	user, err := queries.CreateUser(ctx, db.CreateUserParams{
-		Username:           params.Username,
-		PasswordHash:       passwordHash,
-		RecoveryPhraseHash: recoveryHash,
+	var userID int64
+	madeDir := ""
+	err = inTx(ctx, params.Database, func(q *db.Queries) error {
+		user, err := q.CreateUser(ctx, db.CreateUserParams{
+			Username:           params.Username,
+			PasswordHash:       passwordHash,
+			RecoveryPhraseHash: recoveryHash,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create user: %w", err)
+		}
+		userID = user.ID
+
+		// First user is automatically the admin.
+		if err := q.SetUserAdmin(ctx, db.SetUserAdminParams{
+			IsAdmin:  1,
+			Username: user.Username,
+		}); err != nil {
+			return fmt.Errorf("promote first user to admin: %w", err)
+		}
+
+		_, dir, err := createHome(ctx, q, params.FilesDir, params.Username, user.ID)
+		madeDir = dir
+		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		if madeDir != "" {
+			// Best-effort, and only the home this call made: it is new and
+			// empty, and the error that got here is the one worth reporting.
+			_ = os.Remove(madeDir)
+		}
+		return nil, err
 	}
 
-	// First user is automatically the admin.
-	if err := queries.SetUserAdmin(ctx, db.SetUserAdminParams{
-		IsAdmin:  1,
-		Username: user.Username,
-	}); err != nil {
-		return nil, fmt.Errorf("promote first user to admin: %w", err)
-	}
-
-	token, err := newSession(ctx, queries, user.ID)
+	token, err := newSession(ctx, queries, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -419,21 +453,54 @@ func RequestAccount(ctx context.Context, queries *db.Queries, params RequestAcco
 	return RequestAccountResult{RecoveryPhrase: recoveryPhrase}, nil
 }
 
-// ApproveRequest makes a pending request an active account. It returns
-// ErrRequestNotFound when the username names no pending request.
-func ApproveRequest(ctx context.Context, queries *db.Queries, params ApproveRequestParams) (ApproveRequestResult, error) {
-	approved, err := queries.SetUserStatus(ctx, db.SetUserStatusParams{
-		Username:   params.Username,
-		FromStatus: StatusPending,
-		ToStatus:   StatusActive,
+// ApproveRequest makes a pending request an active account, with a home at
+// users/<username> that it owns, in one transaction (#1908). A request carries
+// no home of its own, and an account with no owner row cannot write anywhere,
+// so approving without one produced an account that 403s on every upload.
+//
+// It returns ErrRequestNotFound when the username names no pending request,
+// and ErrFolderExists when a home of that name is already taken — in which
+// case the request stays pending rather than becoming an account that cannot
+// use its home.
+func ApproveRequest(ctx context.Context, params ApproveRequestParams) (ApproveRequestResult, error) {
+	if params.Database == nil {
+		return ApproveRequestResult{}, errors.New("database not initialized")
+	}
+	var result ApproveRequestResult
+	madeDir := ""
+	err := inTx(ctx, params.Database, func(q *db.Queries) error {
+		approved, err := q.SetUserStatus(ctx, db.SetUserStatusParams{
+			Username:   params.Username,
+			FromStatus: StatusPending,
+			ToStatus:   StatusActive,
+		})
+		if err != nil {
+			return fmt.Errorf("approve %q: %w", params.Username, err)
+		}
+		if approved == 0 {
+			return ErrRequestNotFound
+		}
+		user, err := q.GetUserByUsername(ctx, params.Username)
+		if err != nil {
+			return fmt.Errorf("look up %q: %w", params.Username, err)
+		}
+		relPath, dir, err := createHome(ctx, q, params.FilesDir, params.Username, user.ID)
+		madeDir = dir
+		if err != nil {
+			return err
+		}
+		result.FolderPath = relPath
+		return nil
 	})
 	if err != nil {
-		return ApproveRequestResult{}, fmt.Errorf("approve %q: %w", params.Username, err)
+		if madeDir != "" {
+			// Best-effort, and only the home this call made: it is new and
+			// empty, and the error that got here is the one worth reporting.
+			_ = os.Remove(madeDir)
+		}
+		return ApproveRequestResult{}, err
 	}
-	if approved == 0 {
-		return ApproveRequestResult{}, ErrRequestNotFound
-	}
-	return ApproveRequestResult{}, nil
+	return result, nil
 }
 
 // DenyRequest deletes a pending request, which frees its username at once. It
@@ -480,13 +547,13 @@ func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*Login
 }
 
 // CreateUser adds an active account for an admin, with no recovery phrase
-// until its first sign-in, and optionally a home at users/<username> that it
-// owns (#2016). Homes live under users/ so that a username and a top-level
-// folder name are different namespaces: a Quark with a family/ folder can
-// still have an account named family. It returns ErrInvalidUsername,
-// ErrPasswordTooShort, ErrUsernameTaken, or ErrFolderExists when that home is
-// already taken; a refused account leaves no row behind, and no folder except
-// the shared users parent.
+// until its first sign-in, and a home at users/<username> that it owns
+// (#2016). Homes live under users/ so that a username and a top-level folder
+// name are different namespaces: a Quark with a family/ folder can still have
+// an account named family. It returns ErrInvalidUsername, ErrPasswordTooShort,
+// ErrUsernameTaken, or ErrFolderExists when that home is already taken; a
+// refused account leaves no row behind, and no folder except the shared users
+// parent.
 func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult, error) {
 	if err := validateUsername(params.Username); err != nil {
 		return CreateUserResult{}, err
@@ -503,7 +570,7 @@ func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult,
 	}
 
 	var result CreateUserResult
-	folder := ""
+	madeDir := ""
 	err = inTx(ctx, params.Database, func(q *db.Queries) error {
 		// An empty hash is "no phrase yet": bcrypt never matches it, so recovery
 		// fails like a wrong phrase until Login fills it in.
@@ -518,51 +585,80 @@ func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult,
 			return fmt.Errorf("create account: %w", err)
 		}
 		result.UserID, result.CreatedAt = user.ID, user.CreatedAt
-		if !params.CreateFolder {
-			return nil
-		}
 
-		// The users parent is shared by every home, so MkdirAll it: it already
-		// existing is not a conflict.
-		if err := os.MkdirAll(filepath.Join(params.FilesDir, usersDirName), 0o755); err != nil {
-			return fmt.Errorf("create users folder: %w", err)
-		}
-		// The username is validated, so it is one path segment and cannot climb
-		// out of FilesDir. Mkdir, not MkdirAll, for the home itself: an existing
-		// home is refused rather than handed to the new account.
-		home := filepath.Join(params.FilesDir, usersDirName, params.Username)
-		if err := os.Mkdir(home, 0o755); err != nil {
-			if errors.Is(err, os.ErrExist) {
-				return ErrFolderExists
-			}
-			return fmt.Errorf("create private folder: %w", err)
-		}
-		folder = home
-		// The grant is on the home alone. users/ gets none: breadcrumb
-		// visibility already shows the path to someone granted beneath it, and
-		// it stays admin-only otherwise.
-		//
-		// Written directly: GrantOwnerIfNeeded acts for the caller, and the
-		// caller here is the admin, who needs no row.
-		relPath := path.Join(usersDirName, params.Username)
-		if err := q.SetUserPathAccess(ctx, db.SetUserPathAccessParams{
-			RelPath: relPath,
-			UserID:  sql.NullInt64{Int64: user.ID, Valid: true},
-			Level:   "owner",
-		}); err != nil {
-			return fmt.Errorf("grant private folder: %w", err)
+		relPath, dir, err := createHome(ctx, q, params.FilesDir, params.Username, user.ID)
+		madeDir = dir
+		if err != nil {
+			return err
 		}
 		result.FolderPath = relPath
 		return nil
 	})
 	if err != nil {
-		if folder != "" {
+		if madeDir != "" {
 			// Best-effort, and only the account's own home: the users parent
 			// may hold other people's. The home is new and empty, and the error
 			// that got here is the one worth reporting.
-			_ = os.Remove(folder)
+			_ = os.Remove(madeDir)
 		}
 		return CreateUserResult{}, err
+	}
+	return result, nil
+}
+
+// RepairHomesParams is the Quark whose accounts are repaired.
+type RepairHomesParams struct {
+	Database *db.DatabaseSqlc
+	// FilesDir is the internal device's files directory, where homes live.
+	FilesDir string
+}
+
+// RepairHomesResult names the accounts that were given their home.
+type RepairHomesResult struct {
+	Repaired []string
+}
+
+// RepairHomes gives every active account with no owner row on users/<username>
+// one, and makes the directory when it is missing (#1908).
+//
+// Approval used to create neither the directory nor the grant, and an account
+// created before homes were always made has neither, so those accounts are
+// refused every write. This runs at startup rather than as a migration because
+// a migration is SQL and cannot make a directory.
+//
+// It keys on the missing grant, never on the missing directory: a hand-made
+// users/<username> with no row behaves exactly like no home at all, so such an
+// account is repaired by granting it what is already there. Running it again on
+// a repaired Quark does nothing.
+func RepairHomes(ctx context.Context, params RepairHomesParams) (RepairHomesResult, error) {
+	var result RepairHomesResult
+	if params.Database == nil {
+		return result, errors.New("database not initialized")
+	}
+	if params.FilesDir == "" {
+		return result, errors.New("files directory not set")
+	}
+	accounts, err := params.Database.Queries.ListAccountsMissingHome(ctx)
+	if err != nil {
+		return result, fmt.Errorf("list the accounts with no home: %w", err)
+	}
+	for _, account := range accounts {
+		// An account made before the username rule may hold a name that is not
+		// one path segment (#1908). It keeps no home rather than being given a
+		// directory somewhere else in the tree.
+		if err := validateUsername(account.Username); err != nil {
+			slog.Warn("no home repaired: the username is not a folder name", "username", account.Username)
+			continue
+		}
+		// MkdirAll, not Mkdir: the repair ends with the directory there, so one
+		// that already exists is adopted rather than refused.
+		if err := os.MkdirAll(filepath.Join(params.FilesDir, usersDirName, account.Username), 0o755); err != nil {
+			return result, fmt.Errorf("create the home of %q: %w", account.Username, err)
+		}
+		if err := grantHome(ctx, params.Database.Queries, account.Username, account.ID); err != nil {
+			return result, err
+		}
+		result.Repaired = append(result.Repaired, account.Username)
 	}
 	return result, nil
 }

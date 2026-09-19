@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/admin/approve/{username}": {
             "put": {
-                "description": "Turns a pending account request into an active account that can sign in. Admin-only.",
+                "description": "Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing home of that name leaves the request pending rather than making an account that cannot use it. Admin-only.",
                 "tags": [
                     "admin"
                 ],
@@ -49,6 +49,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "no account request has that username",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "a folder with that name already exists",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -374,7 +380,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Creates an active account with the given password. The admin never sees its recovery phrase: the account gets one on its first sign-in. With createFolder, the account's home is made under users/ on the internal device, named after the account, and the account owns it; an existing home of that name is refused rather than handed over, while a top-level folder of that name does not collide. Admin-only.",
+                "description": "Creates an active account with the given password. The admin never sees its recovery phrase: the account gets one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it; an existing home of that name is refused rather than handed over, while a top-level folder of that name does not collide. Admin-only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1402,7 +1408,7 @@ const docTemplate = `{
         },
         "/auth/setup": {
             "post": {
-                "description": "Creates the owner account. Can only be called once.",
+                "description": "Creates the owner account, with a home under users/ on the internal device that it owns. Can only be called once.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4821,10 +4827,6 @@ const docTemplate = `{
                 "username"
             ],
             "properties": {
-                "createFolder": {
-                    "description": "CreateFolder makes a private folder named after the account, owned by it.",
-                    "type": "boolean"
-                },
                 "password": {
                     "type": "string"
                 },

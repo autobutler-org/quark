@@ -88,7 +88,8 @@ func TestNormalizeRecoveryPhrase(t *testing.T) {
 // --- Integration tests (real SQLite, full flow) ---
 
 func TestIsSetupComplete_FreshDB(t *testing.T) {
-	queries := newTestDB(t)
+	database := newTestDB(t)
+	queries := database.Queries
 	complete, err := authutil.IsSetupComplete(context.Background(), queries)
 	if err != nil {
 		t.Fatalf("IsSetupComplete failed: %v", err)
@@ -99,8 +100,9 @@ func TestIsSetupComplete_FreshDB(t *testing.T) {
 }
 
 func TestSetup_Success(t *testing.T) {
-	queries := newTestDB(t)
-	result, err := authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	queries := database.Queries
+	result, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "supersecret",
 	})
@@ -127,8 +129,8 @@ func TestSetup_Success(t *testing.T) {
 }
 
 func TestSetup_CannotRunTwice(t *testing.T) {
-	queries := newTestDB(t)
-	_, err := authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "supersecret",
 	})
@@ -136,7 +138,7 @@ func TestSetup_CannotRunTwice(t *testing.T) {
 		t.Fatalf("First setup failed: %v", err)
 	}
 
-	_, err = authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	_, err = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin2",
 		Password: "anotherpass",
 	})
@@ -146,8 +148,8 @@ func TestSetup_CannotRunTwice(t *testing.T) {
 }
 
 func TestSetup_ShortPassword(t *testing.T) {
-	queries := newTestDB(t)
-	_, err := authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "short",
 	})
@@ -157,8 +159,8 @@ func TestSetup_ShortPassword(t *testing.T) {
 }
 
 func TestSetup_EmptyUsername(t *testing.T) {
-	queries := newTestDB(t)
-	_, err := authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "",
 		Password: "validpassword",
 	})
@@ -168,8 +170,9 @@ func TestSetup_EmptyUsername(t *testing.T) {
 }
 
 func TestLogin_Success(t *testing.T) {
-	queries := newTestDB(t)
-	_, err := authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	queries := database.Queries
+	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "mypassword",
 	})
@@ -190,8 +193,9 @@ func TestLogin_Success(t *testing.T) {
 }
 
 func TestLogin_WrongPassword(t *testing.T) {
-	queries := newTestDB(t)
-	_, _ = authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	queries := database.Queries
+	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "mypassword",
 	})
@@ -206,8 +210,9 @@ func TestLogin_WrongPassword(t *testing.T) {
 }
 
 func TestLogin_WrongUsername(t *testing.T) {
-	queries := newTestDB(t)
-	_, _ = authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	queries := database.Queries
+	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "mypassword",
 	})
@@ -226,8 +231,9 @@ func TestLogin_WrongUsername(t *testing.T) {
 }
 
 func TestValidateSession_Valid(t *testing.T) {
-	queries := newTestDB(t)
-	setupResult, _ := authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	queries := database.Queries
+	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "mypassword",
 	})
@@ -242,7 +248,8 @@ func TestValidateSession_Valid(t *testing.T) {
 }
 
 func TestValidateSession_Invalid(t *testing.T) {
-	queries := newTestDB(t)
+	database := newTestDB(t)
+	queries := database.Queries
 	_, _, err := authutil.ValidateSession(context.Background(), queries, "notavalidtoken")
 	if err == nil {
 		t.Error("Expected error for invalid session token")
@@ -250,8 +257,9 @@ func TestValidateSession_Invalid(t *testing.T) {
 }
 
 func TestLogout_InvalidatesSession(t *testing.T) {
-	queries := newTestDB(t)
-	setupResult, _ := authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	queries := database.Queries
+	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "mypassword",
 	})
@@ -268,8 +276,9 @@ func TestLogout_InvalidatesSession(t *testing.T) {
 }
 
 func TestRecover_Success(t *testing.T) {
-	queries := newTestDB(t)
-	setupResult, _ := authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	queries := database.Queries
+	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "originalpass",
 	})
@@ -312,8 +321,9 @@ func TestRecover_Success(t *testing.T) {
 }
 
 func TestRecover_WrongPhrase(t *testing.T) {
-	queries := newTestDB(t)
-	_, _ = authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	queries := database.Queries
+	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "mypassword",
 	})
@@ -352,9 +362,10 @@ func createUserWithPhrase(t *testing.T, queries *db.Queries, username, password,
 // TestRecover_NamedAccount recovers the account the request names, not the
 // founding one: a second user's phrase resets the second user's password.
 func TestRecover_NamedAccount(t *testing.T) {
-	queries := newTestDB(t)
+	database := newTestDB(t)
+	queries := database.Queries
 	ctx := context.Background()
-	founder, err := authutil.Setup(ctx, queries, authutil.SetupParams{Username: "admin", Password: "admin-password"})
+	founder, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -388,9 +399,10 @@ func TestRecover_NamedAccount(t *testing.T) {
 // TestRecover_UnknownUserLooksLikeWrongPhrase keeps the endpoint from
 // revealing which usernames exist.
 func TestRecover_UnknownUserLooksLikeWrongPhrase(t *testing.T) {
-	queries := newTestDB(t)
+	database := newTestDB(t)
+	queries := database.Queries
 	ctx := context.Background()
-	founder, err := authutil.Setup(ctx, queries, authutil.SetupParams{Username: "admin", Password: "admin-password"})
+	founder, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,8 +426,9 @@ func TestRecover_UnknownUserLooksLikeWrongPhrase(t *testing.T) {
 }
 
 func TestValidateBasicAuth_Success(t *testing.T) {
-	queries := newTestDB(t)
-	_, _ = authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	queries := database.Queries
+	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "mypassword",
 	})
@@ -430,8 +443,9 @@ func TestValidateBasicAuth_Success(t *testing.T) {
 }
 
 func TestValidateBasicAuth_WrongPassword(t *testing.T) {
-	queries := newTestDB(t)
-	_, _ = authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	queries := database.Queries
+	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "mypassword",
 	})
@@ -443,8 +457,9 @@ func TestValidateBasicAuth_WrongPassword(t *testing.T) {
 }
 
 func TestValidateBasicAuth_WrongUsername(t *testing.T) {
-	queries := newTestDB(t)
-	_, _ = authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	queries := database.Queries
+	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "mypassword",
 	})
@@ -456,8 +471,9 @@ func TestValidateBasicAuth_WrongUsername(t *testing.T) {
 }
 
 func TestRecover_CaseInsensitive(t *testing.T) {
-	queries := newTestDB(t)
-	setupResult, _ := authutil.Setup(context.Background(), queries, authutil.SetupParams{
+	database := newTestDB(t)
+	queries := database.Queries
+	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "mypassword",
 	})

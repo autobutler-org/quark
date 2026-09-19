@@ -70,7 +70,7 @@ func setUserStatus(t *testing.T, queries *db.Queries, username, from, to string)
 // founding admin signs in exactly as before.
 func TestLoginUser_StatusRefusals(t *testing.T) {
 	database := dbtest.NewDB(t)
-	if _, err := authutil.Setup(context.Background(), database.Queries, authutil.SetupParams{Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"}); err != nil {
 		t.Fatal(err)
 	}
 	createRecoverableUser(t, database.Queries, "waiting", "apple-bread-cloud-delta-eagle-flame")
@@ -113,7 +113,7 @@ func TestLoginUser_StatusRefusals(t *testing.T) {
 // account is 403 with its status, the same shape login uses.
 func TestRecoverAccount_StatusRefusal(t *testing.T) {
 	database := dbtest.NewDB(t)
-	if _, err := authutil.Setup(context.Background(), database.Queries, authutil.SetupParams{Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"}); err != nil {
 		t.Fatal(err)
 	}
 	const phrase = "apple-bread-cloud-delta-eagle-flame"

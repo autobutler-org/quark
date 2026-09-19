@@ -56,7 +56,7 @@ func TestDeleteUser_ReassignsOwnerRowsToActor(t *testing.T) {
 	database := dbtest.NewDB(t)
 	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, q)
+	setupFounder(t, database, t.TempDir())
 	mkStatusUser(t, q, "bob", authutil.StatusActive)
 	adminID, bobID := userID(t, q, "admin"), userID(t, q, "bob")
 
@@ -83,7 +83,9 @@ func TestDeleteUser_ReassignsOwnerRowsToActor(t *testing.T) {
 	if result.HeirUserID != adminID || result.OwnerRowsReassigned != 3 || result.SetupReset {
 		t.Errorf("result = %+v, want heir %d, 3 reassigned, no reset", result, adminID)
 	}
-	want := map[string]string{"bob": "owner", ".trash/20260914-1/report.txt": "owner", "shared": "owner"}
+	// The admin's own home is in there as well, because setup gives every
+	// account one (#1908); the other three are what they inherited from bob.
+	want := map[string]string{"bob": "owner", ".trash/20260914-1/report.txt": "owner", "shared": "owner", "users/admin": "owner"}
 	got := levels(t, database, adminID)
 	if len(got) != len(want) {
 		t.Errorf("admin's rows = %v, want %v", got, want)
@@ -112,7 +114,7 @@ func TestDeleteUser_SelfServiceHeirIsOldestActiveAdmin(t *testing.T) {
 	database := dbtest.NewDB(t)
 	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, q)
+	setupFounder(t, database, t.TempDir())
 	mkUser(t, q, "deputy", true)
 	mkStatusUser(t, q, "bob", authutil.StatusActive)
 	setStatus(t, q, "admin", authutil.StatusActive, authutil.StatusDisabled)
@@ -140,7 +142,7 @@ func TestDeleteUser_LastAdminRules(t *testing.T) {
 		t.Run("with an "+other+" account", func(t *testing.T) {
 			database := dbtest.NewDB(t)
 			q := database.Queries
-			setupFounder(t, q)
+			setupFounder(t, database, t.TempDir())
 			mkStatusUser(t, q, "member", other)
 
 			_, err := authutil.DeleteUser(context.Background(), authutil.DeleteUserParams{Database: database, Username: "admin"})
@@ -157,7 +159,7 @@ func TestDeleteUser_LastAdminRules(t *testing.T) {
 		database := dbtest.NewDB(t)
 		q := database.Queries
 		ctx := context.Background()
-		setupFounder(t, q)
+		setupFounder(t, database, t.TempDir())
 		mkStatusUser(t, q, "asker", authutil.StatusPending)
 
 		result, err := authutil.DeleteUser(ctx, authutil.DeleteUserParams{Database: database, Username: "admin"})
@@ -175,7 +177,7 @@ func TestDeleteUser_LastAdminRules(t *testing.T) {
 	t.Run("with a second active admin", func(t *testing.T) {
 		database := dbtest.NewDB(t)
 		q := database.Queries
-		setupFounder(t, q)
+		setupFounder(t, database, t.TempDir())
 		mkUser(t, q, "deputy", true)
 
 		result, err := authutil.DeleteUser(context.Background(), authutil.DeleteUserParams{Database: database, Username: "admin"})
@@ -194,7 +196,7 @@ func TestDeleteUser_AdminRefusals(t *testing.T) {
 	database := dbtest.NewDB(t)
 	q := database.Queries
 	ctx := context.Background()
-	setupFounder(t, q)
+	setupFounder(t, database, t.TempDir())
 	mkUser(t, q, "deputy", true)
 	adminID := userID(t, q, "admin")
 

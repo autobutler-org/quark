@@ -168,10 +168,13 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 - The request leaves **Requests** and the account appears in **Accounts**.
 - The requester can sign in (JN-AUTH-011).
+- A folder `users/<username>` exists in Files, owned by them, so their first upload lands somewhere.
 
 **Notes:**
 
 - The list refreshes on its own when a new request arrives, on any client.
+- A home of that name already existing leaves the request pending and shows "A folder with that name already
+  exists." An account is never approved without a home it owns.
 
 ---
 
