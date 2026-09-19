@@ -83,4 +83,47 @@ void main() {
 
     expect(find.text('No albums — create one in the Photos view'), findsOne);
   });
+
+  /// #2060: the selection bar behind this sheet has a Cancel that throws the
+  /// selection away. A second button with the same word, dismissing only the
+  /// sheet, is how someone ends up believing they backed out of a selection
+  /// they are still in.
+  testBothViewports('the sheet closes with Close, not a second Cancel', (
+    tester,
+    size,
+  ) async {
+    var closes = 0;
+    await pumpAt(
+      tester,
+      AlbumPickerSheet(
+        selectedCount: 3,
+        albums: const [AlbumItem(id: 1, name: 'Trips')],
+        onPicked: (_) {},
+        onRetry: () {},
+        onClose: () => closes++,
+      ),
+      size: size,
+    );
+
+    expect(find.text('Cancel'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('album_picker_close')));
+    await tester.pump();
+
+    expect(closes, 1);
+  });
+
+  testWidgets('a sheet with no close handler shows no button', (tester) async {
+    await pumpAt(
+      tester,
+      AlbumPickerSheet(
+        selectedCount: 1,
+        albums: const [AlbumItem(id: 1, name: 'Trips')],
+        onPicked: (_) {},
+        onRetry: () {},
+      ),
+      size: narrowViewport,
+    );
+
+    expect(find.byKey(const ValueKey('album_picker_close')), findsNothing);
+  });
 }
