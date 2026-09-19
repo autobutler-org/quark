@@ -446,8 +446,9 @@ class UploadManager extends ChangeNotifier {
         );
       } on _UploadStopped {
         // Neither sent nor failed: the run is ending and this file stopped on
-        // a chunk boundary. Its record stays, so picking it up again resumes
-        // from the offset the server holds rather than from zero.
+        // a chunk boundary. The session ends with it, so its staged bytes go
+        // now rather than sitting on the server's disk until they expire.
+        _abandonStoredSession(fileKey);
         _chunked.remove(progressKey);
         return;
       } catch (e) {
@@ -464,15 +465,45 @@ class UploadManager extends ChangeNotifier {
       await Future<void>.delayed(Duration(seconds: attempt));
     }
 
+    _abandonStoredSession(fileKey);
     _chunked.remove(progressKey);
     _recordFailure(name, Errors.message(lastError, 'upload $name'));
   }
 
+  /// Forgets the session stored for [fileKey] and tells the server to drop it.
+  ///
+  /// Every way a file stops using its session other than a commit comes
+  /// through here: the server discards a session only when it commits, so one
+  /// the client walks away from keeps its staged bytes until it expires.
+  void _abandonStoredSession(String fileKey) {
+    final record = _store.read(fileKey);
+    _store.remove(fileKey);
+    if (record != null) {
+      _abandonSession(record.sessionId);
+    }
+  }
+
+  /// Best effort and never awaited: tidying up must not hold a worker or turn
+  /// an outcome into a different one.
+  void _abandonSession(String sessionId) {
+    unawaited(
+      _client
+          .deleteSession(sessionId)
+          .then<void>(
+            (_) {},
+            onError: (Object e) => debugPrint(
+              '[upload_manager.dart] Could not drop session $sessionId: $e',
+            ),
+          ),
+    );
+  }
+
   /// Runs one session to the end of the file.
   ///
-  /// Returns true when the server said the last chunk landed, false when the
+  /// Returns true when the server said the file was committed, false when the
   /// session disappeared mid-file and the caller should open another. Anything
-  /// else throws.
+  /// else throws. Holding every byte is not the same as committed: see the
+  /// replay below.
   Future<bool> _runUploadSession({
     required _QueuedUpload queued,
     required UploadChunkSource source,
@@ -506,7 +537,7 @@ class UploadManager extends ChangeNotifier {
     // on it.
     var stalledResyncs = 0;
 
-    while (offset < total) {
+    while (true) {
       // A chunk boundary is a real stopping point, which a whole-file upload
       // never had: the session and its offset survive, so stopping here costs
       // at most one chunk rather than the whole file. Without this a cancel
@@ -516,11 +547,17 @@ class UploadManager extends ChangeNotifier {
         throw const _UploadStopped();
       }
 
-      final end = math.min(offset + _chunkSizeBytes, total);
+      // A session with every byte staged but still open is one whose commit
+      // failed — a full disk, say. The server commits again when the final
+      // chunk is replayed, so resend it rather than calling the file done.
+      final start = offset < total
+          ? offset
+          : math.max(0, total - _chunkSizeBytes);
+      final end = math.min(start + _chunkSizeBytes, total);
       final outcome = await _sendChunk(
         sessionId: record.sessionId,
         source: source,
-        start: offset,
+        start: start,
         end: end,
         total: total,
       );
@@ -533,6 +570,9 @@ class UploadManager extends ChangeNotifier {
           _reportChunkProgress(progressKey, name, offset, total);
           if (complete) {
             return true;
+          }
+          if (offset >= total) {
+            throw Exception('server holds all of $name but did not commit it');
           }
         case ChunkOffsetMismatch(offset: final committed):
           // Almost always a chunk whose response was lost on the way back: the
@@ -558,8 +598,6 @@ class UploadManager extends ChangeNotifier {
           throw Exception('$outcome');
       }
     }
-
-    return true;
   }
 
   Future<UploadSessionRecord> _openSession({
@@ -617,7 +655,7 @@ class UploadManager extends ChangeNotifier {
           // We are the only thing that knew about this session and we have
           // just decided not to use it. Saying so frees its temp file now
           // rather than leaving it for the server's sweeper.
-          unawaited(_client.deleteSession(record.sessionId));
+          _abandonSession(record.sessionId);
         }
         return null;
       }
@@ -627,7 +665,9 @@ class UploadManager extends ChangeNotifier {
         '[upload_manager.dart] Could not check session ${record.sessionId}, '
         'starting $fileName over: $e',
       );
+      // It may well still exist; a new one is about to replace it.
       store.remove(fileKey);
+      _abandonSession(record.sessionId);
       return null;
     }
   }

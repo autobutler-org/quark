@@ -863,9 +863,79 @@ func TestCommitWithoutOverwriteLeavesAnExistingFileAlone(t *testing.T) {
 	if got, _ := os.ReadFile(existing); string(got) != "original" {
 		t.Errorf("existing file now reads %q", got)
 	}
-	// The session survives a failed commit, so its bytes must too.
-	if _, err := os.Stat(staged); err != nil {
-		t.Errorf("staged file is gone after a refused commit: %v", err)
+	// Retrying cannot make the name free, so the session ends and its bytes go
+	// with it instead of sitting on disk until the TTL.
+	if _, err := os.Stat(staged); !os.IsNotExist(err) {
+		t.Errorf("staged file survived a commit that can never succeed: %v", err)
+	}
+	if got := stagedCount(t, store.StagingDir()); got != 0 {
+		t.Errorf("staging dir still holds %d entries after a refused commit", got)
+	}
+}
+
+// A commit that failed for a reason the client can outlast keeps the session,
+// so resending the last chunk lands the file without restaging it.
+func TestATransientCommitFailureKeepsTheSessionForARetry(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, root := newLocalDestination(t)
+	// A file where the destination directory should be makes MkdirAll fail
+	// with a plain I/O error rather than a vfs sentinel.
+	blocker := filepath.Join(root, "album")
+	if err := os.WriteFile(blocker, nil, 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	content := []byte("worth keeping")
+	total := int64(len(content))
+	created, err := store.CreateSession(uploadutil.CreateSessionParams{
+		Destination: dest,
+		RootDir:     "album",
+		FileName:    "photo.jpg",
+		TotalSize:   total,
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	_, err = writeChunk(store, dest, created.SessionID, 0, total-1, total, content)
+	if err == nil || errors.Is(err, vfs.ErrConflict) {
+		t.Fatalf("commit into a blocked directory returned %v, want a plain I/O error", err)
+	}
+	if got := stagedCount(t, store.StagingDir()); got != 1 {
+		t.Fatalf("staging dir holds %d entries after a transient failure, want 1", got)
+	}
+
+	if err := os.Remove(blocker); err != nil {
+		t.Fatalf("unblock: %v", err)
+	}
+	if _, err := writeChunk(store, dest, created.SessionID, 0, total-1, total, content); err != nil {
+		t.Fatalf("retrying the last chunk: %v", err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(root, "album", "photo.jpg")); !bytes.Equal(got, content) {
+		t.Errorf("committed file is %q, want %q", got, content)
+	}
+	if got := stagedCount(t, store.StagingDir()); got != 0 {
+		t.Errorf("staging dir still holds %d entries after the retried commit", got)
+	}
+}
+
+func TestCloseRemovesEveryStagedFile(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, _ := newTestDestination(t)
+	for _, name := range []string{"a.bin", "b.bin"} {
+		id := openSession(t, store, dest, name, 1024)
+		if _, err := writeChunk(store, dest, id, 0, 511, 1024, make([]byte, 512)); err != nil {
+			t.Fatalf("chunk: %v", err)
+		}
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if got := stagedCount(t, store.StagingDir()); got != 0 {
+		t.Errorf("close left %d staged file(s) behind", got)
 	}
 }
 

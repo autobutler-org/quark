@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // stagingDirName is the directory, under the data dir's tmp area, where
@@ -321,16 +323,17 @@ func (s *SessionStore) commit(ctx context.Context, sess *session, dest Destinati
 		Overwrite:  sess.overwrite,
 	})
 	if err != nil {
-		// The session survives so the client can retry the last chunk; the
-		// staged bytes are still valid and re-staging gigabytes to work around
-		// a transient disk error would be the wrong trade.
+		// A transient failure (I/O, a full disk, a dropped request) keeps the
+		// session so the client can resend the last chunk; re-staging gigabytes
+		// to work around it would be the wrong trade. A failure no retry can
+		// fix ends the session now rather than holding a full copy of the file
+		// on disk until the TTL.
+		if commitCannotSucceed(err) {
+			s.endLocked(sess)
+		}
 		return WriteChunkResult{}, err
 	}
-
-	s.mu.Lock()
-	delete(s.sessions, sess.id)
-	s.mu.Unlock()
-	sess.discardLocked()
+	s.endLocked(sess)
 
 	return WriteChunkResult{
 		SessionID: sess.id,
@@ -340,6 +343,25 @@ func (s *SessionStore) commit(ctx context.Context, sess *session, dest Destinati
 		Serial:    sess.serial,
 		Created:   written.Created,
 	}, nil
+}
+
+// endLocked removes a session from the store and discards its staged file.
+// Called with the session's lock held.
+func (s *SessionStore) endLocked(sess *session) {
+	s.mu.Lock()
+	delete(s.sessions, sess.id)
+	s.mu.Unlock()
+	sess.discardLocked()
+}
+
+// commitCannotSucceed reports a commit failure that resending the last chunk
+// would only repeat: the name is taken and overwrite was not asked for, the
+// destination escapes its root, or the namespace can never hold the file.
+// Everything else is treated as transient.
+func commitCannotSucceed(err error) bool {
+	return errors.Is(err, vfs.ErrConflict) ||
+		errors.Is(err, vfs.ErrPermissionDenied) ||
+		errors.Is(err, vfs.ErrTooLarge)
 }
 
 // append writes one chunk at the committed offset. Called with the session's
