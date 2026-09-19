@@ -52,7 +52,7 @@ dependencies:
     sdk: flutter
   file_picker: ^12.2.0
   http: ^1.5.0
-  flutter_secure_storage: ^11.0.0
+  flutter_secure_storage: ^11.2.0
   shared_preferences: ^2.5.5
   open_filex: ^4.7.0
   path_provider: ^2.1.6
@@ -63,7 +63,7 @@ dependencies:
   go_router: ^18.0.1
   url_launcher: ^6.3.2
   web_socket_channel: ^3.0.3
-  flutter_quill: ^11.5.0
+  flutter_quill: ^11.6.0
   flutter_localizations:
     sdk: flutter
   cached_network_image: ^4.0.0
