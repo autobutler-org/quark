@@ -65,7 +65,11 @@ class _SetupFormState extends State<SetupForm> {
     final theme = Theme.of(context);
     return Form(
       key: widget.formKey,
-      autovalidateMode: AutovalidateMode.onUserInteraction,
+      // Deliberately not set here. A Form-level onUserInteraction validates
+      // every field the moment any one of them is touched, so typing a
+      // username put "Password is required" under two fields the user had
+      // not reached yet (#2008). Each field below carries the mode instead,
+      // so a field speaks only about itself, once it has been used.
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -113,6 +117,7 @@ class _SetupFormState extends State<SetupForm> {
             onFieldSubmitted: (_) {
               FocusScope.of(context).requestFocus(widget.passwordFocus);
             },
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Username is required' : null,
           ),
@@ -144,6 +149,7 @@ class _SetupFormState extends State<SetupForm> {
             onFieldSubmitted: (_) {
               FocusScope.of(context).requestFocus(widget.confirmFocus);
             },
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             validator: (v) {
               if (v == null || v.isEmpty) return 'Password is required';
               if (v.length < 8) return 'Password must be at least 8 characters';
@@ -177,6 +183,7 @@ class _SetupFormState extends State<SetupForm> {
             textInputAction: TextInputAction.done,
             autofillHints: const [AutofillHints.newPassword],
             onFieldSubmitted: (_) => widget.loading ? null : widget.onSubmit(),
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             validator: (v) {
               if (v == null || v.isEmpty) return 'Please confirm your password';
               if (v != widget.passwordController.text) {
