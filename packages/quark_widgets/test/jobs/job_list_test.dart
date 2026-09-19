@@ -189,4 +189,21 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  /// #2038: the empty state read "Conversions and other long tasks show up
+  /// here", which names the category rather than anything a first-time owner
+  /// would recognize.
+  testWidgets('the empty state names something a household would recognize', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      const JobList(items: [], isLoading: false),
+      size: narrowViewport,
+    );
+
+    expect(find.text('No jobs yet'), findsOneWidget);
+    expect(find.textContaining('converting a video'), findsOneWidget);
+    expect(find.textContaining('Conversions'), findsNothing);
+  });
 }
