@@ -111,14 +111,19 @@ class SheetsBody extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ],
-            if (!isSearching) ...[
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: onCreateNew,
-                icon: const Icon(Icons.add),
-                label: const Text('Create new sheet'),
+            const SizedBox(height: 16),
+            // Offered while searching too (#2044). A search that found
+            // nothing is the moment someone knows exactly what they wanted
+            // and does not have it — sending them back to a toolbar icon to
+            // start it is the long way round.
+            FilledButton.icon(
+              key: const ValueKey('sheets_create_cta'),
+              onPressed: onCreateNew,
+              icon: const Icon(Icons.add),
+              label: Text(
+                isSearching ? 'Create a new sheet instead' : 'Create new sheet',
               ),
-            ],
+            ),
           ],
         ),
       );
