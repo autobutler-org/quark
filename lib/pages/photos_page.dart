@@ -340,9 +340,30 @@ class PhotosPageState extends State<PhotosPage>
       context,
       selectedCount: _controller.selectedIds.length,
       loadAlbums: _controller.fetchAlbums,
+      // A household with no albums yet is exactly the one adding photos to
+      // its first (#2041), so the sheet can make it rather than sending them
+      // away to do it.
+      onCreateAlbum: _createAlbumForSelection,
     );
     if (album == null || !mounted) return;
     await _addSelectedTo(album);
+  }
+
+  /// Names and creates an album from inside the picker, for a Quark with none
+  /// yet. Answers with it so the picker can hand it straight back (#2041).
+  Future<AlbumItem?> _createAlbumForSelection() async {
+    final name = await AlbumNameDialog.show(
+      context,
+      title: 'New album',
+      isNameTaken: (name) => _controller.albumNameTaken(name),
+    );
+    if (name == null || name.isEmpty) return null;
+    try {
+      return await _controller.createAlbum(name);
+    } catch (e) {
+      if (mounted) _snack(Errors.album(e, 'create the album'));
+      return null;
+    }
   }
 
   Future<void> _addSelectedTo(AlbumItem album) async {

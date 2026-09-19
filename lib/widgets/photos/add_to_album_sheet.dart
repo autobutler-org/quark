@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/services/album_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/quark_widget_items.dart';
+import 'package:quark/widgets/photos/album_name_dialog.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Opens the package's [AddToAlbumSheet] for one photo, and adds it to or
@@ -102,6 +103,37 @@ class _AddToAlbumSheetHostState extends State<AddToAlbumSheetHost> {
     }
   }
 
+  /// Makes an album and puts this photo straight into it (#2041).
+  ///
+  /// The sheet used to tell a user with no albums to go and create one in the
+  /// Photos view, which meant losing the sheet, the selection and the photo
+  /// they were looking at.
+  Future<void> _createAndAdd() async {
+    final name = await AlbumNameDialog.show(context, title: 'New album');
+    if (name == null || name.isEmpty || !mounted) return;
+    try {
+      final album = await AlbumService.createAlbum(name);
+      await AlbumService.addPhotoToAlbum(
+        album.id,
+        deviceSerial: widget.deviceSerial,
+        relPath: widget.relPath,
+      );
+      if (!mounted) return;
+      setState(() {
+        _albums = [
+          ..._albums,
+          AlbumItem(id: album.id, name: album.name, itemCount: 1),
+        ];
+        _memberIds.add(album.id);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(Errors.album(e, 'create the album'))),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AddToAlbumSheet(
@@ -109,6 +141,7 @@ class _AddToAlbumSheetHostState extends State<AddToAlbumSheetHost> {
       memberAlbumIds: _memberIds,
       isLoading: _loading,
       onToggle: _toggle,
+      onCreateAlbum: _createAndAdd,
     );
   }
 }

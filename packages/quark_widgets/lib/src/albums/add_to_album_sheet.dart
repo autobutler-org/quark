@@ -12,7 +12,11 @@ import '../theme/quark_tokens.dart';
 /// whether a tap adds or removes. Show it with
 /// `showModalBottomSheet(isScrollControlled: true, ...)`.
 ///
-/// Key prefix: `add_to_album_<id>` on each album row.
+/// With no albums to list, the sheet offers to make one rather than telling
+/// the user to go and do it somewhere else (#2041) — pass [onCreateAlbum].
+///
+/// Key prefix: `add_to_album_<id>` on each album row, plus
+/// `add_to_album_create` on the create action.
 ///
 /// ```dart
 /// showModalBottomSheet<void>(
@@ -33,6 +37,7 @@ class AddToAlbumSheet extends StatelessWidget {
     required this.onToggle,
     this.isLoading = false,
     this.error,
+    this.onCreateAlbum,
     super.key,
   });
 
@@ -50,6 +55,10 @@ class AddToAlbumSheet extends StatelessWidget {
 
   /// A user-facing message for a load that failed, or null.
   final String? error;
+
+  /// Makes a new album to add this photo to. Null leaves the empty state as
+  /// copy, for a caller that cannot create one.
+  final VoidCallback? onCreateAlbum;
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +94,23 @@ class AddToAlbumSheet extends StatelessWidget {
                 : error != null
                 ? Center(child: Text(error, textAlign: TextAlign.center))
                 : albums.isEmpty
-                ? const Center(child: Text('No albums — create one first'))
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('No albums yet'),
+                        if (onCreateAlbum != null) ...[
+                          SizedBox(height: tokens.spacingMd),
+                          FilledButton.icon(
+                            key: const ValueKey('add_to_album_create'),
+                            onPressed: onCreateAlbum,
+                            icon: const Icon(QuarkIcons.add_rounded, size: 18),
+                            label: const Text('Create album'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  )
                 : ListView(
                     controller: scrollController,
                     children: [

@@ -13,6 +13,7 @@ class AlbumPickerSheetHost extends StatefulWidget {
   const AlbumPickerSheetHost({
     required this.selectedCount,
     required this.loadAlbums,
+    this.onCreateAlbum,
     super.key,
   });
 
@@ -21,6 +22,7 @@ class AlbumPickerSheetHost extends StatefulWidget {
     BuildContext context, {
     required int selectedCount,
     required Future<List<AlbumItem>> Function() loadAlbums,
+    Future<AlbumItem?> Function()? onCreateAlbum,
   }) {
     return showModalBottomSheet<AlbumItem>(
       context: context,
@@ -31,6 +33,7 @@ class AlbumPickerSheetHost extends StatefulWidget {
       builder: (_) => AlbumPickerSheetHost(
         selectedCount: selectedCount,
         loadAlbums: loadAlbums,
+        onCreateAlbum: onCreateAlbum,
       ),
     );
   }
@@ -40,6 +43,10 @@ class AlbumPickerSheetHost extends StatefulWidget {
 
   /// Fetches the album tree.
   final Future<List<AlbumItem>> Function() loadAlbums;
+
+  /// Names and creates an album, answering with it — or null if the user
+  /// backed out. Null hides the empty state's create action (#2041).
+  final Future<AlbumItem?> Function()? onCreateAlbum;
 
   @override
   State<AlbumPickerSheetHost> createState() => _AlbumPickerSheetHostState();
@@ -77,6 +84,14 @@ class _AlbumPickerSheetHostState extends State<AlbumPickerSheetHost> {
     }
   }
 
+  /// Makes an album and picks it, so the selection the user built lands in it
+  /// without leaving the sheet (#2041).
+  Future<void> _createAndPick() async {
+    final album = await widget.onCreateAlbum!();
+    if (album == null || !mounted) return;
+    Navigator.of(context).pop(album);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlbumPickerSheet(
@@ -86,6 +101,7 @@ class _AlbumPickerSheetHostState extends State<AlbumPickerSheetHost> {
       error: _error,
       onPicked: (album) => Navigator.of(context).pop(album),
       onRetry: _load,
+      onCreateAlbum: widget.onCreateAlbum == null ? null : _createAndPick,
     );
   }
 }
