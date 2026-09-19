@@ -17,6 +17,7 @@ import 'package:quark/pages/spreadsheet_editor_page.dart';
 import 'package:quark/pages/storage_devices_page.dart';
 import 'package:quark/pages/terms_page.dart';
 import 'package:quark/pages/trash_page.dart';
+import 'package:quark/pages/users_page.dart';
 import 'package:quark/pages/vault_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
@@ -52,6 +53,9 @@ class AppRoutes {
   static const health = '/health';
   static const vault = '/vault';
   static const jobs = '/jobs';
+
+  /// The admin-only Users page (#1662).
+  static const users = '/users';
   static const settings = '/settings';
   static const setup = '/setup';
   static const login = '/login';
@@ -354,6 +358,10 @@ final router = GoRouter(
     ),
     GoRoute(path: AppRoutes.jobs, builder: (context, _) => JobsPage()),
     GoRoute(
+      path: AppRoutes.users,
+      builder: (context, state) => const UsersPage(),
+    ),
+    GoRoute(
       path: AppRoutes.settings,
       builder: (context, state) => const SettingsPage(),
     ),
@@ -397,7 +405,7 @@ Future<AuthStatus> Function() authStatusProbe = AuthService.checkStatus;
 
 /// Pages only an admin can use. [authRedirect] sends anyone else to
 /// [AppRoutes.files]; the Quark refuses their requests either way.
-const adminRoutes = {AppRoutes.vault};
+const adminRoutes = {AppRoutes.vault, AppRoutes.users};
 
 /// Whether the Quark says the signed-in caller is an admin. False when it
 /// cannot say.

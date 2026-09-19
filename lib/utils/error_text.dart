@@ -158,6 +158,11 @@ abstract final class Errors {
   /// this is what they read in the meantime.
   static const String sessionExpired = 'Your session expired. Sign in again.';
 
+  /// Removing, turning off or deleting the only active admin, which the Quark
+  /// refuses with a 409.
+  static const String lastAdmin =
+      'This Quark needs at least one admin. Make someone else an admin first.';
+
   /// The Quark answered, and what it said maps to copy worth the difference.
   /// Anything unmapped falls back to [couldNot] — a vague-but-true sentence
   /// beats a guess about a status the backend may not even return.

@@ -67,6 +67,7 @@ void main() {
       QuarkDrawerSection.health,
       QuarkDrawerSection.vault,
       QuarkDrawerSection.jobs,
+      QuarkDrawerSection.users,
       QuarkDrawerSection.settings,
     ]) {
       expect(
@@ -81,10 +82,13 @@ void main() {
     expect(files.selected, isTrue);
   });
 
-  testWidgets('keeps the vault out of a non-admin drawer', (tester) async {
+  testWidgets('keeps admin-only pages out of a non-admin drawer', (
+    tester,
+  ) async {
     await pumpDrawer(tester);
 
     expect(find.byKey(const ValueKey('drawer_vault')), findsNothing);
+    expect(find.byKey(const ValueKey('drawer_users')), findsNothing);
     expect(find.byKey(const ValueKey('drawer_settings')), findsOneWidget);
   });
 
@@ -93,15 +97,18 @@ void main() {
   ) async {
     await pumpDrawer(tester);
     expect(find.byKey(const ValueKey('drawer_vault')), findsNothing);
+    expect(find.byKey(const ValueKey('drawer_users')), findsNothing);
 
     settings.isAdmin.value = true;
     await tester.pump();
     expect(find.byKey(const ValueKey('drawer_vault')), findsOneWidget);
+    expect(find.byKey(const ValueKey('drawer_users')), findsOneWidget);
 
-    // A demoted admin loses the entry without signing out.
+    // A demoted admin loses the entries without signing out.
     settings.isAdmin.value = false;
     await tester.pump();
     expect(find.byKey(const ValueKey('drawer_vault')), findsNothing);
+    expect(find.byKey(const ValueKey('drawer_users')), findsNothing);
   });
 
   testWidgets('a row goes to its page', (tester) async {
