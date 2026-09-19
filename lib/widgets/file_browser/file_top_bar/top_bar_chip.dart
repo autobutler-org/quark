@@ -11,6 +11,7 @@ class TopBarChip extends StatelessWidget {
     this.onTap,
     this.active = false,
     this.iconOnly = false,
+    this.tooltip,
     super.key,
   });
 
@@ -19,6 +20,11 @@ class TopBarChip extends StatelessWidget {
   final VoidCallback? onTap;
   final bool active;
   final bool iconOnly;
+
+  /// What the chip does, for a label that names a mode without explaining it
+  /// (#2037). Falls back to [label] when the chip is icon-only, which is what
+  /// keeps a narrow bar readable.
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +38,7 @@ class TopBarChip extends StatelessWidget {
           ? SystemMouseCursors.click
           : SystemMouseCursors.basic,
       child: Tooltip(
-        message: iconOnly ? label : '',
+        message: tooltip ?? (iconOnly ? label : ''),
         child: Material(
           color: active
               ? colorScheme.primary.withValues(alpha: 0.12)

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/top_bar_chip.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/view_grouping_copy.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/top_bar_menu_radio_item.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/top_bar_menu_section_header.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -107,6 +108,10 @@ class FileTopBarViewsMenu extends StatelessWidget {
           title: Text(
             isUnifiedView ? 'Unified' : 'Per-device',
             style: const TextStyle(fontSize: 14),
+          ),
+          subtitle: Text(
+            ViewGroupingCopy.forMode(isUnified: isUnifiedView),
+            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
           ),
           trailing: Switch.adaptive(
             value: isUnifiedView,
