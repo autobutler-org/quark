@@ -40,17 +40,16 @@ func newCreateUserFixture(t *testing.T) createUserFixture {
 		t.Fatalf("GetManagedDevices = %v, %v", devices, err)
 	}
 	database := dbtest.NewDB(t)
-	setupFounder(t, database.Queries)
+	setupFounder(t, database, devices[0].FilesDir)
 	return createUserFixture{database: database, storage: storage, filesDir: devices[0].FilesDir}
 }
 
-func (f createUserFixture) create(username string, folder bool) (authutil.CreateUserResult, error) {
+func (f createUserFixture) create(username string) (authutil.CreateUserResult, error) {
 	return authutil.CreateUser(context.Background(), authutil.CreateUserParams{
-		Database:     f.database,
-		Username:     username,
-		Password:     "initial-password",
-		CreateFolder: folder,
-		FilesDir:     f.filesDir,
+		Database: f.database,
+		Username: username,
+		Password: "initial-password",
+		FilesDir: f.filesDir,
 	})
 }
 
@@ -71,7 +70,7 @@ func TestCreateUser_PhraseOnFirstLoginOnly(t *testing.T) {
 	ctx := context.Background()
 	q := f.database.Queries
 
-	result, err := f.create("bob", false)
+	result, err := f.create("bob")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
@@ -82,11 +81,8 @@ func TestCreateUser_PhraseOnFirstLoginOnly(t *testing.T) {
 	if user.Status != authutil.StatusActive || user.IsAdmin != 0 || user.RecoveryPhraseHash != "" {
 		t.Errorf("created account status=%q admin=%d hash=%q, want active, non-admin, no hash", user.Status, user.IsAdmin, user.RecoveryPhraseHash)
 	}
-	if result.FolderPath != "" {
-		t.Errorf("FolderPath = %q without a folder", result.FolderPath)
-	}
-	if _, err := os.Stat(filepath.Join(f.filesDir, "users")); !os.IsNotExist(err) {
-		t.Errorf("a folder was made without being asked for: %v", err)
+	if result.FolderPath != "users/bob" {
+		t.Errorf("FolderPath = %q, want users/bob", result.FolderPath)
 	}
 
 	_, recoverErr := authutil.Recover(ctx, q, authutil.RecoverParams{Username: "bob", RecoveryPhrase: "", NewPassword: "another-password"})
@@ -130,7 +126,7 @@ func TestCreateUser_PrivateFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := f.create("bob", true)
+	result, err := f.create("bob")
 	if err != nil {
 		t.Fatalf("CreateUser with a top-level folder of the same name: %v", err)
 	}
@@ -158,14 +154,15 @@ func TestCreateUser_PrivateFolder(t *testing.T) {
 	if check := loaded.Access.Check("", "users/carol", accessutil.Read); check.Readable {
 		t.Error("new account can read another account's home")
 	}
-	// The home is the only grant: users/ itself gets none, and breadcrumb
-	// visibility is what shows the path to someone granted beneath it.
+	// Each home is the only grant it carries: users/ itself gets none, and
+	// breadcrumb visibility is what shows the path to someone granted beneath
+	// it. The founder's home is there too, because every account gets one.
 	var granted string
-	if err := f.database.Db.QueryRow(`SELECT GROUP_CONCAT(rel_path) FROM path_access`).Scan(&granted); err != nil {
+	if err := f.database.Db.QueryRow(`SELECT GROUP_CONCAT(rel_path) FROM path_access ORDER BY rel_path`).Scan(&granted); err != nil {
 		t.Fatal(err)
 	}
-	if granted != "users/bob" {
-		t.Errorf("path_access holds %q, want only users/bob", granted)
+	if granted != "users/admin,users/bob" {
+		t.Errorf("path_access holds %q, want only the two homes", granted)
 	}
 }
 
@@ -182,20 +179,17 @@ func TestCreateUser_RefusalsLeaveNothing(t *testing.T) {
 	}
 	before := f.userCount(t)
 
-	if _, err := f.create("family", true); !errors.Is(err, authutil.ErrFolderExists) {
+	if _, err := f.create("family"); !errors.Is(err, authutil.ErrFolderExists) {
 		t.Errorf("existing folder = %v, want ErrFolderExists", err)
 	}
 	if _, err := os.Stat(filepath.Join(existing, "photo.jpg")); err != nil {
 		t.Errorf("refused account touched the existing folder: %v", err)
 	}
-	if _, err := f.create("admin", true); !errors.Is(err, authutil.ErrUsernameTaken) {
+	if _, err := f.create("admin"); !errors.Is(err, authutil.ErrUsernameTaken) {
 		t.Errorf("taken name = %v, want ErrUsernameTaken", err)
 	}
-	if _, err := os.Stat(filepath.Join(f.filesDir, "users", "admin")); !os.IsNotExist(err) {
-		t.Errorf("a taken name still made a folder: %v", err)
-	}
 	for _, name := range []string{"../x", "a/b", ".trash"} {
-		if _, err := f.create(name, true); !errors.Is(err, authutil.ErrInvalidUsername) {
+		if _, err := f.create(name); !errors.Is(err, authutil.ErrInvalidUsername) {
 			t.Errorf("create %q = %v, want ErrInvalidUsername", name, err)
 		}
 	}
@@ -205,11 +199,12 @@ func TestCreateUser_RefusalsLeaveNothing(t *testing.T) {
 	if after := f.userCount(t); after != before {
 		t.Errorf("refusals left %d account rows, want %d", after, before)
 	}
-	var rows int
-	if err := f.database.Db.QueryRow(`SELECT COUNT(*) FROM path_access`).Scan(&rows); err != nil {
+	// Only the founder's own home, made when the Quark was set up.
+	var granted string
+	if err := f.database.Db.QueryRow(`SELECT GROUP_CONCAT(rel_path) FROM path_access`).Scan(&granted); err != nil {
 		t.Fatal(err)
 	}
-	if rows != 0 {
-		t.Errorf("refusals left %d access rows", rows)
+	if granted != "users/admin" {
+		t.Errorf("refusals left path_access holding %q, want only users/admin", granted)
 	}
 }

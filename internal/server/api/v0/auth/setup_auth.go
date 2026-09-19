@@ -3,13 +3,14 @@ package v0_auth
 import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
 
 // setupAuth godoc
 // @Summary First-boot user setup
-// @Description Creates the owner account. Can only be called once.
+// @Description Creates the owner account, with a home under users/ on the internal device that it owns. Can only be called once.
 // @Tags auth
 // @Accept json
 // @Produce json
@@ -31,9 +32,16 @@ func setupAuth(c *gin.Context) *serverutil.Response {
 		return serverutil.BadRequest(err)
 	}
 
-	result, err := authutil.Setup(c.Request.Context(), (*deps).Database().Queries, authutil.SetupParams{
+	filesDir, err := storageutil.GetFilesDir()
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+
+	result, err := authutil.Setup(c.Request.Context(), authutil.SetupParams{
+		Database: (*deps).Database(),
 		Username: req.Username,
 		Password: req.Password,
+		FilesDir: filesDir,
 	})
 	if err != nil {
 		return serverutil.BadRequest(err)

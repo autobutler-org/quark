@@ -35,7 +35,7 @@ func newSessionsTestEngine(t *testing.T) (*gin.Engine, *db.Queries, int64) {
 
 	// Setup a test user via authutil so password hashing is correct.
 	ctx := context.Background()
-	_, err := authutil.Setup(ctx, queries, authutil.SetupParams{
+	_, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "testuser",
 		Password: "TestPassword123!",
 	})

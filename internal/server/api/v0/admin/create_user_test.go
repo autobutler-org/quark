@@ -12,7 +12,6 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
 func (h adminHarness) postJSON(path string, body any) *httptest.ResponseRecorder {
@@ -29,15 +28,11 @@ func (h adminHarness) postJSON(path string, body any) *httptest.ResponseRecorder
 // account and the folder; a taken name, an existing home and an invalid name
 // are refused with the status the app keys its copy off.
 func TestCreateUser_Endpoint(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	filesDir, err := storageutil.GetFilesDir()
-	if err != nil {
-		t.Fatal(err)
-	}
 	h := newAdminHarness(t)
+	filesDir := h.filesDir
 	ctx := context.Background()
 
-	w := h.postJSON("/api/v0/admin/users", map[string]any{"username": "bob", "password": "initial-password", "createFolder": true})
+	w := h.postJSON("/api/v0/admin/users", map[string]any{"username": "bob", "password": "initial-password"})
 	if w.Code != http.StatusCreated {
 		t.Fatalf("create = %d: %s", w.Code, w.Body.String())
 	}
@@ -82,7 +77,7 @@ func TestCreateUser_Endpoint(t *testing.T) {
 		text string
 	}{
 		{"taken", map[string]any{"username": "bob", "password": "initial-password"}, http.StatusConflict, authutil.ErrUsernameTaken.Error()},
-		{"folder exists", map[string]any{"username": "family", "password": "initial-password", "createFolder": true}, http.StatusConflict, authutil.ErrFolderExists.Error()},
+		{"folder exists", map[string]any{"username": "family", "password": "initial-password"}, http.StatusConflict, authutil.ErrFolderExists.Error()},
 		{"invalid name", map[string]any{"username": "../x", "password": "initial-password"}, http.StatusBadRequest, authutil.ErrInvalidUsername.Error()},
 		{"short password", map[string]any{"username": "carol", "password": "short"}, http.StatusBadRequest, authutil.ErrPasswordTooShort.Error()},
 	} {

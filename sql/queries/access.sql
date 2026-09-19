@@ -90,3 +90,31 @@ WHERE
         rel_path = sqlc.arg(rel_path)
         OR substr(rel_path, 1, length(sqlc.arg(rel_path)) + 1) = sqlc.arg(rel_path) || '/'
     );
+
+-- ListAccountsMissingHome names every active account that does not own its
+-- home, which the startup repair then gives one (#1908). The grant is what
+-- matters rather than the directory: a home with no row is unreachable to the
+-- account it was made for, so both cases have to come back from this one query.
+-- The path is spelled the way authutil.homeRelPath spells it, on the internal
+-- device, whose serial is ''.
+-- name: ListAccountsMissingHome :many
+SELECT
+    id,
+    username
+FROM
+    users
+WHERE
+    status = 'active'
+    AND NOT EXISTS (
+        SELECT
+            1
+        FROM
+            path_access
+        WHERE
+            path_access.user_id = users.id
+            AND path_access.device_serial = ''
+            AND path_access.rel_path = 'users/' || users.username
+            AND path_access.level = 'owner'
+    )
+ORDER BY
+    id;

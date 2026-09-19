@@ -17,7 +17,7 @@ import (
 
 // createUser godoc
 // @Summary Add an account
-// @Description Creates an active account with the given password. The admin never sees its recovery phrase: the account gets one on its first sign-in. With createFolder, the account's home is made under users/ on the internal device, named after the account, and the account owns it; an existing home of that name is refused rather than handed over, while a top-level folder of that name does not collide. Admin-only.
+// @Description Creates an active account with the given password. The admin never sees its recovery phrase: the account gets one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it; an existing home of that name is refused rather than handed over, while a top-level folder of that name does not collide. Admin-only.
 // @Tags admin
 // @Accept json
 // @Produce json
@@ -43,21 +43,16 @@ func createUser(c *gin.Context) *serverutil.Response {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		return serverutil.BadRequest(err)
 	}
-	filesDir := ""
-	if req.CreateFolder {
-		dir, err := storageutil.GetFilesDir()
-		if err != nil {
-			return serverutil.InternalServerError(err)
-		}
-		filesDir = dir
+	filesDir, err := storageutil.GetFilesDir()
+	if err != nil {
+		return serverutil.InternalServerError(err)
 	}
 
 	result, err := authutil.CreateUser(c.Request.Context(), authutil.CreateUserParams{
-		Database:     database,
-		Username:     req.Username,
-		Password:     req.Password,
-		CreateFolder: req.CreateFolder,
-		FilesDir:     filesDir,
+		Database: database,
+		Username: req.Username,
+		Password: req.Password,
+		FilesDir: filesDir,
 	})
 	if err != nil {
 		return accountErrorResponse(err)
@@ -65,9 +60,7 @@ func createUser(c *gin.Context) *serverutil.Response {
 
 	if bus := deps.EventBus(); bus != nil {
 		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})
-		if result.FolderPath != "" {
-			bus.Publish(eventbus.Event{Kind: eventbus.EventNewFolder, Path: result.FolderPath})
-		}
+		bus.Publish(eventbus.Event{Kind: eventbus.EventNewFolder, Path: result.FolderPath})
 	}
 	return serverutil.NewResponse().WithStatusCode(http.StatusCreated).WithData(userSummary{
 		ID:        result.UserID,

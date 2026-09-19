@@ -53,7 +53,7 @@ func newDeleteAccountEngine(t *testing.T) (*gin.Engine, *sql.DB, string) {
 	}
 	database.Queries = db.New(conn)
 
-	if _, err := authutil.Setup(context.Background(), database.Queries, authutil.SetupParams{
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: deleteAccountUser,
 		Password: "TestPassword123!",
 	}); err != nil {

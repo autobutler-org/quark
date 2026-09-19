@@ -46,7 +46,8 @@ func setStatus(t *testing.T, q *db.Queries, name, from, to string) {
 // with the right password gets its own error, and with a wrong one gets the
 // same "invalid credentials" as a stranger, so the status leaks nothing.
 func TestLogin_RefusesByStatusAfterPassword(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
 	mkStatusUser(t, q, "waiting", authutil.StatusPending)
 	mkStatusUser(t, q, "off", authutil.StatusDisabled)
@@ -76,7 +77,8 @@ func TestLogin_RefusesByStatusAfterPassword(t *testing.T) {
 // account was active stops working once it is disabled, and basic auth refuses
 // it too. The app's status call then sees an anonymous caller.
 func TestSessionsAndBasicAuth_RefuseInactive(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
 	mkStatusUser(t, q, "bob", authutil.StatusActive)
 	login, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", Password: "pw-for-status"})
@@ -108,7 +110,8 @@ func TestSessionsAndBasicAuth_RefuseInactive(t *testing.T) {
 // TestRecover_RefusesPending checks the right phrase for a pending account is
 // refused with ErrAccountPending and changes nothing.
 func TestRecover_RefusesPending(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
 	mkStatusUser(t, q, "waiting", authutil.StatusPending)
 
@@ -125,7 +128,8 @@ func TestRecover_RefusesPending(t *testing.T) {
 // TestDemoteFromAdmin_CountsOnlyActiveAdmins checks a disabled admin does not
 // stand in for the last active one.
 func TestDemoteFromAdmin_CountsOnlyActiveAdmins(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
 	mkUser(t, q, "boss", true)
 	mkUser(t, q, "sleeping", true)
@@ -139,7 +143,8 @@ func TestDemoteFromAdmin_CountsOnlyActiveAdmins(t *testing.T) {
 // TestPromoteToAdmin_OnlyActive checks a pending or disabled account cannot be
 // promoted, and neither can a username with no account.
 func TestPromoteToAdmin_OnlyActive(t *testing.T) {
-	q := newTestDB(t)
+	database := newTestDB(t)
+	q := database.Queries
 	ctx := context.Background()
 	mkStatusUser(t, q, "waiting", authutil.StatusPending)
 	mkStatusUser(t, q, "off", authutil.StatusDisabled)
@@ -161,8 +166,8 @@ func TestPromoteToAdmin_OnlyActive(t *testing.T) {
 func TestSetup_ValidatesUsername(t *testing.T) {
 	for _, name := range []string{"", "Admin", "../x", "a/b", ".trash", "-dash", "has space", strings.Repeat("a", 33)} {
 		t.Run(name, func(t *testing.T) {
-			q := newTestDB(t)
-			_, err := authutil.Setup(context.Background(), q, authutil.SetupParams{Username: name, Password: "long-enough"})
+			database := newTestDB(t)
+			_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: name, Password: "long-enough"})
 			if !errors.Is(err, authutil.ErrInvalidUsername) {
 				t.Errorf("Setup(%q) = %v, want ErrInvalidUsername", name, err)
 			}
@@ -170,8 +175,8 @@ func TestSetup_ValidatesUsername(t *testing.T) {
 	}
 	for _, name := range []string{"admin", "j.doe", "a_b-c", "7", strings.Repeat("a", 32)} {
 		t.Run(name, func(t *testing.T) {
-			q := newTestDB(t)
-			if _, err := authutil.Setup(context.Background(), q, authutil.SetupParams{Username: name, Password: "long-enough"}); err != nil {
+			database := newTestDB(t)
+			if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: name, Password: "long-enough"}); err != nil {
 				t.Errorf("Setup(%q): %v", name, err)
 			}
 		})

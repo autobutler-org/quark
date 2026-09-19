@@ -15,6 +15,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,13 +26,28 @@ type adminHarness struct {
 	engine   *gin.Engine
 	events   <-chan eventbus.Event
 	adminID  int64
+	// filesDir is where the handlers make homes, under this test's own HOME.
+	filesDir string
 }
 
 func newAdminHarness(t *testing.T) adminHarness {
 	t.Helper()
+	// These handlers resolve the files directory from HOME, and both creating
+	// and approving an account make a folder in it (#1908), so every harness
+	// gets a data directory of its own rather than the developer's.
+	t.Setenv("HOME", t.TempDir())
+	filesDir, err := storageutil.GetFilesDir()
+	if err != nil {
+		t.Fatal(err)
+	}
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
-	if _, err := authutil.Setup(ctx, database.Queries, authutil.SetupParams{Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{
+		Database: database,
+		Username: "admin",
+		Password: "admin-password",
+		FilesDir: filesDir,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	admin, err := database.Queries.GetUserByUsername(ctx, "admin")
@@ -52,7 +68,7 @@ func newAdminHarness(t *testing.T) adminHarness {
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_admin.NewRouter())
-	return adminHarness{database: database, engine: engine, events: events, adminID: admin.ID}
+	return adminHarness{database: database, engine: engine, events: events, adminID: admin.ID, filesDir: filesDir}
 }
 
 func (h adminHarness) do(method, path string) *httptest.ResponseRecorder {

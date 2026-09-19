@@ -34,6 +34,63 @@ func (q *Queries) DeletePathAccessTree(ctx context.Context, arg DeletePathAccess
 	return result.RowsAffected()
 }
 
+const listAccountsMissingHome = `-- name: ListAccountsMissingHome :many
+SELECT
+    id,
+    username
+FROM
+    users
+WHERE
+    status = 'active'
+    AND NOT EXISTS (
+        SELECT
+            1
+        FROM
+            path_access
+        WHERE
+            path_access.user_id = users.id
+            AND path_access.device_serial = ''
+            AND path_access.rel_path = 'users/' || users.username
+            AND path_access.level = 'owner'
+    )
+ORDER BY
+    id
+`
+
+type ListAccountsMissingHomeRow struct {
+	ID       int64
+	Username string
+}
+
+// ListAccountsMissingHome names every active account that does not own its
+// home, which the startup repair then gives one (#1908). The grant is what
+// matters rather than the directory: a home with no row is unreachable to the
+// account it was made for, so both cases have to come back from this one query.
+// The path is spelled the way authutil.homeRelPath spells it, on the internal
+// device, whose serial is ”.
+func (q *Queries) ListAccountsMissingHome(ctx context.Context) ([]ListAccountsMissingHomeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAccountsMissingHome)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAccountsMissingHomeRow
+	for rows.Next() {
+		var i ListAccountsMissingHomeRow
+		if err := rows.Scan(&i.ID, &i.Username); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPathAccessForUser = `-- name: ListPathAccessForUser :many
 SELECT
     device_serial,
