@@ -21,3 +21,10 @@ func (r *router) Routes() []*serverutil.Route {
 		revokeAllSessionsRoute,
 	}
 }
+
+// accountRefusal is the 403 body of a sign-in refused for the account's status.
+type accountRefusal struct {
+	Error string `json:"error"`
+	// Status is pending or disabled.
+	Status string `json:"status"`
+}

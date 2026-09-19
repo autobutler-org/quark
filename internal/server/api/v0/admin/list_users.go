@@ -43,6 +43,7 @@ func listUsers(c *gin.Context) *serverutil.Response {
 			ID:        u.ID,
 			Username:  u.Username,
 			IsAdmin:   u.IsAdmin != 0,
+			Status:    u.Status,
 			CreatedAt: u.CreatedAt.Format(time.RFC3339),
 		})
 	}

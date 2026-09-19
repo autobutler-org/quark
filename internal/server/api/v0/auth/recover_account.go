@@ -16,6 +16,7 @@ import (
 // @Param body body object true "{username, recoveryPhrase, newPassword}"
 // @Success 200 {object} object
 // @Failure 400 {object} serverutil.Response
+// @Failure 403 {object} accountRefusal "status is pending or disabled"
 // @Router /auth/recover [post]
 func recoverAccount(c *gin.Context) *serverutil.Response {
 	deps, ok := getQueries(c)
@@ -37,6 +38,9 @@ func recoverAccount(c *gin.Context) *serverutil.Response {
 		RecoveryPhrase: req.RecoveryPhrase,
 		NewPassword:    req.NewPassword,
 	})
+	if refusal := accountRefusalResponse(err); refusal != nil {
+		return refusal
+	}
 	if err != nil {
 		return serverutil.BadRequest(err)
 	}

@@ -1,16 +1,37 @@
 package v0_auth
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
 	"github.com/gin-gonic/gin"
 )
+
+// accountRefusalResponse answers a sign-in refused for the account's status
+// with 403 and that status, and returns nil for any other error. The status
+// field is what the app reads; the error is the sentence to show.
+func accountRefusalResponse(err error) *serverutil.Response {
+	var status string
+	switch {
+	case errors.Is(err, authutil.ErrAccountPending):
+		status = authutil.StatusPending
+	case errors.Is(err, authutil.ErrAccountDisabled):
+		status = authutil.StatusDisabled
+	default:
+		return nil
+	}
+	return serverutil.NewResponse().WithStatusCode(http.StatusForbidden).WithData(accountRefusal{
+		Error:  err.Error(),
+		Status: status,
+	})
+}
 
 const sessionCookieName = "session"
 const sessionCookieMaxAge = int(30 * 24 * time.Hour / time.Second)
