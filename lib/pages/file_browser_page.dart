@@ -1856,6 +1856,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   /// the spinner up until the refresh timer came round — which is what a
   /// member saw opening `groups`, a folder they may list but may not stat,
   /// since their grant sits on the group's folder rather than on `groups`.
+  ///
+  /// A failed stat comes here too, when the path cannot name a file: the
+  /// listing is then what reports the folder missing, and its error state
+  /// offers the way out. Without it, a link to a folder that is not there sat
+  /// on "Opening folder" forever (#2073).
   void _showFolder(String path) {
     // Resolution is over, so drop the in-flight flag first: it is what
     // suppresses listings while the type is unknown, and every caller here
