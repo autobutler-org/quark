@@ -31,7 +31,7 @@ func accountErrorResponse(err error) *serverutil.Response {
 // Like the account sentinels, the group sentinels go out unwrapped.
 func groupErrorResponse(err error) *serverutil.Response {
 	switch {
-	case errors.Is(err, grouputil.ErrGroupNotFound):
+	case errors.Is(err, grouputil.ErrGroupNotFound), errors.Is(err, grouputil.ErrNotMember), errors.Is(err, authutil.ErrUserNotFound):
 		return serverutil.NotFound(err)
 	case errors.Is(err, grouputil.ErrGroupNameTaken):
 		return serverutil.Conflict(err)
