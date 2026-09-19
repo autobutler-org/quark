@@ -10,6 +10,11 @@ const (
 	serviceGroupName = "quark"
 	serviceDataDir   = "/var/lib/quark"
 
+	// serviceLoginShell lets the service account log in over SSH once an admin
+	// turns SSH access on and allows a key or sets a password (#2131). Until
+	// then the account has neither, so the shell alone lets nobody in.
+	serviceLoginShell = "/bin/bash"
+
 	// serviceBinDir holds the installed binary, and is group-owned by the
 	// service account so the service can replace its own binary in place.
 	//

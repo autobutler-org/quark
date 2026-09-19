@@ -176,6 +176,26 @@ abstract final class Errors {
   static const String demoModeReadOnly =
       "Sample albums can't be changed in demo mode.";
 
+  /// Why SSH access can't be managed on this Quark, and what fixes it.
+  /// [reason] is the code `GET /api/v0/ssh/status` sends (#2131).
+  static String sshUnavailable(String? reason) => switch (reason) {
+    'unsupported_os' =>
+      'SSH access can only be managed on a Quark running Linux.',
+    'not_service' =>
+      "Quark isn't running as its installed service. On the device, run "
+          '`sudo quark install`, then manage SSH access here.',
+    'sshd_missing' =>
+      "The SSH server isn't installed. On the device, run "
+          '`sudo apt install openssh-server`, then `sudo quark install`.',
+    'helper_missing' =>
+      "Quark's SSH helper isn't installed yet. On the device, run "
+          '`sudo quark install` to add it.',
+    'no_login_shell' =>
+      "The quark account can't sign in yet. On the device, run "
+          '`sudo quark install` to give it a login shell.',
+    _ => "SSH access can't be managed on this Quark.",
+  };
+
   /// Session gone. The router sends the user to login on the next navigation;
   /// this is what they read in the meantime.
   static const String sessionExpired = 'Your session expired. Sign in again.';

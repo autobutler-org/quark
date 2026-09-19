@@ -4161,6 +4161,317 @@ const docTemplate = `{
                 }
             }
         },
+        "/ssh/enabled": {
+            "put": {
+                "description": "Starts sshd and opens port 22, or stops sshd and closes the port. The choice survives a reboot. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ssh"
+                ],
+                "summary": "Turn SSH access on or off",
+                "parameters": [
+                    {
+                        "description": "Whether SSH access should be on",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_ssh.setSSHEnabledBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "SSH access can't be managed on this Quark",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/ssh/keys": {
+            "post": {
+                "description": "Adds one OpenSSH public key to those allowed to sign in as quark. Options such as command= are dropped. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ssh"
+                ],
+                "summary": "Allow a public key to sign in over SSH",
+                "parameters": [
+                    {
+                        "description": "The public key",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_ssh.addSSHKeyBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/sshutil.Key"
+                        }
+                    },
+                    "400": {
+                        "description": "not an SSH public key",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the key is already allowed, or SSH access can't be managed on this Quark",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Removes the allowed key with the given SHA256 fingerprint. The fingerprint is a query parameter because it can contain a slash. Admin-only.",
+                "tags": [
+                    "ssh"
+                ],
+                "summary": "Stop a public key signing in over SSH",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "SHA256 fingerprint, as SHA256:...",
+                        "name": "fingerprint",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no allowed key has that fingerprint",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "SSH access can't be managed on this Quark",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/ssh/password": {
+            "put": {
+                "description": "Sets the password for the quark login account. Quark does not store it. At least 12 characters, no control characters. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ssh"
+                ],
+                "summary": "Set the SSH login password",
+                "parameters": [
+                    {
+                        "description": "The new password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_ssh.setSSHPasswordBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "too short, too long, or holds control characters",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "SSH access can't be managed on this Quark",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Removes the quark login account's password, so only allowed keys can sign in. Admin-only.",
+                "tags": [
+                    "ssh"
+                ],
+                "summary": "Clear the SSH login password",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "SSH access can't be managed on this Quark",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/ssh/status": {
+            "get": {
+                "description": "Whether SSH access can be managed on this Quark (and why not), whether sshd is running, and the public keys allowed to sign in as quark. Admin-only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ssh"
+                ],
+                "summary": "Get SSH access status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_ssh.sshStatusResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/storage/devices/rename": {
             "patch": {
                 "description": "Sets a custom display name for a storage device identified by its serial number",
@@ -5555,6 +5866,23 @@ const docTemplate = `{
                 }
             }
         },
+        "sshutil.Key": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "description": "Comment is the text after the key, often user@host. May be empty.",
+                    "type": "string"
+                },
+                "fingerprint": {
+                    "description": "Fingerprint is the SHA256 fingerprint, as ` + "`" + `ssh-keygen -l` + "`" + ` prints it.",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "Type is the key algorithm, such as ssh-ed25519.",
+                    "type": "string"
+                }
+            }
+        },
         "storageutil.TrashContentsItem": {
             "type": "object",
             "properties": {
@@ -6365,6 +6693,61 @@ const docTemplate = `{
             "properties": {
                 "enabled": {
                     "type": "boolean"
+                }
+            }
+        },
+        "v0_ssh.addSSHKeyBody": {
+            "type": "object",
+            "required": [
+                "key"
+            ],
+            "properties": {
+                "key": {
+                    "description": "Key is one public key line, as in id_ed25519.pub.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_ssh.setSSHEnabledBody": {
+            "type": "object",
+            "required": [
+                "enabled"
+            ],
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "v0_ssh.setSSHPasswordBody": {
+            "type": "object",
+            "required": [
+                "password"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_ssh.sshStatusResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "keys": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sshutil.Key"
+                    }
+                },
+                "reason": {
+                    "description": "Reason is why not, when available is false: unsupported_os,\nnot_service, sshd_missing, helper_missing or no_login_shell.",
+                    "type": "string"
                 }
             }
         },
