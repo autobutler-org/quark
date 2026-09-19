@@ -46,6 +46,9 @@ func deleteFiles(c *gin.Context) *serverutil.Response {
 	// Every path is checked before any is trashed, so a batch the caller may
 	// only partly change changes nothing.
 	for _, p := range filePaths {
+		if refused := refuseHomeRoot(access, serial, path.Join(rootDir, p)); refused != nil {
+			return refused
+		}
 		check := access.Check(serial, path.Join(rootDir, p), accessutil.Write)
 		if !check.Readable {
 			return serverutil.NotFound(errNoAccess)

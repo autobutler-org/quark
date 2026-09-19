@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -80,6 +81,19 @@ var ErrMoveIntoItself = errors.New("accessutil: cannot move a path into itself")
 // out of the root.
 func Canonical(p string) string {
 	return strings.TrimPrefix(path.Clean("/"+filepath.ToSlash(p)), "/")
+}
+
+// IsHomeRoot reports whether a path is an account's home itself,
+// users/<username> on the internal device, rather than something inside it.
+// The home carries the account's owner grant, so moving or trashing it would
+// strand the account and let RepairHomes create an empty one in its place
+// (#2016). A users/<name> folder on any other device is an ordinary folder.
+func IsHomeRoot(serial, p string) bool {
+	if serial != "" {
+		return false
+	}
+	dir, name := path.Split(Canonical(p))
+	return dir == authutil.UsersDirName+"/" && name != ""
 }
 
 // Access is one principal's rows, resolved in memory.

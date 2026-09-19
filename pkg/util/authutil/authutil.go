@@ -39,6 +39,11 @@ const (
 	StatusDisabled = "disabled"
 )
 
+// UsersDirName is the directory under the files directory that holds every
+// account's home, so a username never collides with a top-level folder name
+// (#2016).
+const UsersDirName = "users"
+
 // Errors a handler passes to the app unchanged. Their text is what a person
 // reads, so they are returned bare rather than wrapped.
 var (
@@ -652,7 +657,7 @@ func RepairHomes(ctx context.Context, params RepairHomesParams) (RepairHomesResu
 		}
 		// MkdirAll, not Mkdir: the repair ends with the directory there, so one
 		// that already exists is adopted rather than refused.
-		if err := os.MkdirAll(filepath.Join(params.FilesDir, usersDirName, account.Username), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(params.FilesDir, UsersDirName, account.Username), 0o755); err != nil {
 			return result, fmt.Errorf("create the home of %q: %w", account.Username, err)
 		}
 		if err := grantHome(ctx, params.Database.Queries, account.Username, account.ID); err != nil {
