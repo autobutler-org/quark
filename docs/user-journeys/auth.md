@@ -224,6 +224,38 @@ account on this Quark.
 
 ---
 
+### JN-AUTH-011: Sign in after the request is approved
+
+**Preconditions:** JN-AUTH-009 complete. An admin has approved the request (JN-USR-008).
+
+**Steps:**
+
+1. Navigate to `/login`.
+2. Enter the requested username and its password.
+3. Tap **Sign in**.
+
+**Expected result:**
+
+- App navigates to `/files`.
+- The account's recovery phrase from JN-AUTH-009 resets its password (JN-AUTH-005).
+
+---
+
+### JN-AUTH-012: Requests turned off
+
+**Preconditions:** An admin has turned off account requests (JN-USR-010). User is not signed in.
+
+**Steps:**
+
+1. Navigate to `/login`.
+
+**Expected result:**
+
+- The sign-in form does not offer to request an account.
+- Opening `/request-account` directly and sending a request shows "This Quark isn't taking account requests right now."
+
+---
+
 ### JN-AUTH-014: Sign in to a turned-off account
 
 **Preconditions:** An admin has turned the account off.
