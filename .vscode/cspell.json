@@ -33,7 +33,8 @@
     "pubspec.lock",
     "test-results",
     "test/performance/generate_files.sh",
-    "tmp"
+    "tmp",
+    "tests/stress/**"
   ],
   "ignoreRandomStrings": true,
   "gitignoreRoot": ".gitignore",
@@ -201,6 +202,7 @@
     "GOPROXY",
     "gopsutil",
     "goreleaser",
+    "goroutines",
     "gosec",
     "gotests",
     "GOTOOLCHAIN",

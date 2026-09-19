@@ -1023,7 +1023,7 @@ test/unit: test/unit/backend test/unit/frontend ## Run unit tests
 .PHONY: test/unit/backend
 test/unit/backend: internal/server/public/stub.txt ## Run unit tests for backend
 	# Generate coverage report for unit tests (excludes integration test packages)
-	$(GO) test -v $(shell $(GO) list ./... | grep -v '/internal/server/api/v0/') \
+	$(GO) test -v $(shell $(GO) list ./... | grep -v '/internal/server/api/v0/' | grep -v '/tests/stress') \
 		-coverprofile=coverage.out \
 		-covermode=atomic
 	# Apply coverage ignore directives
@@ -1049,6 +1049,11 @@ test/unit/frontend: generate/frontend ## Run unit tests for frontend
 			$(MAKE) -C "$$pkg" test/unit || exit 1
 		fi
 	done
+
+.PHONY: test/stress
+test/stress: ## Run API stress/chaos suite against a running backend (QUARK_BASE_URL)
+	@echo "API stress suite → $${QUARK_BASE_URL:-http://127.0.0.1:8080} (see tests/stress/README.md)"
+	$(GO) test -tags stress -count=1 -timeout 10m -v ./tests/stress/
 
 .PHONY: test/integration
 test/integration: test/integration/backend ## Run integration tests
