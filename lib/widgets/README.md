@@ -36,6 +36,9 @@ lib/widgets/
   host_dialog.dart              edits AppSettings hosts
   host_manager.dart             edits AppSettings hosts
   quark_connect_form.dart       calls the connection services
+  text_controller_scope.dart    owns a dialog's TextEditingController, so it is
+                                disposed with the dialog rather than when the
+                                dialog's future completes (#2012)
 ```
 
 The photos page is decoupled (#1732): `PhotosController` makes its service
