@@ -127,6 +127,10 @@ func (d *detector) getDeviceInfo(devicePath string) (*Device, error) {
 	}
 
 	info := string(output)
+	if isDiskImage(info) {
+		// Mounted .dmg files and Xcode's simulator runtimes are not storage.
+		return nil, fmt.Errorf("%s is a mounted disk image", devicePath)
+	}
 	device.Name = extractValue(info, "Volume Name:")
 	device.MountPoint = extractValue(info, "Mount Point:")
 	device.FileSystem = extractValue(info, "Type \\(Bundle\\):")
@@ -178,6 +182,11 @@ func shouldSkipVolume(mountPoint string) bool {
 	}
 
 	return false
+}
+
+// isDiskImage reports whether diskutil info text describes a mounted disk image.
+func isDiskImage(info string) bool {
+	return extractValue(info, "Protocol:") == "Disk Image"
 }
 
 func extractValue(info, key string) string {
