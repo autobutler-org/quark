@@ -16,7 +16,7 @@ lib/widgets/
   file_browser/
     file_browser_view.dart      lists files, calls FilesService
     file_top_bar.dart           search and sort chrome, calls FilesService
-    file_storage_footer.dart    capacity row, calls StorageService
+    file_storage_footer.dart    capacity row, takes the app's HealthStatus
     recent_files_section.dart   calls FilesService
     new_file_dialog.dart        one-line wrapper that pops NewFileDialog
   jobs/

@@ -23,6 +23,7 @@ import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/upload_manager.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/services/health_service.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/services/upload_chunk_source.dart';
@@ -104,6 +105,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
   // Device filter state (#801)
   List<StorageDevice> _allDevices = [];
+  HealthStatus? _health;
 
   /// Tracks selected devices by devicePath (unique per device, unlike serial).
   Set<String> _activeDevicePaths = {};
@@ -300,13 +302,25 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       });
       return;
     }
-    await _loadDevices();
+    await Future.wait([_loadDevices(), _loadHealth()]);
     if (!mounted) return;
     setState(() => _reloadFiles());
     // `_reloadFiles` may issue nothing while a deep link is still resolving.
     // Awaiting the sentinel would hang the refresh, and with it the mixin's
     // in-flight flag, for the rest of the session.
     if (!identical(_filesFuture, _notLoaded)) await _filesFuture;
+  }
+
+  /// Feeds the storage footer. A failure keeps the last reading (or the
+  /// placeholder, before the first one) rather than surfacing an error.
+  Future<void> _loadHealth() async {
+    try {
+      final health = await HealthService.getHealth();
+      if (!mounted) return;
+      setState(() => _health = health);
+    } catch (e) {
+      debugPrint('[file_browser_page.dart] Failed to load health: $e');
+    }
   }
 
   Future<void> _loadDevices() async {
@@ -2284,7 +2298,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                     ),
                   ),
           ),
-          if (!_noHostSelected) const FileStorageFooter(),
+          if (!_noHostSelected) FileStorageFooter(status: _health),
         ],
       ),
     );
