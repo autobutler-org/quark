@@ -44,6 +44,9 @@ lib/widgets/
   host_dialog.dart              edits AppSettings hosts
   host_manager.dart             edits AppSettings hosts
   quark_connect_form.dart       calls the connection services
+  text_controller_scope.dart    owns a dialog's TextEditingController, so it is
+                                disposed with the dialog rather than when the
+                                dialog's future completes (#2012)
   upload_drop_zone.dart         takes a desktop drop through desktop_drop, an
                                 app dependency the package does not have
 ```
