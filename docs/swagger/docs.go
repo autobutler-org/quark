@@ -15,6 +15,201 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/access": {
+            "get": {
+                "description": "Returns the grants on a path, then one inherited grant per account or group for the highest level a parent folder gives it; a grant whose from is not relPath is inherited and is changed on that folder. Only an owner of the path, directly or through a parent folder, or an admin may see them. canManage and canGrantOwner are true in every answer.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "access"
+                ],
+                "summary": "List who can reach a file or folder",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device serial; empty is the internal device",
+                        "name": "serial",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Path on the device",
+                        "name": "relPath",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/accessutil.GrantsResult"
+                        }
+                    },
+                    "400": {
+                        "description": "a path in the trash",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller can read the path but doesn't own it",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "the caller can't read the path",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Grants one active account or existing group read, write or owner on a path, replacing the level it had there, and returns the path's grants as they now stand. Only an owner of the path or an admin may share it. A non-admin can't change their own owner row on the path. Publishes access_changed for the path.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "access"
+                ],
+                "summary": "Share a file or folder",
+                "parameters": [
+                    {
+                        "description": "The path, one account or group, and the level",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_access.setAccessBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/accessutil.GrantsResult"
+                        }
+                    },
+                    "400": {
+                        "description": "a path in the trash, not exactly one account or group, a level other than read, write or owner, or the caller's own owner row",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller can read the path but doesn't own it",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "the caller can't read the path, or no active account or group has that id",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Removes one account's or group's grant on exactly this path and returns the path's grants as they now stand. Only an owner of the path or an admin may. Access a parent folder gives is removed on that folder instead. A non-admin can't remove their own owner row on the path; another owner or an admin may remove the last one. Publishes access_changed for the path.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "access"
+                ],
+                "summary": "Stop sharing a file or folder",
+                "parameters": [
+                    {
+                        "description": "The path and one account or group",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_access.revokeAccessBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/accessutil.GrantsResult"
+                        }
+                    },
+                    "400": {
+                        "description": "a path in the trash, not exactly one account or group, or the caller's own owner row",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller can read the path but doesn't own it",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "the caller can't read the path, or that account or group has no access to it",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the access comes from a parent folder",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/approve/{username}": {
             "put": {
                 "description": "Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing home of that name leaves the request pending rather than making an account that cannot use it. Admin-only.",
@@ -4859,6 +5054,61 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "accessutil.Grant": {
+            "type": "object",
+            "properties": {
+                "builtin": {
+                    "description": "Builtin marks the everyone group.",
+                    "type": "boolean"
+                },
+                "from": {
+                    "description": "From is the path the row is on. A grant whose From is not the path\nasked about is inherited from that folder, and is changed there.",
+                    "type": "string"
+                },
+                "groupId": {
+                    "description": "GroupID is set for a grant to a group.",
+                    "type": "integer"
+                },
+                "level": {
+                    "description": "Level is read, write or owner.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is the account's username or the group's name.",
+                    "type": "string"
+                },
+                "userId": {
+                    "description": "UserID is set for a grant to an account.",
+                    "type": "integer"
+                }
+            }
+        },
+        "accessutil.GrantsResult": {
+            "type": "object",
+            "properties": {
+                "canGrantOwner": {
+                    "description": "CanGrantOwner is whether the caller may grant, change or revoke owner.\nEvery owner may, so it equals CanManage.",
+                    "type": "boolean"
+                },
+                "canManage": {
+                    "description": "CanManage is whether the caller may change the grants. Only a caller who\nmay manage sees them at all, so it is true in every result.",
+                    "type": "boolean"
+                },
+                "deviceSerial": {
+                    "type": "string"
+                },
+                "grants": {
+                    "description": "Grants lists the rows on the path, then one inherited grant per principal\nholding the highest level any parent folder gives it.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/accessutil.Grant"
+                    }
+                },
+                "relPath": {
+                    "type": "string"
+                }
+            }
+        },
         "authutil.SessionInfo": {
             "type": "object",
             "properties": {
@@ -5197,6 +5447,46 @@ const docTemplate = `{
                 },
                 "version": {
                     "type": "string"
+                }
+            }
+        },
+        "v0_access.revokeAccessBody": {
+            "type": "object",
+            "properties": {
+                "deviceSerial": {
+                    "description": "DeviceSerial names the device; empty is the internal one.",
+                    "type": "string"
+                },
+                "groupId": {
+                    "type": "integer"
+                },
+                "relPath": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v0_access.setAccessBody": {
+            "type": "object",
+            "properties": {
+                "deviceSerial": {
+                    "description": "DeviceSerial names the device; empty is the internal one.",
+                    "type": "string"
+                },
+                "groupId": {
+                    "type": "integer"
+                },
+                "level": {
+                    "description": "Level is read, write or owner.",
+                    "type": "string"
+                },
+                "relPath": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "integer"
                 }
             }
         },
