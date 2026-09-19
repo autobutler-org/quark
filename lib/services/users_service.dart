@@ -64,6 +64,39 @@ class UsersService with AuthenticatedService {
     _check(response, 'deny $username');
   }
 
+  /// Turns [username]'s account off (#1909): it keeps its files and shares
+  /// but cannot sign in, and its sessions end. Refused for your own account,
+  /// and while it is the last active admin.
+  static Future<void> disable(String username) async {
+    final response = await instance.authenticatedPut(
+      _accountUri('/api/v0/admin/disable', username),
+    );
+    _check(response, 'disable $username', lastAdminGuard: true);
+  }
+
+  /// Turns [username]'s account back on, with everything it had.
+  static Future<void> enable(String username) async {
+    final response = await instance.authenticatedPut(
+      _accountUri('/api/v0/admin/enable', username),
+    );
+    _check(response, 'enable $username');
+  }
+
+  /// Deletes [username]'s account (#1909). The files it owned stay on the
+  /// Quark and become the signed-in admin's. Returns how many owner rows
+  /// moved. Refused for your own account, and while it is the last active
+  /// admin.
+  static Future<int> delete(String username) async {
+    final response = await instance.authenticatedDelete(
+      _accountUri('/api/v0/admin/users', username),
+    );
+    _check(response, 'delete $username', lastAdminGuard: true);
+    final body = jsonDecode(response.body);
+    return body is Map
+        ? (body['ownerRowsReassigned'] as num?)?.toInt() ?? 0
+        : 0;
+  }
+
   /// Whether the Quark's sign-in page offers to request an account, as
   /// `GET /auth/status` reports it.
   static Future<bool> accessRequestsEnabled() async =>
