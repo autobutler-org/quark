@@ -151,4 +151,24 @@ void main() {
       expect(serialOrNull('  ABC123  '), 'ABC123');
     });
   });
+
+  // ─── isHomeRoot ────────────────────────────────────────────────────
+  // The same cases as the Quark's TestIsHomeRoot, so the two stay in step.
+  group('isHomeRoot', () {
+    for (final (serial, path, want) in [
+      ('', 'users/bob', true),
+      ('', '/users/bob/', true),
+      ('', 'users/./bob', true),
+      ('', 'users', false),
+      ('', 'users/bob/notes.txt', false),
+      ('', 'users/bob/sub', false),
+      ('', 'bob', false),
+      ('', 'shared/users/bob', false),
+      ('USB1', 'users/bob', false),
+    ]) {
+      test('($serial, $path) is $want', () {
+        expect(isHomeRoot(serial, path), want);
+      });
+    }
+  });
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/models/file_node.dart';
+import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -13,8 +14,9 @@ typedef FileMenuActionDispatch =
 /// The "more" menu on one file or folder, shared by the list and grid views.
 ///
 /// Offers the entries in [menuActions] that make sense for [item]: nothing
-/// that changes a file inside an archive, Extract only on an archive, and
-/// Navigate to folder only in search results.
+/// that changes a file inside an archive, Extract only on an archive,
+/// Navigate to folder only in search results, and no Move/Rename or Delete on
+/// a home folder itself unless the viewer is an admin.
 class FileMenuButton extends StatelessWidget {
   const FileMenuButton({
     required this.item,
@@ -23,6 +25,7 @@ class FileMenuButton extends StatelessWidget {
     required this.inArchive,
     required this.isSearchMode,
     required this.onDispatchMenuAction,
+    this.isAdmin = false,
     this.onNavigateToFolder,
     super.key,
   });
@@ -34,12 +37,18 @@ class FileMenuButton extends StatelessWidget {
   final Set<String> extractingPaths;
   final bool inArchive;
   final bool isSearchMode;
+
+  /// Whether the viewer is an admin, who may move or delete a home folder
+  /// (`users/<name>` on the internal drive); a member may not (#2016).
+  final bool isAdmin;
   final FileMenuActionDispatch onDispatchMenuAction;
   final void Function(FileNode)? onNavigateToFolder;
 
   @override
   Widget build(BuildContext context) {
     final extracting = extractingPaths.contains(item.apiPath);
+    final canChange =
+        !inArchive && (isAdmin || !isHomeRoot(item.deviceSerial, item.apiPath));
 
     PopupMenuItem<FileMenuAction> entry(
       FileMenuAction action,
@@ -57,9 +66,9 @@ class FileMenuButton extends StatelessWidget {
       itemBuilder: (context) => [
         if (menuActions.contains(FileMenuAction.download))
           entry(FileMenuAction.download, const Text('Download')),
-        if (menuActions.contains(FileMenuAction.moveRename) && !inArchive)
+        if (menuActions.contains(FileMenuAction.moveRename) && canChange)
           entry(FileMenuAction.moveRename, const Text('Move/Rename')),
-        if (menuActions.contains(FileMenuAction.delete) && !inArchive)
+        if (menuActions.contains(FileMenuAction.delete) && canChange)
           entry(FileMenuAction.delete, const Text('Delete')),
         if (menuActions.contains(FileMenuAction.extractHere) &&
             !inArchive &&

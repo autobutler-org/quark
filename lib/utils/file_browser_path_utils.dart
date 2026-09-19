@@ -64,3 +64,16 @@ String? serialOrNull(String serial) {
   }
   return trimmed;
 }
+
+/// Whether [path] on [serial] is an account's home itself, `users/<name>` on
+/// the internal drive, rather than something inside it or a `users` folder on
+/// a USB drive. The Quark refuses a member's delete or move of one (#2016);
+/// this mirrors its `authutil.IsHomeRoot`, so keep the two in step.
+bool isHomeRoot(String serial, String path) {
+  if (serial.trim().isNotEmpty) return false;
+  final segments = path
+      .split('/')
+      .where((s) => s.isNotEmpty && s != '.')
+      .toList();
+  return segments.length == 2 && segments.first == 'users';
+}

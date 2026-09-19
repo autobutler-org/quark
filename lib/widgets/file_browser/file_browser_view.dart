@@ -48,6 +48,7 @@ class FileBrowserView extends StatefulWidget {
     this.scrollController,
     this.showFileSizeAndMenu = true,
     this.isSearchMode = false,
+    this.isAdmin = false,
     this.onNavigateToFolder,
     this.inArchive = false,
     this.isInitialLoad = false,
@@ -100,6 +101,10 @@ class FileBrowserView extends StatefulWidget {
   final ScrollController? scrollController;
   final bool showFileSizeAndMenu;
   final bool isSearchMode;
+
+  /// Whether the viewer is an admin; a member's menu leaves Move/Rename and
+  /// Delete off a home folder itself. See [FileMenuButton.isAdmin].
+  final bool isAdmin;
   final void Function(FileNode)? onNavigateToFolder;
 
   /// When true, we are browsing inside an archive — only download is available
@@ -290,6 +295,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                                 showFileSizeAndMenu: widget.showFileSizeAndMenu,
                                 inArchive: widget.inArchive,
                                 isSearchMode: widget.isSearchMode,
+                                isAdmin: widget.isAdmin,
                                 selectionMode: widget.selectionMode,
                                 onDispatchMenuAction: _dispatchMenuAction,
                                 onOpenDirectory: widget.onOpenDirectory,
@@ -414,6 +420,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                                             extractingPaths: _extractingPaths,
                                             inArchive: widget.inArchive,
                                             isSearchMode: widget.isSearchMode,
+                                            isAdmin: widget.isAdmin,
                                             onDispatchMenuAction:
                                                 _dispatchMenuAction,
                                             onNavigateToFolder:
@@ -500,6 +507,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                       showFileSizeAndMenu: widget.showFileSizeAndMenu,
                       inArchive: widget.inArchive,
                       isSearchMode: widget.isSearchMode,
+                      isAdmin: widget.isAdmin,
                       selectionMode: widget.selectionMode,
                       onDispatchMenuAction: _dispatchMenuAction,
                       onOpenDirectory: widget.onOpenDirectory,

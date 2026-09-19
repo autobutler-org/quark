@@ -2228,43 +2228,47 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        FileBrowserView(
-                          filesFuture: _isSearchMode
-                              ? (_searchFuture ??
-                                    Future.value(const <FileNode>[]))
-                              : _filesFuture,
-                          initialData: _isSearchMode ? null : _cachedFiles,
-                          isInitialLoad: isInitialLoad,
-                          onFileMenuAction: _handleFileMenuAction,
-                          onOpenDirectory: _handleOpenNode,
-                          isGridView: _isGridView,
-                          isUnifiedView: _isUnifiedView,
-                          isSearchMode: _isSearchMode,
-                          onNavigateToFolder: _navigateToFolder,
-                          currentPath: _currentPath,
-                          errorBuilder: (context, error) =>
-                              FolderRouteErrorState(
-                                error: error,
-                                currentPath: _currentPath,
-                                onRetry: _refreshFileState,
-                                onManageHosts: () =>
-                                    context.go(AppRoutes.settings),
-                                onOpenPath: _setPath,
-                                onGoHome: _goHome,
-                              ),
-                          loadingBuilder: _currentPath.isNotEmpty
-                              ? (context) => RouteResolutionLoadingShell(
-                                  path: _currentPath,
-                                )
-                              : null,
-                          onDropToFolder: _handleDropToFolder,
-                          onFolderDragEnter: _handleFolderDragEnter,
-                          onFolderDragExit: _handleFolderDragExit,
-                          scrollController: _fileBrowserScrollController,
-                          inArchive: _archiveContext != null,
-                          selectionMode: _selectionMode,
-                          selectedPaths: _selectedPaths,
-                          onSelectionChanged: _onSelectionChanged,
+                        ValueListenableBuilder<bool>(
+                          valueListenable: AppSettings.instance.isAdmin,
+                          builder: (context, isAdmin, _) => FileBrowserView(
+                            isAdmin: isAdmin,
+                            filesFuture: _isSearchMode
+                                ? (_searchFuture ??
+                                      Future.value(const <FileNode>[]))
+                                : _filesFuture,
+                            initialData: _isSearchMode ? null : _cachedFiles,
+                            isInitialLoad: isInitialLoad,
+                            onFileMenuAction: _handleFileMenuAction,
+                            onOpenDirectory: _handleOpenNode,
+                            isGridView: _isGridView,
+                            isUnifiedView: _isUnifiedView,
+                            isSearchMode: _isSearchMode,
+                            onNavigateToFolder: _navigateToFolder,
+                            currentPath: _currentPath,
+                            errorBuilder: (context, error) =>
+                                FolderRouteErrorState(
+                                  error: error,
+                                  currentPath: _currentPath,
+                                  onRetry: _refreshFileState,
+                                  onManageHosts: () =>
+                                      context.go(AppRoutes.settings),
+                                  onOpenPath: _setPath,
+                                  onGoHome: _goHome,
+                                ),
+                            loadingBuilder: _currentPath.isNotEmpty
+                                ? (context) => RouteResolutionLoadingShell(
+                                    path: _currentPath,
+                                  )
+                                : null,
+                            onDropToFolder: _handleDropToFolder,
+                            onFolderDragEnter: _handleFolderDragEnter,
+                            onFolderDragExit: _handleFolderDragExit,
+                            scrollController: _fileBrowserScrollController,
+                            inArchive: _archiveContext != null,
+                            selectionMode: _selectionMode,
+                            selectedPaths: _selectedPaths,
+                            onSelectionChanged: _onSelectionChanged,
+                          ),
                         ),
                         if (_isWebDragging && !_isHoveringFolderDropTarget)
                           IgnorePointer(
