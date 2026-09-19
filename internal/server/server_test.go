@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/server/middleware"
@@ -117,5 +119,34 @@ func TestNewEngine_InvalidTrustedProxies(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	if _, err := newEngine(); err == nil {
 		t.Fatal("newEngine accepted QUARK_TRUSTED_PROXIES=10.0.0.0/8,not-an-ip")
+	}
+}
+
+// TestAccessLog_RedactsQueryToken verifies that a session token passed as
+// ?token= — which the media, download and event-stream routes accept — never
+// reaches the access log, while the rest of the request line still does
+// (#2152).
+func TestAccessLog_RedactsQueryToken(t *testing.T) {
+	var logged bytes.Buffer
+	prior := gin.DefaultWriter
+	gin.DefaultWriter = &logged
+	t.Cleanup(func() { gin.DefaultWriter = prior })
+
+	gin.SetMode(gin.TestMode)
+	engine, err := newEngine()
+	if err != nil {
+		t.Fatalf("newEngine: %v", err)
+	}
+	engine.GET("/api/v0/videos/stream", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v0/videos/stream?filePath=clip.mp4&token=live-session-token", nil)
+	engine.ServeHTTP(httptest.NewRecorder(), req)
+
+	line := logged.String()
+	if strings.Contains(line, "live-session-token") {
+		t.Fatalf("access log carries the session token: %q", line)
+	}
+	if !strings.Contains(line, "/api/v0/videos/stream?filePath=clip.mp4&token=REDACTED") {
+		t.Fatalf("access log lost the request line: %q", line)
 	}
 }
