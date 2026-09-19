@@ -105,3 +105,43 @@ bool isGroupsDir(String serial, String path) {
   final segments = _internalSegments(serial, path);
   return segments != null && segments.length == 1 && segments.first == 'groups';
 }
+
+/// The folder holding every group's folder, in the browser's own spelling.
+/// A listing of it shows only the group folders the caller can reach, so it
+/// doubles as the account's own list of groups.
+const groupsPath = '/groups';
+
+/// An account's own files, `users/<username>`.
+///
+/// Empty when no username is known — a session recorded before the app kept
+/// one — which reads as the real root, the same place the browser opened
+/// before homes existed.
+String homePath(String? username) {
+  final name = username?.trim() ?? '';
+  return name.isEmpty ? '' : normalizePath('users/$name');
+}
+
+/// Where the file browser opens when the URL names no path (#2139).
+///
+/// A member's grants are sparse, so the real root holds nothing but the
+/// `users` and `groups` scaffolding and their own files sit two clicks down.
+/// They land in their home instead. An admin can reach everything, so the
+/// root is a real place for them and they keep landing there.
+///
+/// A path in the URL always wins over this: a deep link or a reload opens
+/// what it names.
+String landingPath({required bool isAdmin, required String? username}) =>
+    isAdmin ? '' : homePath(username);
+
+/// Whether [path] is [rootPath] or something inside it — the test for whether
+/// a caller whose reach starts at [rootPath] can open [path].
+///
+/// An empty [rootPath] is the real root, which contains everything.
+bool isWithin(String rootPath, String path) {
+  final root = normalizePath(rootPath);
+  if (root.isEmpty) {
+    return true;
+  }
+  final target = normalizePath(path);
+  return target == root || target.startsWith('$root/');
+}

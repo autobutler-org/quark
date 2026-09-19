@@ -32,6 +32,7 @@ void main() {
         home: Scaffold(
           body: FileTopBar(
             currentPath: '/docs',
+            rootPath: '',
             isGridView: false,
             isUnifiedView: false,
             onToggleUnifiedView: () {},

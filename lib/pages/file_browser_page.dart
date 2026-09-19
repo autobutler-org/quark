@@ -92,6 +92,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   int _generation = 0; // incremented on each reload to discard stale fetches
   String _currentPath = '';
 
+  /// Where the browser opens when the URL names no path, and the floor for
+  /// Home, Up and the breadcrumb: a member's own files, an admin's real root
+  /// (#2139). A path in the URL always wins over it.
+  String _landingPath = '';
+
   /// If the deep-link URL pointed directly to a file, open its editor once
   /// the page has mounted. Only consumed once.
   String? _pendingFileOpen;
@@ -139,8 +144,58 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   // Archive browser state — non-null when navigating inside an archive.
   _ArchiveContext? _archiveContext;
 
+  /// The shortcuts the browser offers, each with the path it opens, in the
+  /// order they are rendered.
+  ///
+  /// They are how nobody has to walk through `users/` or `groups/`: those
+  /// folders hold structure, not content, and a member can enter them without
+  /// being able to use them. A listing of `groups/` already shows only the
+  /// folders the caller's groups can reach, so Groups needs no list of its
+  /// own.
+  List<MapEntry<FileShortcut, String>> get _shortcuts {
+    final home = homePath(AppSettings.instance.username);
+    return [
+      if (home.isNotEmpty)
+        MapEntry(
+          const FileShortcut(
+            id: 'my_files',
+            label: 'My files',
+            icon: QuarkIcons.home_rounded,
+          ),
+          home,
+        ),
+      const MapEntry(
+        FileShortcut(
+          id: 'groups',
+          label: 'Groups',
+          icon: QuarkIcons.group_outlined,
+        ),
+        groupsPath,
+      ),
+      if (AppSettings.instance.isAdmin.value)
+        const MapEntry(
+          FileShortcut(
+            id: 'all_files',
+            label: 'All files',
+            icon: QuarkIcons.folder_rounded,
+          ),
+          '',
+        ),
+    ];
+  }
+
+  /// The landing path for whoever is signed in right now.
+  String _landingFor() => landingPath(
+    isAdmin: AppSettings.instance.isAdmin.value,
+    username: AppSettings.instance.username,
+  );
+
   void _applyIncomingRoutePath(String? initialPath) {
-    final normalized = initialPath == null ? '' : normalizePath(initialPath);
+    final requested = initialPath == null ? '' : normalizePath(initialPath);
+    _landingPath = _landingFor();
+    // A path in the URL is what the user asked for; only a bare /files falls
+    // back to where this account starts.
+    final normalized = requested.isEmpty ? _landingPath : requested;
 
     _archiveContext = null;
     _routeFailure = null;
@@ -148,8 +203,33 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     _searchFuture = null;
     _searchQuery = null;
     _currentPath = normalized;
-    _pendingFileOpen = normalized.isEmpty ? null : normalized;
+    // Only a requested path can name a file. The landing path is a folder, so
+    // resolving it would cost a stat call that can only answer "directory".
+    _pendingFileOpen = requested.isEmpty ? null : requested;
     _cachedFiles = FileBrowserCache.instance.get(normalized);
+  }
+
+  /// The admin flag is not persisted — it arrives from `/auth/status` after
+  /// the page is already built — so a reload can land an admin in their own
+  /// home before the answer comes. Move them to the root they should have
+  /// landed on, as long as they have not navigated since.
+  void _onAdminFlagChanged() {
+    if (!mounted) {
+      return;
+    }
+    final landing = _landingFor();
+    if (landing == _landingPath) {
+      return;
+    }
+    final wasAtLanding = _currentPath == _landingPath;
+    setState(() {
+      _landingPath = landing;
+      if (wasAtLanding) {
+        _currentPath = landing;
+        _cachedFiles = FileBrowserCache.instance.get(landing);
+        _reloadFiles();
+      }
+    });
   }
 
   @override
@@ -159,6 +239,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     super
         .initState(); // AutoRefreshMixin.initState handles timer + initial load
     _fileBrowserScrollController.addListener(_onScroll);
+    AppSettings.instance.isAdmin.addListener(_onAdminFlagChanged);
     EventsService.instance.start();
     // If the deep-link URL pointed at a file, open its editor after the first
     // frame so the folder content is loaded beneath it.
@@ -445,6 +526,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       UploadManager.instance.conflictResolver = null;
     }
     _folderDragExitTimer?.cancel();
+    AppSettings.instance.isAdmin.removeListener(_onAdminFlagChanged);
     _fileBrowserScrollController.dispose();
     super.dispose();
   }
@@ -1580,7 +1662,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
 
-    if (_currentPath.isEmpty) {
+    // `users/` is a waypoint a member cannot use, so up stops at their home.
+    if (_currentPath.isEmpty || _currentPath == _landingPath) {
       return;
     }
 
@@ -1618,7 +1701,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       _fileBrowserScrollController.jumpTo(0);
     }
 
-    if (_currentPath.isEmpty) {
+    if (_currentPath == _landingPath) {
       setState(() {
         _isSearchMode = false;
         _searchFuture = null;
@@ -1629,7 +1712,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
 
-    _setPath('');
+    _setPath(_landingPath);
   }
 
   Future<void> _retryRouteFailure(_FilesRouteFailure failure) async {
@@ -1727,6 +1810,27 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     }
   }
 
+  /// Shows [path] as a folder once resolution is over, whether the stat said
+  /// "directory" or failed on a path that cannot name a file.
+  ///
+  /// `_setPath` alone is not enough: it no-ops when the route already points
+  /// here, which it does for every deep link and every tap that routed us
+  /// here, and the listing was deliberately skipped on the way in. That left
+  /// the spinner up until the refresh timer came round — which is what a
+  /// member saw opening `groups`, a folder they may list but may not stat,
+  /// since their grant sits on the group's folder rather than on `groups`.
+  void _showFolder(String path) {
+    // Resolution is over, so drop the in-flight flag first: it is what
+    // suppresses listings while the type is unknown, and every caller here
+    // needs one. `_openPendingFile` clears it again in its `finally`.
+    _handlingPendingFile = false;
+    if (normalizePath(path) == _currentPath) {
+      setState(_reloadFiles);
+    } else {
+      _setPath(path);
+    }
+  }
+
   /// Opens a deep-linked path in the appropriate viewer after mount.
   /// Asks the backend what the path actually is (file vs. directory, and file
   /// type) so that e.g. a folder named "things.qdoc" is opened as a folder
@@ -1780,7 +1884,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         });
         return;
       }
-      _setPath(filePath);
+      _showFolder(filePath);
       return;
     } catch (error) {
       if (!mounted) return;
@@ -1794,7 +1898,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         });
         return;
       }
-      _setPath(filePath);
+      _showFolder(filePath);
       return;
     }
 
@@ -1802,17 +1906,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
     if (isDir) {
       // The "things.qdoc is really a folder" case this stat exists to catch.
-      // Resolution is over, so drop the in-flight flag first — it is what
-      // suppresses listings while the type is unknown, and this path needs one.
-      // _setPath no-ops when the route already points here — which for a deep
-      // link it does — and the listing was skipped on the way in, so load it
-      // directly rather than leaving the folder rendered permanently empty.
-      _handlingPendingFile = false;
-      if (normalizePath(filePath) == _currentPath) {
-        setState(_reloadFiles);
-      } else {
-        _setPath(filePath);
-      }
+      _showFolder(filePath);
       return;
     }
 
@@ -2122,6 +2216,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
               }
               return FileTopBar(
                 currentPath: displayPath,
+                // Inside an archive every crumb is the archive's own, so
+                // nothing is out of reach there.
+                rootPath: archive != null ? '' : _landingPath,
                 isGridView: _isGridView,
                 isSearchMode: _isSearchMode,
                 isUploading: _isUploading,
@@ -2172,6 +2269,13 @@ class _FileBrowserPageState extends State<FileBrowserPage>
               );
             },
           ),
+          if (!_selectionMode && !_isSearchMode && !_noHostSelected)
+            FileShortcutBar(
+              shortcuts: [for (final s in _shortcuts) s.key],
+              onSelected: (id) =>
+                  _setPath(_shortcuts.firstWhere((s) => s.key.id == id).value),
+            ),
+
           FutureBuilder<List<FileNode>>(
             future: _isSearchMode
                 ? (_searchFuture ?? Future.value(const <FileNode>[]))
@@ -2193,7 +2297,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
           // Hide Recent Files on mobile — show only on tablet/desktop (#959).
           if (!_isSearchMode &&
-              _currentPath.isEmpty &&
+              _currentPath == _landingPath &&
               !_noHostSelected &&
               MediaQuery.sizeOf(context).width >= 600)
             RecentFilesSection(

@@ -507,6 +507,30 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'FileShortcutBar',
+    group: 'File browser',
+    build: (context, log) => FileShortcutBar(
+      shortcuts: const [
+        FileShortcut(
+          id: 'my_files',
+          label: 'My files',
+          icon: QuarkIcons.home_rounded,
+        ),
+        FileShortcut(
+          id: 'groups',
+          label: 'Groups',
+          icon: QuarkIcons.group_outlined,
+        ),
+        FileShortcut(
+          id: 'all_files',
+          label: 'All files',
+          icon: QuarkIcons.folder_rounded,
+        ),
+      ],
+      onSelected: (id) => log('FileShortcutBar.onSelected($id)'),
+    ),
+  ),
+  GalleryEntry(
     name: 'NewFileDialog',
     group: 'File browser',
     build: (context, log) => NewFileDialog(
