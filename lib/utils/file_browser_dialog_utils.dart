@@ -6,6 +6,7 @@ import 'package:quark/models/move_rename_result.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/utils/trash_config.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -266,12 +267,20 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
   );
 }
 
+/// Asks the user to confirm deleting [itemName]; true when they did.
+///
+/// Deleting moves the item to the trash rather than erasing it (#1844), so
+/// this says so: a confirmation that reads like the last word before something
+/// is gone forever is the wrong warning, and the one place a user decides is
+/// here. The permanent step lives in the trash, behind its own confirmation.
 Future<bool?> confirmDelete(BuildContext context, String itemName) =>
     confirmAction(
       context,
-      title: 'Delete',
-      message: 'Delete $itemName?',
-      confirmLabel: 'Delete',
+      title: 'Move to Trash?',
+      message:
+          '$itemName moves to Trash. You can restore it for '
+          '${TrashConfig.retentionDays} days.',
+      confirmLabel: 'Move to Trash',
     );
 
 /// Asks the user to confirm [confirmLabel]; true when they did.

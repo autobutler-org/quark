@@ -12,6 +12,7 @@ import 'package:quark/services/album_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/favorites_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/image_viewer_config.dart';
 import 'package:quark/widgets/image_viewer/current_photo.dart';
 import 'package:quark/widgets/image_viewer/desktop_body.dart';
@@ -656,29 +657,11 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   Future<void> _confirmDelete() async {
     final relPath = _currentRelPath;
     if (relPath == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete photo?'),
-        content: Text(
-          'This permanently deletes "$_currentName" from the server. '
-          'This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+    // Shares the Files confirmation rather than wording its own. This one used
+    // to promise a permanent delete that "cannot be undone", which stopped
+    // being true when every delete started going to the trash (#1844, #2049) —
+    // and the two dialogs delete through the same endpoint.
+    final confirmed = await confirmDelete(context, '"$_currentName"');
     if (confirmed != true || !mounted) return;
     try {
       final dir = relPath.contains('/')
