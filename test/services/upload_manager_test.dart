@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -791,6 +792,40 @@ void main() {
       expect(server.ranges, ['0-8', '8-16', '16-20']);
     });
 
+    test(
+      'a session that cannot be checked is deleted before starting over',
+      () async {
+        final sessionId = server.seed(
+          fileName: 'big.bin',
+          totalSize: 20,
+          offset: 8,
+        );
+        final key = keyFor('big.bin', 20);
+        store.write(
+          UploadSessionRecord(
+            fileKey: key,
+            sessionId: sessionId,
+            offset: 8,
+            totalSize: 20,
+            fileName: 'big.bin',
+            createdAt: DateTime.now(),
+          ),
+        );
+        server.getSessionError = Exception('connection reset');
+        final manager = managerFor();
+
+        final done = manager.results.first;
+        manager.enqueue(uploads: [sized('big.bin', 20)], uploadPath: '');
+        final result = await done;
+
+        expect(server.created, hasLength(1), reason: 'started over');
+        expect(result.failed, 0);
+        expect(server.deleted, [
+          sessionId,
+        ], reason: 'the session it replaced may still hold staged bytes');
+      },
+    );
+
     test('a stale record is pruned rather than resumed', () async {
       final sessionId = server.seed(
         fileName: 'big.bin',
@@ -861,12 +896,105 @@ void main() {
       expect(result.completed, 0, reason: 'neither sent nor failed');
       expect(result.failed, 0);
       expect(
-        store.read(keyFor('big.bin', 40))?.offset,
-        8,
-        reason: 'the record stays, so the file resumes rather than restarts',
+        server.deleted,
+        server.created,
+        reason: 'a canceled session frees its staged bytes now, not at expiry',
       );
+      expect(store.read(keyFor('big.bin', 40)), isNull);
       expect(manager.isUploading, isFalse, reason: 'the UI unlocks');
     });
+
+    test('giving up on a chunked file deletes its session', () async {
+      server.intercept = (attempt, start, end) async {
+        if (start == 8) {
+          return const ChunkRejected(statusCode: 500, message: 'disk full');
+        }
+        return null;
+      };
+      final manager = managerFor(maxAttempts: 2);
+
+      final done = manager.results.first;
+      manager.enqueue(uploads: [sized('big.bin', 20)], uploadPath: '');
+      final result = await done;
+
+      expect(result.failed, 1);
+      expect(server.created, hasLength(1), reason: 'the retry resumed it');
+      expect(
+        server.deleted,
+        server.created,
+        reason: 'nothing is left staged on the server once the client gives up',
+      );
+      expect(store.read(keyFor('big.bin', 20)), isNull);
+    });
+
+    test(
+      'a resumed session holding every byte replays the last chunk to commit',
+      () async {
+        // A commit that failed (a full disk, say) leaves the session complete
+        // but unwritten. Only a commit response means the file is in place.
+        final sessionId = server.seed(
+          fileName: 'big.bin',
+          totalSize: 20,
+          offset: 20,
+        );
+        final key = keyFor('big.bin', 20);
+        store.write(
+          UploadSessionRecord(
+            fileKey: key,
+            sessionId: sessionId,
+            offset: 20,
+            totalSize: 20,
+            fileName: 'big.bin',
+            createdAt: DateTime.now(),
+          ),
+        );
+        final manager = managerFor();
+
+        final done = manager.results.first;
+        manager.enqueue(uploads: [sized('big.bin', 20)], uploadPath: '');
+        final result = await done;
+
+        expect(server.created, isEmpty);
+        expect(server.ranges, ['12-20'], reason: 'the final chunk, replayed');
+        expect(server.sessions, isEmpty, reason: 'the replay committed it');
+        expect(result.failed, 0);
+        expect(store.read(key), isNull);
+      },
+    );
+
+    test(
+      'a replayed final chunk that still fails to commit is not a success',
+      () async {
+        final sessionId = server.seed(
+          fileName: 'big.bin',
+          totalSize: 20,
+          offset: 20,
+        );
+        final key = keyFor('big.bin', 20);
+        store.write(
+          UploadSessionRecord(
+            fileKey: key,
+            sessionId: sessionId,
+            offset: 20,
+            totalSize: 20,
+            fileName: 'big.bin',
+            createdAt: DateTime.now(),
+          ),
+        );
+        server.intercept = (attempt, start, end) async =>
+            const ChunkRejected(statusCode: 500, message: 'disk full');
+        final manager = managerFor(maxAttempts: 1);
+
+        final done = manager.results.first;
+        manager.enqueue(uploads: [sized('big.bin', 20)], uploadPath: '');
+        final result = await done;
+
+        expect(server.ranges, ['12-20']);
+        expect(result.failed, 1);
+        expect(server.deleted, [sessionId]);
+        expect(store.read(key), isNull);
+      },
+    );
 
     test('a rejected chunk fails the file, not the batch', () async {
       server.intercept = (attempt, start, end) async {
@@ -1164,18 +1292,17 @@ class _FakeUploadServer implements ResumableUploadClient {
     if (session == null) {
       return const ChunkSessionGone();
     }
-    if (end <= session.offset) {
+    if (end <= session.offset && session.offset < session.totalSize) {
       // Idempotent replay: a retry after a response lost in flight.
-      return ChunkAccepted(
-        offset: session.offset,
-        complete: session.offset >= session.totalSize,
-      );
+      return ChunkAccepted(offset: session.offset, complete: false);
     }
-    if (start != session.offset) {
+    // A replayed final chunk is written nowhere but reaches the commit again,
+    // as on the real server.
+    if (start != session.offset && end > session.offset) {
       return ChunkOffsetMismatch(offset: session.offset);
     }
 
-    session.offset = end;
+    session.offset = math.max(session.offset, end);
     final complete = session.offset >= session.totalSize;
     if (complete) {
       sessions.remove(sessionId);
@@ -1187,8 +1314,15 @@ class _FakeUploadServer implements ResumableUploadClient {
     );
   }
 
+  /// Thrown from [getSession] when set, as a status check that never landed.
+  Object? getSessionError;
+
   @override
   Future<UploadSessionStatus?> getSession(String sessionId) async {
+    final error = getSessionError;
+    if (error != null) {
+      throw error;
+    }
     final session = sessions[sessionId];
     if (session == null) {
       return null;

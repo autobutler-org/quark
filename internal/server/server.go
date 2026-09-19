@@ -205,6 +205,19 @@ func repairHomes(deps deputil.Dependencies) {
 	}
 }
 
+// clearDataTmp empties <DataDir>/tmp and logs what it freed, so an orphan
+// left by a crash shows up in the logs rather than only in disk usage.
+func clearDataTmp(when string) {
+	result, err := storageutil.ClearTmpDir(storageutil.ClearTmpDirParams{DataDir: storageutil.GetDataDir()})
+	if err != nil {
+		log.Printf("[tmp] %s: failed to clear the data dir's tmp: %v", when, err)
+	}
+	if result.Removed > 0 {
+		log.Printf("[tmp] %s: removed %d item(s), %d bytes (%.1f MB), from the data dir's tmp",
+			when, result.Removed, result.Bytes, storageutil.BytesToMB(uint64(result.Bytes)))
+	}
+}
+
 func initExternalVault(deps deputil.Dependencies) {
 	serial, err := deps.Database().Queries.GetVaultLocation(context.Background())
 	if err != nil || serial == "" {
@@ -367,6 +380,10 @@ func newEngine() (*gin.Engine, error) {
 }
 
 func StartServer(deps deputil.Dependencies, opts StartOptions) error {
+	// First, before any worker or upload session can write to it: whatever is
+	// in the data dir's tmp was stranded by a previous run.
+	clearDataTmp("startup")
+
 	if result, err := updateutil.RemoveStaleBackups(updateutil.RemoveStaleBackupsParams{}); err != nil {
 		log.Printf("[update] failed to remove stale binary backups: %v", err)
 	} else if len(result.Removed) > 0 {
@@ -431,6 +448,12 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 		syncWorker.Stop()
 		stopJobs()
 		remoteutil.Stop()
+		// os.Exit skips the sweeper's own shutdown, so staged partial uploads
+		// are dropped here or they outlive the process.
+		if sessions := deps.UploadSessions(); sessions != nil {
+			_ = sessions.Close()
+		}
+		clearDataTmp("shutdown")
 		os.Exit(0)
 	}()
 
