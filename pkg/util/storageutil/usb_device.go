@@ -79,15 +79,26 @@ func (u *usbDevice) BlockDevicePath() (string, bool) {
 		if err != nil {
 			continue
 		}
-		parts := strings.SplitSeq(resolved, string(os.PathSeparator))
-		for part := range parts {
-			if part == usbDirName {
-				blockDevName := filepath.Base(filepath.Dir(dev))
-				return filepath.Join("/dev", blockDevName), true
-			}
+		if ownsBlockDevice(usbDirName, resolved) {
+			blockDevName := filepath.Base(filepath.Dir(dev))
+			return filepath.Join("/dev", blockDevName), true
 		}
 	}
 	return "", false
+}
+
+// ownsBlockDevice reports whether the resolved sysfs path of a block device
+// sits under one of usbDirName's own interfaces ("2-1.1:1.0" for "2-1.1").
+// Matching the bare device name instead would also claim every hub upstream
+// of the disk: a drive behind an adapter resolves through ".../2-1/2-1.1/...",
+// and the hub "2-1" would be listed as a storage device.
+func ownsBlockDevice(usbDirName, resolved string) bool {
+	for part := range strings.SplitSeq(resolved, string(os.PathSeparator)) {
+		if strings.HasPrefix(part, usbDirName+":") {
+			return true
+		}
+	}
+	return false
 }
 
 func (u *usbDevice) IsStorageDevice() bool {
