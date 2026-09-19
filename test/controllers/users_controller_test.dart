@@ -100,6 +100,22 @@ void main() {
     );
   });
 
+  test('offers only accounts that can sign in as group members', () async {
+    users = [
+      ...users,
+      const UserAccount(id: 4, username: 'dee', status: UserAccount.disabled),
+    ];
+    final c = controller();
+
+    await c.load();
+
+    // cy is pending and dee is turned off; the Quark refuses both (#1910).
+    expect(c.activeAccounts, const [
+      PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
+      PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
+    ]);
+  });
+
   test('keeps the failure raw, and a good load clears it', () async {
     var fail = true;
     final c = controller(

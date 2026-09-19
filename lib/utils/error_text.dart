@@ -193,6 +193,12 @@ abstract final class Errors {
       'Use up to 32 lowercase letters, numbers, dots, dashes or underscores, '
       'starting with a letter or number.';
 
+  /// Adding an account to a group, which the Quark refuses with a 404 when
+  /// the account can't sign in: waiting for approval, turned off, or gone.
+  static const String cannotJoinGroup =
+      "That account can't join a group. Only accounts that can sign in can be "
+      'added.';
+
   /// The Quark answered, and what it said maps to copy worth the difference.
   /// Anything unmapped falls back to [couldNot] — a vague-but-true sentence
   /// beats a guess about a status the backend may not even return.
