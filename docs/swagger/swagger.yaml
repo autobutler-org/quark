@@ -1261,6 +1261,90 @@ paths:
       summary: Rename a group
       tags:
       - admin
+  /admin/groups/{id}/members/{userId}:
+    delete:
+      description: Takes an account out of a group, whatever the account's status,
+        so it loses what only the group gave it. Members of the everyone group can't
+        be changed. Publishes access_changed with no path. Admin-only.
+      parameters:
+      - description: Group id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Account id
+        in: path
+        name: userId
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: the everyone group
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no group has that id, or that account isn't in the group
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Take an account out of a group
+      tags:
+      - admin
+    put:
+      description: Puts an active account in a group, so it reaches what the group
+        was shared. Adding a member again changes nothing. Members of the everyone
+        group can't be changed. Publishes access_changed with no path when the membership
+        is new. Admin-only.
+      parameters:
+      - description: Group id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Account id
+        in: path
+        name: userId
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: the everyone group
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no group has that id, or no active account has that id
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Add an account to a group
+      tags:
+      - admin
   /admin/promote/{username}:
     put:
       description: Grants admin role to the given username. Only an active account
@@ -2115,7 +2199,7 @@ paths:
       description: Upgrades the connection to WebSocket and pushes JSON events for
         file system mutations (upload, delete, move, new_folder). Each connection
         hears only events about paths its user can read; admins hear every event.
-        A connection closes once its account is turned off or deleted.
+        A connection closes once its account is turned off, deleted, promoted or demoted.
       produces:
       - application/json
       responses:

@@ -21,6 +21,8 @@ func (r *router) Routes() []*serverutil.Route {
 		createGroupRoute,
 		renameGroupRoute,
 		deleteGroupRoute,
+		addGroupMemberRoute,
+		removeGroupMemberRoute,
 	}
 }
 

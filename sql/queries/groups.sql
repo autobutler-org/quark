@@ -29,3 +29,11 @@ UPDATE groups SET name = ? WHERE id = ? AND builtin = 0 RETURNING *;
 -- DeleteGroup drops a group; ON DELETE CASCADE drops its members and grants.
 -- name: DeleteGroup :execrows
 DELETE FROM groups WHERE id = ? AND builtin = 0;
+
+-- AddGroupMember puts an account in a group. Adding a member again changes
+-- nothing and reports no rows.
+-- name: AddGroupMember :execrows
+INSERT INTO group_members (group_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING;
+
+-- name: RemoveGroupMember :execrows
+DELETE FROM group_members WHERE group_id = ? AND user_id = ?;
