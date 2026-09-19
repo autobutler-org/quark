@@ -1,11 +1,11 @@
 {
-    "name": "quark",
-    "short_name": "quark",
+    "name": "Quark",
+    "short_name": "Quark",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#070D19",
+    "theme_color": "#070D19",
+    "description": "Quark — your own cloud, at home.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
