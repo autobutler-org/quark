@@ -12,6 +12,8 @@ void main() {
     bool isInitialLoad = false,
     Widget Function(BuildContext context, Object error)? errorBuilder,
     WidgetBuilder? loadingBuilder,
+    bool isSearchMode = false,
+    String? searchQuery,
   }) {
     return tester.pumpWidget(
       MaterialApp(
@@ -25,6 +27,8 @@ void main() {
             isGridView: false,
             errorBuilder: errorBuilder,
             loadingBuilder: loadingBuilder,
+            isSearchMode: isSearchMode,
+            searchQuery: searchQuery,
           ),
         ),
       ),
@@ -149,6 +153,50 @@ void main() {
       }
       expect(find.text('Restore'), findsNothing);
       expect(find.text('Delete permanently'), findsNothing);
+    });
+  });
+
+  /// #2058: a search that matched nothing showed the same empty state as an
+  /// empty folder — "No files yet. Upload files using the button above" — in
+  /// a library full of files the search had simply not matched.
+  group('the empty state', () {
+    testWidgets('an empty folder still invites an upload', (tester) async {
+      await pumpFileBrowserView(
+        tester,
+        filesFuture: Future.value(const <FileNode>[]),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('No files yet'), findsOneWidget);
+    });
+
+    testWidgets('a search with no matches says so, and names the search', (
+      tester,
+    ) async {
+      await pumpFileBrowserView(
+        tester,
+        filesFuture: Future.value(const <FileNode>[]),
+        isSearchMode: true,
+        searchQuery: 'invoice',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('No files yet'), findsNothing);
+      expect(find.textContaining('invoice'), findsOneWidget);
+    });
+
+    testWidgets('a search with no query still avoids the upload prompt', (
+      tester,
+    ) async {
+      await pumpFileBrowserView(
+        tester,
+        filesFuture: Future.value(const <FileNode>[]),
+        isSearchMode: true,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('No files yet'), findsNothing);
+      expect(find.textContaining('No matches'), findsOneWidget);
     });
   });
 }
