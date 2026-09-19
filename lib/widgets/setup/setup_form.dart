@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:quark/utils/username_rules.dart';
 import 'package:quark/widgets/error_banner.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+/// The create-an-account form: a username, a password typed twice, and a
+/// submit button.
+///
+/// Setup uses it for the owner account and the request-account page for a
+/// requested one, so the heading, the line under it and the button label are
+/// parameters. The username field checks the Quark's rule for new accounts
+/// (see [validateNewUsername]).
 class SetupForm extends StatefulWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController usernameController;
@@ -18,6 +26,15 @@ class SetupForm extends StatefulWidget {
   final VoidCallback onTogglePassword;
   final VoidCallback onToggleConfirm;
   final VoidCallback onSubmit;
+
+  /// The heading.
+  final String title;
+
+  /// The line under [title], saying what the account is for.
+  final String subtitle;
+
+  /// The submit button's label.
+  final String submitLabel;
 
   const SetupForm({
     super.key,
@@ -35,6 +52,11 @@ class SetupForm extends StatefulWidget {
     required this.onTogglePassword,
     required this.onToggleConfirm,
     required this.onSubmit,
+    this.title = 'Set up your quark',
+    this.subtitle =
+        'Create your owner account. This is the only account that can manage '
+        'the quark.',
+    this.submitLabel = 'Create account',
   });
 
   @override
@@ -78,7 +100,7 @@ class _SetupFormState extends State<SetupForm> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Set up your quark',
+            widget.title,
             style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
             ),
@@ -86,7 +108,7 @@ class _SetupFormState extends State<SetupForm> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Create your owner account. This is the only account that can manage the quark.',
+            widget.subtitle,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
@@ -104,6 +126,9 @@ class _SetupFormState extends State<SetupForm> {
             focusNode: widget.usernameFocus,
             decoration: const InputDecoration(
               labelText: 'Username',
+              helperText: newUsernameHint,
+              helperMaxLines: 2,
+              errorMaxLines: 3,
               border: OutlineInputBorder(),
               prefixIcon: Icon(QuarkIcons.person_outline),
             ),
@@ -113,8 +138,9 @@ class _SetupFormState extends State<SetupForm> {
             onFieldSubmitted: (_) {
               FocusScope.of(context).requestFocus(widget.passwordFocus);
             },
-            validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Username is required' : null,
+            // The Quark refuses a username outside its rule with a 400
+            // (#1946), so it is checked here first and never rewritten.
+            validator: validateNewUsername,
           ),
           const SizedBox(height: 16),
 
@@ -195,7 +221,7 @@ class _SetupFormState extends State<SetupForm> {
                     width: 20,
                     child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                   )
-                : const Text('Create account'),
+                : Text(widget.submitLabel),
           ),
         ],
       ),

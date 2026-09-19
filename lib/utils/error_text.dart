@@ -163,6 +163,27 @@ abstract final class Errors {
   static const String lastAdmin =
       'This Quark needs at least one admin. Make someone else an admin first.';
 
+  /// Signing in to an account someone requested that no admin has approved
+  /// yet. The Quark refuses it with a 403 whose `status` is `pending`.
+  static const String accountPending =
+      "Your account request hasn't been approved yet. Ask an admin of this "
+      'Quark.';
+
+  /// Signing in to an account an admin turned off: a 403 whose `status` is
+  /// `disabled`.
+  static const String accountDisabled =
+      'This account is turned off. Ask an admin of this Quark.';
+
+  /// Requesting an account from a Quark that is not taking requests, which it
+  /// answers with a 404.
+  static const String accessRequestsOff =
+      "This Quark isn't taking account requests right now.";
+
+  /// A username a new account can't have. The Quark refuses it with a 400.
+  static const String invalidUsername =
+      'Use up to 32 lowercase letters, numbers, dots, dashes or underscores, '
+      'starting with a letter or number.';
+
   /// The Quark answered, and what it said maps to copy worth the difference.
   /// Anything unmapped falls back to [couldNot] — a vague-but-true sentence
   /// beats a guess about a status the backend may not even return.

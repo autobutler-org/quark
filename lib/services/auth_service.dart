@@ -22,10 +22,15 @@ class AuthStatus {
   /// requests from anyone else.
   final bool isAdmin;
 
+  /// Whether the Quark's sign-in page may offer to request an account (#1908).
+  /// False before setup, and when the Quark does not say.
+  final bool accessRequestsEnabled;
+
   const AuthStatus({
     required this.setupComplete,
     this.username,
     this.isAdmin = false,
+    this.accessRequestsEnabled = false,
   });
 }
 
@@ -99,6 +104,7 @@ class AuthService {
       setupComplete: body['setup'] as bool? ?? false,
       username: body['username'] as String?,
       isAdmin: body['isAdmin'] as bool? ?? false,
+      accessRequestsEnabled: body['accessRequestsEnabled'] as bool? ?? false,
     );
   }
 
@@ -181,6 +187,9 @@ class AuthService {
     if (response.statusCode == 401) {
       throw const MessageException('Invalid username or password.');
     }
+    if (response.statusCode == 403) {
+      _throwAccountRefusal(response.body, 'Login failed');
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = _tryDecodeError(response.body);
       throwApiError(response.statusCode, body, 'Login failed');
@@ -211,6 +220,10 @@ class AuthService {
           }),
         )
         .timeout(kAuthRequestTimeout);
+    // A pending or disabled account is refused like a sign-in (#1908).
+    if (response.statusCode == 403) {
+      _throwAccountRefusal(response.body, 'Recovery failed');
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = _tryDecodeError(response.body);
       throwApiError(response.statusCode, body, 'Recovery failed');
@@ -220,6 +233,36 @@ class AuthService {
     await AppSettings.instance.setSessionToken(token);
     await AppSettings.instance.setUsername(username);
     return LoginResult(sessionToken: token);
+  }
+
+  /// Asks this Quark for an account (#1908) and returns the new account's
+  /// recovery phrase, which is shown once.
+  ///
+  /// No session comes back: an admin approves the account before it can sign
+  /// in. A Quark that is not taking requests, or has not been set up, answers
+  /// 404, which reads as [Errors.accessRequestsOff]. Any other refusal, such
+  /// as a taken username, passes on the Quark's own text.
+  static Future<String> requestAccount({
+    required String username,
+    required String password,
+  }) async {
+    final uri = _baseUri.resolve('/api/v0/auth/request-account');
+    final response = await authHttpClientFactory()
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'username': username, 'password': password}),
+        )
+        .timeout(kAuthRequestTimeout);
+    if (response.statusCode == 404) {
+      throw MessageException(Errors.accessRequestsOff);
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final body = _tryDecodeError(response.body);
+      throwApiError(response.statusCode, body, 'Account request failed');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['recoveryPhrase'] as String;
   }
 
   /// Logs out — clears the in-memory session token and notifies the server.
@@ -343,6 +386,27 @@ class AuthService {
   static Future<void> _forgetLocalSession() async {
     await AppSettings.instance.setUsername(null);
     await AppSettings.instance.setSessionToken(null);
+  }
+
+  /// Throws for a sign-in the Quark refused because of the account's status
+  /// rather than its password: a 403 whose `status` is `pending` or
+  /// `disabled` (#1908). Mapped by that field, not by the text beside it. Any
+  /// other 403 passes on the Quark's own text.
+  static Never _throwAccountRefusal(String body, String context) {
+    Object? status;
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map) status = decoded['status'];
+    } on FormatException {
+      status = null;
+    }
+    switch (status) {
+      case 'pending':
+        throw const MessageException(Errors.accountPending);
+      case 'disabled':
+        throw const MessageException(Errors.accountDisabled);
+    }
+    throwApiError(403, _tryDecodeError(body), context);
   }
 
   static String? _tryDecodeError(String body) {
