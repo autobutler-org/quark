@@ -56,6 +56,7 @@ class FileBreadcrumbBar extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final tokens = QuarkTokens.of(context);
+    final atRoot = currentPath.isEmpty;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -68,7 +69,7 @@ class FileBreadcrumbBar extends StatelessWidget {
         children: [
           IconButton(
             key: const ValueKey('breadcrumb_up'),
-            onPressed: currentPath.isEmpty ? null : onGoUp,
+            onPressed: atRoot ? null : onGoUp,
             icon: const Icon(QuarkIcons.chevron_left_rounded),
             tooltip: 'Up one level',
           ),
@@ -77,17 +78,36 @@ class FileBreadcrumbBar extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  GestureDetector(
-                    key: const ValueKey('breadcrumb_home'),
-                    onTap: onGoHome,
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: tokens.spacingXs,
-                      ),
-                      child: Icon(
-                        QuarkIcons.home_rounded,
-                        size: 20,
-                        color: Theme.of(context).colorScheme.primary,
+                  // At the top folder this is where you already are, so it
+                  // stops looking and behaving like a button — it used to be
+                  // primary-colored and tappable and answer a click with
+                  // nothing at all (#2010). The up button beside it has
+                  // always gone quiet here for the same reason.
+                  Tooltip(
+                    message: atRoot
+                        ? 'You are in the top folder'
+                        : 'Go to the top folder',
+                    child: MouseRegion(
+                      cursor: atRoot
+                          ? SystemMouseCursors.basic
+                          : SystemMouseCursors.click,
+                      child: GestureDetector(
+                        key: const ValueKey('breadcrumb_home'),
+                        onTap: atRoot ? null : onGoHome,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: tokens.spacingXs,
+                          ),
+                          child: Icon(
+                            QuarkIcons.home_rounded,
+                            size: 20,
+                            color: atRoot
+                                ? Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface.withValues(alpha: 0.4)
+                                : Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
                       ),
                     ),
                   ),
