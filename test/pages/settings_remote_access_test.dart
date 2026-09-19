@@ -102,14 +102,36 @@ void main() {
     }
   }
 
-  testWidgets('offers enable with no experimental marker', (tester) async {
+  // #2036: the enable path cannot succeed until #1815 is wired up, and a
+  // button that always fails reads as a broken product rather than a feature
+  // that has not shipped. Settings says so instead of offering it.
+  testWidgets('says remote access is coming rather than offering it', (
+    tester,
+  ) async {
     await pumpWithStatus(tester, {'enabled': false, 'connected': false});
 
     expect(
       find.byKey(const ValueKey('settings_remote_access_experimental')),
       findsNothing,
     );
-    expect(find.text('Enable remote access'), findsOneWidget);
+    expect(find.text('Enable remote access'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('remote_access_coming_soon')),
+      findsOneWidget,
+    );
+    expect(find.text('Coming soon'), findsOneWidget);
+  });
+
+  testWidgets('says the same thing to a non-admin', (tester) async {
+    await pumpWithStatus(tester, {
+      'enabled': false,
+      'connected': false,
+    }, isAdmin: false);
+
+    expect(
+      find.byKey(const ValueKey('remote_access_coming_soon')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('offers a non-admin no way to turn it on', (tester) async {

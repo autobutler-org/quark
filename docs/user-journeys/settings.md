@@ -165,6 +165,11 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-011: Enable remote access
 
+**Status:** Not available to users. The enable path cannot succeed (#1815), so Settings shows **Coming
+soon** in place of the button and says the Quark is reachable on the home network in the meantime (#2036).
+Everything below is what the journey looks like once `RemoteAccessConfig.enableAvailable` goes back to
+true with the wiring in #1815.
+
 **Preconditions:** User is signed in as an admin and on the Settings page. Remote access is currently disabled.
 
 **Steps:**
