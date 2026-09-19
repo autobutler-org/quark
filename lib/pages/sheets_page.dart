@@ -12,6 +12,7 @@ import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/sheets/sheets_body.dart';
 import 'package:quark/widgets/sheets/sheets_search_bar.dart';
@@ -170,19 +171,7 @@ class _SheetsPageState extends State<SheetsPage> with SafeSetStateMixin {
           const AppThemeToggle(),
         ],
       ),
-      drawer: QuarkDrawer(
-        activeSection: QuarkDrawerSection.sheets,
-        onTapFiles: () => context.go('/files'),
-        onTapPhotos: () => context.go('/photos'),
-        onTapTrash: () => context.go(AppRoutes.trash),
-        onTapDocs: () => context.go('/docs'),
-        onTapSheets: () => Navigator.of(context).pop(),
-        onTapDevices: () => context.go('/devices'),
-        onTapHealth: () => context.go('/health'),
-        onTapVault: () => context.go(AppRoutes.vault),
-        onTapJobs: () => context.go(AppRoutes.jobs),
-        onTapSettings: () => context.go('/settings'),
-      ),
+      drawer: const AppDrawer(activeSection: QuarkDrawerSection.sheets),
       body: Column(
         children: [
           SheetsSearchBar(controller: _searchController),

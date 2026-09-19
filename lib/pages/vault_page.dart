@@ -10,6 +10,7 @@ import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/utils/web_download_stub.dart'
     if (dart.library.html) 'package:quark/utils/web_download_web.dart'
     as web_download;
+import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/vault/entry_detail_page.dart';
 import 'package:quark/widgets/vault/entry_editor_page.dart';
@@ -190,19 +191,7 @@ class _VaultPageState extends State<VaultPage> {
           const AppThemeToggle(),
         ],
       ),
-      drawer: QuarkDrawer(
-        activeSection: QuarkDrawerSection.vault,
-        onTapFiles: () => context.go(AppRoutes.files),
-        onTapPhotos: () => context.go(AppRoutes.photos),
-        onTapTrash: () => context.go(AppRoutes.trash),
-        onTapDocs: () => context.go(AppRoutes.docs),
-        onTapSheets: () => context.go(AppRoutes.sheets),
-        onTapDevices: () => context.go(AppRoutes.devices),
-        onTapHealth: () => context.go(AppRoutes.health),
-        onTapVault: () => Navigator.pop(context),
-        onTapJobs: () => context.go(AppRoutes.jobs),
-        onTapSettings: () => context.go(AppRoutes.settings),
-      ),
+      drawer: const AppDrawer(activeSection: QuarkDrawerSection.vault),
       body: _buildBody(),
       floatingActionButton:
           (_status?.initialized == true &&

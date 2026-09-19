@@ -12,6 +12,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_device_chips.dart';
+import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -201,19 +202,7 @@ class _TrashPageState extends State<TrashPage>
                     const AppThemeToggle(),
                   ],
                 ),
-          drawer: QuarkDrawer(
-            activeSection: QuarkDrawerSection.trash,
-            onTapFiles: () => context.go(AppRoutes.files),
-            onTapPhotos: () => context.go(AppRoutes.photos),
-            onTapTrash: () => Navigator.of(context).pop(),
-            onTapDocs: () => context.go(AppRoutes.docs),
-            onTapSheets: () => context.go(AppRoutes.sheets),
-            onTapDevices: () => context.go(AppRoutes.devices),
-            onTapHealth: () => context.go(AppRoutes.health),
-            onTapVault: () => context.go(AppRoutes.vault),
-            onTapJobs: () => context.go(AppRoutes.jobs),
-            onTapSettings: () => context.go(AppRoutes.settings),
-          ),
+          drawer: const AppDrawer(activeSection: QuarkDrawerSection.trash),
           body: Column(
             children: [
               if (_controller.selectionMode)

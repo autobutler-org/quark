@@ -12,6 +12,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/photo_grid_config.dart';
 import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/widgets/device_upload_picker.dart';
+import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/photos/add_to_album_sheet.dart';
 import 'package:quark/widgets/photos/album_actions_sheet.dart';
@@ -550,19 +551,7 @@ class PhotosPageState extends State<PhotosPage>
                       onCancel: c.exitSelectionMode,
                     )
                   : null,
-              drawer: QuarkDrawer(
-                activeSection: QuarkDrawerSection.photos,
-                onTapFiles: () => context.go(AppRoutes.files),
-                onTapPhotos: () => Navigator.of(context).pop(),
-                onTapTrash: () => context.go(AppRoutes.trash),
-                onTapDocs: () => context.go(AppRoutes.docs),
-                onTapSheets: () => context.go(AppRoutes.sheets),
-                onTapDevices: () => context.go(AppRoutes.devices),
-                onTapHealth: () => context.go(AppRoutes.health),
-                onTapVault: () => context.go(AppRoutes.vault),
-                onTapJobs: () => context.go(AppRoutes.jobs),
-                onTapSettings: () => context.go(AppRoutes.settings),
-              ),
+              drawer: const AppDrawer(activeSection: QuarkDrawerSection.photos),
               bottomBar: c.selectionMode && c.addingToAlbum == null
                   ? PhotoSelectionBar(
                       selectedCount: selectedIds.length,

@@ -7,6 +7,7 @@ import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/widgets/health/health_body.dart';
+import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 
 class HealthPage extends StatefulWidget {
@@ -64,35 +65,7 @@ class _HealthPageState extends State<HealthPage>
           const AppThemeToggle(),
         ],
       ),
-      drawer: QuarkDrawer(
-        activeSection: QuarkDrawerSection.health,
-        onTapFiles: () {
-          context.go(AppRoutes.files);
-        },
-        onTapPhotos: () {
-          context.go(AppRoutes.photos);
-        },
-        onTapTrash: () => context.go(AppRoutes.trash),
-        onTapDocs: () {
-          context.go(AppRoutes.docs);
-        },
-        onTapSheets: () {
-          context.go(AppRoutes.sheets);
-        },
-        onTapDevices: () {
-          context.go(AppRoutes.devices);
-        },
-        onTapHealth: () {
-          Navigator.of(context).pop();
-        },
-        onTapVault: () {
-          context.go(AppRoutes.vault);
-        },
-        onTapJobs: () => context.go(AppRoutes.jobs),
-        onTapSettings: () {
-          context.go(AppRoutes.settings);
-        },
-      ),
+      drawer: const AppDrawer(activeSection: QuarkDrawerSection.health),
       body: HealthBody(
         status: _status,
         error: _error,
