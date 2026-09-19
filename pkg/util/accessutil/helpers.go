@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -231,4 +232,63 @@ func isStructuralRoot(serial, p string) bool {
 	}
 	rel := Canonical(p)
 	return rel == authutil.UsersDirName || rel == authutil.GroupsDirName
+}
+
+// sharedRoots keeps the granted paths the Shared with me shortcut lists, in
+// order of device then path. Level travels with each; the owner is read from
+// the database afterward.
+func sharedRoots(levels map[string]map[string]Level, username string) []SharedItem {
+	home := ""
+	if username != "" {
+		home = path.Join(authutil.UsersDirName, username)
+	}
+	items := make([]SharedItem, 0)
+	for serial, paths := range levels {
+		for rel, level := range paths {
+			if isSharedRoot(serial, rel, home, paths) {
+				items = append(items, SharedItem{DeviceSerial: serial, RelPath: rel, Level: level.String()})
+			}
+		}
+	}
+	slices.SortFunc(items, func(a, b SharedItem) int {
+		return cmp.Or(cmp.Compare(a.DeviceSerial, b.DeviceSerial), cmp.Compare(a.RelPath, b.RelPath))
+	})
+	return items
+}
+
+// isSharedRoot reports whether one granted path is a root of an ad-hoc share,
+// rather than somewhere the file browser reaches another way. home is the
+// caller's own, empty when their name is not known.
+func isSharedRoot(serial, rel, home string, paths map[string]Level) bool {
+	if rel == "" || isStructuralRoot(serial, rel) || storageutil.IsTrashPath(rel) {
+		return false
+	}
+	if serial == "" {
+		if isBeneath(authutil.GroupsDirName, rel) {
+			return false
+		}
+		if home != "" && (rel == home || isBeneath(home, rel)) {
+			return false
+		}
+	}
+	for ancestor := path.Dir(rel); ancestor != "."; ancestor = path.Dir(ancestor) {
+		if _, granted := paths[ancestor]; granted && isSharedRoot(serial, ancestor, home, paths) {
+			return false
+		}
+	}
+	return true
+}
+
+// ownerName is who owns the path the rows were read for: the account or group
+// on the owner row nearest it, which is the row on the path itself or the one
+// on the closest folder holding it. It is empty when no owner row covers the
+// path, which leaves the share unlabeled rather than labeled wrongly.
+func ownerName(rows []db.ListPathAccessOnAncestorsRow) string {
+	name, from := "", -1
+	for _, row := range rows {
+		if ParseLevel(row.Level) == Owner && len(row.RelPath) > from {
+			name, from = row.Name, len(row.RelPath)
+		}
+	}
+	return name
 }

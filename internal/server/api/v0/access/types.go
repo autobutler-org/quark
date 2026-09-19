@@ -12,6 +12,7 @@ func (r *router) Routes() []*serverutil.Route {
 		setAccessRoute,
 		revokeAccessRoute,
 		listPrincipalsRoute,
+		listSharedWithMeRoute,
 	}
 }
 
