@@ -25,9 +25,19 @@ class SignInForm extends StatelessWidget {
   /// Manual route to the setup wizard, for a Quark that has no accounts yet.
   ///
   /// The gate normally detects that and redirects, but a slow, failed or
-  /// offline probe leaves the user here — so the link is always visible
-  /// rather than conditional on a status call that may never answer (#1827).
+  /// offline probe leaves the user here — so the link is shown whenever the
+  /// app does not *know* the Quark is claimed (#1827). It is hidden only on
+  /// the strength of a status call that said so, because on a Quark with an
+  /// owner it reads as an onboarding offer on every visit and dilutes the
+  /// one action that page is for (#2030).
   final VoidCallback onSetUpQuark;
+
+  /// Whether the Quark is known to have an owner already.
+  ///
+  /// Null means nobody has answered yet — a probe still in flight, a failed
+  /// one, or an unreachable Quark — and that is deliberately treated as "may
+  /// still need setting up".
+  final bool? setupComplete;
 
   const SignInForm({
     super.key,
@@ -47,6 +57,7 @@ class SignInForm extends StatelessWidget {
     required this.onSubmit,
     required this.onForgotPassword,
     required this.onSetUpQuark,
+    this.setupComplete,
   });
 
   @override
@@ -168,11 +179,14 @@ class SignInForm extends StatelessWidget {
             child: const Text('Forgot password?'),
           ),
 
-          // Escape hatch to the setup wizard for an unclaimed Quark (#1827).
-          TextButton(
-            onPressed: loading ? null : onSetUpQuark,
-            child: const Text('First time here? Set up this Quark'),
-          ),
+          // Escape hatch to the setup wizard for an unclaimed Quark (#1827),
+          // hidden once the Quark has said it has an owner (#2030).
+          if (setupComplete != true)
+            TextButton(
+              key: const ValueKey('login_set_up_quark'),
+              onPressed: loading ? null : onSetUpQuark,
+              child: const Text('First time here? Set up this Quark'),
+            ),
         ],
       ),
     );

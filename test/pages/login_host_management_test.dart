@@ -128,16 +128,28 @@ void main() {
       expect(find.byType(HostManager), findsNothing);
     });
 
-    // #1827: the manual escape hatch to /setup. Always rendered, because the
-    // gate's status probe can be slow, failed or offline — it must never be
-    // the only way to reach the setup wizard.
-    testWidgets('the sign-in form offers a way to set up an unclaimed Quark', (
+    // #1827: the manual escape hatch to /setup, for the case it exists for —
+    // a probe that never answered, which is also the only case that leaves a
+    // user on login with the Quark's state unknown. A Quark that answered
+    // "already set up" hides it instead (#2030); one that answered "not set
+    // up" is redirected to the wizard by the gate and never sees this form.
+    testWidgets('an unanswered probe still offers the setup wizard', (
       tester,
     ) async {
+      authStatusProbe = () async => throw Exception('unreachable');
       await addAccepted('Home', 'http://quark.local');
       await pumpLogin(tester);
 
       expect(find.text('First time here? Set up this Quark'), findsOneWidget);
+    });
+
+    // #2030: on a Quark with an owner the link led to a wizard that refuses,
+    // and read as an onboarding offer on every visit.
+    testWidgets('a Quark with an owner does not offer setup', (tester) async {
+      await addAccepted('Home', 'http://quark.local');
+      await pumpLogin(tester);
+
+      expect(find.text('First time here? Set up this Quark'), findsNothing);
     });
 
     // It has to *navigate*, not push. go_router ships
@@ -146,6 +158,7 @@ void main() {
     // own uri is what gets reported to the browser, and it is the only thing
     // here that tells `go` and `push` apart (the wizard shows either way).
     testWidgets('tapping it leaves login for the setup wizard', (tester) async {
+      authStatusProbe = () async => throw Exception('unreachable');
       await addAccepted('Home', 'http://quark.local');
       final router = await pumpLogin(tester);
 
