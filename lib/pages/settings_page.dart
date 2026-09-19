@@ -71,11 +71,15 @@ String buildVersionLabel({
   return '$version ($buildNumber)';
 }
 
-/// The app's own row, which has to name what it is reporting — the Quark's
-/// version sits under its own "Installed version" heading and does not.
+/// The app's own row, which has to name what it is reporting.
 ///
-/// Prefixed only when there is a version to prefix: "App version Development
-/// build" reads like a bug.
+/// Always prefixed, dev builds included. Both this and the Quark's version
+/// render as `Development build (<sha>)` on a developer's machine, from two
+/// different commits — the app is whatever the dev server compiled, the Quark
+/// whatever binary is running — and two identical-looking lines with
+/// different hashes read as the page contradicting itself (#2035). The colon
+/// is what lets the prefix sit in front of "Development build" without
+/// reading like a bug.
 String appVersionLabel({
   required String version,
   required String buildNumber,
@@ -86,7 +90,7 @@ String appVersionLabel({
     buildNumber: buildNumber,
     sha: sha,
   );
-  return version.isEmpty ? label : 'App version $label';
+  return 'App version: $label';
 }
 
 /// The GitHub release a tagged build was cut from, or null when there is no
@@ -794,8 +798,11 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Names whose version this is. "Installed version" alone
+                  // sat opposite the app's own line and left the reader to
+                  // work out which was which (#2035).
                   const Text(
-                    'Installed version',
+                    'Quark version (installed)',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 6),

@@ -80,7 +80,7 @@ void main() {
 
     await pumpSettings(tester);
 
-    expect(find.text('App version 0.31.1 (42)'), findsOneWidget);
+    expect(find.text('App version: 0.31.1 (42)'), findsOneWidget);
   });
 
   // Nothing stamps a version unless the build passed --build-name, so the
@@ -90,7 +90,7 @@ void main() {
       // What `make watch/frontend` produces: no tag, but a --dart-define'd sha.
       expect(
         appVersionLabel(version: '', buildNumber: '', sha: 'a1b2c3d'),
-        'Development build (a1b2c3d)',
+        'App version: Development build (a1b2c3d)',
       );
     });
 
@@ -98,13 +98,13 @@ void main() {
       // A bare `flutter run`, outside the Makefile: no tag and no sha either.
       expect(
         appVersionLabel(version: '', buildNumber: '', sha: ''),
-        'Development build — no version stamped',
+        'App version: Development build — no version stamped',
       );
       // Web omits the version.json keys rather than defaulting them, so a
       // build number can survive a missing version.
       expect(
         appVersionLabel(version: '', buildNumber: '42', sha: ''),
-        'Development build — no version stamped',
+        'App version: Development build — no version stamped',
       );
     });
 
@@ -113,14 +113,14 @@ void main() {
       // "App version 0.31.1 ()" is what the first cut rendered.
       expect(
         appVersionLabel(version: '0.31.1', buildNumber: '', sha: 'a1b2c3d'),
-        'App version 0.31.1',
+        'App version: 0.31.1',
       );
     });
 
     test('names both when the iOS release stamped both', () {
       expect(
         appVersionLabel(version: '0.31.1', buildNumber: '42', sha: 'a1b2c3d'),
-        'App version 0.31.1 (42)',
+        'App version: 0.31.1 (42)',
       );
     });
   });
@@ -161,7 +161,7 @@ void main() {
 
     final link = tester.widget<InkWell>(
       find.ancestor(
-        of: find.text('App version 0.31.1 (42)'),
+        of: find.text('App version: 0.31.1 (42)'),
         matching: find.byType(InkWell),
       ),
     );
@@ -179,10 +179,14 @@ void main() {
       );
       expect(
         appVersionLabel(version: '', buildNumber: '', sha: 'a1b2c3d'),
-        'Development build (a1b2c3d)',
+        'App version: Development build (a1b2c3d)',
       );
     });
 
+    // #2035: the Quark's line lives under "Quark version (installed)" and the
+    // app's names itself inline, so two "Development build (…)" lines from
+    // two different commits cannot be mistaken for the page contradicting
+    // itself.
     test('carries no "App version" prefix, having its own heading', () {
       expect(buildVersionLabel(version: '0.31.1'), '0.31.1');
     });
