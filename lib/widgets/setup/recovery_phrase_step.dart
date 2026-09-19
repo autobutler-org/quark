@@ -4,6 +4,14 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Shows the recovery phrase and requires acknowledgement before proceeding.
+///
+/// The guidance and the buttons have to agree. This screen used to warn
+/// "don't store it digitally on this device" directly above a Copy button,
+/// which is a contradiction on the one screen where a user is deciding
+/// whether to trust the thing they just set up (#2023). A password manager is
+/// a good home for a recovery phrase; the clipboard of the machine you sign
+/// in from is not, so that is what the copy now says, next to the button it
+/// is about.
 class RecoveryPhraseStep extends StatelessWidget {
   final String phrase;
   final bool acknowledged;
@@ -41,8 +49,9 @@ class RecoveryPhraseStep extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'This phrase is the only way to reset your password if you forget it. '
-          "It will not be shown again. Write it down somewhere safe — don't store it digitally on this device.",
+          'This phrase is the only way to reset your password if you forget '
+          'it. It will not be shown again — write it down, or save it in a '
+          'password manager.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
           ),
@@ -77,12 +86,23 @@ class RecoveryPhraseStep extends StatelessWidget {
                   text: phrase,
                   icon: QuarkIcons.copy_outlined,
                   variant: CopyButtonVariant.outlined,
+                  label: 'Copy to a password manager',
                   unavailableReason: clipboardUnavailableReason,
                   onCopy: (value) => copyToClipboard(
                     context,
                     value,
                     message: 'Recovery phrase copied to clipboard',
                   ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'The clipboard is shared with everything on this device. '
+                  'Paste it into your password manager, then copy something '
+                  'else.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -94,9 +114,7 @@ class RecoveryPhraseStep extends StatelessWidget {
         CheckboxListTile(
           value: acknowledged,
           onChanged: onAcknowledgedChanged,
-          title: const Text(
-            'I have written down my recovery phrase and stored it safely.',
-          ),
+          title: const Text('I have saved my recovery phrase somewhere safe.'),
           controlAffinity: ListTileControlAffinity.leading,
           contentPadding: EdgeInsets.zero,
         ),
