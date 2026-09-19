@@ -302,10 +302,10 @@ func TestToggleFavorite_PerUser(t *testing.T) {
 	if rows, err := q.ListFavorites(ctx, ben); err != nil || len(rows) != 0 {
 		t.Errorf("ben's favorites after deleting ben = %v, %v; want none", rows, err)
 	}
-	if _, err := q.GetAlbum(ctx, benAlbum.ID); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := q.GetAlbum(ctx, db.GetAlbumParams{ID: benAlbum.ID, UserID: ben}); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("ben's Favorites album after deleting ben: %v, want sql.ErrNoRows", err)
 	}
-	if _, err := q.GetAlbum(ctx, annAlbum.ID); err != nil {
+	if _, err := q.GetAlbum(ctx, db.GetAlbumParams{ID: annAlbum.ID, UserID: ann}); err != nil {
 		t.Errorf("ann's Favorites album after deleting ben: %v", err)
 	}
 }
