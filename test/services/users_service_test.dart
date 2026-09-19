@@ -152,8 +152,8 @@ void main() {
     });
   });
 
-  test("a folder that already exists passes the Quark's text on", () async {
-    answer(409, {'error': 'a folder with that name already exists'});
+  test("a taken username passes the Quark's text on", () async {
+    answer(409, {'error': 'that username is taken'});
 
     await expectLater(
       UsersService.create(username: 'bob', password: 'hunter2hunter2'),
@@ -161,7 +161,7 @@ void main() {
         isA<MessageException>().having(
           (e) => e.message,
           'message',
-          'a folder with that name already exists',
+          'that username is taken',
         ),
       ),
     );

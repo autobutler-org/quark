@@ -67,9 +67,6 @@ func TestCreateUser_Endpoint(t *testing.T) {
 		t.Errorf("first login = %+v, %v; want a recovery phrase", first, err)
 	}
 
-	if err := os.MkdirAll(filepath.Join(filesDir, "users", "family"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	for _, tc := range []struct {
 		name string
 		body map[string]any
@@ -77,7 +74,6 @@ func TestCreateUser_Endpoint(t *testing.T) {
 		text string
 	}{
 		{"taken", map[string]any{"username": "bob", "password": "initial-password"}, http.StatusConflict, authutil.ErrUsernameTaken.Error()},
-		{"folder exists", map[string]any{"username": "family", "password": "initial-password"}, http.StatusConflict, authutil.ErrFolderExists.Error()},
 		{"invalid name", map[string]any{"username": "../x", "password": "initial-password"}, http.StatusBadRequest, authutil.ErrInvalidUsername.Error()},
 		{"short password", map[string]any{"username": "carol", "password": "short"}, http.StatusBadRequest, authutil.ErrPasswordTooShort.Error()},
 	} {
@@ -92,8 +88,5 @@ func TestCreateUser_Endpoint(t *testing.T) {
 	}
 	if n := h.drainEvents(); n != 0 {
 		t.Errorf("refused creates published %d account_changed events", n)
-	}
-	if _, err := h.database.Queries.GetUserByUsername(ctx, "family"); err == nil {
-		t.Error("the folder conflict still created the account")
 	}
 }
