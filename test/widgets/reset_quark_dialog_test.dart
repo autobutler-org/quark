@@ -16,6 +16,10 @@ void main() {
   final files = find.byKey(const ValueKey('reset_quark_files'));
   final devices = find.byKey(const ValueKey('reset_quark_devices'));
   final warning = find.byKey(const ValueKey('reset_quark_warning'));
+  final driveWarning = find.byKey(
+    const ValueKey('reset_quark_devices_warning'),
+  );
+  final scope = find.byKey(const ValueKey('reset_quark_scope'));
   final submit = find.byKey(const ValueKey('reset_quark_submit'));
 
   bool isChecked(WidgetTester tester, Finder tile) =>
@@ -101,6 +105,49 @@ void main() {
 
     expect(warning, findsOneWidget);
     expect(find.text(kResetQuarkPartialWarning), findsOneWidget);
+  });
+
+  // #2052: the checkbox that reaches outside the appliance is the one choice
+  // the dialog cannot take back, and it used to be as quiet as the others.
+  testBothViewports('stays quiet about drives until one is included', (
+    tester,
+    size,
+  ) async {
+    await pumpDialog(tester, size: size);
+
+    expect(driveWarning, findsNothing);
+  });
+
+  testBothViewports('warns louder once an attached drive is included', (
+    tester,
+    size,
+  ) async {
+    await pumpDialog(tester, size: size);
+
+    await tapVisible(tester, devices);
+
+    expect(driveWarning, findsOneWidget);
+    expect(find.text(kResetQuarkDriveWarning), findsOneWidget);
+  });
+
+  testWidgets('drops the drive warning when the drive is unchecked again', (
+    tester,
+  ) async {
+    await pumpDialog(tester, size: narrowViewport);
+
+    await tapVisible(tester, devices);
+    await tapVisible(tester, devices);
+
+    expect(driveWarning, findsNothing);
+  });
+
+  // #2052: what a reset keeps is as load-bearing as what it erases, and the
+  // entry into the dialog reads as "everything" either way.
+  testBothViewports('says what the selection keeps', (tester, size) async {
+    await pumpDialog(tester, size: size);
+
+    expect(scope, findsOneWidget);
+    expect(find.textContaining('Keeps'), findsOneWidget);
   });
 
   testWidgets('warns once the accounts are left out', (tester) async {

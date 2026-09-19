@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/widgets/settings/reset_quark_warning.dart';
 
 /// The aspects of an appliance a reset can wipe, as chosen in the dialog.
 @immutable
@@ -34,6 +35,40 @@ class QuarkResetSelection {
   /// that point at them.
   bool get leavesDataBehind => !database || !files;
 
+  /// What this selection erases, as a phrase that reads after "Erases: ".
+  ///
+  /// Never empty: the button is disabled on an empty selection, but the line
+  /// is on screen while the user is still turning boxes off, and "Erases: "
+  /// followed by nothing is a worse answer than saying so.
+  String get erasesSummary {
+    final parts = [
+      if (database) 'accounts and settings',
+      if (files) 'stored files',
+      if (devices) 'Quark data on attached drives',
+    ];
+    return parts.isEmpty ? 'nothing yet' : _list(parts);
+  }
+
+  /// What this selection leaves alone, as a phrase that reads after "Keeps: ".
+  ///
+  /// The last entry is unconditional and is the one people are really asking
+  /// about: a reset never touches the rest of a drive it was pointed at, and
+  /// a drive that is unplugged is not reached at all.
+  String get keepsSummary => _list([
+    if (!database) 'accounts and settings',
+    if (!files) 'stored files',
+    if (!devices) 'everything on attached drives',
+    if (devices) 'everything else on those drives',
+  ]);
+
+  /// Joins [parts] the way a sentence does, with a comma and an "and".
+  static String _list(List<String> parts) => switch (parts.length) {
+    0 => '',
+    1 => parts.first,
+    2 => '${parts.first} and ${parts.last}',
+    _ => '${parts.sublist(0, parts.length - 1).join(', ')} and ${parts.last}',
+  };
+
   /// A copy of this selection with the named aspects changed.
   QuarkResetSelection copyWith({bool? database, bool? files, bool? devices}) =>
       QuarkResetSelection(
@@ -48,6 +83,18 @@ const String kResetQuarkPartialWarning =
     'This leaves data on the Quark. Whoever sets it up next will be able to '
     'reach whatever you leave.';
 
+/// What the user reads when a reset would reach off the appliance and onto a
+/// drive they plugged in (#2052).
+///
+/// Louder than [kResetQuarkPartialWarning] because it is the one choice here
+/// that touches something the Quark does not own. Leaving data behind is
+/// recoverable by whoever sets the Quark up next; erasing a drive is not
+/// recoverable by anyone.
+const String kResetQuarkDriveWarning =
+    'This erases the Quark data directory on the drives attached right now. '
+    'That is the one part of this reset nothing can bring back — not even a '
+    'backup drive, if the backup is on it.';
+
 /// The confirmation body for factory-resetting the appliance (#1762).
 ///
 /// Deliberately not the account-deletion dialog. Deleting an account removes a
@@ -60,12 +107,16 @@ const String kResetQuarkPartialWarning =
 /// plugged in for unrelated reasons must not be wiped because a form arrived
 /// with the box already checked, so reaching one is always a deliberate act.
 ///
-/// The warning appears only once the user has turned something off and left
-/// data behind. A notice that is always on is a notice nobody reads, so this
-/// one only speaks when it has something to say.
+/// Each warning appears only once it has something to say: one when the user
+/// has turned something off and left data behind, one when they have reached
+/// onto an attached drive. A notice that is always on is a notice nobody
+/// reads. The scope line below the boxes is the exception — it is always on,
+/// because "what will this actually erase" is the question the dialog exists
+/// to answer, and it reads back both halves, kept as well as erased (#2052).
 ///
 /// Key prefixes: `reset_quark_database`, `reset_quark_files`,
-/// `reset_quark_devices`, `reset_quark_warning`, `reset_quark_confirm_field`,
+/// `reset_quark_devices`, `reset_quark_scope`, `reset_quark_warning`,
+/// `reset_quark_devices_warning`, `reset_quark_confirm_field`,
 /// `reset_quark_cancel`, and `reset_quark_submit`.
 ///
 /// ```dart
@@ -184,34 +235,31 @@ class _ResetQuarkDialogState extends State<ResetQuarkDialog> {
               'attached right now; anything else on them is left alone.',
             ),
           ),
+          const SizedBox(height: 12),
+          // Reads back the boxes above as two plain sentences. The checkboxes
+          // say what each one does; this says what the reset as a whole comes
+          // to, which is the question someone hovering over the button is
+          // actually asking (#2052).
+          Text(
+            key: const ValueKey('reset_quark_scope'),
+            'Erases: ${_selection.erasesSummary}\n'
+            'Keeps: ${_selection.keepsSummary}',
+            style: textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
           if (_selection.leavesDataBehind) ...[
             const SizedBox(height: 8),
-            Container(
-              key: const ValueKey('reset_quark_warning'),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    size: 20,
-                    color: colorScheme.onErrorContainer,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      kResetQuarkPartialWarning,
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onErrorContainer,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            const ResetQuarkWarning(
+              key: ValueKey('reset_quark_warning'),
+              message: kResetQuarkPartialWarning,
+            ),
+          ],
+          if (_selection.devices) ...[
+            const SizedBox(height: 8),
+            const ResetQuarkWarning(
+              key: ValueKey('reset_quark_devices_warning'),
+              message: kResetQuarkDriveWarning,
             ),
           ],
           const SizedBox(height: 16),
