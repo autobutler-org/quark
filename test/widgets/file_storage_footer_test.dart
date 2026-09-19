@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark/services/health_service.dart';
 import 'package:quark/widgets/file_browser/file_storage_footer.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -8,10 +9,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 // indicator and Android its gesture bar. It drew the storage readout and
 // progress bar straight into that band (#1598).
 //
-// These pump the footer under a MediaQuery carrying real device insets. The
-// health request fails in the test environment, which is fine: the footer is
-// built to stay in its placeholder state when health is unreachable, and the
-// layout is what's under test.
+// These pump the footer under a MediaQuery carrying real device insets, with
+// no health reading so it shows its placeholder; the layout is what's under
+// test.
 void main() {
   // iPhone 15 Pro portrait: 34pt home indicator band.
   const gestureInsets = EdgeInsets.only(top: 59, bottom: 34);
@@ -113,5 +113,49 @@ void main() {
       bare + gestureInsets.bottom,
       reason: 'the inset is the only thing that grows the footer',
     );
+  });
+
+  // The page owns the reading and refreshes it; the footer has to show
+  // whatever it is handed on each rebuild rather than a value it cached once
+  // (#2151).
+  testWidgets('shows the reading it is rebuilt with', (
+    WidgetTester tester,
+  ) async {
+    HealthStatus reading(int usedGiB) => HealthStatus(
+      healthy: true,
+      alerts: const [],
+      cpuPercent: 0,
+      cpuCorePercents: const [],
+      memPercent: 0,
+      memUsedBytes: 0,
+      memTotalBytes: 0,
+      diskPercent: usedGiB.toDouble(),
+      diskUsedBytes: usedGiB << 30,
+      diskTotalBytes: 100 << 30,
+      temperatureCelsius: 0,
+    );
+    Future<void> pumpWith(HealthStatus? status) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              const Spacer(),
+              FileStorageFooter(status: status),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await pumpWith(null);
+    expect(find.text('Storage'), findsOneWidget);
+
+    await pumpWith(reading(10));
+    expect(find.text('10.0 GB / 100.0 GB'), findsOneWidget);
+    expect(find.text('10%'), findsOneWidget);
+
+    await pumpWith(reading(25));
+    expect(find.text('25.0 GB / 100.0 GB'), findsOneWidget);
+    expect(find.text('25%'), findsOneWidget);
   });
 }

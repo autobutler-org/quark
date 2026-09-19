@@ -3,40 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-class FileStorageFooter extends StatefulWidget {
-  const FileStorageFooter({super.key});
+/// The capacity row at the bottom of the Files page. It renders whatever
+/// [status] the page last fetched and never fetches on its own, so the page's
+/// refresh (button, timer, server events) is what keeps it current (#2151).
+class FileStorageFooter extends StatelessWidget {
+  const FileStorageFooter({super.key, this.status});
 
-  @override
-  State<FileStorageFooter> createState() => _FileStorageFooterState();
-}
-
-class _FileStorageFooterState extends State<FileStorageFooter> {
-  double _diskPercent = 0;
-  String _label = 'Storage';
-  bool _loaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final status = await HealthService.getHealth();
-      if (!mounted) return;
-      setState(() {
-        _diskPercent = (status.diskPercent / 100).clamp(0.0, 1.0);
-        _label =
-            '${_formatBytes(status.diskUsedBytes)}'
-            ' / ${_formatBytes(status.diskTotalBytes)}';
-        _loaded = true;
-      });
-    } catch (_) {
-      // Silent — footer stays in placeholder state if health is unreachable.
-      if (mounted) setState(() => _loaded = true);
-    }
-  }
+  /// The latest health reading, or null before one has arrived (or when the
+  /// Quark's health endpoint is unreachable), which shows the placeholder.
+  final HealthStatus? status;
 
   String _formatBytes(int bytes) {
     if (bytes <= 0) return '0 B';
@@ -52,9 +27,13 @@ class _FileStorageFooterState extends State<FileStorageFooter> {
 
   @override
   Widget build(BuildContext context) {
+    final status = this.status;
+    final diskPercent = status == null
+        ? 0.0
+        : (status.diskPercent / 100).clamp(0.0, 1.0);
     final colorScheme = Theme.of(context).colorScheme;
     final barColor = QuarkStorageBar.colorForFraction(
-      _diskPercent,
+      diskPercent,
       QuarkTokens.of(context),
     );
     return Container(
@@ -80,7 +59,10 @@ class _FileStorageFooterState extends State<FileStorageFooter> {
               ),
               const SizedBox(width: 8),
               Text(
-                _loaded ? _label : 'Storage',
+                status == null
+                    ? 'Storage'
+                    : '${_formatBytes(status.diskUsedBytes)}'
+                          ' / ${_formatBytes(status.diskTotalBytes)}',
                 style: TextStyle(
                   fontSize: 12,
                   color: colorScheme.onSurface.withValues(alpha: 0.4),
@@ -90,13 +72,13 @@ class _FileStorageFooterState extends State<FileStorageFooter> {
               Expanded(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 320),
-                  child: QuarkStorageBar(usedFraction: _diskPercent),
+                  child: QuarkStorageBar(usedFraction: diskPercent),
                 ),
               ),
               const SizedBox(width: 8),
-              if (_loaded && _diskPercent > 0)
+              if (diskPercent > 0)
                 Text(
-                  '${(_diskPercent * 100).toStringAsFixed(0)}%',
+                  '${(diskPercent * 100).toStringAsFixed(0)}%',
                   style: TextStyle(
                     fontSize: 11,
                     color: barColor,
