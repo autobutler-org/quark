@@ -58,7 +58,49 @@ void main() {
   testBothViewports('says so when there are no albums', (tester, size) async {
     await pumpSheet(tester, size: size, albums: const []);
 
-    expect(find.text('No albums — create one first'), findsOneWidget);
+    expect(find.text('No albums yet'), findsOneWidget);
+  });
+
+  /// #2041: with no albums the sheet read "No albums — create one first" and
+  /// offered nothing, so the user had to dismiss it, leave the photo and go
+  /// looking for the create action somewhere else.
+  testBothViewports('an empty sheet offers to create an album', (
+    tester,
+    size,
+  ) async {
+    var creates = 0;
+    await pumpAt(
+      tester,
+      AddToAlbumSheet(
+        albums: const [],
+        memberAlbumIds: const {},
+        onToggle: (_) {},
+        onCreateAlbum: () => creates++,
+      ),
+      size: size,
+    );
+
+    expect(find.text('No albums yet'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('add_to_album_create')));
+    await tester.pump();
+
+    expect(creates, 1);
+  });
+
+  testWidgets('a caller that cannot create albums offers nothing', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      AddToAlbumSheet(
+        albums: const [],
+        memberAlbumIds: const {},
+        onToggle: (_) {},
+      ),
+      size: narrowViewport,
+    );
+
+    expect(find.byKey(const ValueKey('add_to_album_create')), findsNothing);
   });
 
   testWidgets('renders each album\'s count in agreement with itself', (

@@ -36,6 +36,7 @@ class AlbumPickerSheet extends StatelessWidget {
     this.isLoading = false,
     this.error,
     this.onClose,
+    this.onCreateAlbum,
     super.key,
   });
 
@@ -65,6 +66,10 @@ class AlbumPickerSheet extends StatelessWidget {
   /// one word doing different things is how a user ends up thinking they
   /// backed out of something they are still in (#2060).
   final VoidCallback? onClose;
+
+  /// Makes a new album to put these photos in. Null leaves the empty state as
+  /// copy, for a caller that cannot create one.
+  final VoidCallback? onCreateAlbum;
 
   @override
   Widget build(BuildContext context) {
@@ -114,8 +119,22 @@ class AlbumPickerSheet extends StatelessWidget {
                     ),
                   )
                 : albums.isEmpty
-                ? const Center(
-                    child: Text('No albums — create one in the Photos view'),
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('No albums yet'),
+                        if (onCreateAlbum != null) ...[
+                          SizedBox(height: tokens.spacingMd),
+                          FilledButton.icon(
+                            key: const ValueKey('album_picker_create'),
+                            onPressed: onCreateAlbum,
+                            icon: const Icon(QuarkIcons.add_rounded, size: 18),
+                            label: const Text('Create album'),
+                          ),
+                        ],
+                      ],
+                    ),
                   )
                 : ListView(
                     controller: scrollController,
