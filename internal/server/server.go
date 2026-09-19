@@ -367,7 +367,9 @@ func newEngine() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	router := gin.Default()
+	// gin.Default, but with an access log that redacts ?token= (#2152).
+	router := gin.New()
+	router.Use(serverutil.AccessLogger(), gin.Recovery())
 	// Disable automatic redirects so unmatched routes (e.g. /health, /photos)
 	// fall through to the NoRoute SPA handler instead of 301-redirecting to /.
 	router.RedirectTrailingSlash = false
