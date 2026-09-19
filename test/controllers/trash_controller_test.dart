@@ -174,6 +174,21 @@ void main() {
     );
   });
 
+  /// #2014: a restore the Quark refuses because the destination is occupied
+  /// told the user to move or rename the thing in the way, without saying
+  /// where it is. The page offers to open that folder, which needs the
+  /// controller to name it.
+  test('names the folder an item would be restored into', () async {
+    final c = controller();
+    await c.load();
+
+    expect(c.restoreFolderFor(c.nodes![0]), '/Docs');
+    expect(c.restoreFolderFor(c.nodes![1]), '/');
+    // The Quark no longer knows where this one came from, so there is no
+    // folder to offer.
+    expect(c.restoreFolderFor(c.nodes![2]), isNull);
+  });
+
   test('restores one request per device and drops what came back', () async {
     final c = controller();
     await c.load();

@@ -88,10 +88,10 @@ class _TrashPageState extends State<TrashPage>
   @override
   Future<void> refresh() => _controller.load();
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {SnackBarAction? action}) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(SnackBar(content: Text(message), action: action));
   }
 
   static String _items(int count) => count == 1 ? '1 item' : '$count items';
@@ -119,9 +119,27 @@ class _TrashPageState extends State<TrashPage>
           e,
           nodes.length == 1 ? 'restore the item' : 'restore the items',
         ),
+        // A 409 means something is already where this item goes back to.
+        // Telling the user to move or rename it, without saying where it is,
+        // leaves them to search for it (#2014). The Quark never overwrites,
+        // so opening the folder is the action that actually unblocks them.
+        action: _conflictAction(e, nodes),
       );
     }
     unawaited(manualRefresh());
+  }
+
+  /// Takes the user to the folder a refused restore collided with, when the
+  /// Quark said the destination was occupied and still knows where that is.
+  SnackBarAction? _conflictAction(Object error, List<FileNode> nodes) {
+    if (error is! ApiException || error.statusCode != 409) return null;
+    if (nodes.length != 1) return null;
+    final folder = _controller.restoreFolderFor(nodes.single);
+    if (folder == null) return null;
+    return SnackBarAction(
+      label: 'Open folder',
+      onPressed: () => context.go(AppRoutes.filesPath(folder)),
+    );
   }
 
   Future<void> _deletePermanently(List<FileNode> nodes) async {
