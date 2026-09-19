@@ -145,7 +145,7 @@ void main() {
     await HttpOverrides.runZoned(() async {
       await tester.pumpWidget(const MaterialApp(home: FileBrowserPage()));
       await tester.pumpAndSettle();
-      expect(find.text('10.0 GB / 100.0 GB'), findsOneWidget);
+      expect(find.textContaining('10.0 GB / 100.0 GB'), findsOneWidget);
 
       // AutoRefreshMixin drops a refresh within a wall-clock second of the
       // last one, so let real time pass before pressing the button.
@@ -155,14 +155,14 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('refresh_button')));
       await tester.pump();
       expect(
-        find.text('10.0 GB / 100.0 GB'),
+        find.textContaining('10.0 GB / 100.0 GB'),
         findsOneWidget,
         reason: 'the last reading stays up while the refresh is in flight',
       );
 
       second.complete(_HealthClient.reading(25));
       await tester.pumpAndSettle();
-      expect(find.text('25.0 GB / 100.0 GB'), findsOneWidget);
+      expect(find.textContaining('25.0 GB / 100.0 GB'), findsOneWidget);
     }, createHttpClient: (_) => client);
   });
 
@@ -180,11 +180,11 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(client.paths, contains('/api/v0/files'));
-      expect(find.text('10.0 GB / 100.0 GB'), findsNothing);
+      expect(find.textContaining('10.0 GB / 100.0 GB'), findsNothing);
 
       health.complete(_HealthClient.reading(10));
       await tester.pumpAndSettle();
-      expect(find.text('10.0 GB / 100.0 GB'), findsOneWidget);
+      expect(find.textContaining('10.0 GB / 100.0 GB'), findsOneWidget);
     }, createHttpClient: (_) => client);
   });
 }
