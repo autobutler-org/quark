@@ -14,9 +14,12 @@ typedef FileMenuActionDispatch =
 /// The "more" menu on one file or folder, shared by the list and grid views.
 ///
 /// Offers the entries in [menuActions] that make sense for [item]: nothing
-/// that changes a file inside an archive, Extract only on an archive,
-/// Navigate to folder only in search results, and no Move/Rename or Delete on
-/// the `users` folder or a home folder itself unless the viewer is an admin.
+/// that changes or shares a file inside an archive, Extract only on an
+/// archive, Navigate to folder only in search results, and no Move/Rename or
+/// Delete on the `users` folder or a home folder itself unless the viewer is
+/// an admin. Share is hidden on the `users` folder for everyone, admins
+/// included: access is additive down the tree, so a grant there would expose
+/// every home at once (#2016).
 class FileMenuButton extends StatelessWidget {
   const FileMenuButton({
     required this.item,
@@ -72,6 +75,10 @@ class FileMenuButton extends StatelessWidget {
           entry(FileMenuAction.download, const Text('Download')),
         if (menuActions.contains(FileMenuAction.moveRename) && canChange)
           entry(FileMenuAction.moveRename, const Text('Move/Rename')),
+        if (menuActions.contains(FileMenuAction.share) &&
+            !inArchive &&
+            !isUsersDir(item.deviceSerial, item.apiPath))
+          entry(FileMenuAction.share, const Text('Share…')),
         if (menuActions.contains(FileMenuAction.delete) && canChange)
           entry(FileMenuAction.delete, const Text('Delete')),
         if (menuActions.contains(FileMenuAction.extractHere) &&
