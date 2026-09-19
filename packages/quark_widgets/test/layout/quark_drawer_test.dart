@@ -91,4 +91,72 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  /// #2033: with more than one Quark saved, nothing in the signed-in app said
+  /// which one was on screen, so an upload could land on the wrong device
+  /// without a single hint beforehand.
+  testBothViewports('names the Quark it is signed in to', (tester, size) async {
+    await pumpAt(
+      tester,
+      const QuarkDrawer(
+        activeSection: QuarkDrawerSection.files,
+        hostName: 'Cabin',
+        hostAddress: 'cabin.local:8443',
+      ),
+      size: size,
+    );
+
+    expect(find.text('Cabin'), findsOneWidget);
+    expect(find.text('cabin.local:8443'), findsOneWidget);
+  });
+
+  testWidgets('falls back to the product name when no host is passed', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      const QuarkDrawer(activeSection: QuarkDrawerSection.files),
+      size: narrowViewport,
+    );
+
+    expect(find.text('Quark'), findsOneWidget);
+    expect(find.byKey(const ValueKey('drawer_host')), findsNothing);
+  });
+
+  testWidgets('the host block is how you get to switching Quarks', (
+    tester,
+  ) async {
+    var taps = 0;
+    await pumpAt(
+      tester,
+      QuarkDrawer(
+        activeSection: QuarkDrawerSection.files,
+        hostName: 'Cabin',
+        hostAddress: 'cabin.local',
+        onTapHost: () => taps++,
+      ),
+      size: narrowViewport,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('drawer_host')));
+    await tester.pump();
+
+    expect(taps, 1);
+  });
+
+  testWidgets('a long nickname and address do not overflow a phone', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      const QuarkDrawer(
+        activeSection: QuarkDrawerSection.files,
+        hostName: 'The Quark in the basement behind the water heater',
+        hostAddress: 'https://quark-in-the-basement.home.local:8443',
+      ),
+      size: narrowViewport,
+    );
+
+    expect(tester.takeException(), isNull);
+  });
 }

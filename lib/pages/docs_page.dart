@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/app_settings.dart';
+import 'package:quark/utils/host_display.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/content_search_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -171,6 +173,9 @@ class _DocsPageState extends State<DocsPage> with SafeSetStateMixin {
       ),
       drawer: QuarkDrawer(
         activeSection: QuarkDrawerSection.docs,
+        hostName: AppSettings.instance.activeHostName,
+        hostAddress: shortHostAddress(AppSettings.instance.activeHost),
+        onTapHost: () => context.go(AppRoutes.settings),
         onTapFiles: () => context.go('/files'),
         onTapPhotos: () => context.go('/photos'),
         onTapTrash: () => context.go(AppRoutes.trash),

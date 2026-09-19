@@ -190,6 +190,9 @@ final List<GalleryEntry> registry = [
         ),
         drawer: QuarkDrawer(
           activeSection: QuarkDrawerSection.photos,
+          hostName: 'Home',
+          hostAddress: 'quark.home.local',
+          onTapHost: () => log('QuarkDrawer host'),
           onTapFiles: () => log('QuarkDrawer files'),
         ),
         body: const Center(child: Text('Tap the brand button')),

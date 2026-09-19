@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/utils/host_display.dart';
 import 'package:quark/services/health_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -66,6 +67,9 @@ class _HealthPageState extends State<HealthPage>
       ),
       drawer: QuarkDrawer(
         activeSection: QuarkDrawerSection.health,
+        hostName: AppSettings.instance.activeHostName,
+        hostAddress: shortHostAddress(AppSettings.instance.activeHost),
+        onTapHost: () => context.go(AppRoutes.settings),
         onTapFiles: () {
           context.go(AppRoutes.files);
         },

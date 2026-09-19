@@ -21,6 +21,7 @@ import 'package:quark/widgets/vault/vault_unlock_view.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/utils/host_display.dart';
 
 class VaultPage extends StatefulWidget {
   const VaultPage({super.key});
@@ -192,6 +193,9 @@ class _VaultPageState extends State<VaultPage> {
       ),
       drawer: QuarkDrawer(
         activeSection: QuarkDrawerSection.vault,
+        hostName: AppSettings.instance.activeHostName,
+        hostAddress: shortHostAddress(AppSettings.instance.activeHost),
+        onTapHost: () => context.go(AppRoutes.settings),
         onTapFiles: () => context.go(AppRoutes.files),
         onTapPhotos: () => context.go(AppRoutes.photos),
         onTapTrash: () => context.go(AppRoutes.trash),

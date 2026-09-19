@@ -7,6 +7,7 @@ import 'package:quark/models/photo_album.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/utils/host_display.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/photo_grid_config.dart';
@@ -552,6 +553,9 @@ class PhotosPageState extends State<PhotosPage>
                   : null,
               drawer: QuarkDrawer(
                 activeSection: QuarkDrawerSection.photos,
+                hostName: AppSettings.instance.activeHostName,
+                hostAddress: shortHostAddress(AppSettings.instance.activeHost),
+                onTapHost: () => context.go(AppRoutes.settings),
                 onTapFiles: () => context.go(AppRoutes.files),
                 onTapPhotos: () => Navigator.of(context).pop(),
                 onTapTrash: () => context.go(AppRoutes.trash),

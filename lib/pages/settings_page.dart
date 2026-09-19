@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:quark/controllers/account_actions_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/utils/host_display.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/connected_devices_service.dart';
 import 'package:quark/services/files_service.dart';
@@ -680,6 +681,9 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       drawer: QuarkDrawer(
         activeSection: QuarkDrawerSection.settings,
+        hostName: AppSettings.instance.activeHostName,
+        hostAddress: shortHostAddress(AppSettings.instance.activeHost),
+        onTapHost: () => context.go(AppRoutes.settings),
         onTapFiles: () {
           context.go(AppRoutes.files);
         },

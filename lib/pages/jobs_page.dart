@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/app_settings.dart';
+import 'package:quark/utils/host_display.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -53,6 +55,9 @@ class _JobsPageState extends State<JobsPage>
         ],
         drawer: QuarkDrawer(
           activeSection: QuarkDrawerSection.jobs,
+          hostName: AppSettings.instance.activeHostName,
+          hostAddress: shortHostAddress(AppSettings.instance.activeHost),
+          onTapHost: () => context.go(AppRoutes.settings),
           onTapFiles: () => context.go(AppRoutes.files),
           onTapPhotos: () => context.go(AppRoutes.photos),
           onTapTrash: () => context.go(AppRoutes.trash),
