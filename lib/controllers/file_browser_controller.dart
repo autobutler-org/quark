@@ -11,6 +11,7 @@ import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
+import 'package:quark/widgets/sharing/show_share_sheet.dart';
 
 class FileMenuActionOutcome {
   const FileMenuActionOutcome({
@@ -274,6 +275,15 @@ class FileBrowserController {
         // Handled via the onNavigateToFolder callback in FileBrowserView;
         // should never reach handleFileAction.
         return null;
+      case FileMenuAction.share:
+        // The sheet reports its own refusals, so there is nothing to add.
+        await showShareSheet(
+          context,
+          deviceSerial: node.deviceSerial,
+          relPath: node.apiPath,
+          name: trimTrailingSlashes(node.name),
+        );
+        return null;
       case FileMenuAction.restore:
       case FileMenuAction.deletePermanently:
         // Trash-only actions; the Files page never offers them.
@@ -293,6 +303,8 @@ class FileBrowserController {
         return 'Extraction failed';
       case FileMenuAction.navigateToFolder:
         return 'Navigation failed';
+      case FileMenuAction.share:
+        return 'Sharing failed';
       case FileMenuAction.restore:
         return 'Restore failed';
       case FileMenuAction.deletePermanently:

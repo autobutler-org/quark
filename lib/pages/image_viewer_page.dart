@@ -12,6 +12,7 @@ import 'package:quark/services/album_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/favorites_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/utils/image_viewer_config.dart';
 import 'package:quark/widgets/image_viewer/current_photo.dart';
 import 'package:quark/widgets/image_viewer/desktop_body.dart';
@@ -629,6 +630,18 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   void _navigateToAlbum(AlbumRef ref) =>
       context.go(AppRoutes.photosAlbum('${ref.id}'));
 
+  /// Opens the share sheet for the photo showing (#1911).
+  Future<void> _share() async {
+    final relPath = _currentRelPath;
+    if (relPath == null) return;
+    await showShareSheet(
+      context,
+      deviceSerial: _currentSerial ?? '',
+      relPath: relPath,
+      name: _currentName,
+    );
+  }
+
   Future<void> _makeACopy() async {
     final relPath = _currentRelPath;
     if (relPath == null) return;
@@ -818,6 +831,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
             onAddToAlbum: _addToAlbum,
             onRemoveFromAlbum: () => _removeFromAlbum(widget.sourceAlbum!),
             onMakeACopy: _makeACopy,
+            onShare: _share,
             onDelete: _confirmDelete,
             onShowShortcuts: () => _showShortcutsDialog(context),
           ),
