@@ -3569,7 +3569,7 @@ const docTemplate = `{
         },
         "/photos/favorite": {
             "get": {
-                "description": "Returns whether the specified photo is in the user's favorites. Needs read access on the photo.",
+                "description": "Returns whether the specified photo is in the caller's own favorites. Needs read access on the photo.",
                 "produces": [
                     "application/json"
                 ],
@@ -3620,7 +3620,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Adds the photo to favorites if not already favorited; removes it otherwise. Needs read access on the photo.",
+                "description": "Adds the photo to the caller's own favorites if not already favorited; removes it otherwise. Needs read access on the photo.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3672,7 +3672,7 @@ const docTemplate = `{
         },
         "/photos/favorites": {
             "get": {
-                "description": "Returns all photos the user has favorited, newest first.",
+                "description": "Returns the photos the caller has favorited and can still read, newest first. Every account has its own favorites, admins included.",
                 "produces": [
                     "application/json"
                 ],
@@ -3701,7 +3701,7 @@ const docTemplate = `{
         },
         "/photos/metadata": {
             "get": {
-                "description": "Returns EXIF, file info, and album membership for the specified photo.",
+                "description": "Returns EXIF, file info, and the caller's own favorite state and album membership for the specified photo.",
                 "produces": [
                     "application/json"
                 ],
@@ -4873,7 +4873,7 @@ const docTemplate = `{
         },
         "/videos/metadata": {
             "get": {
-                "description": "Returns duration, resolution, codec, bitrate, framerate, rotation, and album membership for the specified video.",
+                "description": "Returns duration, resolution, codec, bitrate, framerate, rotation, and the caller's own favorite state and album membership for the specified video.",
                 "produces": [
                     "application/json"
                 ],
