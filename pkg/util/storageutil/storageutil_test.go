@@ -61,6 +61,29 @@ func TestIsStorageDevice(t *testing.T) {
 	}
 }
 
+func TestOwnsBlockDevice(t *testing.T) {
+	const behindHub = "/sys/devices/pci0000:00/0000:00:14.0/usb2/2-1/2-1.1/2-1.1:1.0/host0/target0:0:0/0:0:0:0"
+	const direct = "/sys/devices/pci0000:00/0000:00:14.0/usb2/2-1/2-1:1.0/host0/target0:0:0/0:0:0:0"
+	tests := []struct {
+		name     string
+		usbDir   string
+		resolved string
+		want     bool
+	}{
+		{"drive behind hub", "2-1.1", behindHub, true},
+		{"hub in front of drive", "2-1", behindHub, false},
+		{"root hub", "usb2", behindHub, false},
+		{"drive plugged in directly", "2-1", direct, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ownsBlockDevice(tt.usbDir, tt.resolved); got != tt.want {
+				t.Errorf("ownsBlockDevice(%q) = %v, want %v", tt.usbDir, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBytesConversions(t *testing.T) {
 	tests := []struct {
 		name  string
