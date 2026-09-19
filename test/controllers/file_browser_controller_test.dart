@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/file_browser_controller.dart';
 import 'package:quark/models/file_node.dart';
+import 'package:quark/utils/error_text.dart';
+import 'package:quark/widgets/file_browser/file_browser_view.dart';
 
 FileNode _node(String path, {String serial = '', bool isDir = false}) {
   final name = path.split('/').last;
@@ -55,6 +57,40 @@ void main() {
       await controller.deleteNodes(nodes: const []);
 
       expect(called, isFalse);
+    });
+  });
+
+  group('failureMessage', () {
+    const controller = FileBrowserController();
+
+    // A refused move used to roll back with no message at all (#2178).
+    test("a refused move says the Quark's reason", () {
+      expect(
+        controller.failureMessage(
+          FileMenuAction.moveRename,
+          const MessageException("a home folder can't be deleted or moved"),
+        ),
+        "A home folder can't be deleted or moved.",
+      );
+    });
+
+    test('a move refused without a reason still says something', () {
+      expect(
+        controller.failureMessage(
+          FileMenuAction.moveRename,
+          const ApiException(403),
+        ),
+        "You don't have permission to move or rename the item.",
+      );
+    });
+
+    test('every action has a sentence', () {
+      for (final action in FileMenuAction.values) {
+        expect(
+          controller.failureMessage(action, Exception('boom')),
+          startsWith("Couldn't "),
+        );
+      }
     });
   });
 }

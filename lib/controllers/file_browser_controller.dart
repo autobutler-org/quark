@@ -5,6 +5,7 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/file_browser_actions.dart';
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/folder_picker.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
@@ -281,24 +282,18 @@ class FileBrowserController {
     }
   }
 
-  String failureMessage(FileMenuAction action) {
-    switch (action) {
-      case FileMenuAction.download:
-        return 'Download failed';
-      case FileMenuAction.moveRename:
-        return 'Move/Rename failed';
-      case FileMenuAction.delete:
-        return 'Delete failed';
-      case FileMenuAction.extractHere:
-        return 'Extraction failed';
-      case FileMenuAction.navigateToFolder:
-        return 'Navigation failed';
-      case FileMenuAction.restore:
-        return 'Restore failed';
-      case FileMenuAction.deletePermanently:
-        return 'Delete failed';
-    }
-  }
+  /// What to tell the user when [action] threw [error]. Every action gets a
+  /// sentence: a refused move used to roll back with no word at all (#2178).
+  String failureMessage(FileMenuAction action, Object? error) =>
+      Errors.message(error, switch (action) {
+        FileMenuAction.download => 'download the file',
+        FileMenuAction.moveRename => 'move or rename the item',
+        FileMenuAction.delete ||
+        FileMenuAction.deletePermanently => 'delete the item',
+        FileMenuAction.extractHere => 'extract the archive',
+        FileMenuAction.navigateToFolder => 'open the folder',
+        FileMenuAction.restore => 'restore the item',
+      });
 
   String? resolveMoveRenameTargetPath({
     required String currentPath,

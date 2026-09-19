@@ -52,6 +52,21 @@ class FilesService with AuthenticatedService {
     return fallback;
   }
 
+  /// Throws for a delete or move the Quark refused.
+  ///
+  /// Only a 403 carries the Quark's own sentence ("you do not have permission
+  /// to change this", "a home folder can't be deleted or moved"), because those
+  /// are hand-written. A 400 or 500 from these routes carries a Go error's
+  /// text, paths and all, so it travels as a bare status instead.
+  static Never _throwRefusal(http.Response response, String context) {
+    final status = response.statusCode;
+    throwApiError(
+      status,
+      status == 403 ? _responseMessage(response, fallback: '') : null,
+      context,
+    );
+  }
+
   static Uri constructMediaUrl(String filePath, {String? serial}) {
     final querySegments = <String>[
       'filePath=${Uri.encodeQueryComponent(filePath)}',
@@ -427,7 +442,7 @@ class FilesService with AuthenticatedService {
 
     final response = await instance.authenticatedDelete(uri);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to delete file');
+      _throwRefusal(response, 'Failed to delete file');
     }
   }
 
@@ -459,7 +474,7 @@ class FilesService with AuthenticatedService {
         .replace(query: querySegments.join('&'));
     final response = await instance.authenticatedDelete(uri);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to delete files');
+      _throwRefusal(response, 'Failed to delete files');
     }
   }
 
@@ -494,7 +509,7 @@ class FilesService with AuthenticatedService {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to move file');
+      _throwRefusal(response, 'Failed to move file');
     }
   }
 
