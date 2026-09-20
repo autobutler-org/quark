@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -15,9 +16,14 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///  Case 2 — Too many segments: leading (ancestor) segments are dropped and a
 ///            "⋯" indicator is prepended until the remainder fits the available
 ///            width. The home icon is always visible.
+///
+/// Segments outside [rootPath] are shown but not offered: a member's reach
+/// starts at their own home, and the `users` folder on the way to it is a
+/// waypoint they cannot use (#2139).
 class FileTopBarBreadcrumb extends StatelessWidget {
   const FileTopBarBreadcrumb({
     required this.currentPath,
+    required this.rootPath,
     required this.navEnabled,
     required this.hiddenCrumbsController,
     required this.onGoHome,
@@ -26,6 +32,9 @@ class FileTopBarBreadcrumb extends StatelessWidget {
   });
 
   final String currentPath;
+
+  /// The lowest folder the caller can open — empty for the real root.
+  final String rootPath;
   final bool navEnabled;
 
   /// Owned by the top bar so the popup of hidden ancestors survives the
@@ -85,6 +94,10 @@ class FileTopBarBreadcrumb extends StatelessWidget {
       ),
     );
   }
+
+  /// Whether a crumb pointing at [target] may be tapped.
+  bool _canOpen(String target) =>
+      navEnabled && onPathSelected != null && isWithin(rootPath, target);
 
   /// Determines which segments to display given [availableWidth] (the inner
   /// width of the breadcrumb container after its padding is removed).
@@ -160,7 +173,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
             color: colorScheme.onSurfaceVariant,
           ),
           title: Text(name, style: const TextStyle(fontSize: 14)),
-          onTap: !navEnabled || onPathSelected == null
+          onTap: !_canOpen(targetPath)
               ? null
               : () {
                   hiddenCrumbsController.close();
@@ -231,15 +244,15 @@ class FileTopBarBreadcrumb extends StatelessWidget {
       // Middle-truncate the label if it exceeds the per-segment pixel cap.
       final label = _middleTruncate(segments[i], maxSegmentPx, segStyle);
 
+      final tappable = !isLast && _canOpen(targetPath);
+
       result.add(
         MouseRegion(
-          cursor: (isLast || onPathSelected == null || !navEnabled)
-              ? SystemMouseCursors.basic
-              : SystemMouseCursors.click,
+          cursor: tappable
+              ? SystemMouseCursors.click
+              : SystemMouseCursors.basic,
           child: InkWell(
-            onTap: (isLast || onPathSelected == null || !navEnabled)
-                ? null
-                : () => onPathSelected!(targetPath),
+            onTap: tappable ? () => onPathSelected!(targetPath) : null,
             borderRadius: BorderRadius.circular(4),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
@@ -247,7 +260,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 13,
-                  color: isLast ? colorScheme.onSurface : colorScheme.primary,
+                  color: tappable ? colorScheme.primary : colorScheme.onSurface,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.clip,

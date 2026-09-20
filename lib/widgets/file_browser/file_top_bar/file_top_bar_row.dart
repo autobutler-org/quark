@@ -11,6 +11,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 class FileTopBarRow extends StatelessWidget {
   const FileTopBarRow({
     required this.currentPath,
+    required this.rootPath,
     required this.navEnabled,
     required this.isRefreshing,
     required this.searchExpanded,
@@ -27,6 +28,9 @@ class FileTopBarRow extends StatelessWidget {
   });
 
   final String currentPath;
+
+  /// The lowest folder the caller can open — empty for the real root.
+  final String rootPath;
   final bool navEnabled;
   final bool isRefreshing;
   final bool searchExpanded;
@@ -53,6 +57,7 @@ class FileTopBarRow extends StatelessWidget {
             FileTopBarNavButtons(
               navEnabled: navEnabled,
               currentPath: currentPath,
+              rootPath: rootPath,
               isRefreshing: isRefreshing,
               onGoUp: onGoUp,
               onRefresh: onRefresh,

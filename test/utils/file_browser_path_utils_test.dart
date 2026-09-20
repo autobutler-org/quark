@@ -227,4 +227,50 @@ void main() {
       });
     }
   });
+
+  // ─── homePath / landingPath ────────────────────────────────────────
+  group('homePath', () {
+    for (final (username, want) in [
+      ('alice', '/users/alice'),
+      ('  bob  ', '/users/bob'),
+      ('', ''),
+      (null, ''),
+    ]) {
+      test('($username) is "$want"', () {
+        expect(homePath(username), want);
+      });
+    }
+  });
+
+  group('landingPath', () {
+    test('a member starts in their own files', () {
+      expect(landingPath(isAdmin: false, username: 'alice'), '/users/alice');
+    });
+
+    test('an admin starts at the real root', () {
+      expect(landingPath(isAdmin: true, username: 'root'), '');
+    });
+
+    test('an account with no recorded username starts at the real root', () {
+      expect(landingPath(isAdmin: false, username: null), '');
+    });
+  });
+
+  // ─── isWithin ──────────────────────────────────────────────────────
+  group('isWithin', () {
+    for (final (root, path, want) in [
+      ('', '/anything', true),
+      ('', '', true),
+      ('/users/alice', '/users/alice', true),
+      ('/users/alice', '/users/alice/docs', true),
+      ('/users/alice', '/users', false),
+      ('/users/alice', '', false),
+      ('/users/alice', '/users/alicia', false),
+      ('users/alice', '/users/alice/docs', true),
+    ]) {
+      test('($root, $path) is $want', () {
+        expect(isWithin(root, path), want);
+      });
+    }
+  });
 }

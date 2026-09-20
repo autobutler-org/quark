@@ -288,6 +288,7 @@ class QuarkIcons {
   static const IconData shield_outlined = Icons.shield_outlined;
   static const IconData logout = Icons.logout;
   static const IconData person_outline = Icons.person_outline;
+  static const IconData group_outlined = Icons.group_outlined;
   static const IconData visibility = Icons.visibility;
   static const IconData visibility_off = Icons.visibility_off;
   static const IconData visibility_outlined = Icons.visibility_outlined;
