@@ -1,41 +1,45 @@
 package storageutil
 
 import (
+	"slices"
 	"sync"
 	"time"
 )
 
-// deviceStatusCache holds a short-lived cached copy of GetDeviceStatuses
-// results to avoid redundant disk probes when the endpoint is called in
-// rapid succession (see #1022).
-type deviceStatusCache struct {
+// ttlCache holds a short-lived cached copy of a device query so callers in
+// rapid succession do not each re-run device detection, which shells out once
+// per volume on macOS (see #1022, #2191).
+type ttlCache[T any] struct {
 	mu       sync.Mutex
-	result   []*DeviceStatus
+	result   T
+	valid    bool
 	cachedAt time.Time
 	ttl      time.Duration
 }
 
-func (c *deviceStatusCache) get() ([]*DeviceStatus, bool) {
+func (c *ttlCache[T]) get() (T, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.result == nil || time.Since(c.cachedAt) > c.ttl {
-		return nil, false
+	if !c.valid || time.Since(c.cachedAt) > c.ttl {
+		var zero T
+		return zero, false
 	}
 	return c.result, true
 }
 
-func (c *deviceStatusCache) set(result []*DeviceStatus) {
+func (c *ttlCache[T]) set(result T) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.result = result
+	c.valid = true
 	c.cachedAt = time.Now()
 }
 
-// invalidate clears the cache so the next GetDeviceStatuses call re-probes disk.
-func (c *deviceStatusCache) invalidate() {
+// invalidate clears the cache so the next call re-detects devices.
+func (c *ttlCache[T]) invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.result = nil
+	c.valid = false
 }
 
 // diskProbeCache holds long-lived disk probe results keyed by device data
@@ -79,7 +83,8 @@ func (c *diskProbeCache) set(dir string, result DiskProbeResult) {
 // Construct with NewStorageService(d) and inject via deputil.Dependencies.
 type StorageService struct {
 	detector   Detector
-	cache      deviceStatusCache
+	cache      ttlCache[[]*DeviceStatus]
+	managed    ttlCache[[]ManagedDevice]
 	probeCache diskProbeCache
 }
 
@@ -87,12 +92,19 @@ type StorageService struct {
 func NewStorageService(d Detector) *StorageService {
 	return &StorageService{
 		detector: d,
-		cache:    deviceStatusCache{ttl: 10 * time.Second},
+		cache:    ttlCache[[]*DeviceStatus]{ttl: 10 * time.Second},
+		managed:  ttlCache[[]ManagedDevice]{ttl: 10 * time.Second},
 	}
 }
 
 // GetManagedDevices returns all devices that have an quark data directory.
+// Nearly every file request calls it, often twice, so the result is cached
+// until the TTL lapses or InvalidateDeviceCache runs. The returned slice is a
+// copy, so a caller may modify it.
 func (s *StorageService) GetManagedDevices() ([]ManagedDevice, error) {
+	if cached, ok := s.managed.get(); ok {
+		return slices.Clone(cached), nil
+	}
 	devices, err := s.detector.DetectDevices()
 	if err != nil {
 		return nil, err // coverage: ignore - requires device detection failure
@@ -111,7 +123,8 @@ func (s *StorageService) GetManagedDevices() ([]ManagedDevice, error) {
 			FilesDir: filesDir,
 		})
 	}
-	return managed, nil
+	s.managed.set(managed)
+	return slices.Clone(managed), nil
 }
 
 // FindManagedDeviceBySerial finds a managed device by USB serial.
@@ -227,6 +240,7 @@ func (s *StorageService) getDeviceStatusesFresh() ([]*DeviceStatus, error) {
 // any mount/unmount operation to prevent stale UI state.
 func (s *StorageService) InvalidateDeviceCache() {
 	s.cache.invalidate()
+	s.managed.invalidate()
 }
 
 // FindUsbDeviceBySerial finds a USB device by serial number.
