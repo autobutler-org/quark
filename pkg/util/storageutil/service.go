@@ -11,9 +11,11 @@ import (
 // per volume on macOS (see #1022, #2191).
 type ttlCache[T any] struct {
 	mu       sync.Mutex
+	flight   sync.Mutex
 	result   T
 	valid    bool
 	cachedAt time.Time
+	gen      uint64
 	ttl      time.Duration
 }
 
@@ -27,12 +29,40 @@ func (c *ttlCache[T]) get() (T, bool) {
 	return c.result, true
 }
 
-func (c *ttlCache[T]) set(result T) {
+// load returns the cached value, running fill at most once per lapse. Waiters
+// queue on flight and then read what the one detection stored, so a cache miss
+// under load costs one scan rather than one per in-flight request (#2197). A
+// failed detection is not cached, and neither is one that started before an
+// invalidate, since it predates whatever the caller invalidated for.
+func (c *ttlCache[T]) load(fill func() (T, error)) (T, error) {
+	if cached, ok := c.get(); ok {
+		return cached, nil
+	}
+
+	c.flight.Lock()
+	defer c.flight.Unlock()
+	if cached, ok := c.get(); ok {
+		return cached, nil
+	}
+
+	c.mu.Lock()
+	gen := c.gen
+	c.mu.Unlock()
+
+	result, err := fill()
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.result = result
-	c.valid = true
-	c.cachedAt = time.Now()
+	if c.gen == gen {
+		c.result = result
+		c.valid = true
+		c.cachedAt = time.Now()
+	}
+	return result, nil
 }
 
 // invalidate clears the cache so the next call re-detects devices.
@@ -40,6 +70,7 @@ func (c *ttlCache[T]) invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.valid = false
+	c.gen++
 }
 
 // diskProbeCache holds long-lived disk probe results keyed by device data
@@ -104,15 +135,16 @@ func NewStorageService(d Detector) *StorageService {
 // until the TTL lapses or InvalidateDeviceCache runs. The returned slice is a
 // copy, so a caller may modify it.
 func (s *StorageService) GetManagedDevices() ([]ManagedDevice, error) {
-	if cached, ok := s.managed.get(); ok {
-		return slices.Clone(cached), nil
-	}
-	devices, err := s.detector.DetectDevices()
+	managed, err := s.managed.load(func() ([]ManagedDevice, error) {
+		devices, err := s.detector.DetectDevices()
+		if err != nil {
+			return nil, err
+		}
+		return managedDevices(devices), nil
+	})
 	if err != nil {
-		return nil, err // coverage: ignore - requires device detection failure
+		return nil, err
 	}
-	managed := managedDevices(devices)
-	s.managed.set(managed)
 	return slices.Clone(managed), nil
 }
 
@@ -126,19 +158,20 @@ func (s *StorageService) GetManagedDevices() ([]ManagedDevice, error) {
 // cheap (#2195). It is cached like GetManagedDevices, and the returned slice
 // is a copy.
 func (s *StorageService) GetManagedRoots() ([]ManagedDevice, error) {
-	if cached, ok := s.roots.get(); ok {
-		return slices.Clone(cached), nil
-	}
-	detect := s.detector.DetectDevices
-	if rd, ok := s.detector.(rootDetector); ok {
-		detect = rd.DetectRoots
-	}
-	devices, err := detect()
+	roots, err := s.roots.load(func() ([]ManagedDevice, error) {
+		detect := s.detector.DetectDevices
+		if rd, ok := s.detector.(rootDetector); ok {
+			detect = rd.DetectRoots
+		}
+		devices, err := detect()
+		if err != nil {
+			return nil, err // coverage: ignore - requires device detection failure
+		}
+		return managedDevices(devices), nil
+	})
 	if err != nil {
 		return nil, err // coverage: ignore - requires device detection failure
 	}
-	roots := managedDevices(devices)
-	s.roots.set(roots)
 	return slices.Clone(roots), nil
 }
 
@@ -204,15 +237,7 @@ func (s *StorageService) FindDeviceFilesDirBySerial(serial string) (string, bool
 // Results are cached for up to 10 seconds to avoid repeated disk probes when
 // the endpoint is hit in rapid succession (#1022).
 func (s *StorageService) GetDeviceStatuses() ([]*DeviceStatus, error) {
-	if cached, ok := s.cache.get(); ok {
-		return cached, nil
-	}
-	statuses, err := s.getDeviceStatusesFresh()
-	if err != nil {
-		return nil, err
-	}
-	s.cache.set(statuses)
-	return statuses, nil
+	return s.cache.load(s.getDeviceStatusesFresh)
 }
 
 func (s *StorageService) getDeviceStatusesFresh() ([]*DeviceStatus, error) {
