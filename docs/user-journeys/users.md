@@ -321,12 +321,16 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 **Expected result:**
 
 - After step 2 the dialog closes, and **Family** is listed with **No members**.
+- A folder named `Family` is made in `groups`, which the group can write to. Everyone added to the group reaches it
+  (JN-FB-035); nobody else does.
 - After step 3 the dialog stays open and reads "A group with that name already exists.": names are unique ignoring
   case.
 
 **Notes:**
 
-- A name has 1 to 64 characters and no line breaks or tabs.
+- A name has 1 to 64 characters, isn't `.` or `..`, and has no slashes, line breaks or tabs. It is also the name of
+  the group's folder, so it has to be one folder name.
+- A folder of that name already sitting in `groups` is adopted, with its content, rather than refused.
 
 ---
 
@@ -338,11 +342,16 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 1. On the **Groups** tab, tap the actions menu on **Family**'s row.
 2. Tap **Rename**, change the name to `Household`, and tap **Rename**.
+3. Make a folder called `Neighbors` in `groups` (JN-FB-009), then rename **Household** to `Neighbors`.
 
 **Expected result:**
 
 - The row reads **Household**, with the same members.
 - Whatever was shared with the group is still shared with it.
+- The group's folder is renamed to match, the way any other move goes: what is shared on it, the favorites in it and
+  its album items all follow, and open clients see the move without a refresh (JN-FB-024).
+- Step 3 is refused with "a folder with that name is already in groups; move or rename it first", and the group keeps
+  the name it had.
 
 ---
 
@@ -384,4 +393,31 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 - **Family** leaves the list.
 - Its members lose what was shared with **Family**. Their accounts and their own files stay.
+- The group's folder in `groups`, and everything in it, stay too. With the group gone only an admin reaches that
+  folder, to hand it to someone else (JN-FB-027) or to remove it.
 - Tapping **Cancel** in step 2 changes nothing.
+
+---
+
+### JN-USR-020: The everyone group has a folder
+
+**Preconditions:** User is signed in as an admin. A second account, `bob`, is not an admin.
+
+**Steps:**
+
+1. Navigate to `/files` and open `groups`.
+2. Open `everyone` and upload a file into it (JN-FB-006).
+3. Sign in as `bob` and tap **Groups**.
+
+**Expected result:**
+
+- `groups/everyone` exists without anyone having made it, and every account can read and write in it — a shared
+  drawer nobody has to be added to.
+- bob sees `everyone` among his group folders and can open the uploaded file.
+
+**Notes:**
+
+- The quark gives any group with no folder one at startup, so a Quark upgraded from before group folders gets
+  `everyone` and a folder for each group it already had.
+- A group named before names had to be one folder name — one holding a slash — keeps no folder rather than being
+  given one somewhere else in the tree.

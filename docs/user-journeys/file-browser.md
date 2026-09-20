@@ -560,3 +560,185 @@ group the user is in, publishes `access_changed`.
 
 - Your row reads **Owner**, and its level menu and remove button are turned off, so you can't lock yourself out.
 - Another owner, or an admin, can still change or remove it.
+
+---
+
+### JN-FB-033: A member lands in their own files
+
+**Preconditions:** Signed in as `bob`, who is not an admin and whose home, `users/bob`, has files in it.
+
+**Steps:**
+
+1. Navigate to `/files`.
+2. Read the breadcrumb.
+3. Tap **Up**, then **Back**.
+4. Navigate directly to `/files/users/bob/Trip`.
+
+**Expected result:**
+
+- The listing opens on bob's own files, not on a root holding nothing but `users` and `groups`.
+- A row of shortcuts is shown: **My files** and **Groups**, so nobody walks through `users` or `groups` to get
+  anywhere.
+- The breadcrumb reads `users` / `bob`, and the `users` crumb is plain text rather than a link: it is a waypoint bob
+  can't open.
+- **Up** and **Back** are turned off in bob's own files, so neither strands him in `users`.
+- Step 4 opens `users/bob/Trip`: a path in the URL always wins, so deep links and reloads are untouched.
+
+**Notes:**
+
+- The address bar still reads `/files` after step 1. Tapping a shortcut or a folder updates it as usual (JN-FB-002).
+- Recent files, on a screen wide enough for it (JN-FB-022), is shown on the folder the account lands on.
+- A session recorded before the app kept a username lands at the real root instead.
+
+---
+
+### JN-FB-034: An admin lands at the real root
+
+**Preconditions:** Signed in as an admin.
+
+**Steps:**
+
+1. Navigate to `/files`.
+2. Tap **My files**, then **All files**.
+
+**Expected result:**
+
+- The listing opens at the real root, holding `users`, `groups` and whatever else is on the quark: an admin can reach
+  everything, so the root is a real place for them.
+- The shortcuts read **My files**, **Groups** and **All files**.
+- **My files** opens the admin's own home, `users/<username>`; every admin has one. **All files** returns to the root.
+
+**Notes:**
+
+- Whether the account is an admin is answered by the quark after the page is built, so a reload can show an admin
+  their own files for a moment before moving them to the root. It only moves them if they haven't navigated yet.
+
+---
+
+### JN-FB-035: Open a group's folder
+
+**Preconditions:** Signed in as `bob`, who is not an admin and is a member of the group `Family` (JN-USR-018).
+
+**Steps:**
+
+1. Navigate to `/files` and tap **Groups**.
+2. Open `Family`.
+3. Upload a file into it (JN-FB-006).
+
+**Expected result:**
+
+- **Groups** opens `groups`, listing `Family` and `everyone` — the group folders bob's groups reach, not every group
+  on the quark.
+- `Family` holds what the group shares, and bob can add, rename and delete inside it.
+- `everyone` is listed for every account (JN-USR-020).
+
+**Notes:**
+
+- One folder per group, and membership alone decides who reaches it, so adding someone to a group gives them the
+  folder and removing them takes it away (JN-USR-018).
+- Move/Rename and Delete aren't offered on `groups` or on a group's own folder (JN-FB-037).
+
+---
+
+### JN-FB-036: Open what someone has shared with you
+
+**Preconditions:** Signed in as `bob`, who is not an admin. `alice` has shared `Recipes` with him (JN-FB-027).
+
+**Steps:**
+
+1. Navigate to `/files` and tap **Shared with me**.
+2. Have alice share a second folder, `Photos`, then reload and tap **Shared with me** again.
+
+**Expected result:**
+
+- **Shared with me** is offered only when something has been shared. Tapping it opens a **Shared with me** sheet
+  listing what has been shared, one share or many, each reading "Shared by alice". Tapping an entry opens it.
+- After step 2 the sheet lists both folders.
+- bob's own files and his groups' folders aren't listed there: **My files** and **Groups** open those.
+
+**Notes:**
+
+- An admin is never offered the shortcut. They reach the same folders through **All files** (JN-FB-034).
+- A share reads by the group that owns it when a group does, the same way.
+- Only the top of each share is listed: a folder inside one already shared isn't listed again, and the trash is never
+  listed.
+
+---
+
+### JN-FB-037: A home or a group's folder can't be deleted or moved
+
+**Preconditions:** Signed in as `bob`, who is not an admin, has a home at `users/bob`, and is a member of `Family`.
+
+**Steps:**
+
+1. Open the context menu on `users`, on `users/bob`, on `groups` and on `groups/Family`.
+2. Open a folder inside `users/bob` and open its context menu.
+3. Sign in as an admin and repeat step 1.
+
+**Expected result:**
+
+- None of the four offers **Move/Rename** or **Delete** to bob.
+- The folder in step 2 keeps the full menu: everything inside a home or a group folder is ordinary content.
+- For the admin all four keep **Move/Rename** and **Delete**.
+- The quark refuses the same delete, move or rename on its own, telling a member that a home folder, or a group's
+  folder, can't be deleted or moved.
+
+**Notes:**
+
+- **Share…** stays offered on bob's own home, so he can share his own folder (JN-FB-027).
+- A folder named `users` or `groups` on a USB drive is an ordinary folder; only the quark's own are protected.
+
+---
+
+### JN-FB-038: The users and groups folders can't be shared
+
+**Preconditions:** Signed in as an admin.
+
+**Steps:**
+
+1. Open the context menu on `users`, then on `groups`.
+
+**Expected result:**
+
+- **Share…** is offered on neither, for an admin as much as for anyone else.
+- The quark refuses such a share even when asked for it directly, answering that the users and groups folders can't be
+  shared and to share a folder inside them instead.
+
+**Notes:**
+
+- Access adds up down the tree (JN-FB-030), so a share on `users` would hand over every home at once, and one on
+  `groups` every group folder.
+
+---
+
+### JN-FB-039: Upload a file whose name is taken
+
+**Preconditions:** The folder `Recipes` holds `soup.txt`, and the user can write there.
+
+**Steps:**
+
+1. Open `Recipes` and upload a file named `soup.txt` (JN-FB-006).
+2. Tap **Keep both**.
+3. Upload `soup.txt` again and tap **Replace**.
+4. Upload `soup.txt` again and tap **Cancel**.
+5. Upload several files at once, more than one of whose names is taken, tick **Do the same for the rest of this
+   upload**, and answer once.
+
+**Expected result:**
+
+- A dialog titled **That name is taken** names the file and offers **Keep both**, **Replace** and **Cancel**. The
+  quark never renames a file quietly.
+- **Keep both** lands the new file beside the old one under the first free numbered name, `soup_(1).txt`.
+- **Replace** overwrites what is there, and the file keeps the owner it already had, so re-uploading never hands
+  ownership over (JN-FB-032).
+- **Cancel** leaves both files alone and sends nothing for that one. The rest of the upload carries on, and it isn't
+  counted as a failure.
+- In step 5 the question is asked once and the answer stands for every later clash in that upload.
+
+**Notes:**
+
+- Both upload routes answer the same way: the single request that carries a small file, and the resumable session a
+  large one uses.
+- Clashes are asked about one at a time, so a batch that hits several doesn't stack dialogs.
+- Importing from the Photos page never asks. Camera names like `IMG_0001.jpg` clash routinely and carry nothing the
+  person chose, so an import always keeps both.
