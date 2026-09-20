@@ -100,7 +100,7 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 		}
 	} else {
 		// Fallback: walk the managed devices.
-		devices, err := params.Storage.GetManagedDevices()
+		devices, err := params.Storage.GetManagedRoots()
 		if err != nil {
 			return ListPhotosResult{}, err
 		}

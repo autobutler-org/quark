@@ -85,6 +85,7 @@ type StorageService struct {
 	detector   Detector
 	cache      ttlCache[[]*DeviceStatus]
 	managed    ttlCache[[]ManagedDevice]
+	roots      ttlCache[[]ManagedDevice]
 	probeCache diskProbeCache
 }
 
@@ -94,6 +95,7 @@ func NewStorageService(d Detector) *StorageService {
 		detector: d,
 		cache:    ttlCache[[]*DeviceStatus]{ttl: 10 * time.Second},
 		managed:  ttlCache[[]ManagedDevice]{ttl: 10 * time.Second},
+		roots:    ttlCache[[]ManagedDevice]{ttl: 10 * time.Second},
 	}
 }
 
@@ -109,7 +111,40 @@ func (s *StorageService) GetManagedDevices() ([]ManagedDevice, error) {
 	if err != nil {
 		return nil, err // coverage: ignore - requires device detection failure
 	}
+	managed := managedDevices(devices)
+	s.managed.set(managed)
+	return slices.Clone(managed), nil
+}
 
+// GetManagedRoots returns the same devices as GetManagedDevices for the file
+// paths, which only need where each device's files live, which device it is,
+// and what to call it. DataDir, FilesDir, MountPoint, DevicePath, IsInternal,
+// UsbInfo and Name are set; the sizes, filesystem, model and categories a
+// storage page shows may be empty. It skips the per-volume work of full
+// detection (one `diskutil info` each on macOS, a walk of every files
+// directory on both platforms), so a cache miss inside a file request stays
+// cheap (#2195). It is cached like GetManagedDevices, and the returned slice
+// is a copy.
+func (s *StorageService) GetManagedRoots() ([]ManagedDevice, error) {
+	if cached, ok := s.roots.get(); ok {
+		return slices.Clone(cached), nil
+	}
+	detect := s.detector.DetectDevices
+	if rd, ok := s.detector.(rootDetector); ok {
+		detect = rd.DetectRoots
+	}
+	devices, err := detect()
+	if err != nil {
+		return nil, err // coverage: ignore - requires device detection failure
+	}
+	roots := managedDevices(devices)
+	s.roots.set(roots)
+	return slices.Clone(roots), nil
+}
+
+// managedDevices keeps the devices that have, or can be given, a files
+// directory.
+func managedDevices(devices []Device) []ManagedDevice {
 	var managed []ManagedDevice
 	for _, device := range devices {
 		dataDir := GetDataDirForDevice(device.MountPoint)
@@ -123,14 +158,14 @@ func (s *StorageService) GetManagedDevices() ([]ManagedDevice, error) {
 			FilesDir: filesDir,
 		})
 	}
-	s.managed.set(managed)
-	return slices.Clone(managed), nil
+	return managed
 }
 
 // FindManagedDeviceBySerial finds a managed device by USB serial.
-// An empty serial returns the first internal device.
+// An empty serial returns the first internal device. It reads
+// GetManagedRoots, so only the fields that documents are guaranteed.
 func (s *StorageService) FindManagedDeviceBySerial(serial string) (*ManagedDevice, error) {
-	managed, err := s.GetManagedDevices()
+	managed, err := s.GetManagedRoots()
 	if err != nil {
 		return nil, err // coverage: ignore - requires device detection failure
 	}
@@ -153,7 +188,7 @@ func (s *StorageService) FindDeviceFilesDirBySerial(serial string) (string, bool
 	if serial == "" {
 		return "", false
 	}
-	devices, err := s.GetManagedDevices()
+	devices, err := s.GetManagedRoots()
 	if err != nil {
 		return "", false // coverage: ignore - requires device detection failure
 	}
@@ -241,6 +276,7 @@ func (s *StorageService) getDeviceStatusesFresh() ([]*DeviceStatus, error) {
 func (s *StorageService) InvalidateDeviceCache() {
 	s.cache.invalidate()
 	s.managed.invalidate()
+	s.roots.invalidate()
 }
 
 // FindUsbDeviceBySerial finds a USB device by serial number.
