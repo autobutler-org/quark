@@ -938,10 +938,18 @@ test/probe: setup/probe generate/frontend ## Build+install debug APK with ProbeA
 PERF_PORT ?= 18080
 PERF_BASE_URL ?= http://127.0.0.1:$(PERF_PORT)
 PERF_SUMMARY_WRK_DIRS ?= test-results/performance/load test-results/performance/stress
-# Fails load and stress when a files list or stat scenario's p99 is over this.
+# Fails the stress profile when a files list or stat scenario's p99 is over
+# this. It catches a request path that has stopped answering, not a few tens of
+# milliseconds of drift: a shared CI runner puts the nonadmin listing around
+# 350ms on a bad day with no code change at all.
 # On macOS the every-10s device rescan shells out to diskutil and stalls
 # requests for seconds, so a local run reports timeouts that Linux does not.
-PERF_P99_BUDGET_MS ?= 250
+PERF_P99_BUDGET_MS ?= 400
+# The load profile runs each scenario for 10s rather than 30s, so one slow
+# moment moves its p99 much further: the same runner has answered anywhere from
+# 175ms to 800ms for a scenario the stress profile puts under 400ms. It gets a
+# budget of its own, loose enough that only a stall trips it.
+PERF_LOAD_P99_BUDGET_MS ?= 1000
 # The server's data dir relative to HOME (see storageutil.GetDataDirForDevice).
 ifeq ($(UNAME_S),Darwin)
 PERF_DATA_DIR := Library/Application Support/Quark/data
@@ -977,7 +985,7 @@ test/perf/load: build/backend ## Run local wrk load profile against a temporary 
 	export TEST_UPLOAD_CONCURRENCY=4
 	export TEST_UPLOAD_COUNT=8
 	./test/performance/test.sh
-	python3 ./test/performance/render_summary.py --wrk-dir "$$WORK_DIR" --p99-budget-ms $(PERF_P99_BUDGET_MS)
+	python3 ./test/performance/render_summary.py --wrk-dir "$$WORK_DIR" --p99-budget-ms $(PERF_LOAD_P99_BUDGET_MS)
 
 .PHONY: test/perf/stress
 test/perf/stress: build/backend ## Run local wrk stress profile against a temporary local backend
