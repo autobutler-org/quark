@@ -316,7 +316,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       });
       return;
     }
-    await Future.wait([_loadDevices(), _loadHealth()]);
+    // Health is much slower than the listing and only feeds the footer, so it
+    // lands on its own rather than holding up the files (#2189).
+    unawaited(_loadHealth());
+    await _loadDevices();
     if (!mounted) return;
     setState(() => _reloadFiles());
     // `_reloadFiles` may issue nothing while a deep link is still resolving.
