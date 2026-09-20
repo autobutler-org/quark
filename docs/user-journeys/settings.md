@@ -366,3 +366,33 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 - The setting persists across app restarts.
 - Switching the toggle off returns the Photos page to the quark's real library with nothing from the sample set
   rendered.
+
+---
+
+### JN-ST-024: Turn SSH access on and off
+
+**Preconditions:** Logged in as an admin (JN-AUTH-002). The Quark runs as its installed service (`sudo quark install`)
+with `openssh-server` installed, as on every Quark image. SSH access starts off.
+
+**Steps:**
+
+1. Navigate to `/settings` and find **SSH access**.
+2. Tap **Add key**, paste a public key (the contents of `~/.ssh/id_ed25519.pub`), and tap **Add key**.
+3. Optionally tap **Set password**, type a password of at least 12 characters twice, and tap **Set password**.
+4. Switch **SSH access** on and confirm **Turn on**.
+5. From a computer on the same network, run `ssh quark@quark.local`.
+6. Try `ssh root@quark.local`.
+7. Back in settings, remove the key with its delete button, tap **Clear password**, and switch **SSH access** off.
+
+**Expected result:**
+
+- The key appears under **Allowed keys** by its comment, with its SHA256 fingerprint.
+- Step 4 asks for confirmation first; cancelling leaves SSH off.
+- Step 5 signs in as `quark` with the key, or with the password when one is set.
+- Step 6 is refused: root can never sign in over SSH.
+- After step 7, port 22 is closed and nothing answers `ssh`. The switch stays where it was left across a reboot.
+- On a Quark that can't manage SSH (not the installed service, no SSH server, or an install from before this
+  feature), the section shows why and the command that fixes it, instead of the controls.
+
+**Notes:** Admin-only; other accounts don't see the section, and `/api/v0/ssh/*` answers them 403. Quark never
+stores the password. Keys live in `/var/lib/quark/.ssh/authorized_keys`.

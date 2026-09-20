@@ -62,7 +62,7 @@ func createServiceUser() error {
 		"useradd",
 		"--system",
 		"--no-create-home",
-		"--shell", "/usr/sbin/nologin",
+		"--shell", serviceLoginShell,
 		"--comment", "Quark service account",
 		serviceUserName,
 	).Run()
@@ -83,12 +83,7 @@ func createServiceDataDir() error {
 }
 
 func installSudoersRule() error {
-	mountsDir := filepath.Join(serviceDataDir, "data", "mounts")
-	content := fmt.Sprintf(
-		"%s ALL=(root) NOPASSWD: /bin/mount * %s/*, /bin/umount %s/*\n",
-		serviceUserName, mountsDir, mountsDir,
-	)
-	return os.WriteFile(sudoersDropInPath, []byte(content), 0440)
+	return os.WriteFile(sudoersDropInPath, []byte(sudoersContent()), 0440)
 }
 
 // serviceGroupID returns the numeric gid the service runs as. An explicit
@@ -204,6 +199,15 @@ func Install() error {
 		}
 		if err := installSudoersRule(); err != nil {
 			return fmt.Errorf("failed to install sudoers rule: %w", err)
+		}
+		if err := ensureLoginShell(); err != nil {
+			return fmt.Errorf("failed to give the service account a login shell: %w", err)
+		}
+		if err := installSSHHelper(); err != nil {
+			return fmt.Errorf("failed to install the SSH access helper: %w", err)
+		}
+		if err := installSSHDropIn(); err != nil {
+			return fmt.Errorf("failed to install the sshd drop-in: %w", err)
 		}
 		return installSystemdService()
 	case "darwin": // coverage: ignore - Not run in CI

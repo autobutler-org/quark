@@ -795,6 +795,32 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
+  // ── Settings ──────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'SshAccessPanel',
+    group: 'Settings',
+    build: (context, log) => Column(
+      children: [
+        SshAccessPanel(
+          enabled: true,
+          keys: _gallerySshKeys,
+          onEnabledChanged: (on) => log('SshAccessPanel.onEnabledChanged($on)'),
+          onAddKey: () => log('SshAccessPanel.onAddKey'),
+          onRemoveKey: (fingerprint) =>
+              log('SshAccessPanel.onRemoveKey($fingerprint)'),
+          onSetPassword: () => log('SshAccessPanel.onSetPassword'),
+          onClearPassword: () => log('SshAccessPanel.onClearPassword'),
+        ),
+        const Divider(),
+        const SshAccessPanel(
+          unavailableReason:
+              "Quark's SSH helper isn't installed yet. On the device, run "
+              '`sudo quark install` to add it.',
+        ),
+      ],
+    ),
+  ),
+
   // ── Storage ───────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'UploadTargetPicker',
@@ -1080,6 +1106,19 @@ const List<AlbumItem> _galleryAlbumList = [
 const List<UploadTarget> _galleryTargets = [
   UploadTarget(serial: '', name: '', mountPoint: '/data', isInternal: true),
   UploadTarget(serial: 'usb-1', name: 'Backup drive', mountPoint: '/mnt/usb'),
+];
+
+/// The fake SSH keys: one with a comment, one without.
+const List<SshKeyItem> _gallerySshKeys = [
+  SshKeyItem(
+    fingerprint: 'SHA256:4mKq0mB3fY3x9vX1nC8o2wz3d5b7h1QeRk9ZcTt0aLs',
+    type: 'ssh-ed25519',
+    comment: 'me@laptop',
+  ),
+  SshKeyItem(
+    fingerprint: 'SHA256:Zp1yF0vH8wQ2c5nKj7rT3xB9mLd4sAe6gUo1iVb2hNk',
+    type: 'ssh-rsa',
+  ),
 ];
 
 /// The fake jobs: one of every state the list draws.
