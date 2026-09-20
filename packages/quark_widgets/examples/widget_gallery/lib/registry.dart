@@ -531,6 +531,18 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'SharedRootsSheet',
+    group: 'File browser',
+    build: (context, log) => SharedRootsSheet(
+      items: const [
+        SharedRootItem(path: 'users/alice/Trip', name: 'Trip', owner: 'alice'),
+        SharedRootItem(path: 'Family', name: 'Family', owner: 'carol'),
+        SharedRootItem(path: 'Loose', name: 'Loose'),
+      ],
+      onPicked: (path) => log('SharedRootsSheet.onPicked($path)'),
+    ),
+  ),
+  GalleryEntry(
     name: 'NewFileDialog',
     group: 'File browser',
     build: (context, log) => NewFileDialog(

@@ -9,6 +9,7 @@ import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/pages/file_browser_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Records where every request went and answers each one with an empty JSON
@@ -21,15 +22,19 @@ class _RecordingHttpOverrides extends HttpOverrides {
   /// the path itself.
   int statStatus = 200;
 
+  /// What `/api/v0/access/mine` answers. Nothing is shared by default.
+  String sharedWithMe = '{"items":[]}';
+
   @override
   HttpClient createHttpClient(SecurityContext? context) =>
-      _RecordingClient(requested, () => statStatus);
+      _RecordingClient(requested, () => statStatus, () => sharedWithMe);
 }
 
 class _RecordingClient implements HttpClient {
-  _RecordingClient(this.requested, this.statStatus);
+  _RecordingClient(this.requested, this.statStatus, this.sharedWithMe);
   final List<Uri> requested;
   final int Function() statStatus;
+  final String Function() sharedWithMe;
 
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async {
@@ -38,9 +43,12 @@ class _RecordingClient implements HttpClient {
     return _RecordingRequest(url, _bodyFor(url), status);
   }
 
-  static String _bodyFor(Uri url) {
+  String _bodyFor(Uri url) {
     if (url.path.endsWith('/api/v0/files/stat')) {
       return jsonEncode({'isDir': true, 'fileType': 'folder', 'name': 'docs'});
+    }
+    if (url.path.endsWith('/api/v0/access/mine')) {
+      return sharedWithMe();
     }
     return '[]';
   }
@@ -286,6 +294,83 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byKey(const ValueKey('file_shortcut_all_files')), findsOne);
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  testWidgets('Shared with me stays out of the way until something is shared', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      await pumpBrowser(tester);
+
+      expect(
+        find.byKey(const ValueKey('file_shortcut_shared_with_me')),
+        findsNothing,
+        reason: 'a shortcut that opens nothing is worse than no shortcut',
+      );
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  testWidgets('Shared with me appears once something has been shared', (
+    tester,
+  ) async {
+    overrides.sharedWithMe = jsonEncode({
+      'items': [
+        {'relPath': 'users/bob/Trip', 'level': 'read', 'owner': 'bob'},
+      ],
+    });
+
+    await HttpOverrides.runZoned(() async {
+      await pumpBrowser(tester);
+
+      expect(
+        find.byKey(const ValueKey('file_shortcut_shared_with_me')),
+        findsOne,
+      );
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  testWidgets('Shared with me lists a lone share rather than opening it', (
+    tester,
+  ) async {
+    overrides.sharedWithMe = jsonEncode({
+      'items': [
+        {'relPath': 'users/bob/Trip', 'level': 'read', 'owner': 'bob'},
+      ],
+    });
+
+    await HttpOverrides.runZoned(() async {
+      await pumpBrowser(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('file_shortcut_shared_with_me')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SharedRootsSheet), findsOne);
+      expect(find.text('Shared by bob'), findsOne);
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  testWidgets('Shared with me asks which one when there are several', (
+    tester,
+  ) async {
+    overrides.sharedWithMe = jsonEncode({
+      'items': [
+        {'relPath': 'users/bob/Trip', 'level': 'read', 'owner': 'bob'},
+        {'relPath': 'Family', 'level': 'write', 'owner': 'carol'},
+      ],
+    });
+
+    await HttpOverrides.runZoned(() async {
+      await pumpBrowser(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('file_shortcut_shared_with_me')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SharedRootsSheet), findsOne);
+      expect(find.text('Shared by bob'), findsOne);
+      expect(find.text('Shared by carol'), findsOne);
     }, createHttpClient: overrides.createHttpClient);
   });
 }

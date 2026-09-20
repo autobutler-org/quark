@@ -57,6 +57,13 @@ definitions:
           $ref: '#/definitions/accessutil.PrincipalUser'
         type: array
     type: object
+  accessutil.ListSharedWithMeResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/accessutil.SharedItem'
+        type: array
+    type: object
   accessutil.PrincipalGroup:
     properties:
       builtin:
@@ -72,6 +79,22 @@ definitions:
       id:
         type: integer
       username:
+        type: string
+    type: object
+  accessutil.SharedItem:
+    properties:
+      deviceSerial:
+        description: DeviceSerial names the device; empty is the internal one.
+        type: string
+      level:
+        description: Level is read, write or owner.
+        type: string
+      owner:
+        description: |-
+          Owner is the username of the account, or the name of the group, that
+          owns the item. It is empty when no owner row covers the path.
+        type: string
+      relPath:
         type: string
     type: object
   authutil.SessionInfo:
@@ -1163,6 +1186,33 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
       summary: Share a file or folder
+      tags:
+      - access
+  /access/mine:
+    get:
+      description: Returns the root of each ad-hoc share the signed-in account holds,
+        with the account or group that owns it, for the file browser's Shared with
+        me shortcut. Left out are their own home and its contents, which My files
+        opens; every group folder and its contents, which Groups opens; the users
+        and groups folders themselves; the device root; the trash; and a grant inside
+        another grant. An admin bypasses the access table, so their answer is empty
+        and they reach everything through All files.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/accessutil.ListSharedWithMeResult'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: List what has been shared with you
       tags:
       - access
   /access/principals:

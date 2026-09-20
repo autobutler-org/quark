@@ -1032,3 +1032,66 @@ func ListPrincipals(params ListPrincipalsParams) (ListPrincipalsResult, error) {
 	}
 	return result, nil
 }
+
+// SharedItem is the root of one ad-hoc share, as the file browser's Shared
+// with me shortcut lists them.
+type SharedItem struct {
+	// DeviceSerial names the device; empty is the internal one.
+	DeviceSerial string `json:"deviceSerial"`
+	RelPath      string `json:"relPath"`
+	// Level is read, write or owner.
+	Level string `json:"level"`
+	// Owner is the username of the account, or the name of the group, that
+	// owns the item. It is empty when no owner row covers the path.
+	Owner string `json:"owner"`
+}
+
+// ListSharedWithMeParams asks what somebody else shared with the caller.
+type ListSharedWithMeParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// Access is the caller's access as loaded for the request.
+	Access Access
+	// Username is the caller's own, so their home can be left out. An empty
+	// one leaves every home in, which is the honest answer for a caller whose
+	// name is not known.
+	Username string
+}
+
+// ListSharedWithMeResult is the shares, ordered by device then path. The slice
+// is never nil, so an empty answer serializes as [].
+type ListSharedWithMeResult struct {
+	Items []SharedItem `json:"items"`
+}
+
+// ListSharedWithMe lists the roots of what has been shared with the caller
+// (#2139): the paths they were granted, minus the ones the file browser
+// already reaches another way.
+//
+// Left out are their own home and everything inside it, which My files opens;
+// every group folder and its contents, which Groups opens; the users and
+// groups folders themselves, which carry structure rather than content; the
+// device root; the trash; and a grant inside another grant, since opening the
+// outer one reaches it.
+//
+// An admin bypasses the access table and has no rows loaded, so their answer
+// is always empty: every path is theirs through All files.
+func ListSharedWithMe(params ListSharedWithMeParams) (ListSharedWithMeResult, error) {
+	if params.Database == nil {
+		return ListSharedWithMeResult{}, ErrNoDatabase
+	}
+	items := sharedRoots(params.Access.levels, params.Username)
+	for i, item := range items {
+		// ponytail: one query per share, and a caller has a handful. Fold the
+		// owner into one read over every root if that stops being true.
+		rows, err := params.Database.Queries.ListPathAccessOnAncestors(params.Ctx, db.ListPathAccessOnAncestorsParams{
+			DeviceSerial: item.DeviceSerial,
+			RelPath:      item.RelPath,
+		})
+		if err != nil {
+			return ListSharedWithMeResult{}, err
+		}
+		items[i].Owner = ownerName(rows)
+	}
+	return ListSharedWithMeResult{Items: items}, nil
+}

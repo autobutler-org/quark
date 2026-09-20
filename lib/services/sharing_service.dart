@@ -87,6 +87,23 @@ class SharingService with AuthenticatedService {
     );
   }
 
+  /// The roots of what other accounts have shared with the signed-in one, for
+  /// the file browser's Shared with me shortcut. An admin reaches every path
+  /// without a grant, so the Quark answers them with an empty list.
+  static Future<List<SharedRoot>> sharedWithMe() async {
+    final response = await instance.authenticatedGet(
+      apiBaseUri.resolve('/api/v0/access/mine'),
+    );
+    _check(response, 'list what is shared with you');
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return [
+      for (final item
+          in (decoded['items'] as List? ?? const [])
+              .whereType<Map<String, dynamic>>())
+        SharedRoot.fromJson(item),
+    ];
+  }
+
   static Uri get _accessUri => apiBaseUri.resolve('/api/v0/access');
 
   static PathAccess _access(http.Response response, String context) {

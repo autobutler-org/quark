@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/file_browser_controller.dart';
 import 'package:quark/models/file_node.dart';
+import 'package:quark/models/path_grant.dart';
 import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/document_editor_page.dart';
 import 'package:quark/pages/generic_file_viewer_page.dart';
@@ -24,6 +25,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/models/upload_conflict.dart';
 import 'package:quark/services/upload_manager.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/services/sharing_service.dart';
 import 'package:quark/services/health_service.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/services/storage_service.dart';
@@ -51,6 +53,7 @@ import 'package:quark/widgets/file_browser/folder_route_error_state.dart';
 import 'package:quark/widgets/file_browser/new_file_dialog.dart';
 import 'package:quark/widgets/file_browser/recent_files_section.dart';
 import 'package:quark/widgets/file_browser/route_resolution_loading_shell.dart';
+import 'package:quark/widgets/file_browser/shared_roots_sheet.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/quark_connect_form.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -144,6 +147,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   // Archive browser state — non-null when navigating inside an archive.
   _ArchiveContext? _archiveContext;
 
+  /// The roots of what other accounts have shared with this one, which decides
+  /// whether Shared with me is offered at all and what it opens (#2139).
+  List<SharedRoot> _sharedRoots = const [];
+
   /// The shortcuts the browser offers, each with the path it opens, in the
   /// order they are rendered.
   ///
@@ -172,6 +179,17 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         ),
         groupsPath,
       ),
+      if (_sharedRoots.isNotEmpty)
+        MapEntry(
+          const FileShortcut(
+            id: _sharedWithMeId,
+            label: 'Shared with me',
+            icon: QuarkIcons.folder_copy_outlined,
+          ),
+          // Where it leads depends on how many shares there are, so
+          // `_openSharedWithMe` decides rather than this table.
+          '',
+        ),
       if (AppSettings.instance.isAdmin.value)
         const MapEntry(
           FileShortcut(
@@ -182,6 +200,35 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           '',
         ),
     ];
+  }
+
+  /// The one shortcut that opens no fixed path.
+  static const _sharedWithMeId = 'shared_with_me';
+
+  /// Lists what has been shared with this account, in a sheet to choose from.
+  /// Ad-hoc shares land wherever their owner keeps them, so there is no one
+  /// folder holding them to open instead. A single share is listed like any
+  /// other: opening it without asking looked like a mis-tap, and a shared file
+  /// dropped the reader straight into a viewer they never asked for.
+  Future<void> _openSharedWithMe() async {
+    final roots = _sharedRoots;
+    if (roots.isEmpty) return;
+    final picked = await showSharedRootsSheet(context, roots);
+    if (picked != null && mounted) _setPath(picked);
+  }
+
+  /// Feeds the Shared with me shortcut. A failure leaves the shortcut out
+  /// rather than showing a shortcut that opens nothing.
+  Future<void> _loadSharedRoots() async {
+    try {
+      final roots = await SharingService.sharedWithMe();
+      if (!mounted) return;
+      setState(() => _sharedRoots = roots);
+    } catch (e) {
+      debugPrint('[file_browser_page.dart] Failed to load shared roots: $e');
+      if (!mounted) return;
+      setState(() => _sharedRoots = const []);
+    }
   }
 
   /// The landing path for whoever is signed in right now.
@@ -430,8 +477,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       return;
     }
     // Health is much slower than the listing and only feeds the footer, so it
-    // lands on its own rather than holding up the files (#2189).
+    // lands on its own rather than holding up the files (#2189). The shared
+    // roots only decide whether one shortcut is offered, so they land on their
+    // own too.
     unawaited(_loadHealth());
+    unawaited(_loadSharedRoots());
     await _loadDevices();
     if (!mounted) return;
     setState(() => _reloadFiles());
@@ -2272,8 +2322,13 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           if (!_selectionMode && !_isSearchMode && !_noHostSelected)
             FileShortcutBar(
               shortcuts: [for (final s in _shortcuts) s.key],
-              onSelected: (id) =>
-                  _setPath(_shortcuts.firstWhere((s) => s.key.id == id).value),
+              onSelected: (id) {
+                if (id == _sharedWithMeId) {
+                  unawaited(_openSharedWithMe());
+                  return;
+                }
+                _setPath(_shortcuts.firstWhere((s) => s.key.id == id).value);
+              },
             ),
 
           FutureBuilder<List<FileNode>>(

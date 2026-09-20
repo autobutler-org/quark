@@ -41,10 +41,12 @@ func (f *fakeDetector) DetectDevices() ([]storageutil.Device, error) {
 }
 
 // harness is the access, files and events routers over one real device and a
-// migrated database. Each request acts as the account its ?as= names.
+// migrated database. Each request acts as the account its ?as= names, as an
+// admin when it carries admin=1.
 type harness struct {
-	srv   *httptest.Server
-	users map[string]int64
+	srv      *httptest.Server
+	users    map[string]int64
+	database *db.DatabaseSqlc
 }
 
 func newHarness(t *testing.T) harness {
@@ -83,7 +85,11 @@ func newHarness(t *testing.T) harness {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
-		c = ctxutil.With(c, "principal", accessutil.Principal{UserID: users[c.Query("as")]})
+		c = ctxutil.With(c, "username", c.Query("as"))
+		c = ctxutil.With(c, "principal", accessutil.Principal{
+			UserID:  users[c.Query("as")],
+			IsAdmin: c.Query("admin") == "1",
+		})
 		c.Next()
 	})
 	group := engine.Group("/api/v0")
@@ -92,7 +98,7 @@ func newHarness(t *testing.T) harness {
 	}
 	srv := httptest.NewServer(engine)
 	t.Cleanup(srv.Close)
-	return harness{srv: srv, users: users}
+	return harness{srv: srv, users: users, database: database}
 }
 
 func (h harness) do(t *testing.T, method, path, body string) (int, string) {
@@ -228,5 +234,81 @@ func TestAccess_StructuralRootsAreRefused(t *testing.T) {
 		if code != http.StatusBadRequest || errorText(t, body) != accessutil.ErrStructuralShare.Error() {
 			t.Errorf("share %s = %d %s, want 400", rel, code, body)
 		}
+	}
+}
+
+// sharedWithMe is what the Shared with me shortcut lists for one account.
+func (h harness) sharedWithMe(t *testing.T, query string) []accessutil.SharedItem {
+	t.Helper()
+	code, body := h.do(t, http.MethodGet, "/api/v0/access/mine?"+query, "")
+	if code != http.StatusOK {
+		t.Fatalf("GET /access/mine?%s = %d %s", query, code, body)
+	}
+	var out accessutil.ListSharedWithMeResult
+	if err := json.Unmarshal([]byte(body), &out); err != nil {
+		t.Fatalf("decode %s: %v", body, err)
+	}
+	return out.Items
+}
+
+// TestAccess_SharedWithMe has bob share family with carol: it is what carol's
+// Shared with me lists, labeled with bob, while her own home and her group's
+// folder stay out of it. dave, whom nothing was shared with, and an admin, who
+// bypasses the table, both get nothing (#2139).
+func TestAccess_SharedWithMe(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	group, err := h.database.Queries.CreateGroup(ctx, "family")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, grant := range []struct {
+		rel   string
+		user  string
+		level accessutil.Level
+	}{
+		{"users/bob", "bob", accessutil.Owner},
+		{"users/carol", "carol", accessutil.Owner},
+	} {
+		if err := h.database.Queries.SetUserPathAccess(ctx, db.SetUserPathAccessParams{
+			RelPath: grant.rel,
+			UserID:  sql.NullInt64{Int64: h.users[grant.user], Valid: true},
+			Level:   grant.level.String(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := h.database.Queries.SetGroupPathAccess(ctx, db.SetGroupPathAccessParams{
+		RelPath: "groups/family",
+		GroupID: sql.NullInt64{Int64: group.ID, Valid: true},
+		Level:   accessutil.Write.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.database.Queries.AddGroupMember(ctx, db.AddGroupMemberParams{
+		GroupID: group.ID,
+		UserID:  h.users["carol"],
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := h.sharedWithMe(t, "as=carol"); len(got) != 0 {
+		t.Fatalf("carol is shown %+v before the share", got)
+	}
+	carol := strconv.FormatInt(h.users["carol"], 10)
+	if code, body := h.do(t, http.MethodPut, "/api/v0/access?as=bob",
+		`{"relPath":"family","userId":`+carol+`,"level":"read"}`); code != http.StatusOK {
+		t.Fatalf("share = %d %s", code, body)
+	}
+
+	want := []accessutil.SharedItem{{RelPath: "family", Level: "read", Owner: "bob"}}
+	if got := h.sharedWithMe(t, "as=carol"); !slices.Equal(got, want) {
+		t.Errorf("carol is shown %+v, want %+v", got, want)
+	}
+	if got := h.sharedWithMe(t, "as=dave"); len(got) != 0 {
+		t.Errorf("dave is shown %+v, want nothing", got)
+	}
+	if got := h.sharedWithMe(t, "as=carol&admin=1"); len(got) != 0 {
+		t.Errorf("an admin is shown %+v, want nothing", got)
 	}
 }

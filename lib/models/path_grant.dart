@@ -111,3 +111,45 @@ class SharePrincipals {
         ],
       );
 }
+
+/// The root of one ad-hoc share, as `GET /api/v0/access/mine` lists them
+/// (#2139).
+///
+/// The Quark leaves out everything the file browser already reaches another
+/// way — the account's own home, the folders of its groups, the scaffolding
+/// holding both — so what comes back is what Shared with me offers and
+/// nothing else.
+class SharedRoot {
+  const SharedRoot({
+    required this.relPath,
+    this.deviceSerial = '',
+    this.level = 'read',
+    this.owner = '',
+  });
+
+  /// The path in the Quark's own spelling.
+  final String relPath;
+
+  /// The drive it sits on, empty for the Quark's own.
+  final String deviceSerial;
+
+  /// `read`, `write` or `owner`.
+  final String level;
+
+  /// The account or group that owns it, empty when the Quark could name none.
+  final String owner;
+
+  /// The item's own name, without the folders holding it.
+  String get name {
+    final trimmed = relPath.replaceFirst(RegExp(r'/+$'), '');
+    final lastSlash = trimmed.lastIndexOf('/');
+    return lastSlash < 0 ? trimmed : trimmed.substring(lastSlash + 1);
+  }
+
+  factory SharedRoot.fromJson(Map<String, dynamic> json) => SharedRoot(
+    relPath: json['relPath'] as String? ?? '',
+    deviceSerial: json['deviceSerial'] as String? ?? '',
+    level: json['level'] as String? ?? 'read',
+    owner: json['owner'] as String? ?? '',
+  );
+}
