@@ -48,7 +48,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: loadtest-results
-          path: test-results/performance/
+          path: test-results/performance/load/
           if-no-files-found: warn
 
   performance-stress:
@@ -81,7 +81,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: stress-results
-          path: test-results/performance/
+          path: test-results/performance/stress/
           if-no-files-found: warn
 
   performance-summary:
@@ -99,14 +99,14 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: loadtest-results
-          path: test-results/performance
+          path: test-results/performance/load
 
       - name: Download stress test results
         continue-on-error: true
         uses: actions/download-artifact@v8
         with:
           name: stress-results
-          path: test-results/performance
+          path: test-results/performance/stress
 
       - name: Render performance summary
         run: |
