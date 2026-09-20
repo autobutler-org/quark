@@ -65,27 +65,43 @@ String? serialOrNull(String serial) {
   return trimmed;
 }
 
+/// The segments of [path] on the internal drive, or null on any other drive,
+/// with empty and `.` segments dropped the way the Quark cleans a path.
+List<String>? _internalSegments(String serial, String path) {
+  if (serial.trim().isNotEmpty) return null;
+  return path.split('/').where((s) => s.isNotEmpty && s != '.').toList();
+}
+
 /// Whether [path] on [serial] is an account's home itself, `users/<name>` on
 /// the internal drive, rather than something inside it or a `users` folder on
 /// a USB drive. The Quark refuses a member's delete or move of one (#2016);
-/// this mirrors its `authutil.IsHomeRoot`, so keep the two in step.
+/// this mirrors its `accessutil.IsHomeRoot`, so keep the two in step.
 bool isHomeRoot(String serial, String path) {
-  if (serial.trim().isNotEmpty) return false;
-  final segments = path
-      .split('/')
-      .where((s) => s.isNotEmpty && s != '.')
-      .toList();
-  return segments.length == 2 && segments.first == 'users';
+  final segments = _internalSegments(serial, path);
+  return segments != null && segments.length == 2 && segments.first == 'users';
 }
 
 /// Whether [path] on [serial] is the `users` folder on the internal drive that
 /// holds every home. A member has no write access to it, so the Quark refuses
 /// their delete or move of it the same way it refuses one of a home (#2016).
 bool isUsersDir(String serial, String path) {
-  if (serial.trim().isNotEmpty) return false;
-  final segments = path
-      .split('/')
-      .where((s) => s.isNotEmpty && s != '.')
-      .toList();
-  return segments.length == 1 && segments.first == 'users';
+  final segments = _internalSegments(serial, path);
+  return segments != null && segments.length == 1 && segments.first == 'users';
+}
+
+/// Whether [path] on [serial] is a group's folder itself, `groups/<name>` on
+/// the internal drive, rather than something inside it or a `groups` folder on
+/// a USB drive. The Quark refuses a member's delete or move of one (#2016);
+/// this mirrors its `accessutil.IsGroupRoot`, so keep the two in step.
+bool isGroupRoot(String serial, String path) {
+  final segments = _internalSegments(serial, path);
+  return segments != null && segments.length == 2 && segments.first == 'groups';
+}
+
+/// Whether [path] on [serial] is the `groups` folder on the internal drive
+/// that holds every group's folder. Like `users`, a member may not delete or
+/// move it, and nobody may share it (#2016).
+bool isGroupsDir(String serial, String path) {
+  final segments = _internalSegments(serial, path);
+  return segments != null && segments.length == 1 && segments.first == 'groups';
 }

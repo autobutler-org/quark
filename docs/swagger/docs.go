@@ -80,7 +80,7 @@ const docTemplate = `{
                 }
             },
             "put": {
-                "description": "Grants one active account or existing group read, write or owner on a path, replacing the level it had there, and returns the path's grants as they now stand. Only an owner of the path or an admin may share it. A non-admin can't change their own owner row on the path. Publishes access_changed for the path.",
+                "description": "Grants one active account or existing group read, write or owner on a path, replacing the level it had there, and returns the path's grants as they now stand. Only an owner of the path or an admin may share it. A non-admin can't change their own owner row on the path. Nobody, admins included, may share the users or groups folder itself on the internal device. Publishes access_changed for the path.",
                 "consumes": [
                     "application/json"
                 ],
@@ -110,7 +110,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "a path in the trash, not exactly one account or group, a level other than read, write or owner, or the caller's own owner row",
+                        "description": "a path in the trash, not exactly one account or group, a level other than read, write or owner, the caller's own owner row, or the users or groups folder itself",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -545,7 +545,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Creates an empty group. The name is trimmed, has 1 to 64 characters and no control characters, and is unique ignoring case. Publishes account_changed. Admin-only.",
+                "description": "Creates an empty group and its folder in groups on the internal device, named after the group, with one grant giving the group write there; an existing folder of that name is adopted. The name is trimmed, has 1 to 64 characters, no control characters or slashes, isn't . or .., and is unique ignoring case. Publishes account_changed and new_folder. Admin-only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -609,7 +609,7 @@ const docTemplate = `{
         },
         "/admin/groups/{id}": {
             "put": {
-                "description": "Renames a group under the same rules a new name follows; a group may take its own name in another case. The everyone group can't be renamed. The response lists no members. Publishes account_changed. Admin-only.",
+                "description": "Renames a group under the same rules a new name follows; a group may take its own name in another case. Its folder in groups is renamed to match as an ordinary move does, carrying its shares, favorites and album items, and publishing move and access_changed. The everyone group can't be renamed. The response lists no members. Publishes account_changed. Admin-only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -670,7 +670,7 @@ const docTemplate = `{
                         }
                     },
                     "409": {
-                        "description": "a group with that name already exists",
+                        "description": "a group with that name already exists, or another folder in groups already has the new name",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -684,7 +684,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Deletes a group, its memberships and every share made to it, so its members lose what only the group gave them. The everyone group can't be deleted. Publishes access_changed with no path. Admin-only.",
+                "description": "Deletes a group, its memberships and every share made to it, so its members lose what only the group gave them. Its folder in groups and its content stay, admin-only from then on. The everyone group can't be deleted. Publishes access_changed with no path. Admin-only.",
                 "tags": [
                     "admin"
                 ],

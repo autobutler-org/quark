@@ -49,9 +49,10 @@ Future<List<String>> _menuFor(
       .toList();
 }
 
-/// A member may not move or delete a home folder itself (#2016), so the menu
-/// does not offer to; the Quark refuses it either way. Nobody is offered Share
-/// on the `users` folder, since a grant there would expose every home.
+/// A member may not move or delete a home or group folder itself (#2016), so
+/// the menu does not offer to; the Quark refuses it either way. Nobody is
+/// offered Share on the `users` or `groups` folder, since a grant there would
+/// expose every home or every group folder.
 void main() {
   testWidgets("hides Move/Rename and Delete on a member's home", (
     tester,
@@ -107,6 +108,58 @@ void main() {
 
   testWidgets('keeps them on users/<name> on a USB drive', (tester) async {
     expect(await _menuFor(tester, _folder('users/bob', serial: 'USB1')), [
+      'Download',
+      'Move/Rename',
+      'Share…',
+      'Delete',
+    ]);
+  });
+
+  testWidgets("hides Move/Rename and Delete on a member's group folder", (
+    tester,
+  ) async {
+    expect(await _menuFor(tester, _folder('groups/Family')), [
+      'Download',
+      'Share…',
+    ]);
+  });
+
+  testWidgets('offers only Download on the groups folder to a member', (
+    tester,
+  ) async {
+    expect(await _menuFor(tester, _folder('groups')), ['Download']);
+  });
+
+  testWidgets('keeps them on the groups folder for an admin, without Share', (
+    tester,
+  ) async {
+    expect(await _menuFor(tester, _folder('groups'), isAdmin: true), [
+      'Download',
+      'Move/Rename',
+      'Delete',
+    ]);
+  });
+
+  testWidgets('keeps them on what is inside a group folder', (tester) async {
+    expect(await _menuFor(tester, _folder('groups/Family/Photos')), [
+      'Download',
+      'Move/Rename',
+      'Share…',
+      'Delete',
+    ]);
+  });
+
+  testWidgets('keeps them on a group folder for an admin', (tester) async {
+    expect(await _menuFor(tester, _folder('groups/Family'), isAdmin: true), [
+      'Download',
+      'Move/Rename',
+      'Share…',
+      'Delete',
+    ]);
+  });
+
+  testWidgets('keeps them on groups/<name> on a USB drive', (tester) async {
+    expect(await _menuFor(tester, _folder('groups/Family', serial: 'USB1')), [
       'Download',
       'Move/Rename',
       'Share…',

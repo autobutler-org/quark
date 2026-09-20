@@ -9,13 +9,14 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
 
 // createGroup godoc
 // @Summary Create a group
-// @Description Creates an empty group. The name is trimmed, has 1 to 64 characters and no control characters, and is unique ignoring case. Publishes account_changed. Admin-only.
+// @Description Creates an empty group and its folder in groups on the internal device, named after the group, with one grant giving the group write there; an existing folder of that name is adopted. The name is trimmed, has 1 to 64 characters, no control characters or slashes, isn't . or .., and is unique ignoring case. Publishes account_changed and new_folder. Admin-only.
 // @Tags admin
 // @Accept json
 // @Produce json
@@ -41,8 +42,14 @@ func createGroup(c *gin.Context) *serverutil.Response {
 		return serverutil.BadRequest(grouputil.ErrInvalidGroupName)
 	}
 
+	filesDir, err := storageutil.GetFilesDir()
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+
 	result, err := grouputil.CreateGroup(c.Request.Context(), grouputil.CreateGroupParams{
 		Database: database,
+		FilesDir: filesDir,
 		Name:     body.Name,
 	})
 	if err != nil {
@@ -50,6 +57,7 @@ func createGroup(c *gin.Context) *serverutil.Response {
 	}
 	if bus := deps.EventBus(); bus != nil {
 		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})
+		bus.Publish(eventbus.Event{Kind: eventbus.EventNewFolder, Path: result.FolderPath})
 	}
 	return serverutil.Ok().WithStatusCode(http.StatusCreated).WithData(result.Group)
 }

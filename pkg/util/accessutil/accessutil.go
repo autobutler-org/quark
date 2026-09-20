@@ -97,6 +97,19 @@ func IsHomeRoot(serial, p string) bool {
 	return dir == authutil.UsersDirName+"/" && name != ""
 }
 
+// IsGroupRoot reports whether a path is a group's folder itself,
+// groups/<name> on the internal device, rather than something inside it. The
+// folder carries the group's grant, so a member moving or trashing it would
+// take the whole group's space with it (#2016). A groups/<name> folder on any
+// other device is an ordinary folder.
+func IsGroupRoot(serial, p string) bool {
+	if serial != "" {
+		return false
+	}
+	dir, name := path.Split(Canonical(p))
+	return dir == authutil.GroupsDirName+"/" && name != ""
+}
+
 // Access is one principal's rows, resolved in memory.
 type Access struct {
 	principal Principal
@@ -749,6 +762,10 @@ var (
 	ErrPrincipalNotFound = errors.New("no active account or group has that id")
 	// ErrInvalidLevel reports a level other than read, write or owner.
 	ErrInvalidLevel = errors.New("access is read, write or owner")
+	// ErrStructuralShare reports a grant on the users or groups folder itself.
+	// Access is additive down the tree, so one there would reach every home or
+	// every group folder at once (#2016).
+	ErrStructuralShare = errors.New("the users and groups folders can't be shared; share a folder inside them instead")
 )
 
 // Grant is one principal's access to a path, as the sharing sheet shows it.
@@ -840,13 +857,18 @@ type SetGrantParams struct {
 // grants as they now stand. It answers to the same callers ListGrants does, and
 // any of them may grant owner. A non-admin may not change their own owner row
 // on the path (ErrSelfOwner). The account must be active and the group must
-// exist; a grant a parent folder already covers is still recorded.
+// exist; a grant a parent folder already covers is still recorded. Nobody,
+// admins included, may grant on the users or groups folder itself
+// (ErrStructuralShare).
 func SetGrant(params SetGrantParams) (GrantsResult, error) {
 	if (params.UserID == 0) == (params.GroupID == 0) {
 		return GrantsResult{}, ErrGrantTarget
 	}
 	if params.Level < Read || params.Level > Owner {
 		return GrantsResult{}, ErrInvalidLevel
+	}
+	if isStructuralRoot(params.DeviceSerial, params.Path) {
+		return GrantsResult{}, ErrStructuralShare
 	}
 	if params.Database == nil {
 		return GrantsResult{}, ErrNoDatabase

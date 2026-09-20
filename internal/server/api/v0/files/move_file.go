@@ -38,7 +38,8 @@ func moveFile(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
-	// Moving things into a home is fine; moving the home itself is not.
+	// Moving things into a home or group folder is fine; moving the folder
+	// itself is not.
 	if refused := refuseHomeRoot(access, req.OldDeviceSerial, req.OldFilePath); refused != nil {
 		return refused
 	}

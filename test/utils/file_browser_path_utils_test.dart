@@ -188,4 +188,43 @@ void main() {
       });
     }
   });
+
+  // ─── isGroupRoot ───────────────────────────────────────────────────
+  // The same cases as the Quark's TestIsGroupRoot, so the two stay in step.
+  group('isGroupRoot', () {
+    for (final (serial, path, want) in [
+      ('', 'groups/Family', true),
+      ('', '/groups/Family/', true),
+      ('', 'groups/./Family', true),
+      ('', 'groups', false),
+      ('', 'groups/Family/notes.txt', false),
+      ('', 'groups/Family/sub', false),
+      ('', 'Family', false),
+      ('', 'shared/groups/Family', false),
+      ('', 'users/Family', false),
+      ('USB1', 'groups/Family', false),
+    ]) {
+      test('($serial, $path) is $want', () {
+        expect(isGroupRoot(serial, path), want);
+      });
+    }
+  });
+
+  // ─── isGroupsDir ───────────────────────────────────────────────────
+  group('isGroupsDir', () {
+    for (final (serial, path, want) in [
+      ('', 'groups', true),
+      ('', '/groups/', true),
+      ('', './groups', true),
+      ('', 'groups/Family', false),
+      ('', 'shared/groups', false),
+      ('', 'groups.txt', false),
+      ('', 'users', false),
+      ('USB1', 'groups', false),
+    ]) {
+      test('($serial, $path) is $want', () {
+        expect(isGroupsDir(serial, path), want);
+      });
+    }
+  });
 }

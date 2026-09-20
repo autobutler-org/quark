@@ -31,18 +31,31 @@ var errReadOnly = errors.New("you do not have permission to change this")
 // home folder itself.
 var errHomeFolder = errors.New("a home folder can't be deleted or moved")
 
-// refuseHomeRoot answers a non-admin's delete or move of a home folder itself
-// (#2016): 404 if they may not see it, 403 if they may. It returns nil for
-// anything else, including every path inside a home. Admins pass, as they do
-// every other access check.
+// errGroupFolder is what a member hears when they try to delete or move a
+// group's folder itself.
+var errGroupFolder = errors.New("a group's folder can't be deleted or moved")
+
+// refuseHomeRoot answers a non-admin's delete or move of a home folder or a
+// group folder itself (#2016): 404 if they may not see it, 403 if they may.
+// It returns nil for anything else, including every path inside one. Admins
+// pass, as they do every other access check.
 func refuseHomeRoot(access accessutil.Access, serial, p string) *serverutil.Response {
-	if access.Principal().IsAdmin || !accessutil.IsHomeRoot(serial, p) {
+	if access.Principal().IsAdmin {
+		return nil
+	}
+	var refusal error
+	switch {
+	case accessutil.IsHomeRoot(serial, p):
+		refusal = errHomeFolder
+	case accessutil.IsGroupRoot(serial, p):
+		refusal = errGroupFolder
+	default:
 		return nil
 	}
 	if !access.Check(serial, p, accessutil.Read).Readable {
 		return serverutil.NotFound(errNoAccess)
 	}
-	return serverutil.Forbidden(errHomeFolder)
+	return serverutil.Forbidden(refusal)
 }
 
 // grantOwner records the caller as owner of something they just created

@@ -15,7 +15,7 @@ import (
 
 // deleteGroup godoc
 // @Summary Delete a group
-// @Description Deletes a group, its memberships and every share made to it, so its members lose what only the group gave them. The everyone group can't be deleted. Publishes access_changed with no path. Admin-only.
+// @Description Deletes a group, its memberships and every share made to it, so its members lose what only the group gave them. Its folder in groups and its content stay, admin-only from then on. The everyone group can't be deleted. Publishes access_changed with no path. Admin-only.
 // @Tags admin
 // @Param id path int true "Group id"
 // @Success 204
