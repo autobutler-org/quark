@@ -3,7 +3,9 @@ package storageutil
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -35,4 +37,11 @@ func safeJoin(base string, parts ...string) (string, error) {
 		return "", errors.New("invalid path: escapes base directory")
 	}
 	return joined, nil
+}
+
+// nameTaken is the error for an upload whose name is already in use when the
+// caller chose neither to overwrite nor to keep both. It wraps [fs.ErrExist],
+// which is how a caller tells it apart from a failed write.
+func nameTaken(rootDir, fileName string) error {
+	return fmt.Errorf("%w: %s", fs.ErrExist, path.Join(rootDir, fileName))
 }

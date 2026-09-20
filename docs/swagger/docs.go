@@ -2910,7 +2910,7 @@ const docTemplate = `{
         },
         "/files/upload": {
             "post": {
-                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates.",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -2926,6 +2926,18 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Device serial number to upload to",
                         "name": "serial",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Replace a file of the same name",
+                        "name": "overwrite",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Land under the first free name, e.g. file_(1).txt, when the name is taken",
+                        "name": "keepBoth",
                         "in": "query"
                     },
                     {
@@ -2960,13 +2972,19 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
                     }
                 }
             }
         },
         "/files/upload-session": {
             "post": {
-                "description": "Reserve a session for one file; the bytes follow as chunks on PUT. Needs write access on the directory the file lands in. The session belongs to the caller: it is not found for anyone else.",
+                "description": "Reserve a session for one file; the bytes follow as chunks on PUT. Needs write access on the directory the file lands in. The session belongs to the caller: it is not found for anyone else. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3009,6 +3027,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -3057,7 +3081,7 @@ const docTemplate = `{
                 }
             },
             "put": {
-                "description": "Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A session opened by someone else is not found.",
+                "description": "Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A session opened by someone else is not found. A 409 carrying X-Upload-Offset is a chunk out of step; one without it is a name already in use.",
                 "consumes": [
                     "application/octet-stream"
                 ],
@@ -3147,7 +3171,7 @@ const docTemplate = `{
         },
         "/files/upload/{rootDir}": {
             "post": {
-                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates.",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -3170,6 +3194,18 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Device serial number to upload to",
                         "name": "serial",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Replace a file of the same name",
+                        "name": "overwrite",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Land under the first free name, e.g. file_(1).txt, when the name is taken",
+                        "name": "keepBoth",
                         "in": "query"
                     },
                     {
@@ -3201,6 +3237,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -5968,6 +6010,9 @@ const docTemplate = `{
             "properties": {
                 "fileName": {
                     "type": "string"
+                },
+                "keepBoth": {
+                    "type": "boolean"
                 },
                 "overwrite": {
                     "type": "boolean"

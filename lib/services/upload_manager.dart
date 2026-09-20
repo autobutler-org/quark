@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:quark/models/upload_conflict.dart';
 import 'package:quark/models/upload_session.dart';
 import 'package:quark/services/file_browser_actions.dart';
 import 'package:quark/services/resumable_upload_service.dart';
@@ -22,6 +23,7 @@ class UploadBatchResult {
     required this.total,
     required this.completed,
     required this.failed,
+    this.declined = 0,
     this.cancelled = false,
     this.stoppedEarly = false,
     this.firstError,
@@ -36,6 +38,9 @@ class UploadBatchResult {
   final int completed;
 
   final int failed;
+
+  /// Files the user chose not to send after the Quark reported the name taken.
+  final int declined;
 
   /// The user asked for it to stop.
   final bool cancelled;
@@ -52,7 +57,7 @@ class UploadBatchResult {
   /// not a decision, and nothing should stand between "upload" and uploading.
   final String? note;
 
-  int get succeeded => completed - failed;
+  int get succeeded => completed - failed - declined;
 
   /// Enqueued but never attempted, because the run stopped first.
   int get skipped => total - completed;
@@ -99,6 +104,19 @@ typedef UploadSender =
       required String currentPath,
       required List<http.MultipartFile> selectedFiles,
       String? serial,
+      UploadConflictChoice? conflict,
+    });
+
+/// Asks the user what to do about [fileName], whose name the Quark says is
+/// taken. The answer decides whether the file is sent again, and how.
+///
+/// A run with no resolver — nothing on screen to ask with — counts the file as
+/// failed rather than guessing, which is what keeps an upload from quietly
+/// replacing someone's work.
+typedef UploadConflictResolver =
+    Future<UploadConflictAnswer> Function(
+      String fileName, {
+      required bool offerApplyToAll,
     });
 
 /// Runs uploads independently of whatever is on screen.
@@ -187,6 +205,20 @@ class UploadManager extends ChangeNotifier {
   bool _stoppedEarly = false;
   String? _firstError;
   String? _note;
+  int _declined = 0;
+
+  /// Asked what to do when the Quark says a name is taken. Set by whatever is
+  /// on screen while an upload runs, and cleared when it goes away.
+  UploadConflictResolver? conflictResolver;
+
+  /// The choice that stands for the rest of this run, once the user has ticked
+  /// the box that says so.
+  UploadConflictChoice? _runChoice;
+  bool _runChoiceStands = false;
+
+  /// One clash is asked about at a time. Four workers can hit a taken name at
+  /// once, and four dialogs stacked on top of each other is not a question.
+  Future<void> _prompts = Future<void>.value();
 
   final Map<String, ChunkedUploadProgress> _chunked = {};
 
@@ -276,6 +308,7 @@ class UploadManager extends ChangeNotifier {
         total: _total,
         completed: _completed,
         failed: _failed,
+        declined: _declined,
         cancelled: _cancelled,
         stoppedEarly: _stoppedEarly,
         firstError: _firstError,
@@ -285,6 +318,9 @@ class UploadManager extends ChangeNotifier {
       _total = 0;
       _completed = 0;
       _failed = 0;
+      _declined = 0;
+      _runChoice = null;
+      _runChoiceStands = false;
       _consecutiveFailures = 0;
       _cancelled = false;
       _stoppedEarly = false;
@@ -307,6 +343,71 @@ class UploadManager extends ChangeNotifier {
   /// through to the single multipart POST that has always carried uploads
   /// (#1629).
   Future<void> _upload(_QueuedUpload queued) async {
+    try {
+      await _attempt(queued);
+    } on _NameTaken {
+      // The Quark refuses a name it already has rather than renaming the file
+      // behind the user's back (#2016), so the user decides and the file goes
+      // again saying what they chose.
+      final answer = await _answerForConflict(queued.upload.name);
+      if (answer == null) {
+        _recordFailure(queued.upload.name, Errors.fileNameTaken);
+        return;
+      }
+      final choice = answer.choice;
+      if (choice == null) {
+        _recordDeclined();
+        return;
+      }
+      try {
+        await _attempt(queued.withConflict(choice));
+      } on _NameTaken {
+        // Keeping both picks a free name and replacing takes the name it
+        // asked for, so a second clash is the Quark disagreeing with itself.
+        _recordFailure(queued.upload.name, Errors.fileNameTaken);
+      }
+    }
+  }
+
+  /// The user's answer for [fileName], or null when there is nobody to ask.
+  ///
+  /// Serialized, so a batch that hits four clashes at once asks four times in
+  /// turn rather than all at once — and, once the user says the answer stands
+  /// for the rest of the upload, stops asking at all.
+  Future<UploadConflictAnswer?> _answerForConflict(String fileName) {
+    final asked = _prompts.then((_) async {
+      if (_runChoiceStands) {
+        return UploadConflictAnswer(choice: _runChoice);
+      }
+      final resolver = conflictResolver;
+      if (resolver == null) {
+        return null;
+      }
+      if (_cancelled || _stoppedEarly) {
+        return const UploadConflictAnswer(choice: null);
+      }
+      final answer = await resolver(fileName, offerApplyToAll: _total > 1);
+      if (answer.applyToAll) {
+        _runChoiceStands = true;
+        _runChoice = answer.choice;
+      }
+      return answer;
+    });
+    // The queue must keep moving whatever one prompt did.
+    _prompts = asked.then((_) {}, onError: (_) {});
+    return asked;
+  }
+
+  /// Counts a file the user chose not to send. Not a failure: nothing went
+  /// wrong, and it must not count toward the run giving up.
+  void _recordDeclined() {
+    _declined++;
+    _completed++;
+    notifyListeners();
+  }
+
+  /// Sends one file, by whichever route its size calls for.
+  Future<void> _attempt(_QueuedUpload queued) async {
     final source = await _openChunkSource(queued.upload);
     if (source == null) {
       return _uploadWhole(queued);
@@ -363,6 +464,7 @@ class UploadManager extends ChangeNotifier {
           currentPath: queued.targetPath,
           selectedFiles: [file],
           serial: queued.serial,
+          conflict: queued.conflict,
         ).timeout(
           _attemptTimeout,
           onTimeout: () =>
@@ -374,6 +476,11 @@ class UploadManager extends ChangeNotifier {
         notifyListeners();
         return;
       } catch (e) {
+        if (_isNameTaken(e)) {
+          // Retrying cannot free the name, and the backoff would only delay
+          // the question.
+          throw const _NameTaken();
+        }
         lastError = e;
         debugPrint(
           '[upload_manager.dart] ${queued.upload.name} attempt $attempt/'
@@ -452,6 +559,11 @@ class UploadManager extends ChangeNotifier {
         _chunked.remove(progressKey);
         return;
       } catch (e) {
+        if (_isNameTaken(e)) {
+          _abandonStoredSession(fileKey);
+          _chunked.remove(progressKey);
+          throw const _NameTaken();
+        }
         lastError = e;
         debugPrint(
           '[upload_manager.dart] $name session attempt $attempt/$_maxAttempts '
@@ -611,6 +723,7 @@ class UploadManager extends ChangeNotifier {
       fileName: queued.upload.name,
       totalSize: total,
       serial: queued.serial,
+      conflict: queued.conflict,
     );
     return UploadSessionRecord(
       fileKey: fileKey,
@@ -748,12 +861,14 @@ class UploadManager extends ChangeNotifier {
     required String currentPath,
     required List<http.MultipartFile> selectedFiles,
     String? serial,
+    UploadConflictChoice? conflict,
   }) {
     final sender = _sender ?? uploadMultipartFilesToCurrentPath;
     return sender(
       currentPath: currentPath,
       selectedFiles: selectedFiles,
       serial: serial,
+      conflict: conflict,
     );
   }
 
@@ -792,9 +907,31 @@ class ChunkedUploadProgress {
 }
 
 class _QueuedUpload {
-  const _QueuedUpload(this.upload, this.targetPath, this.serial);
+  const _QueuedUpload(
+    this.upload,
+    this.targetPath,
+    this.serial, [
+    this.conflict,
+  ]);
 
   final PendingUpload upload;
   final String targetPath;
   final String? serial;
+
+  /// What the user said to do about a name the Quark already has, once they
+  /// have been asked. Null on the first attempt.
+  final UploadConflictChoice? conflict;
+
+  _QueuedUpload withConflict(UploadConflictChoice choice) =>
+      _QueuedUpload(upload, targetPath, serial, choice);
 }
+
+/// The Quark refused a file because its name is taken and nothing said what to
+/// do about it. Carried out to [UploadManager._upload], which asks.
+class _NameTaken implements Exception {
+  const _NameTaken();
+}
+
+/// Whether [error] is the Quark saying a name is taken.
+bool _isNameTaken(Object error) =>
+    error is ApiException && error.statusCode == 409;

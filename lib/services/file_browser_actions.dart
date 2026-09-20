@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'package:quark/models/file_node.dart';
+import 'package:quark/models/upload_conflict.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 
@@ -7,11 +8,14 @@ Future<void> uploadMultipartFilesToCurrentPath({
   required String currentPath,
   required List<http.MultipartFile> selectedFiles,
   String? serial,
+  UploadConflictChoice? conflict,
 }) {
   return FilesService.uploadFilesFromFormData(
     toRootDir(currentPath),
     selectedFiles,
     serial: serial,
+    overwrite: conflict == UploadConflictChoice.replace,
+    keepBoth: conflict == UploadConflictChoice.keepBoth,
   );
 }
 

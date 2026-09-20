@@ -514,6 +514,20 @@ final List<GalleryEntry> registry = [
       onCancel: () => log('NewFileDialog.onCancel'),
     ),
   ),
+  GalleryEntry(
+    name: 'UploadConflictDialog',
+    group: 'File browser',
+    build: (context, log) => UploadConflictDialog(
+      fileName: 'holiday.jpg',
+      showApplyToAll: true,
+      applyToAll: false,
+      onApplyToAllChanged: (value) =>
+          log('UploadConflictDialog.onApplyToAllChanged($value)'),
+      onKeepBoth: () => log('UploadConflictDialog.onKeepBoth'),
+      onReplace: () => log('UploadConflictDialog.onReplace'),
+      onCancel: () => log('UploadConflictDialog.onCancel'),
+    ),
+  ),
 
   // ── Jobs ──────────────────────────────────────────────────────────────────
   GalleryEntry(

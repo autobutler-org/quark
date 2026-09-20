@@ -33,6 +33,7 @@ type session struct {
 	totalSize int64
 	serial    string
 	overwrite bool
+	keepBoth  bool
 	// userID is who opened the session; nobody else can see or use it.
 	userID    int64
 	tempPath  string
@@ -66,8 +67,17 @@ func (s *SessionStore) CreateSession(params CreateSessionParams) (CreateSessionR
 	if err != nil {
 		return CreateSessionResult{}, err
 	}
+	if params.Overwrite && params.KeepBoth {
+		return CreateSessionResult{}, fmt.Errorf("%w: choose overwrite or keepBoth, not both", ErrInvalidRequest)
+	}
 	if !params.Destination.Writable(params.Serial) {
 		return CreateSessionResult{}, ErrNoDestination
+	}
+	// A taken name is answered now, before the client sends a byte, rather
+	// than after it has sent gigabytes. The commit checks again.
+	if !params.Overwrite && !params.KeepBoth &&
+		params.Destination.taken(orBackground(params.Ctx), params.Serial, rootDir, fileName) {
+		return CreateSessionResult{}, fmt.Errorf("%w: %s", vfs.ErrConflict, path.Join(rootDir, fileName))
 	}
 
 	id, err := newSessionID()
@@ -91,6 +101,7 @@ func (s *SessionStore) CreateSession(params CreateSessionParams) (CreateSessionR
 		totalSize: params.TotalSize,
 		serial:    params.Serial,
 		overwrite: params.Overwrite,
+		keepBoth:  params.KeepBoth,
 		userID:    params.UserID,
 		tempPath:  file.Name(),
 		createdAt: now,
@@ -321,6 +332,7 @@ func (s *SessionStore) commit(ctx context.Context, sess *session, dest Destinati
 		FileName:   sess.fileName,
 		Serial:     sess.serial,
 		Overwrite:  sess.overwrite,
+		KeepBoth:   sess.keepBoth,
 	})
 	if err != nil {
 		// A transient failure (I/O, a full disk, a dropped request) keeps the
@@ -454,4 +466,12 @@ func newSessionID() (string, error) {
 		return "", fmt.Errorf("failed to generate upload session id: %w", err)
 	}
 	return hex.EncodeToString(buf[:]), nil
+}
+
+// orBackground is the context to check a name with when the caller gave none.
+func orBackground(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }

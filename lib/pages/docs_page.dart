@@ -139,7 +139,7 @@ class _DocsPageState extends State<DocsPage> with SafeSetStateMixin {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.message(e, 'create the document'))),
+          SnackBar(content: Text(Errors.upload(e, 'create the document'))),
         );
       }
     }

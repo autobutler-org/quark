@@ -19,6 +19,8 @@ lib/widgets/
     file_storage_footer.dart    capacity row, takes the app's HealthStatus
     recent_files_section.dart   calls FilesService
     new_file_dialog.dart        one-line wrapper that pops NewFileDialog
+    upload_conflict_prompt.dart pops UploadConflictDialog and holds the
+                                "do the same for the rest" tick while it is open
   jobs/
     job_finish_announcer.dart   shows a snack bar for every job JobsController
                                 announces finished, and navigates its action

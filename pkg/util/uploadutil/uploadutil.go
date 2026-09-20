@@ -137,6 +137,10 @@ type WriteFileParams struct {
 	FileName   string
 	Serial     string
 	Overwrite  bool
+	// KeepBoth lands a file whose name is taken under the first free
+	// storageutil.NumberedName. With neither it nor Overwrite, a taken name is
+	// vfs.ErrConflict (#2016).
+	KeepBoth bool
 }
 
 // WriteFileResult reports where the file ended up, API-relative.
@@ -159,6 +163,8 @@ type WriteMultipartParams struct {
 	RootDir string
 	// Overwrite lets a part replace a file that is already there.
 	Overwrite bool
+	// KeepBoth lands a part whose name is taken under a free numbered name.
+	KeepBoth bool
 }
 
 // WriteMultipartResult lists the files a multipart body wrote, in the order
@@ -231,12 +237,18 @@ func NewSessionStore(params NewSessionStoreParams) *SessionStore {
 
 // CreateSessionParams opens a session for one file.
 type CreateSessionParams struct {
+	// Ctx bounds the check for a name already in use. Nil means background.
+	Ctx         context.Context
 	Destination Destination
 	RootDir     string
 	FileName    string
 	TotalSize   int64
 	Serial      string
 	Overwrite   bool
+	// KeepBoth commits under a free numbered name if the name is taken.
+	// Setting it with Overwrite is ErrInvalidRequest; setting neither makes a
+	// taken name vfs.ErrConflict, at creation as well as at commit.
+	KeepBoth bool
 	// UserID is who opened the session. Every later call on it has to come
 	// from the same user; anyone else is told it does not exist (#1903).
 	UserID int64
