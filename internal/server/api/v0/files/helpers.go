@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
@@ -127,9 +128,9 @@ func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, ac
 	switch opened.Kind {
 	case fileutil.DownloadFolder:
 		// Zip and stream the directory contents.
-		c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", opened.FileName))
+		c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", opened.FileName))
 		c.Writer.Header().Set("Content-Type", "application/octet-stream")
-		if err := fileutil.ZipVFSDir(ctx, fsys, filePath, access, c.Writer); err != nil {
+		if err := fileutil.ZipVFSDir(ctx, fsys, filePath, strings.TrimSuffix(opened.FileName, ".zip"), access, c.Writer); err != nil {
 			return serverutil.InternalServerError(err)
 		}
 		return nil

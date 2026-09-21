@@ -258,7 +258,7 @@ func TestAccess_SymlinkOutOfAShareIsNotFound(t *testing.T) {
 	for _, f := range zr.File {
 		zipped = append(zipped, f.Name)
 	}
-	if want := []string{"f.txt"}; !slices.Equal(zipped, want) {
+	if want := []string{"shared/f.txt"}; !slices.Equal(zipped, want) {
 		t.Errorf("zipped entries = %v, want %v", zipped, want)
 	}
 }

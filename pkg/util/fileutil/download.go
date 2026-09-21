@@ -7,7 +7,9 @@ import (
 	"image"
 	"image/jpeg"
 	"io"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -209,25 +211,63 @@ func downloadContentType(fileType storageutil.FileType, ext string) string {
 	return "application/octet-stream"
 }
 
-// ZipDir streams a zip of the directory at fullPath onto w.
-func ZipDir(w io.Writer, fullPath string) error {
+// ZipDir streams a zip of the directory at fullPath onto w, every entry under a
+// top-level folder named root, so extracting the archive makes that folder
+// rather than spilling its contents into the current directory.
+func ZipDir(w io.Writer, fullPath string, root string) error {
 	zipWriter := zip.NewWriter(w)
 	defer zipWriter.Close()
-	if err := zipWriter.AddFS(os.DirFS(fullPath)); err != nil {
+	// zip.Writer.AddFS, with each name joined onto root.
+	fsys := os.DirFS(fullPath)
+	err := fs.WalkDir(fsys, ".", func(name string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && !info.Mode().IsRegular() {
+			return fmt.Errorf("cannot add non-regular file %s", name)
+		}
+		h, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+		h.Name = path.Join(root, name)
+		if d.IsDir() {
+			h.Name += "/"
+		} else {
+			h.Method = zip.Deflate
+		}
+		zw, err := zipWriter.CreateHeader(h)
+		if err != nil || d.IsDir() {
+			return err
+		}
+		f, err := fsys.Open(name)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = io.Copy(zw, f)
+		return err
+	})
+	if err != nil {
 		return fmt.Errorf("failed to zip folder: %w", err)
 	}
 	return nil
 }
 
 // ZipVFSDir streams a zip of a VFS directory onto w. Entry paths are stored
-// relative to basePath, so the archive unpacks as the folder the client asked
-// for rather than the whole path to it.
+// under a top-level folder named root, followed by the path relative to
+// basePath, so the archive unpacks as the folder the client asked for rather
+// than the whole path to it or its loose contents.
 //
 // Only entries access can read go in. The walk does not descend into a
 // symlinked folder, but it does list a symlinked file, and opening it follows
 // the link — so a link inside a shared folder would otherwise carry whatever
 // it points at into the archive (#1903).
-func ZipVFSDir(ctx context.Context, fsys vfs.VFS, basePath string, access accessutil.Access, w io.Writer) error {
+func ZipVFSDir(ctx context.Context, fsys vfs.VFS, basePath string, root string, access accessutil.Access, w io.Writer) error {
 	zipWriter := zip.NewWriter(w)
 	defer zipWriter.Close()
 
@@ -245,7 +285,7 @@ func ZipVFSDir(ctx context.Context, fsys vfs.VFS, basePath string, access access
 		}
 		// Compute a relative path inside the zip (trim the base filePath prefix).
 		rel := strings.TrimPrefix(entry.Path, basePath)
-		rel = strings.TrimPrefix(rel, "/")
+		rel = path.Join(root, strings.TrimPrefix(rel, "/"))
 		zw, err := zipWriter.Create(rel)
 		if err != nil {
 			r.Close()
