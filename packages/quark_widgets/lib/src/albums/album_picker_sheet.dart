@@ -119,7 +119,7 @@ class AlbumPickerSheet extends StatelessWidget {
                           ),
                           leading: const Icon(QuarkIcons.photo_album_outlined),
                           title: Text(album.name),
-                          subtitle: Text('${album.itemCount} photos'),
+                          subtitle: Text(album.photoCountLabel),
                           onTap: () => onPicked(album),
                         ),
                     ],
