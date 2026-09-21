@@ -376,8 +376,19 @@ final router = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.login,
-      builder: (context, state) =>
-          LoginPage(onLoginSuccess: () => context.go(AppRoutes.files)),
+      builder: (context, state) {
+        final params = state.uri.queryParameters;
+        return LoginPage(
+          onLoginSuccess: () => context.go(AppRoutes.files),
+          initialUsername: params['username'],
+          // A password reset lands here and used to say nothing at all
+          // (#2029). The query carries it rather than `extra` so the news
+          // survives the reload a browser may do on the way.
+          notice: params['reset'] == '1'
+              ? 'Password updated. Sign in with your new password.'
+              : null,
+        );
+      },
     ),
     GoRoute(
       path: AppRoutes.recover,
