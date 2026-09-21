@@ -140,25 +140,32 @@
 
       #quark-splash .quark-progress span {
         display: block;
-        width: 40%;
+        width: 30%;
         height: 100%;
         border-radius: inherit;
-        background-color: var(--quark-primary);
-        animation: quark-progress-slide 1.4s ease-in-out infinite;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--quark-primary),
+          transparent
+        );
+        animation: quark-progress-beam 1.2s ease-in-out infinite alternate;
       }
 
-      @keyframes quark-progress-slide {
-        0% {
-          transform: translateX(-100%);
+      /* A beam that sweeps to the far edge and bounces back. 70% of the bar
+         left over is 233% of the beam's own 30% width. */
+      @keyframes quark-progress-beam {
+        from {
+          transform: translateX(0);
         }
-        100% {
-          transform: translateX(250%);
+        to {
+          transform: translateX(233.34%);
         }
       }
 
       /*
         A wait is reassuring; a moving bar for someone who asked for stillness
-        is not. The bar holds at rest instead.
+        is not. The bar fills in place and pulses instead of sweeping.
       */
       @media (prefers-reduced-motion: reduce) {
         #quark-splash {
@@ -166,9 +173,18 @@
         }
 
         #quark-splash .quark-progress span {
-          animation: none;
+          animation: quark-progress-pulse 1.6s ease-in-out infinite alternate;
           width: 100%;
-          opacity: 0.6;
+          background: var(--quark-primary);
+        }
+      }
+
+      @keyframes quark-progress-pulse {
+        from {
+          opacity: 0.25;
+        }
+        to {
+          opacity: 0.8;
         }
       }
     </style>
