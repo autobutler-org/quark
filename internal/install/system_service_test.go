@@ -94,3 +94,11 @@ func TestBuildServiceFile(t *testing.T) {
 		}
 	}
 }
+
+// launchd expects a daemon's plist to be named after its Label (#2228).
+func TestPlistNameMatchesLabel(t *testing.T) {
+	label := strings.TrimSuffix(plistServiceName, ".plist")
+	if !strings.Contains(plistServiceContent, "<string>"+label+"</string>") {
+		t.Errorf("plist %s should carry the Label %s:\n%s", plistServiceName, label, plistServiceContent)
+	}
+}

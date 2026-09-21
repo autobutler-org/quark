@@ -42,6 +42,14 @@ func installSystemdService() error {
 }
 
 func installPlistService() error {
+	legacyFilePath := filepath.Join("/Library/LaunchDaemons", legacyPlistServiceName)
+	if _, err := os.Stat(legacyFilePath); err == nil {
+		// Unload fails when the service is already stopped, which is fine.
+		_ = exec.Command("launchctl", "unload", legacyFilePath).Run()
+		if err := os.Remove(legacyFilePath); err != nil {
+			return fmt.Errorf("failed to remove legacy plist service file: %w", err)
+		}
+	}
 	serviceFilePath := filepath.Join("/Library/LaunchDaemons", plistServiceName)
 	if err := os.WriteFile(serviceFilePath, []byte(buildServiceFile()), 0644); err != nil {
 		return fmt.Errorf("failed to write plist service file: %w", err)

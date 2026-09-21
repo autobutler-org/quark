@@ -59,14 +59,17 @@ StandardError=append:/var/log/quark.err
 
 [Install]
 WantedBy=multi-user.target`
-	plistServiceName    = "ai.quark.plist"
-	plistServiceContent = `<!-- /Library/LaunchDaemons/ -->
+	plistServiceName = "org.autobutler.quark.plist"
+	// legacyPlistServiceName is what installs before #2228 wrote. Left loaded, it
+	// runs a second daemon that fights the new one for ports 80 and 443.
+	legacyPlistServiceName = "ai.quark.plist"
+	plistServiceContent    = `<!-- /Library/LaunchDaemons/ -->
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>org.quark</string>
+    <string>org.autobutler.quark</string>
     <key>ProgramArguments</key>
     <array>
         <string>/Applications/quark</string>
