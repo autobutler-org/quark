@@ -159,6 +159,15 @@ func RegisterRouterWithGroup(group *gin.RouterGroup, router Router) {
 	}
 }
 
+// AccessLogger is the request logger every route runs behind: gin's access
+// log, with credentials taken out of the logged URL. gin.Default's logger
+// writes the raw query string, and the media, download and event-stream
+// routes accept the session token as ?token=, so every such request used to
+// put a live session in the log (#2152).
+func AccessLogger() gin.HandlerFunc {
+	return gin.LoggerWithConfig(gin.LoggerConfig{Formatter: redactedLogFormatter})
+}
+
 func RegisterRouter(engine *gin.Engine, router Router) {
 	for _, route := range router.Routes() {
 		engine.Handle(route.Method, route.Path, route.Handler)
