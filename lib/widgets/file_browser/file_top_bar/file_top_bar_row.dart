@@ -7,7 +7,7 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The always-visible upper half of the file browser's top bar: brand,
-/// navigation, search and the two app-level buttons.
+/// navigation, search, the select control and the theme toggle.
 class FileTopBarRow extends StatelessWidget {
   const FileTopBarRow({
     required this.currentPath,
@@ -23,7 +23,6 @@ class FileTopBarRow extends StatelessWidget {
     required this.onSearchChanged,
     required this.onCloseSearch,
     required this.onOpenDrawer,
-    required this.onOpenSettings,
     this.onStartSelection,
     super.key,
   });
@@ -43,7 +42,6 @@ class FileTopBarRow extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onCloseSearch;
   final VoidCallback onOpenDrawer;
-  final VoidCallback onOpenSettings;
 
   /// Enters multi-select. Null hides the control.
   ///
@@ -91,11 +89,6 @@ class FileTopBarRow extends StatelessWidget {
                 onTap: onStartSelection!,
                 tooltip: 'Select files',
               ),
-            TopBarIconButton(
-              icon: QuarkIcons.settings_outlined,
-              onTap: onOpenSettings,
-              tooltip: 'Settings',
-            ),
             const AppThemeToggle(),
             ...QuarkAppBarTrailing.of(context),
           ],

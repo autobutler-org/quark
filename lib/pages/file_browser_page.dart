@@ -2278,7 +2278,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                       })
                     : null,
                 onOpenDrawer: () => Scaffold.of(context).openDrawer(),
-                onOpenSettings: () => context.go(AppRoutes.settings),
                 devices: _allDevices.length > 1 ? _allDevices : null,
                 activeDevicePaths: _activeDevicePaths,
                 onDeviceToggled: (devicePath) {
