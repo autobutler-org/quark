@@ -681,6 +681,13 @@ definitions:
       sessionId:
         type: string
     type: object
+  v0_files.uploadFilesResponse:
+    properties:
+      paths:
+        items:
+          type: string
+        type: array
+    type: object
   v0_files.uploadSessionStatusResponse:
     properties:
       expiresAt:
@@ -3281,7 +3288,8 @@ paths:
       description: Upload one or more files via multipart/form-data. Needs write access
         on the top-level directory; the caller owns each file the upload creates.
         A name already in use is a 409 unless overwrite or keepBoth says what to do
-        about it.
+        about it. Answers with the files-relative path each file landed at, after
+        any keepBoth rename.
       parameters:
       - description: Device serial number to upload to
         in: query
@@ -3307,7 +3315,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/serverutil.Response'
+            $ref: '#/definitions/v0_files.uploadFilesResponse'
         "400":
           description: Bad Request
           schema:
@@ -3473,7 +3481,8 @@ paths:
       - multipart/form-data
       description: Upload one or more files via multipart/form-data. Needs write access
         on the directory; the caller owns each file the upload creates. A name already
-        in use is a 409 unless overwrite or keepBoth says what to do about it.
+        in use is a 409 unless overwrite or keepBoth says what to do about it. Answers
+        with the files-relative path each file landed at, after any keepBoth rename.
       parameters:
       - description: Directory to upload into
         in: path
@@ -3504,7 +3513,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/serverutil.Response'
+            $ref: '#/definitions/v0_files.uploadFilesResponse'
         "400":
           description: Bad Request
           schema:

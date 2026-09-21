@@ -120,7 +120,7 @@ class PhotosController extends ChangeNotifier {
         AlbumService.listAlbumItems,
     Future<List<StorageDevice>> Function() listDevices =
         StorageService.listDevices,
-    Future<http.StreamedResponse> Function(
+    Future<List<String>> Function(
           String uploadPath,
           List<http.MultipartFile> files, {
           String? serial,
@@ -217,7 +217,7 @@ class PhotosController extends ChangeNotifier {
   _removePhotoFromAlbum;
   final Future<List<PhotoAlbumItem>> Function(int albumId) _listAlbumItems;
   final Future<List<StorageDevice>> Function() _listDevices;
-  final Future<http.StreamedResponse> Function(
+  final Future<List<String>> Function(
     String uploadPath,
     List<http.MultipartFile> files, {
     String? serial,
@@ -934,7 +934,15 @@ class PhotosController extends ChangeNotifier {
 
   /// Uploads [files] to the device with [serial], or the default device when
   /// null. Throws what the upload threw.
-  Future<void> uploadPhotos(List<PlatformFile> files, {String? serial}) async {
+  ///
+  /// With an [albumId], each uploaded photo is then added to that album
+  /// (#2240), and the outcome says how many made it; null without one. A
+  /// photo the Quark did not report a path for counts as failed.
+  Future<AddToAlbumOutcome?> uploadPhotos(
+    List<PlatformFile> files, {
+    String? serial,
+    int? albumId,
+  }) async {
     _isUploading = true;
     notifyListeners();
     try {
@@ -953,7 +961,28 @@ class PhotosController extends ChangeNotifier {
               filename: file.name,
             ),
       ];
-      await _uploadToLibrary(multipart, serial: serial);
+      final paths = await _uploadToLibrary(multipart, serial: serial);
+      if (albumId == null) return null;
+      var added = 0;
+      Object? error;
+      for (final relPath in paths) {
+        try {
+          await _addPhotoToAlbum(
+            albumId,
+            deviceSerial: serial ?? '',
+            relPath: relPath,
+          );
+          added++;
+        } catch (e) {
+          error = e;
+        }
+      }
+      return AddToAlbumOutcome(
+        added: added,
+        skipped: 0,
+        failed: files.length - added,
+        error: error,
+      );
     } finally {
       _isUploading = false;
       notifyListeners();
@@ -1010,7 +1039,9 @@ class PhotosController extends ChangeNotifier {
     }
   }
 
-  Future<void> _uploadToLibrary(
+  /// Uploads [files] to the library root and returns the files-relative path
+  /// each one landed at (#2240).
+  Future<List<String>> _uploadToLibrary(
     List<http.MultipartFile> files, {
     String? serial,
   }) {
