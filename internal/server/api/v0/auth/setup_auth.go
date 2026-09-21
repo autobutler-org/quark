@@ -10,7 +10,7 @@ import (
 
 // setupAuth godoc
 // @Summary First-boot user setup
-// @Description Creates the owner account, with a home under users/ on the internal device that it owns. Can only be called once.
+// @Description Creates the owner account, with a home under users/ on the internal device that it owns; an existing folder of that name under users/ becomes the home. Can only be called once.
 // @Tags auth
 // @Accept json
 // @Produce json

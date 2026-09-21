@@ -149,11 +149,14 @@ class AuthService {
   /// Refreshes now, whenever the session changes (sign-in, sign-out, a 401,
   /// switching Quarks), and whenever the Quark reports an account's role
   /// changed, so a demoted admin loses admin-only entries without signing out.
+  /// The Quark closes the socket of the account whose role changed instead of
+  /// sending it that event, so every reconnect refreshes too.
   static void watchAccount() {
     AppSettings.instance.sessionTokenNotifier.addListener(refreshAccount);
     EventsService.instance.events.listen((event) {
       if (event.kind == 'account_changed') refreshAccount();
     });
+    EventsService.instance.connections.listen((_) => refreshAccount());
     EventsService.instance.start();
     refreshAccount();
   }

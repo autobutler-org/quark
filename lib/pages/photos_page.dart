@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +9,7 @@ import 'package:quark/models/photo_album.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/photo_grid_config.dart';
@@ -70,10 +73,22 @@ class PhotosPageState extends State<PhotosPage>
   bool _isOpeningPhoto = false;
 
   ScrollController _scrollController = ScrollController();
+  StreamSubscription<FileEvent>? _eventSub;
+  StreamSubscription<void>? _reconnectSub;
 
   @override
   void initState() {
     super.initState();
+    EventsService.instance.start();
+    // A sharing change, or a change to one of this account's groups, decides
+    // which photos it can see.
+    _eventSub = EventsService.instance.events.listen((evt) {
+      if (evt.kind == 'access_changed') manualRefresh();
+    });
+    // Whatever changed while the socket was down sent no event we saw.
+    _reconnectSub = EventsService.instance.reconnects.listen(
+      (_) => manualRefresh(),
+    );
     _scrollController.addListener(_onScroll);
     _scheduleNavMeasure();
     _controller.addListener(_scheduleAlbumUrlSync);
@@ -189,6 +204,8 @@ class PhotosPageState extends State<PhotosPage>
 
   @override
   void dispose() {
+    _eventSub?.cancel();
+    _reconnectSub?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _controller.removeListener(_scheduleAlbumUrlSync);

@@ -111,8 +111,10 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 **Expected result:**
 
-- Photo is added to the Favorites category.
+- Photo is added to your own Favorites category.
 - Favorite indicator (heart icon) is visible on the thumbnail.
+- Favorites belong to each account. Another account, an admin included, does not see your favorite and can favorite
+  the same photo independently.
 
 ---
 
@@ -127,8 +129,9 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 **Expected result:**
 
-- Only favorited photos are shown.
+- Only the photos you favorited are shown, not another account's favorites.
 - Non-favorited photos are not visible.
+- Each account has its own Favorites album, created the first time it is needed.
 
 ---
 
@@ -144,7 +147,7 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 **Expected result:**
 
-- Photo is removed from the Favorites listing.
+- Photo is removed from your Favorites listing. Another account that favorited it keeps its favorite.
 - It still appears under its original category (Quark / Mobile / All).
 
 ---
@@ -164,7 +167,10 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 - New album appears in the sidebar.
 - Album is initially empty.
-- Album names are unique within their folder, ignoring case, and cannot contain `/`. Top-level albums share one
+- Albums belong to the account that created them. Only you see your albums, an admin included; deleting an account
+  deletes its albums but not the photos in them.
+- Album names are unique within their folder among your own albums, ignoring case, and cannot contain `/`. Another
+  account can have its own `Trips`. Top-level albums share one
   folder with Favorites and Inbox. A name already taken there (`trips` next to `Trips`) or containing `/` cannot be
   saved: the dialog says why ("There's already an album with that name here." or "Album names can't contain a
   slash.") and **Save** stays disabled.
@@ -177,7 +183,7 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 ### JN-PH-011: Add photos to an album
 
-**Preconditions:** A user album exists (JN-PH-010). Photos are visible.
+**Preconditions:** You own a user album (JN-PH-010). Photos are visible.
 
 **Steps:**
 
@@ -189,7 +195,7 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 **Expected result:**
 
-- Selected photos are associated with the album.
+- Selected photos are associated with the album. Another account's albums are never offered.
 - The grid returns to the album, now showing the added photos, and the sidebar shows its new count.
 - Canceling the selection (or pressing Escape) also returns to the album, with nothing added.
 - System albums (Favorites, Inbox) show no **Add Photos** action.
@@ -199,7 +205,7 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 ### JN-PH-012: View an album
 
-**Preconditions:** An album with at least one photo exists (JN-PH-011).
+**Preconditions:** You own an album with at least one photo (JN-PH-011).
 
 **Steps:**
 
@@ -219,7 +225,8 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
   whose id is 2024.
 - Album names are unique within their folder, ignoring case, and cannot contain `/` (JN-PH-010), so the URL is a
   name path. Only an album from before that rule, one that shares its path with another or has `/` in its name, is
-  linked by its id instead. An unknown name or id shows All photos at `/photos`.
+  linked by its id instead. An unknown name or id shows All photos at `/photos`, and so does another account's album
+  id.
 - Renaming the showing album updates the URL to its new name; deleting it returns to All photos.
 - On a narrow screen, where the sidebar sits above the grid, tapping a row scrolls the grid back into view.
 - Tapping a photo opens the viewer over the album's photos only.
@@ -276,3 +283,25 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 - A copy of the photo appears in the destination.
 - Original is unchanged.
+
+---
+
+### JN-PH-016: Share a photo
+
+**Preconditions:** A Quark photo is in a folder the user owns, or the user is an admin.
+
+**Steps:**
+
+1. Open the photo in the image viewer.
+2. Open the more menu and select **Share…**.
+3. Pick an account or group, choose a level, and tap **Share**.
+
+**Expected result:**
+
+- The share sheet opens for that photo, the same as **Share…** in Files (JN-FB-027).
+- The account or group can open the photo.
+
+**Notes:**
+
+- A photo from the device, rather than the Quark, has no **Share…**.
+- Albums can't be shared; share the folder that holds the photos instead.

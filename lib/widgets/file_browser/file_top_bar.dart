@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 class FileTopBar extends StatefulWidget {
   const FileTopBar({
     required this.currentPath,
+    required this.rootPath,
     required this.isGridView,
     required this.isUnifiedView,
     required this.onToggleUnifiedView,
@@ -40,6 +41,10 @@ class FileTopBar extends StatefulWidget {
   });
 
   final String currentPath;
+
+  /// The lowest folder the caller can open — empty for the real root. Up and
+  /// the breadcrumb both stop here (#2139).
+  final String rootPath;
   final bool isGridView;
   final bool isUnifiedView;
   final VoidCallback onToggleUnifiedView;
@@ -165,6 +170,7 @@ class _FileTopBarState extends State<FileTopBar> {
           children: [
             FileTopBarRow(
               currentPath: widget.currentPath,
+              rootPath: widget.rootPath,
               navEnabled: !widget.disableNavigation,
               isRefreshing: widget.isRefreshing,
               searchExpanded: _searchExpanded,
@@ -181,6 +187,7 @@ class _FileTopBarState extends State<FileTopBar> {
             if (!widget.isSearchMode)
               FileTopBarPathRow(
                 currentPath: widget.currentPath,
+                rootPath: widget.rootPath,
                 navEnabled: !widget.disableNavigation,
                 viewsMenuController: _viewsMenuController,
                 hiddenCrumbsController: _hiddenCrumbsController,

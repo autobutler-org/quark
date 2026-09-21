@@ -2,10 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:quark/models/upload_conflict.dart';
 import 'package:quark/models/upload_session.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/upload_chunk_source.dart';
+import 'package:quark/utils/error_text.dart';
 
 /// Where the session endpoints live, under the same `/api/v0` group and behind
 /// the same bearer token as every other files call.
@@ -24,12 +26,16 @@ const String _sessionEndpoint = '/api/v0/files/upload-session';
 /// interesting way.
 abstract interface class ResumableUploadClient {
   /// Opens a session for a file about to be sent in chunks.
+  ///
+  /// Throws an [ApiException] with status 409 when the name is already in use
+  /// and [conflict] did not say what to do about it.
   Future<UploadSession> createSession({
     required String rootDir,
     required String fileName,
     required int totalSize,
     String? serial,
     bool overwrite,
+    UploadConflictChoice? conflict,
   });
 
   /// Sends `[start, end)` of [source] to the session.
@@ -73,6 +79,7 @@ class ResumableUploadService
     required int totalSize,
     String? serial,
     bool overwrite = false,
+    UploadConflictChoice? conflict,
   }) async {
     final response = await authenticatedPost(
       _sessionUri(),
@@ -82,15 +89,19 @@ class ResumableUploadService
         'fileName': fileName,
         'totalSize': totalSize,
         if (serial != null && serial.isNotEmpty) 'serial': serial,
-        'overwrite': overwrite,
+        'overwrite': overwrite || conflict == UploadConflictChoice.replace,
+        'keepBoth': conflict == UploadConflictChoice.keepBoth,
       }),
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to open an upload session (${response.statusCode}): '
-        '${_errorOf(response)}',
+      // The status travels rather than the Quark's own words: a 409 is a
+      // question for the user, and the caller is what knows how to ask it.
+      debugPrint(
+        '[resumable_upload_service.dart] Session for $fileName refused '
+        '(${response.statusCode}): ${_errorOf(response)}',
       );
+      throw ApiException(response.statusCode, 'open an upload session');
     }
     return UploadSession.fromJson(_decode(response));
   }

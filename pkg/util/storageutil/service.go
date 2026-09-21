@@ -1,41 +1,76 @@
 package storageutil
 
 import (
+	"slices"
 	"sync"
 	"time"
 )
 
-// deviceStatusCache holds a short-lived cached copy of GetDeviceStatuses
-// results to avoid redundant disk probes when the endpoint is called in
-// rapid succession (see #1022).
-type deviceStatusCache struct {
+// ttlCache holds a short-lived cached copy of a device query so callers in
+// rapid succession do not each re-run device detection, which shells out once
+// per volume on macOS (see #1022, #2191).
+type ttlCache[T any] struct {
 	mu       sync.Mutex
-	result   []*DeviceStatus
+	flight   sync.Mutex
+	result   T
+	valid    bool
 	cachedAt time.Time
+	gen      uint64
 	ttl      time.Duration
 }
 
-func (c *deviceStatusCache) get() ([]*DeviceStatus, bool) {
+func (c *ttlCache[T]) get() (T, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.result == nil || time.Since(c.cachedAt) > c.ttl {
-		return nil, false
+	if !c.valid || time.Since(c.cachedAt) > c.ttl {
+		var zero T
+		return zero, false
 	}
 	return c.result, true
 }
 
-func (c *deviceStatusCache) set(result []*DeviceStatus) {
+// load returns the cached value, running fill at most once per lapse. Waiters
+// queue on flight and then read what the one detection stored, so a cache miss
+// under load costs one scan rather than one per in-flight request (#2197). A
+// failed detection is not cached, and neither is one that started before an
+// invalidate, since it predates whatever the caller invalidated for.
+func (c *ttlCache[T]) load(fill func() (T, error)) (T, error) {
+	if cached, ok := c.get(); ok {
+		return cached, nil
+	}
+
+	c.flight.Lock()
+	defer c.flight.Unlock()
+	if cached, ok := c.get(); ok {
+		return cached, nil
+	}
+
+	c.mu.Lock()
+	gen := c.gen
+	c.mu.Unlock()
+
+	result, err := fill()
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.result = result
-	c.cachedAt = time.Now()
+	if c.gen == gen {
+		c.result = result
+		c.valid = true
+		c.cachedAt = time.Now()
+	}
+	return result, nil
 }
 
-// invalidate clears the cache so the next GetDeviceStatuses call re-probes disk.
-func (c *deviceStatusCache) invalidate() {
+// invalidate clears the cache so the next call re-detects devices.
+func (c *ttlCache[T]) invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.result = nil
+	c.valid = false
+	c.gen++
 }
 
 // diskProbeCache holds long-lived disk probe results keyed by device data
@@ -79,7 +114,9 @@ func (c *diskProbeCache) set(dir string, result DiskProbeResult) {
 // Construct with NewStorageService(d) and inject via deputil.Dependencies.
 type StorageService struct {
 	detector   Detector
-	cache      deviceStatusCache
+	cache      ttlCache[[]*DeviceStatus]
+	managed    ttlCache[[]ManagedDevice]
+	roots      ttlCache[[]ManagedDevice]
 	probeCache diskProbeCache
 }
 
@@ -87,17 +124,60 @@ type StorageService struct {
 func NewStorageService(d Detector) *StorageService {
 	return &StorageService{
 		detector: d,
-		cache:    deviceStatusCache{ttl: 10 * time.Second},
+		cache:    ttlCache[[]*DeviceStatus]{ttl: 10 * time.Second},
+		managed:  ttlCache[[]ManagedDevice]{ttl: 10 * time.Second},
+		roots:    ttlCache[[]ManagedDevice]{ttl: 10 * time.Second},
 	}
 }
 
 // GetManagedDevices returns all devices that have an quark data directory.
+// Nearly every file request calls it, often twice, so the result is cached
+// until the TTL lapses or InvalidateDeviceCache runs. The returned slice is a
+// copy, so a caller may modify it.
 func (s *StorageService) GetManagedDevices() ([]ManagedDevice, error) {
-	devices, err := s.detector.DetectDevices()
+	managed, err := s.managed.load(func() ([]ManagedDevice, error) {
+		devices, err := s.detector.DetectDevices()
+		if err != nil {
+			return nil, err
+		}
+		return managedDevices(devices), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return slices.Clone(managed), nil
+}
+
+// GetManagedRoots returns the same devices as GetManagedDevices for the file
+// paths, which only need where each device's files live, which device it is,
+// and what to call it. DataDir, FilesDir, MountPoint, DevicePath, IsInternal,
+// UsbInfo and Name are set; the sizes, filesystem, model and categories a
+// storage page shows may be empty. It skips the per-volume work of full
+// detection (one `diskutil info` each on macOS, a walk of every files
+// directory on both platforms), so a cache miss inside a file request stays
+// cheap (#2195). It is cached like GetManagedDevices, and the returned slice
+// is a copy.
+func (s *StorageService) GetManagedRoots() ([]ManagedDevice, error) {
+	roots, err := s.roots.load(func() ([]ManagedDevice, error) {
+		detect := s.detector.DetectDevices
+		if rd, ok := s.detector.(rootDetector); ok {
+			detect = rd.DetectRoots
+		}
+		devices, err := detect()
+		if err != nil {
+			return nil, err // coverage: ignore - requires device detection failure
+		}
+		return managedDevices(devices), nil
+	})
 	if err != nil {
 		return nil, err // coverage: ignore - requires device detection failure
 	}
+	return slices.Clone(roots), nil
+}
 
+// managedDevices keeps the devices that have, or can be given, a files
+// directory.
+func managedDevices(devices []Device) []ManagedDevice {
 	var managed []ManagedDevice
 	for _, device := range devices {
 		dataDir := GetDataDirForDevice(device.MountPoint)
@@ -111,13 +191,14 @@ func (s *StorageService) GetManagedDevices() ([]ManagedDevice, error) {
 			FilesDir: filesDir,
 		})
 	}
-	return managed, nil
+	return managed
 }
 
 // FindManagedDeviceBySerial finds a managed device by USB serial.
-// An empty serial returns the first internal device.
+// An empty serial returns the first internal device. It reads
+// GetManagedRoots, so only the fields that documents are guaranteed.
 func (s *StorageService) FindManagedDeviceBySerial(serial string) (*ManagedDevice, error) {
-	managed, err := s.GetManagedDevices()
+	managed, err := s.GetManagedRoots()
 	if err != nil {
 		return nil, err // coverage: ignore - requires device detection failure
 	}
@@ -140,7 +221,7 @@ func (s *StorageService) FindDeviceFilesDirBySerial(serial string) (string, bool
 	if serial == "" {
 		return "", false
 	}
-	devices, err := s.GetManagedDevices()
+	devices, err := s.GetManagedRoots()
 	if err != nil {
 		return "", false // coverage: ignore - requires device detection failure
 	}
@@ -156,15 +237,7 @@ func (s *StorageService) FindDeviceFilesDirBySerial(serial string) (string, bool
 // Results are cached for up to 10 seconds to avoid repeated disk probes when
 // the endpoint is hit in rapid succession (#1022).
 func (s *StorageService) GetDeviceStatuses() ([]*DeviceStatus, error) {
-	if cached, ok := s.cache.get(); ok {
-		return cached, nil
-	}
-	statuses, err := s.getDeviceStatusesFresh()
-	if err != nil {
-		return nil, err
-	}
-	s.cache.set(statuses)
-	return statuses, nil
+	return s.cache.load(s.getDeviceStatusesFresh)
 }
 
 func (s *StorageService) getDeviceStatusesFresh() ([]*DeviceStatus, error) {
@@ -227,6 +300,8 @@ func (s *StorageService) getDeviceStatusesFresh() ([]*DeviceStatus, error) {
 // any mount/unmount operation to prevent stale UI state.
 func (s *StorageService) InvalidateDeviceCache() {
 	s.cache.invalidate()
+	s.managed.invalidate()
+	s.roots.invalidate()
 }
 
 // FindUsbDeviceBySerial finds a USB device by serial number.

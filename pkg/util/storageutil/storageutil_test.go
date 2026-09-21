@@ -2,13 +2,17 @@ package storageutil
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"mime/multipart"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestReadFileTrim(t *testing.T) {
@@ -214,14 +218,28 @@ func TestCalculateSummary_EmptyDevices(t *testing.T) {
 	}
 }
 
-// mockDetector is a Detector implementation for use in tests.
+// mockDetector is a Detector implementation for use in tests. The counter is
+// mutex-guarded so concurrent callers can assert on it.
 type mockDetector struct {
 	devices []Device
 	err     error
+	delay   time.Duration
+	mu      sync.Mutex
+	calls   int
 }
 
 func (m *mockDetector) DetectDevices() ([]Device, error) {
+	m.mu.Lock()
+	m.calls++
+	m.mu.Unlock()
+	time.Sleep(m.delay)
 	return m.devices, m.err
+}
+
+func (m *mockDetector) callCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.calls
 }
 
 // mockUsbDevice is a minimal UsbDevice implementation for use in tests.
@@ -295,6 +313,227 @@ func TestStorageService_GetManagedDevices(t *testing.T) {
 	}
 	if devices[0].Name != "test-disk" {
 		t.Errorf("expected device name 'test-disk', got %q", devices[0].Name)
+	}
+}
+
+// Device detection shells out once per volume on macOS, and every file request
+// asked for the managed devices at least twice (#2191).
+func TestStorageService_GetManagedDevices_Cached(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.MkdirAll(ConstructFilesDir(tempDir), 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	mock := &mockDetector{devices: []Device{{Name: "test-disk", MountPoint: tempDir, IsInternal: true}}}
+	svc := NewStorageService(mock)
+
+	first, err := svc.GetManagedDevices()
+	if err != nil {
+		t.Fatalf("svc.GetManagedDevices() error = %v", err)
+	}
+	first[0].Name = "changed by caller"
+	second, err := svc.GetManagedDevices()
+	if err != nil {
+		t.Fatalf("svc.GetManagedDevices() error = %v", err)
+	}
+	if mock.callCount() != 1 {
+		t.Errorf("expected 1 detection for 2 calls, got %d", mock.callCount())
+	}
+	if second[0].Name != "test-disk" {
+		t.Errorf("a caller's edit leaked into the cache: got %q", second[0].Name)
+	}
+
+	svc.InvalidateDeviceCache()
+	if _, err := svc.GetManagedDevices(); err != nil {
+		t.Fatalf("svc.GetManagedDevices() error = %v", err)
+	}
+	if mock.callCount() != 2 {
+		t.Errorf("expected a fresh detection after invalidation, got %d calls", mock.callCount())
+	}
+}
+
+// rootsDetector counts which detection path the service took.
+type rootsDetector struct {
+	mockDetector
+	rootCalls int
+}
+
+func (r *rootsDetector) DetectRoots() ([]Device, error) {
+	r.mu.Lock()
+	r.rootCalls++
+	r.mu.Unlock()
+	time.Sleep(r.delay)
+	return r.devices, r.err
+}
+
+func (r *rootsDetector) rootCallCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.rootCalls
+}
+
+// File requests resolve their roots without full detection (#2195).
+func TestStorageService_GetManagedRoots(t *testing.T) {
+	tempDir := t.TempDir()
+	devices := []Device{{MountPoint: tempDir, IsInternal: true}}
+
+	detector := &rootsDetector{mockDetector: mockDetector{devices: devices}}
+	svc := NewStorageService(detector)
+	for range 2 {
+		roots, err := svc.GetManagedRoots()
+		if err != nil {
+			t.Fatalf("svc.GetManagedRoots() error = %v", err)
+		}
+		if len(roots) != 1 || roots[0].FilesDir != ConstructFilesDir(GetDataDirForDevice(tempDir)) {
+			t.Fatalf("svc.GetManagedRoots() = %+v, want the one device at %s", roots, tempDir)
+		}
+	}
+	if _, err := svc.FindManagedDeviceBySerial(""); err != nil {
+		t.Fatalf("svc.FindManagedDeviceBySerial() error = %v", err)
+	}
+	if detector.rootCallCount() != 1 || detector.callCount() != 0 {
+		t.Errorf("expected 1 cached root detection and no full one, got %d and %d", detector.rootCallCount(), detector.callCount())
+	}
+	svc.InvalidateDeviceCache()
+	if _, err := svc.GetManagedRoots(); err != nil {
+		t.Fatalf("svc.GetManagedRoots() error = %v", err)
+	}
+	if detector.rootCallCount() != 2 {
+		t.Errorf("expected a fresh root detection after invalidation, got %d", detector.rootCallCount())
+	}
+
+	// A Detector without DetectRoots falls back to full detection.
+	fallback := &mockDetector{devices: devices}
+	if roots, err := NewStorageService(fallback).GetManagedRoots(); err != nil || len(roots) != 1 {
+		t.Fatalf("fallback GetManagedRoots() = %+v, %v", roots, err)
+	}
+	if fallback.callCount() != 1 {
+		t.Errorf("expected the fallback to run DetectDevices once, got %d", fallback.callCount())
+	}
+}
+
+// Every request that missed the cache used to run its own detection, so a
+// lapse under load stampeded into one subprocess-heavy scan per request
+// (#2197). One detection per lapse serves every waiter.
+func TestStorageService_ConcurrentMissesDetectOnce(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.MkdirAll(ConstructFilesDir(tempDir), 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	detector := &rootsDetector{mockDetector: mockDetector{
+		devices: []Device{{Name: "test-disk", MountPoint: tempDir, IsInternal: true}},
+		delay:   20 * time.Millisecond,
+	}}
+	svc := NewStorageService(detector)
+
+	var wg sync.WaitGroup
+	for range 15 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if devices, err := svc.GetManagedDevices(); err != nil || len(devices) != 1 {
+				t.Errorf("svc.GetManagedDevices() = %+v, %v", devices, err)
+			}
+			if roots, err := svc.GetManagedRoots(); err != nil || len(roots) != 1 {
+				t.Errorf("svc.GetManagedRoots() = %+v, %v", roots, err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if got := detector.callCount(); got != 1 {
+		t.Errorf("expected 1 full detection for 15 concurrent callers, got %d", got)
+	}
+	if got := detector.rootCallCount(); got != 1 {
+		t.Errorf("expected 1 root detection for 15 concurrent callers, got %d", got)
+	}
+}
+
+// blockingDetector pauses inside its first detection so a test can invalidate
+// mid-flight. It reads the devices before pausing, so the paused detection
+// returns what was mounted when it started, not what the test swaps in.
+type blockingDetector struct {
+	mockDetector
+	once    sync.Once
+	started chan struct{}
+	release chan struct{}
+}
+
+func (b *blockingDetector) DetectDevices() ([]Device, error) {
+	devices, err := b.mockDetector.DetectDevices()
+	b.once.Do(func() {
+		close(b.started)
+		<-b.release
+	})
+	return devices, err
+}
+
+// A detection that started before an invalidation predates whatever the caller
+// invalidated for, so it must not be the answer later callers see.
+func TestStorageService_InvalidateDuringDetection(t *testing.T) {
+	before, after := t.TempDir(), t.TempDir()
+	for _, dir := range []string{before, after} {
+		if err := os.MkdirAll(ConstructFilesDir(dir), 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+	}
+	detector := &blockingDetector{
+		mockDetector: mockDetector{devices: []Device{{Name: "before", MountPoint: before}}},
+		started:      make(chan struct{}),
+		release:      make(chan struct{}),
+	}
+	svc := NewStorageService(detector)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := svc.GetManagedDevices(); err != nil {
+			t.Errorf("svc.GetManagedDevices() error = %v", err)
+		}
+	}()
+
+	<-detector.started
+	svc.InvalidateDeviceCache()
+	detector.devices = []Device{{Name: "after", MountPoint: after}}
+	close(detector.release)
+	<-done
+
+	devices, err := svc.GetManagedDevices()
+	if err != nil {
+		t.Fatalf("svc.GetManagedDevices() error = %v", err)
+	}
+	if len(devices) != 1 || devices[0].Name != "after" {
+		t.Errorf("svc.GetManagedDevices() = %+v, want the device detected after invalidation", devices)
+	}
+	if got := detector.callCount(); got != 2 {
+		t.Errorf("expected the invalidated detection to be discarded and re-run, got %d detections", got)
+	}
+}
+
+// A failed detection is not cached, so the next call tries again.
+func TestStorageService_DetectionErrorNotCached(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.MkdirAll(ConstructFilesDir(tempDir), 0755); err != nil {
+		t.Fatalf("failed to create files dir: %v", err)
+	}
+	detector := &mockDetector{
+		devices: []Device{{Name: "test-disk", MountPoint: tempDir, IsInternal: true}},
+		err:     errors.New("detection failed"),
+	}
+	svc := NewStorageService(detector)
+
+	if _, err := svc.GetManagedDevices(); err == nil {
+		t.Fatal("svc.GetManagedDevices() = nil error, want the detector's failure")
+	}
+	detector.err = nil
+	devices, err := svc.GetManagedDevices()
+	if err != nil {
+		t.Fatalf("svc.GetManagedDevices() error = %v", err)
+	}
+	if len(devices) != 1 {
+		t.Errorf("svc.GetManagedDevices() = %+v, want the device detected after the failure", devices)
+	}
+	if got := detector.callCount(); got != 2 {
+		t.Errorf("expected the failure not to be cached, got %d detections", got)
 	}
 }
 
@@ -1736,7 +1975,33 @@ func TestUploadFilesStreamed_SingleFile(t *testing.T) {
 	}
 }
 
-func TestUploadFilesStreamed_ConflictRename(t *testing.T) {
+// A taken name is the caller's to resolve (#2016): without Overwrite or
+// KeepBoth the upload is refused and nothing is written, not renamed.
+func TestUploadFilesStreamed_ConflictIsRefused(t *testing.T) {
+	device := makeManagedDeviceForImpl(t, "test-device")
+	existing := filepath.Join(device.FilesDir, "file.txt")
+	if err := os.WriteFile(existing, []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	body, contentType := makeMultipartBody(t, "files", "file.txt", []byte("new content"))
+	result, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
+		Reader: multipart.NewReader(body, boundaryFromContentType(t, contentType)),
+	}, device, device.FilesDir)
+	if !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("upload over a taken name returned %v, want fs.ErrExist", err)
+	}
+	if len(result.Written) != 0 {
+		t.Errorf("a refused upload reports writing %+v", result.Written)
+	}
+	if old, _ := os.ReadFile(existing); string(old) != "old" {
+		t.Errorf("original now reads %q", old)
+	}
+	if _, err := os.Stat(filepath.Join(device.FilesDir, "file_(1).txt")); !os.IsNotExist(err) {
+		t.Errorf("a refused upload was renamed instead: %v", err)
+	}
+}
+
+func TestUploadFilesStreamed_KeepBothRenames(t *testing.T) {
 	device := makeManagedDeviceForImpl(t, "test-device")
 	existing := filepath.Join(device.FilesDir, "file.txt")
 	if err := os.WriteFile(existing, []byte("old"), 0644); err != nil {
@@ -1744,18 +2009,15 @@ func TestUploadFilesStreamed_ConflictRename(t *testing.T) {
 	}
 	content := []byte("new content")
 	body, contentType := makeMultipartBody(t, "files", "file.txt", content)
-	r := multipart.NewReader(body, boundaryFromContentType(t, contentType))
 	_, err := UploadFilesStreamedImpl(UploadFilesStreamedParams{
-		Reader:       r,
-		RootDir:      "",
-		DeviceSerial: "",
+		Reader:   multipart.NewReader(body, boundaryFromContentType(t, contentType)),
+		KeepBoth: true,
 	}, device, device.FilesDir)
 	if err != nil {
 		t.Fatalf("UploadFilesStreamedImpl failed: %v", err)
 	}
-	old, _ := os.ReadFile(existing)
-	if string(old) != "old" {
-		t.Error("Original file was overwritten, expected conflict rename")
+	if old, _ := os.ReadFile(existing); string(old) != "old" {
+		t.Error("Original file was overwritten, expected keep both")
 	}
 	renamed := filepath.Join(device.FilesDir, "file_(1).txt")
 	got, err := os.ReadFile(renamed)
@@ -1764,6 +2026,24 @@ func TestUploadFilesStreamed_ConflictRename(t *testing.T) {
 	}
 	if string(got) != string(content) {
 		t.Errorf("Expected new content %q, got %q", content, got)
+	}
+}
+
+func TestNumberedName(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		n    int
+		want string
+	}{
+		{"a.txt", 0, "a.txt"},
+		{"a.txt", 2, "a_(2).txt"},
+		{"archive.tar.gz", 1, "archive.tar_(1).gz"},
+		{"README", 1, "README_(1)"},
+		{".env", 1, "file_(1).env"},
+	} {
+		if got := NumberedName(tc.name, tc.n); got != tc.want {
+			t.Errorf("NumberedName(%q, %d) = %q, want %q", tc.name, tc.n, got, tc.want)
+		}
 	}
 }
 
@@ -1791,8 +2071,8 @@ func TestUploadFilesStreamed_SubDirectory(t *testing.T) {
 }
 
 // TestUploadFilesStreamed_ReportsWhatItWrote pins the names the access layer
-// grants ownership on (#1903): a conflict rename reports the name the file
-// really landed under, and an overwrite reports that it created nothing.
+// grants ownership on (#1903): keeping both reports the name the file really
+// landed under, and an overwrite reports that it created nothing.
 func TestUploadFilesStreamed_ReportsWhatItWrote(t *testing.T) {
 	device := makeManagedDeviceForImpl(t, "test-device")
 	if err := os.MkdirAll(filepath.Join(device.FilesDir, "docs"), 0755); err != nil {
@@ -1808,6 +2088,7 @@ func TestUploadFilesStreamed_ReportsWhatItWrote(t *testing.T) {
 			Reader:    multipart.NewReader(body, boundaryFromContentType(t, contentType)),
 			RootDir:   "docs",
 			Overwrite: overwrite,
+			KeepBoth:  !overwrite,
 		}, device, device.FilesDir)
 		if err != nil {
 			t.Fatalf("UploadFilesStreamedImpl failed: %v", err)

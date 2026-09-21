@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -26,6 +28,37 @@ var errNoAccess = errors.New("file not found")
 // errReadOnly is what a caller hears when they may see a path but not change
 // it.
 var errReadOnly = errors.New("you do not have permission to change this")
+
+// errHomeFolder is what a member hears when they try to delete or move a
+// home folder itself.
+var errHomeFolder = errors.New("a home folder can't be deleted or moved")
+
+// errGroupFolder is what a member hears when they try to delete or move a
+// group's folder itself.
+var errGroupFolder = errors.New("a group's folder can't be deleted or moved")
+
+// refuseHomeRoot answers a non-admin's delete or move of a home folder or a
+// group folder itself (#2016): 404 if they may not see it, 403 if they may.
+// It returns nil for anything else, including every path inside one. Admins
+// pass, as they do every other access check.
+func refuseHomeRoot(access accessutil.Access, serial, p string) *serverutil.Response {
+	if access.Principal().IsAdmin {
+		return nil
+	}
+	var refusal error
+	switch {
+	case accessutil.IsHomeRoot(serial, p):
+		refusal = errHomeFolder
+	case accessutil.IsGroupRoot(serial, p):
+		refusal = errGroupFolder
+	default:
+		return nil
+	}
+	if !access.Check(serial, p, accessutil.Read).Readable {
+		return serverutil.NotFound(errNoAccess)
+	}
+	return serverutil.Forbidden(refusal)
+}
 
 // grantOwner records the caller as owner of something they just created
 // (#1903). The item already exists by then, so a failure is logged rather than
@@ -196,14 +229,39 @@ func uploadSessionError(c *gin.Context, err error) *serverutil.Response {
 		return serverutil.Conflict(err)
 	case errors.Is(err, uploadutil.ErrSessionNotFound):
 		return serverutil.NotFound(err)
+	case nameTaken(err):
+		// Answered the way the multipart endpoint answers it. Unlike the offset
+		// mismatch it carries no X-Upload-Offset, which is how a client tells
+		// the two 409s apart.
+		return serverutil.Conflict(err)
 	case errors.Is(err, uploadutil.ErrInvalidRange),
-		errors.Is(err, uploadutil.ErrInvalidRequest),
-		// The file already exists and the caller did not ask to overwrite it.
-		// The multipart endpoint answers 400 for that, and the same upload
-		// arriving in chunks should not answer something else.
-		errors.Is(err, vfs.ErrConflict):
+		errors.Is(err, uploadutil.ErrInvalidRequest):
 		return serverutil.BadRequest(err)
 	default:
 		return serverutil.InternalServerError(err)
 	}
+}
+
+// nameTaken reports an upload refused because its name is in use and the
+// caller chose neither overwrite nor keepBoth (#2016). The VFS reports it as
+// vfs.ErrConflict and the StorageService as fs.ErrExist; both are a 409.
+func nameTaken(err error) bool {
+	return errors.Is(err, vfs.ErrConflict) || errors.Is(err, fs.ErrExist)
+}
+
+// errBothConflictChoices refuses an upload asking to overwrite and to keep
+// both at once.
+var errBothConflictChoices = errors.New("choose overwrite or keepBoth, not both")
+
+// publishUpload announces the files an upload landed, so every open client
+// sees them. Nothing is published when nothing was written — including a
+// refused upload, which changed no file tree.
+func publishUpload(deps deputil.Dependencies, rootDir string, written []storageutil.UploadedFile) {
+	if len(written) == 0 {
+		return
+	}
+	deps.EventBus().Publish(eventbus.Event{
+		Kind: eventbus.EventUpload,
+		Path: rootDir,
+	})
 }

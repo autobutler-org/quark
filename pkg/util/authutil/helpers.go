@@ -104,16 +104,11 @@ func statusError(status string) error {
 // devices are mounted.
 const mountsDirName = "mounts"
 
-// usersDirName is the directory under the files directory that holds every
-// account's home, so a username never collides with a top-level folder name
-// (#2016).
-const usersDirName = "users"
-
 // homeRelPath is where an account's home sits: users/<username>, the path its
 // owner grant is written on. ListAccountsMissingHome spells the same path in
 // SQL, so the two have to agree.
 func homeRelPath(username string) string {
-	return path.Join(usersDirName, username)
+	return path.Join(UsersDirName, username)
 }
 
 // grantHome makes an account the owner of its home.
@@ -140,36 +135,44 @@ func grantHome(ctx context.Context, queries *db.Queries, username string, userID
 //
 // It returns the home's path relative to filesDir and the directory it made,
 // which a caller whose transaction then fails removes. An existing home is
-// refused with ErrFolderExists rather than handed to the account; adopting one
-// is RepairHomes's job, not a new account's.
+// adopted, not refused: the users table is what says whether a username is
+// taken, and a folder is not an account. An admin may make users/<name> and
+// fill it before the account exists, and whoever gets that name gets that
+// folder. madeDir is empty for an adopted home, so a failed creation never
+// removes a folder it did not make.
 func createHome(ctx context.Context, queries *db.Queries, filesDir, username string, userID int64) (relPath, madeDir string, err error) {
 	if filesDir == "" {
 		return "", "", errors.New("files directory not set")
 	}
 	// The users parent is shared by every home, so MkdirAll it: it already
 	// existing is not a conflict.
-	if err := os.MkdirAll(filepath.Join(filesDir, usersDirName), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(filesDir, UsersDirName), 0o755); err != nil {
 		return "", "", fmt.Errorf("create users folder: %w", err)
 	}
 	// The username is validated, so it is one path segment and cannot climb
-	// out of filesDir. Mkdir, not MkdirAll, for the home itself: an existing
-	// home is refused rather than handed to the new account.
-	home := filepath.Join(filesDir, usersDirName, username)
-	if err := os.Mkdir(home, 0o755); err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return "", "", ErrFolderExists
+	// out of filesDir.
+	home := filepath.Join(filesDir, UsersDirName, username)
+	switch err := os.Mkdir(home, 0o755); {
+	case err == nil:
+		madeDir = home
+	case errors.Is(err, os.ErrExist):
+		// Adopted. Mkdir rather than MkdirAll so a non-directory in the way
+		// still fails below instead of passing as a home.
+		if info, statErr := os.Stat(home); statErr != nil || !info.IsDir() {
+			return "", "", fmt.Errorf("create the home of %q: %s is not a folder", username, homeRelPath(username))
 		}
+	default:
 		return "", "", fmt.Errorf("create the home of %q: %w", username, err)
 	}
 	// The grant is on the home alone. users/ gets none: breadcrumb visibility
 	// already shows the path to someone granted beneath it, and it stays
 	// admin-only otherwise.
 	if err := grantHome(ctx, queries, username, userID); err != nil {
-		// The directory is reported so the caller removes it; the transaction
-		// this runs in is about to roll the grant back.
-		return "", home, err
+		// A directory this call made is reported so the caller removes it; the
+		// transaction this runs in is about to roll the grant back.
+		return "", madeDir, err
 	}
-	return homeRelPath(username), home, nil
+	return homeRelPath(username), madeDir, nil
 }
 
 // pruneMountPoints removes the empty per-device directories under

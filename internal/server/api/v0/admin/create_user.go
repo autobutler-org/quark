@@ -17,7 +17,7 @@ import (
 
 // createUser godoc
 // @Summary Add an account
-// @Description Creates an active account with the given password. The admin never sees its recovery phrase: the account gets one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it; an existing home of that name is refused rather than handed over, while a top-level folder of that name does not collide. Admin-only.
+// @Description Creates an active account with the given password. The admin never sees its recovery phrase: the account gets one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it. An existing folder of that name under users/ becomes the home, and a top-level folder of that name does not collide. Admin-only.
 // @Tags admin
 // @Accept json
 // @Produce json
@@ -26,7 +26,7 @@ import (
 // @Failure 400 {object} serverutil.Response "invalid username or password"
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response
-// @Failure 409 {object} serverutil.Response "that username is taken, or a folder with that name already exists"
+// @Failure 409 {object} serverutil.Response "that username is taken"
 // @Failure 500 {object} serverutil.Response
 // @Router /admin/users [post]
 func createUser(c *gin.Context) *serverutil.Response {

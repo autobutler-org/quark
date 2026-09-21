@@ -537,6 +537,35 @@ func TestDeleteUploadSessionRemovesStagedBytes(t *testing.T) {
 	}
 }
 
+// Two sessions opened for one name — the second before the first committed,
+// which is the only way past the check at creation — can never both commit.
+// The 409 ends the losing session, so the second copy is not kept on disk for
+// a day.
+func TestAConflictingCommitEndsTheSessionAndDeletesStagedBytes(t *testing.T) {
+	t.Parallel()
+
+	engine, _, store := newUploadSessionEngine(t)
+	content := randomContent(t, 4096)
+	first := openSessionOK(t, engine, "", "twice.bin", len(content))
+	second := openSessionOK(t, engine, "", "twice.bin", len(content))
+	uploadInChunks(t, engine, first, content, 1024)
+
+	for start := 0; start < 3072; start += 1024 {
+		if w := putSlice(t, engine, second, content, start, start+1024); w.Code != http.StatusOK {
+			t.Fatalf("chunk at %d returned %d: %s", start, w.Code, w.Body.String())
+		}
+	}
+	if w := putSlice(t, engine, second, content, 3072, 4096); w.Code != http.StatusConflict {
+		t.Fatalf("commit over an existing file returned %d, want %d: %s", w.Code, http.StatusConflict, w.Body.String())
+	}
+	if got := stagedFileCount(t, store.StagingDir()); got != 0 {
+		t.Errorf("a refused commit left %d staged file(s) behind", got)
+	}
+	if w := putSlice(t, engine, second, content, 3072, 4096); w.Code != http.StatusNotFound {
+		t.Errorf("retrying an ended session returned %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
 func stagedFileCount(t *testing.T, stagingDir string) int {
 	t.Helper()
 	entries, err := os.ReadDir(stagingDir)

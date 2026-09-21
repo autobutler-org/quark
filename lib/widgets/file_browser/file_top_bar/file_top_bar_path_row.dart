@@ -12,6 +12,7 @@ import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_views_menu.
 class FileTopBarPathRow extends StatelessWidget {
   const FileTopBarPathRow({
     required this.currentPath,
+    required this.rootPath,
     required this.navEnabled,
     required this.viewsMenuController,
     required this.hiddenCrumbsController,
@@ -38,6 +39,9 @@ class FileTopBarPathRow extends StatelessWidget {
   });
 
   final String currentPath;
+
+  /// The lowest folder the caller can open — empty for the real root.
+  final String rootPath;
   final bool navEnabled;
   final MenuController viewsMenuController;
   final MenuController hiddenCrumbsController;
@@ -82,6 +86,7 @@ class FileTopBarPathRow extends StatelessWidget {
 
           final breadcrumb = FileTopBarBreadcrumb(
             currentPath: currentPath,
+            rootPath: rootPath,
             navEnabled: navEnabled,
             hiddenCrumbsController: hiddenCrumbsController,
             onGoHome: onGoHome,

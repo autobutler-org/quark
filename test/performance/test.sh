@@ -5,6 +5,9 @@ BASE_URL="${QUARK_BASE_URL:-http://127.0.0.1:8080}"
 AUTH_USER="${QUARK_USERNAME:-perf}"
 AUTH_PASS="${QUARK_PASSWORD:-perf-password}"
 ACCESS_TOKEN="${QUARK_ACCESS_TOKEN:-}"
+READER_USER="${QUARK_READER_USERNAME:-perf-reader}"
+READER_PASS="${QUARK_READER_PASSWORD:-perf-reader-password}"
+READER_TOKEN=""
 THREADS="${TEST_THREADS:-4}"
 CONCURRENCY="${TEST_CONCURRENCY:-20}"
 DURATION="${TEST_DURATION:-20s}"
@@ -104,8 +107,58 @@ auth_login_and_get_token() {
   fi
 }
 
+# A non-admin account with read access to the whole files root. Admins skip
+# the access checks entirely, so without this the non-admin path never runs.
+setup_reader() {
+  local create_resp
+  local create_status
+  local reader_id
+  local grant_status
+  local cookie_file="$WORK_DIR/auth_cookie_reader.txt"
+
+  create_resp="$WORK_DIR/reader_create.json"
+  create_status="$(curl -sS -o "$create_resp" -w "%{http_code}" \
+    -X POST "$BASE_URL/api/v0/admin/users" \
+    -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"username\":\"$READER_USER\",\"password\":\"$READER_PASS\"}")"
+
+  # 409 means an earlier run against this instance already made the account.
+  if [[ "$create_status" == "201" ]]; then
+    reader_id="$(sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p' "$create_resp")"
+    grant_status="$(curl -sS -o /dev/null -w "%{http_code}" \
+      -X PUT "$BASE_URL/api/v0/access" \
+      -H "Authorization: Bearer $ACCESS_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"deviceSerial\":\"\",\"relPath\":\"\",\"userId\":$reader_id,\"level\":\"read\"}")"
+    if [[ "$grant_status" != "200" ]]; then
+      echo "failed to grant $READER_USER read access via /api/v0/access (status=$grant_status)." >&2
+      return 1
+    fi
+  elif [[ "$create_status" != "409" ]]; then
+    echo "failed to create $READER_USER via /api/v0/admin/users (status=$create_status)." >&2
+    return 1
+  fi
+
+  local login_status
+  login_status="$(curl -sS -o /dev/null -w "%{http_code}" \
+    -c "$cookie_file" \
+    -X POST "$BASE_URL/api/v0/auth/login" \
+    -H "Content-Type: application/json" \
+    -d "{\"username\":\"$READER_USER\",\"password\":\"$READER_PASS\"}")"
+  if [[ "$login_status" != "200" ]]; then
+    echo "login failed for $READER_USER (status=$login_status)." >&2
+    return 1
+  fi
+  READER_TOKEN="$(extract_session_token "$cookie_file")"
+  if [[ -z "$READER_TOKEN" ]]; then
+    echo "login succeeded for $READER_USER but no session token cookie was returned." >&2
+    return 1
+  fi
+}
+
 prepare_fixtures() {
-  make test/perf/generate-files PERF_FIXTURE_TARGET_DIR="$PERF_FIXTURE_TARGET_DIR"
+  bash "$PWD/test/performance/generate_files.sh" "$PERF_FIXTURE_TARGET_DIR"
   for i in $(seq 1 "$UPLOAD_COUNT"); do
     dd if=/dev/zero of="$WORK_DIR/upload-fixtures/upload-$i.bin" bs=1024 count=64 status=none
   done
@@ -128,6 +181,7 @@ seed_albums() {
 run_wrk() {
   local name="$1"
   local script="$2"
+  local token="${3:-$ACCESS_TOKEN}"
 
   echo "Running $name"
   wrk \
@@ -135,7 +189,7 @@ run_wrk() {
     -c"$CONCURRENCY" \
     -d"$DURATION" \
     --latency \
-    -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Authorization: Bearer $token" \
     -s "$script" \
     "$BASE_URL" | tee "$WORK_DIR/$name.txt"
 }
@@ -162,9 +216,13 @@ main() {
   auth_setup_if_needed
   auth_login_and_get_token
   prepare_fixtures
+  setup_reader
   seed_albums
 
   run_wrk "files_list" "$SCENARIO_DIR/files_list.lua"
+  run_wrk "files_list_nonadmin" "$SCENARIO_DIR/files_list.lua" "$READER_TOKEN"
+  run_wrk "files_stat" "$SCENARIO_DIR/files_stat.lua"
+  run_wrk "files_stat_nonadmin" "$SCENARIO_DIR/files_stat.lua" "$READER_TOKEN"
   run_wrk "photos_list" "$SCENARIO_DIR/photos_list.lua"
   run_wrk "thumbnails" "$SCENARIO_DIR/thumbnails.lua"
   run_wrk "albums_list" "$SCENARIO_DIR/albums_list.lua"

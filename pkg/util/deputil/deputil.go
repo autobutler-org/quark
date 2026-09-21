@@ -12,6 +12,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
+	"github.com/autobutler-org/quark/pkg/util/sshutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/util/vaultcrypto"
@@ -28,6 +29,7 @@ type Dependencies interface {
 	HealthDatabase() *db.DatabaseRaw
 	IOSemaphore() *iosemutil.Semaphore
 	JobQueue() *jobutil.Queue
+	SSHSystem() sshutil.System
 	StorageService() *storageutil.StorageService
 	UploadSessions() *uploadutil.SessionStore
 	VaultDB() *db.DatabaseSqlc
@@ -40,6 +42,7 @@ type Dependencies interface {
 	WithHealthDatabase(healthDatabase *db.DatabaseRaw) Dependencies
 	WithIOSemaphore(sem *iosemutil.Semaphore) Dependencies
 	WithJobQueue(q *jobutil.Queue) Dependencies
+	WithSSHSystem(system sshutil.System) Dependencies
 	MetadataStore() vfs.MetadataStore
 	VFSRegistry() vfs.Registry
 	WithMetadataStore(s vfs.MetadataStore) Dependencies
@@ -75,6 +78,9 @@ func NewDependencies() Dependencies {
 		// Combined with Argon2id (~300 ms/attempt), sustained guessing is limited to
 		// ≈ 30 attempts/minute per IP — well below what any offline attack would need.
 		vaultRateLimiter: ratelimitutil.NewWithRate(0.5, 5),
+		// sshSystem is the real host. It runs nothing until an admin asks, and
+		// reports itself unavailable anywhere but the installed service (#2131).
+		sshSystem: sshutil.DefaultSystem(),
 	}
 }
 

@@ -18,10 +18,20 @@ import (
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
-// favoriteKeys lists every favorite as "serial|path", sorted.
-func favoriteKeys(t *testing.T, q *db.Queries) []string {
+// photoOwner creates an account to own favorites and albums.
+func photoOwner(t *testing.T, q *db.Queries, username string) int64 {
 	t.Helper()
-	rows, err := q.ListFavorites(context.Background())
+	user, err := q.CreateUser(context.Background(), db.CreateUserParams{Username: username, PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatalf("CreateUser(%q): %v", username, err)
+	}
+	return user.ID
+}
+
+// favoriteKeys lists an account's favorites as "serial|path", sorted.
+func favoriteKeys(t *testing.T, q *db.Queries, userID int64) []string {
+	t.Helper()
+	rows, err := q.ListFavorites(context.Background(), userID)
 	if err != nil {
 		t.Fatalf("ListFavorites: %v", err)
 	}
@@ -48,9 +58,9 @@ func albumKeys(t *testing.T, q *db.Queries, albumID int64) []string {
 	return keys
 }
 
-func favorite(t *testing.T, q *db.Queries, serial, relPath string) {
+func favorite(t *testing.T, q *db.Queries, userID int64, serial, relPath string) {
 	t.Helper()
-	if _, err := favoritesutil.ToggleFavorite(context.Background(), q, serial, relPath); err != nil {
+	if _, err := favoritesutil.ToggleFavorite(context.Background(), q, userID, serial, relPath); err != nil {
 		t.Fatalf("ToggleFavorite(%q): %v", relPath, err)
 	}
 }
@@ -72,13 +82,17 @@ func TestMoveFileCarriesFavoritesAndAlbumItems(t *testing.T) {
 	}
 	database := dbtest.NewDB(t)
 	q := database.Queries
+	owner := photoOwner(t, q, "founder")
 
 	for _, p := range []string{"a.jpg", "trip/b.jpg", "trip/sub/c.jpg", "trips/d.jpg"} {
-		favorite(t, q, "", p)
+		favorite(t, q, owner, "", p)
 	}
 	// A stale row already sitting at a destination must not block the move.
-	favorite(t, q, "", "2024/trip/b.jpg")
-	user, err := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Trips"})
+	favorite(t, q, owner, "", "2024/trip/b.jpg")
+	// Moves are keyed by path, so another account's favorite follows too.
+	other := photoOwner(t, q, "other")
+	favorite(t, q, other, "", "trip/sub/c.jpg")
+	user, err := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Trips", UserID: owner})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,10 +115,13 @@ func TestMoveFileCarriesFavoritesAndAlbumItems(t *testing.T) {
 	move("/trip", "2024/trip") // the file routes accept a leading slash
 
 	want := []string{"|2024/trip/b.jpg", "|2024/trip/sub/c.jpg", "|renamed.jpg", "|trips/d.jpg"}
-	if got := favoriteKeys(t, q); !reflect.DeepEqual(got, want) {
+	if got := favoriteKeys(t, q, owner); !reflect.DeepEqual(got, want) {
 		t.Errorf("favorites = %v, want %v", got, want)
 	}
-	fav, err := favoritesutil.EnsureFavoritesAlbum(ctx, q)
+	if got, want := favoriteKeys(t, q, other), []string{"|2024/trip/sub/c.jpg"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("other account's favorites = %v, want %v", got, want)
+	}
+	fav, err := favoritesutil.EnsureFavoritesAlbum(ctx, q, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,13 +151,14 @@ func TestDeleteFilesForgetsFavoritesAndAlbumItems(t *testing.T) {
 	}
 	database := dbtest.NewDB(t)
 	q := database.Queries
+	owner := photoOwner(t, q, "founder")
 	ctx := context.Background()
 
 	for _, p := range []string{"keep.jpg", "gone.jpg", "trip/b.jpg", "trip/sub/c.jpg", "trips/d.jpg"} {
-		favorite(t, q, serial, p)
+		favorite(t, q, owner, serial, p)
 	}
-	favorite(t, q, "", "gone.jpg") // same path, other device
-	user, err := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Trips"})
+	favorite(t, q, owner, "", "gone.jpg") // same path, other device
+	user, err := q.CreateAlbum(ctx, db.CreateAlbumParams{Name: "Trips", UserID: owner})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,14 +180,14 @@ func TestDeleteFilesForgetsFavoritesAndAlbumItems(t *testing.T) {
 	want := []string{"USB-992|keep.jpg", "USB-992|trips/d.jpg", "|gone.jpg"}
 	sort.Strings(want)
 	deadline := time.Now().Add(5 * time.Second)
-	for !reflect.DeepEqual(favoriteKeys(t, q), want) && time.Now().Before(deadline) {
+	for !reflect.DeepEqual(favoriteKeys(t, q, owner), want) && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if got := favoriteKeys(t, q); !reflect.DeepEqual(got, want) {
+	if got := favoriteKeys(t, q, owner); !reflect.DeepEqual(got, want) {
 		t.Fatalf("favorites = %v, want %v", got, want)
 	}
 	// Album cleanup runs just before the favorites cleanup, so it is done too.
-	fav, err := favoritesutil.EnsureFavoritesAlbum(ctx, q)
+	fav, err := favoritesutil.EnsureFavoritesAlbum(ctx, q, owner)
 	if err != nil {
 		t.Fatal(err)
 	}

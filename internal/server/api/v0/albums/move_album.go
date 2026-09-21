@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/albumutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
@@ -17,16 +18,16 @@ import (
 
 // moveAlbum godoc
 // @Summary Move a photo album to a new parent
-// @Description Changes the parent of an album. Pass null parentId to move to root. The new parent must not already hold an album with the same name ignoring case; root albums, the system Favorites album included, are siblings of each other.
+// @Description Changes the parent of one of the caller's albums. Pass null parentId to move to root. The new parent must be the caller's own and must not already hold an album with the same name ignoring case; the caller's root albums, their Favorites album included, are siblings of each other.
 // @Tags albums
 // @Accept json
 // @Produce json
 // @Param id path int true "Album ID"
 // @Param body body moveAlbumRequest true "New parent ID (null for root)"
 // @Success 200 {object} AlbumJSON
-// @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 400 {object} serverutil.Response "Bad Request: invalid id or body, or parent not found among the caller's albums"
 // @Failure 403 {object} serverutil.Response "Forbidden: system album, or a system album as the parent"
-// @Failure 404 {object} serverutil.Response "Not Found"
+// @Failure 404 {object} serverutil.Response "Not Found: no album of the caller's has that id"
 // @Failure 409 {object} serverutil.Response "Conflict: an album with that name already exists here"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /albums/{id}/move [patch]
@@ -50,13 +51,14 @@ func moveAlbum(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
-	if resp := rejectSystemAlbum(c.Request.Context(), deps.Database().Queries, id); resp != nil {
+	userID := callerID(c)
+	if resp := rejectSystemAlbum(c.Request.Context(), deps.Database().Queries, userID, id); resp != nil {
 		return resp
 	}
 
 	var parentID sql.NullInt64
 	if req.ParentID != nil {
-		parent, err := deps.Database().Queries.GetAlbum(context.Background(), *req.ParentID)
+		parent, err := deps.Database().Queries.GetAlbum(context.Background(), db.GetAlbumParams{ID: *req.ParentID, UserID: userID})
 		if err != nil {
 			return serverutil.BadRequest(errors.New("parent album not found"))
 		}
@@ -68,6 +70,7 @@ func moveAlbum(c *gin.Context) *serverutil.Response {
 
 	result, err := albumutil.MoveAlbum(c.Request.Context(), albumutil.MoveAlbumParams{
 		Queries:  deps.Database().Queries,
+		UserID:   userID,
 		ID:       id,
 		ParentID: parentID,
 	})

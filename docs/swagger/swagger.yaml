@@ -57,6 +57,13 @@ definitions:
           $ref: '#/definitions/accessutil.PrincipalUser'
         type: array
     type: object
+  accessutil.ListSharedWithMeResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/accessutil.SharedItem'
+        type: array
+    type: object
   accessutil.PrincipalGroup:
     properties:
       builtin:
@@ -72,6 +79,22 @@ definitions:
       id:
         type: integer
       username:
+        type: string
+    type: object
+  accessutil.SharedItem:
+    properties:
+      deviceSerial:
+        description: DeviceSerial names the device; empty is the internal one.
+        type: string
+      level:
+        description: Level is read, write or owner.
+        type: string
+      owner:
+        description: |-
+          Owner is the username of the account, or the name of the group, that
+          owns the item. It is empty when no owner row covers the path.
+        type: string
+      relPath:
         type: string
     type: object
   authutil.SessionInfo:
@@ -247,6 +270,19 @@ definitions:
       error: {}
       statusCode:
         type: integer
+    type: object
+  sshutil.Key:
+    properties:
+      comment:
+        description: Comment is the text after the key, often user@host. May be empty.
+        type: string
+      fingerprint:
+        description: Fingerprint is the SHA256 fingerprint, as `ssh-keygen -l` prints
+          it.
+        type: string
+      type:
+        description: Type is the key algorithm, such as ssh-ed25519.
+        type: string
     type: object
   storageutil.TrashContentsItem:
     properties:
@@ -602,6 +638,8 @@ definitions:
     properties:
       fileName:
         type: string
+      keepBoth:
+        type: boolean
       overwrite:
         type: boolean
       rootDir:
@@ -799,6 +837,44 @@ definitions:
         type: boolean
     required:
     - enabled
+    type: object
+  v0_ssh.addSSHKeyBody:
+    properties:
+      key:
+        description: Key is one public key line, as in id_ed25519.pub.
+        type: string
+    required:
+    - key
+    type: object
+  v0_ssh.setSSHEnabledBody:
+    properties:
+      enabled:
+        type: boolean
+    required:
+    - enabled
+    type: object
+  v0_ssh.setSSHPasswordBody:
+    properties:
+      password:
+        type: string
+    required:
+    - password
+    type: object
+  v0_ssh.sshStatusResponse:
+    properties:
+      available:
+        type: boolean
+      enabled:
+        type: boolean
+      keys:
+        items:
+          $ref: '#/definitions/sshutil.Key'
+        type: array
+      reason:
+        description: |-
+          Reason is why not, when available is false: unsupported_os,
+          not_service, sshd_missing, helper_missing or no_login_shell.
+        type: string
     type: object
   v0_trash.deletedResponse:
     properties:
@@ -1120,8 +1196,9 @@ paths:
       description: Grants one active account or existing group read, write or owner
         on a path, replacing the level it had there, and returns the path's grants
         as they now stand. Only an owner of the path or an admin may share it. A non-admin
-        can't change their own owner row on the path. Publishes access_changed for
-        the path.
+        can't change their own owner row on the path. Nobody, admins included, may
+        share the users or groups folder itself on the internal device. Publishes
+        access_changed for the path.
       parameters:
       - description: The path, one account or group, and the level
         in: body
@@ -1138,7 +1215,8 @@ paths:
             $ref: '#/definitions/accessutil.GrantsResult'
         "400":
           description: a path in the trash, not exactly one account or group, a level
-            other than read, write or owner, or the caller's own owner row
+            other than read, write or owner, the caller's own owner row, or the users
+            or groups folder itself
           schema:
             $ref: '#/definitions/serverutil.Response'
         "401":
@@ -1159,6 +1237,33 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
       summary: Share a file or folder
+      tags:
+      - access
+  /access/mine:
+    get:
+      description: Returns the root of each ad-hoc share the signed-in account holds,
+        with the account or group that owns it, for the file browser's Shared with
+        me shortcut. Left out are their own home and its contents, which My files
+        opens; every group folder and its contents, which Groups opens; the users
+        and groups folders themselves; the device root; the trash; and a grant inside
+        another grant. An admin bypasses the access table, so their answer is empty
+        and they reach everything through All files.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/accessutil.ListSharedWithMeResult'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: List what has been shared with you
       tags:
       - access
   /access/principals:
@@ -1188,8 +1293,7 @@ paths:
     put:
       description: Turns a pending account request into an active account that can
         sign in, with a home under users/ on the internal device that it owns. An
-        existing home of that name leaves the request pending rather than making an
-        account that cannot use it. Admin-only.
+        existing folder of that name under users/ becomes the home. Admin-only.
       parameters:
       - description: Username of the pending request
         in: path
@@ -1209,10 +1313,6 @@ paths:
             $ref: '#/definitions/serverutil.Response'
         "404":
           description: no account request has that username
-          schema:
-            $ref: '#/definitions/serverutil.Response'
-        "409":
-          description: a folder with that name already exists
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -1402,9 +1502,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates an empty group. The name is trimmed, has 1 to 64 characters
-        and no control characters, and is unique ignoring case. Publishes account_changed.
-        Admin-only.
+      description: Creates an empty group and its folder in groups on the internal
+        device, named after the group, with one grant giving the group write there;
+        an existing folder of that name is adopted. The name is trimmed, has 1 to
+        64 characters, no control characters or slashes, isn't . or .., and is unique
+        ignoring case. Publishes account_changed and new_folder. Admin-only.
       parameters:
       - description: The group's name
         in: body
@@ -1445,8 +1547,9 @@ paths:
   /admin/groups/{id}:
     delete:
       description: Deletes a group, its memberships and every share made to it, so
-        its members lose what only the group gave them. The everyone group can't be
-        deleted. Publishes access_changed with no path. Admin-only.
+        its members lose what only the group gave them. Its folder in groups and its
+        content stay, admin-only from then on. The everyone group can't be deleted.
+        Publishes access_changed with no path. Admin-only.
       parameters:
       - description: Group id
         in: path
@@ -1483,7 +1586,9 @@ paths:
       consumes:
       - application/json
       description: Renames a group under the same rules a new name follows; a group
-        may take its own name in another case. The everyone group can't be renamed.
+        may take its own name in another case. Its folder in groups is renamed to
+        match as an ordinary move does, carrying its shares, favorites and album items,
+        and publishing move and access_changed. The everyone group can't be renamed.
         The response lists no members. Publishes account_changed. Admin-only.
       parameters:
       - description: Group id
@@ -1521,7 +1626,8 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "409":
-          description: a group with that name already exists
+          description: a group with that name already exists, or another folder in
+            groups already has the new name
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -1686,8 +1792,8 @@ paths:
       description: 'Creates an active account with the given password. The admin never
         sees its recovery phrase: the account gets one on its first sign-in. The account''s
         home is made under users/ on the internal device, named after the account,
-        and the account owns it; an existing home of that name is refused rather than
-        handed over, while a top-level folder of that name does not collide. Admin-only.'
+        and the account owns it. An existing folder of that name under users/ becomes
+        the home, and a top-level folder of that name does not collide. Admin-only.'
       parameters:
       - description: The account to add
         in: body
@@ -1715,8 +1821,7 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "409":
-          description: that username is taken, or a folder with that name already
-            exists
+          description: that username is taken
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -1774,8 +1879,9 @@ paths:
       - admin
   /albums:
     get:
-      description: Returns all photo albums as a flat list. Use ?tree=true to get
-        a nested tree.
+      description: Returns the caller's own photo albums as a flat list, creating
+        their Favorites album on first use. Admins see only their own albums too.
+        Use ?tree=true to get a nested tree.
       parameters:
       - description: Return as nested tree (default false)
         in: query
@@ -1800,9 +1906,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a new photo album, optionally nested under a parent. The
-        name cannot contain / and must be unique among its siblings ignoring case;
-        root albums, the system Favorites album included, are siblings of each other.
+      description: Creates a photo album owned by the caller, optionally nested under
+        one of the caller's albums. The name cannot contain / and must be unique among
+        its siblings ignoring case; the caller's root albums, their Favorites album
+        included, are siblings of each other.
       parameters:
       - description: Album name and optional parent ID
         in: body
@@ -1819,7 +1926,7 @@ paths:
             $ref: '#/definitions/v0_albums.AlbumJSON'
         "400":
           description: 'Bad Request: missing name, a / in the name, or parent not
-            found'
+            found among the caller''s albums'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "403":
@@ -1839,8 +1946,8 @@ paths:
       - albums
   /albums/{id}:
     delete:
-      description: Deletes an album and all its children (cascades). Does not delete
-        photos from disk.
+      description: Deletes one of the caller's albums and all its children (cascades).
+        Does not delete photos from disk.
       parameters:
       - description: Album ID
         in: path
@@ -1862,6 +1969,10 @@ paths:
           description: 'Forbidden: system album'
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: 'Not Found: no album of the caller''s has that id'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
@@ -1870,7 +1981,8 @@ paths:
       tags:
       - albums
     get:
-      description: Returns a single album with its item count and direct children.
+      description: Returns one of the caller's albums with its item count and direct
+        children.
       parameters:
       - description: Album ID
         in: path
@@ -1889,7 +2001,7 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
-          description: Not Found
+          description: 'Not Found: no album of the caller''s has that id'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -1932,6 +2044,10 @@ paths:
           description: 'Forbidden: system album'
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: 'Not Found: no album of the caller''s has that id'
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
@@ -1940,7 +2056,8 @@ paths:
       tags:
       - albums
     get:
-      description: Returns all photo items (pointers) in the given album.
+      description: Returns the photo items (pointers) the caller can read in one of
+        the caller's albums.
       parameters:
       - description: Album ID
         in: path
@@ -1958,6 +2075,10 @@ paths:
             type: array
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: 'Not Found: no album of the caller''s has that id'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -2014,10 +2135,10 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Changes the parent of an album. Pass null parentId to move to root.
-        The new parent must not already hold an album with the same name ignoring
-        case; root albums, the system Favorites album included, are siblings of each
-        other.
+      description: Changes the parent of one of the caller's albums. Pass null parentId
+        to move to root. The new parent must be the caller's own and must not already
+        hold an album with the same name ignoring case; the caller's root albums,
+        their Favorites album included, are siblings of each other.
       parameters:
       - description: Album ID
         in: path
@@ -2038,7 +2159,8 @@ paths:
           schema:
             $ref: '#/definitions/v0_albums.AlbumJSON'
         "400":
-          description: Bad Request
+          description: 'Bad Request: invalid id or body, or parent not found among
+            the caller''s albums'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "403":
@@ -2046,7 +2168,7 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
-          description: Not Found
+          description: 'Not Found: no album of the caller''s has that id'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "409":
@@ -2064,9 +2186,9 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Updates the name of an existing album. The name cannot contain
-        / and must be unique among the album's siblings ignoring case; changing only
-        the case of the album's own name is allowed.
+      description: Updates the name of one of the caller's albums. The name cannot
+        contain / and must be unique among the album's siblings ignoring case; changing
+        only the case of the album's own name is allowed.
       parameters:
       - description: Album ID
         in: path
@@ -2095,7 +2217,7 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
-          description: Not Found
+          description: 'Not Found: no album of the caller''s has that id'
           schema:
             $ref: '#/definitions/serverutil.Response'
         "409":
@@ -2407,7 +2529,8 @@ paths:
       consumes:
       - application/json
       description: Creates the owner account, with a home under users/ on the internal
-        device that it owns. Can only be called once.
+        device that it owns; an existing folder of that name under users/ becomes
+        the home. Can only be called once.
       parameters:
       - description: '{username, password}'
         in: body
@@ -3049,11 +3172,22 @@ paths:
       - multipart/form-data
       description: Upload one or more files via multipart/form-data. Needs write access
         on the top-level directory; the caller owns each file the upload creates.
+        A name already in use is a 409 unless overwrite or keepBoth says what to do
+        about it.
       parameters:
       - description: Device serial number to upload to
         in: query
         name: serial
         type: string
+      - description: Replace a file of the same name
+        in: query
+        name: overwrite
+        type: boolean
+      - description: Land under the first free name, e.g. file_(1).txt, when the name
+          is taken
+        in: query
+        name: keepBoth
+        type: boolean
       - description: File to upload
         in: formData
         name: file
@@ -3078,6 +3212,10 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/serverutil.Response'
       summary: Upload files to the top-level directory
       tags:
       - files
@@ -3087,7 +3225,8 @@ paths:
       - application/json
       description: 'Reserve a session for one file; the bytes follow as chunks on
         PUT. Needs write access on the directory the file lands in. The session belongs
-        to the caller: it is not found for anyone else.'
+        to the caller: it is not found for anyone else. A name already in use is a
+        409 unless overwrite or keepBoth says what to do about it.'
       parameters:
       - description: File the session will carry
         in: body
@@ -3112,6 +3251,10 @@ paths:
             $ref: '#/definitions/serverutil.Response'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: Conflict
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":
@@ -3171,7 +3314,8 @@ paths:
       - application/octet-stream
       description: Append the chunk named by Content-Range; the last one commits the
         file, and the caller owns it if it is new. A session opened by someone else
-        is not found.
+        is not found. A 409 carrying X-Upload-Offset is a chunk out of step; one without
+        it is a name already in use.
       parameters:
       - description: Upload session id
         in: path
@@ -3210,7 +3354,8 @@ paths:
       consumes:
       - multipart/form-data
       description: Upload one or more files via multipart/form-data. Needs write access
-        on the directory; the caller owns each file the upload creates.
+        on the directory; the caller owns each file the upload creates. A name already
+        in use is a 409 unless overwrite or keepBoth says what to do about it.
       parameters:
       - description: Directory to upload into
         in: path
@@ -3221,6 +3366,15 @@ paths:
         in: query
         name: serial
         type: string
+      - description: Replace a file of the same name
+        in: query
+        name: overwrite
+        type: boolean
+      - description: Land under the first free name, e.g. file_(1).txt, when the name
+          is taken
+        in: query
+        name: keepBoth
+        type: boolean
       - description: File to upload
         in: formData
         name: file
@@ -3245,6 +3399,10 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/serverutil.Response'
       summary: Upload files to a nested directory
       tags:
       - files
@@ -3265,9 +3423,11 @@ paths:
       - health
   /jobs:
     get:
-      description: Returns every job of the requested kinds, newest first, finished
-        ones included. This is the source of truth for job state; the job_* events
-        are a hint to refresh and can be dropped.
+      description: Returns the jobs of the requested kinds the caller may see, newest
+        first, finished ones included. An admin sees every job; anyone else sees the
+        jobs they queued whose file they can still read, with error left blank. This
+        is the source of truth for job state; the job_* events are a hint to refresh
+        and can be dropped.
       parameters:
       - collectionFormat: multi
         description: Job kinds to list; repeat for more than one (kind=video-transcode&kind=...)
@@ -3301,6 +3461,8 @@ paths:
     delete:
       description: Cancels a pending or running job and returns it, now canceled.
         A pending job never runs; a running job is stopped and cleans up after itself.
+        Only the account that queued the job, or an admin, may cancel it; any other
+        caller gets 404.
       parameters:
       - description: Job ID
         in: path
@@ -3334,7 +3496,9 @@ paths:
       tags:
       - jobs
     get:
-      description: Returns one background job by id.
+      description: Returns one background job by id. A caller who is not an admin
+        gets only a job they queued whose file they can still read, with error left
+        blank; any other job is 404.
       parameters:
       - description: Job ID
         in: path
@@ -3367,8 +3531,12 @@ paths:
     post:
       description: Resets a failed job to pending so it runs again. It keeps its id
         and createdAt; progress, error, startedAt, and finishedAt are cleared, and
-        the returned jobId is the same id. A retry whose inputs no longer exist, such
-        as a transcode of a video that was moved or deleted, is refused with 422.
+        the returned jobId is the same id. Only the account that queued the job, or
+        an admin, may retry it; any other caller gets 404. The job runs as the account
+        that queued it, which must still be active and able to write the folder of
+        the file the job works on, or the retry is refused with 403. A retry whose
+        inputs no longer exist, such as a transcode of a video that was moved or deleted,
+        is refused with 422.
       parameters:
       - description: Job ID
         in: path
@@ -3384,6 +3552,11 @@ paths:
             $ref: '#/definitions/v0_jobs.retryJobResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden — the account that queued the job can no longer sign
+            in or write the folder
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
@@ -3509,7 +3682,7 @@ paths:
       - photos
   /photos/favorite:
     get:
-      description: Returns whether the specified photo is in the user's favorites.
+      description: Returns whether the specified photo is in the caller's own favorites.
         Needs read access on the photo.
       parameters:
       - description: Device serial
@@ -3546,8 +3719,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Adds the photo to favorites if not already favorited; removes it
-        otherwise. Needs read access on the photo.
+      description: Adds the photo to the caller's own favorites if not already favorited;
+        removes it otherwise. Needs read access on the photo.
       parameters:
       - description: Photo reference
         in: body
@@ -3579,7 +3752,8 @@ paths:
       - favorites
   /photos/favorites:
     get:
-      description: Returns all photos the user has favorited, newest first.
+      description: Returns the photos the caller has favorited and can still read,
+        newest first. Every account has its own favorites, admins included.
       produces:
       - application/json
       responses:
@@ -3598,8 +3772,8 @@ paths:
       - favorites
   /photos/metadata:
     get:
-      description: Returns EXIF, file info, and album membership for the specified
-        photo.
+      description: Returns EXIF, file info, and the caller's own favorite state and
+        album membership for the specified photo.
       parameters:
       - description: Device serial
         in: query
@@ -3849,6 +4023,219 @@ paths:
       summary: Enable remote access via Tailscale
       tags:
       - settings
+  /ssh/enabled:
+    put:
+      consumes:
+      - application/json
+      description: Starts sshd and opens port 22, or stops sshd and closes the port.
+        The choice survives a reboot. Admin-only.
+      parameters:
+      - description: Whether SSH access should be on
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_ssh.setSSHEnabledBody'
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: SSH access can't be managed on this Quark
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Turn SSH access on or off
+      tags:
+      - ssh
+  /ssh/keys:
+    delete:
+      description: Removes the allowed key with the given SHA256 fingerprint. The
+        fingerprint is a query parameter because it can contain a slash. Admin-only.
+      parameters:
+      - description: SHA256 fingerprint, as SHA256:...
+        in: query
+        name: fingerprint
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no allowed key has that fingerprint
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: SSH access can't be managed on this Quark
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Stop a public key signing in over SSH
+      tags:
+      - ssh
+    post:
+      consumes:
+      - application/json
+      description: Adds one OpenSSH public key to those allowed to sign in as quark.
+        Options such as command= are dropped. Admin-only.
+      parameters:
+      - description: The public key
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_ssh.addSSHKeyBody'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/sshutil.Key'
+        "400":
+          description: not an SSH public key
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: the key is already allowed, or SSH access can't be managed
+            on this Quark
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Allow a public key to sign in over SSH
+      tags:
+      - ssh
+  /ssh/password:
+    delete:
+      description: Removes the quark login account's password, so only allowed keys
+        can sign in. Admin-only.
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: SSH access can't be managed on this Quark
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Clear the SSH login password
+      tags:
+      - ssh
+    put:
+      consumes:
+      - application/json
+      description: Sets the password for the quark login account. Quark does not store
+        it. At least 12 characters, no control characters. Admin-only.
+      parameters:
+      - description: The new password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_ssh.setSSHPasswordBody'
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: too short, too long, or holds control characters
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: SSH access can't be managed on this Quark
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Set the SSH login password
+      tags:
+      - ssh
+  /ssh/status:
+    get:
+      description: Whether SSH access can be managed on this Quark (and why not),
+        whether sshd is running, and the public keys allowed to sign in as quark.
+        Admin-only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_ssh.sshStatusResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Get SSH access status
+      tags:
+      - ssh
   /storage/devices/rename:
     patch:
       consumes:
@@ -4405,7 +4792,8 @@ paths:
   /videos/metadata:
     get:
       description: Returns duration, resolution, codec, bitrate, framerate, rotation,
-        and album membership for the specified video.
+        and the caller's own favorite state and album membership for the specified
+        video.
       parameters:
       - description: Device serial
         in: query
@@ -4452,7 +4840,9 @@ paths:
         when the format's container accepts them; small caps the height at 480 lines.
         Converting to the source's own format needs small quality. The output is never
         upscaled and never overwrites a file. Follow the job with GET /jobs/{id} or
-        the job_* events; an upload event announces the output file.
+        the job_* events; an upload event announces the output file. Needs read access
+        on the video and write access on its folder; the job runs as, and its output
+        is owned by, the caller.
       parameters:
       - description: Transcode request
         in: body
@@ -4469,6 +4859,10 @@ paths:
             $ref: '#/definitions/v0_videos.transcodeVideoResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":

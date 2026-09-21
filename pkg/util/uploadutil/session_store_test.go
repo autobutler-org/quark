@@ -799,6 +799,21 @@ func commitWhole(
 	content []byte,
 ) (string, error) {
 	t.Helper()
+	return commitWholeSeeding(t, store, dest, name, overwrite, content, func() {})
+}
+
+// commitWholeSeeding is commitWhole with a hook that runs once the session is
+// open, for a destination that only becomes occupied mid-upload.
+func commitWholeSeeding(
+	t *testing.T,
+	store *uploadutil.SessionStore,
+	dest uploadutil.Destination,
+	name string,
+	overwrite bool,
+	content []byte,
+	afterOpen func(),
+) (string, error) {
+	t.Helper()
 	total := int64(len(content))
 	created, err := store.CreateSession(uploadutil.CreateSessionParams{
 		Destination: dest,
@@ -809,6 +824,7 @@ func commitWhole(
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
+	afterOpen()
 	staged := stagedFile(t, store)
 	_, err = writeChunk(store, dest, created.SessionID, 0, total-1, total, content)
 	return staged, err
@@ -846,26 +862,158 @@ func TestCommitRenamesTheStagedFileIntoPlace(t *testing.T) {
 	}
 }
 
+// A session whose name is already taken is refused when it is opened, before
+// a byte is staged (#2016).
+func TestOpeningASessionOnATakenNameIsRefused(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, root := newLocalDestination(t)
+	if err := os.WriteFile(filepath.Join(root, "taken.txt"), []byte("original"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	_, err := store.CreateSession(uploadutil.CreateSessionParams{
+		Destination: dest,
+		FileName:    "taken.txt",
+		TotalSize:   8,
+	})
+	if !errors.Is(err, vfs.ErrConflict) {
+		t.Fatalf("opening a session on a taken name returned %v, want vfs.ErrConflict", err)
+	}
+	if got := stagedCount(t, store.StagingDir()); got != 0 {
+		t.Errorf("a refused session staged %d file(s)", got)
+	}
+}
+
+// Keeping both commits under the first free numbered name rather than over
+// the file that is there.
+func TestCommitKeepingBothLandsUnderAFreeName(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, root := newLocalDestination(t)
+	if err := os.WriteFile(filepath.Join(root, "taken.txt"), []byte("original"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	created, err := store.CreateSession(uploadutil.CreateSessionParams{
+		Destination: dest,
+		FileName:    "taken.txt",
+		TotalSize:   8,
+		KeepBoth:    true,
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	result, err := writeChunk(store, dest, created.SessionID, 0, 7, 8, []byte("intruder"))
+	if err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if result.Path != "taken_(1).txt" {
+		t.Errorf("commit landed at %q, want %q", result.Path, "taken_(1).txt")
+	}
+	if got, _ := os.ReadFile(filepath.Join(root, "taken.txt")); string(got) != "original" {
+		t.Errorf("the original now reads %q", got)
+	}
+	if got, _ := os.ReadFile(filepath.Join(root, "taken_(1).txt")); string(got) != "intruder" {
+		t.Errorf("the second copy reads %q", got)
+	}
+}
+
+// The same name taken while the bytes were in flight is caught at the commit,
+// which the creation check cannot see.
 func TestCommitWithoutOverwriteLeavesAnExistingFileAlone(t *testing.T) {
 	t.Parallel()
 
 	store := newTestStore(t)
 	dest, root := newLocalDestination(t)
 	existing := filepath.Join(root, "taken.txt")
-	if err := os.WriteFile(existing, []byte("original"), 0o644); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
-	staged, err := commitWhole(t, store, dest, "taken.txt", false, []byte("intruder"))
+	staged, err := commitWholeSeeding(t, store, dest, "taken.txt", false, []byte("intruder"), func() {
+		if err := os.WriteFile(existing, []byte("original"), 0o644); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	})
 	if !errors.Is(err, vfs.ErrConflict) {
 		t.Fatalf("commit over an existing file returned %v, want vfs.ErrConflict", err)
 	}
 	if got, _ := os.ReadFile(existing); string(got) != "original" {
 		t.Errorf("existing file now reads %q", got)
 	}
-	// The session survives a failed commit, so its bytes must too.
-	if _, err := os.Stat(staged); err != nil {
-		t.Errorf("staged file is gone after a refused commit: %v", err)
+	// Retrying cannot make the name free, so the session ends and its bytes go
+	// with it instead of sitting on disk until the TTL.
+	if _, err := os.Stat(staged); !os.IsNotExist(err) {
+		t.Errorf("staged file survived a commit that can never succeed: %v", err)
+	}
+	if got := stagedCount(t, store.StagingDir()); got != 0 {
+		t.Errorf("staging dir still holds %d entries after a refused commit", got)
+	}
+}
+
+// A commit that failed for a reason the client can outlast keeps the session,
+// so resending the last chunk lands the file without restaging it.
+func TestATransientCommitFailureKeepsTheSessionForARetry(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, root := newLocalDestination(t)
+	// A file where the destination directory should be makes MkdirAll fail
+	// with a plain I/O error rather than a vfs sentinel.
+	blocker := filepath.Join(root, "album")
+	if err := os.WriteFile(blocker, nil, 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	content := []byte("worth keeping")
+	total := int64(len(content))
+	created, err := store.CreateSession(uploadutil.CreateSessionParams{
+		Destination: dest,
+		RootDir:     "album",
+		FileName:    "photo.jpg",
+		TotalSize:   total,
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	_, err = writeChunk(store, dest, created.SessionID, 0, total-1, total, content)
+	if err == nil || errors.Is(err, vfs.ErrConflict) {
+		t.Fatalf("commit into a blocked directory returned %v, want a plain I/O error", err)
+	}
+	if got := stagedCount(t, store.StagingDir()); got != 1 {
+		t.Fatalf("staging dir holds %d entries after a transient failure, want 1", got)
+	}
+
+	if err := os.Remove(blocker); err != nil {
+		t.Fatalf("unblock: %v", err)
+	}
+	if _, err := writeChunk(store, dest, created.SessionID, 0, total-1, total, content); err != nil {
+		t.Fatalf("retrying the last chunk: %v", err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(root, "album", "photo.jpg")); !bytes.Equal(got, content) {
+		t.Errorf("committed file is %q, want %q", got, content)
+	}
+	if got := stagedCount(t, store.StagingDir()); got != 0 {
+		t.Errorf("staging dir still holds %d entries after the retried commit", got)
+	}
+}
+
+func TestCloseRemovesEveryStagedFile(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, _ := newTestDestination(t)
+	for _, name := range []string{"a.bin", "b.bin"} {
+		id := openSession(t, store, dest, name, 1024)
+		if _, err := writeChunk(store, dest, id, 0, 511, 1024, make([]byte, 512)); err != nil {
+			t.Fatalf("chunk: %v", err)
+		}
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if got := stagedCount(t, store.StagingDir()); got != 0 {
+		t.Errorf("close left %d staged file(s) behind", got)
 	}
 }
 

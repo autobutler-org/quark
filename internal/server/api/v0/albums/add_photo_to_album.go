@@ -56,9 +56,9 @@ func addPhotoToAlbum(c *gin.Context) *serverutil.Response {
 		return serverutil.NotFound(errNoAccess)
 	}
 
-	album, err := deps.Database().Queries.GetAlbum(context.Background(), id)
+	album, err := deps.Database().Queries.GetAlbum(context.Background(), db.GetAlbumParams{ID: id, UserID: callerID(c)})
 	if err != nil {
-		return serverutil.NotFound(errors.New("album not found"))
+		return serverutil.NotFound(errAlbumNotFound)
 	}
 	if resp := forbidSystemAlbum(album); resp != nil {
 		return resp

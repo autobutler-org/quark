@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -44,6 +45,9 @@ var (
 	// ErrSourceNotFound is returned when the source is missing or is not a
 	// readable video.
 	ErrSourceNotFound = errors.New("video not found or not readable")
+	// ErrCreatorForbidden fails a job whose creator can no longer read the
+	// source or write its folder (#1979).
+	ErrCreatorForbidden = errors.New("the account that queued this job can no longer read the video or save files in its folder")
 )
 
 // Params is what a transcode job stores. Paths are resolved again every time
@@ -64,6 +68,9 @@ type EnqueueParams struct {
 	Queue   *jobutil.Queue
 	Storage *storageutil.StorageService
 	Params  Params
+	// UserID is the account queueing the transcode, which the job runs as. 0
+	// records none.
+	UserID int64
 }
 
 // EnqueueResult carries the queued job.
@@ -97,6 +104,7 @@ func Enqueue(ctx context.Context, params EnqueueParams) (EnqueueResult, error) {
 			Format:  params.Params.Format,
 			Quality: params.Params.Quality,
 		},
+		UserID: params.UserID,
 	})
 	if err != nil {
 		return EnqueueResult{}, err
@@ -107,6 +115,9 @@ func Enqueue(ctx context.Context, params EnqueueParams) (EnqueueResult, error) {
 // NewHandlerParams configures NewHandler.
 type NewHandlerParams struct {
 	Storage *storageutil.StorageService
+	// Database holds the accounts and access rows a job's creator is checked
+	// against. A job with a creator fails without one.
+	Database *db.DatabaseSqlc
 	// EventBus receives the upload event for a finished output. Nil publishes
 	// nothing.
 	EventBus *eventbus.Bus
@@ -118,14 +129,18 @@ type NewHandlerParams struct {
 // lanes. Run writes the output into the device data dir's tmp/transcode-jobs,
 // outside the files tree, moves it beside the source on success without
 // replacing any file, removes it on failure or cancel, and publishes the same
-// upload event a new file does. Validate refuses a retry whose source no
-// longer exists, and Lane probes the source to choose between the lanes.
+// upload event a new file does. Run acts as the account that queued the job:
+// it needs read on the source and write on its folder when it starts and again
+// just before the output lands, fails with ErrCreatorForbidden or
+// accessutil.ErrCreatorInactive otherwise, and makes that account the owner of
+// the output. Validate refuses a retry whose source no longer exists, and Lane
+// probes the source to choose between the lanes.
 func NewHandler(params NewHandlerParams) jobutil.Handler {
 	transcode := params.Transcode
 	if transcode == nil {
 		transcode = videoutil.Transcode
 	}
-	h := handler{storage: params.Storage, bus: params.EventBus, transcode: transcode}
+	h := handler{storage: params.Storage, database: params.Database, bus: params.EventBus, transcode: transcode}
 	return jobutil.Handler{
 		Run:      h.run,
 		Validate: h.validate,

@@ -138,6 +138,59 @@ func (q *Queries) ListAccountsMissingHome(ctx context.Context) ([]ListAccountsMi
 	return items, nil
 }
 
+const listGroupsMissingFolder = `-- name: ListGroupsMissingFolder :many
+SELECT
+    id,
+    name
+FROM
+    groups
+WHERE
+    NOT EXISTS (
+        SELECT
+            1
+        FROM
+            path_access
+        WHERE
+            path_access.group_id = groups.id
+            AND path_access.device_serial = ''
+            AND path_access.rel_path = 'groups/' || groups.name
+    )
+ORDER BY
+    id
+`
+
+type ListGroupsMissingFolderRow struct {
+	ID   int64
+	Name string
+}
+
+// ListGroupsMissingFolder names every group with no row of its own on its
+// folder, groups/<name> on the internal device, which the startup repair then
+// grants (#2016). Like ListAccountsMissingHome it keys on the row rather than
+// the directory, and it spells the path the way grouputil does.
+func (q *Queries) ListGroupsMissingFolder(ctx context.Context) ([]ListGroupsMissingFolderRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGroupsMissingFolder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListGroupsMissingFolderRow
+	for rows.Next() {
+		var i ListGroupsMissingFolderRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPathAccessForUser = `-- name: ListPathAccessForUser :many
 SELECT
     device_serial,

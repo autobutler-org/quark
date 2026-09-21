@@ -64,8 +64,9 @@ INSERT INTO photo_albums (id, name, parent_id, smart_type) VALUES
 		t.Fatalf("seed: %v", err)
 	}
 
-	if err := m.Up(); err != nil {
-		t.Fatalf("migrate up: %v", err)
+	// Stop at 008: 014 gives albums an owner and deletes them when there is none.
+	if err := m.Migrate(uniqueAlbumNamesVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", uniqueAlbumNamesVersion, err)
 	}
 
 	want := map[int64]string{
@@ -166,9 +167,11 @@ func TestMigrationsApplyCleanly(t *testing.T) {
 	}
 
 	columns := map[string][]string{
-		"users":        {"is_admin", "status"},
-		"sessions":     {"last_used_at"},
-		"photo_hashes": {"dhash", "content_hash"},
+		"users":           {"is_admin", "status"},
+		"sessions":        {"last_used_at"},
+		"photo_hashes":    {"dhash", "content_hash"},
+		"photo_albums":    {"user_id"},
+		"photo_favorites": {"user_id"},
 	}
 	for table, names := range columns {
 		for _, name := range names {
@@ -308,5 +311,219 @@ func TestGroupNameNocaseMigration(t *testing.T) {
 	}
 	if _, err := conn.Exec(`INSERT INTO groups (name) VALUES ('family')`); err != nil {
 		t.Errorf("family still refused after the down migration: %v", err)
+	}
+}
+
+// migrateTo opens a database and applies migrations up to version.
+func migrateTo(t *testing.T, version uint) (*sql.DB, *migrate.Migrate) {
+	t.Helper()
+	conn, err := sql.Open("sqlite", DSN(filepath.Join(t.TempDir(), "quark.db")))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	migrationSource, err := newMigrationSource()
+	if err != nil {
+		t.Fatalf("source: %v", err)
+	}
+	driver, err := sqlite.WithInstance(conn, &sqlite.Config{})
+	if err != nil {
+		t.Fatalf("driver: %v", err)
+	}
+	m, err := migrate.NewWithInstance("iofs", migrationSource, "sqlite", driver)
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := m.Migrate(version); err != nil {
+		t.Fatalf("migrate to %d: %v", version, err)
+	}
+	return conn, m
+}
+
+// count runs a COUNT query.
+func count(t *testing.T, conn *sql.DB, query string, args ...any) int {
+	t.Helper()
+	var n int
+	if err := conn.QueryRow(query, args...).Scan(&n); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+	return n
+}
+
+// jobOwnerVersion is 013_job_owner, the migration that records who queued a
+// job (#1979).
+const jobOwnerVersion = 13
+
+// TestJobOwnerMigration leaves existing jobs with no owner, deletes an
+// account's jobs with it, and rolls back and forward again keeping every row.
+func TestJobOwnerMigration(t *testing.T) {
+	conn, m := migrateTo(t, jobOwnerVersion-1)
+	if _, err := conn.Exec(`
+INSERT INTO users (id, username, password_hash, recovery_phrase_hash) VALUES (1, 'bob', 'h', 'r'), (2, 'carol', 'h', 'r');
+INSERT INTO jobs (id, kind, name, status, params, lane, error) VALUES
+	(1, 'video-transcode', 'old', 'failed', '{"relPath":"a.mkv"}', 'encode', 'boom'),
+	(2, 'video-transcode', 'older', 'completed', '{}', 'copy', '');
+`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(jobOwnerVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", jobOwnerVersion, err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM jobs WHERE user_id IS NULL`); n != 2 {
+		t.Errorf("existing jobs with no owner = %d, want 2", n)
+	}
+	if _, err := conn.Exec(`INSERT INTO jobs (kind, name, user_id) VALUES ('video-transcode', 'nobody', 99)`); err == nil {
+		t.Error("a job owned by a missing account was accepted")
+	}
+	if _, err := conn.Exec(`
+INSERT INTO jobs (id, kind, name, user_id) VALUES (3, 'video-transcode', 'bob''s', 1), (4, 'video-transcode', 'carol''s', 2);
+DELETE FROM users WHERE id = 1;`); err != nil {
+		t.Fatalf("delete account: %v", err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM jobs WHERE id = 3`); n != 0 {
+		t.Error("a deleted account's job was kept")
+	}
+
+	// Down, up, and down and up once more.
+	for range 2 {
+		if err := m.Migrate(jobOwnerVersion - 1); err != nil {
+			t.Fatalf("roll back to %d: %v", jobOwnerVersion-1, err)
+		}
+		if n := count(t, conn, `SELECT COUNT(*) FROM jobs WHERE id IN (1, 2, 4)`); n != 3 {
+			t.Errorf("jobs after the down migration = %d, want 3", n)
+		}
+		if n := count(t, conn, `SELECT COUNT(*) FROM jobs WHERE id = 1 AND status = 'failed' AND error = 'boom' AND lane = 'encode'`); n != 1 {
+			t.Error("the down migration changed a job's columns")
+		}
+		if n := count(t, conn, `SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name = 'user_id'`); n != 0 {
+			t.Error("jobs.user_id is still there after the down migration")
+		}
+		if n := count(t, conn, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_jobs_status_id'`); n != 1 {
+			t.Error("idx_jobs_status_id is missing after the down migration")
+		}
+		if err := m.Migrate(jobOwnerVersion); err != nil {
+			t.Fatalf("migrate to %d again: %v", jobOwnerVersion, err)
+		}
+		if n := count(t, conn, `SELECT COUNT(*) FROM jobs WHERE user_id IS NULL`); n != 3 {
+			t.Errorf("jobs after migrating up again = %d, want 3 with no owner", n)
+		}
+	}
+	if _, err := conn.Exec(`INSERT INTO jobs (kind, name) VALUES ('video-transcode', 'new')`); err != nil {
+		t.Fatalf("insert after the round trip: %v", err)
+	}
+	if n := count(t, conn, `SELECT MAX(id) FROM jobs`); n != 5 {
+		t.Errorf("new job id = %d, want 5: the rebuild must not reuse ids", n)
+	}
+}
+
+// perUserPhotosVersion is 014_per_user_photos, the migration that gives
+// favorites and albums an owner (#1912).
+const perUserPhotosVersion = 14
+
+// TestPerUserPhotosMigration gives existing favorites and albums to the oldest
+// admin, lets two accounts then hold the same album name, and rolls back to
+// the oldest admin's rows.
+func TestPerUserPhotosMigration(t *testing.T) {
+	conn, m := migrateTo(t, perUserPhotosVersion-1)
+	if _, err := conn.Exec(`
+INSERT INTO users (id, username, password_hash, recovery_phrase_hash, created_at, is_admin) VALUES
+	(1, 'member',  'h', 'r', '2024-01-01 00:00:00', 0), -- oldest, but not an admin
+	(2, 'late',    'h', 'r', '2024-03-01 00:00:00', 1),
+	(3, 'founder', 'h', 'r', '2024-02-01 00:00:00', 1), -- oldest admin
+	(4, 'tie',     'h', 'r', '2024-02-01 00:00:00', 1); -- same time, higher id
+INSERT INTO photo_albums (id, name, parent_id, smart_type) VALUES
+	(1, 'Favorites', NULL, 'favorites'),
+	(2, 'Trips',     NULL, NULL),
+	(3, 'Japan',     2,    NULL);
+INSERT INTO photo_album_items (album_id, device_serial, rel_path) VALUES (1, '', 'a.jpg'), (3, '', 'b.jpg');
+INSERT INTO photo_favorites (device_serial, rel_path) VALUES ('', 'a.jpg'), ('USB', 'c.jpg');
+`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(perUserPhotosVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", perUserPhotosVersion, err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM photo_albums WHERE user_id = 3`); n != 3 {
+		t.Errorf("albums owned by the oldest admin = %d, want 3", n)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM photo_album_items`); n != 2 {
+		t.Errorf("album items after migration = %d, want both kept", n)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM photo_favorites WHERE user_id = 3`); n != 2 {
+		t.Errorf("favorites owned by the oldest admin = %d, want 2", n)
+	}
+
+	// Another account can hold its own Favorites album, root Trips and the
+	// same favorite; the same account still cannot hold two.
+	for _, stmt := range []string{
+		`INSERT INTO photo_albums (id, name, smart_type, user_id) VALUES (4, 'Favorites', 'favorites', 1)`,
+		`INSERT INTO photo_albums (id, name, user_id) VALUES (5, 'trips', 1)`,
+		`INSERT INTO photo_favorites (user_id, device_serial, rel_path) VALUES (1, '', 'a.jpg')`,
+	} {
+		if _, err := conn.Exec(stmt); err != nil {
+			t.Errorf("%s: %v", stmt, err)
+		}
+	}
+	for _, stmt := range []string{
+		`INSERT INTO photo_albums (name, smart_type, user_id) VALUES ('Favorites 2', 'favorites', 3)`,
+		`INSERT INTO photo_albums (name, user_id) VALUES ('TRIPS', 3)`,
+		`INSERT INTO photo_favorites (user_id, device_serial, rel_path) VALUES (3, '', 'a.jpg')`,
+		`INSERT INTO photo_favorites (user_id, rel_path) VALUES (99, 'x.jpg')`,
+	} {
+		if _, err := conn.Exec(stmt); err == nil {
+			t.Errorf("%s: accepted, want a constraint failure", stmt)
+		}
+	}
+
+	// Deleting an account deletes its favorites and albums.
+	if _, err := conn.Exec(`INSERT INTO users (id, username, password_hash, recovery_phrase_hash) VALUES (5, 'gone', 'h', 'r');
+INSERT INTO photo_albums (name, user_id) VALUES ('Gone', 5);
+INSERT INTO photo_favorites (user_id, rel_path) VALUES (5, 'g.jpg');
+DELETE FROM users WHERE id = 5;`); err != nil {
+		t.Fatalf("delete account: %v", err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM photo_albums WHERE name = 'Gone'`) +
+		count(t, conn, `SELECT COUNT(*) FROM photo_favorites WHERE rel_path = 'g.jpg'`); n != 0 {
+		t.Errorf("rows left after deleting their account = %d, want 0", n)
+	}
+
+	if err := m.Migrate(perUserPhotosVersion - 1); err != nil {
+		t.Fatalf("roll back to %d: %v", perUserPhotosVersion-1, err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM photo_albums`); n != 3 {
+		t.Errorf("albums after the down migration = %d, want the oldest admin's 3", n)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM photo_favorites`); n != 2 {
+		t.Errorf("favorites after the down migration = %d, want 2 with the duplicate folded", n)
+	}
+	if _, err := conn.Exec(`INSERT INTO photo_albums (name) VALUES ('TRIPS')`); err == nil {
+		t.Error("a second root TRIPS was accepted after the down migration")
+	}
+}
+
+// TestPerUserPhotosMigrationWithoutAdmin deletes favorites and albums nobody
+// can own instead of failing.
+func TestPerUserPhotosMigrationWithoutAdmin(t *testing.T) {
+	conn, m := migrateTo(t, perUserPhotosVersion-1)
+	if _, err := conn.Exec(`
+INSERT INTO photo_albums (id, name, parent_id) VALUES (1, 'Trips', NULL), (2, 'Japan', 1);
+INSERT INTO photo_album_items (album_id, device_serial, rel_path) VALUES (2, '', 'b.jpg');
+INSERT INTO photo_favorites (rel_path) VALUES ('a.jpg');
+`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(perUserPhotosVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", perUserPhotosVersion, err)
+	}
+	for _, table := range []string{"photo_albums", "photo_album_items", "photo_favorites"} {
+		if n := count(t, conn, `SELECT COUNT(*) FROM `+table); n != 0 {
+			t.Errorf("%s rows with no admin = %d, want 0", table, n)
+		}
+	}
+	if err := m.Migrate(perUserPhotosVersion - 1); err != nil {
+		t.Fatalf("roll back to %d: %v", perUserPhotosVersion-1, err)
 	}
 }

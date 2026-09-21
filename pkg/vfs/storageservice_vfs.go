@@ -32,7 +32,7 @@ func serialSet(serials []string) map[string]bool {
 // the Docs page, Recent files, filename search, folder download — only ever
 // saw files sitting at the storage root (#1605).
 func (v *StorageServiceVFS) List(ctx context.Context, path string, filter *ListFilter) ([]FileInfo, error) {
-	devices, err := v.svc.GetManagedDevices()
+	devices, err := v.svc.GetManagedRoots()
 	if err != nil {
 		return nil, err
 	}

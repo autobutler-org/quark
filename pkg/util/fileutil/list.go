@@ -58,7 +58,7 @@ func ListFiles(params ListFilesParams) (ListFilesResult, error) {
 		return ListFilesResult{Files: visibleFiles(params.Access, files)}, nil
 	}
 
-	devices, err := params.Storage.GetManagedDevices()
+	devices, err := params.Storage.GetManagedRoots()
 	if err != nil {
 		return ListFilesResult{}, err
 	}
@@ -248,7 +248,7 @@ func ListRecent(params ListRecentParams) (ListRecentResult, error) {
 	}
 
 	// Fallback: walk devices via StorageService.
-	devices, err := params.Storage.GetManagedDevices()
+	devices, err := params.Storage.GetManagedRoots()
 	if err != nil {
 		return ListRecentResult{}, err
 	}
@@ -331,7 +331,7 @@ type ListByTypeResult struct {
 
 // ListByType returns every file whose type matches, sorted newest-first.
 func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
-	devices, err := params.Storage.GetManagedDevices()
+	devices, err := params.Storage.GetManagedRoots()
 	if err != nil {
 		return ListByTypeResult{}, err
 	}
@@ -468,7 +468,7 @@ func searchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 	// name and path come from the managed device that owns that directory.
 	devicesByFilesDir := make(map[string]storageutil.ManagedDevice)
 	if params.Storage != nil {
-		devices, err := params.Storage.GetManagedDevices()
+		devices, err := params.Storage.GetManagedRoots()
 		if err != nil {
 			return SearchFilesResult{}, err
 		}
@@ -542,7 +542,7 @@ func searchFilesVFS(params SearchFilesParams) (SearchFilesResult, error) {
 // searchFilesDiskWalk is the original BFS implementation used as fallback when the
 // in-memory index is unavailable.
 func searchFilesDiskWalk(params SearchFilesParams) (SearchFilesResult, error) {
-	devices, err := params.Storage.GetManagedDevices()
+	devices, err := params.Storage.GetManagedRoots()
 	if err != nil {
 		return SearchFilesResult{}, err
 	}

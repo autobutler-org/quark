@@ -934,10 +934,29 @@ test/probe: setup/probe generate/frontend ## Build+install debug APK with ProbeA
 	probe test tests/photos.probe
 
 
-PERF_PORT ?= 8080
+# Not 8080: that is where the dev backend listens.
+PERF_PORT ?= 18080
 PERF_BASE_URL ?= http://127.0.0.1:$(PERF_PORT)
-PERF_SUMMARY_WRK_DIRS ?= test-results/performance
-PERF_FIXTURE_TARGET_DIR ?= $(HOME)/quark/data/files
+PERF_SUMMARY_WRK_DIRS ?= test-results/performance/load test-results/performance/stress
+# Fails the stress profile when a files list or stat scenario's p99 is over
+# this. It catches a request path that has stopped answering, not a few tens of
+# milliseconds of drift: a shared CI runner puts the nonadmin listing around
+# 350ms on a bad day with no code change at all.
+# On macOS the every-10s device rescan shells out to diskutil and stalls
+# requests for seconds, so a local run reports timeouts that Linux does not.
+PERF_P99_BUDGET_MS ?= 400
+# The load profile runs each scenario for 10s rather than 30s, so one slow
+# moment moves its p99 much further: the same runner has answered anywhere from
+# 175ms to 800ms for a scenario the stress profile puts under 400ms. It gets a
+# budget of its own, loose enough that only a stall trips it.
+PERF_LOAD_P99_BUDGET_MS ?= 1000
+# The server's data dir relative to HOME (see storageutil.GetDataDirForDevice).
+ifeq ($(UNAME_S),Darwin)
+PERF_DATA_DIR := Library/Application Support/Quark/data
+else
+PERF_DATA_DIR := quark/data
+endif
+PERF_FIXTURE_TARGET_DIR ?= $(HOME)/$(PERF_DATA_DIR)/files
 
 .PHONY: test/perf/generate-files
 test/perf/generate-files: ## Generate file fixtures under a target files directory for performance testing
@@ -945,35 +964,53 @@ test/perf/generate-files: ## Generate file fixtures under a target files directo
 
 .PHONY: test/perf/load
 test/perf/load: build/backend ## Run local wrk load profile against a temporary local backend
-	mkdir -p test-results/performance
-	$(MAKE) test/perf/generate-files PERF_FIXTURE_TARGET_DIR="$(PERF_FIXTURE_TARGET_DIR)"
-	PORT=$(PERF_PORT) QUARK_INSECURE=true ./build/quark serve > test-results/performance/server-load.log 2>&1 &
+	WORK_DIR=test-results/performance/load
+	rm -rf "$$WORK_DIR"
+	mkdir -p "$$WORK_DIR"
+	if (exec 3<>/dev/tcp/127.0.0.1/$(PERF_PORT)) 2>/dev/null; then
+		echo "port $(PERF_PORT) is already in use; stop whatever listens there or pass PERF_PORT=<free port>" >&2
+		exit 1
+	fi
+	PERF_HOME="$$(mktemp -d)"
+	trap 'kill $$SERVER_PID 2>/dev/null || true; wait $$SERVER_PID 2>/dev/null || true; rm -rf "$$PERF_HOME"' EXIT
+	PERF_FIXTURE_TARGET_DIR="$$PERF_HOME/$(PERF_DATA_DIR)/files"
+	$(MAKE) test/perf/generate-files PERF_FIXTURE_TARGET_DIR="$$PERF_FIXTURE_TARGET_DIR"
+	HOME="$$PERF_HOME" PORT=$(PERF_PORT) QUARK_INSECURE=true ./build/quark serve > "$$WORK_DIR/server.log" 2>&1 &
 	SERVER_PID=$$!
-	trap 'kill $$SERVER_PID 2>/dev/null || true' EXIT
+	export WORK_DIR PERF_FIXTURE_TARGET_DIR
 	export QUARK_BASE_URL=$(PERF_BASE_URL)
-	export PERF_FIXTURE_TARGET_DIR="$(PERF_FIXTURE_TARGET_DIR)"
-	export TEST_DURATION_THREADS=2
-	export TEST_DURATION_CONCURRENCY=15
-	export TEST_DURATION_DURATION=10s
+	export TEST_THREADS=2
+	export TEST_CONCURRENCY=15
+	export TEST_DURATION=10s
 	export TEST_UPLOAD_CONCURRENCY=4
 	export TEST_UPLOAD_COUNT=8
 	./test/performance/test.sh
+	python3 ./test/performance/render_summary.py --wrk-dir "$$WORK_DIR" --p99-budget-ms $(PERF_LOAD_P99_BUDGET_MS)
 
 .PHONY: test/perf/stress
 test/perf/stress: build/backend ## Run local wrk stress profile against a temporary local backend
-	mkdir -p test-results/performance
-	$(MAKE) test/perf/generate-files PERF_FIXTURE_TARGET_DIR="$(PERF_FIXTURE_TARGET_DIR)"
-	PORT=$(PERF_PORT) QUARK_INSECURE=true ./build/quark serve > test-results/performance/server-stress.log 2>&1 &
+	WORK_DIR=test-results/performance/stress
+	rm -rf "$$WORK_DIR"
+	mkdir -p "$$WORK_DIR"
+	if (exec 3<>/dev/tcp/127.0.0.1/$(PERF_PORT)) 2>/dev/null; then
+		echo "port $(PERF_PORT) is already in use; stop whatever listens there or pass PERF_PORT=<free port>" >&2
+		exit 1
+	fi
+	PERF_HOME="$$(mktemp -d)"
+	trap 'kill $$SERVER_PID 2>/dev/null || true; wait $$SERVER_PID 2>/dev/null || true; rm -rf "$$PERF_HOME"' EXIT
+	PERF_FIXTURE_TARGET_DIR="$$PERF_HOME/$(PERF_DATA_DIR)/files"
+	$(MAKE) test/perf/generate-files PERF_FIXTURE_TARGET_DIR="$$PERF_FIXTURE_TARGET_DIR"
+	HOME="$$PERF_HOME" PORT=$(PERF_PORT) QUARK_INSECURE=true ./build/quark serve > "$$WORK_DIR/server.log" 2>&1 &
 	SERVER_PID=$$!
-	trap 'kill $$SERVER_PID 2>/dev/null || true' EXIT
+	export WORK_DIR PERF_FIXTURE_TARGET_DIR
 	export QUARK_BASE_URL=$(PERF_BASE_URL)
-	export PERF_FIXTURE_TARGET_DIR="$(PERF_FIXTURE_TARGET_DIR)"
-	export TEST_DURATION_THREADS=4
-	export TEST_DURATION_CONCURRENCY=50
-	export TEST_DURATION_DURATION=30s
+	export TEST_THREADS=4
+	export TEST_CONCURRENCY=50
+	export TEST_DURATION=30s
 	export TEST_UPLOAD_CONCURRENCY=10
 	export TEST_UPLOAD_COUNT=20
 	./test/performance/test.sh
+	python3 ./test/performance/render_summary.py --wrk-dir "$$WORK_DIR" --p99-budget-ms $(PERF_P99_BUDGET_MS)
 
 .PHONY: test/perf/summary
 test/perf/summary: ## Render the Markdown performance summary

@@ -80,7 +80,7 @@ const docTemplate = `{
                 }
             },
             "put": {
-                "description": "Grants one active account or existing group read, write or owner on a path, replacing the level it had there, and returns the path's grants as they now stand. Only an owner of the path or an admin may share it. A non-admin can't change their own owner row on the path. Publishes access_changed for the path.",
+                "description": "Grants one active account or existing group read, write or owner on a path, replacing the level it had there, and returns the path's grants as they now stand. Only an owner of the path or an admin may share it. A non-admin can't change their own owner row on the path. Nobody, admins included, may share the users or groups folder itself on the internal device. Publishes access_changed for the path.",
                 "consumes": [
                     "application/json"
                 ],
@@ -110,7 +110,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "a path in the trash, not exactly one account or group, a level other than read, write or owner, or the caller's own owner row",
+                        "description": "a path in the trash, not exactly one account or group, a level other than read, write or owner, the caller's own owner row, or the users or groups folder itself",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -210,6 +210,38 @@ const docTemplate = `{
                 }
             }
         },
+        "/access/mine": {
+            "get": {
+                "description": "Returns the root of each ad-hoc share the signed-in account holds, with the account or group that owns it, for the file browser's Shared with me shortcut. Left out are their own home and its contents, which My files opens; every group folder and its contents, which Groups opens; the users and groups folders themselves; the device root; the trash; and a grant inside another grant. An admin bypasses the access table, so their answer is empty and they reach everything through All files.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "access"
+                ],
+                "summary": "List what has been shared with you",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/accessutil.ListSharedWithMeResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/access/principals": {
             "get": {
                 "description": "Returns every active account by username and every group, the built-in everyone group first. Any signed-in account may ask, so each account carries only its id and username.",
@@ -244,7 +276,7 @@ const docTemplate = `{
         },
         "/admin/approve/{username}": {
             "put": {
-                "description": "Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing home of that name leaves the request pending rather than making an account that cannot use it. Admin-only.",
+                "description": "Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing folder of that name under users/ becomes the home. Admin-only.",
                 "tags": [
                     "admin"
                 ],
@@ -276,12 +308,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "no account request has that username",
-                        "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
-                        }
-                    },
-                    "409": {
-                        "description": "a folder with that name already exists",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -551,7 +577,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Creates an empty group. The name is trimmed, has 1 to 64 characters and no control characters, and is unique ignoring case. Publishes account_changed. Admin-only.",
+                "description": "Creates an empty group and its folder in groups on the internal device, named after the group, with one grant giving the group write there; an existing folder of that name is adopted. The name is trimmed, has 1 to 64 characters, no control characters or slashes, isn't . or .., and is unique ignoring case. Publishes account_changed and new_folder. Admin-only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -615,7 +641,7 @@ const docTemplate = `{
         },
         "/admin/groups/{id}": {
             "put": {
-                "description": "Renames a group under the same rules a new name follows; a group may take its own name in another case. The everyone group can't be renamed. The response lists no members. Publishes account_changed. Admin-only.",
+                "description": "Renames a group under the same rules a new name follows; a group may take its own name in another case. Its folder in groups is renamed to match as an ordinary move does, carrying its shares, favorites and album items, and publishing move and access_changed. The everyone group can't be renamed. The response lists no members. Publishes account_changed. Admin-only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -676,7 +702,7 @@ const docTemplate = `{
                         }
                     },
                     "409": {
-                        "description": "a group with that name already exists",
+                        "description": "a group with that name already exists, or another folder in groups already has the new name",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -690,7 +716,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Deletes a group, its memberships and every share made to it, so its members lose what only the group gave them. The everyone group can't be deleted. Publishes access_changed with no path. Admin-only.",
+                "description": "Deletes a group, its memberships and every share made to it, so its members lose what only the group gave them. Its folder in groups and its content stay, admin-only from then on. The everyone group can't be deleted. Publishes access_changed with no path. Admin-only.",
                 "tags": [
                     "admin"
                 ],
@@ -956,7 +982,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Creates an active account with the given password. The admin never sees its recovery phrase: the account gets one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it; an existing home of that name is refused rather than handed over, while a top-level folder of that name does not collide. Admin-only.",
+                "description": "Creates an active account with the given password. The admin never sees its recovery phrase: the account gets one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it. An existing folder of that name under users/ becomes the home, and a top-level folder of that name does not collide. Admin-only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1004,7 +1030,7 @@ const docTemplate = `{
                         }
                     },
                     "409": {
-                        "description": "that username is taken, or a folder with that name already exists",
+                        "description": "that username is taken",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1085,7 +1111,7 @@ const docTemplate = `{
         },
         "/albums": {
             "get": {
-                "description": "Returns all photo albums as a flat list. Use ?tree=true to get a nested tree.",
+                "description": "Returns the caller's own photo albums as a flat list, creating their Favorites album on first use. Admins see only their own albums too. Use ?tree=true to get a nested tree.",
                 "produces": [
                     "application/json"
                 ],
@@ -1120,7 +1146,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Creates a new photo album, optionally nested under a parent. The name cannot contain / and must be unique among its siblings ignoring case; root albums, the system Favorites album included, are siblings of each other.",
+                "description": "Creates a photo album owned by the caller, optionally nested under one of the caller's albums. The name cannot contain / and must be unique among its siblings ignoring case; the caller's root albums, their Favorites album included, are siblings of each other.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1150,7 +1176,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request: missing name, a / in the name, or parent not found",
+                        "description": "Bad Request: missing name, a / in the name, or parent not found among the caller's albums",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1178,7 +1204,7 @@ const docTemplate = `{
         },
         "/albums/{id}": {
             "get": {
-                "description": "Returns a single album with its item count and direct children.",
+                "description": "Returns one of the caller's albums with its item count and direct children.",
                 "produces": [
                     "application/json"
                 ],
@@ -1209,7 +1235,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Not Found: no album of the caller's has that id",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1223,7 +1249,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Deletes an album and all its children (cascades). Does not delete photos from disk.",
+                "description": "Deletes one of the caller's albums and all its children (cascades). Does not delete photos from disk.",
                 "produces": [
                     "application/json"
                 ],
@@ -1259,6 +1285,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "404": {
+                        "description": "Not Found: no album of the caller's has that id",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -1270,7 +1302,7 @@ const docTemplate = `{
         },
         "/albums/{id}/items": {
             "get": {
-                "description": "Returns all photo items (pointers) in the given album.",
+                "description": "Returns the photo items (pointers) the caller can read in one of the caller's albums.",
                 "produces": [
                     "application/json"
                 ],
@@ -1299,6 +1331,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found: no album of the caller's has that id",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1423,6 +1461,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "404": {
+                        "description": "Not Found: no album of the caller's has that id",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -1434,7 +1478,7 @@ const docTemplate = `{
         },
         "/albums/{id}/move": {
             "patch": {
-                "description": "Changes the parent of an album. Pass null parentId to move to root. The new parent must not already hold an album with the same name ignoring case; root albums, the system Favorites album included, are siblings of each other.",
+                "description": "Changes the parent of one of the caller's albums. Pass null parentId to move to root. The new parent must be the caller's own and must not already hold an album with the same name ignoring case; the caller's root albums, their Favorites album included, are siblings of each other.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1471,7 +1515,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad Request: invalid id or body, or parent not found among the caller's albums",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1483,7 +1527,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Not Found: no album of the caller's has that id",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1505,7 +1549,7 @@ const docTemplate = `{
         },
         "/albums/{id}/rename": {
             "patch": {
-                "description": "Updates the name of an existing album. The name cannot contain / and must be unique among the album's siblings ignoring case; changing only the case of the album's own name is allowed.",
+                "description": "Updates the name of one of the caller's albums. The name cannot contain / and must be unique among the album's siblings ignoring case; changing only the case of the album's own name is allowed.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1554,7 +1598,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Not Found: no album of the caller's has that id",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1984,7 +2028,7 @@ const docTemplate = `{
         },
         "/auth/setup": {
             "post": {
-                "description": "Creates the owner account, with a home under users/ on the internal device that it owns. Can only be called once.",
+                "description": "Creates the owner account, with a home under users/ on the internal device that it owns; an existing folder of that name under users/ becomes the home. Can only be called once.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2898,7 +2942,7 @@ const docTemplate = `{
         },
         "/files/upload": {
             "post": {
-                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates.",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -2914,6 +2958,18 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Device serial number to upload to",
                         "name": "serial",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Replace a file of the same name",
+                        "name": "overwrite",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Land under the first free name, e.g. file_(1).txt, when the name is taken",
+                        "name": "keepBoth",
                         "in": "query"
                     },
                     {
@@ -2948,13 +3004,19 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
                     }
                 }
             }
         },
         "/files/upload-session": {
             "post": {
-                "description": "Reserve a session for one file; the bytes follow as chunks on PUT. Needs write access on the directory the file lands in. The session belongs to the caller: it is not found for anyone else.",
+                "description": "Reserve a session for one file; the bytes follow as chunks on PUT. Needs write access on the directory the file lands in. The session belongs to the caller: it is not found for anyone else. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2997,6 +3059,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -3045,7 +3113,7 @@ const docTemplate = `{
                 }
             },
             "put": {
-                "description": "Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A session opened by someone else is not found.",
+                "description": "Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A session opened by someone else is not found. A 409 carrying X-Upload-Offset is a chunk out of step; one without it is a name already in use.",
                 "consumes": [
                     "application/octet-stream"
                 ],
@@ -3135,7 +3203,7 @@ const docTemplate = `{
         },
         "/files/upload/{rootDir}": {
             "post": {
-                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates.",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -3158,6 +3226,18 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Device serial number to upload to",
                         "name": "serial",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Replace a file of the same name",
+                        "name": "overwrite",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Land under the first free name, e.g. file_(1).txt, when the name is taken",
+                        "name": "keepBoth",
                         "in": "query"
                     },
                     {
@@ -3192,6 +3272,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
                     }
                 }
             }
@@ -3218,7 +3304,7 @@ const docTemplate = `{
         },
         "/jobs": {
             "get": {
-                "description": "Returns every job of the requested kinds, newest first, finished ones included. This is the source of truth for job state; the job_* events are a hint to refresh and can be dropped.",
+                "description": "Returns the jobs of the requested kinds the caller may see, newest first, finished ones included. An admin sees every job; anyone else sees the jobs they queued whose file they can still read, with error left blank. This is the source of truth for job state; the job_* events are a hint to refresh and can be dropped.",
                 "produces": [
                     "application/json"
                 ],
@@ -3266,7 +3352,7 @@ const docTemplate = `{
         },
         "/jobs/{id}": {
             "get": {
-                "description": "Returns one background job by id.",
+                "description": "Returns one background job by id. A caller who is not an admin gets only a job they queued whose file they can still read, with error left blank; any other job is 404.",
                 "produces": [
                     "application/json"
                 ],
@@ -3311,7 +3397,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Cancels a pending or running job and returns it, now canceled. A pending job never runs; a running job is stopped and cleans up after itself.",
+                "description": "Cancels a pending or running job and returns it, now canceled. A pending job never runs; a running job is stopped and cleans up after itself. Only the account that queued the job, or an admin, may cancel it; any other caller gets 404.",
                 "produces": [
                     "application/json"
                 ],
@@ -3364,7 +3450,7 @@ const docTemplate = `{
         },
         "/jobs/{id}/retry": {
             "post": {
-                "description": "Resets a failed job to pending so it runs again. It keeps its id and createdAt; progress, error, startedAt, and finishedAt are cleared, and the returned jobId is the same id. A retry whose inputs no longer exist, such as a transcode of a video that was moved or deleted, is refused with 422.",
+                "description": "Resets a failed job to pending so it runs again. It keeps its id and createdAt; progress, error, startedAt, and finishedAt are cleared, and the returned jobId is the same id. Only the account that queued the job, or an admin, may retry it; any other caller gets 404. The job runs as the account that queued it, which must still be active and able to write the folder of the file the job works on, or the retry is refused with 403. A retry whose inputs no longer exist, such as a transcode of a video that was moved or deleted, is refused with 422.",
                 "produces": [
                     "application/json"
                 ],
@@ -3390,6 +3476,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — the account that queued the job can no longer sign in or write the folder",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -3569,7 +3661,7 @@ const docTemplate = `{
         },
         "/photos/favorite": {
             "get": {
-                "description": "Returns whether the specified photo is in the user's favorites. Needs read access on the photo.",
+                "description": "Returns whether the specified photo is in the caller's own favorites. Needs read access on the photo.",
                 "produces": [
                     "application/json"
                 ],
@@ -3620,7 +3712,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Adds the photo to favorites if not already favorited; removes it otherwise. Needs read access on the photo.",
+                "description": "Adds the photo to the caller's own favorites if not already favorited; removes it otherwise. Needs read access on the photo.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3672,7 +3764,7 @@ const docTemplate = `{
         },
         "/photos/favorites": {
             "get": {
-                "description": "Returns all photos the user has favorited, newest first.",
+                "description": "Returns the photos the caller has favorited and can still read, newest first. Every account has its own favorites, admins included.",
                 "produces": [
                     "application/json"
                 ],
@@ -3701,7 +3793,7 @@ const docTemplate = `{
         },
         "/photos/metadata": {
             "get": {
-                "description": "Returns EXIF, file info, and album membership for the specified photo.",
+                "description": "Returns EXIF, file info, and the caller's own favorite state and album membership for the specified photo.",
                 "produces": [
                     "application/json"
                 ],
@@ -4052,6 +4144,317 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/v0_settings.RemoteAccessResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/ssh/enabled": {
+            "put": {
+                "description": "Starts sshd and opens port 22, or stops sshd and closes the port. The choice survives a reboot. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ssh"
+                ],
+                "summary": "Turn SSH access on or off",
+                "parameters": [
+                    {
+                        "description": "Whether SSH access should be on",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_ssh.setSSHEnabledBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "SSH access can't be managed on this Quark",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/ssh/keys": {
+            "post": {
+                "description": "Adds one OpenSSH public key to those allowed to sign in as quark. Options such as command= are dropped. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ssh"
+                ],
+                "summary": "Allow a public key to sign in over SSH",
+                "parameters": [
+                    {
+                        "description": "The public key",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_ssh.addSSHKeyBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/sshutil.Key"
+                        }
+                    },
+                    "400": {
+                        "description": "not an SSH public key",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the key is already allowed, or SSH access can't be managed on this Quark",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Removes the allowed key with the given SHA256 fingerprint. The fingerprint is a query parameter because it can contain a slash. Admin-only.",
+                "tags": [
+                    "ssh"
+                ],
+                "summary": "Stop a public key signing in over SSH",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "SHA256 fingerprint, as SHA256:...",
+                        "name": "fingerprint",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no allowed key has that fingerprint",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "SSH access can't be managed on this Quark",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/ssh/password": {
+            "put": {
+                "description": "Sets the password for the quark login account. Quark does not store it. At least 12 characters, no control characters. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ssh"
+                ],
+                "summary": "Set the SSH login password",
+                "parameters": [
+                    {
+                        "description": "The new password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_ssh.setSSHPasswordBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "too short, too long, or holds control characters",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "SSH access can't be managed on this Quark",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Removes the quark login account's password, so only allowed keys can sign in. Admin-only.",
+                "tags": [
+                    "ssh"
+                ],
+                "summary": "Clear the SSH login password",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "SSH access can't be managed on this Quark",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/ssh/status": {
+            "get": {
+                "description": "Whether SSH access can be managed on this Quark (and why not), whether sshd is running, and the public keys allowed to sign in as quark. Admin-only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ssh"
+                ],
+                "summary": "Get SSH access status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_ssh.sshStatusResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
                         }
                     },
                     "403": {
@@ -4873,7 +5276,7 @@ const docTemplate = `{
         },
         "/videos/metadata": {
             "get": {
-                "description": "Returns duration, resolution, codec, bitrate, framerate, rotation, and album membership for the specified video.",
+                "description": "Returns duration, resolution, codec, bitrate, framerate, rotation, and the caller's own favorite state and album membership for the specified video.",
                 "produces": [
                     "application/json"
                 ],
@@ -4932,7 +5335,7 @@ const docTemplate = `{
         },
         "/videos/transcode": {
             "post": {
-                "description": "Queues a background job that converts the source video into a new file beside it, in any format GET /videos/transcode/formats lists. Original quality keeps the source resolution, and copies the streams without re-encoding when the format's container accepts them; small caps the height at 480 lines. Converting to the source's own format needs small quality. The output is never upscaled and never overwrites a file. Follow the job with GET /jobs/{id} or the job_* events; an upload event announces the output file.",
+                "description": "Queues a background job that converts the source video into a new file beside it, in any format GET /videos/transcode/formats lists. Original quality keeps the source resolution, and copies the streams without re-encoding when the format's container accepts them; small caps the height at 480 lines. Converting to the source's own format needs small quality. The output is never upscaled and never overwrites a file. Follow the job with GET /jobs/{id} or the job_* events; an upload event announces the output file. Needs read access on the video and write access on its folder; the job runs as, and its output is owned by, the caller.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4963,6 +5366,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -5158,6 +5567,17 @@ const docTemplate = `{
                 }
             }
         },
+        "accessutil.ListSharedWithMeResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/accessutil.SharedItem"
+                    }
+                }
+            }
+        },
         "accessutil.PrincipalGroup": {
             "type": "object",
             "properties": {
@@ -5180,6 +5600,26 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "accessutil.SharedItem": {
+            "type": "object",
+            "properties": {
+                "deviceSerial": {
+                    "description": "DeviceSerial names the device; empty is the internal one.",
+                    "type": "string"
+                },
+                "level": {
+                    "description": "Level is read, write or owner.",
+                    "type": "string"
+                },
+                "owner": {
+                    "description": "Owner is the username of the account, or the name of the group, that\nowns the item. It is empty when no owner row covers the path.",
+                    "type": "string"
+                },
+                "relPath": {
                     "type": "string"
                 }
             }
@@ -5423,6 +5863,23 @@ const docTemplate = `{
                 "error": {},
                 "statusCode": {
                     "type": "integer"
+                }
+            }
+        },
+        "sshutil.Key": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "description": "Comment is the text after the key, often user@host. May be empty.",
+                    "type": "string"
+                },
+                "fingerprint": {
+                    "description": "Fingerprint is the SHA256 fingerprint, as ` + "`" + `ssh-keygen -l` + "`" + ` prints it.",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "Type is the key algorithm, such as ssh-ed25519.",
+                    "type": "string"
                 }
             }
         },
@@ -5945,6 +6402,9 @@ const docTemplate = `{
                 "fileName": {
                     "type": "string"
                 },
+                "keepBoth": {
+                    "type": "boolean"
+                },
                 "overwrite": {
                     "type": "boolean"
                 },
@@ -6233,6 +6693,61 @@ const docTemplate = `{
             "properties": {
                 "enabled": {
                     "type": "boolean"
+                }
+            }
+        },
+        "v0_ssh.addSSHKeyBody": {
+            "type": "object",
+            "required": [
+                "key"
+            ],
+            "properties": {
+                "key": {
+                    "description": "Key is one public key line, as in id_ed25519.pub.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_ssh.setSSHEnabledBody": {
+            "type": "object",
+            "required": [
+                "enabled"
+            ],
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "v0_ssh.setSSHPasswordBody": {
+            "type": "object",
+            "required": [
+                "password"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_ssh.sshStatusResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "keys": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sshutil.Key"
+                    }
+                },
+                "reason": {
+                    "description": "Reason is why not, when available is false: unsupported_os,\nnot_service, sshd_missing, helper_missing or no_login_shell.",
+                    "type": "string"
                 }
             }
         },
