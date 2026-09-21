@@ -4,6 +4,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -156,7 +158,9 @@ func TestListArchiveThroughVFS(t *testing.T) {
 
 // --- ZipVFSDir ---
 
-func TestZipVFSDirStoresPathsRelativeToTheFolder(t *testing.T) {
+// The entries sit under one folder named after the archive, so extracting it
+// makes that folder instead of spilling the contents into the current one.
+func TestZipVFSDirWrapsEntriesInTheFolder(t *testing.T) {
 	fsys := vfs.NewMemVFS("files")
 	writeMem(t, fsys, "folder/one.txt", "one")
 	writeMem(t, fsys, "folder/sub/two.txt", "two")
@@ -166,7 +170,7 @@ func TestZipVFSDirStoresPathsRelativeToTheFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	var buf bytes.Buffer
-	if err := fileutil.ZipVFSDir(context.Background(), fsys, "folder", system.Access, &buf); err != nil {
+	if err := fileutil.ZipVFSDir(context.Background(), fsys, "folder", "My Folder", system.Access, &buf); err != nil {
 		t.Fatalf("ZipVFSDir failed: %v", err)
 	}
 
@@ -174,16 +178,53 @@ func TestZipVFSDirStoresPathsRelativeToTheFolder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the zip is unreadable: %v", err)
 	}
-	names := map[string]bool{}
-	for _, f := range zr.File {
-		names[f.Name] = true
+	assertZipNames(t, zr, "My Folder/one.txt", "My Folder/sub/two.txt")
+}
+
+// --- ZipDir ---
+
+func TestZipDirWrapsEntriesInTheFolder(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	if !names["one.txt"] || !names["sub/two.txt"] {
-		t.Errorf("entries should be relative to the folder, got %v", names)
+	for name, content := range map[string]string{"one.txt": "one", "sub/two.txt": "two"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
+
+	var buf bytes.Buffer
+	if err := fileutil.ZipDir(&buf, dir, "My Folder"); err != nil {
+		t.Fatalf("ZipDir failed: %v", err)
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	if err != nil {
+		t.Fatalf("the zip is unreadable: %v", err)
+	}
+	assertZipNames(t, zr, "My Folder/one.txt", "My Folder/sub/two.txt")
 }
 
 // --- helpers ---
+
+// assertZipNames fails unless every file entry in zr is under a folder and
+// the wanted names are among them.
+func assertZipNames(t *testing.T, zr *zip.Reader, want ...string) {
+	t.Helper()
+	names := map[string]bool{}
+	for _, f := range zr.File {
+		names[f.Name] = true
+		if !strings.Contains(strings.TrimSuffix(f.Name, "/"), "/") && !strings.HasSuffix(f.Name, "/") {
+			t.Errorf("entry %q is loose at the top of the archive", f.Name)
+		}
+	}
+	for _, name := range want {
+		if !names[name] {
+			t.Errorf("missing entry %q, got %v", name, names)
+		}
+	}
+}
 
 func registryWith(t *testing.T, fsys vfs.VFS) vfs.Registry {
 	t.Helper()

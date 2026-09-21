@@ -33,7 +33,9 @@ Future<String?> downloadNode({required FileNode node}) {
   return FilesService.saveFile(
     filePath,
     serial: serialOrNull(node.deviceSerial),
-    fileName: itemName,
+    // A folder arrives as a zip archive, so the name offered to the save dialog
+    // needs the extension the folder name does not have.
+    fileName: node.isDir ? '$itemName.zip' : itemName,
   );
 }
 

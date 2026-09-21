@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
@@ -81,11 +82,14 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 
 	switch opened.Kind {
 	case fileutil.DownloadFolder:
-		if err := fileutil.ZipDir(c.Writer, opened.FullPath); err != nil {
+		// Before the first byte of the archive: writing the zip commits the
+		// headers, so a Content-Disposition set afterwards never reached the
+		// client and the download landed with no .zip extension.
+		c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", opened.FileName))
+		c.Writer.Header().Set("Content-Type", "application/octet-stream")
+		if err := fileutil.ZipDir(c.Writer, opened.FullPath, strings.TrimSuffix(opened.FileName, ".zip")); err != nil {
 			return serverutil.InternalServerError(err)
 		}
-		c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", opened.FileName))
-		c.Writer.Header().Set("Content-Type", "application/octet-stream")
 		return nil // response written directly to writer
 
 	case fileutil.DownloadRawJPEG, fileutil.DownloadJPEG:
