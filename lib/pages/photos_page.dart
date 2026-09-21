@@ -612,13 +612,10 @@ class PhotosPageState extends State<PhotosPage>
                     icon: const Icon(QuarkIcons.add_rounded, size: 18),
                     label: const Text('Add Photos'),
                   ),
-                RefreshIconButton(
-                  isRefreshing: isRefreshing,
-                  onPressed: manualRefresh,
-                  tooltip: 'Reload photos',
-                ),
                 const AppThemeToggle(),
               ],
+              onRefresh: manualRefresh,
+              isRefreshing: isRefreshing,
               appBar: c.selectionMode
                   ? PhotosSelectionAppBar(
                       selectedCount: selectedIds.length,

@@ -6,15 +6,24 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  Widget page({List<Widget> actions = const []}) => Scaffold(
+  Widget page({
+    List<Widget> actions = const [],
+    VoidCallback? onRefresh,
+    bool isRefreshing = false,
+    String label = 'Photos',
+  }) => Scaffold(
     appBar: QuarkAppBar(
-      label: 'Photos',
+      label: label,
       icon: QuarkIcons.photo_library_outlined,
       actions: actions,
+      onRefresh: onRefresh,
+      isRefreshing: isRefreshing,
     ),
     drawer: const QuarkDrawer(activeSection: QuarkDrawerSection.photos),
     body: const SizedBox.shrink(),
   );
+
+  Finder refreshButton() => find.byKey(const ValueKey('refresh_button'));
 
   testBothViewports('leads with the brand button and no title', (
     tester,
@@ -66,6 +75,94 @@ void main() {
       bar.leadingWidth,
       greaterThanOrEqualTo(QuarkBrandButton.preferredWidth),
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  // #2254: refresh is a slot beside the brand button, not an action. Every
+  // page used to put it at a different index on the right.
+  testBothViewports('leaves the refresh slot out when onRefresh is null', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(tester, page(), size: size, scaffold: false);
+
+    expect(refreshButton(), findsNothing);
+  });
+
+  testBothViewports('sits between the brand button and the actions', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      page(onRefresh: () {}, actions: const [Text('an action')]),
+      size: size,
+      scaffold: false,
+    );
+
+    final brand = tester.getRect(find.byKey(const ValueKey('brand_button')));
+    final refresh = tester.getRect(refreshButton());
+    expect(refresh.left, greaterThanOrEqualTo(brand.right));
+    expect(
+      refresh.right,
+      lessThanOrEqualTo(tester.getRect(find.text('an action')).left),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testBothViewports('refreshes on tap', (tester, size) async {
+    var refreshes = 0;
+    await pumpAt(
+      tester,
+      page(onRefresh: () => refreshes++),
+      size: size,
+      scaffold: false,
+    );
+
+    await tester.tap(refreshButton());
+    await tester.pump();
+
+    expect(refreshes, 1);
+  });
+
+  testBothViewports('spins and refuses taps while refreshing', (
+    tester,
+    size,
+  ) async {
+    var refreshes = 0;
+    await pumpAt(
+      tester,
+      page(onRefresh: () => refreshes++, isRefreshing: true),
+      size: size,
+      scaffold: false,
+    );
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(tester.widget<IconButton>(refreshButton()).onPressed, isNull);
+
+    await tester.tap(refreshButton(), warnIfMissed: false);
+    await tester.pump();
+
+    expect(refreshes, 0);
+  });
+
+  testWidgets('the refresh slot fits beside the brand button at 360px', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      page(label: 'Photos ' * 20, onRefresh: () {}),
+      size: narrowViewport,
+      scaffold: false,
+    );
+
+    final bar = tester.widget<AppBar>(find.byType(AppBar));
+    expect(
+      bar.leadingWidth,
+      greaterThan(QuarkBrandButton.preferredWidth),
+      reason: 'the slot needs its own width, or the brand button is clipped',
+    );
+    expect(bar.leadingWidth, lessThan(narrowViewport.width));
     expect(tester.takeException(), isNull);
   });
 }

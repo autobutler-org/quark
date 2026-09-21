@@ -37,17 +37,24 @@ class RefreshIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The theme's icon style, not the ambient one: an AppBar swaps in a larger
+    // icon and its own foreground color, which made the app bar's refresh look
+    // unlike the one in the file browser's top bar (#2254).
+    final iconTheme = Theme.of(context).iconTheme;
+    final size = iconTheme.size ?? 20;
     return IconButton(
       key: const ValueKey('refresh_button'),
       tooltip: tooltip,
+      iconSize: size,
+      color: iconTheme.color,
       onPressed: isRefreshing ? null : onPressed,
       icon: isRefreshing
           ? SizedBox(
-              width: 20,
-              height: 20,
+              width: size,
+              height: size,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Theme.of(context).colorScheme.onSurface,
+                color: iconTheme.color,
               ),
             )
           : const Icon(QuarkIcons.refresh),

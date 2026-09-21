@@ -478,6 +478,12 @@ yet rather than a rule violation. Decouple it with the `page-decoupler` agent in
   - Implement `Future<void> refresh()` with the data-fetching logic.
   - Do NOT override `initState` for initial data loads — the mixin calls `refresh()` on startup automatically.
   - Use `manualRefresh()` for button/pull-to-refresh wiring.
+- **An app bar's refresh is a slot, never an action.** Pass `onRefresh: manualRefresh` and
+  `isRefreshing: isRefreshing` to `QuarkAppBar` or `QuarkPageScaffold` and the button lands beside the brand
+  button, where Files has always kept it (#2254). A refresh button in `actions:` fails
+  `test/widgets/app_bar_refresh_placement_test.dart`. A page that only offers refresh in some state passes
+  `onRefresh: condition ? manualRefresh : null`. This is the app bar only — a retry or refresh button inside a
+  page body is unaffected.
 - **All refresh buttons must use `RefreshIconButton`** (`lib/widgets/refresh_icon_button.dart`).
   - Pass `isRefreshing: isRefreshing` (from the mixin) and `onPressed: manualRefresh`.
   - Do NOT use raw `IconButton(icon: Icon(Icons.refresh))` for refresh actions.

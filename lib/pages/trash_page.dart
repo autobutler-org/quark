@@ -234,12 +234,10 @@ class _TrashPageState extends State<TrashPage>
                           ? _controller.enterSelection
                           : null,
                     ),
-                    RefreshIconButton(
-                      isRefreshing: isRefreshing,
-                      onPressed: manualRefresh,
-                    ),
                     const AppThemeToggle(),
                   ],
+                  onRefresh: manualRefresh,
+                  isRefreshing: isRefreshing,
                 ),
           drawer: const AppDrawer(activeSection: QuarkDrawerSection.trash),
           body: Column(

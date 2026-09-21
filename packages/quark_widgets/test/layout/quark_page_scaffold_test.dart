@@ -210,6 +210,89 @@ void main() {
     }
   });
 
+  // #2254: the scaffold hands the refresh slot straight to its default bar,
+  // and the page's own bar takes it over wholesale when there is one.
+  testBothViewports('passes the refresh slot to the default app bar', (
+    tester,
+    size,
+  ) async {
+    var refreshes = 0;
+    await pumpAt(
+      tester,
+      QuarkPageScaffold(
+        title: 'Photos',
+        icon: QuarkIcons.photo_library_outlined,
+        onRefresh: () => refreshes++,
+        actions: const [Text('an action')],
+        body: const Text('the grid'),
+      ),
+      size: size,
+      scaffold: false,
+    );
+
+    final refresh = find.byKey(const ValueKey('refresh_button'));
+    expect(refresh, findsOneWidget);
+    expect(
+      tester.getRect(refresh).left,
+      greaterThanOrEqualTo(
+        tester.getRect(find.byKey(const ValueKey('brand_button'))).right,
+      ),
+    );
+    expect(
+      tester.getRect(refresh).right,
+      lessThanOrEqualTo(tester.getRect(find.text('an action')).left),
+    );
+
+    await tester.tap(refresh);
+    await tester.pump();
+    expect(refreshes, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testBothViewports('shows the spinner while the refresh runs', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      QuarkPageScaffold(
+        title: 'Photos',
+        icon: QuarkIcons.photo_library_outlined,
+        onRefresh: () {},
+        isRefreshing: true,
+        body: const Text('the grid'),
+      ),
+      size: size,
+      scaffold: false,
+    );
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const ValueKey('refresh_button')))
+          .onPressed,
+      isNull,
+    );
+  });
+
+  testBothViewports('has no refresh button without onRefresh', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      const QuarkPageScaffold(
+        title: 'Photos',
+        icon: QuarkIcons.photo_library_outlined,
+        body: Text('the grid'),
+      ),
+      size: size,
+      scaffold: false,
+    );
+
+    expect(find.byKey(const ValueKey('refresh_button')), findsNothing);
+  });
+
   testBothViewports('survives a long title and many actions', (
     tester,
     size,

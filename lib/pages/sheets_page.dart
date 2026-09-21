@@ -7,6 +7,7 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/content_search_service.dart';
+import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
@@ -24,12 +25,12 @@ class SheetsPage extends StatefulWidget {
   State<SheetsPage> createState() => _SheetsPageState();
 }
 
-class _SheetsPageState extends State<SheetsPage> with SafeSetStateMixin {
+class _SheetsPageState extends State<SheetsPage>
+    with SafeSetStateMixin, WidgetsBindingObserver, AutoRefreshMixin {
   List<FileNode> _files = [];
   List<FileNode> _filtered = [];
   List<ContentSearchResult> _contentResults = [];
   bool _contentSearching = false;
-  bool _loading = true;
 
   /// The thrown object, not its message — the render decides whether it means
   /// "your Quark is unreachable" or "the request failed" (#1637).
@@ -41,7 +42,6 @@ class _SheetsPageState extends State<SheetsPage> with SafeSetStateMixin {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
-    _load();
   }
 
   @override
@@ -51,22 +51,20 @@ class _SheetsPageState extends State<SheetsPage> with SafeSetStateMixin {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setStateSafely(() {
-      _loading = true;
-      _error = null;
-    });
+  @override
+  Future<void> refresh() async {
     try {
       final files = await FilesService.getFilesByType('qsheet');
       setStateSafely(() {
         _files = files;
         _applyFilter();
-        _loading = false;
+        // Cleared on success rather than up front, so a poll against an
+        // unreachable Quark does not blink the error view away and back.
+        _error = null;
       });
     } catch (e) {
       setStateSafely(() {
         _error = e;
-        _loading = false;
       });
     }
   }
@@ -112,7 +110,7 @@ class _SheetsPageState extends State<SheetsPage> with SafeSetStateMixin {
     await context.push(
       AppRoutes.sheetFile(node.apiPath, serial: node.deviceSerial),
     );
-    _load();
+    manualRefresh();
   }
 
   Future<void> _createNewSheet() async {
@@ -136,7 +134,7 @@ class _SheetsPageState extends State<SheetsPage> with SafeSetStateMixin {
       await FilesService.uploadFilesFromFormData('', [file]);
       if (!mounted) return;
       context.push(AppRoutes.sheetFile(fileName));
-      _load();
+      manualRefresh();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -152,16 +150,13 @@ class _SheetsPageState extends State<SheetsPage> with SafeSetStateMixin {
       appBar: QuarkAppBar(
         label: 'Sheets',
         icon: QuarkIcons.table_chart_outlined,
+        onRefresh: manualRefresh,
+        isRefreshing: isRefreshing,
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
             tooltip: 'New spreadsheet',
             onPressed: _createNewSheet,
-          ),
-          IconButton(
-            icon: const Icon(QuarkIcons.refresh_rounded),
-            tooltip: 'Reload',
-            onPressed: _load,
           ),
           IconButton(
             icon: const Icon(QuarkIcons.settings_outlined),
@@ -177,13 +172,13 @@ class _SheetsPageState extends State<SheetsPage> with SafeSetStateMixin {
           SheetsSearchBar(controller: _searchController),
           Expanded(
             child: SheetsBody(
-              loading: _loading,
+              loading: isInitialLoad,
               error: _error,
               files: _filtered,
               contentResults: _contentResults,
               contentSearching: _contentSearching,
               searchQuery: _searchController.text,
-              onRetry: _load,
+              onRetry: manualRefresh,
               onCreateNew: _createNewSheet,
               onOpenSheet: _openSheet,
             ),

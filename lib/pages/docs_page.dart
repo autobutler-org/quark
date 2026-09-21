@@ -7,6 +7,7 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/content_search_service.dart';
+import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
@@ -24,12 +25,12 @@ class DocsPage extends StatefulWidget {
   State<DocsPage> createState() => _DocsPageState();
 }
 
-class _DocsPageState extends State<DocsPage> with SafeSetStateMixin {
+class _DocsPageState extends State<DocsPage>
+    with SafeSetStateMixin, WidgetsBindingObserver, AutoRefreshMixin {
   List<FileNode> _files = [];
   List<FileNode> _filtered = [];
   List<ContentSearchResult> _contentResults = [];
   bool _contentSearching = false;
-  bool _loading = true;
 
   /// The thrown object, not its message — the render decides whether it means
   /// "your Quark is unreachable" or "the request failed" (#1637).
@@ -41,7 +42,6 @@ class _DocsPageState extends State<DocsPage> with SafeSetStateMixin {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
-    _load();
   }
 
   @override
@@ -51,22 +51,20 @@ class _DocsPageState extends State<DocsPage> with SafeSetStateMixin {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setStateSafely(() {
-      _loading = true;
-      _error = null;
-    });
+  @override
+  Future<void> refresh() async {
     try {
       final files = await FilesService.getFilesByType('qdoc');
       setStateSafely(() {
         _files = files;
         _applyFilter();
-        _loading = false;
+        // Cleared on success rather than up front, so a poll against an
+        // unreachable Quark does not blink the error view away and back.
+        _error = null;
       });
     } catch (e) {
       setStateSafely(() {
         _error = e;
-        _loading = false;
       });
     }
   }
@@ -113,7 +111,7 @@ class _DocsPageState extends State<DocsPage> with SafeSetStateMixin {
       AppRoutes.docFile(node.apiPath, serial: node.deviceSerial),
     );
     // Refresh in case the doc was renamed or deleted.
-    _load();
+    manualRefresh();
   }
 
   Future<void> _createNewDoc() async {
@@ -135,7 +133,7 @@ class _DocsPageState extends State<DocsPage> with SafeSetStateMixin {
       await FilesService.uploadFilesFromFormData('', [file]);
       if (!mounted) return;
       context.push(AppRoutes.docFile(fileName), extra: true);
-      _load();
+      manualRefresh();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -151,16 +149,13 @@ class _DocsPageState extends State<DocsPage> with SafeSetStateMixin {
       appBar: QuarkAppBar(
         label: 'Docs',
         icon: QuarkIcons.description_outlined,
+        onRefresh: manualRefresh,
+        isRefreshing: isRefreshing,
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
             tooltip: 'New document',
             onPressed: _createNewDoc,
-          ),
-          IconButton(
-            icon: const Icon(QuarkIcons.refresh_rounded),
-            tooltip: 'Reload',
-            onPressed: _load,
           ),
           IconButton(
             icon: const Icon(QuarkIcons.settings_outlined),
@@ -176,13 +171,13 @@ class _DocsPageState extends State<DocsPage> with SafeSetStateMixin {
           DocsSearchBar(controller: _searchController),
           Expanded(
             child: DocsBody(
-              loading: _loading,
+              loading: isInitialLoad,
               error: _error,
               files: _filtered,
               contentResults: _contentResults,
               contentSearching: _contentSearching,
               searchQuery: _searchController.text,
-              onRetry: _load,
+              onRetry: manualRefresh,
               onCreateNew: _createNewDoc,
               onOpenDoc: _openDoc,
             ),

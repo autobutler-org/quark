@@ -244,13 +244,9 @@ class _UsersPageState extends State<UsersPage>
         return QuarkPageScaffold(
           title: 'Users',
           icon: QuarkIcons.person_outline,
-          actions: [
-            RefreshIconButton(
-              isRefreshing: isRefreshing,
-              onPressed: manualRefresh,
-            ),
-            const AppThemeToggle(),
-          ],
+          onRefresh: manualRefresh,
+          isRefreshing: isRefreshing,
+          actions: const [AppThemeToggle()],
           drawer: const AppDrawer(activeSection: QuarkDrawerSection.users),
           body: QuarkTabView(
             tabs: [

@@ -190,11 +190,10 @@ final List<GalleryEntry> registry = [
         appBar: QuarkAppBar(
           label: 'Photos',
           icon: QuarkIcons.photo_library_outlined,
+          // Refresh is a slot, not an action: it always lands beside the
+          // brand button, and a page cannot move it.
+          onRefresh: () => log('QuarkAppBar.onRefresh'),
           actions: [
-            RefreshIconButton(
-              isRefreshing: false,
-              onPressed: () => log('QuarkAppBar refresh'),
-            ),
             ThemeToggleButton(
               mode: ThemeMode.dark,
               onChanged: (mode) => log('ThemeToggleButton.onChanged($mode)'),
@@ -227,12 +226,7 @@ final List<GalleryEntry> registry = [
           appBar: QuarkAppBar(
             label: 'Health',
             icon: QuarkIcons.monitor_heart_outlined,
-            actions: [
-              RefreshIconButton(
-                isRefreshing: false,
-                onPressed: () => log('QuarkAppBarTrailing page refresh'),
-              ),
-            ],
+            onRefresh: () => log('QuarkAppBarTrailing page refresh'),
           ),
           body: const Center(
             child: Text('The badge comes from the scope, after the page'),
@@ -312,12 +306,7 @@ final List<GalleryEntry> registry = [
       child: QuarkPageScaffold(
         title: 'Photos',
         icon: QuarkIcons.photo_library_outlined,
-        actions: [
-          RefreshIconButton(
-            isRefreshing: false,
-            onPressed: () => log('QuarkPageScaffold refresh'),
-          ),
-        ],
+        onRefresh: () => log('QuarkPageScaffold.onRefresh'),
         drawer: QuarkDrawer(
           activeSection: QuarkDrawerSection.photos,
           onTapFiles: () => log('QuarkDrawer.onTapFiles'),
