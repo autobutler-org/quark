@@ -1,6 +1,7 @@
 package v0_files_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -72,6 +73,41 @@ func TestUploadNameConflict(t *testing.T) {
 				assertContents(t, filepath.Join(filesDir, "notes"), tc.want)
 			})
 		}
+	}
+}
+
+// An upload answers with where each file landed, keepBoth's rename included,
+// so a client can act on the file it just sent (#2240).
+func TestUploadReportsLandedPaths(t *testing.T) {
+	t.Parallel()
+
+	engines := []struct {
+		name   string
+		engine func(t *testing.T) (*gin.Engine, string)
+	}{
+		{name: "storage service", engine: newTestEngine},
+		{name: "vfs", engine: newStorageVFSTestEngine},
+	}
+	for _, eng := range engines {
+		t.Run(eng.name, func(t *testing.T) {
+			t.Parallel()
+			e, _ := eng.engine(t)
+			for _, want := range []string{"notes/clash.txt", "notes/clash_(1).txt"} {
+				w := uploadFile(t, e, "/api/v0/files/upload/notes?keepBoth=true", "clash.txt", "x")
+				if w.Code != http.StatusOK {
+					t.Fatalf("upload returned %d: %s", w.Code, w.Body.String())
+				}
+				var got struct {
+					Paths []string `json:"paths"`
+				}
+				if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+					t.Fatalf("decode upload response: %v\nbody: %s", err, w.Body.String())
+				}
+				if len(got.Paths) != 1 || got.Paths[0] != want {
+					t.Fatalf("paths = %v, want [%s]", got.Paths, want)
+				}
+			}
+		})
 	}
 }
 

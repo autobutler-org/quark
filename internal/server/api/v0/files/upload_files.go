@@ -13,7 +13,7 @@ import (
 
 // uploadFiles godoc
 // @Summary Upload files to the top-level directory
-// @Description Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.
+// @Description Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename.
 // @Tags files
 // @Accept multipart/form-data
 // @Produce json
@@ -21,7 +21,7 @@ import (
 // @Param overwrite query boolean false "Replace a file of the same name"
 // @Param keepBoth query boolean false "Land under the first free name, e.g. file_(1).txt, when the name is taken"
 // @Param file formData file true "File to upload"
-// @Success 200 {object} serverutil.Response "OK"
+// @Success 200 {object} uploadFilesResponse "OK"
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
@@ -34,7 +34,7 @@ func uploadFiles(c *gin.Context) *serverutil.Response {
 
 // uploadFiles godoc
 // @Summary Upload files to a nested directory
-// @Description Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.
+// @Description Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename.
 // @Tags files
 // @Accept multipart/form-data
 // @Produce json
@@ -43,7 +43,7 @@ func uploadFiles(c *gin.Context) *serverutil.Response {
 // @Param overwrite query boolean false "Replace a file of the same name"
 // @Param keepBoth query boolean false "Land under the first free name, e.g. file_(1).txt, when the name is taken"
 // @Param file formData file true "File to upload"
-// @Success 200 {object} serverutil.Response "OK"
+// @Success 200 {object} uploadFilesResponse "OK"
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
@@ -99,7 +99,7 @@ func uploadFilesNested(c *gin.Context, rootDir string) *serverutil.Response {
 			}
 			return serverutil.InternalServerError(err)
 		}
-		return serverutil.Ok()
+		return serverutil.Ok().WithData(uploadedPaths(written.Written))
 	}
 
 	// StorageService fallback (serial routing, etc.)
@@ -118,7 +118,7 @@ func uploadFilesNested(c *gin.Context, rootDir string) *serverutil.Response {
 		}
 		return serverutil.BadRequest(err)
 	}
-	return serverutil.Ok()
+	return serverutil.Ok().WithData(uploadedPaths(written.Written))
 }
 
 var uploadFilesRoute = serverutil.ApiRoute(

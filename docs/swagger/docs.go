@@ -3197,7 +3197,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -3239,7 +3239,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
+                            "$ref": "#/definitions/v0_files.uploadFilesResponse"
                         }
                     },
                     "400": {
@@ -3483,7 +3483,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -3532,7 +3532,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
+                            "$ref": "#/definitions/v0_files.uploadFilesResponse"
                         }
                     },
                     "400": {
@@ -6979,6 +6979,17 @@ const docTemplate = `{
                 },
                 "sessionId": {
                     "type": "string"
+                }
+            }
+        },
+        "v0_files.uploadFilesResponse": {
+            "type": "object",
+            "properties": {
+                "paths": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

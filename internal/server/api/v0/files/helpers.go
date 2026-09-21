@@ -266,3 +266,14 @@ func publishUpload(deps deputil.Dependencies, rootDir string, written []storageu
 		Path: rootDir,
 	})
 }
+
+// uploadedPaths is the answer to an upload: where each file landed. The
+// nested route's rootDir keeps gin's leading slash on the VFS branch, so it is
+// trimmed to match the files-relative paths the photo and album APIs use.
+func uploadedPaths(written []storageutil.UploadedFile) uploadFilesResponse {
+	paths := make([]string, 0, len(written))
+	for _, file := range written {
+		paths = append(paths, strings.TrimPrefix(file.Path, "/"))
+	}
+	return uploadFilesResponse{Paths: paths}
+}

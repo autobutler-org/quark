@@ -70,3 +70,10 @@ type uploadChunkResponse struct {
 	Complete  bool   `json:"complete"`
 	Path      string `json:"path,omitempty"`
 }
+
+// uploadFilesResponse lists where each uploaded file landed, files-relative
+// and in the order the files arrived, so a client can act on a file that
+// keepBoth renamed.
+type uploadFilesResponse struct {
+	Paths []string `json:"paths"`
+}

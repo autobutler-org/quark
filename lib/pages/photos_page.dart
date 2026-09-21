@@ -328,16 +328,36 @@ class PhotosPageState extends State<PhotosPage>
 
       final serial = await _pickUploadSerial();
       if (serial == null) return;
+      // A user album showing takes the upload too (#2240). System albums and
+      // Favorites are filled by the Quark or by starring, so those stay a
+      // plain library upload.
+      final showing = _controller.selectedAlbum;
+      final album = showing == null || showing.isSystemAlbum ? null : showing;
 
       try {
-        await _controller.uploadPhotos(
+        final outcome = await _controller.uploadPhotos(
           picked,
           serial: serial.isNotEmpty ? serial : null,
+          albumId: album?.id,
         );
         if (!mounted) return;
-        _snack(
-          'Uploaded ${picked.length == 1 ? picked.first.name : '${picked.length} photos'}',
-        );
+        final uploaded =
+            'Uploaded ${picked.length == 1 ? picked.first.name : '${picked.length} photos'}';
+        if (outcome == null || album == null) {
+          _snack(uploaded);
+        } else if (outcome.failed == 0) {
+          _snack('$uploaded to "${album.name}"');
+        } else {
+          final which = outcome.failed < picked.length
+              ? '${outcome.failed} of them'
+              : picked.length == 1
+              ? 'it'
+              : 'them';
+          _snack(
+            '$uploaded. '
+            '${Errors.message(outcome.error, 'add $which to "${album.name}"')}',
+          );
+        }
         await manualRefresh();
       } catch (e) {
         if (mounted) _snack(Errors.message(e, 'upload your photos'));

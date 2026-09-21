@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:photo_manager/photo_manager.dart';
@@ -31,6 +32,38 @@ PhotoAlbum _album(int id, String name, {String? smartType, int count = 0}) =>
       updatedAt: DateTime(2024),
       itemCount: count,
     );
+
+/// A one-byte picked photo with no path on disk, so it uploads from bytes.
+final class _Picked extends PlatformFile {
+  _Picked(this.name);
+
+  @override
+  final String name;
+
+  final Uint8List _bytes = Uint8List.fromList([1]);
+
+  @override
+  Uri get uri => Uri.parse('memory:$name');
+
+  // The controller never asks for one, and cross_file is not a dependency
+  // of the app to name its type.
+  @override
+  get xFile => throw UnimplementedError();
+
+  @override
+  int? lengthSync() => _bytes.length;
+
+  @override
+  Future<int> length() async => _bytes.length;
+
+  @override
+  Future<Uint8List> readAsBytes() async => _bytes;
+
+  @override
+  Stream<Uint8List> readAsByteStream() => Stream.value(_bytes);
+}
+
+PlatformFile _picked(String name) => _Picked(name);
 
 StorageDevice _device(String serial, {bool enabled = true}) => StorageDevice(
   name: serial,
@@ -70,6 +103,9 @@ class _FakeQuark {
   Object? albumsError;
   final Set<String> failingAdds = {};
   final List<String> calls = [];
+
+  /// Where the next upload says its files landed.
+  List<String> landedPaths = const [];
 
   PhotosController controller() => PhotosController(
     isWeb: false,
@@ -157,6 +193,17 @@ class _FakeQuark {
       ];
     },
     listDevices: () async => [_device('a'), _device('b', enabled: false)],
+    uploadFiles:
+        (
+          path,
+          files, {
+          String? serial,
+          bool overwrite = false,
+          bool keepBoth = false,
+        }) async {
+          calls.add('upload(${files.length}, $serial, keepBoth: $keepBoth)');
+          return landedPaths;
+        },
     bytesCache: PhotoBytesCache.instance,
   );
 }
@@ -737,6 +784,45 @@ void main() {
       expect(await controller.uploadTargets(), isEmpty);
     });
 
+    test('without an album, uploads and adds nothing', () async {
+      final quark = _FakeQuark()..landedPaths = ['a.jpg'];
+
+      final outcome = await quark.controller().uploadPhotos([_picked('a.jpg')]);
+
+      expect(outcome, isNull);
+      expect(quark.calls, ['upload(1, null, keepBoth: true)']);
+    });
+
+    test('adds each photo to the album where it landed (#2240)', () async {
+      final quark = _FakeQuark()
+        ..landedPaths = ['IMG_1.jpg', 'IMG_1_(1).jpg', 'b.jpg']
+        ..failingAdds.add('b.jpg');
+
+      final outcome = await quark.controller().uploadPhotos(
+        [_picked('IMG_1.jpg'), _picked('IMG_1.jpg'), _picked('b.jpg')],
+        serial: 'a',
+        albumId: 1,
+      );
+
+      expect(quark.calls, [
+        'upload(3, a, keepBoth: true)',
+        'add(1, IMG_1.jpg)',
+        'add(1, IMG_1_(1).jpg)',
+      ]);
+      expect((outcome!.added, outcome.failed), (2, 1));
+      expect(outcome.error, isA<ApiException>());
+    });
+
+    test('a photo the Quark reported no path for counts as failed', () async {
+      final quark = _FakeQuark();
+
+      final outcome = await quark.controller().uploadPhotos([
+        _picked('a.jpg'),
+      ], albumId: 1);
+
+      expect((outcome!.added, outcome.failed), (0, 1));
+    });
+
     group('a drop (#2214)', () {
       DropItemFile file(String name) =>
           DropItemFile.fromData(Uint8List.fromList([1]), path: name);
@@ -773,7 +859,7 @@ void main() {
                   '$path/${files.map((f) => f.filename).join(',')} '
                   'serial=$serial keepBoth=$keepBoth',
                 );
-                return http.StreamedResponse(const Stream.empty(), 200);
+                return const <String>[];
               },
         );
         final (:photos, notPhotos: _) = controller.sortDroppedFiles([
@@ -811,7 +897,7 @@ void main() {
                 if (files.single.filename == 'full.jpg') {
                   throw const ApiException(507);
                 }
-                return http.StreamedResponse(const Stream.empty(), 200);
+                return const <String>[];
               },
         );
         final (:photos, notPhotos: _) = controller.sortDroppedFiles([

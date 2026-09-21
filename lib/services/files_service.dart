@@ -536,7 +536,11 @@ class FilesService with AuthenticatedService {
   /// unless the caller says what to do about it: [overwrite] replaces what is
   /// there, [keepBoth] lands the new file under a free name. The Quark never
   /// renames a file on its own (#2016).
-  static Future<http.StreamedResponse> uploadFilesFromFormData(
+  ///
+  /// Returns the files-relative path each file landed at, in the order sent,
+  /// so a caller can act on a file [keepBoth] renamed (#2240). A Quark too old
+  /// to report them answers with an empty list.
+  static Future<List<String>> uploadFilesFromFormData(
     String uploadPath,
     List<http.MultipartFile> formDataFiles, {
     String? serial,
@@ -565,7 +569,11 @@ class FilesService with AuthenticatedService {
       throw ApiException(response.statusCode, 'Failed to upload files');
     }
 
-    return response;
+    // The answer is a list of names, bounded by the files in this request.
+    final body = await response.stream.bytesToString();
+    final decoded = body.isEmpty ? null : jsonDecode(body);
+    final paths = decoded is Map<String, dynamic> ? decoded['paths'] : null;
+    return paths is List ? paths.whereType<String>().toList() : const [];
   }
 
   static Future<String?> saveFile(
