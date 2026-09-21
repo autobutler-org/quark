@@ -744,3 +744,24 @@ group the user is in, publishes `access_changed`.
 - Clashes are asked about one at a time, so a batch that hits several doesn't stack dialogs.
 - Importing from the Photos page never asks. Camera names like `IMG_0001.jpg` clash routinely and carry nothing the
   person chose, so an import always keeps both.
+
+---
+
+### JN-FB-040: Misspellings are underlined in a prose file
+
+**Preconditions:** The app is running on iOS or Android. Files holds `notes.txt` containing `Teh meeting`, and
+`config.json`.
+
+**Steps:**
+
+1. Open `notes.txt` in the plaintext editor (JN-FB-018).
+2. Tap the underlined word.
+3. Open `config.json` in the plaintext editor.
+
+**Expected result:**
+
+- `Teh` is underlined as a misspelling, and tapping it offers suggestions from the platform's spell checker.
+- Nothing in `config.json` is underlined. Only prose files are checked: `.txt`, `.md`, `.markdown` and `.rst`,
+  not code, `.log` or `.env`.
+- On web and desktop nothing is underlined in either file, because those platforms give Flutter no spell
+  checker. The Docs editor is not covered yet (#2210).
