@@ -18,18 +18,19 @@
 
     <meta charset="UTF-8" />
     <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
-    <meta name="description" content="A new Flutter project." />
+    <meta name="description" content="Quark — your own cloud, at home." />
+    <meta name="theme-color" content="#070D19" />
 
     <!-- iOS meta tags & icons -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-    <meta name="apple-mobile-web-app-title" content="quark" />
+    <meta name="apple-mobile-web-app-title" content="Quark" />
     <link rel="apple-touch-icon" href="icons/Icon-192.png" />
 
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="favicon.png" />
 
-    <title>quark</title>
+    <title>Quark</title>
     <link rel="manifest" href="manifest.json" />
 
     <!--
@@ -46,9 +47,174 @@
         background-color: transparent;
         color: transparent;
       }
+
+      /*
+        The splash below stands in for the app until Flutter paints its first
+        frame. Downloading and starting the bundle takes seconds on a cold
+        load, and a blank white viewport for that long reads as broken (#2019).
+
+        Its colors are QuarkTokens, copied rather than imported because
+        nothing Dart has loaded yet — dark is the app's default appearance,
+        light follows the OS the way ThemeMode.system does.
+      */
+      :root {
+        --quark-background: #070d19;
+        --quark-foreground: #e2e8f0;
+        --quark-muted: #94a3b8;
+        --quark-border: #1e293b;
+        --quark-primary: #0ea5e9;
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root {
+          --quark-background: #f8fafc;
+          --quark-foreground: #0f172a;
+          --quark-muted: #64748b;
+          --quark-border: #e2e8f0;
+        }
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background-color: var(--quark-background);
+      }
+
+      #quark-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        padding: 0 16px;
+        box-sizing: border-box;
+        background-color: var(--quark-background);
+        color: var(--quark-foreground);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        text-align: center;
+        /* Above the canvas, so the app is never half-drawn underneath it. */
+        z-index: 2;
+        transition: opacity 200ms ease-out;
+      }
+
+      /* Set once Flutter has painted; the element is removed when it ends. */
+      #quark-splash.quark-splash-done {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      #quark-splash .quark-mark {
+        width: 72px;
+        height: 72px;
+        border-radius: 16px;
+        background-color: var(--quark-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #quark-splash .quark-wordmark {
+        font-size: 28px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+
+      #quark-splash .quark-status {
+        font-size: 14px;
+        color: var(--quark-muted);
+      }
+
+      #quark-splash .quark-progress {
+        width: 180px;
+        max-width: 60vw;
+        height: 3px;
+        border-radius: 999px;
+        background-color: var(--quark-border);
+        overflow: hidden;
+      }
+
+      #quark-splash .quark-progress span {
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: inherit;
+        background-color: var(--quark-primary);
+        animation: quark-progress-slide 1.4s ease-in-out infinite;
+      }
+
+      @keyframes quark-progress-slide {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(250%);
+        }
+      }
+
+      /*
+        A wait is reassuring; a moving bar for someone who asked for stillness
+        is not. The bar holds at rest instead.
+      */
+      @media (prefers-reduced-motion: reduce) {
+        #quark-splash {
+          transition: none;
+        }
+
+        #quark-splash .quark-progress span {
+          animation: none;
+          width: 100%;
+          opacity: 0.6;
+        }
+      }
     </style>
   </head>
   <body>
+    <!--
+      Static markup, inline styles, no requests of its own: this has to paint
+      on the first pass, before any of the bundle has arrived.
+    -->
+    <div id="quark-splash" role="status" aria-live="polite">
+      <div class="quark-mark">
+        <!-- The storage badge the app bar wears, drawn rather than loaded. -->
+        <svg
+          width="36"
+          height="36"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+        >
+          <rect
+            x="3"
+            y="4"
+            width="18"
+            height="6"
+            rx="2"
+            stroke="#ffffff"
+            stroke-width="1.8"
+          />
+          <rect
+            x="3"
+            y="14"
+            width="18"
+            height="6"
+            rx="2"
+            stroke="#ffffff"
+            stroke-width="1.8"
+          />
+          <circle cx="7" cy="7" r="1.1" fill="#ffffff" />
+          <circle cx="7" cy="17" r="1.1" fill="#ffffff" />
+        </svg>
+      </div>
+      <div class="quark-wordmark">Quark</div>
+      <div class="quark-status">Starting your Quark…</div>
+      <div class="quark-progress" aria-hidden="true"><span></span></div>
+    </div>
+
     <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
@@ -58,5 +224,23 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
     <script src="flutter_bootstrap.js" async></script>
+    <script>
+      // The engine fires this once the first frame is on screen, which is the
+      // only moment that means "there is something to look at". A timer would
+      // either uncover a blank canvas early or sit on top of a drawn app.
+      window.addEventListener("flutter-first-frame", function () {
+        var splash = document.getElementById("quark-splash");
+        if (!splash) return;
+        splash.classList.add("quark-splash-done");
+        splash.addEventListener("transitionend", function () {
+          splash.remove();
+        });
+        // transitionend never fires when the fade is disabled for reduced
+        // motion, so the element still has to go on its own.
+        window.setTimeout(function () {
+          splash.remove();
+        }, 400);
+      });
+    </script>
   </body>
 </html>
