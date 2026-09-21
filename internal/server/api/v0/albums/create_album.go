@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/albumutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
@@ -15,13 +16,13 @@ import (
 
 // createAlbum godoc
 // @Summary Create a photo album
-// @Description Creates a new photo album, optionally nested under a parent. The name cannot contain / and must be unique among its siblings ignoring case; root albums, the system Favorites album included, are siblings of each other.
+// @Description Creates a photo album owned by the caller, optionally nested under one of the caller's albums. The name cannot contain / and must be unique among its siblings ignoring case; the caller's root albums, their Favorites album included, are siblings of each other.
 // @Tags albums
 // @Accept json
 // @Produce json
 // @Param body body createAlbumRequest true "Album name and optional parent ID"
 // @Success 201 {object} AlbumJSON
-// @Failure 400 {object} serverutil.Response "Bad Request: missing name, a / in the name, or parent not found"
+// @Failure 400 {object} serverutil.Response "Bad Request: missing name, a / in the name, or parent not found among the caller's albums"
 // @Failure 403 {object} serverutil.Response "Forbidden: system album as the parent"
 // @Failure 409 {object} serverutil.Response "Conflict: an album with that name already exists here"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
@@ -37,9 +38,10 @@ func createAlbum(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
+	userID := callerID(c)
 	var parentID sql.NullInt64
 	if req.ParentID != nil {
-		parent, err := deps.Database().Queries.GetAlbum(context.Background(), *req.ParentID)
+		parent, err := deps.Database().Queries.GetAlbum(context.Background(), db.GetAlbumParams{ID: *req.ParentID, UserID: userID})
 		if err != nil {
 			return serverutil.BadRequest(errors.New("parent album not found"))
 		}
@@ -51,6 +53,7 @@ func createAlbum(c *gin.Context) *serverutil.Response {
 
 	result, err := albumutil.CreateAlbum(c.Request.Context(), albumutil.CreateAlbumParams{
 		Queries:  deps.Database().Queries,
+		UserID:   userID,
 		Name:     req.Name,
 		ParentID: parentID,
 	})

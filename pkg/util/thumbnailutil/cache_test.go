@@ -1,8 +1,10 @@
 package thumbnailutil
 
 import (
+	"image"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -154,5 +156,37 @@ func TestCacheDir(t *testing.T) {
 	// Should end with the expected path suffix
 	if filepath.Base(dir) != "thumbnails" {
 		t.Errorf("cache directory should end with 'thumbnails', got: %s", dir)
+	}
+}
+
+// Concurrent first requests for one thumbnail all generate it and commit the
+// same entry. Sharing one temporary path made all but one of them fail.
+func TestWriteCacheConcurrentSameEntry(t *testing.T) {
+	cachedPath := filepath.Join(t.TempDir(), "entry")
+	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+
+	const writers = 16
+	errs := make([]error, writers)
+	var wg sync.WaitGroup
+	for i := range writers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, errs[i] = writeCache(cachedPath, img, false)
+		}()
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("writer %d: %v", i, err)
+		}
+	}
+	entries, err := os.ReadDir(filepath.Dir(cachedPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("cache dir holds %d files, want only the committed entry", len(entries))
 	}
 }

@@ -19,6 +19,8 @@ lib/widgets/
     file_storage_footer.dart    capacity row, takes the app's HealthStatus
     recent_files_section.dart   calls FilesService
     new_file_dialog.dart        one-line wrapper that pops NewFileDialog
+    upload_conflict_prompt.dart pops UploadConflictDialog and holds the
+                                "do the same for the rest" tick while it is open
   jobs/
     job_finish_announcer.dart   shows a snack bar for every job JobsController
                                 announces finished, and navigates its action
@@ -30,6 +32,12 @@ lib/widgets/
   photos/
     add_to_album_sheet.dart     AddToAlbumSheet host for a photo in an album
                                 view: calls AlbumService, shows snack bars
+  settings/
+    ssh_access_section.dart     hosts SshAccessPanel around SshAccessController,
+                                with its confirmation, key and password dialogs
+  sharing/
+    show_share_sheet.dart       opens ShareSheet around a ShareController for
+                                one file or folder; confirms owner changes
   video_viewer/
     transcode_dialog_host.dart  hosts TranscodeDialog around an injected
                                 formats loader

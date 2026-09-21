@@ -425,6 +425,35 @@ final List<GalleryEntry> registry = [
       ],
     ),
   ),
+  GalleryEntry(
+    name: 'QuarkTabView',
+    group: 'Layout',
+    build: (context, log) => SizedBox(
+      height: 320,
+      child: QuarkTabView(
+        tabs: [
+          QuarkTab(
+            label: 'Accounts',
+            child: ListView(
+              children: const [
+                ListTile(title: Text('ada')),
+                ListTile(title: Text('bob')),
+              ],
+            ),
+          ),
+          QuarkTab(
+            label: 'Groups',
+            child: ListView(
+              children: const [
+                ListTile(title: Text('everyone')),
+                ListTile(title: Text('Family')),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
 
   // ── File browser ──────────────────────────────────────────────────────────
   GalleryEntry(
@@ -478,11 +507,61 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'FileShortcutBar',
+    group: 'File browser',
+    build: (context, log) => FileShortcutBar(
+      shortcuts: const [
+        FileShortcut(
+          id: 'my_files',
+          label: 'My files',
+          icon: QuarkIcons.home_rounded,
+        ),
+        FileShortcut(
+          id: 'groups',
+          label: 'Groups',
+          icon: QuarkIcons.group_outlined,
+        ),
+        FileShortcut(
+          id: 'all_files',
+          label: 'All files',
+          icon: QuarkIcons.folder_rounded,
+        ),
+      ],
+      onSelected: (id) => log('FileShortcutBar.onSelected($id)'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'SharedRootsSheet',
+    group: 'File browser',
+    build: (context, log) => SharedRootsSheet(
+      items: const [
+        SharedRootItem(path: 'users/alice/Trip', name: 'Trip', owner: 'alice'),
+        SharedRootItem(path: 'Family', name: 'Family', owner: 'carol'),
+        SharedRootItem(path: 'Loose', name: 'Loose'),
+      ],
+      onPicked: (path) => log('SharedRootsSheet.onPicked($path)'),
+    ),
+  ),
+  GalleryEntry(
     name: 'NewFileDialog',
     group: 'File browser',
     build: (context, log) => NewFileDialog(
       onCreate: (name) => log('NewFileDialog.onCreate($name)'),
       onCancel: () => log('NewFileDialog.onCancel'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'UploadConflictDialog',
+    group: 'File browser',
+    build: (context, log) => UploadConflictDialog(
+      fileName: 'holiday.jpg',
+      showApplyToAll: true,
+      applyToAll: false,
+      onApplyToAllChanged: (value) =>
+          log('UploadConflictDialog.onApplyToAllChanged($value)'),
+      onKeepBoth: () => log('UploadConflictDialog.onKeepBoth'),
+      onReplace: () => log('UploadConflictDialog.onReplace'),
+      onCancel: () => log('UploadConflictDialog.onCancel'),
     ),
   ),
 
@@ -716,6 +795,32 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
+  // ── Settings ──────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'SshAccessPanel',
+    group: 'Settings',
+    build: (context, log) => Column(
+      children: [
+        SshAccessPanel(
+          enabled: true,
+          keys: _gallerySshKeys,
+          onEnabledChanged: (on) => log('SshAccessPanel.onEnabledChanged($on)'),
+          onAddKey: () => log('SshAccessPanel.onAddKey'),
+          onRemoveKey: (fingerprint) =>
+              log('SshAccessPanel.onRemoveKey($fingerprint)'),
+          onSetPassword: () => log('SshAccessPanel.onSetPassword'),
+          onClearPassword: () => log('SshAccessPanel.onClearPassword'),
+        ),
+        const Divider(),
+        const SshAccessPanel(
+          unavailableReason:
+              "Quark's SSH helper isn't installed yet. On the device, run "
+              '`sudo quark install` to add it.',
+        ),
+      ],
+    ),
+  ),
+
   // ── Storage ───────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'UploadTargetPicker',
@@ -775,6 +880,154 @@ final List<GalleryEntry> registry = [
     build: (context, log) => CreateUserDialog(
       onSubmit: (input) => log('CreateUserDialog.onSubmit(${input.username})'),
       onCancel: () => log('CreateUserDialog.onCancel'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'GroupList',
+    group: 'Users',
+    build: (context, log) => GroupList(
+      groups: const [
+        GroupItem(id: 1, name: 'everyone', isBuiltin: true),
+        GroupItem(
+          id: 2,
+          name: 'Family',
+          members: [
+            PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
+            PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
+          ],
+        ),
+        GroupItem(id: 3, name: 'Book club'),
+      ],
+      onCreate: () => log('GroupList.onCreate'),
+      onMembers: (id) => log('GroupList.onMembers($id)'),
+      onRename: (id) => log('GroupList.onRename($id)'),
+      onDelete: (id) => log('GroupList.onDelete($id)'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'PrincipalPicker',
+    group: 'Users',
+    build: (context, log) => PrincipalPicker(
+      options: const [
+        PrincipalItem(
+          kind: PrincipalKind.group,
+          id: 1,
+          name: 'everyone',
+          isBuiltin: true,
+        ),
+        PrincipalItem(kind: PrincipalKind.group, id: 2, name: 'Family'),
+        PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
+        PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
+      ],
+      selected: const PrincipalItem(
+        kind: PrincipalKind.group,
+        id: 2,
+        name: 'Family',
+      ),
+      onSelected: (principal) =>
+          log('PrincipalPicker.onSelected(${principal.keySuffix})'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'GroupMembersSheet',
+    group: 'Users',
+    build: (context, log) => GroupMembersSheet(
+      group: const GroupItem(
+        id: 2,
+        name: 'Family',
+        members: [
+          PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
+          PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
+        ],
+      ),
+      candidates: const [
+        PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
+        PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
+        PrincipalItem(kind: PrincipalKind.user, id: 3, name: 'cy'),
+        PrincipalItem(kind: PrincipalKind.user, id: 4, name: 'dee'),
+      ],
+      busyIds: const {2},
+      onAdd: (userId) => log('GroupMembersSheet.onAdd($userId)'),
+      onRemove: (userId) => log('GroupMembersSheet.onRemove($userId)'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkNameDialog',
+    group: 'Core',
+    build: (context, log) => QuarkNameDialog(
+      title: 'Rename Family',
+      label: 'Group name',
+      submitLabel: 'Rename',
+      initialName: 'Family',
+      maxLength: 64,
+      onSubmit: (name) => log('QuarkNameDialog.onSubmit($name)'),
+      onCancel: () => log('QuarkNameDialog.onCancel'),
+    ),
+  ),
+
+  // ── Sharing ───────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'ShareSheet',
+    group: 'Sharing',
+    build: (context, log) => ShareSheet(
+      itemName: 'Recipes',
+      grants: const [
+        GrantItem(
+          principal: PrincipalItem(
+            kind: PrincipalKind.group,
+            id: 1,
+            name: 'everyone',
+            isBuiltin: true,
+          ),
+          level: AccessLevel.read,
+        ),
+        GrantItem(
+          principal: PrincipalItem(
+            kind: PrincipalKind.user,
+            id: 1,
+            name: 'ada',
+          ),
+          level: AccessLevel.owner,
+        ),
+        GrantItem(
+          principal: PrincipalItem(
+            kind: PrincipalKind.user,
+            id: 2,
+            name: 'bob',
+          ),
+          level: AccessLevel.write,
+        ),
+        GrantItem(
+          principal: PrincipalItem(
+            kind: PrincipalKind.group,
+            id: 2,
+            name: 'Family',
+          ),
+          level: AccessLevel.write,
+          inheritedFrom: 'Shared',
+        ),
+      ],
+      principals: const [
+        PrincipalItem(
+          kind: PrincipalKind.group,
+          id: 1,
+          name: 'everyone',
+          isBuiltin: true,
+        ),
+        PrincipalItem(kind: PrincipalKind.group, id: 2, name: 'Family'),
+        PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
+        PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
+        PrincipalItem(kind: PrincipalKind.user, id: 3, name: 'cy'),
+      ],
+      canManage: true,
+      canGrantOwner: true,
+      lockedKeys: const {'user_1'},
+      onAdd: (principal, level) =>
+          log('ShareSheet.onAdd(${principal.keySuffix}, ${level.name})'),
+      onSetLevel: (principal, level) =>
+          log('ShareSheet.onSetLevel(${principal.keySuffix}, ${level.name})'),
+      onRevoke: (principal) =>
+          log('ShareSheet.onRevoke(${principal.keySuffix})'),
     ),
   ),
 
@@ -853,6 +1106,19 @@ const List<AlbumItem> _galleryAlbumList = [
 const List<UploadTarget> _galleryTargets = [
   UploadTarget(serial: '', name: '', mountPoint: '/data', isInternal: true),
   UploadTarget(serial: 'usb-1', name: 'Backup drive', mountPoint: '/mnt/usb'),
+];
+
+/// The fake SSH keys: one with a comment, one without.
+const List<SshKeyItem> _gallerySshKeys = [
+  SshKeyItem(
+    fingerprint: 'SHA256:4mKq0mB3fY3x9vX1nC8o2wz3d5b7h1QeRk9ZcTt0aLs',
+    type: 'ssh-ed25519',
+    comment: 'me@laptop',
+  ),
+  SshKeyItem(
+    fingerprint: 'SHA256:Zp1yF0vH8wQ2c5nKj7rT3xB9mLd4sAe6gUo1iVb2hNk',
+    type: 'ssh-rsa',
+  ),
 ];
 
 /// The fake jobs: one of every state the list draws.

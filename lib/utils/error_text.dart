@@ -86,6 +86,19 @@ abstract final class Errors {
       ? albumNameTaken
       : message(error, action);
 
+  /// An upload the Quark refused with a 409: something in that folder
+  /// already has the name. The user answers it by keeping both or replacing.
+  static const String fileNameTaken =
+      "There's already a file with that name here.";
+
+  /// A failed upload or new file. A 409 gets [fileNameTaken] — the generic
+  /// "it changed while you were working" would send the user to retry a name
+  /// that will clash again. [action] is as in [message].
+  static String upload(Object? error, String action) =>
+      error is ApiException && error.statusCode == 409
+      ? fileNameTaken
+      : message(error, action);
+
   /// A restore the Quark refused with a 409: the item's original path is
   /// taken, and a restore never overwrites.
   static const String restoreConflict =
@@ -105,26 +118,35 @@ abstract final class Errors {
   static const String ffmpegMissing =
       "Converting videos needs ffmpeg, which isn't installed on your Quark.";
 
+  /// A conversion or retry refused with a 403. The output lands beside the
+  /// video, so the account has to be able to save files in its folder.
+  static const String cantSaveInFolder = "You can't save files in that folder.";
+
   /// A conversion that could not be started. A 501 gets [ffmpegMissing]
-  /// rather than the generic "doesn't support that yet".
-  static String transcode(Object? error) =>
-      error is ApiException && error.statusCode == 501
-      ? ffmpegMissing
-      : message(error, 'convert the video');
+  /// rather than the generic "doesn't support that yet", and a 403
+  /// [cantSaveInFolder].
+  static String transcode(Object? error) => switch (error) {
+    ApiException(statusCode: 501) => ffmpegMissing,
+    ApiException(statusCode: 403) => cantSaveInFolder,
+    _ => message(error, 'convert the video'),
+  };
 
   /// A retry the Quark refused. Only a failed job can be retried, so a 409
   /// means this one didn't fail; a 422 means the file it used is gone; a 404
-  /// means the Quark no longer knows the job. Retrying again would fail the
-  /// same way.
+  /// means the Quark no longer knows the job, or no longer shows it to this
+  /// account; a 403 means the account that queued it can't save files in the
+  /// folder any more. Retrying again would fail the same way.
   static String retryJob(Object? error) => switch (error) {
     ApiException(statusCode: 409) => "That job can't be retried.",
     ApiException(statusCode: 422) => 'The file this job used no longer exists.',
     ApiException(statusCode: 404) => 'That job no longer exists.',
+    ApiException(statusCode: 403) => cantSaveInFolder,
     _ => message(error, 'retry the job'),
   };
 
   /// A cancel the Quark refused: a 409 means the job had already finished, a
-  /// 404 that the Quark no longer knows it.
+  /// 404 that the Quark no longer knows it or no longer shows it to this
+  /// account. A 403 reads as the generic permission copy from [message].
   static String cancelJob(Object? error) => switch (error) {
     ApiException(statusCode: 409) => 'That job has already finished.',
     ApiException(statusCode: 404) => 'That job no longer exists.',
@@ -153,6 +175,26 @@ abstract final class Errors {
   /// to change them on.
   static const String demoModeReadOnly =
       "Sample albums can't be changed in demo mode.";
+
+  /// Why SSH access can't be managed on this Quark, and what fixes it.
+  /// [reason] is the code `GET /api/v0/ssh/status` sends (#2131).
+  static String sshUnavailable(String? reason) => switch (reason) {
+    'unsupported_os' =>
+      'SSH access can only be managed on a Quark running Linux.',
+    'not_service' =>
+      "Quark isn't running as its installed service. On the device, run "
+          '`sudo quark install`, then manage SSH access here.',
+    'sshd_missing' =>
+      "The SSH server isn't installed. On the device, run "
+          '`sudo apt install openssh-server`, then `sudo quark install`.',
+    'helper_missing' =>
+      "Quark's SSH helper isn't installed yet. On the device, run "
+          '`sudo quark install` to add it.',
+    'no_login_shell' =>
+      "The quark account can't sign in yet. On the device, run "
+          '`sudo quark install` to give it a login shell.',
+    _ => "SSH access can't be managed on this Quark.",
+  };
 
   /// Session gone. The router sends the user to login on the next navigation;
   /// this is what they read in the meantime.
@@ -183,6 +225,12 @@ abstract final class Errors {
   static const String invalidUsername =
       'Use up to 32 lowercase letters, numbers, dots, dashes or underscores, '
       'starting with a letter or number.';
+
+  /// Adding an account to a group, which the Quark refuses with a 404 when
+  /// the account can't sign in: waiting for approval, turned off, or gone.
+  static const String cannotJoinGroup =
+      "That account can't join a group. Only accounts that can sign in can be "
+      'added.';
 
   /// The Quark answered, and what it said maps to copy worth the difference.
   /// Anything unmapped falls back to [couldNot] — a vague-but-true sentence

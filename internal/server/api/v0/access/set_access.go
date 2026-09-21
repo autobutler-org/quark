@@ -13,13 +13,13 @@ import (
 
 // setAccess godoc
 // @Summary Share a file or folder
-// @Description Grants one active account or existing group read, write or owner on a path, replacing the level it had there, and returns the path's grants as they now stand. Only an owner of the path or an admin may share it. A non-admin can't change their own owner row on the path. Publishes access_changed for the path.
+// @Description Grants one active account or existing group read, write or owner on a path, replacing the level it had there, and returns the path's grants as they now stand. Only an owner of the path or an admin may share it. A non-admin can't change their own owner row on the path. Nobody, admins included, may share the users or groups folder itself on the internal device. Publishes access_changed for the path.
 // @Tags access
 // @Accept json
 // @Produce json
 // @Param body body setAccessBody true "The path, one account or group, and the level"
 // @Success 200 {object} accessutil.GrantsResult
-// @Failure 400 {object} serverutil.Response "a path in the trash, not exactly one account or group, a level other than read, write or owner, or the caller's own owner row"
+// @Failure 400 {object} serverutil.Response "a path in the trash, not exactly one account or group, a level other than read, write or owner, the caller's own owner row, or the users or groups folder itself"
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response "the caller can read the path but doesn't own it"
 // @Failure 404 {object} serverutil.Response "the caller can't read the path, or no active account or group has that id"

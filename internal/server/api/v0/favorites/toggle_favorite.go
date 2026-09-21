@@ -13,7 +13,7 @@ import (
 
 // toggleFavorite godoc
 // @Summary Toggle a photo favorite
-// @Description Adds the photo to favorites if not already favorited; removes it otherwise. Needs read access on the photo.
+// @Description Adds the photo to the caller's own favorites if not already favorited; removes it otherwise. Needs read access on the photo.
 // @Tags favorites
 // @Accept json
 // @Produce json
@@ -47,6 +47,7 @@ func toggleFavorite(c *gin.Context) *serverutil.Response {
 	isFav, err := favoritesutil.ToggleFavorite(
 		c.Request.Context(),
 		deps.Database().Queries,
+		access.Principal().UserID,
 		req.DeviceSerial,
 		req.RelPath,
 	)

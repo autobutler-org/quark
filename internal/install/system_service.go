@@ -10,6 +10,11 @@ const (
 	serviceGroupName = "quark"
 	serviceDataDir   = "/var/lib/quark"
 
+	// serviceLoginShell lets the service account log in over SSH once an admin
+	// turns SSH access on and allows a key or sets a password (#2131). Until
+	// then the account has neither, so the shell alone lets nobody in.
+	serviceLoginShell = "/bin/bash"
+
 	// serviceBinDir holds the installed binary, and is group-owned by the
 	// service account so the service can replace its own binary in place.
 	//
@@ -30,6 +35,12 @@ const (
 
 	systemdServiceName = "quark.service"
 
+	// systemdServiceContent grants CAP_NET_BIND_SERVICE as an ambient
+	// capability and deliberately leaves the bounding set alone. The bounding
+	// set also caps what a setuid-root program started by the service gets,
+	// so restricting it to CAP_NET_BIND_SERVICE left `sudo` without the
+	// capabilities to switch groups or mount, and every `sudo mount` failed
+	// (#2115).
 	systemdServiceContent = `[Unit]
 Description=Quark Service
 After=network.target
@@ -42,7 +53,6 @@ Environment="PORT=80"
 Environment="HTTPS_PORT=443"
 Environment="GIN_MODE=release"
 AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 Restart=always
 StandardOutput=append:/var/log/quark.app
 StandardError=append:/var/log/quark.err

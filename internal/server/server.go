@@ -20,7 +20,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
-	"github.com/autobutler-org/quark/pkg/util/favoritesutil"
+	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/healthutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
@@ -57,6 +57,7 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 		Kind: transcodeutil.Kind,
 		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{
 			Storage:  deps.StorageService(),
+			Database: deps.Database(),
 			EventBus: deps.EventBus(),
 		}),
 	})
@@ -75,13 +76,6 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 			log.Printf("[server] worker error logger stopped: %v", err)
 		}
 	}()
-	if _, err := favoritesutil.EnsureFavoritesAlbum(
-		context.Background(),
-		deps.Database().Queries,
-	); err != nil {
-		log.Printf("[server] warning: could not ensure Favorites album: %v", err)
-	}
-
 	syncWorker := backup.NewSyncWorker(backup.SyncWorkerParams{
 		Bus:         deps.EventBus(),
 		Storage:     deps.StorageService(),
@@ -179,8 +173,9 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 // repairHomes gives any account that has no home one, at every startup
 // (#1908). An account whose approval predates homes being created has no owner
 // row anywhere, which the access layer reads as "may write nowhere", so this
-// is what makes such an account usable again. It is idempotent, so a Quark
-// with nothing to repair pays one query for it.
+// is what makes such an account usable again. It then gives every group,
+// everyone included, its folder the same way (#2016). Both are idempotent, so
+// a Quark with nothing to repair pays one query for each.
 func repairHomes(deps deputil.Dependencies) {
 	database := deps.Database()
 	if database == nil {
@@ -202,6 +197,31 @@ func repairHomes(deps deputil.Dependencies) {
 	}
 	if err != nil {
 		log.Printf("[auth] home repair stopped early: %v", err)
+	}
+	// Group folders, the everyone group's included, are repaired the same way
+	// and at the same moment (#2016).
+	groups, err := grouputil.RepairGroupFolders(ctx, grouputil.RepairGroupFoldersParams{
+		Database: database,
+		FilesDir: filesDir,
+	})
+	if len(groups.Repaired) > 0 {
+		log.Printf("[groups] gave %d group(s) their folder: %v", len(groups.Repaired), groups.Repaired)
+	}
+	if err != nil {
+		log.Printf("[groups] group folder repair stopped early: %v", err)
+	}
+}
+
+// clearDataTmp empties <DataDir>/tmp and logs what it freed, so an orphan
+// left by a crash shows up in the logs rather than only in disk usage.
+func clearDataTmp(when string) {
+	result, err := storageutil.ClearTmpDir(storageutil.ClearTmpDirParams{DataDir: storageutil.GetDataDir()})
+	if err != nil {
+		log.Printf("[tmp] %s: failed to clear the data dir's tmp: %v", when, err)
+	}
+	if result.Removed > 0 {
+		log.Printf("[tmp] %s: removed %d item(s), %d bytes (%.1f MB), from the data dir's tmp",
+			when, result.Removed, result.Bytes, storageutil.BytesToMB(uint64(result.Bytes)))
 	}
 }
 
@@ -367,6 +387,10 @@ func newEngine() (*gin.Engine, error) {
 }
 
 func StartServer(deps deputil.Dependencies, opts StartOptions) error {
+	// First, before any worker or upload session can write to it: whatever is
+	// in the data dir's tmp was stranded by a previous run.
+	clearDataTmp("startup")
+
 	if result, err := updateutil.RemoveStaleBackups(updateutil.RemoveStaleBackupsParams{}); err != nil {
 		log.Printf("[update] failed to remove stale binary backups: %v", err)
 	} else if len(result.Removed) > 0 {
@@ -431,6 +455,12 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 		syncWorker.Stop()
 		stopJobs()
 		remoteutil.Stop()
+		// os.Exit skips the sweeper's own shutdown, so staged partial uploads
+		// are dropped here or they outlive the process.
+		if sessions := deps.UploadSessions(); sessions != nil {
+			_ = sessions.Close()
+		}
+		clearDataTmp("shutdown")
 		os.Exit(0)
 	}()
 

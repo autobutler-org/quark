@@ -11,32 +11,35 @@ import (
 
 const addFavorite = `-- name: AddFavorite :exec
 INSERT INTO
-    photo_favorites (device_serial, rel_path)
+    photo_favorites (user_id, device_serial, rel_path)
 VALUES
-    (?, ?)
-ON CONFLICT (device_serial, rel_path) DO NOTHING
+    (?, ?, ?)
+ON CONFLICT (user_id, device_serial, rel_path) DO NOTHING
 `
 
 type AddFavoriteParams struct {
+	UserID       int64
 	DeviceSerial string
 	RelPath      string
 }
 
 func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) error {
-	_, err := q.db.ExecContext(ctx, addFavorite, arg.DeviceSerial, arg.RelPath)
+	_, err := q.db.ExecContext(ctx, addFavorite, arg.UserID, arg.DeviceSerial, arg.RelPath)
 	return err
 }
 
 const createFavoritesAlbum = `-- name: CreateFavoritesAlbum :one
 INSERT INTO
-    photo_albums (name, smart_type)
+    photo_albums (name, smart_type, user_id)
 VALUES
-    ('Favorites', 'favorites')
-RETURNING id, name, parent_id, created_at, updated_at, smart_type
+    ('Favorites', 'favorites', CAST(?1 AS INTEGER))
+RETURNING id, name, parent_id, created_at, updated_at, smart_type, user_id
 `
 
-func (q *Queries) CreateFavoritesAlbum(ctx context.Context) (PhotoAlbum, error) {
-	row := q.db.QueryRowContext(ctx, createFavoritesAlbum)
+// photo_albums.user_id is nullable only because SQLite cannot add a NOT NULL
+// foreign key column (014); the CAST keeps the parameter a plain id.
+func (q *Queries) CreateFavoritesAlbum(ctx context.Context, userID int64) (PhotoAlbum, error) {
+	row := q.db.QueryRowContext(ctx, createFavoritesAlbum, userID)
 	var i PhotoAlbum
 	err := row.Scan(
 		&i.ID,
@@ -45,6 +48,7 @@ func (q *Queries) CreateFavoritesAlbum(ctx context.Context) (PhotoAlbum, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SmartType,
+		&i.UserID,
 	)
 	return i, err
 }
@@ -65,7 +69,7 @@ type DeleteFavoritesUnderParams struct {
 }
 
 // DeleteFavoritesUnder drops the favorite for a deleted path, and every
-// favorite under it when the path is a folder.
+// favorite under it when the path is a folder, for every account.
 func (q *Queries) DeleteFavoritesUnder(ctx context.Context, arg DeleteFavoritesUnderParams) error {
 	_, err := q.db.ExecContext(ctx, deleteFavoritesUnder, arg.DeviceSerial, arg.RelPath)
 	return err
@@ -73,17 +77,18 @@ func (q *Queries) DeleteFavoritesUnder(ctx context.Context, arg DeleteFavoritesU
 
 const getFavoritesAlbum = `-- name: GetFavoritesAlbum :one
 SELECT
-    id, name, parent_id, created_at, updated_at, smart_type
+    id, name, parent_id, created_at, updated_at, smart_type, user_id
 FROM
     photo_albums
 WHERE
-    smart_type = 'favorites'
+    user_id = CAST(?1 AS INTEGER)
+    AND smart_type = 'favorites'
 LIMIT
     1
 `
 
-func (q *Queries) GetFavoritesAlbum(ctx context.Context) (PhotoAlbum, error) {
-	row := q.db.QueryRowContext(ctx, getFavoritesAlbum)
+func (q *Queries) GetFavoritesAlbum(ctx context.Context, userID int64) (PhotoAlbum, error) {
+	row := q.db.QueryRowContext(ctx, getFavoritesAlbum, userID)
 	var i PhotoAlbum
 	err := row.Scan(
 		&i.ID,
@@ -92,6 +97,7 @@ func (q *Queries) GetFavoritesAlbum(ctx context.Context) (PhotoAlbum, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SmartType,
+		&i.UserID,
 	)
 	return i, err
 }
@@ -102,17 +108,19 @@ SELECT
 FROM
     photo_favorites
 WHERE
-    device_serial = ?
+    user_id = ?
+    AND device_serial = ?
     AND rel_path = ?
 `
 
 type IsFavoriteParams struct {
+	UserID       int64
 	DeviceSerial string
 	RelPath      string
 }
 
 func (q *Queries) IsFavorite(ctx context.Context, arg IsFavoriteParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, isFavorite, arg.DeviceSerial, arg.RelPath)
+	row := q.db.QueryRowContext(ctx, isFavorite, arg.UserID, arg.DeviceSerial, arg.RelPath)
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -120,15 +128,17 @@ func (q *Queries) IsFavorite(ctx context.Context, arg IsFavoriteParams) (bool, e
 
 const listFavorites = `-- name: ListFavorites :many
 SELECT
-    id, device_serial, rel_path, created_at
+    id, user_id, device_serial, rel_path, created_at
 FROM
     photo_favorites
+WHERE
+    user_id = ?
 ORDER BY
     created_at DESC
 `
 
-func (q *Queries) ListFavorites(ctx context.Context) ([]PhotoFavorite, error) {
-	rows, err := q.db.QueryContext(ctx, listFavorites)
+func (q *Queries) ListFavorites(ctx context.Context, userID int64) ([]PhotoFavorite, error) {
+	rows, err := q.db.QueryContext(ctx, listFavorites, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -138,6 +148,7 @@ func (q *Queries) ListFavorites(ctx context.Context) ([]PhotoFavorite, error) {
 		var i PhotoFavorite
 		if err := rows.Scan(
 			&i.ID,
+			&i.UserID,
 			&i.DeviceSerial,
 			&i.RelPath,
 			&i.CreatedAt,
@@ -175,9 +186,9 @@ type MoveFavoritesParams struct {
 	OldDeviceSerial string
 }
 
-// MoveFavorites points favorites at a moved file or folder. OR IGNORE skips
-// a row whose destination is already a favorite; DeleteFavoritesUnder on the
-// old path clears those leftovers.
+// MoveFavorites points favorites at a moved file or folder, for every account.
+// OR IGNORE skips a row whose destination is already that account's favorite;
+// DeleteFavoritesUnder on the old path clears those leftovers.
 func (q *Queries) MoveFavorites(ctx context.Context, arg MoveFavoritesParams) error {
 	_, err := q.db.ExecContext(ctx, moveFavorites,
 		arg.NewDeviceSerial,
@@ -191,16 +202,18 @@ func (q *Queries) MoveFavorites(ctx context.Context, arg MoveFavoritesParams) er
 const removeFavorite = `-- name: RemoveFavorite :exec
 DELETE FROM photo_favorites
 WHERE
-    device_serial = ?
+    user_id = ?
+    AND device_serial = ?
     AND rel_path = ?
 `
 
 type RemoveFavoriteParams struct {
+	UserID       int64
 	DeviceSerial string
 	RelPath      string
 }
 
 func (q *Queries) RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) error {
-	_, err := q.db.ExecContext(ctx, removeFavorite, arg.DeviceSerial, arg.RelPath)
+	_, err := q.db.ExecContext(ctx, removeFavorite, arg.UserID, arg.DeviceSerial, arg.RelPath)
 	return err
 }

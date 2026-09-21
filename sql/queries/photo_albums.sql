@@ -1,17 +1,25 @@
 -- name: CreateAlbum :one
 INSERT INTO
-    photo_albums (name, parent_id)
+    photo_albums (name, parent_id, user_id)
 VALUES
-    (?, ?)
+    (
+        sqlc.arg(name),
+        sqlc.arg(parent_id),
+        CAST(sqlc.arg(user_id) AS INTEGER)
+    )
 RETURNING *;
 
+-- Album reads and writes are scoped to the owning account (#1912): another
+-- account's album id reads as missing. The CAST keeps the nullable user_id
+-- column (014) a plain id parameter.
 -- name: GetAlbum :one
 SELECT
     *
 FROM
     photo_albums
 WHERE
-    id = ?
+    id = sqlc.arg(id)
+    AND user_id = CAST(sqlc.arg(user_id) AS INTEGER)
 LIMIT
     1;
 
@@ -20,6 +28,8 @@ SELECT
     *
 FROM
     photo_albums
+WHERE
+    user_id = CAST(sqlc.arg(user_id) AS INTEGER)
 ORDER BY
     parent_id,
     name;
@@ -30,7 +40,8 @@ SELECT
 FROM
     photo_albums
 WHERE
-    parent_id IS NULL
+    user_id = CAST(sqlc.arg(user_id) AS INTEGER)
+    AND parent_id IS NULL
 ORDER BY
     name;
 
@@ -47,25 +58,28 @@ ORDER BY
 -- name: RenameAlbum :one
 UPDATE photo_albums
 SET
-    name = ?,
+    name = sqlc.arg(name),
     updated_at = datetime('now')
 WHERE
-    id = ?
+    id = sqlc.arg(id)
+    AND user_id = CAST(sqlc.arg(user_id) AS INTEGER)
 RETURNING *;
 
 -- name: MoveAlbum :one
 UPDATE photo_albums
 SET
-    parent_id = ?,
+    parent_id = sqlc.arg(parent_id),
     updated_at = datetime('now')
 WHERE
-    id = ?
+    id = sqlc.arg(id)
+    AND user_id = CAST(sqlc.arg(user_id) AS INTEGER)
 RETURNING *;
 
 -- name: DeleteAlbum :exec
 DELETE FROM photo_albums
 WHERE
-    id = ?;
+    id = sqlc.arg(id)
+    AND user_id = CAST(sqlc.arg(user_id) AS INTEGER);
 
 -- name: AddPhotoToAlbum :one
 INSERT INTO
@@ -129,6 +143,7 @@ FROM
 WHERE
     album_id = ?;
 
+-- ListAlbumsContainingPhoto lists the albums of one account that hold a photo.
 -- name: ListAlbumsContainingPhoto :many
 SELECT
     pa.*
@@ -136,7 +151,8 @@ FROM
     photo_albums pa
     JOIN photo_album_items pai ON pa.id = pai.album_id
 WHERE
-    pai.device_serial = ?
-    AND pai.rel_path = ?
+    pa.user_id = CAST(sqlc.arg(user_id) AS INTEGER)
+    AND pai.device_serial = sqlc.arg(device_serial)
+    AND pai.rel_path = sqlc.arg(rel_path)
 ORDER BY
     pa.name;

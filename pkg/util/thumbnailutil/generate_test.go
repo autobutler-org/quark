@@ -61,8 +61,8 @@ func TestGenerateFromReaderWritesDecodableCacheEntry(t *testing.T) {
 	}
 
 	// The temporary file the entry was committed through must not survive.
-	if _, statErr := os.Stat(cachedPath + ".tmp"); !os.IsNotExist(statErr) {
-		t.Errorf("temporary cache file was left behind: %v", statErr)
+	if leftovers, _ := filepath.Glob(cachedPath + ".*.tmp"); len(leftovers) != 0 {
+		t.Errorf("temporary cache file was left behind: %v", leftovers)
 	}
 }
 

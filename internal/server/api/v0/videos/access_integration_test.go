@@ -18,8 +18,10 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/transcodeutil"
 	"github.com/autobutler-org/quark/pkg/util/videoutil"
 	"github.com/gin-gonic/gin"
 )
@@ -60,9 +62,16 @@ func newVideoHarness(t *testing.T) videoHarness {
 	if err != nil {
 		t.Fatal(err)
 	}
+	storage := storageutil.NewStorageService(systemDevice{})
+	queue := jobutil.NewQueue(jobutil.NewQueueParams{Database: database})
+	queue.Register(jobutil.RegisterParams{
+		Kind:    transcodeutil.Kind,
+		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{Storage: storage, Database: database}),
+	})
 	deps := deputil.NewDependencies().
-		WithStorageService(storageutil.NewStorageService(systemDevice{})).
-		WithDatabase(database)
+		WithStorageService(storage).
+		WithDatabase(database).
+		WithJobQueue(queue)
 	system := accessutil.System
 	principal := &system
 
@@ -179,5 +188,42 @@ func TestVideoAccess_NonAdmin(t *testing.T) {
 	}
 	if got := h.level(t, "shared/clip.mp4"); got != "" {
 		t.Errorf("source video gained a %q row, want none", got)
+	}
+}
+
+// TestTranscodeAccess_NonAdmin queues a transcode only for a caller who can read
+// the video and write its folder, and records them as the job's creator (#1979).
+func TestTranscodeAccess_NonAdmin(t *testing.T) {
+	h := newVideoHarness(t)
+	*h.principal = accessutil.Principal{UserID: h.userID}
+	transcode := func(rel string) int {
+		code, _ := h.do(t, http.MethodPost, "/api/v0/videos/transcode", `{"relPath":"`+rel+`","format":"mov","quality":"original"}`)
+		return code
+	}
+
+	for _, rel := range []string{"shared/clip.mp4", "shared/missing.mp4", "../../etc/passwd"} {
+		if got := transcode(rel); got != http.StatusNotFound {
+			t.Errorf("transcode %s with no access = %d, want 404", rel, got)
+		}
+	}
+	h.grant(t, "shared", accessutil.Read)
+	if got := transcode("shared/clip.mp4"); got != http.StatusForbidden {
+		t.Errorf("transcode with read only = %d, want 403", got)
+	}
+	h.grant(t, "shared", accessutil.Write)
+	if got := transcode("private/clip.mp4"); got != http.StatusNotFound {
+		t.Errorf("transcode of an unshared video = %d, want 404", got)
+	}
+	if got := transcode("shared/clip.mp4"); got != http.StatusAccepted {
+		t.Fatalf("transcode with write = %d, want 202", got)
+	}
+
+	var jobs int
+	var creator sql.NullInt64
+	if err := h.database.Db.QueryRow(`SELECT COUNT(*), MAX(user_id) FROM jobs`).Scan(&jobs, &creator); err != nil {
+		t.Fatal(err)
+	}
+	if jobs != 1 || creator.Int64 != h.userID {
+		t.Errorf("queued %d job(s) created by %v, want 1 created by %d", jobs, creator, h.userID)
 	}
 }

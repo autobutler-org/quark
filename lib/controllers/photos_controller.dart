@@ -121,6 +121,7 @@ class PhotosController extends ChangeNotifier {
           List<http.MultipartFile> files, {
           String? serial,
           bool overwrite,
+          bool keepBoth,
         })
         uploadFiles =
         FilesService.uploadFilesFromFormData,
@@ -214,6 +215,7 @@ class PhotosController extends ChangeNotifier {
     List<http.MultipartFile> files, {
     String? serial,
     bool overwrite,
+    bool keepBoth,
   })
   _uploadFiles;
   final PhotoBytesCache _bytesCache;
@@ -943,7 +945,10 @@ class PhotosController extends ChangeNotifier {
               filename: file.name,
             ),
       ];
-      await _uploadFiles('', multipart, serial: serial);
+      // Photos come off cameras with names like IMG_0001.jpg, so clashes are
+      // routine and the file's name carries nothing the user chose. Rather
+      // than the Quark's 409 (#2016), the import asks for both to be kept.
+      await _uploadFiles('', multipart, serial: serial, keepBoth: true);
     } finally {
       _isUploading = false;
       notifyListeners();

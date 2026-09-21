@@ -19,7 +19,8 @@ func grantError(err error) *serverutil.Response {
 	case errors.Is(err, accessutil.ErrInheritedGrant):
 		return serverutil.Conflict(err)
 	case errors.Is(err, accessutil.ErrTrashShare), errors.Is(err, accessutil.ErrSelfOwner),
-		errors.Is(err, accessutil.ErrGrantTarget), errors.Is(err, accessutil.ErrInvalidLevel):
+		errors.Is(err, accessutil.ErrGrantTarget), errors.Is(err, accessutil.ErrInvalidLevel),
+		errors.Is(err, accessutil.ErrStructuralShare):
 		return serverutil.BadRequest(err)
 	default:
 		return serverutil.InternalServerError(err)

@@ -25,16 +25,18 @@ import (
 // device into the StorageService without touching the real filesystem.
 type fakeDetector struct {
 	mountPoint string
+	// extra devices are reported after the internal one.
+	extra []storageutil.Device
 }
 
 func (f *fakeDetector) DetectDevices() ([]storageutil.Device, error) {
-	return []storageutil.Device{
+	return append([]storageutil.Device{
 		{
 			Name:       "Test Device",
 			MountPoint: f.mountPoint,
 			IsInternal: true,
 		},
-	}, nil
+	}, f.extra...), nil
 }
 
 // newTestEngine creates a gin engine with the files routes registered and

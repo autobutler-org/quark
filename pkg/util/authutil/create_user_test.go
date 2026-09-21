@@ -30,6 +30,13 @@ type createUserFixture struct {
 
 func newCreateUserFixture(t *testing.T) createUserFixture {
 	t.Helper()
+	return newCreateUserFixtureWith(t, nil)
+}
+
+// newCreateUserFixtureWith runs beforeSetup on the files directory before the
+// founder is set up, so a test can put something there first.
+func newCreateUserFixtureWith(t *testing.T, beforeSetup func(filesDir string)) createUserFixture {
+	t.Helper()
 	mountPoint := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(mountPoint, "quark", "data", "files"), 0o755); err != nil {
 		t.Fatal(err)
@@ -38,6 +45,9 @@ func newCreateUserFixture(t *testing.T) createUserFixture {
 	devices, err := storage.GetManagedDevices()
 	if err != nil || len(devices) != 1 {
 		t.Fatalf("GetManagedDevices = %v, %v", devices, err)
+	}
+	if beforeSetup != nil {
+		beforeSetup(devices[0].FilesDir)
 	}
 	database := dbtest.NewDB(t)
 	setupFounder(t, database, devices[0].FilesDir)
@@ -166,25 +176,12 @@ func TestCreateUser_PrivateFolder(t *testing.T) {
 	}
 }
 
-// TestCreateUser_RefusalsLeaveNothing checks an existing folder, a taken name
-// and an invalid name are refused with no account row and no folder change.
+// TestCreateUser_RefusalsLeaveNothing checks a taken name and an invalid name
+// are refused with no account row.
 func TestCreateUser_RefusalsLeaveNothing(t *testing.T) {
 	f := newCreateUserFixture(t)
-	existing := filepath.Join(f.filesDir, "users", "family")
-	if err := os.MkdirAll(existing, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(existing, "photo.jpg"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	before := f.userCount(t)
 
-	if _, err := f.create("family"); !errors.Is(err, authutil.ErrFolderExists) {
-		t.Errorf("existing folder = %v, want ErrFolderExists", err)
-	}
-	if _, err := os.Stat(filepath.Join(existing, "photo.jpg")); err != nil {
-		t.Errorf("refused account touched the existing folder: %v", err)
-	}
 	if _, err := f.create("admin"); !errors.Is(err, authutil.ErrUsernameTaken) {
 		t.Errorf("taken name = %v, want ErrUsernameTaken", err)
 	}

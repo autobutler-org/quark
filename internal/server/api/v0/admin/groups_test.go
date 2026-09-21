@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -50,8 +53,7 @@ func TestGroups_Endpoints(t *testing.T) {
 	one := func(kind eventbus.EventKind) []eventbus.EventKind { return []eventbus.EventKind{kind} }
 	expectEvents := func(step string, want []eventbus.EventKind) {
 		t.Helper()
-		got := h.drainKinds()
-		if len(got) != len(want) || (len(want) == 1 && got[0] != want[0]) {
+		if got := h.drainKinds(); !slices.Equal(got, want) {
 			t.Errorf("%s published %v, want %v", step, got, want)
 		}
 	}
@@ -70,12 +72,22 @@ func TestGroups_Endpoints(t *testing.T) {
 	if family.Name != "Family" || family.Builtin || family.Members == nil {
 		t.Errorf("created %+v", family)
 	}
-	expectEvents("create", one(eventbus.EventAccountChanged))
+	expectEvents("create", []eventbus.EventKind{eventbus.EventAccountChanged, eventbus.EventNewFolder})
+	expectDir := func(step, rel string, want bool) {
+		t.Helper()
+		info, err := os.Stat(filepath.Join(h.filesDir, filepath.FromSlash(rel)))
+		if got := err == nil && info.IsDir(); got != want {
+			t.Errorf("%s: %s is a folder = %v, want %v", step, rel, got, want)
+		}
+	}
+	expectDir("create", "groups/Family", true)
 	familyPath := "/api/v0/admin/groups/" + strconv.FormatInt(family.ID, 10)
 
 	expectError("create taken", h.doJSON(http.MethodPost, "/api/v0/admin/groups", `{"name":"FAMILY"}`), http.StatusConflict, grouputil.ErrGroupNameTaken)
 	expectError("create empty", h.doJSON(http.MethodPost, "/api/v0/admin/groups", `{"name":""}`), http.StatusBadRequest, grouputil.ErrInvalidGroupName)
 	expectError("create no body", h.doJSON(http.MethodPost, "/api/v0/admin/groups", ``), http.StatusBadRequest, grouputil.ErrInvalidGroupName)
+	expectError("create traversal", h.doJSON(http.MethodPost, "/api/v0/admin/groups", `{"name":"../escape"}`), http.StatusBadRequest, grouputil.ErrInvalidGroupName)
+	expectDir("create traversal", "escape", false)
 	expectEvents("refused creates", nil)
 
 	w = h.do(http.MethodGet, "/api/v0/admin/groups")
@@ -92,7 +104,14 @@ func TestGroups_Endpoints(t *testing.T) {
 	if w.Code != http.StatusOK || decodeGroup(t, w).Name != "Household" {
 		t.Errorf("rename = %d %s", w.Code, w.Body.String())
 	}
-	expectEvents("rename", one(eventbus.EventAccountChanged))
+	// The folder moves like any other move, carrying the group's grant.
+	expectEvents("rename", []eventbus.EventKind{eventbus.EventMove, eventbus.EventAccessChanged, eventbus.EventAccountChanged})
+	expectDir("rename", "groups/Family", false)
+	expectDir("rename", "groups/Household", true)
+	if err := os.Mkdir(filepath.Join(h.filesDir, "groups", "Taken"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	expectError("rename onto a folder", h.doJSON(http.MethodPut, familyPath, `{"name":"Taken"}`), http.StatusConflict, grouputil.ErrGroupFolderTaken)
 	expectError("rename everyone", h.doJSON(http.MethodPut, everyonePath, `{"name":"all"}`), http.StatusBadRequest, grouputil.ErrBuiltinGroup)
 	expectError("rename invalid", h.doJSON(http.MethodPut, familyPath, `{"name":"a\nb"}`), http.StatusBadRequest, grouputil.ErrInvalidGroupName)
 	expectError("rename onto everyone", h.doJSON(http.MethodPut, familyPath, `{"name":"Everyone"}`), http.StatusConflict, grouputil.ErrGroupNameTaken)
@@ -106,5 +125,6 @@ func TestGroups_Endpoints(t *testing.T) {
 		t.Errorf("delete = %d %s, want 204", w.Code, w.Body.String())
 	}
 	expectEvents("delete", one(eventbus.EventAccessChanged))
+	expectDir("delete keeps the folder", "groups/Household", true)
 	expectError("delete again", h.do(http.MethodDelete, familyPath), http.StatusNotFound, grouputil.ErrGroupNotFound)
 }

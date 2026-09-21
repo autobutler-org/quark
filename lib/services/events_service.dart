@@ -52,6 +52,31 @@ class EventsService {
 
   Stream<FileEvent> get events => _controller.stream;
 
+  final _connections = StreamController<void>.broadcast();
+
+  /// Fires each time the socket opens, reconnects included.
+  ///
+  /// The Quark closes an account's socket without sending the event that
+  /// caused it when that account is promoted, demoted, turned off or deleted,
+  /// so anything that depends on the account refreshes here as well.
+  Stream<void> get connections => _connections.stream;
+
+  final _reconnects = StreamController<void>.broadcast();
+
+  /// Fires each time the socket opens again after the first time since
+  /// [start].
+  ///
+  /// Events published while the socket was down are gone, so a listing that
+  /// follows events reloads here. The first connection is left out: a page
+  /// already loads on its own when it opens.
+  Stream<void> get reconnects => _reconnects.stream;
+  bool _hasConnected = false;
+
+  /// Opens the socket. A test swaps in a fake channel.
+  @visibleForTesting
+  static WebSocketChannel Function(Uri uri, {Map<String, dynamic>? headers})
+  connectChannel = connectLocalTrustWs;
+
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _sub;
   Timer? _reconnectTimer;
@@ -88,6 +113,7 @@ class EventsService {
     _channel?.sink.close();
     _channel = null;
     _attempt = 0;
+    _hasConnected = false;
   }
 
   /// Drops any existing connection and reconnects with the current token.
@@ -130,7 +156,7 @@ class EventsService {
       //   - otherwise        → ws_connect_stub.dart (web: browser handles cert trust)
       // The token goes in both the query (the only option on web) and the
       // Authorization header (ignored on web); requireAuth accepts either.
-      final channel = connectLocalTrustWs(
+      final channel = connectChannel(
         wsUri,
         headers: {'Authorization': 'Bearer $token'},
       );
@@ -141,8 +167,12 @@ class EventsService {
       // the Flutter error handler instead of our reconnect path.
       channel.ready
           .then((_) {
+            if (!identical(channel, _channel)) return;
             _attempt = 0;
             debugPrint('[EventsService] connected to ${_redact(wsUri)}');
+            _connections.add(null);
+            if (_hasConnected) _reconnects.add(null);
+            _hasConnected = true;
           })
           .catchError((Object e) {
             debugPrint('[EventsService] connect failed: $e');

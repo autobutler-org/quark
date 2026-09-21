@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:quark/models/upload_conflict.dart';
 import 'package:quark/models/upload_session.dart';
 import 'package:quark/services/resumable_upload_service.dart';
 import 'package:quark/services/upload_chunk_source.dart';
 import 'package:quark/services/upload_manager.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/upload_session_record.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -30,9 +33,15 @@ void main() {
   test('sends every queued file to its own directory', () async {
     final sent = <String>[];
     final manager = UploadManager.forTesting(
-      sender: ({required currentPath, required selectedFiles, serial}) async {
-        sent.add('$currentPath/${selectedFiles.single.filename}');
-      },
+      sender:
+          ({
+            required currentPath,
+            required selectedFiles,
+            serial,
+            conflict,
+          }) async {
+            sent.add('$currentPath/${selectedFiles.single.filename}');
+          },
     );
 
     final done = manager.results.first;
@@ -54,11 +63,12 @@ void main() {
     // stops listening. The upload is not the page's to cancel.
     final completers = <Completer<void>>[];
     final manager = UploadManager.forTesting(
-      sender: ({required currentPath, required selectedFiles, serial}) {
-        final completer = Completer<void>();
-        completers.add(completer);
-        return completer.future;
-      },
+      sender:
+          ({required currentPath, required selectedFiles, serial, conflict}) {
+            final completer = Completer<void>();
+            completers.add(completer);
+            return completer.future;
+          },
     );
 
     var notifications = 0;
@@ -104,7 +114,13 @@ void main() {
   test('reports progress as files complete', () async {
     final seen = <int>[];
     final manager = UploadManager.forTesting(
-      sender: ({required currentPath, required selectedFiles, serial}) async {},
+      sender:
+          ({
+            required currentPath,
+            required selectedFiles,
+            serial,
+            conflict,
+          }) async {},
     );
     manager.addListener(() {
       if (manager.isUploading) seen.add(manager.completed);
@@ -123,11 +139,12 @@ void main() {
   test('extends the run instead of starting a second one', () async {
     final completers = <Completer<void>>[];
     final manager = UploadManager.forTesting(
-      sender: ({required currentPath, required selectedFiles, serial}) {
-        final completer = Completer<void>();
-        completers.add(completer);
-        return completer.future;
-      },
+      sender:
+          ({required currentPath, required selectedFiles, serial, conflict}) {
+            final completer = Completer<void>();
+            completers.add(completer);
+            return completer.future;
+          },
     );
 
     final done = manager.results.first;
@@ -160,11 +177,17 @@ void main() {
         // One attempt each: retries are covered separately, and this is about
         // what happens to the other files when one is beyond saving.
         maxAttempts: 1,
-        sender: ({required currentPath, required selectedFiles, serial}) async {
-          final name = selectedFiles.single.filename!;
-          if (name == 'a.txt') throw Exception('network down');
-          sent.add(name);
-        },
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              final name = selectedFiles.single.filename!;
+              if (name == 'a.txt') throw Exception('network down');
+              sent.add(name);
+            },
       );
 
       final done = manager.results.first;
@@ -182,7 +205,13 @@ void main() {
 
   test('carries a cap note through to the end', () async {
     final manager = UploadManager.forTesting(
-      sender: ({required currentPath, required selectedFiles, serial}) async {},
+      sender:
+          ({
+            required currentPath,
+            required selectedFiles,
+            serial,
+            conflict,
+          }) async {},
     );
 
     final done = manager.results.first;
@@ -204,12 +233,18 @@ void main() {
       final gate = Completer<void>();
       final manager = UploadManager.forTesting(
         concurrency: 3,
-        sender: ({required currentPath, required selectedFiles, serial}) async {
-          inFlight++;
-          peak = peak > inFlight ? peak : inFlight;
-          await gate.future;
-          inFlight--;
-        },
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              inFlight++;
+              peak = peak > inFlight ? peak : inFlight;
+              await gate.future;
+              inFlight--;
+            },
       );
 
       final done = manager.results.first;
@@ -233,14 +268,20 @@ void main() {
       final gates = <Completer<void>>[];
       final manager = UploadManager.forTesting(
         concurrency: 2,
-        sender: ({required currentPath, required selectedFiles, serial}) async {
-          inFlight++;
-          peak = peak > inFlight ? peak : inFlight;
-          final gate = Completer<void>();
-          gates.add(gate);
-          await gate.future;
-          inFlight--;
-        },
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              inFlight++;
+              peak = peak > inFlight ? peak : inFlight;
+              final gate = Completer<void>();
+              gates.add(gate);
+              await gate.future;
+              inFlight--;
+            },
       );
 
       final done = manager.results.first;
@@ -271,13 +312,19 @@ void main() {
       final finished = <String>[];
       final manager = UploadManager.forTesting(
         concurrency: 2,
-        sender: ({required currentPath, required selectedFiles, serial}) async {
-          final name = selectedFiles.single.filename!;
-          if (name == 'slow.txt') {
-            await slow.future;
-          }
-          finished.add(name);
-        },
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              final name = selectedFiles.single.filename!;
+              if (name == 'slow.txt') {
+                await slow.future;
+              }
+              finished.add(name);
+            },
       );
 
       final done = manager.results.first;
@@ -307,11 +354,17 @@ void main() {
     test('a failure in one worker does not stop the others', () async {
       final manager = UploadManager.forTesting(
         concurrency: 3,
-        sender: ({required currentPath, required selectedFiles, serial}) async {
-          if (selectedFiles.single.filename == 'bad.txt') {
-            throw Exception('network down');
-          }
-        },
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              if (selectedFiles.single.filename == 'bad.txt') {
+                throw Exception('network down');
+              }
+            },
       );
 
       final done = manager.results.first;
@@ -337,10 +390,16 @@ void main() {
       var attempts = 0;
       final manager = UploadManager.forTesting(
         concurrency: 1,
-        sender: ({required currentPath, required selectedFiles, serial}) async {
-          attempts++;
-          if (attempts < 3) throw Exception('server busy');
-        },
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              attempts++;
+              if (attempts < 3) throw Exception('server busy');
+            },
       );
 
       final done = manager.results.first;
@@ -361,8 +420,13 @@ void main() {
           concurrency: 1,
           attemptTimeout: const Duration(milliseconds: 50),
           maxAttempts: 1,
-          sender: ({required currentPath, required selectedFiles, serial}) =>
-              Completer<void>().future,
+          sender:
+              ({
+                required currentPath,
+                required selectedFiles,
+                serial,
+                conflict,
+              }) => Completer<void>().future,
         );
 
         final done = manager.results.first;
@@ -381,10 +445,16 @@ void main() {
         concurrency: 1,
         maxAttempts: 1,
         maxConsecutiveFailures: 3,
-        sender: ({required currentPath, required selectedFiles, serial}) async {
-          sent++;
-          throw Exception('disk full');
-        },
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              sent++;
+              throw Exception('disk full');
+            },
       );
 
       final done = manager.results.first;
@@ -409,11 +479,17 @@ void main() {
         concurrency: 1,
         maxAttempts: 1,
         maxConsecutiveFailures: 3,
-        sender: ({required currentPath, required selectedFiles, serial}) async {
-          sent++;
-          // Fail, fail, succeed, repeating: intermittent, not terminal.
-          if (sent % 3 != 0) throw Exception('flaky');
-        },
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              sent++;
+              // Fail, fail, succeed, repeating: intermittent, not terminal.
+              if (sent % 3 != 0) throw Exception('flaky');
+            },
       );
 
       final done = manager.results.first;
@@ -432,11 +508,12 @@ void main() {
       final gates = <Completer<void>>[];
       final manager = UploadManager.forTesting(
         concurrency: 1,
-        sender: ({required currentPath, required selectedFiles, serial}) {
-          final gate = Completer<void>();
-          gates.add(gate);
-          return gate.future;
-        },
+        sender:
+            ({required currentPath, required selectedFiles, serial, conflict}) {
+              final gate = Completer<void>();
+              gates.add(gate);
+              return gate.future;
+            },
       );
 
       final done = manager.results.first;
@@ -462,7 +539,12 @@ void main() {
     test('cancel on an idle manager does nothing', () {
       final manager = UploadManager.forTesting(
         sender:
-            ({required currentPath, required selectedFiles, serial}) async {},
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {},
       );
 
       expect(manager.cancel, returnsNormally);
@@ -494,9 +576,15 @@ void main() {
       Duration attemptTimeout = kUploadAttemptTimeout,
     }) {
       return UploadManager.forTesting(
-        sender: ({required currentPath, required selectedFiles, serial}) async {
-          sentWhole.add(selectedFiles.single.filename!);
-        },
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              sentWhole.add(selectedFiles.single.filename!);
+            },
         sessionClient: server,
         sessionStore: store,
         concurrency: concurrency,
@@ -791,6 +879,40 @@ void main() {
       expect(server.ranges, ['0-8', '8-16', '16-20']);
     });
 
+    test(
+      'a session that cannot be checked is deleted before starting over',
+      () async {
+        final sessionId = server.seed(
+          fileName: 'big.bin',
+          totalSize: 20,
+          offset: 8,
+        );
+        final key = keyFor('big.bin', 20);
+        store.write(
+          UploadSessionRecord(
+            fileKey: key,
+            sessionId: sessionId,
+            offset: 8,
+            totalSize: 20,
+            fileName: 'big.bin',
+            createdAt: DateTime.now(),
+          ),
+        );
+        server.getSessionError = Exception('connection reset');
+        final manager = managerFor();
+
+        final done = manager.results.first;
+        manager.enqueue(uploads: [sized('big.bin', 20)], uploadPath: '');
+        final result = await done;
+
+        expect(server.created, hasLength(1), reason: 'started over');
+        expect(result.failed, 0);
+        expect(server.deleted, [
+          sessionId,
+        ], reason: 'the session it replaced may still hold staged bytes');
+      },
+    );
+
     test('a stale record is pruned rather than resumed', () async {
       final sessionId = server.seed(
         fileName: 'big.bin',
@@ -861,12 +983,105 @@ void main() {
       expect(result.completed, 0, reason: 'neither sent nor failed');
       expect(result.failed, 0);
       expect(
-        store.read(keyFor('big.bin', 40))?.offset,
-        8,
-        reason: 'the record stays, so the file resumes rather than restarts',
+        server.deleted,
+        server.created,
+        reason: 'a canceled session frees its staged bytes now, not at expiry',
       );
+      expect(store.read(keyFor('big.bin', 40)), isNull);
       expect(manager.isUploading, isFalse, reason: 'the UI unlocks');
     });
+
+    test('giving up on a chunked file deletes its session', () async {
+      server.intercept = (attempt, start, end) async {
+        if (start == 8) {
+          return const ChunkRejected(statusCode: 500, message: 'disk full');
+        }
+        return null;
+      };
+      final manager = managerFor(maxAttempts: 2);
+
+      final done = manager.results.first;
+      manager.enqueue(uploads: [sized('big.bin', 20)], uploadPath: '');
+      final result = await done;
+
+      expect(result.failed, 1);
+      expect(server.created, hasLength(1), reason: 'the retry resumed it');
+      expect(
+        server.deleted,
+        server.created,
+        reason: 'nothing is left staged on the server once the client gives up',
+      );
+      expect(store.read(keyFor('big.bin', 20)), isNull);
+    });
+
+    test(
+      'a resumed session holding every byte replays the last chunk to commit',
+      () async {
+        // A commit that failed (a full disk, say) leaves the session complete
+        // but unwritten. Only a commit response means the file is in place.
+        final sessionId = server.seed(
+          fileName: 'big.bin',
+          totalSize: 20,
+          offset: 20,
+        );
+        final key = keyFor('big.bin', 20);
+        store.write(
+          UploadSessionRecord(
+            fileKey: key,
+            sessionId: sessionId,
+            offset: 20,
+            totalSize: 20,
+            fileName: 'big.bin',
+            createdAt: DateTime.now(),
+          ),
+        );
+        final manager = managerFor();
+
+        final done = manager.results.first;
+        manager.enqueue(uploads: [sized('big.bin', 20)], uploadPath: '');
+        final result = await done;
+
+        expect(server.created, isEmpty);
+        expect(server.ranges, ['12-20'], reason: 'the final chunk, replayed');
+        expect(server.sessions, isEmpty, reason: 'the replay committed it');
+        expect(result.failed, 0);
+        expect(store.read(key), isNull);
+      },
+    );
+
+    test(
+      'a replayed final chunk that still fails to commit is not a success',
+      () async {
+        final sessionId = server.seed(
+          fileName: 'big.bin',
+          totalSize: 20,
+          offset: 20,
+        );
+        final key = keyFor('big.bin', 20);
+        store.write(
+          UploadSessionRecord(
+            fileKey: key,
+            sessionId: sessionId,
+            offset: 20,
+            totalSize: 20,
+            fileName: 'big.bin',
+            createdAt: DateTime.now(),
+          ),
+        );
+        server.intercept = (attempt, start, end) async =>
+            const ChunkRejected(statusCode: 500, message: 'disk full');
+        final manager = managerFor(maxAttempts: 1);
+
+        final done = manager.results.first;
+        manager.enqueue(uploads: [sized('big.bin', 20)], uploadPath: '');
+        final result = await done;
+
+        expect(server.ranges, ['12-20']);
+        expect(result.failed, 1);
+        expect(server.deleted, [sessionId]);
+        expect(store.read(key), isNull);
+      },
+    );
 
     test('a rejected chunk fails the file, not the batch', () async {
       server.intercept = (attempt, start, end) async {
@@ -956,7 +1171,12 @@ void main() {
           const ChunkRejected(statusCode: 500, message: 'nope');
       final manager = UploadManager.forTesting(
         sender:
-            ({required currentPath, required selectedFiles, serial}) async {},
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {},
         sessionClient: server,
         sessionStore: store,
         concurrency: 1,
@@ -1038,6 +1258,161 @@ void main() {
       expect(peak, lessThanOrEqualTo(kDefaultUploadConcurrency));
     });
   });
+  group('a name the Quark already has', () {
+    test('asks once and sends the answer with the file', () async {
+      final conflicts = <UploadConflictChoice?>[];
+      var refuse = true;
+      final manager = UploadManager.forTesting(
+        maxAttempts: 2,
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              conflicts.add(conflict);
+              if (conflict == null && refuse) {
+                throw const ApiException(409, 'upload');
+              }
+            },
+      );
+      manager.conflictResolver = (fileName, {required offerApplyToAll}) async =>
+          const UploadConflictAnswer(choice: UploadConflictChoice.keepBoth);
+
+      manager.enqueue(uploads: [upload('a.txt')], uploadPath: '');
+      final result = await manager.results.first;
+
+      expect(conflicts, [null, UploadConflictChoice.keepBoth]);
+      expect(result.succeeded, 1);
+      expect(result.failed, 0);
+      refuse = false;
+    });
+
+    test('a cancelled clash is not a failure', () async {
+      final manager = UploadManager.forTesting(
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              throw const ApiException(409, 'upload');
+            },
+      );
+      manager.conflictResolver = (fileName, {required offerApplyToAll}) async =>
+          const UploadConflictAnswer(choice: null);
+
+      manager.enqueue(uploads: [upload('a.txt')], uploadPath: '');
+      final result = await manager.results.first;
+
+      expect(result.declined, 1);
+      expect(result.failed, 0);
+      expect(result.succeeded, 0);
+    });
+
+    test(
+      'an answer that stands is asked for once and used for the rest',
+      () async {
+        var asked = 0;
+        final manager = UploadManager.forTesting(
+          concurrency: 1,
+          sender:
+              ({
+                required currentPath,
+                required selectedFiles,
+                serial,
+                conflict,
+              }) async {
+                if (conflict == null) {
+                  throw const ApiException(409, 'upload');
+                }
+              },
+        );
+        manager.conflictResolver =
+            (fileName, {required offerApplyToAll}) async {
+              asked++;
+              expect(offerApplyToAll, isTrue);
+              return const UploadConflictAnswer(
+                choice: UploadConflictChoice.replace,
+                applyToAll: true,
+              );
+            };
+
+        manager.enqueue(
+          uploads: [upload('a.txt'), upload('b.txt'), upload('c.txt')],
+          uploadPath: '',
+        );
+        final result = await manager.results.first;
+
+        expect(asked, 1);
+        expect(result.succeeded, 3);
+      },
+    );
+
+    test('with nobody to ask, the file is reported as failed', () async {
+      final manager = UploadManager.forTesting(
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              throw const ApiException(409, 'upload');
+            },
+      );
+
+      manager.enqueue(uploads: [upload('a.txt')], uploadPath: '');
+      final result = await manager.results.first;
+
+      expect(result.failed, 1);
+      expect(result.firstError, Errors.fileNameTaken);
+    });
+
+    test('a chunked upload asks too, and reopens its session', () async {
+      final server = _FakeUploadServer()..refuseUntilAnswered = true;
+      final manager = UploadManager.forTesting(
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {},
+        sessionClient: server,
+        sessionStore: InMemoryUploadSessionStore(),
+        concurrency: 1,
+        chunkSizeBytes: 8,
+        chunkedThresholdBytes: 8,
+        chunkRetryBackoff: Duration.zero,
+      );
+      manager.conflictResolver = (fileName, {required offerApplyToAll}) async =>
+          const UploadConflictAnswer(choice: UploadConflictChoice.keepBoth);
+
+      final done = manager.results.first;
+      manager.enqueue(
+        uploads: [
+          PendingUpload(
+            relativeDir: '',
+            name: 'big.bin',
+            build: () async => http.MultipartFile.fromBytes(
+              'files',
+              _bytes,
+              filename: 'big.bin',
+            ),
+            openChunkSource: () async => _FakeChunkSource(20),
+          ),
+        ],
+        uploadPath: '',
+      );
+      final result = await done;
+
+      expect(server.createdConflicts, [null, UploadConflictChoice.keepBoth]);
+      expect(result.succeeded, 1);
+    });
+  });
 }
 
 final _bytes = Uint8List.fromList([1, 2, 3]);
@@ -1097,6 +1472,11 @@ class _FakeUploadServer implements ResumableUploadClient {
   final List<String> created = [];
   final List<String> createdRootDirs = [];
   final List<String> createdFileNames = [];
+  final List<UploadConflictChoice?> createdConflicts = [];
+
+  /// Stands in for a Quark whose name is taken: a session opened without a
+  /// conflict choice is refused with a 409.
+  bool refuseUntilAnswered = false;
   final List<String> deleted = [];
   final List<String> ranges = [];
 
@@ -1132,7 +1512,15 @@ class _FakeUploadServer implements ResumableUploadClient {
     required int totalSize,
     String? serial,
     bool overwrite = false,
+    UploadConflictChoice? conflict,
   }) async {
+    createdConflicts.add(conflict);
+    final refusal = refuseUntilAnswered && conflict == null
+        ? const ApiException(409, 'open an upload session')
+        : null;
+    if (refusal != null) {
+      throw refusal;
+    }
     final sessionId = 'session-${++_counter}';
     sessions[sessionId] = _FakeSession(
       rootDir: rootDir,
@@ -1164,18 +1552,17 @@ class _FakeUploadServer implements ResumableUploadClient {
     if (session == null) {
       return const ChunkSessionGone();
     }
-    if (end <= session.offset) {
+    if (end <= session.offset && session.offset < session.totalSize) {
       // Idempotent replay: a retry after a response lost in flight.
-      return ChunkAccepted(
-        offset: session.offset,
-        complete: session.offset >= session.totalSize,
-      );
+      return ChunkAccepted(offset: session.offset, complete: false);
     }
-    if (start != session.offset) {
+    // A replayed final chunk is written nowhere but reaches the commit again,
+    // as on the real server.
+    if (start != session.offset && end > session.offset) {
       return ChunkOffsetMismatch(offset: session.offset);
     }
 
-    session.offset = end;
+    session.offset = math.max(session.offset, end);
     final complete = session.offset >= session.totalSize;
     if (complete) {
       sessions.remove(sessionId);
@@ -1187,8 +1574,15 @@ class _FakeUploadServer implements ResumableUploadClient {
     );
   }
 
+  /// Thrown from [getSession] when set, as a status check that never landed.
+  Object? getSessionError;
+
   @override
   Future<UploadSessionStatus?> getSession(String sessionId) async {
+    final error = getSessionError;
+    if (error != null) {
+      throw error;
+    }
     final session = sessions[sessionId];
     if (session == null) {
       return null;

@@ -15,7 +15,7 @@ import (
 
 // createUploadSession godoc
 // @Summary Open a resumable upload session
-// @Description Reserve a session for one file; the bytes follow as chunks on PUT. Needs write access on the directory the file lands in. The session belongs to the caller: it is not found for anyone else.
+// @Description Reserve a session for one file; the bytes follow as chunks on PUT. Needs write access on the directory the file lands in. The session belongs to the caller: it is not found for anyone else. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.
 // @Tags files
 // @Accept json
 // @Produce json
@@ -24,6 +24,7 @@ import (
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
+// @Failure 409 {object} serverutil.Response "Conflict"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Router /files/upload-session [post]
 func createUploadSession(c *gin.Context) *serverutil.Response {
@@ -53,12 +54,14 @@ func createUploadSession(c *gin.Context) *serverutil.Response {
 	}
 
 	result, err := store.CreateSession(uploadutil.CreateSessionParams{
+		Ctx:         c.Request.Context(),
 		Destination: uploadDestination(deps),
 		RootDir:     request.RootDir,
 		FileName:    request.FileName,
 		TotalSize:   request.TotalSize,
 		Serial:      request.Serial,
 		Overwrite:   request.Overwrite,
+		KeepBoth:    request.KeepBoth,
 		UserID:      access.Principal().UserID,
 	})
 	if err != nil {

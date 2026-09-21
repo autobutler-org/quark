@@ -41,14 +41,16 @@ type accessHarness struct {
 	principal *accessutil.Principal
 }
 
-func newAccessHarness(t *testing.T, admin bool) accessHarness {
+// newAccessHarness builds the harness over the internal device, plus any
+// extra devices given.
+func newAccessHarness(t *testing.T, admin bool, extra ...storageutil.Device) accessHarness {
 	t.Helper()
 	mountPoint := t.TempDir()
 	filesDir := filepath.Join(mountPoint, "quark", "data", "files")
 	if err := os.MkdirAll(filesDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	svc := storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint})
+	svc := storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint, extra: extra})
 	registry := vfs.NewRegistry()
 	if err := registry.Register(vfs.Namespace{ID: "files"}, vfs.NewStorageServiceVFS(svc, "files")); err != nil {
 		t.Fatal(err)
@@ -411,6 +413,17 @@ func (h accessHarness) upload(t *testing.T, dir, name string, overwrite bool) *h
 	return uploadFile(t, h.engine, target, name, "content of "+name)
 }
 
+// uploadKeepingBoth sends one multipart file into dir asking the Quark to
+// land it under a free name if the one it has is taken.
+func (h accessHarness) uploadKeepingBoth(t *testing.T, dir, name string) *httptest.ResponseRecorder {
+	t.Helper()
+	target := "/api/v0/files/upload"
+	if dir != "" {
+		target += "/" + dir
+	}
+	return uploadFile(t, h.engine, target+"?keepBoth=true", name, "content of "+name)
+}
+
 func (h accessHarness) openSession(t *testing.T, dir, name string, size int) *httptest.ResponseRecorder {
 	t.Helper()
 	return openSession(t, h.engine, map[string]any{"rootDir": dir, "fileName": name, "totalSize": size})
@@ -462,12 +475,18 @@ func TestAccess_UploadOwnsOnlyNewFiles(t *testing.T) {
 		"into an own folder": h.upload(t, "mine", "x.txt", false),
 	})
 	h.uploadInOneChunk(t, "shared", "chunked.bin")
+	// Keeping both writes a new file, which the caller owns under the name it
+	// really landed under (#2016).
+	if w := h.uploadKeepingBoth(t, "shared", "existing.txt"); w.Code != http.StatusOK {
+		t.Fatalf("keep both returned %d: %s", w.Code, w.Body.String())
+	}
 
 	want := map[string]string{
-		"shared":             "write",
-		"mine":               "owner",
-		"shared/new.txt":     "owner",
-		"shared/chunked.bin": "owner",
+		"shared":                  "write",
+		"mine":                    "owner",
+		"shared/new.txt":          "owner",
+		"shared/chunked.bin":      "owner",
+		"shared/existing_(1).txt": "owner",
 	}
 	if got := h.levels(t); !maps.Equal(got, want) {
 		t.Errorf("rows = %v, want %v", got, want)
@@ -597,5 +616,42 @@ func TestAccess_AdminSeesEverything(t *testing.T) {
 	)
 	if n := h.rowCount(t); n != 0 {
 		t.Errorf("path_access rows after admin requests = %d, want 0", n)
+	}
+}
+
+// Replacing a file re-uploads its content, not its ownership: the owner row
+// the first upload wrote stays with whoever wrote it (#2016).
+func TestAccess_ReplacingAFileKeepsItsOwner(t *testing.T) {
+	h := newAccessHarness(t, false)
+	writeFixture(t, h.filesDir, "shared/theirs.txt")
+	h.grant(t, "shared", accessutil.Write)
+
+	alice, err := h.database.Queries.CreateUser(context.Background(), db.CreateUserParams{
+		Username: "alice", PasswordHash: "h", RecoveryPhraseHash: "r",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.database.Queries.SetUserPathAccess(context.Background(), db.SetUserPathAccessParams{
+		RelPath: accessutil.Canonical("shared/theirs.txt"),
+		UserID:  sql.NullInt64{Int64: alice.ID, Valid: true},
+		Level:   accessutil.Owner.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if w := h.upload(t, "shared", "theirs.txt", true); w.Code != http.StatusOK {
+		t.Fatalf("replace returned %d: %s", w.Code, w.Body.String())
+	}
+
+	var owner int64
+	if err := h.database.Db.QueryRow(
+		`SELECT user_id FROM path_access WHERE rel_path = ? AND level = 'owner'`,
+		accessutil.Canonical("shared/theirs.txt"),
+	).Scan(&owner); err != nil {
+		t.Fatalf("the owner row did not survive the replace: %v", err)
+	}
+	if owner != alice.ID {
+		t.Errorf("shared/theirs.txt is owned by %d, want alice (%d)", owner, alice.ID)
 	}
 }

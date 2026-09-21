@@ -24,9 +24,19 @@ func NewDetector() Detector {
 // by cross-referencing with ListUsbDevices. The UsbInfo field will be set
 // if a match is found by block device path or mount point.
 func (d *detector) DetectDevices() ([]Device, error) {
+	return detectDevices(true)
+}
+
+// DetectRoots returns the same devices as DetectDevices without walking each
+// one's files to categorize its usage, the only expensive step on Linux (#2195).
+func (d *detector) DetectRoots() ([]Device, error) {
+	return detectDevices(false)
+}
+
+func detectDevices(categorize bool) ([]Device, error) {
 	devices := []Device{}
 
-	rootDevice, err := detectRootDevice()
+	rootDevice, err := detectRootDevice(categorize)
 	if err != nil {
 		return devices, err
 	}
@@ -84,7 +94,9 @@ func (d *detector) DetectDevices() ([]Device, error) {
 				Model:          usb.GetProduct(),
 				UsbInfo:        usb,
 			}
-			device.ApplySimpleCategorization()
+			if categorize {
+				device.ApplySimpleCategorization()
+			}
 			devices = append(devices, device)
 		}
 	}
@@ -113,7 +125,7 @@ func parseProcMountsRoot(r io.Reader) (devicePath, fsType string, err error) {
 // detectRootDevice parses /proc/mounts to find the root filesystem mount
 // and uses syscall.Statfs to get size information.
 // This replaces the previous df-based approach which spawned a subprocess.
-func detectRootDevice() (*Device, error) {
+func detectRootDevice(categorize bool) (*Device, error) {
 	f, err := os.Open("/proc/mounts")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open /proc/mounts: %w", err)
@@ -162,6 +174,8 @@ func detectRootDevice() (*Device, error) {
 		device.Name = "Root Volume"
 	}
 
-	device.ApplySimpleCategorization()
+	if categorize {
+		device.ApplySimpleCategorization()
+	}
 	return device, nil
 }

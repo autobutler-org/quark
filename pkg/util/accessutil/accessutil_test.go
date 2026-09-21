@@ -455,3 +455,48 @@ func TestGrantOwnerIfNeeded(t *testing.T) {
 		t.Errorf("rows = %d, want 3", n)
 	}
 }
+
+func TestIsHomeRoot(t *testing.T) {
+	for _, tc := range []struct {
+		serial, path string
+		want         bool
+	}{
+		{"", "users/bob", true},
+		{"", "/users/bob/", true},
+		{"", "users/./bob", true},
+		{"", "users", false},
+		{"", "users/bob/notes.txt", false},
+		{"", "users/bob/sub", false},
+		{"", "bob", false},
+		{"", "shared/users/bob", false},
+		{"USB1", "users/bob", false},
+	} {
+		if got := accessutil.IsHomeRoot(tc.serial, tc.path); got != tc.want {
+			t.Errorf("IsHomeRoot(%q, %q) = %v, want %v", tc.serial, tc.path, got, tc.want)
+		}
+	}
+}
+
+// The same cases as TestIsHomeRoot, under groups/, and the Dart mirror's
+// isGroupRoot test uses them too.
+func TestIsGroupRoot(t *testing.T) {
+	for _, tc := range []struct {
+		serial, path string
+		want         bool
+	}{
+		{"", "groups/Family", true},
+		{"", "/groups/Family/", true},
+		{"", "groups/./Family", true},
+		{"", "groups", false},
+		{"", "groups/Family/notes.txt", false},
+		{"", "groups/Family/sub", false},
+		{"", "Family", false},
+		{"", "shared/groups/Family", false},
+		{"", "users/Family", false},
+		{"USB1", "groups/Family", false},
+	} {
+		if got := accessutil.IsGroupRoot(tc.serial, tc.path); got != tc.want {
+			t.Errorf("IsGroupRoot(%q, %q) = %v, want %v", tc.serial, tc.path, got, tc.want)
+		}
+	}
+}

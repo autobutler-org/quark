@@ -8,7 +8,9 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
+	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 func everyoneID(t *testing.T, database *db.DatabaseSqlc) int64 {
@@ -20,9 +22,49 @@ func everyoneID(t *testing.T, database *db.DatabaseSqlc) int64 {
 	return id
 }
 
+// filesDirs remembers each test database's files directory, so create and
+// rename helpers agree on it without threading it through every call.
+var filesDirs = map[*db.DatabaseSqlc]string{}
+
+// filesDirFor is the files directory the groups of database live under.
+func filesDirFor(t *testing.T, database *db.DatabaseSqlc) string {
+	t.Helper()
+	if dir, ok := filesDirs[database]; ok {
+		return dir
+	}
+	dir := t.TempDir()
+	filesDirs[database] = dir
+	t.Cleanup(func() { delete(filesDirs, database) })
+	return dir
+}
+
+// renameParams renames a group through a local files VFS over the test's
+// files directory, as the server's files namespace does.
+func renameParams(t *testing.T, database *db.DatabaseSqlc, groupID int64, name string) grouputil.RenameGroupParams {
+	t.Helper()
+	dir := filesDirFor(t, database)
+	local, err := vfs.NewLocalVFS(dir, "files")
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: "files"}, local); err != nil {
+		t.Fatal(err)
+	}
+	return grouputil.RenameGroupParams{
+		Database: database, Registry: registry, EventBus: eventbus.New(),
+		FilesDir: dir, GroupID: groupID, Name: name,
+	}
+}
+
+func createParams(t *testing.T, database *db.DatabaseSqlc, name string) grouputil.CreateGroupParams {
+	t.Helper()
+	return grouputil.CreateGroupParams{Database: database, FilesDir: filesDirFor(t, database), Name: name}
+}
+
 func create(t *testing.T, database *db.DatabaseSqlc, name string) grouputil.Group {
 	t.Helper()
-	result, err := grouputil.CreateGroup(context.Background(), grouputil.CreateGroupParams{Database: database, Name: name})
+	result, err := grouputil.CreateGroup(context.Background(), createParams(t, database, name))
 	if err != nil {
 		t.Fatalf("CreateGroup(%q): %v", name, err)
 	}
@@ -45,8 +87,14 @@ func TestCreateGroupValidatesTheName(t *testing.T) {
 		{name: "two\nlines", err: grouputil.ErrInvalidGroupName},
 		{name: "tab\there", err: grouputil.ErrInvalidGroupName},
 		{name: "bad \xff byte", err: grouputil.ErrInvalidGroupName},
+		{name: "a/b", err: grouputil.ErrInvalidGroupName},
+		{name: "../escape", err: grouputil.ErrInvalidGroupName},
+		{name: `a\b`, err: grouputil.ErrInvalidGroupName},
+		{name: ".", err: grouputil.ErrInvalidGroupName},
+		{name: " .. ", err: grouputil.ErrInvalidGroupName},
+		{name: "...", want: "..."},
 	} {
-		result, err := grouputil.CreateGroup(context.Background(), grouputil.CreateGroupParams{Database: database, Name: tc.name})
+		result, err := grouputil.CreateGroup(context.Background(), createParams(t, database, tc.name))
 		if !errors.Is(err, tc.err) {
 			t.Errorf("CreateGroup(%q) error = %v, want %v", tc.name, err, tc.err)
 			continue
@@ -64,14 +112,14 @@ func TestGroupNamesAreUniqueIgnoringCase(t *testing.T) {
 	friends := create(t, database, "Friends")
 
 	for _, name := range []string{"family", "FAMILY", "Everyone"} {
-		if _, err := grouputil.CreateGroup(ctx, grouputil.CreateGroupParams{Database: database, Name: name}); !errors.Is(err, grouputil.ErrGroupNameTaken) {
+		if _, err := grouputil.CreateGroup(ctx, createParams(t, database, name)); !errors.Is(err, grouputil.ErrGroupNameTaken) {
 			t.Errorf("CreateGroup(%q) = %v, want ErrGroupNameTaken", name, err)
 		}
 	}
-	if _, err := grouputil.RenameGroup(ctx, grouputil.RenameGroupParams{Database: database, GroupID: friends.ID, Name: "fAmIlY"}); !errors.Is(err, grouputil.ErrGroupNameTaken) {
+	if _, err := grouputil.RenameGroup(ctx, renameParams(t, database, friends.ID, "fAmIlY")); !errors.Is(err, grouputil.ErrGroupNameTaken) {
 		t.Errorf("rename onto another group's name = %v, want ErrGroupNameTaken", err)
 	}
-	renamed, err := grouputil.RenameGroup(ctx, grouputil.RenameGroupParams{Database: database, GroupID: family.ID, Name: "family"})
+	renamed, err := grouputil.RenameGroup(ctx, renameParams(t, database, family.ID, "family"))
 	if err != nil || renamed.Group.Name != "family" {
 		t.Errorf("rename to its own name in another case = %+v, %v", renamed, err)
 	}
@@ -82,7 +130,7 @@ func TestEveryoneCannotBeChanged(t *testing.T) {
 	ctx := context.Background()
 	id := everyoneID(t, database)
 
-	if _, err := grouputil.RenameGroup(ctx, grouputil.RenameGroupParams{Database: database, GroupID: id, Name: "all"}); !errors.Is(err, grouputil.ErrBuiltinGroup) {
+	if _, err := grouputil.RenameGroup(ctx, renameParams(t, database, id, "all")); !errors.Is(err, grouputil.ErrBuiltinGroup) {
 		t.Errorf("rename everyone = %v, want ErrBuiltinGroup", err)
 	}
 	if _, err := grouputil.DeleteGroup(ctx, grouputil.DeleteGroupParams{Database: database, GroupID: id}); !errors.Is(err, grouputil.ErrBuiltinGroup) {
@@ -97,7 +145,7 @@ func TestEveryoneCannotBeChanged(t *testing.T) {
 func TestMissingGroupIsNotFound(t *testing.T) {
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
-	if _, err := grouputil.RenameGroup(ctx, grouputil.RenameGroupParams{Database: database, GroupID: 999, Name: "x"}); !errors.Is(err, grouputil.ErrGroupNotFound) {
+	if _, err := grouputil.RenameGroup(ctx, renameParams(t, database, 999, "x")); !errors.Is(err, grouputil.ErrGroupNotFound) {
 		t.Errorf("rename = %v, want ErrGroupNotFound", err)
 	}
 	if _, err := grouputil.DeleteGroup(ctx, grouputil.DeleteGroupParams{Database: database, GroupID: 999}); !errors.Is(err, grouputil.ErrGroupNotFound) {
@@ -130,7 +178,8 @@ func TestDeleteGroupCascades(t *testing.T) {
 	if _, err := grouputil.DeleteGroup(ctx, grouputil.DeleteGroupParams{Database: database, GroupID: family.ID}); err != nil {
 		t.Fatalf("DeleteGroup: %v", err)
 	}
-	for table, want := range map[string]int{"group_members": 1, "path_access": 1, "groups": 2} {
+	// Kept keeps its share and the grant on its own folder.
+	for table, want := range map[string]int{"group_members": 1, "path_access": 2, "groups": 2} {
 		var n int
 		if err := database.Db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&n); err != nil {
 			t.Fatal(err)

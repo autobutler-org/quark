@@ -17,7 +17,7 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 **Expected result:**
 
-- App navigates to `/users`.
+- App navigates to `/users`, open on the **Accounts** tab. The **Groups** tab is beside it (JN-USR-015).
 - The **Accounts** section lists every account on the Quark. Admins are marked **Admin**, and turned-off accounts
   **Turned off**.
 - The signed-in account is marked **You** and has no actions menu.
@@ -106,7 +106,7 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 ### JN-USR-006: Add a user
 
-**Preconditions:** No account named `dee` exists, and neither does a home at `users/dee`.
+**Preconditions:** No account named `dee` exists.
 
 **Steps:**
 
@@ -133,7 +133,7 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 ### JN-USR-007: Adding a user whose folder already exists
 
-**Preconditions:** A folder `users/eli` exists. No account is named `eli`.
+**Preconditions:** A folder `users/eli` exists with files in it. No account is named `eli`.
 
 **Steps:**
 
@@ -143,14 +143,14 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 **Expected result:**
 
-- The dialog stays open with what was typed, and shows "A folder with that name already exists."
-- No account is created, and the existing folder is not handed to anyone.
+- The account is created, and `users/eli` becomes its home with everything already in it.
+- `eli` owns `users/eli` and can upload to it.
 
 **Notes:**
 
-- Only a home at `users/eli` refuses the account. A top-level folder named `eli` is a different thing and is left
-  alone.
-- A taken username shows "That username is taken." the same way.
+- The accounts, not the folders, decide whether a username is taken. An admin can make `users/eli` and fill it
+  before the account exists; whoever gets the name `eli` gets that folder.
+- A taken username shows "That username is taken." and the dialog stays open with what was typed.
 
 ---
 
@@ -173,8 +173,8 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 **Notes:**
 
 - The list refreshes on its own when a new request arrives, on any client.
-- A home of that name already existing leaves the request pending and shows "A folder with that name already
-  exists." An account is never approved without a home it owns.
+- A home of that name that already exists becomes theirs, with whatever is in it. An account is never approved
+  without a home it owns.
 
 ---
 
@@ -284,3 +284,140 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 **Notes:**
 
 - The Quark refuses an admin action on the caller's own account with "Use Settings to change your own account."
+
+---
+
+### JN-USR-015: See the groups
+
+**Preconditions:** User is signed in as an admin.
+
+**Steps:**
+
+1. Navigate to `/users`.
+2. Tap the **Groups** tab.
+
+**Expected result:**
+
+- **everyone** is listed first and reads **Every account**. It has no actions menu: every account is in it, so it
+  can't be renamed or deleted, and its members can't be changed.
+- Every other group is listed by name, with how many members it has.
+
+**Notes:**
+
+- The list refreshes on its own when any admin, on any client, changes a group or who is in one.
+
+---
+
+### JN-USR-016: Create a group
+
+**Preconditions:** User is on the **Groups** tab.
+
+**Steps:**
+
+1. Tap **New group**.
+2. Type `Family` and tap **Create**.
+3. Tap **New group** again, type `family`, and tap **Create**.
+
+**Expected result:**
+
+- After step 2 the dialog closes, and **Family** is listed with **No members**.
+- A folder named `Family` is made in `groups`, which the group can write to. Everyone added to the group reaches it
+  (JN-FB-035); nobody else does.
+- After step 3 the dialog stays open and reads "A group with that name already exists.": names are unique ignoring
+  case.
+
+**Notes:**
+
+- A name has 1 to 64 characters, isn't `.` or `..`, and has no slashes, line breaks or tabs. It is also the name of
+  the group's folder, so it has to be one folder name.
+- A folder of that name already sitting in `groups` is adopted, with its content, rather than refused.
+
+---
+
+### JN-USR-017: Rename a group
+
+**Preconditions:** A group named `Family` exists.
+
+**Steps:**
+
+1. On the **Groups** tab, tap the actions menu on **Family**'s row.
+2. Tap **Rename**, change the name to `Household`, and tap **Rename**.
+3. Make a folder called `Neighbors` in `groups` (JN-FB-009), then rename **Household** to `Neighbors`.
+
+**Expected result:**
+
+- The row reads **Household**, with the same members.
+- Whatever was shared with the group is still shared with it.
+- The group's folder is renamed to match, the way any other move goes: what is shared on it, the favorites in it and
+  its album items all follow, and open clients see the move without a refresh (JN-FB-024).
+- Step 3 is refused with "a folder with that name is already in groups; move or rename it first", and the group keeps
+  the name it had.
+
+---
+
+### JN-USR-018: Add and remove group members
+
+**Preconditions:** A group named `Family` exists, along with an active account `bob` and a turned-off account `cy`.
+
+**Steps:**
+
+1. On the **Groups** tab, tap the actions menu on **Family**'s row, then **Members**.
+2. Search for `bob` and tap his row.
+3. Tap the remove button on **bob**'s row in the members list.
+
+**Expected result:**
+
+- The picker lists only accounts that can sign in and aren't already members, so `cy` isn't offered.
+- After step 2 **bob** is listed as a member, the picker stops offering him, and **Family**'s row reads **1 member**.
+- Whatever is shared with **Family** appears in bob's Files without a refresh (JN-FB-024).
+- After step 3 bob is no longer a member, and what was shared with **Family** leaves his Files.
+
+**Notes:**
+
+- If the account stops being able to sign in before it is added, the sheet reads "That account can't join a group.
+  Only accounts that can sign in can be added."
+- A turned-off account that was already a member stays one.
+
+---
+
+### JN-USR-019: Delete a group
+
+**Preconditions:** A group named `Family` exists, and a folder is shared with it.
+
+**Steps:**
+
+1. On the **Groups** tab, tap the actions menu on **Family**'s row, then **Delete**.
+2. Read the confirmation, and tap **Delete**.
+
+**Expected result:**
+
+- **Family** leaves the list.
+- Its members lose what was shared with **Family**. Their accounts and their own files stay.
+- The group's folder in `groups`, and everything in it, stay too. With the group gone only an admin reaches that
+  folder, to hand it to someone else (JN-FB-027) or to remove it.
+- Tapping **Cancel** in step 2 changes nothing.
+
+---
+
+### JN-USR-020: The everyone group has a folder
+
+**Preconditions:** User is signed in as an admin. A second account, `bob`, is not an admin.
+
+**Steps:**
+
+1. Navigate to `/files` and open `groups`.
+2. Open `everyone` and upload a file into it (JN-FB-006).
+3. Sign in as `bob` and tap **Groups**.
+
+**Expected result:**
+
+- `groups/everyone` exists without anyone having made it, and every account can read and write in it — a shared
+  drawer nobody has to be added to.
+- bob sees `everyone` among his group folders and can open the uploaded file.
+
+**Notes:**
+
+- The quark gives any group with no folder one at startup, so a Quark upgraded from before group folders gets
+  `everyone` and a folder for each group it already had.
+- A group named before names had to be one folder name — one holding a slash — keeps no folder rather than being
+  given one somewhere else in the tree.

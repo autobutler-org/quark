@@ -2,7 +2,6 @@ package authutil_test
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -105,48 +104,93 @@ func TestApproveRequest_MakesTheHomeAndItsGrant(t *testing.T) {
 	}
 }
 
-// TestApproveRequest_HomeTakenLeavesTheRequestPending checks a home that is
-// already taken refuses the approval whole: the request stays pending rather
-// than becoming an account that cannot use the home it was handed, and the
-// folder that was already there is left alone.
-func TestApproveRequest_HomeTakenLeavesTheRequestPending(t *testing.T) {
-	f := newCreateUserFixture(t)
+// seedHome makes users/<username> under filesDir with a file in it, the way an
+// admin fills a home before the account exists, and returns the file's path.
+func seedHome(t *testing.T, filesDir, username string) string {
+	t.Helper()
+	if err := os.MkdirAll(homeOf(filesDir, username), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(homeOf(filesDir, username), "photo.jpg")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return file
+}
+
+// TestNewAccounts_AdoptAnExistingHome checks that a folder already at
+// users/<username> does not block setup, an admin's create, or an approval:
+// the users table decides whether a name is taken, and the account takes over
+// the folder with its contents intact.
+func TestNewAccounts_AdoptAnExistingHome(t *testing.T) {
 	ctx := context.Background()
-	taken := homeOf(f.filesDir, "bob")
-	if err := os.MkdirAll(taken, 0o755); err != nil {
+	var seeded string
+	f := newCreateUserFixtureWith(t, func(filesDir string) {
+		seeded = seedHome(t, filesDir, "admin")
+	})
+	admin, err := f.database.Queries.GetUserByUsername(ctx, "admin")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(taken, "photo.jpg"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
+
+	carolFile := seedHome(t, f.filesDir, "carol")
+	carol, err := f.create("carol")
+	if err != nil {
+		t.Fatalf("create onto an existing home: %v", err)
 	}
+	if carol.FolderPath != "users/carol" {
+		t.Errorf("FolderPath = %q, want users/carol", carol.FolderPath)
+	}
+
+	bobFile := seedHome(t, f.filesDir, "bob")
 	if _, err := request(f.database.Queries, "bob", "bob-password"); err != nil {
 		t.Fatal(err)
 	}
-
-	_, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{
+	if _, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{
 		Database: f.database,
 		Username: "bob",
 		FilesDir: f.filesDir,
-	})
-
-	if !errors.Is(err, authutil.ErrFolderExists) {
-		t.Fatalf("approve onto an existing home = %v, want ErrFolderExists", err)
+	}); err != nil {
+		t.Fatalf("approve onto an existing home: %v", err)
 	}
 	bob, err := f.database.Queries.GetUserByUsername(ctx, "bob")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bob.Status != authutil.StatusPending {
-		t.Errorf("status after a refused approval = %q, want pending", bob.Status)
+
+	for _, tc := range []struct {
+		username, file string
+		id             int64
+	}{
+		{"admin", seeded, admin.ID},
+		{"carol", carolFile, carol.UserID},
+		{"bob", bobFile, bob.ID},
+	} {
+		if _, err := os.Stat(tc.file); err != nil {
+			t.Errorf("%s: the adopted home lost its contents: %v", tc.username, err)
+		}
+		if !ownsHome(t, f, tc.id, tc.username) {
+			t.Errorf("%s does not own the home it adopted", tc.username)
+		}
 	}
-	if _, err := authutil.Login(ctx, f.database.Queries, authutil.LoginParams{Username: "bob", Password: "bob-password"}); !errors.Is(err, authutil.ErrAccountPending) {
-		t.Errorf("login after a refused approval = %v, want ErrAccountPending", err)
+}
+
+// TestCreateUser_NonFolderHomeLeavesItAlone checks a file sitting where the
+// home would go fails the create with no account, and the file stays.
+func TestCreateUser_NonFolderHomeLeavesItAlone(t *testing.T) {
+	f := newCreateUserFixture(t)
+	file := homeOf(f.filesDir, "bob")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(taken, "photo.jpg")); err != nil {
-		t.Errorf("a refused approval touched the folder that was already there: %v", err)
+	if _, err := f.create("bob"); err == nil {
+		t.Fatal("create succeeded with a file where the home goes")
 	}
-	if ownsHome(t, f, bob.ID, "bob") {
-		t.Error("a refused approval handed the existing folder to the requester")
+	if _, err := f.database.Queries.GetUserByUsername(context.Background(), "bob"); err == nil {
+		t.Error("a failed home left the account behind")
+	}
+	if info, err := os.Stat(file); err != nil || info.IsDir() {
+		t.Errorf("the file in the way was touched: %v", err)
 	}
 }
 

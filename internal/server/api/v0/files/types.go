@@ -39,6 +39,7 @@ type createUploadSessionRequest struct {
 	TotalSize int64  `json:"totalSize"`
 	Serial    string `json:"serial"`
 	Overwrite bool   `json:"overwrite"`
+	KeepBoth  bool   `json:"keepBoth"`
 }
 
 type createUploadSessionResponse struct {

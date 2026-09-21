@@ -432,6 +432,22 @@ func WalkFilesInDir(
 	})
 }
 
+// NumberedName is fileName with _(n) before its extension: NumberedName("a.txt",
+// 2) is "a_(2).txt". n of zero is fileName itself, so a caller can count from
+// zero over every name an upload may take. A name that is all extension
+// (".env") gets "file" as its stem.
+func NumberedName(fileName string, n int) string {
+	if n == 0 {
+		return fileName
+	}
+	ext := filepath.Ext(fileName)
+	stem := strings.TrimSuffix(fileName, ext)
+	if stem == "" {
+		stem = "file"
+	}
+	return fmt.Sprintf("%s_(%d)%s", stem, n, ext)
+}
+
 // GetNonConflictingPath returns a file path that doesn't conflict with existing files.
 // If the target path already exists, it appends _(n) before the file extension,
 // incrementing n until a non-existent path is found.

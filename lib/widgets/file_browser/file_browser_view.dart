@@ -19,6 +19,9 @@ enum FileMenuAction {
   navigateToFolder,
   extractHere,
 
+  /// Opens the share sheet for a file or folder (#1911).
+  share,
+
   /// Puts a trashed item back where it was deleted from.
   restore,
 
@@ -48,6 +51,7 @@ class FileBrowserView extends StatefulWidget {
     this.scrollController,
     this.showFileSizeAndMenu = true,
     this.isSearchMode = false,
+    this.isAdmin = false,
     this.onNavigateToFolder,
     this.inArchive = false,
     this.isInitialLoad = false,
@@ -66,6 +70,7 @@ class FileBrowserView extends StatefulWidget {
   static const Set<FileMenuAction> defaultMenuActions = {
     FileMenuAction.download,
     FileMenuAction.moveRename,
+    FileMenuAction.share,
     FileMenuAction.delete,
     FileMenuAction.extractHere,
     FileMenuAction.navigateToFolder,
@@ -100,6 +105,10 @@ class FileBrowserView extends StatefulWidget {
   final ScrollController? scrollController;
   final bool showFileSizeAndMenu;
   final bool isSearchMode;
+
+  /// Whether the viewer is an admin; a member's menu leaves Move/Rename and
+  /// Delete off a home folder itself. See [FileMenuButton.isAdmin].
+  final bool isAdmin;
   final void Function(FileNode)? onNavigateToFolder;
 
   /// When true, we are browsing inside an archive — only download is available
@@ -290,6 +299,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                                 showFileSizeAndMenu: widget.showFileSizeAndMenu,
                                 inArchive: widget.inArchive,
                                 isSearchMode: widget.isSearchMode,
+                                isAdmin: widget.isAdmin,
                                 selectionMode: widget.selectionMode,
                                 onDispatchMenuAction: _dispatchMenuAction,
                                 onOpenDirectory: widget.onOpenDirectory,
@@ -414,6 +424,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                                             extractingPaths: _extractingPaths,
                                             inArchive: widget.inArchive,
                                             isSearchMode: widget.isSearchMode,
+                                            isAdmin: widget.isAdmin,
                                             onDispatchMenuAction:
                                                 _dispatchMenuAction,
                                             onNavigateToFolder:
@@ -500,6 +511,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                       showFileSizeAndMenu: widget.showFileSizeAndMenu,
                       inArchive: widget.inArchive,
                       isSearchMode: widget.isSearchMode,
+                      isAdmin: widget.isAdmin,
                       selectionMode: widget.selectionMode,
                       onDispatchMenuAction: _dispatchMenuAction,
                       onOpenDirectory: widget.onOpenDirectory,

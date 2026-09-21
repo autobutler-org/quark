@@ -31,7 +31,7 @@ type PhotoMetadataJSON struct {
 
 // getMetadata godoc
 // @Summary Get metadata for a single photo
-// @Description Returns EXIF, file info, and album membership for the specified photo.
+// @Description Returns EXIF, file info, and the caller's own favorite state and album membership for the specified photo.
 // @Tags photos
 // @Produce json
 // @Param serial query string false "Device serial"
@@ -72,6 +72,7 @@ func getMetadata(c *gin.Context) *serverutil.Response {
 	result, err := photoutil.Metadata(photoutil.MetadataParams{
 		Ctx:     c.Request.Context(),
 		Queries: deps.Database().Queries,
+		UserID:  access.Principal().UserID,
 		Storage: deps.StorageService(),
 		FS:      fsys,
 		Serial:  serial,

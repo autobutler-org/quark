@@ -1,8 +1,8 @@
 -- name: CreateJob :one
 INSERT INTO
-    jobs (kind, name, params, lane)
+    jobs (kind, name, params, lane, user_id)
 VALUES
-    (?, ?, ?, ?)
+    (?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetJob :one

@@ -3,6 +3,7 @@ package transcodeutil
 import (
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
@@ -10,6 +11,7 @@ import (
 // handler carries what the transcode job kind needs at run time.
 type handler struct {
 	storage   *storageutil.StorageService
+	database  *db.DatabaseSqlc
 	bus       *eventbus.Bus
 	transcode TranscodeFunc
 }

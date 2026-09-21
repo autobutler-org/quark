@@ -140,7 +140,7 @@ class _SheetsPageState extends State<SheetsPage> with SafeSetStateMixin {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.message(e, 'create the sheet'))),
+          SnackBar(content: Text(Errors.upload(e, 'create the sheet'))),
         );
       }
     }

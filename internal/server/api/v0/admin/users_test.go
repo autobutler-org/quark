@@ -16,6 +16,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -58,7 +59,17 @@ func newAdminHarness(t *testing.T) adminHarness {
 	events, unsubscribe := bus.Subscribe("test")
 	t.Cleanup(unsubscribe)
 
-	deps := deputil.NewDependencies().WithDatabase(database).WithEventBus(bus)
+	// Renaming a group moves its folder through the files VFS (#2016).
+	local, err := vfs.NewLocalVFS(filesDir, "files")
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: "files"}, local); err != nil {
+		t.Fatal(err)
+	}
+
+	deps := deputil.NewDependencies().WithDatabase(database).WithEventBus(bus).WithVFSRegistry(registry)
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {

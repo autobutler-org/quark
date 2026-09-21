@@ -92,11 +92,13 @@ func OpenCached(cachedPath string) (*os.File, error) {
 // file, so a reader never sees a half-written thumbnail. It returns the
 // committed entry's modification time, which the ETag is derived from.
 func writeCache(cachedPath string, img image.Image, encodePNG bool) (time.Time, error) {
-	tmpPath := cachedPath + ".tmp"
-	f, err := os.Create(tmpPath)
+	// A unique temporary file per writer: concurrent first requests for one
+	// thumbnail each commit it, and a shared path made all but one fail.
+	f, err := os.CreateTemp(filepath.Dir(cachedPath), filepath.Base(cachedPath)+".*.tmp")
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to create cache file: %w", err)
 	}
+	tmpPath := f.Name()
 
 	if encodePNG {
 		err = png.Encode(f, img)

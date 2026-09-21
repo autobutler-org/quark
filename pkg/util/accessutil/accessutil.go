@@ -19,8 +19,10 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/gin-gonic/gin"
 )
@@ -82,6 +84,32 @@ func Canonical(p string) string {
 	return strings.TrimPrefix(path.Clean("/"+filepath.ToSlash(p)), "/")
 }
 
+// IsHomeRoot reports whether a path is an account's home itself,
+// users/<username> on the internal device, rather than something inside it.
+// The home carries the account's owner grant, so moving or trashing it would
+// strand the account and let RepairHomes create an empty one in its place
+// (#2016). A users/<name> folder on any other device is an ordinary folder.
+func IsHomeRoot(serial, p string) bool {
+	if serial != "" {
+		return false
+	}
+	dir, name := path.Split(Canonical(p))
+	return dir == authutil.UsersDirName+"/" && name != ""
+}
+
+// IsGroupRoot reports whether a path is a group's folder itself,
+// groups/<name> on the internal device, rather than something inside it. The
+// folder carries the group's grant, so a member moving or trashing it would
+// take the whole group's space with it (#2016). A groups/<name> folder on any
+// other device is an ordinary folder.
+func IsGroupRoot(serial, p string) bool {
+	if serial != "" {
+		return false
+	}
+	dir, name := path.Split(Canonical(p))
+	return dir == authutil.GroupsDirName+"/" && name != ""
+}
+
 // Access is one principal's rows, resolved in memory.
 type Access struct {
 	principal Principal
@@ -125,7 +153,7 @@ func Load(params LoadParams) (LoadResult, error) {
 	if err != nil {
 		return LoadResult{}, err
 	}
-	devices, err := params.Storage.GetManagedDevices()
+	devices, err := params.Storage.GetManagedRoots()
 	if err != nil {
 		return LoadResult{}, err
 	}
@@ -495,6 +523,8 @@ type FilterEventResult struct {
 //     or after the change, so a listing that just gained or lost entries
 //     reloads. One with no path, from a group membership change or a deleted
 //     group (#1910), may have changed anything and always passes.
+//   - A job_* event carries no path and passes when CanSeeJob shows its job,
+//     with the job's error left out (#1979).
 //   - Anything else passes when its path is readable.
 func FilterEvent(params FilterEventParams) FilterEventResult {
 	evt := params.Event
@@ -537,6 +567,14 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 		visible := Canonical(evt.Path) == "" ||
 			params.Previous.Visible(evt.DeviceSerial, evt.Path) || access.Visible(evt.DeviceSerial, evt.Path)
 		return FilterEventResult{Event: evt, Deliver: visible}
+	case eventbus.EventJobQueued, eventbus.EventJobStarted, eventbus.EventJobProgress,
+		eventbus.EventJobCompleted, eventbus.EventJobFailed, eventbus.EventJobCanceled:
+		job, ok := evt.Data.(jobutil.Job)
+		if !ok || !access.CanSeeJob(job) {
+			return FilterEventResult{}
+		}
+		evt.Data = access.RedactJob(job)
+		return FilterEventResult{Event: evt, Deliver: true}
 	default:
 		return FilterEventResult{Event: evt, Deliver: readable(evt.Path)}
 	}
@@ -599,6 +637,91 @@ func VisibleTrash(params VisibleTrashParams) VisibleTrashResult {
 	return VisibleTrashResult{Items: kept}
 }
 
+// CanSeeJob reports whether a job is shown to the principal (#1979). An admin
+// sees every job. Anyone else sees only a job they queued, and only while they
+// can still read the file it works on. A job with no creator is admin-only.
+func (a Access) CanSeeJob(job jobutil.Job) bool {
+	if a.principal.IsAdmin {
+		return true
+	}
+	if job.UserID == 0 || job.UserID != a.principal.UserID {
+		return false
+	}
+	serial, relPath := job.Source()
+	return relPath == "" || a.Check(serial, relPath, Read).Readable
+}
+
+// RedactJob is a job as the principal is shown it. Only an admin sees its
+// Error, which can hold host paths and ffmpeg output.
+func (a Access) RedactJob(job jobutil.Job) jobutil.Job {
+	if !a.principal.IsAdmin {
+		job.Error = ""
+	}
+	return job
+}
+
+// VisibleJobsParams filters a job listing.
+type VisibleJobsParams struct {
+	Access Access
+	Jobs   []jobutil.Job
+}
+
+// VisibleJobsResult is the jobs the principal may see.
+type VisibleJobsResult struct {
+	Jobs []jobutil.Job
+}
+
+// VisibleJobs keeps the jobs CanSeeJob shows, each through RedactJob. It never
+// returns a nil slice, so an empty listing serializes as [].
+func VisibleJobs(params VisibleJobsParams) VisibleJobsResult {
+	kept := make([]jobutil.Job, 0, len(params.Jobs))
+	for _, job := range params.Jobs {
+		if params.Access.CanSeeJob(job) {
+			kept = append(kept, params.Access.RedactJob(job))
+		}
+	}
+	return VisibleJobsResult{Jobs: kept}
+}
+
+// ErrCreatorInactive reports a job whose creator's account was deleted or is
+// no longer active, so the job can't run as them.
+var ErrCreatorInactive = errors.New("the account that queued this job can no longer sign in")
+
+// LoadCreatorParams loads the access a job runs with.
+type LoadCreatorParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	Storage  *storageutil.StorageService
+	// UserID is the job's creator, 0 for none.
+	UserID int64
+}
+
+// LoadCreator loads the access of the account that queued a job, with its
+// status and role as they are now, since a job always runs as its creator,
+// whoever retried it. A job with no creator runs as System. A creator whose
+// account is gone or not active gets ErrCreatorInactive.
+func LoadCreator(params LoadCreatorParams) (LoadResult, error) {
+	if params.UserID == 0 {
+		return Load(LoadParams{Ctx: params.Ctx, Principal: System})
+	}
+	if params.Database == nil {
+		return LoadResult{}, ErrNoDatabase
+	}
+	user, err := params.Database.Queries.GetUserByID(params.Ctx, params.UserID)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && user.Status != authutil.StatusActive) {
+		return LoadResult{}, ErrCreatorInactive
+	}
+	if err != nil {
+		return LoadResult{}, err
+	}
+	return Load(LoadParams{
+		Ctx:       params.Ctx,
+		Database:  params.Database,
+		Storage:   params.Storage,
+		Principal: Principal{UserID: user.ID, IsAdmin: user.IsAdmin != 0},
+	})
+}
+
 // ParseLevel reads a level's spelling, as the path_access table stores it and
 // the sharing API accepts it. Anything else is None.
 func ParseLevel(s string) Level {
@@ -639,6 +762,10 @@ var (
 	ErrPrincipalNotFound = errors.New("no active account or group has that id")
 	// ErrInvalidLevel reports a level other than read, write or owner.
 	ErrInvalidLevel = errors.New("access is read, write or owner")
+	// ErrStructuralShare reports a grant on the users or groups folder itself.
+	// Access is additive down the tree, so one there would reach every home or
+	// every group folder at once (#2016).
+	ErrStructuralShare = errors.New("the users and groups folders can't be shared; share a folder inside them instead")
 )
 
 // Grant is one principal's access to a path, as the sharing sheet shows it.
@@ -730,13 +857,18 @@ type SetGrantParams struct {
 // grants as they now stand. It answers to the same callers ListGrants does, and
 // any of them may grant owner. A non-admin may not change their own owner row
 // on the path (ErrSelfOwner). The account must be active and the group must
-// exist; a grant a parent folder already covers is still recorded.
+// exist; a grant a parent folder already covers is still recorded. Nobody,
+// admins included, may grant on the users or groups folder itself
+// (ErrStructuralShare).
 func SetGrant(params SetGrantParams) (GrantsResult, error) {
 	if (params.UserID == 0) == (params.GroupID == 0) {
 		return GrantsResult{}, ErrGrantTarget
 	}
 	if params.Level < Read || params.Level > Owner {
 		return GrantsResult{}, ErrInvalidLevel
+	}
+	if isStructuralRoot(params.DeviceSerial, params.Path) {
+		return GrantsResult{}, ErrStructuralShare
 	}
 	if params.Database == nil {
 		return GrantsResult{}, ErrNoDatabase
@@ -899,4 +1031,67 @@ func ListPrincipals(params ListPrincipalsParams) (ListPrincipalsResult, error) {
 		result.Groups = append(result.Groups, PrincipalGroup{ID: group.ID, Name: group.Name, Builtin: group.Builtin != 0})
 	}
 	return result, nil
+}
+
+// SharedItem is the root of one ad-hoc share, as the file browser's Shared
+// with me shortcut lists them.
+type SharedItem struct {
+	// DeviceSerial names the device; empty is the internal one.
+	DeviceSerial string `json:"deviceSerial"`
+	RelPath      string `json:"relPath"`
+	// Level is read, write or owner.
+	Level string `json:"level"`
+	// Owner is the username of the account, or the name of the group, that
+	// owns the item. It is empty when no owner row covers the path.
+	Owner string `json:"owner"`
+}
+
+// ListSharedWithMeParams asks what somebody else shared with the caller.
+type ListSharedWithMeParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// Access is the caller's access as loaded for the request.
+	Access Access
+	// Username is the caller's own, so their home can be left out. An empty
+	// one leaves every home in, which is the honest answer for a caller whose
+	// name is not known.
+	Username string
+}
+
+// ListSharedWithMeResult is the shares, ordered by device then path. The slice
+// is never nil, so an empty answer serializes as [].
+type ListSharedWithMeResult struct {
+	Items []SharedItem `json:"items"`
+}
+
+// ListSharedWithMe lists the roots of what has been shared with the caller
+// (#2139): the paths they were granted, minus the ones the file browser
+// already reaches another way.
+//
+// Left out are their own home and everything inside it, which My files opens;
+// every group folder and its contents, which Groups opens; the users and
+// groups folders themselves, which carry structure rather than content; the
+// device root; the trash; and a grant inside another grant, since opening the
+// outer one reaches it.
+//
+// An admin bypasses the access table and has no rows loaded, so their answer
+// is always empty: every path is theirs through All files.
+func ListSharedWithMe(params ListSharedWithMeParams) (ListSharedWithMeResult, error) {
+	if params.Database == nil {
+		return ListSharedWithMeResult{}, ErrNoDatabase
+	}
+	items := sharedRoots(params.Access.levels, params.Username)
+	for i, item := range items {
+		// ponytail: one query per share, and a caller has a handful. Fold the
+		// owner into one read over every root if that stops being true.
+		rows, err := params.Database.Queries.ListPathAccessOnAncestors(params.Ctx, db.ListPathAccessOnAncestorsParams{
+			DeviceSerial: item.DeviceSerial,
+			RelPath:      item.RelPath,
+		})
+		if err != nil {
+			return ListSharedWithMeResult{}, err
+		}
+		items[i].Owner = ownerName(rows)
+	}
+	return ListSharedWithMeResult{Items: items}, nil
 }

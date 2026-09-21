@@ -49,6 +49,8 @@ type MetadataParams struct {
 	Ctx context.Context
 	// Queries reads rotation, favorite, and album membership.
 	Queries *db.Queries
+	// UserID is the account whose favorite and albums are reported.
+	UserID int64
 	// Storage resolves the device files directory for a serial.
 	Storage *storageutil.StorageService
 	// FS reads the file through the VFS. Nil falls back to direct disk access.
@@ -76,7 +78,7 @@ type MetadataResult struct {
 }
 
 // Metadata gathers everything the photo detail view needs: file stat, EXIF,
-// the user's server-side rotation, favorite state, album membership, and the
+// the server-side rotation, the account's favorite state and albums, and the
 // Live Photo video companion.
 //
 // A missing file comes back as [storageutil.ErrPathNotFound] and a relPath that
@@ -102,7 +104,7 @@ func Metadata(params MetadataParams) (MetadataResult, error) {
 
 	isFavorite, favErr := params.Queries.IsFavorite(
 		params.Ctx,
-		db.IsFavoriteParams{DeviceSerial: params.Serial, RelPath: params.RelPath},
+		db.IsFavoriteParams{UserID: params.UserID, DeviceSerial: params.Serial, RelPath: params.RelPath},
 	)
 	if favErr != nil && !errors.Is(favErr, sql.ErrNoRows) {
 		softErrors = append(softErrors, fmt.Errorf("check favorite for %q: %w", params.RelPath, favErr))
@@ -111,6 +113,7 @@ func Metadata(params MetadataParams) (MetadataResult, error) {
 	albums, albumsErr := params.Queries.ListAlbumsContainingPhoto(
 		params.Ctx,
 		db.ListAlbumsContainingPhotoParams{
+			UserID:       params.UserID,
 			DeviceSerial: params.Serial,
 			RelPath:      params.RelPath,
 		},
