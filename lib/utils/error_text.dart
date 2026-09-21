@@ -70,6 +70,12 @@ abstract final class Errors {
       "This video format ($extension) isn't supported for in-browser "
       'playback. Download the file to watch it locally.';
 
+  /// Files dropped onto the Photos page that are not images. The page leaves
+  /// them out rather than filling the library with them (#2214).
+  static String notPhotos(int count) => count == 1
+      ? "1 file isn't a photo, so it wasn't uploaded."
+      : "$count files aren't photos, so they weren't uploaded.";
+
   /// An album name a sibling already has, ignoring case — what the Quark's
   /// 409 means for creating, renaming or moving an album.
   static const String albumNameTaken =

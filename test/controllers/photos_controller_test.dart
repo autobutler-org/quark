@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:photo_manager/photo_manager.dart';
@@ -734,6 +735,99 @@ void main() {
       );
 
       expect(await controller.uploadTargets(), isEmpty);
+    });
+
+    group('a drop (#2214)', () {
+      DropItemFile file(String name) =>
+          DropItemFile.fromData(Uint8List.fromList([1]), path: name);
+
+      test('keeps the photos, walking into folders, and counts the rest', () {
+        final (:photos, :notPhotos) = PhotosController().sortDroppedFiles([
+          file('IMG_1234.jpg'),
+          file('notes.txt'),
+          DropItemDirectory('/trip', [
+            file('RAW_1.CR2'),
+            file('clip.mp4'),
+            file('logo.svg'),
+          ], name: 'trip'),
+        ]);
+
+        expect(photos.map((p) => p.name), ['IMG_1234.jpg', 'RAW_1.CR2']);
+        expect(notPhotos, 3);
+      });
+
+      test('uploads one request a photo to the library root, keeping both '
+          'on a clash', () async {
+        final requests = <String>[];
+        final controller = PhotosController(
+          readDroppedFile: (file) async => Uint8List.fromList([1, 2, 3]),
+          uploadFiles:
+              (
+                path,
+                files, {
+                serial,
+                overwrite = false,
+                keepBoth = false,
+              }) async {
+                requests.add(
+                  '$path/${files.map((f) => f.filename).join(',')} '
+                  'serial=$serial keepBoth=$keepBoth',
+                );
+                return http.StreamedResponse(const Stream.empty(), 200);
+              },
+        );
+        final (:photos, notPhotos: _) = controller.sortDroppedFiles([
+          file('a.jpg'),
+          file('b.png'),
+        ]);
+
+        final uploaded = await controller.uploadDroppedPhotos(
+          photos,
+          serial: 'sd1',
+        );
+
+        expect(uploaded, 2);
+        expect(requests, [
+          '/a.jpg serial=sd1 keepBoth=true',
+          '/b.png serial=sd1 keepBoth=true',
+        ]);
+        expect(controller.isUploading, isFalse);
+      });
+
+      test('skips a photo that reads empty and passes a failure on', () async {
+        final sent = <String?>[];
+        final controller = PhotosController(
+          readDroppedFile: (file) async =>
+              file.name == 'empty.jpg' ? Uint8List(0) : Uint8List(1),
+          uploadFiles:
+              (
+                path,
+                files, {
+                serial,
+                overwrite = false,
+                keepBoth = false,
+              }) async {
+                sent.add(files.single.filename);
+                if (files.single.filename == 'full.jpg') {
+                  throw const ApiException(507);
+                }
+                return http.StreamedResponse(const Stream.empty(), 200);
+              },
+        );
+        final (:photos, notPhotos: _) = controller.sortDroppedFiles([
+          file('empty.jpg'),
+          file('ok.jpg'),
+          file('full.jpg'),
+          file('never.jpg'),
+        ]);
+
+        await expectLater(
+          controller.uploadDroppedPhotos(photos),
+          throwsA(isA<ApiException>()),
+        );
+        expect(sent, ['ok.jpg', 'full.jpg']);
+        expect(controller.isUploading, isFalse);
+      });
     });
   });
 
