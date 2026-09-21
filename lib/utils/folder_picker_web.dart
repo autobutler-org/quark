@@ -28,6 +28,7 @@ bool get isPhotoLibraryPickerNeededPlatform {
   );
 }
 
+/// Asks the browser for a folder and returns every file under it, with its folder path, for upload.
 Future<List<PendingUpload>> pickFolderUploadsPlatform() {
   return _pickUploads(directory: true);
 }

@@ -5,6 +5,7 @@ import '../token.dart';
 import 'builtins.dart';
 import 'values.dart';
 
+/// Reads another cell's value while a formula is evaluated, so the evaluator never touches the sheet directly.
 typedef CellAccessor = FormulaValue Function(int row, int col);
 
 FormulaValue evaluate(

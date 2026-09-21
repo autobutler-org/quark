@@ -4,6 +4,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+/// The page for creating a new vault entry.
 class EntryEditorPage extends StatefulWidget {
   final List<VaultFolder> folders;
 

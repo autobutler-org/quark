@@ -34,6 +34,8 @@ enum SortColumn { name, type, size, device }
 
 enum SortDirection { asc, desc }
 
+/// The body of the Files page: the listing of one folder, with sorting, selection, context menus and
+/// drag-and-drop.
 class FileBrowserView extends StatefulWidget {
   const FileBrowserView({
     required this.filesFuture,

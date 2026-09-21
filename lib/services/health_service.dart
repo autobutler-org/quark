@@ -62,6 +62,7 @@ class HealthStatus {
   final String hostname;
 }
 
+/// Calls `/api/v0/health` for the device metrics the Health page shows.
 class HealthService with AuthenticatedService {
   static final HealthService _instance = HealthService._();
   HealthService._();

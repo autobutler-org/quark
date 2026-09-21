@@ -3,7 +3,6 @@ import 'package:quark/models/photo_metadata.dart';
 import 'package:quark/widgets/image_viewer/metadata_content.dart';
 
 /// The photo viewer's metadata panel on mobile, dragged up from the bottom.
-
 class MetadataDrawer extends StatelessWidget {
   final ScrollController scrollController;
   final String name;

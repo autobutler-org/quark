@@ -1,5 +1,6 @@
 import 'data_cell.dart';
 
+/// One row of cells in a `DataTable`.
 class DataRow {
   List<DataCell> cells = [];
 

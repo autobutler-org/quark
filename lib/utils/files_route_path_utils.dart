@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:quark/utils/file_kind.dart';
 
+/// The `/files` URL for [path]. This file holds the helpers that decide how a `/files` route opens a path: as a
+/// folder, in an editor, or in the generic viewer.
 String filesRouteDisplayPath(String path) {
   final trimmed = path.trim();
   if (trimmed.isEmpty || trimmed == '/') {

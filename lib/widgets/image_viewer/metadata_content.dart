@@ -6,7 +6,6 @@ import 'package:quark_icons/quark_icons.dart';
 
 /// The metadata sections shown in the photo viewer, shared by the desktop
 /// sidebar and the mobile drawer.
-
 class MetadataContent {
   static List<Widget> sections({
     required BuildContext context,

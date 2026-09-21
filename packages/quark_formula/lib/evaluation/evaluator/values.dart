@@ -1,3 +1,4 @@
+/// A value a formula can produce: a number, string, boolean, or error.
 sealed class FormulaValue {
   const FormulaValue();
 

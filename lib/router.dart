@@ -224,6 +224,8 @@ final Listenable routerRefreshListenable = Listenable.merge([
   AppSettings.instance.isAdmin,
 ]);
 
+/// Every route in the app. It opens on the login page, and [authRedirect] sends a visitor who is signed out, or
+/// has not accepted the terms, to the page that fixes it.
 final router = GoRouter(
   // The login page is the landing page (#1639). It is the one route that is
   // always reachable, and it owns host management, so a user pointed at a

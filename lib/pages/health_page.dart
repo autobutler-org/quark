@@ -10,6 +10,7 @@ import 'package:quark/widgets/health/health_body.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 
+/// The Health page: the Quark's live device metrics, refreshed on a timer.
 class HealthPage extends StatefulWidget {
   const HealthPage({super.key});
 

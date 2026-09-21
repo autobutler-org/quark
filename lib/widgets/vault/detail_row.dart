@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+/// One labeled field in a vault entry's details, optionally with a copy button.
 class DetailRow extends StatelessWidget {
   final String label;
   final String value;

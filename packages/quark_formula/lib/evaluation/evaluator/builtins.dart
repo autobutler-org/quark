@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'values.dart';
 
+/// A built-in spreadsheet function, called with its arguments already resolved to values or ranges. This file
+/// holds the table of built-ins by name.
 typedef BuiltinFn = FormulaValue Function(List<ResolvedArgument> arguments);
 typedef _NumberResult = ({double? value, ErrorValue? error});
 typedef _StringResult = ({String? value, ErrorValue? error});

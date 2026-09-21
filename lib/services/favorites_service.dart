@@ -11,6 +11,7 @@ class FavoriteStatus {
       FavoriteStatus(isFavorite: json['isFavorite'] as bool? ?? false);
 }
 
+/// Calls `/api/v0/favorites`: toggling a photo's favorite state, checking it, and listing favorites.
 class FavoritesService with AuthenticatedService {
   static final FavoritesService _instance = FavoritesService._();
   FavoritesService._();

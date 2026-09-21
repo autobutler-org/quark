@@ -18,6 +18,8 @@ import 'package:flutter/widgets.dart';
 
 // ignore_for_file: constant_identifier_names
 
+/// Every icon the app uses, by semantic name: Quark's own icons from the icon font, and aliases for the Material
+/// icons, so the rest of the app never imports Material icons directly.
 @staticIconProvider
 class QuarkIcons {
   QuarkIcons._();

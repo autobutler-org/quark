@@ -5,6 +5,8 @@ import 'package:quark/widgets/login/host_switcher.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+/// The username and password form on the login page, with the host switcher, a link to recovery and, on a Quark
+/// with no accounts yet, a link to setup.
 class SignInForm extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController usernameController;

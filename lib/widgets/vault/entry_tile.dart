@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/services/vault_service.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+/// One vault entry in the entry list.
 class EntryTile extends StatelessWidget {
   final VaultEntryItem entry;
   final VoidCallback onTap;

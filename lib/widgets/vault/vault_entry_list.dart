@@ -4,6 +4,7 @@ import 'package:quark/widgets/vault/entry_tile.dart';
 import 'package:quark/widgets/vault/vault_toolbar.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+/// The unlocked vault: the entries, filtered by the search box and the chosen folder.
 class VaultEntryList extends StatelessWidget {
   /// The entries left after the search box and folder filter.
   final List<VaultEntryItem> entries;

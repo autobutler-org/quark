@@ -1,5 +1,6 @@
 // Minimal lexer placeholder for quark_formula package
 
+/// The prototype engine's lexer.
 class Lexer {
   final String input;
   Lexer(this.input);

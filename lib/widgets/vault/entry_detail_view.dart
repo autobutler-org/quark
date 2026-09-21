@@ -3,6 +3,7 @@ import 'package:quark/services/vault_service.dart';
 import 'package:quark/widgets/vault/detail_row.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+/// The read-only fields of a vault entry, with the password hidden until the user reveals it.
 class EntryDetailView extends StatelessWidget {
   final VaultEntryDetail entry;
   final bool showPassword;

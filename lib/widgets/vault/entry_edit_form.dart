@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:quark/services/vault_service.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+/// The fields for creating or editing a vault entry: name, URL, username, password with a generator, notes, and
+/// folder.
 class EntryEditForm extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController urlController;

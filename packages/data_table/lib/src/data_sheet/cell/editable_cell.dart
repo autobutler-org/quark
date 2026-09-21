@@ -12,6 +12,7 @@ import 'package:flutter/material.dart'
         TextAlignVertical,
         TextField;
 
+/// The text field shown in a cell while it is being edited.
 class EditableCell extends StatelessWidget {
   final TextEditingController controller;
   final void Function(String) onSubmitted;

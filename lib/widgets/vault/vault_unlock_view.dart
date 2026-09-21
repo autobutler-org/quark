@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+/// The form that unlocks the vault with its master password, saying why it is locked.
 class VaultUnlockView extends StatelessWidget {
   final TextEditingController passwordController;
   final String lockReason;

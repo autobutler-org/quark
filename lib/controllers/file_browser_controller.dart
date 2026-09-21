@@ -32,6 +32,8 @@ typedef DeleteFilesFn =
       String? deviceSerial,
     });
 
+/// The Files page's calls to the Quark and the platform: listing a folder, picking and uploading files, folders
+/// and photos, creating folders, deleting, and the actions in a file's menu.
 class FileBrowserController {
   const FileBrowserController({this.deleteFiles = FilesService.deleteFiles});
 

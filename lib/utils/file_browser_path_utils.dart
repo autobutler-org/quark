@@ -1,3 +1,5 @@
+/// Trims [value] and drops its trailing slashes. This file holds the file browser's path helpers: normalizing,
+/// joining, parents, and the home, users and groups roots.
 String trimTrailingSlashes(String value) {
   final trimmed = value.trim();
   if (trimmed.isEmpty) {

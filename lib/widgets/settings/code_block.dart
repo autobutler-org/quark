@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+/// A block of monospace text the user can select and copy, such as a command to run.
 class CodeBlock extends StatelessWidget {
   const CodeBlock({super.key, required this.text});
 

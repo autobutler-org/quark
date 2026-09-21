@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import '../token.dart';
 
+/// A node in a parsed formula: a literal, a cell or range reference, an operator, or a function call.
 sealed class FormulaNode {
   final int offset;
 

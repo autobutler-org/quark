@@ -30,6 +30,8 @@ const _forwardedResponseHeaders = <String>[
   'etag',
 ];
 
+/// Starts a loopback proxy for [upstream] on a random port, forwarding range requests so the native player can
+/// seek. Uses the app's auth header unless [headers] is given.
 Future<LocalMediaProxy> startLocalMediaProxy(
   Uri upstream, {
   Map<String, String>? headers,

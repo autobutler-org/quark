@@ -82,6 +82,8 @@ class FlutterPackage {
   final String? url;
 }
 
+/// Fetches the software bill of materials: the Go backend's from the Quark, and the Flutter app's from its
+/// bundled asset.
 class SbomService with AuthenticatedService {
   static final SbomService _instance = SbomService._();
   SbomService._();

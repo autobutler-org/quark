@@ -1,3 +1,4 @@
+/// The kinds of token the lexer produces.
 enum TokenKind {
   number,
   string,
@@ -23,6 +24,7 @@ enum TokenKind {
   eof
 }
 
+/// One token from the lexer: its kind, its text, and where it starts in the formula.
 class Token {
   final TokenKind kind;
   final String value;

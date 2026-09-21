@@ -16,6 +16,8 @@ import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/storage_devices/role_dialog.dart';
 import 'package:quark/widgets/storage_devices/storage_devices_body.dart';
 
+/// The Storage page: the drives the Quark can see, their status and role, and the actions to mount, rename or
+/// back them up.
 class StorageDevicesPage extends StatefulWidget {
   const StorageDevicesPage({super.key});
 

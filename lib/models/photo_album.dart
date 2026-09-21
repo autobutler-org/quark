@@ -1,3 +1,5 @@
+/// A photo album as the Quark returns it, including the system albums (Favorites and the inbox) that users cannot
+/// rename or delete.
 class PhotoAlbum {
   final int id;
   final String name;

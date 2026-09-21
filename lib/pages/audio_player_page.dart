@@ -9,6 +9,7 @@ import 'package:quark/widgets/audio_player/error_view.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:video_player/video_player.dart';
 
+/// Full-screen player for an audio file on the Quark.
 class AudioPlayerPage extends StatefulWidget {
   final Uri url;
   final String name;

@@ -33,6 +33,7 @@ import 'package:quark/widgets/upload_drop_zone.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+/// The Photos page: the photo library as a grid, filtered by album, with upload.
 class PhotosPage extends StatefulWidget {
   const PhotosPage({this.album, super.key});
 

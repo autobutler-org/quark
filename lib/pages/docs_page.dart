@@ -18,6 +18,8 @@ import 'package:quark/widgets/docs/docs_search_bar.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 
+/// The Docs page: the user's `.qdoc` documents, with a way to start a new one. A search also matches document
+/// contents and lists the sheets whose names match.
 class DocsPage extends StatefulWidget {
   const DocsPage({super.key});
 
