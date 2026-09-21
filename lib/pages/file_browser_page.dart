@@ -2458,6 +2458,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                             isGridView: _isGridView,
                             isUnifiedView: _isUnifiedView,
                             isSearchMode: _isSearchMode,
+                            searchQuery: _searchQuery,
                             onNavigateToFolder: _navigateToFolder,
                             currentPath: _currentPath,
                             errorBuilder: (context, error) =>

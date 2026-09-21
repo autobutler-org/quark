@@ -52,6 +52,7 @@ class FileBrowserView extends StatefulWidget {
     this.showFileSizeAndMenu = true,
     this.isSearchMode = false,
     this.isAdmin = false,
+    this.searchQuery,
     this.onNavigateToFolder,
     this.inArchive = false,
     this.isInitialLoad = false,
@@ -109,6 +110,12 @@ class FileBrowserView extends StatefulWidget {
   /// Whether the viewer is an admin; a member's menu leaves Move/Rename and
   /// Delete off a home folder itself. See [FileMenuButton.isAdmin].
   final bool isAdmin;
+
+  /// What the user searched for, so an empty result can name it. Null outside
+  /// search mode, and null is survivable inside it — the copy drops the
+  /// quoted term rather than quoting nothing.
+  final String? searchQuery;
+
   final void Function(FileNode)? onNavigateToFolder;
 
   /// When true, we are browsing inside an archive — only download is available
@@ -241,6 +248,19 @@ class _FileBrowserViewState extends State<FileBrowserView> {
         if (raw.isEmpty) {
           if (widget.emptyBuilder != null) {
             return widget.emptyBuilder!(context);
+          }
+          // A search that matched nothing is not an empty library, and
+          // "upload something" is the wrong advice for it (#2058).
+          if (widget.isSearchMode) {
+            final query = widget.searchQuery?.trim() ?? '';
+            return EmptyStateWidget(
+              icon: QuarkIcons.search_rounded,
+              headline: 'No matches',
+              subtext: query.isEmpty
+                  ? 'Nothing here matches your search. Try fewer words.'
+                  : 'Nothing here matches "$query". Try fewer words, or '
+                        'check another device.',
+            );
           }
           return const EmptyStateWidget(
             icon: QuarkIcons.folder_open_outlined,
