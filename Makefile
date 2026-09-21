@@ -1023,7 +1023,7 @@ test/unit: test/unit/backend test/unit/frontend ## Run unit tests
 .PHONY: test/unit/backend
 test/unit/backend: internal/server/public/stub.txt ## Run unit tests for backend
 	# Generate coverage report for unit tests (excludes integration test packages)
-	$(GO) test -v $(shell $(GO) list ./... | grep -v '/internal/server/api/v0/') \
+	$(GO) test -v $(shell $(GO) list ./... | grep -v '/internal/server/api/v0/' | grep -v '/test/chaos') \
 		-coverprofile=coverage.out \
 		-covermode=atomic
 	# Apply coverage ignore directives
@@ -1049,6 +1049,41 @@ test/unit/frontend: generate/frontend ## Run unit tests for frontend
 			$(MAKE) -C "$$pkg" test/unit || exit 1
 		fi
 	done
+
+.PHONY: test/chaos
+test/chaos: ## Run API stress/chaos suite against a running backend (QUARK_BASE_URL)
+	@echo "API stress suite → $${QUARK_BASE_URL:-http://127.0.0.1:8080} (see test/chaos/README.md)"
+	$(GO) test -tags chaos -count=1 -timeout 10m -v ./test/chaos/
+
+.PHONY: test/chaos/local
+test/chaos/local: build/backend ## Run the API stress suite against a temporary local backend (what CI runs)
+	WORK_DIR=test-results/chaos
+	rm -rf "$$WORK_DIR"
+	mkdir -p "$$WORK_DIR"
+	if (exec 3<>/dev/tcp/127.0.0.1/$(PERF_PORT)) 2>/dev/null; then
+		echo "port $(PERF_PORT) is already in use; stop whatever listens there or pass PERF_PORT=<free port>" >&2
+		exit 1
+	fi
+	STRESS_HOME="$$(mktemp -d)"
+	trap 'kill $$SERVER_PID 2>/dev/null || true; wait $$SERVER_PID 2>/dev/null || true; rm -rf "$$STRESS_HOME"' EXIT
+	HOME="$$STRESS_HOME" PORT=$(PERF_PORT) QUARK_INSECURE=true ./build/quark serve > "$$WORK_DIR/server.log" 2>&1 &
+	SERVER_PID=$$!
+	for _ in $$(seq 1 60); do
+		curl -sSf $(PERF_BASE_URL)/api/v0/auth/status >/dev/null 2>&1 && break
+		sleep 1
+	done
+	if ! curl -sSf $(PERF_BASE_URL)/api/v0/auth/status >/dev/null; then
+		echo "backend did not answer on $(PERF_BASE_URL) within 60s; last lines of $$WORK_DIR/server.log:" >&2
+		tail -n 40 "$$WORK_DIR/server.log" >&2
+		exit 1
+	fi
+	# Until setup completes the auth middleware lets every /api route through,
+	# so the suite's 401 checks need a real account first.
+	export QUARK_USER=stress QUARK_PASSWORD=stress-password
+	curl -sSf -o /dev/null -X POST -H 'Content-Type: application/json' \
+		-d "{\"username\":\"$$QUARK_USER\",\"password\":\"$$QUARK_PASSWORD\"}" \
+		$(PERF_BASE_URL)/api/v0/auth/setup
+	QUARK_BASE_URL=$(PERF_BASE_URL) $(MAKE) test/chaos
 
 .PHONY: test/integration
 test/integration: test/integration/backend ## Run integration tests

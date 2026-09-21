@@ -201,6 +201,7 @@
     "GOPROXY",
     "gopsutil",
     "goreleaser",
+    "goroutines",
     "gosec",
     "gotests",
     "GOTOOLCHAIN",

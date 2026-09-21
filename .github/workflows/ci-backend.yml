@@ -54,3 +54,27 @@ jobs:
       - name: Run integration tests
         run: |
           make test/integration/backend
+  api-chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Setup go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Setup sqlc
+        uses: ./.github/actions/setup-sqlc
+      - name: Setup swag
+        uses: ./.github/actions/setup-swag
+      - name: Run API stress suite
+        run: |
+          make test/chaos/local
+      - name: Upload stress suite artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: api-chaos-results
+          path: test-results/chaos/
+          if-no-files-found: warn
