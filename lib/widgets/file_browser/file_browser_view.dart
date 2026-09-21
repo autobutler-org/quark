@@ -3,6 +3,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_browser_list_tile.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_grid_preview.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_grid_sort_header.dart';
+import 'package:quark/widgets/file_browser/file_browser_view/file_menu.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_menu_button.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_sort_header.dart';
@@ -108,7 +109,7 @@ class FileBrowserView extends StatefulWidget {
   final bool isSearchMode;
 
   /// Whether the viewer is an admin; a member's menu leaves Move/Rename and
-  /// Delete off a home folder itself. See [FileMenuButton.isAdmin].
+  /// Delete off a home folder itself. See [FileMenu.isAdmin].
   final bool isAdmin;
 
   /// What the user searched for, so an empty result can name it. Null outside
@@ -138,11 +139,11 @@ class FileBrowserView extends StatefulWidget {
   /// widget owns this state; [FileBrowserView] reflects it.
   final Set<String> selectedPaths;
 
-  /// Called when the user taps an item in selection mode or long-presses to
-  /// enter selection mode. The argument is the tapped [FileNode].
-  /// The parent widget should toggle the path in its own set and rebuild.
-  final void Function(FileNode node, {required bool enterSelectionMode})?
-  onSelectionChanged;
+  /// Called when the user taps an item in selection mode. The argument is the
+  /// tapped [FileNode]. The parent widget should toggle the path in its own
+  /// set and rebuild. Selection mode is entered from the toolbar, never from
+  /// a row: a long press opens the row's menu instead (#2245).
+  final void Function(FileNode node)? onSelectionChanged;
 
   @override
   State<FileBrowserView> createState() => _FileBrowserViewState();
@@ -374,6 +375,16 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                     final isSelected = widget.selectedPaths.contains(
                       item.apiPath,
                     );
+                    final menu = FileMenu(
+                      item: item,
+                      menuActions: widget.menuActions,
+                      extractingPaths: _extractingPaths,
+                      inArchive: widget.inArchive,
+                      isSearchMode: widget.isSearchMode,
+                      isAdmin: widget.isAdmin,
+                      onDispatchMenuAction: _dispatchMenuAction,
+                      onNavigateToFolder: widget.onNavigateToFolder,
+                    );
                     return FolderDropWrapper(
                       item: item,
                       currentPath: widget.currentPath,
@@ -386,108 +397,103 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                             ? Theme.of(context).colorScheme.primaryContainer
                                   .withValues(alpha: 0.55)
                             : null,
-                        child: InkWell(
-                          onTap: widget.selectionMode
-                              ? () => widget.onSelectionChanged?.call(
-                                  item,
-                                  enterSelectionMode: false,
-                                )
-                              : widget.onOpenDirectory == null
+                        // InkWell.onLongPress hands over no position, so the
+                        // gesture is caught outside it; the tile's context is
+                        // what the entries dispatch against, since it outlives
+                        // the menu.
+                        child: GestureDetector(
+                          onLongPressStart:
+                              !widget.showFileSizeAndMenu ||
+                                  widget.selectionMode
                               ? null
-                              : () => widget.onOpenDirectory!(item),
-                          onLongPress: widget.inArchive || widget.selectionMode
-                              ? null
-                              : () => widget.onSelectionChanged?.call(
-                                  item,
-                                  enterSelectionMode: true,
+                              : (details) => menu.showAt(
+                                  context,
+                                  details.globalPosition,
                                 ),
-                          child: Stack(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: FileGridPreview(item: item),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Flexible(
-                                      child: Text(
-                                        item.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                          child: InkWell(
+                            onTap: widget.selectionMode
+                                ? () => widget.onSelectionChanged?.call(item)
+                                : widget.onOpenDirectory == null
+                                ? null
+                                : () => widget.onOpenDirectory!(item),
+                            child: Stack(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: FileGridPreview(item: item),
                                       ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        if (widget.showFileSizeAndMenu)
-                                          Flexible(
-                                            child: Text(
-                                              formatFileSize(
-                                                item.size,
-                                                item.isDir,
-                                                compressedSize:
-                                                    item.compressedSize,
+                                      const SizedBox(height: 8),
+                                      Flexible(
+                                        child: Text(
+                                          item.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          if (widget.showFileSizeAndMenu)
+                                            Flexible(
+                                              child: Text(
+                                                formatFileSize(
+                                                  item.size,
+                                                  item.isDir,
+                                                  compressedSize:
+                                                      item.compressedSize,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                          ),
-                                        if (widget.showFileSizeAndMenu)
-                                          FileMenuButton(
-                                            item: item,
-                                            menuActions: widget.menuActions,
-                                            extractingPaths: _extractingPaths,
-                                            inArchive: widget.inArchive,
-                                            isSearchMode: widget.isSearchMode,
-                                            isAdmin: widget.isAdmin,
-                                            onDispatchMenuAction:
-                                                _dispatchMenuAction,
-                                            onNavigateToFolder:
-                                                widget.onNavigateToFolder,
-                                          ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Checkbox overlay in selection mode.
-                              if (widget.selectionMode)
-                                Positioned(
-                                  top: 4,
-                                  left: 4,
-                                  child: IgnorePointer(
-                                    child: Container(
-                                      width: 24,
-                                      height: 24,
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .surface
-                                            .withValues(alpha: 0.75),
-                                        shape: BoxShape.circle,
+                                          if (widget.showFileSizeAndMenu)
+                                            FileMenuButton(menu: menu),
+                                        ],
                                       ),
-                                      child: Icon(
-                                        isSelected
-                                            ? Icons.check_circle
-                                            : Icons.radio_button_unchecked,
-                                        size: 20,
-                                        color: isSelected
-                                            ? Theme.of(
-                                                context,
-                                              ).colorScheme.primary
-                                            : Theme.of(
-                                                context,
-                                              ).colorScheme.onSurfaceVariant,
+                                    ],
+                                  ),
+                                ),
+                                // Checkbox overlay in selection mode.
+                                if (widget.selectionMode)
+                                  Positioned(
+                                    top: 4,
+                                    left: 4,
+                                    child: IgnorePointer(
+                                      child: Container(
+                                        width: 24,
+                                        height: 24,
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .surface
+                                              .withValues(alpha: 0.75),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          isSelected
+                                              ? Icons.check_circle
+                                              : Icons.radio_button_unchecked,
+                                          size: 20,
+                                          color: isSelected
+                                              ? Theme.of(
+                                                  context,
+                                                ).colorScheme.primary
+                                              : Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurfaceVariant,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

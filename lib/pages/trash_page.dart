@@ -222,10 +222,10 @@ class _TrashPageState extends State<TrashPage>
                             ? _emptyTrash
                             : null,
                       ),
-                    // Selecting has always been here — long-press a row — but
-                    // a long press is a gesture a mouse does not make, so on
-                    // the web the trash looked like it had no bulk actions at
-                    // all (#2250). An empty trash has nothing to select.
+                    // The trash used to be selected into by long-pressing a
+                    // row; that gesture opens the row's menu now (#2245), so
+                    // this button is the only way in. An empty trash has
+                    // nothing to select.
                     IconButton(
                       key: const ValueKey('trash_select'),
                       tooltip: 'Select items',

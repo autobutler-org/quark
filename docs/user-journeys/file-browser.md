@@ -124,7 +124,7 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 **Steps:**
 
 1. Navigate to `/files`.
-2. Long-press (mobile) or right-click / use the context menu (desktop/web) on a file.
+2. Long-press a file, or open its three-dot menu.
 3. Select **Download**.
 
 **Expected result:**
@@ -213,8 +213,7 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 **Steps:**
 
 1. Navigate to `/files`.
-2. Enter multi-select mode (long-press a file on mobile, or the **Select files** button in the toolbar on
-   desktop/web).
+2. Enter multi-select mode with the **Select files** button in the toolbar.
 3. Select two or more files.
 4. Tap **Delete selected**.
 5. Confirm the deletion prompt.

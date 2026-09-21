@@ -651,12 +651,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
   // ── Multi-select / batch delete (#986) ──────────────────────────────────
 
-  void _onSelectionChanged(FileNode node, {required bool enterSelectionMode}) {
+  void _onSelectionChanged(FileNode node) {
     setState(() {
-      if (enterSelectionMode && !_selectionMode) {
-        _selectionMode = true;
-        _selectedPaths.clear();
-      }
       if (_selectedPaths.contains(node.apiPath)) {
         _selectedPaths.remove(node.apiPath);
       } else {
