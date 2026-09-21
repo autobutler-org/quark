@@ -6,6 +6,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/error_banner.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// Password recovery screen — resets password using the recovery phrase.
 class RecoverPage extends StatefulWidget {
@@ -35,7 +36,18 @@ class _RecoverPageState extends State<RecoverPage> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    // Redraws the strength meter as the password is typed, the way the setup
+    // form does it.
+    _passwordController.addListener(_onPasswordChanged);
+  }
+
+  void _onPasswordChanged() => setState(() {});
+
+  @override
   void dispose() {
+    _passwordController.removeListener(_onPasswordChanged);
     _usernameController.dispose();
     _phraseController.dispose();
     _passwordController.dispose();
@@ -205,7 +217,13 @@ class _RecoverPageState extends State<RecoverPage> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
+                    // The same meter the setup form shows. Choosing a password
+                    // here is the same decision it is there, and it was the
+                    // one place in the app that asked for one without saying
+                    // how strong it was (#2031).
+                    PasswordStrengthBar(password: _passwordController.text),
+                    const SizedBox(height: 8),
 
                     TextFormField(
                       controller: _confirmController,
