@@ -3,6 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+/// What the whole-disk figure in the footer means.
+///
+/// The number is the Quark's disk, system and all, so a brand-new Quark with
+/// no files in it still shows tens of gigabytes used. Beside "No files yet"
+/// that reads as "Quark has already eaten my disk" rather than "this is the
+/// whole device" (#2024), so the footer says which it is.
+const String kStorageFooterScope = 'Device storage';
+
+/// The longer form, for the tooltip.
+const String kStorageFooterExplanation =
+    'The whole disk inside your Quark, including its system software — not '
+    'just the files you have put here.';
+
 /// The capacity row at the bottom of the Files page. It renders whatever
 /// [status] the page last fetched and never fetches on its own, so the page's
 /// refresh (button, timer, server events) is what keeps it current (#2151).
@@ -48,44 +61,55 @@ class FileStorageFooter extends StatelessWidget {
       // inset region is painted rather than left bare (#1598).
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            children: [
-              Icon(
-                QuarkIcons.storage_rounded,
-                size: 14,
-                color: colorScheme.onSurface.withValues(alpha: 0.4),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                status == null
-                    ? 'Storage'
-                    : '${_formatBytes(status.diskUsedBytes)}'
-                          ' / ${_formatBytes(status.diskTotalBytes)}',
-                style: TextStyle(
-                  fontSize: 12,
+        child: Tooltip(
+          message: kStorageFooterExplanation,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  QuarkIcons.storage_rounded,
+                  size: 14,
                   color: colorScheme.onSurface.withValues(alpha: 0.4),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 320),
-                  child: QuarkStorageBar(usedFraction: diskPercent),
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (diskPercent > 0)
-                Text(
-                  '${(diskPercent * 100).toStringAsFixed(0)}%',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: barColor,
-                    fontWeight: FontWeight.w500,
+                const SizedBox(width: 8),
+                // Flexible with an ellipsis: the label now carries the scope as
+                // well as the figures, and the bar beside it still has to fit
+                // on a phone.
+                Flexible(
+                  child: Text(
+                    status == null
+                        ? kStorageFooterScope
+                        : '$kStorageFooterScope  ·  '
+                              '${_formatBytes(status.diskUsedBytes)}'
+                              ' / ${_formatBytes(status.diskTotalBytes)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
                   ),
                 ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 320),
+                    child: QuarkStorageBar(usedFraction: diskPercent),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (diskPercent > 0)
+                  Text(
+                    '${(diskPercent * 100).toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: barColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
