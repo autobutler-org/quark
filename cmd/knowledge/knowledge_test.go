@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -202,4 +203,142 @@ func hasEdge(g Graph, from, to, kind string) bool {
 		}
 	}
 	return false
+}
+
+func TestDartFileDoc(t *testing.T) {
+	cases := []struct {
+		name, content, want string
+	}{
+		{
+			name: "class doc at column zero",
+			content: "import 'package:flutter/material.dart';\n\n" +
+				"/// A sheet that adds one photo to albums.\n///\n/// Longer prose below.\n" +
+				"class AddToAlbumSheet extends StatelessWidget {}\n",
+			want: "A sheet that adds one photo to albums.",
+		},
+		{
+			name:    "joins the first paragraph",
+			content: "/// Percent-encode a path,\n/// keeping the separator.\n\nclass Foo {}\n",
+			want:    "Percent-encode a path, keeping the separator.",
+		},
+		{
+			name:    "annotation between doc and declaration",
+			content: "/// A generated model.\n@immutable\nclass Model {}\n",
+			want:    "A generated model.",
+		},
+		{
+			name:    "barrel documents its library directive",
+			content: "/// The spreadsheet data model.\nlibrary;\n\nexport 'src/data_table.dart';\n",
+			want:    "The spreadsheet data model.",
+		},
+		{
+			// A doc on an indented member is not the file's summary.
+			name:    "indented member doc is ignored",
+			content: "class FilesService {\n  /// Construct a thumbnail URL.\n  static Uri build() {}\n}\n",
+			want:    "",
+		},
+		{
+			name:    "no doc at all",
+			content: "import 'dart:io';\n\nclass Foo {}\n",
+			want:    "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := dartFileDoc(c.content); got != c.want {
+				t.Errorf("dartFileDoc = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestRouteBuilders(t *testing.T) {
+	lines := []string{
+		"    GoRoute(",
+		"      path: AppRoutes.vault,",
+		"      builder: (context, state) => const VaultPage(),",
+		"    ),",
+		"    GoRoute(path: AppRoutes.jobs, builder: (context, _) => JobsPage()),",
+		"    GoRoute(",
+		"      path: AppRoutes.setup,",
+		"      builder: (context, state) =>",
+		"          SetupPage(onSetupComplete: () => context.go(AppRoutes.files)),",
+		"    ),",
+		"    GoRoute(",
+		"      path: AppRoutes.legacyCirrus,",
+		"      redirect: (context, state) => AppRoutes.files,",
+		"    ),",
+	}
+	pages := routeBuilders(lines)
+
+	want := map[string]string{"vault": "VaultPage", "jobs": "JobsPage", "setup": "SetupPage"}
+	for route, page := range want {
+		if pages[route] != page {
+			t.Errorf("route %q built by %q, want %q", route, pages[route], page)
+		}
+	}
+	// A redirect-only route has no builder, so it must not borrow a neighbor's.
+	if page, ok := pages["legacyCirrus"]; ok {
+		t.Errorf("legacyCirrus is redirect-only but got page %q", page)
+	}
+}
+
+func TestTableColumns(t *testing.T) {
+	migration := `CREATE TABLE
+    IF NOT EXISTS file_content (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        serial TEXT NOT NULL,
+        -- rel_path is relative to the device root.
+        rel_path TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(serial, rel_path),
+        FOREIGN KEY (serial) REFERENCES devices (serial)
+    );`
+
+	got := tableColumns(migration, "CREATE TABLE\n    IF NOT EXISTS file_content")
+	want := []string{"id", "serial", "rel_path", "created_at"}
+	if len(got) != len(want) {
+		t.Fatalf("columns = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("column %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestQueryDoc(t *testing.T) {
+	body := "-- Counts the admins still enabled.\n-- name: CountActiveAdmins :one\nSELECT count(*) FROM users;\n"
+	header := len("-- Counts the admins still enabled.\n")
+	if got := queryDoc(body, header, "SELECT count(*) FROM users;", []string{"users"}); got != "Counts the admins still enabled." {
+		t.Errorf("prose comment = %q", got)
+	}
+
+	// With no comment the statement describes itself.
+	cases := []struct{ statement, want string }{
+		{"SELECT * FROM users;", "Reads users."},
+		{"INSERT INTO users (id) VALUES (?);", "Inserts into users."},
+		{"UPDATE users SET a = 1;", "Updates users."},
+		{"DELETE FROM users;", "Deletes from users."},
+		{"WITH t AS (SELECT 1) SELECT * FROM users;", "Reads users."},
+		{"PRAGMA foreign_keys;", ""},
+	}
+	for _, c := range cases {
+		if got := queryDoc("-- name: X :one\n", 0, c.statement, []string{"users"}); got != c.want {
+			t.Errorf("queryDoc(%q) = %q, want %q", c.statement, got, c.want)
+		}
+	}
+}
+
+func TestTruncate(t *testing.T) {
+	if got := truncate("short", 20); got != "short" {
+		t.Errorf("truncate left a short string alone: %q", got)
+	}
+	got := truncate("the quick brown fox jumps over", 15)
+	if !strings.HasSuffix(got, "…") || len(got) > 18 {
+		t.Errorf("truncate = %q", got)
+	}
+	if strings.Contains(got, "jumps") {
+		t.Errorf("truncate kept too much: %q", got)
+	}
 }

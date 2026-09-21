@@ -87,6 +87,10 @@ Edge kinds are `imports`, `handles` (handler package → route), `touches` (quer
 (journey → client route). `handles` and `visits` are inferred and dropped when the target does not exist, so a
 missing edge means "not matched", not "not connected".
 
+Most nodes carry a `doc`: a Go package doc, a swagger summary, a Dart `///` block, a journey title, a table's
+columns, or a query's comment or a one-line summary of its statement. An empty `doc` means the source has no
+doc comment to derive one from (#2213) — it says nothing about the code.
+
 ## Answering "how does X work?"
 
 1. **Name the surface.** A URL, a screen, a button. `map.py api` or `map.py app` turns it
