@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -169,10 +168,7 @@ func detectRootDevice(categorize bool) (*Device, error) {
 		IsInternal:     true,
 	}
 
-	device.Name = filepath.Base(device.MountPoint)
-	if device.Name == "" || device.Name == "/" {
-		device.Name = "Root Volume"
-	}
+	device.Name = rootDeviceName(device.MountPoint)
 
 	if categorize {
 		device.ApplySimpleCategorization()
