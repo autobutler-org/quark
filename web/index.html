@@ -245,6 +245,7 @@
       // only moment that means "there is something to look at". A timer would
       // either uncover a blank canvas early or sit on top of a drawn app.
       window.addEventListener("flutter-first-frame", function () {
+        window.clearTimeout(devReload);
         var splash = document.getElementById("quark-splash");
         if (!splash) return;
         splash.classList.add("quark-splash-done");
@@ -257,6 +258,16 @@
           splash.remove();
         }, 400);
       });
+
+      // `flutter run -d web-server` serves this page before its first compile
+      // finishes, and a load that starts then stalls without an error, so
+      // the splash above never clears (#2234). A dev (DDC) build keeps
+      // reloading until the app starts. Only the DDC bootstrap defines
+      // $dartCreateScript, so a slow production load is never cut off.
+      // ponytail: fixed 10s; a healthy dev load slower than that reloads forever.
+      var devReload = window.setTimeout(function () {
+        if (window.$dartCreateScript) window.location.reload();
+      }, 10000);
     </script>
   </body>
 </html>
