@@ -143,12 +143,19 @@ List<PendingUpload> _pendingUploadsFromPicker(List<PlatformFile> result) {
         PendingUpload(
           relativeDir: '',
           name: name,
-          build: () async => http.MultipartFile(
-            'files',
-            picked.readAsByteStream(),
-            await picked.length(),
-            filename: name,
-          ),
+          build: () async {
+            final length = await picked.length();
+            if (length == null) {
+              debugPrint('[folder_picker_io.dart] Failed to size $name');
+              return null;
+            }
+            return http.MultipartFile(
+              'files',
+              picked.readAsByteStream(),
+              length,
+              filename: name,
+            );
+          },
         ),
       );
       continue;
