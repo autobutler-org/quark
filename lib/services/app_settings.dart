@@ -351,15 +351,6 @@ class AppSettings {
       ? _hosts[_activeIndex].hostAddress
       : null;
 
-  /// The nickname of the active Quark, or null when none is configured.
-  ///
-  /// What the user called the device, so it is what the app calls it back
-  /// (#2033). [activeHost] is the address the same entry carries.
-  String? get activeHostName =>
-      (_activeIndex >= 0 && _activeIndex < _hosts.length)
-      ? _hosts[_activeIndex].name
-      : null;
-
   /// Publishes the current [activeHost] to [activeHostNotifier] and recomputes
   /// [hasAcceptedTerms] for it.
   /// Every mutation of [_hosts] or [_activeIndex] must end with this call.

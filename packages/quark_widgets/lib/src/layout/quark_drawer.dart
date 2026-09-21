@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../models/host_item.dart';
+import 'quark_drawer/quark_drawer_header.dart';
+
 /// The top-level destinations in [QuarkDrawer], one per main page.
 enum QuarkDrawerSection {
   /// The file browser.
@@ -49,20 +52,28 @@ enum QuarkDrawerSection {
 /// destination the signed-in user cannot use, such as Users or Vault for
 /// someone who is not an admin, rather than showing a row that goes nowhere.
 ///
-/// The header names the Quark on screen when [hostName] is passed (#2033).
-/// With more than one saved, the signed-in app otherwise said "Quark" and
-/// nothing else, so which device a page was reading — or an upload was about
-/// to land on — was invisible.
+/// The header names the Quark on screen, [hosts] at [activeHostIndex]
+/// (#2033). With more than one saved, the signed-in app otherwise said
+/// "Quark" and nothing else, so which device a page was reading — or an
+/// upload was about to land on — was invisible. With two or more [hosts] the
+/// header opens a menu beneath it listing each one, the active one checked
+/// (#2230). Adding and editing Quarks stays in Settings, a row below. With
+/// one it is a plain label.
 ///
 /// Key prefixes: `drawer_<section>` on each row, for example `drawer_photos`
-/// and `drawer_users`, and `drawer_host` on the header when it names a Quark. The header is a
-/// label, not a button.
+/// and `drawer_users`; `drawer_host` on the header when it names a Quark;
+/// `drawer_host_header` on the button that opens the switcher, and
+/// `drawer_host_<index>` on each Quark in it.
 ///
 /// ```dart
 /// QuarkDrawer(
 ///   activeSection: QuarkDrawerSection.photos,
-///   hostName: 'Home',
-///   hostAddress: 'quark.home.local',
+///   hosts: const [
+///     HostItem(name: 'Home', address: 'quark.home.local'),
+///     HostItem(name: 'Cabin', address: 'cabin.local:8443'),
+///   ],
+///   activeHostIndex: 0,
+///   onSelectHost: (index) => settings.setActiveIndex(index),
 ///   onTapFiles: () => context.go(AppRoutes.files),
 ///   onTapUsers: isAdmin ? () => context.go(AppRoutes.users) : null,
 /// );
@@ -71,8 +82,9 @@ class QuarkDrawer extends StatelessWidget {
   /// Creates a drawer with [activeSection] marked as current.
   const QuarkDrawer({
     required this.activeSection,
-    this.hostName,
-    this.hostAddress,
+    this.hosts = const [],
+    this.activeHostIndex = -1,
+    this.onSelectHost,
     this.onTapFiles,
     this.onTapPhotos,
     this.onTapTrash,
@@ -90,14 +102,18 @@ class QuarkDrawer extends StatelessWidget {
   /// The page the drawer was opened from, drawn as selected.
   final QuarkDrawerSection activeSection;
 
-  /// The nickname of the Quark being browsed, or null to show the product
-  /// name alone — which is the honest header before a Quark is chosen.
-  final String? hostName;
+  /// Every saved Quark, in the order the switcher lists them. Empty shows the
+  /// product name alone — the honest header before a Quark is chosen.
+  final List<HostItem> hosts;
 
-  /// The address under [hostName], already shortened for display by the
-  /// caller. Ignored without a [hostName]: an address with no name to go with
-  /// it is a diagnostic, not an identity.
-  final String? hostAddress;
+  /// The index into [hosts] of the Quark being browsed. Out of range shows the
+  /// product name alone.
+  final int activeHostIndex;
+
+  /// Called with the index of the Quark picked from the switcher, including
+  /// the active one: whether that is a no-op is the caller's call. Null, or
+  /// fewer than two [hosts], leaves the header a label.
+  final ValueChanged<int>? onSelectHost;
 
   /// Called when the Files row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapFiles;
@@ -206,7 +222,11 @@ class QuarkDrawer extends StatelessWidget {
           DrawerHeader(
             decoration: BoxDecoration(color: theme.colorScheme.primary),
             padding: EdgeInsets.zero,
-            child: _header(context),
+            child: QuarkDrawerHeader(
+              hosts: hosts,
+              activeHostIndex: activeHostIndex,
+              onSelectHost: onSelectHost,
+            ),
           ),
           for (final (section, icon, label, onTap) in rows)
             if (onTap != null)
@@ -217,62 +237,6 @@ class QuarkDrawer extends StatelessWidget {
                 selected: activeSection == section,
                 onTap: onTap,
               ),
-        ],
-      ),
-    );
-  }
-
-  /// The header: the product name, or the Quark on screen and how to leave it.
-  Widget _header(BuildContext context) {
-    final theme = Theme.of(context);
-    final name = hostName;
-    final onPrimary = theme.colorScheme.onPrimary;
-
-    if (name == null || name.isEmpty) {
-      return Align(
-        alignment: Alignment.bottomLeft,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            'Quark',
-            style: theme.textTheme.titleLarge?.copyWith(color: onPrimary),
-          ),
-        ),
-      );
-    }
-
-    final address = hostAddress ?? '';
-    return Padding(
-      key: const ValueKey('drawer_host'),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Quark',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: onPrimary.withValues(alpha: 0.8),
-            ),
-          ),
-          const SizedBox(height: 4),
-          // One line each, clipped with an ellipsis: a nickname is whatever someone
-          // typed, and the drawer is 304dp wide on every phone.
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleLarge?.copyWith(color: onPrimary),
-          ),
-          if (address.isNotEmpty)
-            Text(
-              address,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: onPrimary.withValues(alpha: 0.8),
-              ),
-            ),
         ],
       ),
     );

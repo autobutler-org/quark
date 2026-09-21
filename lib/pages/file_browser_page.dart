@@ -280,6 +280,21 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     });
   }
 
+  /// A different Quark is a different tree: whatever folder was open belongs
+  /// to the last one, so start over at this one's landing folder (#2230).
+  void _onActiveHostChanged() {
+    if (!mounted) {
+      return;
+    }
+    // The listing is reissued here rather than left to the refresh, which
+    // drops the call while one for the old Quark is still in flight.
+    setState(() {
+      _applyIncomingRoutePath(null);
+      _reloadFiles();
+    });
+    manualRefresh();
+  }
+
   @override
   void initState() {
     // Apply deep-link initial path before AutoRefreshMixin triggers the first load.
@@ -288,6 +303,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         .initState(); // AutoRefreshMixin.initState handles timer + initial load
     _fileBrowserScrollController.addListener(_onScroll);
     AppSettings.instance.isAdmin.addListener(_onAdminFlagChanged);
+    AppSettings.instance.activeHostNotifier.addListener(_onActiveHostChanged);
     EventsService.instance.start();
     // If the deep-link URL pointed at a file, open its editor after the first
     // frame so the folder content is loaded beneath it.
@@ -578,6 +594,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     }
     _folderDragExitTimer?.cancel();
     AppSettings.instance.isAdmin.removeListener(_onAdminFlagChanged);
+    AppSettings.instance.activeHostNotifier.removeListener(
+      _onActiveHostChanged,
+    );
     _fileBrowserScrollController.dispose();
     super.dispose();
   }

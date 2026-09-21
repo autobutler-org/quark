@@ -48,6 +48,7 @@ export 'src/models/create_user_input.dart';
 export 'src/models/file_shortcut.dart';
 export 'src/models/grant_item.dart';
 export 'src/models/group_item.dart';
+export 'src/models/host_item.dart';
 export 'src/models/job_item.dart';
 export 'src/models/photo_category_entry.dart';
 export 'src/models/photo_item.dart';

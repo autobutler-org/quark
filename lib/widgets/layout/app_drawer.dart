@@ -19,7 +19,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// more: the router checks with the Quark before it opens one of those pages,
 /// and the Quark refuses their requests from anyone else.
 ///
-/// The header names the active Quark (#2033).
+/// The header names the active Quark (#2033) and, with more than one saved,
+/// switches between them (#2230). Switching goes through login: the router's
+/// gate forwards a Quark you are signed in to on to Files, and one you are
+/// not to its sign-in or setup page.
 class AppDrawer extends StatelessWidget {
   /// Creates the drawer for the page [activeSection] names.
   const AppDrawer({required this.activeSection, super.key});
@@ -34,12 +37,33 @@ class AppDrawer extends StatelessWidget {
         ? () => Navigator.of(context).pop()
         : () => context.go(route);
 
-    return ValueListenableBuilder<bool>(
-      valueListenable: AppSettings.instance.isAdmin,
-      builder: (context, isAdmin, _) => QuarkDrawer(
+    final settings = AppSettings.instance;
+
+    Future<void> selectHost(int index) async {
+      // Captured first: the drawer's context is gone once it closes.
+      final router = GoRouter.of(context);
+      Navigator.of(context).pop();
+      if (index == settings.activeIndex) return;
+      await settings.setActiveIndex(index);
+      router.go(AppRoutes.login);
+    }
+
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        settings.isAdmin,
+        settings.activeHostNotifier,
+      ]),
+      builder: (context, _) => QuarkDrawer(
         activeSection: activeSection,
-        hostName: AppSettings.instance.activeHostName,
-        hostAddress: shortHostAddress(AppSettings.instance.activeHost),
+        hosts: [
+          for (final host in settings.hosts)
+            HostItem(
+              name: host.name,
+              address: shortHostAddress(host.hostAddress),
+            ),
+        ],
+        activeHostIndex: settings.activeIndex,
+        onSelectHost: selectHost,
         onTapFiles: goTo(QuarkDrawerSection.files, AppRoutes.files),
         onTapPhotos: goTo(QuarkDrawerSection.photos, AppRoutes.photos),
         onTapTrash: goTo(QuarkDrawerSection.trash, AppRoutes.trash),
@@ -47,11 +71,11 @@ class AppDrawer extends StatelessWidget {
         onTapSheets: goTo(QuarkDrawerSection.sheets, AppRoutes.sheets),
         onTapDevices: goTo(QuarkDrawerSection.devices, AppRoutes.devices),
         onTapHealth: goTo(QuarkDrawerSection.health, AppRoutes.health),
-        onTapVault: isAdmin
+        onTapVault: settings.isAdmin.value
             ? goTo(QuarkDrawerSection.vault, AppRoutes.vault)
             : null,
         onTapJobs: goTo(QuarkDrawerSection.jobs, AppRoutes.jobs),
-        onTapUsers: isAdmin
+        onTapUsers: settings.isAdmin.value
             ? goTo(QuarkDrawerSection.users, AppRoutes.users)
             : null,
         onTapSettings: goTo(QuarkDrawerSection.settings, AppRoutes.settings),
