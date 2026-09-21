@@ -25,6 +25,7 @@ import (
 // @Failure 404 {object} serverutil.Response "the caller can't read the path, or that account or group has no access to it"
 // @Failure 409 {object} serverutil.Response "the access comes from a parent folder"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /access [delete]
 func revokeAccess(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

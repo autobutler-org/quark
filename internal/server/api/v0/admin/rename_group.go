@@ -28,6 +28,7 @@ import (
 // @Failure 404 {object} serverutil.Response "no group has that id"
 // @Failure 409 {object} serverutil.Response "a group with that name already exists, or another folder in groups already has the new name"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /admin/groups/{id} [put]
 func renameGroup(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

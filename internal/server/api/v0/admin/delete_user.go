@@ -25,6 +25,7 @@ import (
 // @Failure 404 {object} serverutil.Response "no account has that username"
 // @Failure 409 {object} serverutil.Response "the only active admin"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /admin/users/{username} [delete]
 func deleteUser(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

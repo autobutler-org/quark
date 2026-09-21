@@ -22,6 +22,7 @@ import (
 // @Failure 403 {object} serverutil.Response
 // @Failure 409 {object} serverutil.Response "the key is already allowed, or SSH access can't be managed on this Quark"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /ssh/keys [post]
 func addSSHKey(c *gin.Context) *serverutil.Response {
 	system, errResp := sshSystem(c)

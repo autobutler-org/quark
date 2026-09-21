@@ -19,6 +19,7 @@ import (
 // @Failure 401 {object} serverutil.Response
 // @Failure 404 {object} serverutil.Response
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /auth/sessions/{id} [delete]
 func revokeSession(c *gin.Context) *serverutil.Response {
 	deps, ok := getQueries(c)

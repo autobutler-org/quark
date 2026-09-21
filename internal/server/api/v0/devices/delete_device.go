@@ -17,6 +17,7 @@ import (
 // @Success 200 {object} serverutil.Response
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /devices/{id} [delete]
 var deleteDeviceRoute = serverutil.ApiRoute(
 	"DELETE", "/devices/:id", func(c *gin.Context) *serverutil.Response {

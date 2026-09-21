@@ -20,6 +20,7 @@ import (
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /settings/access-requests [put]
 func updateAccessRequests(c *gin.Context) *serverutil.Response {
 	var body accessRequestsSetting

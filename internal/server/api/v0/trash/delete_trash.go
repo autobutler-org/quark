@@ -24,6 +24,7 @@ import (
 // @Failure 403 {object} serverutil.Response "An item the caller can see but did not trash and cannot write where it came from"
 // @Failure 404 {object} serverutil.Response "Unknown device, trash name or path, or an item the caller cannot see"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /trash/delete [post]
 func deleteTrash(c *gin.Context) *serverutil.Response {
 	req, err := bindTrashItems(c.ShouldBindJSON)

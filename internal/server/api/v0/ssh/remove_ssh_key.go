@@ -21,6 +21,7 @@ import (
 // @Failure 404 {object} serverutil.Response "no allowed key has that fingerprint"
 // @Failure 409 {object} serverutil.Response "SSH access can't be managed on this Quark"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /ssh/keys [delete]
 func removeSSHKey(c *gin.Context) *serverutil.Response {
 	system, errResp := sshSystem(c)

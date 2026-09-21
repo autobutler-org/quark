@@ -24,6 +24,7 @@ import (
 // @Failure 404 {object} serverutil.Response "no active account has that username"
 // @Failure 409 {object} serverutil.Response "the only active admin"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /admin/disable/{username} [put]
 func disableUser(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

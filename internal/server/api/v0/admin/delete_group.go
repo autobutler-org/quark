@@ -24,6 +24,7 @@ import (
 // @Failure 403 {object} serverutil.Response
 // @Failure 404 {object} serverutil.Response "no group has that id"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /admin/groups/{id} [delete]
 func deleteGroup(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

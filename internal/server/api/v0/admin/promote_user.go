@@ -23,6 +23,7 @@ import (
 // @Failure 403 {object} serverutil.Response
 // @Failure 404 {object} serverutil.Response "no active account has that username"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /admin/promote/{username} [put]
 func promoteUser(c *gin.Context) *serverutil.Response {
 	target := c.Param("username")

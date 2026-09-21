@@ -24,6 +24,7 @@ import (
 // @Failure 404 {object} serverutil.Response "no account has that username"
 // @Failure 409 {object} serverutil.Response "the last active admin"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /admin/demote/{username} [put]
 func demoteUser(c *gin.Context) *serverutil.Response {
 	target := c.Param("username")

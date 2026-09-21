@@ -17,6 +17,11 @@ const docTemplate = `{
     "paths": {
         "/access": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns the grants on a path, then one inherited grant per account or group for the highest level a parent folder gives it; a grant whose from is not relPath is inherited and is changed on that folder. Only an owner of the path, directly or through a parent folder, or an admin may see them. canManage and canGrantOwner are true in every answer.",
                 "produces": [
                     "application/json"
@@ -80,6 +85,11 @@ const docTemplate = `{
                 }
             },
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Grants one active account or existing group read, write or owner on a path, replacing the level it had there, and returns the path's grants as they now stand. Only an owner of the path or an admin may share it. A non-admin can't change their own owner row on the path. Nobody, admins included, may share the users or groups folder itself on the internal device. Publishes access_changed for the path.",
                 "consumes": [
                     "application/json"
@@ -142,6 +152,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Removes one account's or group's grant on exactly this path and returns the path's grants as they now stand. Only an owner of the path or an admin may. Access a parent folder gives is removed on that folder instead. A non-admin can't remove their own owner row on the path; another owner or an admin may remove the last one. Publishes access_changed for the path.",
                 "consumes": [
                     "application/json"
@@ -212,6 +227,11 @@ const docTemplate = `{
         },
         "/access/mine": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns the root of each ad-hoc share the signed-in account holds, with the account or group that owns it, for the file browser's Shared with me shortcut. Left out are their own home and its contents, which My files opens; every group folder and its contents, which Groups opens; the users and groups folders themselves; the device root; the trash; and a grant inside another grant. An admin bypasses the access table, so their answer is empty and they reach everything through All files.",
                 "produces": [
                     "application/json"
@@ -244,6 +264,11 @@ const docTemplate = `{
         },
         "/access/principals": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns every active account by username and every group, the built-in everyone group first. Any signed-in account may ask, so each account carries only its id and username.",
                 "produces": [
                     "application/json"
@@ -276,6 +301,11 @@ const docTemplate = `{
         },
         "/admin/approve/{username}": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Turns a pending account request into an active account that can sign in, with a home under users/ on the internal device that it owns. An existing folder of that name under users/ becomes the home. Admin-only.",
                 "tags": [
                     "admin"
@@ -323,6 +353,11 @@ const docTemplate = `{
         },
         "/admin/demote/{username}": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Removes admin role from the given username. Refused with 409 while the Quark has at most one active admin. Admin-only.",
                 "tags": [
                     "admin"
@@ -385,6 +420,11 @@ const docTemplate = `{
         },
         "/admin/deny/{username}": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Deletes a pending account request. Its username is free again at once. Admin-only.",
                 "tags": [
                     "admin"
@@ -432,6 +472,11 @@ const docTemplate = `{
         },
         "/admin/disable/{username}": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Stops an account from signing in, and ends its sessions and open event streams. The account keeps its files and shares, so turning it back on restores it. An admin cannot turn off their own account, and the only active admin cannot be turned off. Admin-only.",
                 "tags": [
                     "admin"
@@ -491,6 +536,11 @@ const docTemplate = `{
         },
         "/admin/enable/{username}": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Lets a disabled account sign in again, with everything it owned when it was turned off. Admin-only.",
                 "tags": [
                     "admin"
@@ -538,6 +588,11 @@ const docTemplate = `{
         },
         "/admin/groups": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns every group with its members, the built-in everyone group first and the rest by name. everyone lists no members: it includes every active account. Admin-only.",
                 "produces": [
                     "application/json"
@@ -577,6 +632,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Creates an empty group and its folder in groups on the internal device, named after the group, with one grant giving the group write there; an existing folder of that name is adopted. The name is trimmed, has 1 to 64 characters, no control characters or slashes, isn't . or .., and is unique ignoring case. Publishes account_changed and new_folder. Admin-only.",
                 "consumes": [
                     "application/json"
@@ -641,6 +701,11 @@ const docTemplate = `{
         },
         "/admin/groups/{id}": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Renames a group under the same rules a new name follows; a group may take its own name in another case. Its folder in groups is renamed to match as an ordinary move does, carrying its shares, favorites and album items, and publishing move and access_changed. The everyone group can't be renamed. The response lists no members. Publishes account_changed. Admin-only.",
                 "consumes": [
                     "application/json"
@@ -716,6 +781,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Deletes a group, its memberships and every share made to it, so its members lose what only the group gave them. Its folder in groups and its content stay, admin-only from then on. The everyone group can't be deleted. Publishes access_changed with no path. Admin-only.",
                 "tags": [
                     "admin"
@@ -769,6 +839,11 @@ const docTemplate = `{
         },
         "/admin/groups/{id}/members/{userId}": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Puts an active account in a group, so it reaches what the group was shared. Adding a member again changes nothing. Members of the everyone group can't be changed. Publishes access_changed with no path when the membership is new. Admin-only.",
                 "tags": [
                     "admin"
@@ -827,6 +902,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Takes an account out of a group, whatever the account's status, so it loses what only the group gave it. Members of the everyone group can't be changed. Publishes access_changed with no path. Admin-only.",
                 "tags": [
                     "admin"
@@ -887,6 +967,11 @@ const docTemplate = `{
         },
         "/admin/promote/{username}": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Grants admin role to the given username. Only an active account can be promoted. Admin-only.",
                 "tags": [
                     "admin"
@@ -943,6 +1028,11 @@ const docTemplate = `{
         },
         "/admin/users": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns all registered users. Admin-only.",
                 "produces": [
                     "application/json"
@@ -982,6 +1072,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Creates an active account with the given password. The admin never sees its recovery phrase: the account gets one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it. An existing folder of that name under users/ becomes the home, and a top-level folder of that name does not collide. Admin-only.",
                 "consumes": [
                     "application/json"
@@ -1046,6 +1141,11 @@ const docTemplate = `{
         },
         "/admin/users/{username}": {
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Deletes an account, its sessions, its shares and its group memberships. Its files stay where they are, and every path it owned becomes owned by the admin deleting it. An admin cannot delete their own account here, and the only active admin cannot be deleted. Admin-only.",
                 "produces": [
                     "application/json"
@@ -1111,6 +1211,11 @@ const docTemplate = `{
         },
         "/albums": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns the caller's own photo albums as a flat list, creating their Favorites album on first use. Admins see only their own albums too. Use ?tree=true to get a nested tree.",
                 "produces": [
                     "application/json"
@@ -1146,6 +1251,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Creates a photo album owned by the caller, optionally nested under one of the caller's albums. The name cannot contain / and must be unique among its siblings ignoring case; the caller's root albums, their Favorites album included, are siblings of each other.",
                 "consumes": [
                     "application/json"
@@ -1204,6 +1314,11 @@ const docTemplate = `{
         },
         "/albums/{id}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns one of the caller's albums with its item count and direct children.",
                 "produces": [
                     "application/json"
@@ -1249,6 +1364,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Deletes one of the caller's albums and all its children (cascades). Does not delete photos from disk.",
                 "produces": [
                     "application/json"
@@ -1302,6 +1422,11 @@ const docTemplate = `{
         },
         "/albums/{id}/items": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns the photo items (pointers) the caller can read in one of the caller's albums.",
                 "produces": [
                     "application/json"
@@ -1350,6 +1475,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Adds a photo (by device serial + relative path) to an album. Idempotent. Needs read access on the photo.",
                 "consumes": [
                     "application/json"
@@ -1413,6 +1543,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Removes the album membership pointer. Does not delete the photo from disk.",
                 "consumes": [
                     "application/json"
@@ -1478,6 +1613,11 @@ const docTemplate = `{
         },
         "/albums/{id}/move": {
             "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Changes the parent of one of the caller's albums. Pass null parentId to move to root. The new parent must be the caller's own and must not already hold an album with the same name ignoring case; the caller's root albums, their Favorites album included, are siblings of each other.",
                 "consumes": [
                     "application/json"
@@ -1549,6 +1689,11 @@ const docTemplate = `{
         },
         "/albums/{id}/rename": {
             "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Updates the name of one of the caller's albums. The name cannot contain / and must be unique among the album's siblings ignoring case; changing only the case of the album's own name is allowed.",
                 "consumes": [
                     "application/json"
@@ -1620,6 +1765,11 @@ const docTemplate = `{
         },
         "/auth/account": {
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Deletes the selected aspects and logs the caller out everywhere. Pass account=true to delete only the caller's own account, which is what App Store Guideline 5.1.1(v) requires; the other aspects are a factory reset of the appliance. All four are opt-in and a request selecting none is rejected, so a truncated call cannot destroy anything. The confirm parameter must equal the authenticated username. Databases are dropped and re-migrated in place, so no restart is required. Repeat calls are idempotent. External device data is reached only when devices=true; a drive that is not attached at reset time keeps its data. Deleting the last account returns the appliance to first-boot setup by design. Aspects are independent: deleting the account or the database does NOT delete stored files, and files left behind are readable by whoever sets the appliance up next — the response reports filesRetained=true whenever that happens, so pass files=true as well to erase the data itself.",
                 "produces": [
                     "application/json"
@@ -1771,6 +1921,11 @@ const docTemplate = `{
         },
         "/auth/logout": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Invalidates the current session",
                 "produces": [
                     "application/json"
@@ -1901,6 +2056,11 @@ const docTemplate = `{
         },
         "/auth/sessions": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns all non-expired sessions for the authenticated user. Each session is identified by the SHA-256 hash of its token — pass this ID to DELETE /auth/sessions/{id} to revoke a specific session.",
                 "produces": [
                     "application/json"
@@ -1939,6 +2099,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Deletes all active sessions for the authenticated user.",
                 "produces": [
                     "application/json"
@@ -1976,6 +2141,11 @@ const docTemplate = `{
         },
         "/auth/sessions/{id}": {
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Deletes a specific session. The session ID is the SHA-256 hex hash of the session token, as returned by GET /auth/sessions.",
                 "produces": [
                     "application/json"
@@ -2088,6 +2258,11 @@ const docTemplate = `{
         },
         "/books": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Finds all books in the files directory",
                 "produces": [
                     "application/json"
@@ -2117,6 +2292,11 @@ const docTemplate = `{
         },
         "/events": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Upgrades the connection to WebSocket and pushes JSON events for file system mutations (upload, delete, move, new_folder). Each connection hears only events about paths its user can read; admins hear every event. A connection closes once its account is turned off, deleted, promoted or demoted.",
                 "produces": [
                     "application/json"
@@ -2143,6 +2323,11 @@ const docTemplate = `{
         },
         "/files": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "merges files across all managed devices for the given filePath. If deviceSerial is empty, list files across all devices. Otherwise, only for the specified device",
                 "produces": [
                     "application/json"
@@ -2190,6 +2375,11 @@ const docTemplate = `{
                 }
             },
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Enqueue a file move operation between paths/devices. Needs write access on the file and on the folder it moves into.",
                 "consumes": [
                     "application/json"
@@ -2246,6 +2436,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Move files to the device's trash (internal storage included), returning immediately. They can be restored through /trash/restore until the hourly purge deletes them after the retention period. DB cleanup and events are dispatched in the background.",
                 "produces": [
                     "application/json"
@@ -2315,6 +2510,11 @@ const docTemplate = `{
         },
         "/files/by-type": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Recursively walks all managed devices and returns files whose fileType matches the given value, sorted newest-first.",
                 "produces": [
                     "application/json"
@@ -2369,6 +2569,11 @@ const docTemplate = `{
         },
         "/files/convert/xlsx": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Reads an .xlsx or .xlsm workbook and writes it back as a sibling .qsheet, the format the Sheets editor opens. The workbook itself is left untouched. Answers 409 when a .qsheet of that name already exists and overwrite was not asked for. Needs read access on the workbook and write access on its directory; the caller owns a newly created .qsheet.",
                 "produces": [
                     "application/json"
@@ -2440,6 +2645,11 @@ const docTemplate = `{
         },
         "/files/download": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Downloads a single file or zips a folder and streams it back to the client",
                 "produces": [
                     "application/octet-stream"
@@ -2492,6 +2702,11 @@ const docTemplate = `{
         },
         "/files/download-archive-file": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Reads the specified entry from the archive and streams it to the client. No data is extracted to disk. With format=jpeg an image entry other than camera RAW is converted and served as image/jpeg; every other entry is served as it is.",
                 "produces": [
                     "application/octet-stream",
@@ -2565,6 +2780,11 @@ const docTemplate = `{
         },
         "/files/extract": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Extracts a zip file into a subdirectory named after the archive (without its extension) in the same directory. Needs read access on the archive and write access on its directory; the caller owns what is extracted.",
                 "produces": [
                     "application/json"
@@ -2624,6 +2844,11 @@ const docTemplate = `{
         },
         "/files/folder/{folderDir}": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Enqueue create-folder operation under the given folder directory. Needs write access on that directory; the caller owns the new folder.",
                 "consumes": [
                     "multipart/form-data"
@@ -2693,6 +2918,11 @@ const docTemplate = `{
         },
         "/files/list-archive": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Opens the archive at filePath and returns the direct children of subPath as FileNodeJSON entries. No data is extracted to disk — only archive headers are read.",
                 "produces": [
                     "application/json"
@@ -2755,6 +2985,11 @@ const docTemplate = `{
         },
         "/files/recent": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns files sorted by modification time (newest first) across all managed devices.",
                 "produces": [
                     "application/json"
@@ -2802,6 +3037,11 @@ const docTemplate = `{
         },
         "/files/search": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "searches for a file across all managed devices for the given search term. If deviceSerial is empty, search across all devices. Otherwise, only for the specified device",
                 "produces": [
                     "application/json"
@@ -2845,6 +3085,11 @@ const docTemplate = `{
         },
         "/files/search/content": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Full-text search over indexed file contents using SQLite FTS5.\nOnly text-based file formats are indexed (.txt, .md, .csv, .yaml, .json, etc.).\nBinary formats (images, video, PDF) are not indexed.\nReturns up to ` + "`" + `limit` + "`" + ` results ordered by relevance rank.",
                 "produces": [
                     "application/json"
@@ -2895,6 +3140,11 @@ const docTemplate = `{
         },
         "/files/stat": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns filesystem metadata for the given files-relative path: whether it is a directory and its file type. Useful for deep-link resolution when the path extension alone is ambiguous (e.g. a folder named \"things.qdoc\").",
                 "produces": [
                     "application/json"
@@ -2942,6 +3192,11 @@ const docTemplate = `{
         },
         "/files/upload": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.",
                 "consumes": [
                     "multipart/form-data"
@@ -3016,6 +3271,11 @@ const docTemplate = `{
         },
         "/files/upload-session": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Reserve a session for one file; the bytes follow as chunks on PUT. Needs write access on the directory the file lands in. The session belongs to the caller: it is not found for anyone else. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.",
                 "consumes": [
                     "application/json"
@@ -3080,6 +3340,11 @@ const docTemplate = `{
         },
         "/files/upload-session/{sessionId}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns the committed offset a resuming client continues from",
                 "produces": [
                     "application/json"
@@ -3113,6 +3378,11 @@ const docTemplate = `{
                 }
             },
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A session opened by someone else is not found. A 409 carrying X-Upload-Offset is a chunk out of step; one without it is a name already in use.",
                 "consumes": [
                     "application/octet-stream"
@@ -3168,6 +3438,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Drops the session and the bytes staged for it",
                 "produces": [
                     "application/json"
@@ -3203,6 +3478,11 @@ const docTemplate = `{
         },
         "/files/upload/{rootDir}": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it.",
                 "consumes": [
                     "multipart/form-data"
@@ -3284,6 +3564,11 @@ const docTemplate = `{
         },
         "/health": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns current hardware health: CPU, memory, disk usage and temperature. Sets healthy=false with alert messages when any metric exceeds its critical threshold.",
                 "produces": [
                     "application/json"
@@ -3304,6 +3589,11 @@ const docTemplate = `{
         },
         "/jobs": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns the jobs of the requested kinds the caller may see, newest first, finished ones included. An admin sees every job; anyone else sees the jobs they queued whose file they can still read, with error left blank. This is the source of truth for job state; the job_* events are a hint to refresh and can be dropped.",
                 "produces": [
                     "application/json"
@@ -3352,6 +3642,11 @@ const docTemplate = `{
         },
         "/jobs/{id}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns one background job by id. A caller who is not an admin gets only a job they queued whose file they can still read, with error left blank; any other job is 404.",
                 "produces": [
                     "application/json"
@@ -3397,6 +3692,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Cancels a pending or running job and returns it, now canceled. A pending job never runs; a running job is stopped and cleans up after itself. Only the account that queued the job, or an admin, may cancel it; any other caller gets 404.",
                 "produces": [
                     "application/json"
@@ -3450,6 +3750,11 @@ const docTemplate = `{
         },
         "/jobs/{id}/retry": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Resets a failed job to pending so it runs again. It keeps its id and createdAt; progress, error, startedAt, and finishedAt are cleared, and the returned jobId is the same id. Only the account that queued the job, or an admin, may retry it; any other caller gets 404. The job runs as the account that queued it, which must still be active and able to write the folder of the file the job works on, or the retry is refused with 403. A retry whose inputs no longer exist, such as a transcode of a video that was moved or deleted, is refused with 422.",
                 "produces": [
                     "application/json"
@@ -3515,6 +3820,11 @@ const docTemplate = `{
         },
         "/photos": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Finds all photos across all managed devices with pagination support.",
                 "produces": [
                     "application/json"
@@ -3561,6 +3871,11 @@ const docTemplate = `{
         },
         "/photos/copy": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Creates a copy of the photo in the same directory with a non-conflicting name (e.g. photo_copy.jpg). Needs read access on the photo and write access on its folder; the caller owns the copy.",
                 "consumes": [
                     "application/json"
@@ -3619,6 +3934,11 @@ const docTemplate = `{
         },
         "/photos/duplicates": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns groups of exact duplicates (same SHA-256 content hash) and near-duplicates (perceptual dHash Hamming distance within threshold). Requires photo hashes to have been computed via the thumbnail or hash-index endpoints.",
                 "produces": [
                     "application/json"
@@ -3661,6 +3981,11 @@ const docTemplate = `{
         },
         "/photos/favorite": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns whether the specified photo is in the caller's own favorites. Needs read access on the photo.",
                 "produces": [
                     "application/json"
@@ -3712,6 +4037,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Adds the photo to the caller's own favorites if not already favorited; removes it otherwise. Needs read access on the photo.",
                 "consumes": [
                     "application/json"
@@ -3764,6 +4094,11 @@ const docTemplate = `{
         },
         "/photos/favorites": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns the photos the caller has favorited and can still read, newest first. Every account has its own favorites, admins included.",
                 "produces": [
                     "application/json"
@@ -3793,6 +4128,11 @@ const docTemplate = `{
         },
         "/photos/metadata": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns EXIF, file info, and the caller's own favorite state and album membership for the specified photo.",
                 "produces": [
                     "application/json"
@@ -3846,6 +4186,11 @@ const docTemplate = `{
         },
         "/photos/rotate": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Persists the viewer rotation (0/1/2/3 × 90° CW) for a photo server-side. Needs write access on the photo.",
                 "consumes": [
                     "application/json"
@@ -3904,6 +4249,11 @@ const docTemplate = `{
         },
         "/sbom": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns the Go version and all embedded dependency information from the compiled binary",
                 "produces": [
                     "application/json"
@@ -3930,6 +4280,11 @@ const docTemplate = `{
         },
         "/settings": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Retrieves application settings",
                 "produces": [
                     "application/json"
@@ -3954,6 +4309,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Updates application settings",
                 "consumes": [
                     "application/json"
@@ -4000,6 +4360,11 @@ const docTemplate = `{
         },
         "/settings/access-requests": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Sets whether people can request an account from the sign-in page. Requests are on until an admin turns them off. Admin-only.",
                 "consumes": [
                     "application/json"
@@ -4058,6 +4423,11 @@ const docTemplate = `{
         },
         "/settings/remote-access": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns whether remote access is switched on, whether the Tailscale node has actually joined the tailnet, its remote URL once it has, and the last start failure",
                 "produces": [
                     "application/json"
@@ -4076,6 +4446,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Starts a Tailscale tsnet node and proxies traffic to the local server. A Quark with no tailnet enrollment fetches a pre-auth key from the provisioning service; authKey overrides that key. The node joins the tailnet asynchronously; poll GET for connected. Admin only.",
                 "consumes": [
                     "application/json"
@@ -4131,6 +4506,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Logs the Tailscale tsnet node out, stops it, and deletes its state, so re-enabling provisions a fresh key. Admin only.",
                 "produces": [
                     "application/json"
@@ -4163,6 +4543,11 @@ const docTemplate = `{
         },
         "/ssh/enabled": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Starts sshd and opens port 22, or stops sshd and closes the port. The choice survives a reboot. Admin-only.",
                 "consumes": [
                     "application/json"
@@ -4221,6 +4606,11 @@ const docTemplate = `{
         },
         "/ssh/keys": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Adds one OpenSSH public key to those allowed to sign in as quark. Options such as command= are dropped. Admin-only.",
                 "consumes": [
                     "application/json"
@@ -4283,6 +4673,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Removes the allowed key with the given SHA256 fingerprint. The fingerprint is a query parameter because it can contain a slash. Admin-only.",
                 "tags": [
                     "ssh"
@@ -4342,6 +4737,11 @@ const docTemplate = `{
         },
         "/ssh/password": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Sets the password for the quark login account. Quark does not store it. At least 12 characters, no control characters. Admin-only.",
                 "consumes": [
                     "application/json"
@@ -4398,6 +4798,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Removes the quark login account's password, so only allowed keys can sign in. Admin-only.",
                 "tags": [
                     "ssh"
@@ -4436,6 +4841,11 @@ const docTemplate = `{
         },
         "/ssh/status": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Whether SSH access can be managed on this Quark (and why not), whether sshd is running, and the public keys allowed to sign in as quark. Admin-only.",
                 "produces": [
                     "application/json"
@@ -4474,6 +4884,11 @@ const docTemplate = `{
         },
         "/storage/devices/rename": {
             "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Sets a custom display name for a storage device identified by its serial number",
                 "consumes": [
                     "application/json"
@@ -4527,6 +4942,11 @@ const docTemplate = `{
         },
         "/storage/devices/role": {
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Assigns a role (default-storage, snapshot-backup, unassigned) to a device. Requires master password re-entry.",
                 "consumes": [
                     "application/json"
@@ -4579,6 +4999,11 @@ const docTemplate = `{
         },
         "/storage/devices/snapshot-backup": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Aggregates all files from all managed devices onto the target snapshot-backup device",
                 "consumes": [
                     "application/json"
@@ -4631,6 +5056,11 @@ const docTemplate = `{
         },
         "/storage/devices/snapshot-backup/status/{jobId}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns the current status of a snapshot backup job",
                 "produces": [
                     "application/json"
@@ -4666,6 +5096,11 @@ const docTemplate = `{
         },
         "/storage/devices/snapshot-backup/verify": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Walks all files on the backup device and checks against the manifest",
                 "consumes": [
                     "application/json"
@@ -4712,6 +5147,11 @@ const docTemplate = `{
         },
         "/storage/devices/status": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns statuses for all known storage devices",
                 "produces": [
                     "application/json"
@@ -4738,6 +5178,11 @@ const docTemplate = `{
         },
         "/storage/devices/usb/{serial}": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Mounts a USB storage device identified by serial and returns mount info",
                 "produces": [
                     "application/json"
@@ -4783,6 +5228,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Unmounts a USB storage device identified by serial",
                 "produces": [
                     "application/json"
@@ -4830,6 +5280,11 @@ const docTemplate = `{
         },
         "/trash": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Lists a device's trashed items, most recently trashed first, with how many days anything stays before the hourly purge deletes it. A non-admin sees what they trashed and what was trashed from a place they can read.",
                 "produces": [
                     "application/json"
@@ -4870,6 +5325,11 @@ const docTemplate = `{
         },
         "/trash/contents": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Lists what a trashed folder, or a folder inside one, holds, sorted by name. Each entry's path is relative to the trashed item and can be passed back here, to restore, or to delete. Also returns where the folder would be restored to and when the trashed item expires. A trashed item the caller cannot see is not found.",
                 "produces": [
                     "application/json"
@@ -4929,6 +5389,11 @@ const docTemplate = `{
         },
         "/trash/delete": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Deletes the named trashed items for good. An item with a path deletes only that file or folder from inside a trashed folder. Every item is checked first, so a batch naming an unknown item deletes nothing.",
                 "consumes": [
                     "application/json"
@@ -4987,6 +5452,11 @@ const docTemplate = `{
         },
         "/trash/empty": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Permanently deletes everything in a device's trash. A non-admin empties only the items they could delete one at a time: the ones they trashed and the ones trashed from a folder they can write.",
                 "consumes": [
                     "application/json"
@@ -5039,6 +5509,11 @@ const docTemplate = `{
         },
         "/trash/restore": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Moves trashed items back to where they were deleted from. An item with a path restores only that file or folder from inside a trashed folder, to the folder's original path joined with it, recreating missing parent folders; the trashed folder keeps the rest. Every item is checked first, so a batch naming an unknown item, one whose destination is now occupied, or two whose destinations overlap restores nothing; nothing is ever overwritten.",
                 "consumes": [
                     "application/json"
@@ -5103,6 +5578,11 @@ const docTemplate = `{
         },
         "/version": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Retrieves the installed version of the application",
                 "produces": [
                     "application/json"
@@ -5129,6 +5609,11 @@ const docTemplate = `{
         },
         "/version/available": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Lists all available versions for update",
                 "produces": [
                     "application/json"
@@ -5166,6 +5651,11 @@ const docTemplate = `{
         },
         "/version/update": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Performs an update to the specified version",
                 "consumes": [
                     "application/json"
@@ -5212,6 +5702,11 @@ const docTemplate = `{
         },
         "/videos/extract-frame": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Extracts a JPEG frame at the given timestamp and saves it alongside the source video. Needs read access on the video and write access on its folder; the caller owns the new frame.",
                 "consumes": [
                     "application/json"
@@ -5276,6 +5771,11 @@ const docTemplate = `{
         },
         "/videos/metadata": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns duration, resolution, codec, bitrate, framerate, rotation, and the caller's own favorite state and album membership for the specified video.",
                 "produces": [
                     "application/json"
@@ -5335,6 +5835,11 @@ const docTemplate = `{
         },
         "/videos/transcode": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Queues a background job that converts the source video into a new file beside it, in any format GET /videos/transcode/formats lists. Original quality keeps the source resolution, and copies the streams without re-encoding when the format's container accepts them; small caps the height at 480 lines. Converting to the source's own format needs small quality. The output is never upscaled and never overwrites a file. Follow the job with GET /jobs/{id} or the job_* events; an upload event announces the output file. Needs read access on the video and write access on its folder; the job runs as, and its output is owned by, the caller.",
                 "consumes": [
                     "application/json"
@@ -5399,6 +5904,11 @@ const docTemplate = `{
         },
         "/videos/transcode/formats": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Lists the video formats POST /videos/transcode can write on this device: the ones whose video and audio encoders its ffmpeg build has, in display order.",
                 "produces": [
                     "application/json"
@@ -5431,6 +5941,11 @@ const docTemplate = `{
         },
         "/videos/trim": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Extracts a sub-clip [startMs, endMs] from the source video using stream copy (fast, lossless). The original file is not modified. Needs read access on the video and write access on its folder; the caller owns the new clip.",
                 "consumes": [
                     "application/json"
@@ -7075,17 +7590,25 @@ const docTemplate = `{
                 }
             }
         }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "A session token from POST /auth/login, entered as the word Bearer, a space, and the token.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
+	Version:          "v0",
 	Host:             "",
-	BasePath:         "",
+	BasePath:         "/api/v0",
 	Schemes:          []string{},
-	Title:            "",
-	Description:      "",
+	Title:            "Quark API",
+	Description:      "The REST API a Quark device serves to its Flutter clients. Every endpoint except\n/auth/setup, /auth/login, /auth/recover, /auth/request-account and /auth/status needs a\nsession token. Sign in with POST /auth/login, then click Authorize and enter the word\nBearer, a space, and the token.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

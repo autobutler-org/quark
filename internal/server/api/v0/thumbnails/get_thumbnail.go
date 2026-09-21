@@ -33,6 +33,7 @@ import (
 // @Failure 304 "Not Modified"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /thumbnails/{filePath} [get]
 var getThumbnailRoute = serverutil.ApiRoute(
 	"GET", "/thumbnails/*filePath", func(c *gin.Context) *serverutil.Response {

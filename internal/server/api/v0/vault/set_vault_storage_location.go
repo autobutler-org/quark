@@ -23,6 +23,7 @@ import (
 // @Failure 401 {object} serverutil.Response
 // @Failure 423 {object} serverutil.Response
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /vault/storage-location [put]
 var setVaultStorageLocationRoute = serverutil.ApiRoute(
 	"PUT", "/vault/storage-location", func(c *gin.Context) *serverutil.Response {

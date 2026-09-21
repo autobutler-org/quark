@@ -20,6 +20,7 @@ import (
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /admin/groups [get]
 func listGroups(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

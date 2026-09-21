@@ -24,6 +24,7 @@ import (
 // @Failure 403 {object} serverutil.Response "the caller can read the path but doesn't own it"
 // @Failure 404 {object} serverutil.Response "the caller can't read the path"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /access [get]
 func listAccess(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

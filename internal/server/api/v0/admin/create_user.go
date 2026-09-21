@@ -28,6 +28,7 @@ import (
 // @Failure 403 {object} serverutil.Response
 // @Failure 409 {object} serverutil.Response "that username is taken"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /admin/users [post]
 func createUser(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

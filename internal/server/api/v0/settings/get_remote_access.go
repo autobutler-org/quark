@@ -12,6 +12,7 @@ import (
 // @Tags settings
 // @Produce json
 // @Success 200 {object} RemoteAccessResponse
+// @Security BearerAuth
 // @Router /settings/remote-access [get]
 func getRemoteAccess(c *gin.Context) *serverutil.Response {
 	return serverutil.Ok().WithData(remoteAccessResponse(settingsutil.GetRemoteAccess()))

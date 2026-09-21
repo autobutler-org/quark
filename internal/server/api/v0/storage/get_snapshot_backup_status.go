@@ -17,6 +17,7 @@ import (
 // @Param jobId path string true "Job ID"
 // @Success 200 {object} object
 // @Failure 404 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /storage/devices/snapshot-backup/status/{jobId} [get]
 func getSnapshotBackupStatus(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

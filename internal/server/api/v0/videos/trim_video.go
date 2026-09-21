@@ -31,6 +31,7 @@ import (
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 501 {object} serverutil.Response "Not Implemented — ffmpeg not available"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /videos/trim [post]
 func trimVideo(c *gin.Context) *serverutil.Response {
 	if !videoutil.Available() {

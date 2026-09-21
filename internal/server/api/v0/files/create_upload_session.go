@@ -26,6 +26,7 @@ import (
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 409 {object} serverutil.Response "Conflict"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /files/upload-session [post]
 func createUploadSession(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

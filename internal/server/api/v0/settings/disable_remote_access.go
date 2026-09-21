@@ -15,6 +15,7 @@ import (
 // @Success 200 {object} RemoteAccessResponse
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /settings/remote-access [delete]
 func disableRemoteAccess(c *gin.Context) *serverutil.Response {
 	if err := remoteutil.Disable(); err != nil {

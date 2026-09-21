@@ -16,6 +16,7 @@ import (
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /ssh/status [get]
 func getSSHStatus(c *gin.Context) *serverutil.Response {
 	system, errResp := sshSystem(c)

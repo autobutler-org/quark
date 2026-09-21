@@ -21,6 +21,7 @@ import (
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Param rootDir query string false "File dir to list"
 // @Param serial query string false "Device serial number to filter by"
+// @Security BearerAuth
 // @Router /files [get]
 func listFiles(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

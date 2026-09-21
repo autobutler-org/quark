@@ -13,6 +13,7 @@ import (
 // @Tags auth
 // @Produce json
 // @Success 200 {object} object
+// @Security BearerAuth
 // @Router /auth/logout [post]
 func logoutUser(c *gin.Context) *serverutil.Response {
 	deps, ok := getQueries(c)

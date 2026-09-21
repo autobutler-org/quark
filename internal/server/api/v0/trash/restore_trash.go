@@ -26,6 +26,7 @@ import (
 // @Failure 404 {object} serverutil.Response "Unknown device, trash name or path, or an item the caller cannot see"
 // @Failure 409 {object} serverutil.Response "Destination occupied or overlapping another in the batch, or original location unknown"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /trash/restore [post]
 func restoreTrash(c *gin.Context) *serverutil.Response {
 	req, err := bindTrashItems(c.ShouldBindJSON)

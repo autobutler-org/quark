@@ -27,6 +27,7 @@ import (
 // @Failure 404 {object} serverutil.Response "Not Found: no album of the caller's has that id"
 // @Failure 409 {object} serverutil.Response "Conflict: an album with that name already exists here"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /albums/{id}/rename [patch]
 func renameAlbum(c *gin.Context) *serverutil.Response {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)

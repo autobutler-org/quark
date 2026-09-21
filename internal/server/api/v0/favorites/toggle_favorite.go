@@ -22,6 +22,7 @@ import (
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /photos/favorite [post]
 func toggleFavorite(c *gin.Context) *serverutil.Response {
 	var req favoriteRequest

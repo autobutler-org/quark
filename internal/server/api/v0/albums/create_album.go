@@ -26,6 +26,7 @@ import (
 // @Failure 403 {object} serverutil.Response "Forbidden: system album as the parent"
 // @Failure 409 {object} serverutil.Response "Conflict: an album with that name already exists here"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /albums [post]
 func createAlbum(c *gin.Context) *serverutil.Response {
 	var req createAlbumRequest

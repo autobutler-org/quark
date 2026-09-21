@@ -30,6 +30,7 @@ var errCreatorReadOnly = errors.New("the account that queued this job can't save
 // @Failure 409 {object} serverutil.Response "Conflict — only a failed job can be retried, and a job already reset by a retry is no longer failed"
 // @Failure 422 {object} serverutil.Response "Unprocessable Entity — the job's inputs no longer exist"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /jobs/{id}/retry [post]
 func retryJob(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

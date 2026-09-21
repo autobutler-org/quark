@@ -12,7 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	docs "github.com/autobutler-org/quark/docs/swagger"
+	// Registers the generated spec that ginSwagger serves at /swagger/doc.json.
+	_ "github.com/autobutler-org/quark/docs/swagger"
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/server/middleware"
 	"github.com/autobutler-org/quark/pkg/backup"
@@ -344,7 +345,6 @@ func usbDeviceMonitor(deps deputil.Dependencies) {
 }
 
 func setupSwagger(router *gin.Engine) {
-	docs.SwaggerInfo.BasePath = "/api/v0"
 	router.GET("/swagger", func(c *gin.Context) {
 		c.Redirect(302, "/swagger/index.html")
 	})

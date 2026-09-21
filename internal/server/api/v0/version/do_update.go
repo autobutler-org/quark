@@ -23,6 +23,7 @@ type UpdateRequest struct {
 // @Success 200 {object} UpdateRequest
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /version/update [post]
 func doUpdate(c *gin.Context) *serverutil.Response {
 	params := UpdateParams{}

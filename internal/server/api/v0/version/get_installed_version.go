@@ -13,6 +13,7 @@ import (
 // @Produce json
 // @Success 200 {object} VersionJSON
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /version [get]
 func getInstalledVersion(c *gin.Context) *serverutil.Response {
 	version := versionutil.GetVersion()

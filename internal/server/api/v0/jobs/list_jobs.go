@@ -20,6 +20,7 @@ import (
 // @Success 200 {array} jobutil.Job
 // @Failure 400 {object} serverutil.Response "Bad Request — kind is missing, empty, or not a registered kind"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /jobs [get]
 func listJobs(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

@@ -21,6 +21,7 @@ import (
 // @Produce json
 // @Success 101 {string} string "Switching Protocols"
 // @Failure 400 {object} serverutil.Response "Bad Request"
+// @Security BearerAuth
 // @Router /events [get]
 func streamEvents(c *gin.Context) {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

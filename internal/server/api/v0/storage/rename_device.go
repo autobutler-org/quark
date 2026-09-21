@@ -22,6 +22,7 @@ import (
 // @Success 200 {object} object
 // @Failure 400 {object} serverutil.Response
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /storage/devices/rename [patch]
 func renameDevice(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

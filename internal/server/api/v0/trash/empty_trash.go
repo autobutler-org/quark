@@ -24,6 +24,7 @@ import (
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 404 {object} serverutil.Response "Unknown device"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /trash/empty [post]
 func emptyTrash(c *gin.Context) *serverutil.Response {
 	var req emptyTrashRequest

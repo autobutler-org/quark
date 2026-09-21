@@ -1,3 +1,4 @@
+basePath: /api/v0
 definitions:
   accessutil.Grant:
     properties:
@@ -1091,6 +1092,13 @@ definitions:
     type: object
 info:
   contact: {}
+  description: |-
+    The REST API a Quark device serves to its Flutter clients. Every endpoint except
+    /auth/setup, /auth/login, /auth/recover, /auth/request-account and /auth/status needs a
+    session token. Sign in with POST /auth/login, then click Authorize and enter the word
+    Bearer, a space, and the token.
+  title: Quark API
+  version: v0
 paths:
   /access:
     delete:
@@ -1141,6 +1149,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Stop sharing a file or folder
       tags:
       - access
@@ -1187,6 +1197,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List who can reach a file or folder
       tags:
       - access
@@ -1236,6 +1248,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Share a file or folder
       tags:
       - access
@@ -1263,6 +1277,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List what has been shared with you
       tags:
       - access
@@ -1286,6 +1302,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List who a file or folder can be shared with
       tags:
       - access
@@ -1319,6 +1337,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Approve an account request
       tags:
       - admin
@@ -1361,6 +1381,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Demote admin to regular user
       tags:
       - admin
@@ -1393,6 +1415,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Deny an account request
       tags:
       - admin
@@ -1435,6 +1459,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Turn an account off
       tags:
       - admin
@@ -1467,6 +1493,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Turn an account back on
       tags:
       - admin
@@ -1496,6 +1524,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List groups
       tags:
       - admin
@@ -1541,6 +1571,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Create a group
       tags:
       - admin
@@ -1579,6 +1611,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Delete a group
       tags:
       - admin
@@ -1634,6 +1668,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Rename a group
       tags:
       - admin
@@ -1676,6 +1712,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Take an account out of a group
       tags:
       - admin
@@ -1718,6 +1756,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Add an account to a group
       tags:
       - admin
@@ -1756,6 +1796,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Promote user to admin
       tags:
       - admin
@@ -1783,6 +1825,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List all users
       tags:
       - admin
@@ -1828,6 +1872,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Add an account
       tags:
       - admin
@@ -1874,6 +1920,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Delete an account
       tags:
       - admin
@@ -1900,6 +1948,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List all photo albums
       tags:
       - albums
@@ -1941,6 +1991,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Create a photo album
       tags:
       - albums
@@ -1977,6 +2029,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Delete a photo album
       tags:
       - albums
@@ -2008,6 +2062,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Get a photo album by ID
       tags:
       - albums
@@ -2052,6 +2108,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Remove a photo from an album
       tags:
       - albums
@@ -2085,6 +2143,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List photos in an album
       tags:
       - albums
@@ -2128,6 +2188,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Add a photo to an album
       tags:
       - albums
@@ -2179,6 +2241,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Move a photo album to a new parent
       tags:
       - albums
@@ -2228,6 +2292,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Rename a photo album
       tags:
       - albums
@@ -2314,6 +2380,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Delete account data (factory reset)
       tags:
       - auth
@@ -2361,6 +2429,8 @@ paths:
           description: OK
           schema:
             type: object
+      security:
+      - BearerAuth: []
       summary: Logout
       tags:
       - auth
@@ -2459,6 +2529,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Revoke all sessions (log out everywhere)
       tags:
       - auth
@@ -2486,6 +2558,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List active sessions
       tags:
       - auth
@@ -2521,6 +2595,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Revoke a session by ID
       tags:
       - auth
@@ -2584,6 +2660,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List books
       tags:
       - books
@@ -2604,6 +2682,8 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Stream real-time file/device events
       tags:
       - events
@@ -2653,6 +2733,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Delete files
       tags:
       - files
@@ -2686,6 +2768,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Lists files
       tags:
       - files
@@ -2724,6 +2808,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Move or rename a file
       tags:
       - files
@@ -2761,6 +2847,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List all files of a given type
       tags:
       - files
@@ -2812,6 +2900,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Convert a spreadsheet to a Quark spreadsheet
       tags:
       - files
@@ -2847,6 +2937,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Download a file or folder
       tags:
       - files
@@ -2900,6 +2992,8 @@ paths:
           description: Server busy converting other images
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Download a single file from inside an archive
       tags:
       - files
@@ -2941,6 +3035,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Extract a zip archive in place
       tags:
       - files
@@ -2988,6 +3084,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Create a new folder
       tags:
       - files
@@ -3031,6 +3129,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List contents of an archive file at a given virtual path
       tags:
       - files
@@ -3063,6 +3163,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List recently uploaded files
       tags:
       - files
@@ -3093,6 +3195,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Searches for files
       tags:
       - files
@@ -3130,6 +3234,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Search file contents (FTS5)
       tags:
       - files
@@ -3163,6 +3269,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Stat a file or directory
       tags:
       - files
@@ -3216,6 +3324,8 @@ paths:
           description: Conflict
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Upload files to the top-level directory
       tags:
       - files
@@ -3261,6 +3371,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Open a resumable upload session
       tags:
       - files
@@ -3284,6 +3396,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Abandon a resumable upload session
       tags:
       - files
@@ -3306,6 +3420,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Ask what a resumable upload has committed
       tags:
       - files
@@ -3346,6 +3462,8 @@ paths:
           description: Conflict
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Send one chunk of a resumable upload
       tags:
       - files
@@ -3403,6 +3521,8 @@ paths:
           description: Conflict
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Upload files to a nested directory
       tags:
       - files
@@ -3418,6 +3538,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/v0_health.HealthJSON'
+      security:
+      - BearerAuth: []
       summary: Get system health status
       tags:
       - health
@@ -3454,6 +3576,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List background jobs
       tags:
       - jobs
@@ -3492,6 +3616,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Cancel a background job
       tags:
       - jobs
@@ -3524,6 +3650,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Get a background job
       tags:
       - jobs
@@ -3576,6 +3704,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Retry a background job
       tags:
       - jobs
@@ -3606,6 +3736,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List photos
       tags:
       - photos
@@ -3646,6 +3778,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Duplicate a photo file
       tags:
       - photos
@@ -3677,6 +3811,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List duplicate photos
       tags:
       - photos
@@ -3713,6 +3849,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Check if a photo is favorited
       tags:
       - favorites
@@ -3747,6 +3885,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Toggle a photo favorite
       tags:
       - favorites
@@ -3767,6 +3907,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List all favorited photos
       tags:
       - favorites
@@ -3803,6 +3945,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Get metadata for a single photo
       tags:
       - photos
@@ -3842,6 +3986,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Save the rotation for a photo
       tags:
       - photos
@@ -3860,6 +4006,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Get software bill of materials
       tags:
       - version
@@ -3877,6 +4025,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Get settings
       tags:
       - settings
@@ -3906,6 +4056,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Update settings
       tags:
       - settings
@@ -3945,6 +4097,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Turn account requests on or off
       tags:
       - settings
@@ -3967,6 +4121,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Disable remote access
       tags:
       - settings
@@ -3981,6 +4137,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/v0_settings.RemoteAccessResponse'
+      security:
+      - BearerAuth: []
       summary: Get remote access status
       tags:
       - settings
@@ -4020,6 +4178,8 @@ paths:
           description: This build has no provisioning secret
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Enable remote access via Tailscale
       tags:
       - settings
@@ -4059,6 +4219,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Turn SSH access on or off
       tags:
       - ssh
@@ -4099,6 +4261,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Stop a public key signing in over SSH
       tags:
       - ssh
@@ -4142,6 +4306,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Allow a public key to sign in over SSH
       tags:
       - ssh
@@ -4168,6 +4334,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Clear the SSH login password
       tags:
       - ssh
@@ -4206,6 +4374,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Set the SSH login password
       tags:
       - ssh
@@ -4233,6 +4403,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Get SSH access status
       tags:
       - ssh
@@ -4269,6 +4441,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Rename a storage device
       tags:
       - storage
@@ -4304,6 +4478,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Set the role of a storage device
       tags:
       - storage
@@ -4339,6 +4515,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Start a snapshot backup to a device
       tags:
       - storage
@@ -4362,6 +4540,8 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Get snapshot backup job status
       tags:
       - storage
@@ -4392,6 +4572,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Verify integrity of a snapshot backup
       tags:
       - storage
@@ -4409,6 +4591,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List storage device statuses
       tags:
       - storage
@@ -4440,6 +4624,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Disable (unmount) a USB storage device
       tags:
       - storage
@@ -4471,6 +4657,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Enable (mount) a USB storage device
       tags:
       - storage
@@ -4499,6 +4687,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List the trash
       tags:
       - trash
@@ -4542,6 +4732,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List a folder in the trash
       tags:
       - trash
@@ -4585,6 +4777,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Delete items from the trash permanently
       tags:
       - trash
@@ -4621,6 +4815,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Empty the trash
       tags:
       - trash
@@ -4671,6 +4867,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Restore items from the trash
       tags:
       - trash
@@ -4688,6 +4886,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Get installed version
       tags:
       - version
@@ -4712,6 +4912,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List available versions
       tags:
       - version
@@ -4742,6 +4944,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Perform update
       tags:
       - version
@@ -4786,6 +4990,8 @@ paths:
           description: Not Implemented — ffmpeg not available
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Extract a still frame from a video
       tags:
       - videos
@@ -4827,6 +5033,8 @@ paths:
           description: Not Implemented — ffprobe not available
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Get metadata for a single video file
       tags:
       - videos
@@ -4877,6 +5085,8 @@ paths:
           description: Not Implemented — ffmpeg not available
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Queue a video transcode
       tags:
       - videos
@@ -4900,6 +5110,8 @@ paths:
           description: Not Implemented — ffmpeg not available
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: List transcode formats
       tags:
       - videos
@@ -4945,7 +5157,16 @@ paths:
           description: Not Implemented — ffmpeg not available
           schema:
             $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
       summary: Trim a video clip
       tags:
       - videos
+securityDefinitions:
+  BearerAuth:
+    description: A session token from POST /auth/login, entered as the word Bearer,
+      a space, and the token.
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

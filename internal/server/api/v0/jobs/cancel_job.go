@@ -21,6 +21,7 @@ import (
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 409 {object} serverutil.Response "Conflict — the job has already finished"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /jobs/{id} [delete]
 func cancelJob(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

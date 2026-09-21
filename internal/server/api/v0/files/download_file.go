@@ -27,6 +27,7 @@ import (
 // @Success 200 {file} file
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /files/download [get]
 func downloadFile(c *gin.Context) *serverutil.Response {
 	filePath := c.Query("filePath")

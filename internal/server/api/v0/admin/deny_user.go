@@ -22,6 +22,7 @@ import (
 // @Failure 403 {object} serverutil.Response
 // @Failure 404 {object} serverutil.Response "no account request has that username"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /admin/deny/{username} [put]
 func denyUser(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

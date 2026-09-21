@@ -27,6 +27,7 @@ import (
 // @Failure 403 {object} serverutil.Response
 // @Failure 409 {object} serverutil.Response "a group with that name already exists"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /admin/groups [post]
 func createGroup(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
