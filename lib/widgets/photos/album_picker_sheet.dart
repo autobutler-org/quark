@@ -86,6 +86,9 @@ class _AlbumPickerSheetHostState extends State<AlbumPickerSheetHost> {
       error: _error,
       onPicked: (album) => Navigator.of(context).pop(album),
       onRetry: _load,
+      // Closes the sheet and leaves the selection alone — the selection bar
+      // behind it owns Cancel (#2060).
+      onClose: () => Navigator.of(context).pop(),
     );
   }
 }
