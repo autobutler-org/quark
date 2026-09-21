@@ -305,3 +305,26 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 
 - A photo from the device, rather than the Quark, has no **Share…**.
 - Albums can't be shared; share the folder that holds the photos instead.
+
+---
+
+### JN-PH-017: Upload photos via drag-and-drop (web)
+
+**Preconditions:** Running Quark in a web browser.
+
+**Steps:**
+
+1. Navigate to `/photos`.
+2. Drag one or more photos, or a folder of them, from the OS file manager onto the page.
+
+**Expected result:**
+
+- The page highlights while the drag is over it.
+- The photos upload on drop the same way as the upload button (JN-PH-006), including the device choice when
+  more than one device is enabled, and appear in the grid.
+- A dropped file that is not a photo is left out, and a message says how many were not uploaded. A drop with
+  no photos in it uploads nothing and shows only that message.
+
+**Notes:**
+
+- Photos are recognized by extension, raw camera formats included. SVG and video files are not photos here.

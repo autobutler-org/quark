@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -11,13 +12,16 @@ import 'package:quark/models/photo_album.dart';
 import 'package:quark/services/album_service.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/demo_photos_service.dart';
+import 'package:quark/services/dropped_file_reader.dart';
 import 'package:quark/services/favorites_service.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/album_link.dart' as link;
 import 'package:quark/utils/connection_error.dart';
+import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/photo_grid_config.dart';
 import 'package:quark/utils/quark_widget_items.dart';
+import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -125,6 +129,8 @@ class PhotosController extends ChangeNotifier {
         })
         uploadFiles =
         FilesService.uploadFilesFromFormData,
+    Future<Uint8List?> Function(DropItemFile file) readDroppedFile =
+        readDroppedFileBytes,
     PhotoBytesCache? bytesCache,
     bool isWeb = kIsWeb,
   }) : _getPhotos = getPhotos,
@@ -143,6 +149,7 @@ class PhotosController extends ChangeNotifier {
        _listAlbumItems = listAlbumItems,
        _listDevices = listDevices,
        _uploadFiles = uploadFiles,
+       _readDroppedFile = readDroppedFile,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
        _isWeb = isWeb;
 
@@ -218,6 +225,7 @@ class PhotosController extends ChangeNotifier {
     bool keepBoth,
   })
   _uploadFiles;
+  final Future<Uint8List?> Function(DropItemFile file) _readDroppedFile;
   final PhotoBytesCache _bytesCache;
   final bool _isWeb;
 
@@ -945,14 +953,71 @@ class PhotosController extends ChangeNotifier {
               filename: file.name,
             ),
       ];
-      // Photos come off cameras with names like IMG_0001.jpg, so clashes are
-      // routine and the file's name carries nothing the user chose. Rather
-      // than the Quark's 409 (#2016), the import asks for both to be kept.
-      await _uploadFiles('', multipart, serial: serial, keepBoth: true);
+      await _uploadToLibrary(multipart, serial: serial);
     } finally {
       _isUploading = false;
       notifyListeners();
     }
+  }
+
+  /// Sorts what was dropped onto the page into the photos, walking into
+  /// dropped folders, and a count of the files that are not photos (#2214).
+  ///
+  /// By extension, the same table that decides which files open in the image
+  /// viewer. A browser's MIME type for a raw camera file is often empty.
+  ({List<PendingUpload> photos, int notPhotos}) sortDroppedFiles(
+    List<DropItem> items,
+  ) {
+    final flattened = flattenDroppedItems(
+      items,
+      buildUpload: (file, name) async {
+        final bytes = await _readDroppedFile(file);
+        if (bytes == null || bytes.isEmpty) return null;
+        return http.MultipartFile.fromBytes('files', bytes, filename: name);
+      },
+    );
+    final photos = [
+      for (final upload in flattened.uploads)
+        if (fileKindForName(upload.name) == FileKind.image) upload,
+    ];
+    return (
+      photos: photos,
+      notPhotos: flattened.uploads.length - photos.length,
+    );
+  }
+
+  /// Uploads the dropped [photos] to the device with [serial], or the
+  /// default device when null, and returns how many went up. One request a
+  /// photo, so only one is ever held in memory. Throws what the upload threw.
+  Future<int> uploadDroppedPhotos(
+    List<PendingUpload> photos, {
+    String? serial,
+  }) async {
+    _isUploading = true;
+    notifyListeners();
+    try {
+      var uploaded = 0;
+      for (final photo in photos) {
+        final file = await photo.build();
+        if (file == null) continue;
+        await _uploadToLibrary([file], serial: serial);
+        uploaded++;
+      }
+      return uploaded;
+    } finally {
+      _isUploading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _uploadToLibrary(
+    List<http.MultipartFile> files, {
+    String? serial,
+  }) {
+    // Photos come off cameras with names like IMG_0001.jpg, so clashes are
+    // routine and the file's name carries nothing the user chose. Rather
+    // than the Quark's 409 (#2016), the import asks for both to be kept.
+    return _uploadFiles('', files, serial: serial, keepBoth: true);
   }
 
   // ── Viewer ─────────────────────────────────────────────────────────────────

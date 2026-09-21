@@ -22,6 +22,7 @@ import 'package:quark/pages/svg_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/dropped_file_reader.dart';
 import 'package:quark/models/upload_conflict.dart';
 import 'package:quark/services/upload_manager.dart';
 import 'package:quark/services/files_service.dart';
@@ -937,7 +938,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           // Reached only below the chunking threshold. Above it the file goes
           // out slice by slice through the chunk source and is never read
           // whole (#1629).
-          final bytes = await _readDroppedFileBytes(file);
+          final bytes = await readDroppedFileBytes(file);
           if (bytes == null || bytes.isEmpty) {
             return null;
           }
@@ -962,35 +963,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     } catch (e) {
       debugPrint('[file_browser_page.dart] Error in catch block: $e');
       _showMessage(Errors.message(e, 'read the dropped files'));
-    }
-  }
-
-  Future<Uint8List?> _readDroppedFileBytes(DropItemFile droppedItem) async {
-    try {
-      return await droppedItem.readAsBytes();
-    } catch (_) {
-      // Some browser drag sources (e.g. dragging from another browser tab or
-      // certain file managers) expose an HTTP/HTTPS URL via droppedItem.path
-      // rather than providing raw bytes directly. Blob URLs (blob:...) are
-      // not fetchable this way — this fallback only applies to http/https paths.
-      if (!kIsWeb) {
-        rethrow;
-      }
-
-      final path = droppedItem.path;
-      if (path.isEmpty) {
-        return null;
-      }
-
-      final fallbackResponse = await http.get(Uri.parse(path));
-      if (fallbackResponse.statusCode >= 200 &&
-          fallbackResponse.statusCode < 300) {
-        return fallbackResponse.bodyBytes;
-      }
-
-      throw Exception(
-        'Dropped file read failed (${fallbackResponse.statusCode})',
-      );
     }
   }
 

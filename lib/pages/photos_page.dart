@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -27,6 +28,7 @@ import 'package:quark/widgets/photos/photo_thumbnail.dart';
 import 'package:quark/widgets/photos/photos_empty_state.dart';
 import 'package:quark/widgets/photos/photos_selection_app_bar.dart';
 import 'package:quark/widgets/photos/remove_from_album_dialog.dart';
+import 'package:quark/widgets/upload_drop_zone.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -324,14 +326,8 @@ class PhotosPageState extends State<PhotosPage>
       final picked = await FilePicker.pickFiles(type: FileType.image);
       if (picked.isEmpty || !mounted) return;
 
-      final targets = await _controller.uploadTargets();
-      UploadTarget? target = targets.length == 1 ? targets.first : null;
-      if (targets.length > 1) {
-        if (!mounted) return;
-        target = await showDeviceUploadPicker(context, targets);
-        if (target == null) return;
-      }
-      final serial = target?.serial ?? '';
+      final serial = await _pickUploadSerial();
+      if (serial == null) return;
 
       try {
         await _controller.uploadPhotos(
@@ -349,6 +345,49 @@ class PhotosPageState extends State<PhotosPage>
     } on MissingPluginException {
       if (mounted) _snack('File picker not available. Fully restart the app.');
     }
+  }
+
+  /// Uploads the photos among files dragged onto the page, the same way the
+  /// upload button does, and says so when something dropped is not a photo
+  /// rather than dropping it silently (#2214).
+  Future<void> _uploadDroppedFiles(List<DropItem> items) async {
+    if (_controller.isUploading) return;
+    final (:photos, :notPhotos) = _controller.sortDroppedFiles(items);
+    if (photos.isEmpty) {
+      if (notPhotos > 0) _snack(Errors.notPhotos(notPhotos));
+      return;
+    }
+
+    final serial = await _pickUploadSerial();
+    if (serial == null || !mounted) return;
+
+    try {
+      final uploaded = await _controller.uploadDroppedPhotos(
+        photos,
+        serial: serial.isNotEmpty ? serial : null,
+      );
+      if (!mounted) return;
+      final skipped = notPhotos > 0 ? ' ${Errors.notPhotos(notPhotos)}' : '';
+      _snack(
+        'Uploaded ${uploaded == 1 ? '1 photo' : '$uploaded photos'}.$skipped',
+      );
+      await manualRefresh();
+    } catch (e) {
+      if (mounted) _snack(Errors.message(e, 'upload your photos'));
+    }
+  }
+
+  /// The serial of the device an upload goes to — `''` for the default
+  /// device — or null when the user dismissed the device picker.
+  Future<String?> _pickUploadSerial() async {
+    final targets = await _controller.uploadTargets();
+    UploadTarget? target = targets.length == 1 ? targets.first : null;
+    if (targets.length > 1) {
+      if (!mounted) return null;
+      target = await showDeviceUploadPicker(context, targets);
+      if (target == null) return null;
+    }
+    return target?.serial ?? '';
   }
 
   // ── Selection ──────────────────────────────────────────────────────────────
@@ -576,95 +615,102 @@ class PhotosPageState extends State<PhotosPage>
                       onCancel: c.exitSelectionMode,
                     )
                   : null,
-              body: Stack(
-                children: [
-                  RefreshIndicator(
-                    onRefresh: manualRefresh,
-                    child: QuarkSplitView(
-                      controller: _scrollController,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      // The collapsed layout stacks the sidebar above the
-                      // grid in the same scroll view, and the page measures
-                      // it so the grid starts flush with the top.
-                      collapsedSidebarKey: _navPanelKey,
-                      sidebar: PhotoLibrarySidebar(
-                        columns: c.columns,
-                        minColumns: columnBounds.min,
-                        maxColumns: columnBounds.max,
-                        onColumnsChanged: c.setColumns,
-                        categories: c.showsCategories
-                            ? PhotoCategoryList(
-                                categories: c.categories,
-                                selectedId: c.selectedCategory.name,
-                                expanded: c.categoriesExpanded,
-                                onToggleExpanded: c.toggleCategoriesExpanded,
-                                onSelected: (id) => c.selectCategory(
-                                  PhotoCategory.values.byName(id),
+              body: UploadDropZone(
+                enabled: !c.isUploading,
+                onDrop: _uploadDroppedFiles,
+                child: Stack(
+                  children: [
+                    RefreshIndicator(
+                      onRefresh: manualRefresh,
+                      child: QuarkSplitView(
+                        controller: _scrollController,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        // The collapsed layout stacks the sidebar above the
+                        // grid in the same scroll view, and the page measures
+                        // it so the grid starts flush with the top.
+                        collapsedSidebarKey: _navPanelKey,
+                        sidebar: PhotoLibrarySidebar(
+                          columns: c.columns,
+                          minColumns: columnBounds.min,
+                          maxColumns: columnBounds.max,
+                          onColumnsChanged: c.setColumns,
+                          categories: c.showsCategories
+                              ? PhotoCategoryList(
+                                  categories: c.categories,
+                                  selectedId: c.selectedCategory.name,
+                                  expanded: c.categoriesExpanded,
+                                  onToggleExpanded: c.toggleCategoriesExpanded,
+                                  onSelected: (id) => c.selectCategory(
+                                    PhotoCategory.values.byName(id),
+                                  ),
+                                )
+                              : null,
+                          albums: AlbumSidebar(
+                            albums: c.albums,
+                            isLoading: c.albumsLoading,
+                            expandedIds: c.expandedAlbumIds,
+                            shrinkWrap: compact,
+                            selectedAlbumId: c.selectedAlbumId,
+                            onAllPhotosSelected: () => _showAlbum(null),
+                            onAlbumSelected: (item) => _showAlbum(item.id),
+                            onToggleExpanded: c.toggleAlbumExpanded,
+                            onCreateAlbum: _createAlbum,
+                            onAlbumLongPress: _showAlbumActions,
+                          ),
+                        ),
+                        slivers: [
+                          PhotoGrid(
+                            photos: photos,
+                            crossAxisCount: PhotoGridConfig.columnsFor(
+                              contentWidth,
+                              c.columns,
+                            ),
+                            selectedIds: selectedIds,
+                            selectionMode: c.selectionMode,
+                            isLoading: isInitialLoad || c.albumLoading,
+                            // Unreachable has its own view in the empty state.
+                            error: albumError == null || c.quarkUnreachable
+                                ? null
+                                : Errors.message(albumError, 'load the album'),
+                            hasMore: c.hasMore,
+                            isLoadingMore: c.isLoadingMore,
+                            emptyState: PhotosEmptyState(
+                              unreachable: c.quarkUnreachable,
+                              showingFavorites: album == null
+                                  ? c.selectedCategory ==
+                                        PhotoCategory.favorites
+                                  : album.isFavorites,
+                              albumName: album?.name,
+                              hostAddress: c.activeHost,
+                              onRetry: manualRefresh,
+                              onManageHosts: () =>
+                                  context.go(AppRoutes.settings),
+                            ),
+                            thumbnailBuilder: (context, photo) =>
+                                PhotoThumbnail(
+                                  url: c.thumbnailUrl(photo.id),
+                                  asset: c.assetFor(photo.id),
                                 ),
-                              )
-                            : null,
-                        albums: AlbumSidebar(
-                          albums: c.albums,
-                          isLoading: c.albumsLoading,
-                          expandedIds: c.expandedAlbumIds,
-                          shrinkWrap: compact,
-                          selectedAlbumId: c.selectedAlbumId,
-                          onAllPhotosSelected: () => _showAlbum(null),
-                          onAlbumSelected: (item) => _showAlbum(item.id),
-                          onToggleExpanded: c.toggleAlbumExpanded,
-                          onCreateAlbum: _createAlbum,
-                          onAlbumLongPress: _showAlbumActions,
-                        ),
+                            onTap: (i) => _onPhotoTap(photos, i),
+                            onLongPress: (i) => album == null
+                                ? c.selectFromLongPress(photos[i].id)
+                                : _showAlbumItemActions(album, photos[i].id),
+                            onDoubleTap: (i) => _toggleFavorite(photos[i].id),
+                          ),
+                        ],
                       ),
-                      slivers: [
-                        PhotoGrid(
-                          photos: photos,
-                          crossAxisCount: PhotoGridConfig.columnsFor(
-                            contentWidth,
-                            c.columns,
-                          ),
-                          selectedIds: selectedIds,
-                          selectionMode: c.selectionMode,
-                          isLoading: isInitialLoad || c.albumLoading,
-                          // Unreachable has its own view in the empty state.
-                          error: albumError == null || c.quarkUnreachable
-                              ? null
-                              : Errors.message(albumError, 'load the album'),
-                          hasMore: c.hasMore,
-                          isLoadingMore: c.isLoadingMore,
-                          emptyState: PhotosEmptyState(
-                            unreachable: c.quarkUnreachable,
-                            showingFavorites: album == null
-                                ? c.selectedCategory == PhotoCategory.favorites
-                                : album.isFavorites,
-                            albumName: album?.name,
-                            hostAddress: c.activeHost,
-                            onRetry: manualRefresh,
-                            onManageHosts: () => context.go(AppRoutes.settings),
-                          ),
-                          thumbnailBuilder: (context, photo) => PhotoThumbnail(
-                            url: c.thumbnailUrl(photo.id),
-                            asset: c.assetFor(photo.id),
-                          ),
-                          onTap: (i) => _onPhotoTap(photos, i),
-                          onLongPress: (i) => album == null
-                              ? c.selectFromLongPress(photos[i].id)
-                              : _showAlbumItemActions(album, photos[i].id),
-                          onDoubleTap: (i) => _toggleFavorite(photos[i].id),
-                        ),
-                      ],
                     ),
-                  ),
-                  // The collapsed layout starts scrolled past its nav panel,
-                  // so the chevron is the only sign the panel is up there.
-                  if (compact && _showScrollHint)
-                    const Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: ScrollUpHint(),
-                    ),
-                ],
+                    // The collapsed layout starts scrolled past its nav panel,
+                    // so the chevron is the only sign the panel is up there.
+                    if (compact && _showScrollHint)
+                      const Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: ScrollUpHint(),
+                      ),
+                  ],
+                ),
               ),
             );
           },
