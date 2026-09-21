@@ -1,3 +1,5 @@
+// Package v0_version serves /api/v0/version: the installed version, the SBOM, the versions available, and, for
+// admins, updating to one.
 package v0_version
 
 import "github.com/autobutler-org/quark/pkg/util/serverutil"

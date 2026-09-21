@@ -21,7 +21,7 @@ linters:
       # revive's own default is the legacy golint set. Listed explicitly so that
       # what is off is visible, and so a revive upgrade cannot silently add a rule
       # that breaks CI. Deliberately off for now:
-      #   exported, package-comments -- 253 missing doc comments, mostly in
+      #   exported -- missing doc comments on exported identifiers, mostly in
       #     pkg/util/serverutil and pkg/util/storageutil. Worth writing, but as
       #     documentation PRs per package, not as a wall of one-line stubs.
       #   var-naming -- serverutil.NewHttpError, ApiRoute and friends should be
@@ -38,6 +38,7 @@ linters:
         - name: error-strings
         - name: errorf
         - name: increment-decrement
+        - name: package-comments
         - name: indent-error-flow
         - name: range
         - name: receiver-naming
@@ -55,6 +56,9 @@ linters:
     paths:
       - build
       - docs/swagger
+      # cspell's install pulls in flatted, which ships a Go package with no go.mod,
+      # so ./... walks into it once make check/spelling has run.
+      - node_modules
 
     rules:
       # Best-effort teardown. A failed Close on a file we are done reading, a

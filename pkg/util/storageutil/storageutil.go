@@ -1,3 +1,5 @@
+// Package storageutil is the storage layer beneath the VFS: detecting and mounting USB drives and their partitions,
+// device status and roles, the trash, reading and extracting archives, and the file operations the services call.
 package storageutil
 
 import (

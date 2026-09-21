@@ -1,3 +1,5 @@
+// Package eventbus is the in-process publish/subscribe bus behind /api/v0/events. Anything that changes the file
+// tree publishes an Event, and each connected client holds a subscription.
 package eventbus
 
 import "sync"

@@ -1,3 +1,5 @@
+// Package workerutil runs the background worker that processes backup-to-device requests off a channel and reports
+// their errors.
 package workerutil
 
 import (

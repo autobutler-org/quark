@@ -1,3 +1,6 @@
+// Package db is Quark's SQLite layer: the connection, the golang-migrate migrations under migrations/, and the
+// query methods sqlc generates from sql/queries/. Code outside this package reaches the database through those
+// generated methods.
 package db
 
 import (

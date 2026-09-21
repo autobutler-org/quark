@@ -328,6 +328,11 @@ changes the file tree — upload, move, delete, new folder, conversion, restore 
   partition_linux.go`, `photoutil/rotate.go`) stays there. The rule is only that `<pkg>.go` stays public, so
   reading it tells you the whole API and nothing you cannot call. Private consts and vars are not checked,
   and a tuning value next to the exported thing it tunes is fine where it is.
+- **Every package carries a package doc comment in its interface file** — `<pkg>.go`, or `main.go` for a
+  command; never an sqlc-generated file, which is why `internal/db`'s sits in `database.go`. A new package
+  ships with one, or revive's `package-comments` fails lint. A handler package's doc names the URL it serves
+  and which routes are admin-only, so when a package's purpose or routes change — a route moving into or out
+  of the admin group — update the doc in the same change.
 - `.golangci.yml` is a ratchet: every rule enabled there is at zero violations, and the rules still switched
   off name the sweep they are waiting on. Turning one on means fixing the code in that same PR — do not add a
   `//nolint` to get a build green, and do not disable a rule to avoid a fix.

@@ -1,3 +1,5 @@
+// Package settingsutil reads and writes the Quark's settings, which live in settings.json in the data directory
+// rather than in the database.
 package settingsutil
 
 import (

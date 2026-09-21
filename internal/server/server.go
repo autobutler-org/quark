@@ -1,3 +1,5 @@
+// Package server assembles the HTTP server: the gin engine and its middleware, every /api/v0 router (mounted in
+// routes.go), Swagger, and the embedded web build served as a single-page app.
 package server
 
 import (

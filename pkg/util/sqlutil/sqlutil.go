@@ -1,3 +1,5 @@
+// Package sqlutil holds small conversions between Go values and database/sql types, and recognizes SQLite's
+// unique-constraint errors.
 package sqlutil
 
 import (
