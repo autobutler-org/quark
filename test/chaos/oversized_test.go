@@ -1,10 +1,12 @@
-//go:build stress
+//go:build chaos
 
-package stress
+package chaos
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"testing"
@@ -115,9 +117,28 @@ func TestOversizedAlbumName(t *testing.T) {
 	}
 	t.Logf("POST /api/v0/albums with ~%d byte name", len(name))
 
-	r := c.exchange(http.MethodPost, "/api/v0/albums", payload, map[string]string{
+	resp, err := c.do(http.MethodPost, "/api/v0/albums", bytes.NewReader(payload), map[string]string{
 		"Content-Type": "application/json",
 	})
+	if err != nil {
+		assertGraceful(t, "oversized album name", result{err: err}, false)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		// The server accepted the name; delete the album so reruns start clean.
+		var created struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&created); err == nil && created.ID != 0 {
+			t.Cleanup(func() {
+				r := c.exchange(http.MethodDelete, fmt.Sprintf("/api/v0/albums/%d", created.ID), nil, nil)
+				if r.err != nil || r.status >= 300 {
+					t.Logf("cleanup: deleting album %d: status=%d err=%v", created.ID, r.status, r.err)
+				}
+			})
+		}
+	}
 	// Creating may succeed or reject; either is fine if not a 5xx storm.
-	assertGraceful(t, fmt.Sprintf("oversized album name (status=%d)", r.status), r, false)
+	assertGraceful(t, "oversized album name", result{status: resp.StatusCode}, false)
 }

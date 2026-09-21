@@ -1,6 +1,6 @@
-//go:build stress
+//go:build chaos
 
-package stress
+package chaos
 
 import (
 	"bytes"
@@ -27,7 +27,7 @@ const (
 	max5xxFraction = 0.10
 )
 
-// sharedSession holds a token/cookie obtained once in TestMain when lab
+// sharedSession holds a token/cookie obtained once in TestMain when
 // credentials are configured. Authenticated cases reuse it so a later
 // invalid-login rate-limit burst cannot poison ensureSession logins.
 var sharedSession struct {
@@ -177,15 +177,33 @@ func newClient(t *testing.T) *client {
 	return c
 }
 
-// requireBackend skips the test when /api/v0/auth/status is unreachable.
+// requireBackend fails the test when /api/v0/auth/status is unreachable, so a
+// backend that never started cannot pass as a run of skipped tests.
 func (c *client) requireBackend(t *testing.T) {
 	t.Helper()
 	resp, err := c.do(http.MethodGet, "/api/v0/auth/status", nil, nil)
 	if err != nil {
-		t.Skipf("backend unreachable at %s (%v); start with `make watch/backend` or `quark serve`", c.base, err)
+		t.Fatalf("backend unreachable at %s (%v); start with `make watch/backend` or `quark serve`", c.base, err)
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body) //nolint:errcheck
+}
+
+// setupComplete reports whether /api/v0/auth/status says setup has run.
+func (c *client) setupComplete(t *testing.T) bool {
+	t.Helper()
+	resp, err := c.do(http.MethodGet, "/api/v0/auth/status", nil, nil)
+	if err != nil {
+		t.Fatalf("auth/status: %v", err)
+	}
+	defer resp.Body.Close()
+	var status struct {
+		Setup bool `json:"setup"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&status); err != nil {
+		t.Fatalf("auth/status: decode: %v", err)
+	}
+	return status.Setup
 }
 
 func (c *client) hasAuth() bool {
@@ -307,7 +325,6 @@ func (c *client) do(method, path string, body io.Reader, headers map[string]stri
 type result struct {
 	status int
 	err    error
-	bytes  int
 }
 
 func (c *client) exchange(method, path string, body []byte, headers map[string]string) result {
@@ -320,13 +337,14 @@ func (c *client) exchange(method, path string, body []byte, headers map[string]s
 		return result{err: err}
 	}
 	defer resp.Body.Close()
-	n, _ := io.Copy(io.Discard, io.LimitReader(resp.Body, 8<<20))
-	return result{status: resp.StatusCode, bytes: int(n)}
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 8<<20)) //nolint:errcheck
+	return result{status: resp.StatusCode}
 }
 
 // assertGraceful documents that status (or transport error) is an acceptable
-// defensive outcome for chaos inputs: client/timeout/reset, 4xx, or single 5xx
-// is fine; we fail only when we see nothing useful.
+// defensive outcome for chaos inputs: client/timeout/reset, 2xx, or 4xx is
+// fine. A 404 fails, because it means the route is gone and the case tested
+// nothing.
 func assertGraceful(t *testing.T, label string, r result, allow5xx bool) {
 	t.Helper()
 	if r.err != nil {
@@ -338,9 +356,9 @@ func assertGraceful(t *testing.T, label string, r result, allow5xx bool) {
 	}
 	code := r.status
 	switch {
+	case code == http.StatusNotFound:
+		t.Fatalf("%s: got 404; the route is missing, so this case tested nothing", label)
 	case code >= 200 && code < 500:
-		return
-	case code == http.StatusRequestEntityTooLarge, code == http.StatusTooManyRequests:
 		return
 	case allow5xx && code >= 500 && code < 600:
 		t.Logf("%s: got %d (logged; allowed for this case)", label, code)
@@ -411,6 +429,27 @@ func (h *statusHist) count5xx() int {
 		}
 	}
 	return sum
+}
+
+// assertBurst fails a burst that collected nothing, hit a missing route, or
+// saw more than max5xxFraction server errors.
+func (h *statusHist) assertBurst(t *testing.T, label string) {
+	t.Helper()
+	total := h.total()
+	five := h.count5xx()
+	t.Logf("%s: total=%d hist=[%s]", label, total, h.summary())
+	if total == 0 {
+		t.Fatalf("%s: no responses collected", label)
+	}
+	h.mu.Lock()
+	notFound := h.n[http.StatusNotFound]
+	h.mu.Unlock()
+	if notFound > 0 {
+		t.Fatalf("%s: %d responses were 404; a route in the burst is missing", label, notFound)
+	}
+	if float64(five)/float64(total) > max5xxFraction {
+		t.Fatalf("%s: 5xx storm: %d/%d exceeded %.0f%% threshold", label, five, total, 100*max5xxFraction)
+	}
 }
 
 func (h *statusHist) summary() string {

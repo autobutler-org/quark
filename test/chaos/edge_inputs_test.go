@@ -1,6 +1,6 @@
-//go:build stress
+//go:build chaos
 
-package stress
+package chaos
 
 import (
 	"encoding/json"
@@ -37,10 +37,9 @@ func TestEdgeLoginWhitespaceCredentials(t *testing.T) {
 func TestEdgeLoginUnicodeCredentials(t *testing.T) {
 	c := newClient(t)
 	c.requireBackend(t)
-	// Mixed scripts + combining marks + emoji — not an exploit, just weird input.
 	// Mixed scripts + combining marks + emoji via escapes (keeps cspell quiet).
 	username := "user\u7528\u6237\u65e5\u672c\u8a9e\u0627\u0644\u0639\u0631\u0628\u064a\u0629\U0001F1FA\U0001F1E6\u0301\u200B"
-	password := "pass\u043f\u0430\u0440\u043e\u043b\u044c\U0001F510\ufeff"
+	password := "pass\u043f\u0430\u0440\u043e\u043b\u044c\U0001F510\xef\xbb\xbf" // trailing byte order mark
 	payload, _ := json.Marshal(map[string]string{
 		"username": username,
 		"password": password,
@@ -97,9 +96,15 @@ func TestEdgeSearchEmptyAndWhitespace(t *testing.T) {
 	}
 }
 
+// TestEdgeProtectedWithoutAuth needs a backend that has finished
+// /api/v0/auth/setup: before setup the auth middleware lets every /api route
+// through. make test/chaos/local runs setup first.
 func TestEdgeProtectedWithoutAuth(t *testing.T) {
 	c := newClient(t)
 	c.requireBackend(t)
+	if !c.setupComplete(t) {
+		t.Skip("backend has not run /api/v0/auth/setup, so no route is protected yet; run `make test/chaos/local` or finish setup first")
+	}
 	// Explicitly clear any env-provided auth for this case.
 	c.token, c.cookie, c.user, c.pass = "", "", "", ""
 

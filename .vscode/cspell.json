@@ -33,8 +33,7 @@
     "pubspec.lock",
     "test-results",
     "test/performance/generate_files.sh",
-    "tmp",
-    "tests/stress/**"
+    "tmp"
   ],
   "ignoreRandomStrings": true,
   "gitignoreRoot": ".gitignore",
