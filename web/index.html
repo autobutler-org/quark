@@ -108,16 +108,6 @@
         pointer-events: none;
       }
 
-      #quark-splash .quark-mark {
-        width: 72px;
-        height: 72px;
-        border-radius: 16px;
-        background-color: var(--quark-primary);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
       #quark-splash .quark-wordmark {
         font-size: 28px;
         font-weight: 600;
@@ -191,41 +181,17 @@
   </head>
   <body>
     <!--
-      Static markup, inline styles, no requests of its own: this has to paint
-      on the first pass, before any of the bundle has arrived.
+      Static markup and inline styles, so this paints on the first pass, before
+      any of the bundle has arrived. The logo is its one request.
     -->
     <div id="quark-splash" role="status" aria-live="polite">
-      <div class="quark-mark">
-        <!-- The storage badge the app bar wears, drawn rather than loaded. -->
-        <svg
-          width="36"
-          height="36"
-          viewBox="0 0 24 24"
-          fill="none"
-          aria-hidden="true"
-        >
-          <rect
-            x="3"
-            y="4"
-            width="18"
-            height="6"
-            rx="2"
-            stroke="#ffffff"
-            stroke-width="1.8"
-          />
-          <rect
-            x="3"
-            y="14"
-            width="18"
-            height="6"
-            rx="2"
-            stroke="#ffffff"
-            stroke-width="1.8"
-          />
-          <circle cx="7" cy="7" r="1.1" fill="#ffffff" />
-          <circle cx="7" cy="17" r="1.1" fill="#ffffff" />
-        </svg>
-      </div>
+      <!-- The PWA icon: a small file that is already in the web build. -->
+      <img
+        src="icons/Icon-192.png"
+        width="72"
+        height="72"
+        alt=""
+      />
       <div class="quark-wordmark">Quark</div>
       <div class="quark-status">Starting your Quark…</div>
       <div class="quark-progress" aria-hidden="true"><span></span></div>

@@ -36,9 +36,11 @@ void main() {
 
       expect(html, contains('id="quark-splash"'));
       expect(html, contains('Starting your Quark…'));
-      // An <img> or a web font would be a request that has to land before
-      // anything shows, which is the problem it is here to solve.
-      expect(html, isNot(contains('<img')));
+      // Every request has to land before it shows, which is the problem the
+      // splash is here to solve. The logo is its one request, and it is the
+      // PWA icon already in the build (#2235) — no other image, no web font.
+      expect('<img'.allMatches(html), hasLength(1));
+      expect(html, contains('<img src="icons/Icon-192.png"'));
     });
 
     test('paints the Quark background before the canvas exists', () {
