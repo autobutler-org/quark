@@ -583,7 +583,9 @@ class PhotosPageState extends State<PhotosPage>
                     child: const Text('Select'),
                   ),
                 // The Quark fills system albums itself and refuses edits (#992).
-                if (album != null && !album.isSystemAlbum)
+                // An empty album carries this button in its empty state
+                // instead, so the page never shows two.
+                if (album != null && !album.isSystemAlbum && photos.isNotEmpty)
                   TextButton.icon(
                     key: const ValueKey('photos_add_to_album'),
                     onPressed: () => _addPhotosTo(album.toAlbumItem()),
@@ -685,6 +687,15 @@ class PhotosPageState extends State<PhotosPage>
                               onRetry: manualRefresh,
                               onManageHosts: () =>
                                   context.go(AppRoutes.settings),
+                              onUploadPhotos: c.isUploading
+                                  ? null
+                                  : _uploadPhotos,
+                              // Same action as the app bar's Add Photos, and
+                              // absent for the same albums (#992).
+                              onAddPhotosToAlbum:
+                                  album != null && !album.isSystemAlbum
+                                  ? () => _addPhotosTo(album.toAlbumItem())
+                                  : null,
                             ),
                             thumbnailBuilder: (context, photo) =>
                                 PhotoThumbnail(
