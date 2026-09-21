@@ -222,6 +222,18 @@ class _TrashPageState extends State<TrashPage>
                             ? _emptyTrash
                             : null,
                       ),
+                    // Selecting has always been here — long-press a row — but
+                    // a long press is a gesture a mouse does not make, so on
+                    // the web the trash looked like it had no bulk actions at
+                    // all (#2250). An empty trash has nothing to select.
+                    IconButton(
+                      key: const ValueKey('trash_select'),
+                      tooltip: 'Select items',
+                      icon: const Icon(QuarkIcons.check_circle_outline),
+                      onPressed: (_controller.nodes?.isNotEmpty ?? false)
+                          ? _controller.enterSelection
+                          : null,
+                    ),
                     RefreshIconButton(
                       isRefreshing: isRefreshing,
                       onPressed: manualRefresh,

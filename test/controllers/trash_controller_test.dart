@@ -189,6 +189,37 @@ void main() {
     expect(c.restoreFolderFor(c.nodes![2]), isNull);
   });
 
+  // A mouse cannot long-press a row, so the app bar starts a selection too
+  // (#2250).
+  group('enterSelection', () {
+    test('starts an empty selection and notifies', () async {
+      final c = controller();
+      await c.load();
+      var notifications = 0;
+      c.addListener(() => notifications++);
+
+      c.enterSelection();
+
+      expect(c.selectionMode, isTrue);
+      expect(c.selectedPaths, isEmpty);
+      expect(notifications, 1);
+    });
+
+    test('leaves an ongoing selection alone', () async {
+      final c = controller();
+      await c.load();
+      c.enterSelection();
+      c.toggleSelection(c.nodes![0], enterSelectionMode: false);
+      var notifications = 0;
+      c.addListener(() => notifications++);
+
+      c.enterSelection();
+
+      expect(c.selectedPaths, hasLength(1));
+      expect(notifications, 0);
+    });
+  });
+
   test('restores one request per device and drops what came back', () async {
     final c = controller();
     await c.load();
