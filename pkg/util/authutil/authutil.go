@@ -260,11 +260,12 @@ func GenerateSessionToken() (string, error) {
 // GenerateRecoveryPhrase generates a random 6-word recovery phrase from the
 // built-in wordlist. The phrase is shown to the user exactly once at setup.
 //
-// Entropy note: the built-in wordlist has 256 words, giving ~8 bits per word
-// and ~48 bits of entropy for a 6-word phrase. This is sufficient for a
-// single-user local device with bcrypt verification (not a high-value online
-// target). BIP39 (2048 words, ~77 bits) would be stronger but the tradeoff
-// is intentional — shorter phrases are easier for users to write down correctly.
+// Entropy note: the built-in wordlist has 256 words, giving 8 bits per word
+// and 48 bits of entropy for a 6-word phrase. This is sufficient for a
+// single-user local device with bcrypt verification and a rate-limited
+// recover endpoint (not a high-value online target). Six words from the full
+// BIP39 list (2048 words, 11 bits each) would give 66 bits, but the tradeoff
+// is intentional — common, short words are easier to write down correctly.
 func GenerateRecoveryPhrase() (string, error) {
 	words := make([]string, recoveryWords)
 	listLen := int64(len(wordlist))

@@ -1,7 +1,10 @@
 package authutil
 
-// wordlist is a curated subset of the BIP39 English wordlist.
-// 256 common, memorable words used for recovery phrase generation.
+// wordlist is a curated subset of the BIP39 English wordlist: 256 common,
+// memorable words used for recovery phrase generation. Exactly 256, and all
+// distinct, so each word carries 8 bits and a draw is unbiased — 256 divides
+// the 2^64 range GenerateRecoveryPhrase reduces. TestWordlist enforces both;
+// it held 232 while its comments claimed 256 (#2153).
 var wordlist = []string{
 	"abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract",
 	"absurd", "abuse", "access", "accident", "account", "accuse", "achieve", "acid",
@@ -32,4 +35,7 @@ var wordlist = []string{
 	"census", "certain", "chair", "change", "chaos", "charge", "chase", "cheap",
 	"check", "cheese", "cherry", "chest", "chief", "child", "chimney", "choice",
 	"choose", "chronic", "cinema", "circle", "citizen", "city", "civil", "claim",
+	"clap", "clarify", "claw", "clay", "clean", "clever", "click", "client",
+	"cliff", "climb", "clinic", "clip", "clock", "close", "cloth", "cloud",
+	"clown", "club", "coach", "coast", "coconut", "code", "coffee", "coin",
 }
