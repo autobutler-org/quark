@@ -1138,7 +1138,37 @@ class _SettingsPageState extends State<SettingsPage> {
                           const Text(
                             'Access your quark from anywhere using Tailscale.',
                           ),
-                          if (AppSettings.instance.isAdmin.value) ...[
+                          if (!RemoteAccessConfig.enableAvailable) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              key: const ValueKey('remote_access_coming_soon'),
+                              children: [
+                                Chip(
+                                  label: const Text('Coming soon'),
+                                  visualDensity: VisualDensity.compact,
+                                  side: BorderSide(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.outlineVariant,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Not available yet. Your Quark is '
+                                    'reachable on your home network in the '
+                                    'meantime.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ] else if (AppSettings.instance.isAdmin.value) ...[
                             const SizedBox(height: 12),
                             OutlinedButton.icon(
                               onPressed: _isTogglingRemoteAccess
