@@ -801,6 +801,14 @@ generate/frontend/widget-docs: ## Regenerate the widget gallery's docs from /// 
 generate/frontend/sbom: generate/frontend/pub-get ## Generate Flutter SBOM asset from pubspec.lock
 	dart run scripts/generate_flutter_sbom.dart
 
+# The graph is a build output, not a committed artifact: it regenerates from the tree
+# in a couple of seconds, so there is nothing to keep in sync or diff in CI.
+KNOWLEDGE_GRAPH := docs/architecture/knowledge-graph.json
+
+.PHONY: generate/knowledge
+generate/knowledge: generate/backend/swagger ## Build the knowledge graph the architecture explorer reads
+	$(GO) run ./cmd/knowledge -out $(KNOWLEDGE_GRAPH)
+
 DEPLOY_HOST ?= quark
 DEPLOY_PATH ?= ~/quark
 
@@ -916,6 +924,12 @@ serve/frontend/web: generate/frontend ## Serve web frontend
 	flutter run \
 		-d web-server \
 		$(FLUTTER_RUN_DEFINES)
+
+KNOWLEDGE_PORT ?= 5173
+
+.PHONY: serve/knowledge
+serve/knowledge: generate/knowledge ## Serve the architecture explorer (KNOWLEDGE_PORT, default 5173)
+	$(GO) run ./cmd/knowledge -serve -out $(KNOWLEDGE_GRAPH) -port $(KNOWLEDGE_PORT)
 
 PRINT_COVERAGE ?= 0
 
