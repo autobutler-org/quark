@@ -19,6 +19,7 @@ import (
 // @Failure 403 {object} serverutil.Response
 // @Failure 409 {object} serverutil.Response "SSH access can't be managed on this Quark"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /ssh/enabled [put]
 func setSSHEnabled(c *gin.Context) *serverutil.Response {
 	system, errResp := sshSystem(c)

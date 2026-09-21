@@ -32,6 +32,7 @@ type HealthJSON struct {
 // @Tags health
 // @Produce json
 // @Success 200 {object} HealthJSON
+// @Security BearerAuth
 // @Router /health [get]
 func (r *router) getHealthRoute() *serverutil.Route {
 	return serverutil.ApiRoute("GET", "/health", func(c *gin.Context) *serverutil.Response {

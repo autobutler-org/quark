@@ -26,6 +26,7 @@ import (
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 409 {object} serverutil.Response "Conflict"
+// @Security BearerAuth
 // @Router /files/upload-session/{sessionId} [put]
 func uploadSessionChunk(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

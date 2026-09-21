@@ -21,6 +21,7 @@ import (
 // @Success 200 {array} FileNodeWithTimeJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /files/by-type [get]
 func listFilesByType(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

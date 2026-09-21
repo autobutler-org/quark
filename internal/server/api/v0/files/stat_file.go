@@ -27,6 +27,7 @@ type StatFileJSON struct {
 // @Success 200 {object} StatFileJSON
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /files/stat [get]
 func statFile(c *gin.Context) *serverutil.Response {
 	filePath := c.Query("filePath")

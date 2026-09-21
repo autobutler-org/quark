@@ -29,6 +29,7 @@ type PaginatedPhotosResponse struct {
 // @Param serial query string false "Device serial to filter by"
 // @Success 200 {object} PaginatedPhotosResponse
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /photos [get]
 func listPhotos(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

@@ -22,6 +22,7 @@ import (
 // @Failure 400 {object} serverutil.Response
 // @Failure 409 {object} serverutil.Response
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /storage/devices/snapshot-backup [post]
 func startSnapshotBackup(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

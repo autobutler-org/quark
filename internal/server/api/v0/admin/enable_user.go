@@ -22,6 +22,7 @@ import (
 // @Failure 403 {object} serverutil.Response
 // @Failure 404 {object} serverutil.Response "no disabled account has that username"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /admin/enable/{username} [put]
 func enableUser(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

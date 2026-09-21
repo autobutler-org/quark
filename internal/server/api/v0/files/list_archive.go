@@ -22,6 +22,7 @@ import (
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /files/list-archive [get]
 func listArchive(c *gin.Context) *serverutil.Response {
 	filePath := c.Query("filePath")

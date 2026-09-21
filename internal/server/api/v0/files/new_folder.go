@@ -26,6 +26,7 @@ import (
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /files/folder/{folderDir} [post]
 func newFolder(c *gin.Context) *serverutil.Response {
 	folderDir := c.Param("folderDir")

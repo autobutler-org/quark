@@ -19,6 +19,7 @@ import (
 // @Param serial query []string false "Filter by device serial(s)"
 // @Success 200 {array} FileNodeWithTimeJSON
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /files/recent [get]
 func listRecentFiles(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

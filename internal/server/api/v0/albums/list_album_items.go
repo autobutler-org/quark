@@ -26,6 +26,7 @@ import (
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 404 {object} serverutil.Response "Not Found: no album of the caller's has that id"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /albums/{id}/items [get]
 func listAlbumItems(c *gin.Context) *serverutil.Response {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)

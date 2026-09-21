@@ -31,6 +31,7 @@ import (
 // @Failure 403 {object} serverutil.Response "database, files or devices requested by a non-admin"
 // @Failure 409 {object} serverutil.Response "account=true from the only active admin while other active or disabled accounts exist; nothing is deleted"
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /auth/account [delete]
 func deleteAccount(c *gin.Context) *serverutil.Response {
 	deps, ok := getQueries(c)

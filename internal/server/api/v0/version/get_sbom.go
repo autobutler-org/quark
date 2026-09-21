@@ -14,6 +14,7 @@ import (
 // @Produce json
 // @Success 200 {object} SbomJSON
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /sbom [get]
 func getSbom(c *gin.Context) *serverutil.Response {
 	info, ok := debug.ReadBuildInfo()

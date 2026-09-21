@@ -26,6 +26,7 @@ import (
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 409 {object} serverutil.Response "Conflict"
+// @Security BearerAuth
 // @Router /files/upload [post]
 func uploadFiles(c *gin.Context) *serverutil.Response {
 	return uploadFilesNested(c, "")
@@ -47,6 +48,7 @@ func uploadFiles(c *gin.Context) *serverutil.Response {
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 409 {object} serverutil.Response "Conflict"
+// @Security BearerAuth
 // @Router /files/upload/{rootDir} [post]
 func uploadFilesNested(c *gin.Context, rootDir string) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

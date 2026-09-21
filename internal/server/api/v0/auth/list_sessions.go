@@ -17,6 +17,7 @@ import (
 // @Success 200 {object} object{sessions=[]authutil.SessionInfo}
 // @Failure 401 {object} serverutil.Response
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /auth/sessions [get]
 func listSessions(c *gin.Context) *serverutil.Response {
 	deps, ok := getQueries(c)

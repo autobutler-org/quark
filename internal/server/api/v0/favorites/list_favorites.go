@@ -16,6 +16,7 @@ import (
 // @Produce json
 // @Success 200 {array} favoriteItemJSON
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /photos/favorites [get]
 func listFavorites(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

@@ -18,6 +18,7 @@ import (
 // @Success 200 {object} SettingsJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /settings [post]
 func postSettings(c *gin.Context) *serverutil.Response {
 	var body SettingsJSON

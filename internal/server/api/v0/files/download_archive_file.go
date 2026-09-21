@@ -29,6 +29,7 @@ import (
 // @Failure 404 {object} serverutil.Response "Entry not found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Failure 503 {object} serverutil.Response "Server busy converting other images"
+// @Security BearerAuth
 // @Router /files/download-archive-file [get]
 func downloadArchiveFile(c *gin.Context) *serverutil.Response {
 	archivePath := c.Query("filePath")

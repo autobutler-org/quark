@@ -17,6 +17,7 @@ import (
 // @Success 200 {object} transcodeFormatsResponse
 // @Failure 501 {object} serverutil.Response "Not Implemented — ffmpeg not available"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /videos/transcode/formats [get]
 func listTranscodeFormats(_ *gin.Context) *serverutil.Response {
 	if !videoutil.Available() {

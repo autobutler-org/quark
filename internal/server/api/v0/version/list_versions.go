@@ -14,6 +14,7 @@ import (
 // @Param all query bool false "Include all versions, including old and development versions"
 // @Success 200 {array} updateutil.UpdateVersion "List of available versions"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /version/available [get]
 func listVersions(c *gin.Context) *serverutil.Response {
 	all := c.Query("all") == "true"

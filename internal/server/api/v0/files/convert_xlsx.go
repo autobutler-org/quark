@@ -29,6 +29,7 @@ import (
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 409 {object} serverutil.Response "Conflict"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /files/convert/xlsx [post]
 func convertXlsx(c *gin.Context) *serverutil.Response {
 	filePath := c.Query("filePath")

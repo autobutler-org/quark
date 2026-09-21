@@ -33,6 +33,7 @@ var errRemoteAccessUnavailable = errors.New("remote access is not available in t
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Failure 503 {object} serverutil.Response "This build has no provisioning secret"
+// @Security BearerAuth
 // @Router /settings/remote-access [post]
 func enableRemoteAccess(c *gin.Context) *serverutil.Response {
 	var req RemoteAccessRequest

@@ -19,6 +19,7 @@ import (
 // @Param threshold query int false "Hamming distance threshold for near-duplicates (default 10, max 20)"
 // @Success 200 {object} object{groups=[]photoutil.DuplicateGroup}
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /photos/duplicates [get]
 func listDuplicates(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

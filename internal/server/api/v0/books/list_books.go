@@ -26,6 +26,7 @@ type BookJSON struct {
 // @Produce json
 // @Success 200 {array} BookJSON
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /books [get]
 func listBooks(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

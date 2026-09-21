@@ -20,6 +20,7 @@ import (
 // @Param sessionId path string true "Upload session id"
 // @Success 200 {object} uploadSessionStatusResponse "OK"
 // @Failure 404 {object} serverutil.Response "Not Found"
+// @Security BearerAuth
 // @Router /files/upload-session/{sessionId} [get]
 func getUploadSession(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

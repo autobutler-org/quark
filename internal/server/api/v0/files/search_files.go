@@ -23,6 +23,7 @@ import (
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Param query query string false "Search term to find"
 // @Param serial query string false "Device serial number to filter by"
+// @Security BearerAuth
 // @Router /files/search [get]
 func searchFiles(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

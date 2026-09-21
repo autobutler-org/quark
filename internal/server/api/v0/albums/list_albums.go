@@ -21,6 +21,7 @@ import (
 // @Param tree query bool false "Return as nested tree (default false)"
 // @Success 200 {array} AlbumJSON
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /albums [get]
 func listAlbums(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

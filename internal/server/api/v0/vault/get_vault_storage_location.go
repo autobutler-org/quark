@@ -13,6 +13,7 @@ import (
 // @Produce json
 // @Success 200 {object} storageLocationResponse
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /vault/storage-location [get]
 var getVaultStorageLocationRoute = serverutil.ApiRoute(
 	"GET", "/vault/storage-location", func(c *gin.Context) *serverutil.Response {

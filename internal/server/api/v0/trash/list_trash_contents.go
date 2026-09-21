@@ -21,6 +21,7 @@ import (
 // @Failure 400 {object} serverutil.Response "Malformed trash name or path, or not a folder"
 // @Failure 404 {object} serverutil.Response "Unknown device, trash name or path"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /trash/contents [get]
 func listTrashContents(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

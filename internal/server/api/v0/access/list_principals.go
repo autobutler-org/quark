@@ -19,6 +19,7 @@ import (
 // @Success 200 {object} accessutil.ListPrincipalsResult
 // @Failure 401 {object} serverutil.Response
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /access/principals [get]
 func listPrincipals(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

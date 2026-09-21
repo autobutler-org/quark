@@ -19,6 +19,7 @@ import (
 // @Success 200 {object} accessutil.ListSharedWithMeResult
 // @Failure 401 {object} serverutil.Response
 // @Failure 500 {object} serverutil.Response
+// @Security BearerAuth
 // @Router /access/mine [get]
 func listSharedWithMe(c *gin.Context) *serverutil.Response {
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")

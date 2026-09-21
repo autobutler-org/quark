@@ -14,6 +14,7 @@ import (
 // @Produce json
 // @Success 200 {array} ConnectedDeviceJSON
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /devices [get]
 var listDevicesRoute = serverutil.ApiRoute(
 	"GET", "/devices", func(c *gin.Context) *serverutil.Response {

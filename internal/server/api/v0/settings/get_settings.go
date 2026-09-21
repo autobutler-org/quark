@@ -13,6 +13,7 @@ import (
 // @Produce json
 // @Success 200 {object} SettingsJSON
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Security BearerAuth
 // @Router /settings [get]
 func getSettings(c *gin.Context) *serverutil.Response {
 	s, err := settingsutil.Load()
