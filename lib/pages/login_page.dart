@@ -112,11 +112,19 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  /// A different Quark answers both questions differently, so the old answers
-  /// are dropped before the new ones are asked for.
+  /// A different Quark answers differently, so everything the last one told
+  /// us is dropped before the new one is asked.
+  ///
+  /// That includes the failure banners: "You're offline" belonged to a Quark
+  /// the user has just switched away from, and leaving it up over a healthy
+  /// one made the new host look broken until they pressed Try again (#2062).
   void _onActiveHostChanged() {
     if (!mounted) return;
-    setState(() => _setupComplete = null);
+    setState(() {
+      _setupComplete = null;
+      _disconnected = false;
+      _error = null;
+    });
     _checkAccessRequests();
     _checkSetupState();
   }
