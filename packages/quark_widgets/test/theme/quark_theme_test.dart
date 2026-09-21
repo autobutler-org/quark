@@ -78,6 +78,48 @@ void main() {
       expect(QuarkTheme.light().extension<QuarkTokens>(), QuarkTokens.light);
     });
   });
+
+  /// #2028: a keyboard user had nothing to tell them where they were. The
+  /// focused field differed from a resting one only in hue, and buttons
+  /// carried Material's default focus tint, which on a filled button sits on
+  /// top of a color it barely differs from.
+  group('keyboard focus is visible', () {
+    for (final (name, tokens, brightness) in [
+      ('dark', QuarkTokens.dark, Brightness.dark),
+      ('light', QuarkTokens.light, Brightness.light),
+    ]) {
+      test('$name: a focused field is thicker, not just another color', () {
+        final decoration = QuarkTheme.from(
+          tokens,
+          brightness,
+        ).inputDecorationTheme;
+
+        final focused = decoration.focusedBorder! as OutlineInputBorder;
+        final resting = decoration.enabledBorder! as OutlineInputBorder;
+        expect(focused.borderSide.color, tokens.primary);
+        expect(focused.borderSide.width, greaterThan(resting.borderSide.width));
+      });
+
+      test('$name: a focused button wears an outline', () {
+        final theme = QuarkTheme.from(tokens, brightness);
+
+        for (final style in [
+          theme.filledButtonTheme.style,
+          theme.outlinedButtonTheme.style,
+          theme.textButtonTheme.style,
+        ]) {
+          final side = style!.side!;
+          final focused = side.resolve({WidgetState.focused});
+          expect(focused, isNotNull);
+          expect(focused!.color, tokens.primary);
+          expect(focused.width, 2);
+          // And nothing extra while it is merely sitting there.
+          final resting = side.resolve(<WidgetState>{});
+          expect(resting?.width ?? 0, lessThan(2));
+        }
+      });
+    }
+  });
 }
 
 /// The WCAG contrast ratio between [a] and [b], from 1.0 to 21.0.

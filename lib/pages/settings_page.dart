@@ -778,9 +778,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       color: Theme.of(context).colorScheme.error,
                     ),
                   ),
+                  // Says what the dialog will ask rather than promising the
+                  // widest possible wipe: attached drives are left alone
+                  // unless the user asks for them (#2052).
                   subtitle: const Text(
-                    'Erases every account and everything stored on this Quark, '
-                    'returning it to setup',
+                    'Returns this Quark to first-boot setup. You choose what '
+                    'it erases; attached drives are left alone unless you say '
+                    'otherwise',
                   ),
                   onTap: _accountActions.isWorking ? null : _resetQuark,
                 ),

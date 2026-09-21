@@ -13,17 +13,47 @@ import 'package:flutter_test/flutter_test.dart';
 /// can say it — the element belongs to the engine, not to any widget — so this
 /// guards the rule against a well-meaning cleanup.
 void main() {
-  test('index.html keeps the hidden text input transparent while selected', () {
-    final html = File(
-      'web/index.html',
-    ).readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
+  String flattened() =>
+      File('web/index.html').readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
 
+  test('index.html keeps the hidden text input transparent while selected', () {
     expect(
-      html,
+      flattened(),
       contains(
         '.flt-text-editing::selection '
         '{ background-color: transparent; color: transparent; }',
       ),
     );
+  });
+
+  /// #2019: a cold load spent seconds on a blank white viewport before the
+  /// bundle started. The splash is plain markup in the document because it
+  /// has to paint before any Dart has run — nothing in `lib/` can put it
+  /// there, so this is where the rules live.
+  group('the first-paint splash', () {
+    test('is in the document, not fetched', () {
+      final html = flattened();
+
+      expect(html, contains('id="quark-splash"'));
+      expect(html, contains('Starting your Quark…'));
+      // An <img> or a web font would be a request that has to land before
+      // anything shows, which is the problem it is here to solve.
+      expect(html, isNot(contains('<img')));
+    });
+
+    test('paints the Quark background before the canvas exists', () {
+      final html = flattened();
+
+      expect(html, contains('--quark-background: #070d19;'));
+      expect(html, contains('@media (prefers-color-scheme: light)'));
+      expect(html, contains('background-color: var(--quark-background);'));
+    });
+
+    test('leaves on the engine first frame, not a timer', () {
+      final html = flattened();
+
+      expect(html, contains("addEventListener(\"flutter-first-frame\""));
+      expect(html, contains('splash.remove();'));
+    });
   });
 }

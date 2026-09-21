@@ -35,6 +35,7 @@ class AlbumPickerSheet extends StatelessWidget {
     required this.onRetry,
     this.isLoading = false,
     this.error,
+    this.onClose,
     super.key,
   });
 
@@ -55,6 +56,15 @@ class AlbumPickerSheet extends StatelessWidget {
 
   /// A user-facing message for a load that failed, or null.
   final String? error;
+
+  /// Dismisses the sheet without picking an album. Null leaves the sheet to
+  /// be dragged away.
+  ///
+  /// Labeled Close, never Cancel: the selection bar behind this sheet has a
+  /// Cancel of its own that throws the selection away, and two buttons with
+  /// one word doing different things is how a user ends up thinking they
+  /// backed out of something they are still in (#2060).
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -119,12 +129,24 @@ class AlbumPickerSheet extends StatelessWidget {
                           ),
                           leading: const Icon(QuarkIcons.photo_album_outlined),
                           title: Text(album.name),
-                          subtitle: Text('${album.itemCount} photos'),
+                          subtitle: Text(album.photoCountLabel),
                           onTap: () => onPicked(album),
                         ),
                     ],
                   ),
           ),
+          if (onClose != null)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: tokens.spacingMd),
+              child: SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  key: const ValueKey('album_picker_close'),
+                  onPressed: onClose,
+                  child: const Text('Close'),
+                ),
+              ),
+            ),
           SizedBox(height: tokens.spacingSm),
         ],
       ),

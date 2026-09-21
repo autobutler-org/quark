@@ -108,4 +108,32 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  /// #2010: at the top folder the home glyph stayed primary-colored and
+  /// tappable, and answered a click with nothing — the up button beside it
+  /// had always gone quiet there.
+  testBothViewports('the home glyph is inert at the top folder', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpBar(tester, path: '', size: size, events: events);
+
+    await tester.tap(find.byKey(const ValueKey('breadcrumb_home')));
+    await tester.pump();
+
+    expect(events, isEmpty);
+    expect(find.byTooltip('You are in the top folder'), findsOneWidget);
+  });
+
+  testWidgets('the home glyph still goes home from a folder', (tester) async {
+    final events = <String>[];
+    await pumpBar(tester, path: '/photos/2024', events: events);
+
+    await tester.tap(find.byKey(const ValueKey('breadcrumb_home')));
+    await tester.pump();
+
+    expect(events, ['home']);
+    expect(find.byTooltip('Go to the top folder'), findsOneWidget);
+  });
 }
