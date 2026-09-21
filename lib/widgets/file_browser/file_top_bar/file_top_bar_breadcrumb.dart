@@ -51,6 +51,10 @@ class FileTopBarBreadcrumb extends StatelessWidget {
         ? currentPath.substring(1)
         : currentPath;
     final segments = trimmed.isEmpty ? <String>[] : trimmed.split('/');
+    // Home opens [rootPath], so once there it would go nowhere: it stops
+    // looking and behaving like a button, as the up button does (#2010).
+    final canGoHome =
+        navEnabled && normalizePath(currentPath) != normalizePath(rootPath);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -68,18 +72,21 @@ class FileTopBarBreadcrumb extends StatelessWidget {
             children: [
               // Home icon — always visible, never truncated.
               MouseRegion(
-                cursor: navEnabled
+                cursor: canGoHome
                     ? SystemMouseCursors.click
                     : SystemMouseCursors.basic,
                 child: InkWell(
-                  onTap: navEnabled ? onGoHome : null,
+                  key: const ValueKey('file_top_bar_home'),
+                  onTap: canGoHome ? onGoHome : null,
                   borderRadius: BorderRadius.circular(4),
                   child: Padding(
                     padding: const EdgeInsets.all(2),
                     child: Icon(
                       QuarkIcons.home_rounded,
                       size: 16,
-                      color: colorScheme.onSurfaceVariant,
+                      color: canGoHome
+                          ? colorScheme.onSurfaceVariant
+                          : colorScheme.onSurface.withValues(alpha: 0.4),
                     ),
                   ),
                 ),
