@@ -195,10 +195,12 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 
 1. Open the context menu on a file.
 2. Select **Delete**.
-3. Confirm the deletion prompt.
+3. Confirm the **Move to Trash?** prompt.
 
 **Expected result:**
 
+- The prompt says the file moves to Trash and can be restored for 30 days — it never calls the delete
+  permanent, because it is not (#2049).
 - File no longer appears in the listing.
 - File appears in the trash, where it can be restored (JN-TR-001, JN-TR-003).
 
