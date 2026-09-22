@@ -35,6 +35,7 @@ class RemoteAccessStatus {
       );
 }
 
+/// Calls `/api/v0/settings/remote-access` to read, enable and disable remote access.
 class RemoteAccessService with AuthenticatedService {
   static final RemoteAccessService instance = RemoteAccessService._();
   RemoteAccessService._();

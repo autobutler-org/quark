@@ -1,3 +1,5 @@
+/// Tuning constants for dragging in the file browser: how long a folder stays highlighted after the pointer
+/// leaves, and how fast the list scrolls near its edges.
 class FileBrowserDragConfig {
   const FileBrowserDragConfig._();
 

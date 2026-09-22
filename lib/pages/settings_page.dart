@@ -115,6 +115,8 @@ String shortGitSha(String commit) => (commit.isEmpty || commit == 'NOCOMMIT')
     ? ''
     : commit.substring(0, commit.length.clamp(0, 7));
 
+/// The Settings page: the account, updates, remote access, theme, storage and connected devices, help, and the
+/// software bill of materials. Admins also get SSH access and, where the Quark supports it, installation repair.
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 

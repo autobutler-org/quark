@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:web/web.dart' as web;
 
+/// Triggers a browser download of [data] as [fileName] through a temporary link. A file on the Quark
+/// goes through [saveUrlForDownload] instead, so the browser streams it to disk.
 Future<String?> saveBytesForDownload(Uint8List data, String fileName) async {
   final encoded = base64Encode(data);
   final anchor = web.HTMLAnchorElement()

@@ -8,6 +8,8 @@ const double kMinColumnWidth = 24.0;
 const double kMinRowHeight = 24.0;
 const double kResizeHandleSize = 4.0;
 
+/// The blank cell where the column header row meets the row-number gutter. This file also holds the column header
+/// and row number cells.
 class HeaderCornerCell extends StatelessWidget {
   const HeaderCornerCell({super.key});
 

@@ -18,6 +18,8 @@ import 'data_sheet_control_scheme.dart';
 import 'data_sheet_controller.dart';
 import 'formula_bar.dart';
 
+/// A spreadsheet grid over a `DataSheetController`: scrolling, selection, inline editing, and resizable rows and
+/// columns.
 class DataSheet extends StatelessWidget {
   final DataTable table;
 

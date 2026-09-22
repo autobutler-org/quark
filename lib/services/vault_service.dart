@@ -185,6 +185,8 @@ class VaultFolder {
   );
 }
 
+/// Calls `/api/v0/vault`: vault setup, unlock and lock, entries and folders, password generation, and import and
+/// export.
 class VaultService with AuthenticatedService {
   static final VaultService _instance = VaultService._();
   VaultService._();

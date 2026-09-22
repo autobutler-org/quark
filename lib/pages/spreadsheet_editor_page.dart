@@ -48,6 +48,8 @@ class _SheetTab {
 // Page
 // ---------------------------------------------------------------------------
 
+/// The editor for one spreadsheet: a tab per sheet, which can be added, renamed or deleted, all saved back to the
+/// Quark.
 class SpreadsheetEditorPage extends StatefulWidget {
   final String filePath;
   final String deviceSerial;

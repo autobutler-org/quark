@@ -33,6 +33,7 @@ class ConnectedDevice {
   final int requestCount;
 }
 
+/// Calls `/api/v0/devices`: the clients that have connected to this Quark, and removing one.
 class ConnectedDevicesService with AuthenticatedService {
   static final ConnectedDevicesService _instance = ConnectedDevicesService._();
   ConnectedDevicesService._();

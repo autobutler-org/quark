@@ -4,6 +4,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 
+/// Calls `/api/v0/settings` for the Quark's settings, such as automatic updates.
 class SettingsService with AuthenticatedService {
   static final SettingsService _instance = SettingsService._();
   SettingsService._();

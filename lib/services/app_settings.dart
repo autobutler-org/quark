@@ -76,6 +76,8 @@ class HostEntry {
       HostEntry(name: m['name'] ?? '', hostAddress: m['hostAddress'] ?? '');
 }
 
+/// The app's saved state: the known Quarks and which one is active, each one's session token and username, the
+/// theme, demo mode, and accepted terms. Tokens go to secure storage, except on web.
 class AppSettings {
   AppSettings._();
   static final AppSettings instance = AppSettings._();

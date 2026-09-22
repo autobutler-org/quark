@@ -4,6 +4,7 @@ import 'lexer.dart';
 import 'parser.dart';
 import 'evaluator.dart';
 
+/// Runs one expression through the prototype engine: lex, parse, evaluate.
 class Interpreter {
   final String expr;
   Interpreter(this.expr);

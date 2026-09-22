@@ -58,6 +58,8 @@ abstract interface class ResumableUploadClient {
   Future<void> deleteSession(String sessionId);
 }
 
+/// Calls `/api/v0/files/upload-session` to upload a large file in chunks: create a session, send each chunk, ask
+/// what the Quark has committed, and abandon it.
 class ResumableUploadService
     with AuthenticatedService
     implements ResumableUploadClient {

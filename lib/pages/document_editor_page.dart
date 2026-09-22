@@ -48,6 +48,8 @@ KeyEventResult? quillFindKeyInterceptor(KeyEvent event, VoidCallback onToggle) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+/// The editor for one `.qdoc` document: read-only until the user starts editing, with auto-save, find, a word
+/// count, and PDF export and printing.
 class DocumentEditorPage extends StatefulWidget {
   final String filePath;
   final String deviceSerial;

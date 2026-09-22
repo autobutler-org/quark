@@ -24,6 +24,7 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/services/app_settings.dart';
 
+/// The Vault page: set up, unlock, and browse the Quark's encrypted password vault.
 class VaultPage extends StatefulWidget {
   const VaultPage({super.key});
 

@@ -6,6 +6,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
 
+/// Platform-aware stand-ins for Material widgets: a Cupertino dialog or text field on iOS, and the Material one
+/// everywhere else.
 class QuarkWidget {
   static bool get _useCupertino =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;

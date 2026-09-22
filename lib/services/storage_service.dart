@@ -84,6 +84,8 @@ class StorageDevice {
   }
 }
 
+/// Calls `/api/v0/storage`: the drives the Quark manages, mounting, renaming and assigning roles, and snapshot
+/// backups. Device listings are cached briefly.
 class StorageService with AuthenticatedService {
   static final StorageService _instance = StorageService._();
   StorageService._();

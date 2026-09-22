@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+/// The form that creates the vault by choosing and confirming its master password.
 class VaultSetupView extends StatelessWidget {
   final TextEditingController passwordController;
   final TextEditingController confirmController;

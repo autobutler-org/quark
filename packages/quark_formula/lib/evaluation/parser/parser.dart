@@ -7,6 +7,8 @@ import 'ast.dart';
 export '../errors/lexer_errors.dart';
 export 'ast.dart';
 
+/// Parses a token stream into a formula tree, with the cells, ranges and functions it refers to. Throws a
+/// [LexError] when the tokens do not form a formula.
 ParsedFormula parseTokens(Iterable<Token> tokens) =>
     FormulaParser(tokens).parse();
 

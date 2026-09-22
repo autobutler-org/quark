@@ -60,6 +60,8 @@ import 'package:quark/widgets/quark_connect_form.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+/// The Files page: browse folders and archives on the Quark, upload by picker or drag-and-drop, create, move,
+/// rename and delete, and open each file in its viewer or editor.
 class FileBrowserPage extends StatefulWidget {
   /// Optional path to navigate to on load, e.g. 'photos/2024'.
   /// When non-null and non-empty, the browser opens at this path instead of root.

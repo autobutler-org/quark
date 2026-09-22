@@ -5,6 +5,8 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 
+/// Calls `/api/v0/albums`: listing, creating, renaming, moving and deleting photo albums, and adding photos to
+/// them or removing them.
 class AlbumService with AuthenticatedService {
   static final AlbumService _instance = AlbumService._();
   AlbumService._();

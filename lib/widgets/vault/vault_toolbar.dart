@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/services/vault_service.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+/// The search box and folder filter above the vault's entry list.
 class VaultToolbar extends StatelessWidget {
   final List<VaultFolder> folders;
   final ValueChanged<String> onSearchChanged;

@@ -1,3 +1,5 @@
+/// A file or folder as the Quark lists it: its name, size, kind and timestamps, and the path the API addresses it
+/// by.
 class FileNode {
   const FileNode({
     required this.name,

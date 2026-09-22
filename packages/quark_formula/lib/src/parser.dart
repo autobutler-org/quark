@@ -1,5 +1,6 @@
 // Minimal parser placeholder for quark_formula package
 
+/// The prototype engine's parser.
 class Parser {
   final Iterable<String> tokens;
   Parser(this.tokens);

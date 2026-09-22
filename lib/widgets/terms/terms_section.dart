@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// One titled section of the terms page.
 class TermsSection extends StatelessWidget {
   final String title;
   final String body;

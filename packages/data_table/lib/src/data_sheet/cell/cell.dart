@@ -13,6 +13,8 @@ import 'package:flutter/material.dart'
         Container,
         MouseRegion;
 
+/// One grid cell's frame: its size, cursor, and the borders that mark it as active, highlighted, or referenced by
+/// the formula being edited.
 class Cell extends StatelessWidget {
   final Widget child;
   final bool isActive;

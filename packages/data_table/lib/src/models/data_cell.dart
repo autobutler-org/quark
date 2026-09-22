@@ -1,3 +1,4 @@
+/// One cell's raw value, as typed — a formula stays a formula here.
 class DataCell {
   String value;
 

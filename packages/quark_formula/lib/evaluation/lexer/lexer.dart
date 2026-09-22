@@ -4,6 +4,7 @@ import 'helpers.dart';
 export '../errors/lexer_errors.dart';
 export 'helpers.dart';
 
+/// Splits a cell's text into formula tokens, lazily.
 Iterable<Token> lex(String cellValue) sync* {
   final originalValue = cellValue;
 

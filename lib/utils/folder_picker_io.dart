@@ -18,6 +18,8 @@ bool get isFolderPickerSupportedPlatform =>
 /// see the Camera Roll. Android's picker already includes the gallery.
 bool get isPhotoLibraryPickerNeededPlatform => Platform.isIOS;
 
+/// Asks for a folder on desktop and returns every file under it, with its folder path, for upload. Symlinks are
+/// not followed. Returns nothing on mobile or when the user cancels.
 Future<List<PendingUpload>> pickFolderUploadsPlatform() async {
   if (!isFolderPickerSupportedPlatform) {
     return const [];

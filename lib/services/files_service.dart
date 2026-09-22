@@ -29,6 +29,9 @@ class FilesRequestException implements Exception {
   String toString() => message;
 }
 
+/// Calls `/api/v0/files` and its neighbors: listing, searching, uploading and downloading files, archives, photos
+/// and thumbnails; deleting, moving, converting and extracting them; video edits; and the installed version and
+/// updates.
 class FilesService with AuthenticatedService {
   static final FilesService _instance = FilesService._();
   FilesService._();

@@ -18,6 +18,8 @@ import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/sheets/sheets_body.dart';
 import 'package:quark/widgets/sheets/sheets_search_bar.dart';
 
+/// The Sheets page: the user's `.qsheet` spreadsheets, with a way to start a new one. A search also matches sheet
+/// contents and lists the docs whose names match.
 class SheetsPage extends StatefulWidget {
   const SheetsPage({super.key});
 

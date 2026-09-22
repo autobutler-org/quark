@@ -60,6 +60,8 @@ class AlbumRef {
       AlbumRef(id: json['id'] as int, name: json['name'] as String);
 }
 
+/// What the Quark knows about one photo: its EXIF data, the albums it is in, its saved rotation, and whether it
+/// is a Live Photo.
 class PhotoMetadata {
   final String fileName;
   final int fileSize;

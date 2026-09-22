@@ -13,6 +13,8 @@ import 'package:quark/widgets/jobs/jobs_badge_host.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/probe_bootstrap.dart';
 
+/// Loads the saved settings, trusts the local Quark's self-signed certificate, starts the jobs watcher, and runs
+/// the app.
 Future<void> main() async {
   usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +34,7 @@ Future<void> main() async {
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
+/// The app's root: the theme, the router, and the job announcements and badge that sit above every page.
 class QuarkApp extends StatelessWidget {
   const QuarkApp({super.key});
 

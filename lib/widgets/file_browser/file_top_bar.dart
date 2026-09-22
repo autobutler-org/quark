@@ -5,6 +5,7 @@ import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_path_row.da
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_row.dart';
 import 'package:flutter/material.dart';
 
+/// The Files page's top bar: the breadcrumb for the current folder, the way up, and search.
 class FileTopBar extends StatefulWidget {
   const FileTopBar({
     required this.currentPath,

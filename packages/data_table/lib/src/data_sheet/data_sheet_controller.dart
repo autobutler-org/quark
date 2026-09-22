@@ -55,6 +55,8 @@ class _TableSnapshot {
 // Controller
 // ---------------------------------------------------------------------------
 
+/// The state behind a `DataSheet`: the table, column widths and row heights, the evaluated value of each cell,
+/// and undo and redo.
 class DataSheetController extends ChangeNotifier {
   final DataTable table;
   final List<ValueNotifier<List<DataCell>>> _rows;

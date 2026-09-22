@@ -1,3 +1,7 @@
+/// The formula engine the sheets editor uses: tokens, parsing, evaluation, built-in functions, and the dependency
+/// graph between cells.
+library;
+
 export './token.dart';
 export 'errors/errors.dart';
 export 'evaluator/builtins.dart';

@@ -7,6 +7,7 @@ import 'package:quark/widgets/vault/entry_detail_view.dart';
 import 'package:quark/widgets/vault/entry_edit_form.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+/// The page for one vault entry, from which it can be edited or deleted.
 class EntryDetailPage extends StatefulWidget {
   final VaultEntryDetail entry;
   final List<VaultFolder> folders;

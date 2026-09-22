@@ -3,6 +3,8 @@ import '../token.dart';
 
 export '../errors/lexer_errors.dart';
 
+/// Whether [char] is whitespace between formula tokens. This file holds the character classes the lexer is built
+/// from.
 bool isFormulaWhitespace(String char) => char.trim().isEmpty;
 
 bool isFormulaDigit(String char) {

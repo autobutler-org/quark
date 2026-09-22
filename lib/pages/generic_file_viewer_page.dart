@@ -11,6 +11,8 @@ import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+/// The fallback viewer for a file Quark has no dedicated viewer for: its details, with download and
+/// open-with-another-app actions.
 class GenericFileViewerPage extends StatefulWidget {
   final FileNode node;
 

@@ -13,6 +13,7 @@ import 'package:quark/widgets/video_viewer/transcode_dialog_host.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:video_player/video_player.dart';
 
+/// Full-screen player for a video file on the Quark.
 class VideoViewerPage extends StatefulWidget {
   final Uri url;
   final String name;

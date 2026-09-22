@@ -1,5 +1,6 @@
 import 'data_row.dart';
 
+/// A spreadsheet's rows of cells, and the JSON form it is saved in.
 class DataTable {
   List<DataRow> rows = [];
 

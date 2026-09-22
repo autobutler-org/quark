@@ -416,6 +416,9 @@ yet rather than a rule violation. Decouple it with the `page-decoupler` agent in
   debounce durations, and UI behavior constants), prefer a dedicated static
   const config class under `lib/utils/` and reference it from feature code
   instead of scattering hardcoded literals.
+- **Every Dart file's primary declaration carries a `///` doc** under `lib/` and `packages/*/lib`; a barrel that
+  only re-exports documents a `library;` directive instead. A new file ships with one, written from the code, not
+  the name. When behavior a doc describes changes, update the doc in the same change.
 
 ### Flutter UI/layout principles
 

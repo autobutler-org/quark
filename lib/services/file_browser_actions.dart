@@ -4,6 +4,9 @@ import 'package:quark/models/upload_conflict.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 
+/// Uploads picked files into the folder the file browser is showing. This file holds the file browser's actions
+/// that talk to the Quark — upload, new folder, download, move or rename, and extract — so the page only has to
+/// call them.
 Future<void> uploadMultipartFilesToCurrentPath({
   required String currentPath,
   required List<http.MultipartFile> selectedFiles,
