@@ -47,7 +47,7 @@ type DeleteFilesResult struct{}
 func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 	// ── Phase 1: fast filesystem op (returns in < 1 s even for large batches) ─
 
-	// A rename into .trash/ is a metadata-only op, microseconds on an SD card.
+	// A rename into the trash is a metadata-only op, microseconds on an SD card.
 	trashed, err := params.Storage.TrashFiles(storageutil.TrashFilesParams{
 		RootDir:      params.RootDir,
 		FilePaths:    params.FilePaths,

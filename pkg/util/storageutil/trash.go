@@ -16,8 +16,17 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 )
 
-// TrashDir is the directory inside each device's FilesDir where trashed files live.
-const TrashDir = ".trash"
+// TrashDir is the directory where a device's trashed files live: a visible
+// sibling of its FilesDir, next to files/ and tmp/ in the data directory, so
+// trashing and restoring stay renames on one filesystem (#2173).
+const TrashDir = "trash"
+
+// trashPathPrefix is where trashed items sit in the files-relative path
+// space. Access rows, search rows and thumbnail requests name a trashed item
+// by its TrashPath, which starts here. It is where the trash lived on disk
+// before #2173, kept so none of those needed rewriting, and FilesDir still
+// reserves the name (IsInternalName).
+const trashPathPrefix = ".trash"
 
 // TrashRetentionDays is how long items stay in the trash before auto-expiry.
 const TrashRetentionDays = 30
@@ -73,7 +82,58 @@ func trashMetaFile(trashItemPath string) string {
 // something inside it.
 func IsTrashPath(relPath string) bool {
 	clean := filepath.ToSlash(filepath.Clean(relPath))
-	return clean == TrashDir || strings.HasPrefix(clean, TrashDir+"/")
+	return clean == trashPathPrefix || strings.HasPrefix(clean, trashPathPrefix+"/")
+}
+
+// TrashRoot is the trash directory of the device whose files directory is
+// filesDir: <dataDir>/trash, beside it.
+func TrashRoot(filesDir string) string {
+	return filepath.Join(filepath.Dir(filepath.Clean(filesDir)), TrashDir)
+}
+
+// JoinTrashPath returns where a TrashPath of filesDir's trash sits on disk. A
+// path that is not a TrashPath, or that climbs out of the trash, is an error.
+func JoinTrashPath(filesDir, trashPath string) (string, error) {
+	if !IsTrashPath(trashPath) {
+		return "", fmt.Errorf("not a trash path: %s", trashPath)
+	}
+	inside := strings.TrimPrefix(filepath.ToSlash(filepath.Clean(trashPath)), trashPathPrefix)
+	return safeJoin(TrashRoot(filesDir), filepath.FromSlash(inside))
+}
+
+// openTrash returns filesDir's trash root, first moving in whatever is still
+// in the hidden <filesDir>/.trash that held the trash before #2173, sidecars
+// included. Every trash operation opens the trash this way, so a device's old
+// trash moves the first time it is touched: at startup, by the purge, for
+// every device mounted then, and on first use for one plugged in later.
+func openTrash(filesDir string) (string, error) {
+	root := TrashRoot(filesDir)
+	old := filepath.Join(filesDir, trashPathPrefix)
+	// Lstat, so a symlink planted under the old name is never followed.
+	if info, err := os.Lstat(old); err != nil || !info.IsDir() {
+		return root, nil
+	}
+	entries, err := os.ReadDir(old)
+	if err != nil {
+		return root, fmt.Errorf("failed to read the old trash directory: %w", err) // coverage: ignore - requires filesystem permission errors
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return root, fmt.Errorf("failed to create trash directory: %w", err) // coverage: ignore - requires filesystem permission errors
+	}
+	for _, entry := range entries {
+		dest := filepath.Join(root, entry.Name())
+		// Trash names carry a random suffix, so a clash means both trashes
+		// already hold this item; the old copy stays put, still hidden, rather
+		// than be overwritten.
+		if _, err := os.Lstat(dest); err == nil {
+			continue
+		}
+		if err := os.Rename(filepath.Join(old, entry.Name()), dest); err != nil && !os.IsNotExist(err) {
+			return root, fmt.Errorf("failed to move %s out of the old trash directory: %w", entry.Name(), err) // coverage: ignore - requires filesystem errors
+		}
+	}
+	_ = os.Remove(old) // only succeeds once it is empty
+	return root, nil
 }
 
 // trashFilesDir resolves the FilesDir whose trash a request addresses. The
@@ -118,7 +178,7 @@ func newTrashName(base string, now time.Time) (string, error) {
 	return prefix + base, nil
 }
 
-// TrashFilesParams mirrors DeleteFilesParams but moves to .trash instead of removing.
+// TrashFilesParams mirrors DeleteFilesParams but moves to the trash instead of removing.
 type TrashFilesParams struct {
 	RootDir      string
 	FilePaths    []string
@@ -148,10 +208,10 @@ type TrashFilesResult struct {
 // inside a trashed folder when rel is set. An item's access rows live there
 // while it is in the trash (#1905).
 func TrashPath(trashName, rel string) string {
-	return path.Join(TrashDir, trashName, rel)
+	return path.Join(trashPathPrefix, trashName, rel)
 }
 
-// TrashFiles moves files/directories into the .trash folder under the device's FilesDir.
+// TrashFiles moves files/directories into the device's trash.
 func (s *StorageService) TrashFiles(params TrashFilesParams) (*TrashFilesResult, error) {
 	filesDir, err := s.trashFilesDir(params.DeviceSerial)
 	if err != nil {
@@ -165,7 +225,10 @@ func (s *StorageService) TrashFiles(params TrashFilesParams) (*TrashFilesResult,
 // were permanent.
 func TrashFilesImpl(params TrashFilesParams, filesDir string) (*TrashFilesResult, error) {
 	result := &TrashFilesResult{RootDir: params.RootDir}
-	trashRoot := filepath.Join(filesDir, TrashDir)
+	trashRoot, err := openTrash(filesDir)
+	if err != nil {
+		return result, err
+	}
 	if err := os.MkdirAll(trashRoot, 0o700); err != nil {
 		return result, fmt.Errorf("failed to create trash directory: %w", err)
 	}
@@ -255,7 +318,10 @@ func (s *StorageService) ListTrash(params ListTrashParams) (ListTrashResult, err
 // ListTrashImpl is the testable core of ListTrash. It never returns a nil
 // slice, so an empty trash serializes as [].
 func ListTrashImpl(filesDir string) ([]TrashItem, error) {
-	trashRoot := filepath.Join(filesDir, TrashDir)
+	trashRoot, err := openTrash(filesDir)
+	if err != nil {
+		return nil, err
+	}
 	entries, err := os.ReadDir(trashRoot)
 	items := make([]TrashItem, 0, len(entries))
 	if os.IsNotExist(err) {
@@ -385,7 +451,11 @@ func (s *StorageService) ReadTrashEntry(params ReadTrashEntryParams) (ReadTrashE
 	if err != nil {
 		return ReadTrashEntryResult{}, err
 	}
-	itemPath, err := resolveTrashItem(filepath.Join(filesDir, TrashDir), params.TrashName)
+	trashRoot, err := openTrash(filesDir)
+	if err != nil {
+		return ReadTrashEntryResult{}, err
+	}
+	itemPath, err := resolveTrashItem(trashRoot, params.TrashName)
 	if err != nil {
 		return ReadTrashEntryResult{}, err
 	}
@@ -508,7 +578,11 @@ func (s *StorageService) ListTrashContents(params ListTrashContentsParams) (List
 // ListTrashContentsImpl is the testable core of ListTrashContents. It never
 // returns a nil slice, so an empty folder serializes as [].
 func ListTrashContentsImpl(params ListTrashContentsParams, filesDir string) (ListTrashContentsResult, error) {
-	ref, err := resolveTrashRef(filepath.Join(filesDir, TrashDir), TrashRef{TrashName: params.TrashName, Path: params.Path})
+	trashRoot, err := openTrash(filesDir)
+	if err != nil {
+		return ListTrashContentsResult{}, err
+	}
+	ref, err := resolveTrashRef(trashRoot, TrashRef{TrashName: params.TrashName, Path: params.Path})
 	if err != nil {
 		return ListTrashContentsResult{}, err
 	}
@@ -616,7 +690,10 @@ func (s *StorageService) RestoreTrash(params RestoreTrashParams) (RestoreTrashRe
 // joined with its path inside it, and the folder stays in the trash with the
 // rest of its contents.
 func RestoreTrashImpl(params RestoreTrashParams, filesDir string) (RestoreTrashResult, error) {
-	trashRoot := filepath.Join(filesDir, TrashDir)
+	trashRoot, err := openTrash(filesDir)
+	if err != nil {
+		return RestoreTrashResult{}, err
+	}
 
 	type move struct {
 		from, to, rel, source string
@@ -736,7 +813,10 @@ func (s *StorageService) DeleteTrash(params DeleteTrashParams) (DeleteTrashResul
 // validated before anything is deleted. Something inside a trashed folder is
 // deleted on its own; the folder stays in the trash.
 func DeleteTrashImpl(params DeleteTrashParams, filesDir string) (DeleteTrashResult, error) {
-	trashRoot := filepath.Join(filesDir, TrashDir)
+	trashRoot, err := openTrash(filesDir)
+	if err != nil {
+		return DeleteTrashResult{}, err
+	}
 	refs := make([]resolvedTrashRef, 0, len(params.Items))
 	for _, item := range params.Items {
 		ref, err := resolveTrashRef(trashRoot, item)
@@ -826,7 +906,7 @@ func removeTrashItems(filesDir string, doom func(TrashItem) bool) ([]string, err
 	if err != nil {
 		return nil, err
 	}
-	trashRoot := filepath.Join(filesDir, TrashDir)
+	trashRoot := TrashRoot(filesDir) // ListTrashImpl opened it
 	var removed []string
 	for _, item := range items {
 		if !doom(item) {

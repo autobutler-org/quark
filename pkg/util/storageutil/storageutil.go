@@ -300,10 +300,13 @@ func GetFolderSize(dir string) (int64, error) {
 const WriteTempPrefix = ".vfs-write-"
 
 // IsInternalName reports whether a directory entry is Quark's own bookkeeping
-// rather than user content: the trash, or a write still in flight. Every other
-// dotfile is the user's — a `.env` they uploaded must stay visible.
+// rather than user content: the old hidden trash, or a write still in flight.
+// The trash itself sits beside FilesDir now (#2173), but trashed items are
+// still addressed as `.trash/...`, so the name stays reserved, and an old
+// trash is hidden until its first use moves it out. Every other dotfile is the
+// user's — a `.env` they uploaded must stay visible.
 func IsInternalName(name string) bool {
-	return name == TrashDir || strings.HasPrefix(name, WriteTempPrefix)
+	return name == trashPathPrefix || strings.HasPrefix(name, WriteTempPrefix)
 }
 
 func StatFilesInDir(dir string, deviceName string, devicePath string, deviceSerial string) ([]*DeviceFileInfo, error) {

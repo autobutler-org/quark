@@ -192,3 +192,21 @@ func TestThumbnailAccess_ArchiveEntry(t *testing.T) {
 		t.Errorf("user GET archive entry with the archive shared = %d, want 200", code)
 	}
 }
+
+// TestThumbnail_TrashedImage checks the Trash page's thumbnails, which ask for
+// the trashed item's TrashPath, still come from wherever the trash sits on
+// disk (#2173), down both serving branches.
+func TestThumbnail_TrashedImage(t *testing.T) {
+	for _, withVFS := range []bool{true, false} {
+		h := newThumbnailHarness(t, withVFS)
+		writeJPEG(t, h.filesDir, "a.jpg")
+		result, err := storageutil.TrashFilesImpl(storageutil.TrashFilesParams{FilePaths: []string{"a.jpg"}}, h.filesDir)
+		if err != nil || len(result.Trashed) != 1 {
+			t.Fatalf("trashing a.jpg: %v, %+v", err, result)
+		}
+		p := "/api/v0/thumbnails/" + storageutil.TrashPath(result.Trashed[0].TrashName, "")
+		if code := h.get(p); code != http.StatusOK {
+			t.Errorf("withVFS=%v: GET %s = %d, want 200", withVFS, p, code)
+		}
+	}
+}

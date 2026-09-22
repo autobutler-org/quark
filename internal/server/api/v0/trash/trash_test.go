@@ -474,7 +474,7 @@ func TestDeleteOnInternalStorageGoesToTrash(t *testing.T) {
 
 	// The trash never shows up in a listing, even of the root.
 	w := h.do(http.MethodGet, "/api/v0/files", nil)
-	if bytes.Contains(w.Body.Bytes(), []byte(storageutil.TrashDir)) {
+	if bytes.Contains(w.Body.Bytes(), []byte(".trash")) {
 		t.Errorf("file listing exposes the trash: %s", w.Body.String())
 	}
 }

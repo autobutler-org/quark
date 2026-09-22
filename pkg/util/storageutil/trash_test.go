@@ -69,7 +69,7 @@ func TestTrashFilesImpl_MovesFileToTrash(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "original file should no longer exist")
 
 	// One item + one metadata sidecar.
-	entries, err := os.ReadDir(filepath.Join(filesDir, storageutil.TrashDir))
+	entries, err := os.ReadDir(storageutil.TrashRoot(filesDir))
 	require.NoError(t, err)
 	assert.Len(t, entries, 2)
 
@@ -146,7 +146,7 @@ func TestListTrashImpl_ListsTrashedJSONFiles(t *testing.T) {
 
 func TestListTrashImpl_ItemWithoutSidecar(t *testing.T) {
 	filesDir := t.TempDir()
-	trashRoot := filepath.Join(filesDir, storageutil.TrashDir)
+	trashRoot := storageutil.TrashRoot(filesDir)
 	require.NoError(t, os.MkdirAll(filepath.Join(trashRoot, "20240102T030405Z_abcd_folder"), 0o700))
 	writeFile(t, trashRoot, "20240102T030405Z_abcd_folder/inner.txt", "12345")
 	// A .meta.json with no item beside it is not a sidecar; it is listed.
@@ -199,7 +199,7 @@ func TestRestoreTrashImpl_RestoresFileAndFolder(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Items and sidecars are both gone.
-	entries, err := os.ReadDir(filepath.Join(filesDir, storageutil.TrashDir))
+	entries, err := os.ReadDir(storageutil.TrashRoot(filesDir))
 	require.NoError(t, err)
 	assert.Empty(t, entries)
 }
@@ -240,7 +240,7 @@ func TestRestoreTrashImpl_SameTargetTwiceConflictsAndRestoresNothing(t *testing.
 
 func TestRestoreTrashImpl_WithoutSidecarConflicts(t *testing.T) {
 	filesDir := t.TempDir()
-	writeFile(t, filesDir, ".trash/20240102T030405Z_abcd_lost.txt", "x")
+	writeFile(t, storageutil.TrashRoot(filesDir), "20240102T030405Z_abcd_lost.txt", "x")
 
 	_, err := storageutil.RestoreTrashImpl(storageutil.RestoreTrashParams{
 		Items: refs("20240102T030405Z_abcd_lost.txt"),
@@ -250,10 +250,10 @@ func TestRestoreTrashImpl_WithoutSidecarConflicts(t *testing.T) {
 
 func TestRestoreTrashImpl_SidecarPointingOutsideIsRefused(t *testing.T) {
 	filesDir := t.TempDir()
-	writeFile(t, filesDir, ".trash/evil", "x")
+	writeFile(t, storageutil.TrashRoot(filesDir), "evil", "x")
 	for _, original := range []string{"../outside", ".trash/nested", ""} {
 		meta, _ := json.Marshal(storageutil.TrashEntry{OriginalPath: original, TrashedAt: time.Now()})
-		require.NoError(t, os.WriteFile(filepath.Join(filesDir, ".trash", "evil.meta.json"), meta, 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(storageutil.TrashRoot(filesDir), "evil.meta.json"), meta, 0o600))
 
 		_, err := storageutil.RestoreTrashImpl(storageutil.RestoreTrashParams{Items: refs("evil")}, filesDir)
 		require.ErrorIs(t, err, storageutil.ErrRestoreConflict, "original %q", original)
@@ -307,7 +307,7 @@ func TestDeleteTrashImpl_DeletesNamedItemsOnly(t *testing.T) {
 	items := listTrash(t, filesDir)
 	require.Len(t, items, 1)
 	assert.Equal(t, "c.txt", items[0].OriginalPath)
-	entries, err := os.ReadDir(filepath.Join(filesDir, storageutil.TrashDir))
+	entries, err := os.ReadDir(storageutil.TrashRoot(filesDir))
 	require.NoError(t, err)
 	assert.Len(t, entries, 2, "the deleted items' sidecars are gone too")
 }
@@ -322,7 +322,7 @@ func TestEmptyTrashImpl_DeletesEverything(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, deleted)
 
-	entries, err := os.ReadDir(filepath.Join(filesDir, storageutil.TrashDir))
+	entries, err := os.ReadDir(storageutil.TrashRoot(filesDir))
 	require.NoError(t, err)
 	assert.Empty(t, entries)
 
@@ -343,10 +343,10 @@ func TestPurgeExpiredTrashImpl_DeletesOldItems(t *testing.T) {
 		OriginalPath: "old.txt",
 		TrashedAt:    time.Now().UTC().AddDate(0, 0, -(storageutil.TrashRetentionDays + 1)),
 	})
-	require.NoError(t, os.WriteFile(filepath.Join(filesDir, storageutil.TrashDir, oldName+".meta.json"), meta, 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(storageutil.TrashRoot(filesDir), oldName+".meta.json"), meta, 0o600))
 
 	// A sidecar-less item falls back to its trash-name stamp, not its mtime.
-	stamped := filepath.Join(filesDir, storageutil.TrashDir, "20200101T000000Z_abcd_ancient.txt")
+	stamped := filepath.Join(storageutil.TrashRoot(filesDir), "20200101T000000Z_abcd_ancient.txt")
 	require.NoError(t, os.WriteFile(stamped, []byte("x"), 0o600))
 	recentMtimeButOldStamp := time.Now()
 	require.NoError(t, os.Chtimes(stamped, recentMtimeButOldStamp, recentMtimeButOldStamp))
@@ -358,7 +358,7 @@ func TestPurgeExpiredTrashImpl_DeletesOldItems(t *testing.T) {
 	items := listTrash(t, filesDir)
 	require.Len(t, items, 1)
 	assert.Equal(t, "new.txt", items[0].OriginalPath)
-	_, err = os.Stat(filepath.Join(filesDir, storageutil.TrashDir, oldName+".meta.json"))
+	_, err = os.Stat(filepath.Join(storageutil.TrashRoot(filesDir), oldName+".meta.json"))
 	assert.True(t, os.IsNotExist(err), "the purged item's sidecar is gone")
 }
 
@@ -416,7 +416,7 @@ func TestListTrashContentsImpl_Rejects(t *testing.T) {
 	trash(t, filesDir, "", "note.txt")
 	fileItem := trashNameFor(t, filesDir, "note.txt")
 	// A symlink inside the trashed folder that leads out of it.
-	require.NoError(t, os.Symlink(filepath.Join(filesDir, "secret"), filepath.Join(filesDir, storageutil.TrashDir, name, "escape")))
+	require.NoError(t, os.Symlink(filepath.Join(filesDir, "secret"), filepath.Join(storageutil.TrashRoot(filesDir), name, "escape")))
 
 	cases := []struct {
 		name, path string
@@ -525,4 +525,50 @@ func TestDeleteTrashImpl_NestedItem(t *testing.T) {
 	require.Len(t, rest.Items, 1)
 	assert.Equal(t, "cover.jpg", rest.Items[0].Path)
 	assert.Equal(t, "pics/album", rest.OriginalPath, "the sidecar stays with the folder")
+}
+
+// The trash is a visible folder beside the files directory, not a hidden one
+// inside it (#2173).
+func TestTrashFilesImpl_TrashSitsBesideFilesDir(t *testing.T) {
+	dataDir := t.TempDir()
+	filesDir := filepath.Join(dataDir, "files")
+	writeFile(t, filesDir, "a.txt", "x")
+
+	trash(t, filesDir, "", "a.txt")
+
+	entries, err := os.ReadDir(filepath.Join(dataDir, "trash"))
+	require.NoError(t, err)
+	assert.Len(t, entries, 2, "the item and its sidecar")
+	_, err = os.Lstat(filepath.Join(filesDir, ".trash"))
+	assert.True(t, os.IsNotExist(err), "nothing is left hidden inside the files directory")
+}
+
+// A trash written before #2173 sits hidden at <filesDir>/.trash. The first
+// look at the trash moves it, sidecars included, and it still restores to
+// where it came from.
+func TestListTrashImpl_MovesTheOldHiddenTrash(t *testing.T) {
+	dataDir := t.TempDir()
+	filesDir := filepath.Join(dataDir, "files")
+	const name = "20240102T030405Z_abcd_notes.txt"
+	writeFile(t, storageutil.TrashRoot(filesDir), ""+name, "hello")
+	meta, _ := json.Marshal(storageutil.TrashEntry{OriginalPath: "docs/notes.txt", TrashedAt: time.Now().UTC()})
+	writeFile(t, storageutil.TrashRoot(filesDir), ""+name+".meta.json", string(meta))
+
+	items := listTrash(t, filesDir)
+	require.Len(t, items, 1)
+	assert.Equal(t, name, items[0].TrashName)
+	assert.Equal(t, "docs/notes.txt", items[0].OriginalPath)
+
+	_, err := os.Lstat(filepath.Join(filesDir, ".trash"))
+	assert.True(t, os.IsNotExist(err), "the old hidden trash is gone")
+	for _, moved := range []string{name, name + ".meta.json"} {
+		_, err := os.Stat(filepath.Join(dataDir, "trash", moved))
+		assert.NoError(t, err, "%s moved beside the files directory", moved)
+	}
+
+	_, err = storageutil.RestoreTrashImpl(storageutil.RestoreTrashParams{Items: refs(name)}, filesDir)
+	require.NoError(t, err)
+	restored, err := os.ReadFile(filepath.Join(filesDir, "docs", "notes.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "hello", string(restored))
 }

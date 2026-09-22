@@ -81,7 +81,10 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 
 	// VFS path: no-serial, non-RAW, non-video images only.
 	// RAW and video need OS paths for external tools (dcraw/ffmpeg).
-	if serial == "" && !isVideo && !photoutil.IsRawFile(relPath) {
+	// The trash sits outside the files namespace (#2173), so a trashed image
+	// takes the StorageService branch too.
+	isTrashed := storageutil.IsTrashPath(relPath)
+	if serial == "" && !isVideo && !isTrashed && !photoutil.IsRawFile(relPath) {
 		if reg := deps.VFSRegistry(); reg != nil {
 			if fsys, ok := reg.Get("files"); ok {
 				if resp := getThumbnailVFS(c, deps, fsys, relPath, ext, filePath, serial); resp != vfsThumbnailFallthrough {
@@ -101,6 +104,9 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	}
 
 	fullPath, err := storageutil.SafeJoin(filesDir, relPath)
+	if isTrashed {
+		fullPath, err = storageutil.JoinTrashPath(filesDir, relPath)
+	}
 	if err != nil {
 		return serverutil.NotFound(fmt.Errorf("thumbnail not found: %s", filePath))
 	}
