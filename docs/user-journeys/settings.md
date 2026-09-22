@@ -405,3 +405,28 @@ password set under **SSH access** — set one there first, and clear it afterwar
 
 **Notes:** Admin-only; other accounts don't see the section, and `/api/v0/ssh/*` answers them 403. Quark never
 stores the password. Keys live in `/var/lib/quark/.ssh/authorized_keys`.
+
+### JN-ST-025: Repair the installation
+
+**Preconditions:** Logged in as an admin (JN-AUTH-002). The Quark runs on Linux as its installed service
+(`sudo quark install`), with a unit from after #2120.
+
+**Steps:**
+
+1. Navigate to `/settings` and find **Repair installation**.
+2. Tap **Repair installation**, then **Cancel** in the confirmation.
+3. Tap **Repair installation** again and confirm **Repair**.
+4. Wait a few seconds, then reload the settings page.
+
+**Expected result:**
+
+- Step 2 does nothing; the confirmation says Quark will restart and be unavailable for a few seconds.
+- Step 3 shows "Quark is restarting". The service exits, systemd starts it again, and the restart reapplies the
+  system setup as root (the sudoers rule and the unit are rewritten).
+- After step 4 the page loads normally again.
+- On a Quark whose unit predates #2120, the section shows no button but the one-time command to run on the device,
+  `sudo quark install`. After running it, the button appears.
+- On a Quark that is not Linux or not the installed service, the section does not appear at all.
+
+**Notes:** Admin-only; other accounts don't see the section, and `/api/v0/admin/repair` answers them 403. The button
+asks for a restart and nothing more: no new privileges or sudoers entries.

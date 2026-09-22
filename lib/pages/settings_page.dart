@@ -20,6 +20,7 @@ import 'package:quark/utils/remote_access_config.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark/widgets/settings/help_support_card.dart';
 import 'package:quark/widgets/settings/sbom_expansion_tile.dart';
+import 'package:quark/widgets/settings/repair_installation_section.dart';
 import 'package:quark/widgets/settings/ssh_access_section.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -1205,6 +1206,8 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 8),
             const SshAccessSection(),
             const SizedBox(height: 24),
+            // Renders nothing unless this Quark can repair itself (#2121).
+            const RepairInstallationSection(),
           ],
           const Text(
             'Theme',
