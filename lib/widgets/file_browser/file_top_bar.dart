@@ -33,12 +33,16 @@ class FileTopBar extends StatefulWidget {
     required this.onCreateFolderPressed,
     required this.onNewFilePressed,
     required this.onOpenDrawer,
-    required this.onOpenSettings,
+    this.onStartSelection,
     this.devices,
     this.activeDevicePaths,
     this.onDeviceToggled,
     super.key,
   });
+
+  /// Enters multi-select, for a pointer that cannot long-press (#2057).
+  /// Null hides the control.
+  final VoidCallback? onStartSelection;
 
   final String currentPath;
 
@@ -88,7 +92,6 @@ class FileTopBar extends StatefulWidget {
   final VoidCallback onCreateFolderPressed;
   final VoidCallback onNewFilePressed;
   final VoidCallback onOpenDrawer;
-  final VoidCallback onOpenSettings;
   final List<StorageDevice>? devices;
   final Set<String>? activeDevicePaths;
   final ValueChanged<String>? onDeviceToggled;
@@ -182,7 +185,7 @@ class _FileTopBarState extends State<FileTopBar> {
               onSearchChanged: _onSearchChanged,
               onCloseSearch: _closeSearch,
               onOpenDrawer: widget.onOpenDrawer,
-              onOpenSettings: widget.onOpenSettings,
+              onStartSelection: widget.onStartSelection,
             ),
             if (!widget.isSearchMode)
               FileTopBarPathRow(

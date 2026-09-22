@@ -55,7 +55,6 @@ void main() {
             onCreateFolderPressed: () {},
             onNewFilePressed: () {},
             onOpenDrawer: () {},
-            onOpenSettings: () {},
           ),
         ),
       ),

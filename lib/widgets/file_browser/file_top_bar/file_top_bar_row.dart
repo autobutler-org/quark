@@ -7,7 +7,7 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The always-visible upper half of the file browser's top bar: brand,
-/// navigation, search and the two app-level buttons.
+/// navigation, search, the select control and the theme toggle.
 class FileTopBarRow extends StatelessWidget {
   const FileTopBarRow({
     required this.currentPath,
@@ -23,7 +23,7 @@ class FileTopBarRow extends StatelessWidget {
     required this.onSearchChanged,
     required this.onCloseSearch,
     required this.onOpenDrawer,
-    required this.onOpenSettings,
+    this.onStartSelection,
     super.key,
   });
 
@@ -42,7 +42,13 @@ class FileTopBarRow extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onCloseSearch;
   final VoidCallback onOpenDrawer;
-  final VoidCallback onOpenSettings;
+
+  /// Enters multi-select. Null hides the control.
+  ///
+  /// Selecting has always been here — long-press a row — but a long press is
+  /// a gesture a mouse does not make, so on the web the whole feature was
+  /// invisible and Files looked like it had no bulk actions at all (#2057).
+  final VoidCallback? onStartSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -76,11 +82,13 @@ class FileTopBarRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            TopBarIconButton(
-              icon: QuarkIcons.settings_outlined,
-              onTap: onOpenSettings,
-              tooltip: 'Settings',
-            ),
+            if (onStartSelection != null)
+              TopBarIconButton(
+                key: const ValueKey('file_top_bar_select'),
+                icon: QuarkIcons.check_circle_outline,
+                onTap: onStartSelection!,
+                tooltip: 'Select files',
+              ),
             const AppThemeToggle(),
             ...QuarkAppBarTrailing.of(context),
           ],
