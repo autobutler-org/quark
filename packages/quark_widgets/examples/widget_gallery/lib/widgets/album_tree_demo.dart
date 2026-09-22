@@ -56,8 +56,7 @@ class _AlbumTreeDemoState extends State<AlbumTreeDemo> {
             if (!_expanded.remove(id)) _expanded.add(id);
           });
         },
-        onLongPress: (album) =>
-            widget.log('AlbumTreeTile.onLongPress(${album.name})'),
+        onMenu: (album) => widget.log('AlbumTreeTile.onMenu(${album.name})'),
       ),
     );
   }

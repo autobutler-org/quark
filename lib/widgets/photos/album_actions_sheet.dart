@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// The menu a long-pressed user album opens: rename, new sub-album, delete.
+/// The menu a user album opens from its `more_vert` button, a long press, or
+/// a right-click: rename, new sub-album, delete.
 ///
 /// Each entry closes the sheet before it fires, so the next dialog opens over
 /// the page rather than over the menu.
