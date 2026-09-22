@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show File;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
@@ -580,22 +581,44 @@ class FilesService with AuthenticatedService {
     String filePath, {
     String? serial,
     String? fileName,
-  }) async {
-    final uri = _buildDownloadUri(filePath, serial: serial);
+  }) => _saveDownload(
+    _buildDownloadUri(filePath, serial: serial),
+    fileName: fileName,
+    fallbackPath: filePath,
+  );
 
+  /// Saves the entry at [entryPath] inside the archive at [archivePath], the
+  /// way [saveFile] saves a file: streamed, never held whole in memory.
+  static Future<String?> saveArchiveFile(
+    String archivePath,
+    String entryPath, {
+    String? serial,
+    String? fileName,
+  }) => _saveDownload(
+    _buildArchiveFileUri(archivePath, entryPath, serial: serial),
+    fileName: fileName,
+    fallbackPath: entryPath,
+  );
+
+  static Future<String?> _saveDownload(
+    Uri uri, {
+    String? fileName,
+    required String fallbackPath,
+  }) async {
     if (kIsWeb) {
-      // A browser download has no temp file to stream onto, so this path still
-      // holds the response in memory — the platform gives it nowhere else to go.
-      final response = await instance.authenticatedGet(uri);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw ApiException(response.statusCode, 'Failed to download file');
-      }
-      return web_download.saveBytesForDownload(
-        response.bodyBytes,
+      // The browser saves the file itself, streaming it to disk. Holding the
+      // response here instead ran the tab out of memory near a gigabyte
+      // (#2226). A link cannot send the Authorization header, so it carries a
+      // single-use token issued for this path and serial.
+      final token = await _createDownloadToken(uri.queryParameters);
+      return web_download.saveUrlForDownload(
+        uri.replace(
+          queryParameters: {...uri.queryParameters, 'downloadToken': token},
+        ),
         _resolveDownloadFileName(
-          response.headers['content-disposition'],
+          null,
           preferredName: fileName,
-          fallbackPath: filePath,
+          fallbackPath: fallbackPath,
         ),
       );
     }
@@ -614,7 +637,7 @@ class FilesService with AuthenticatedService {
           fileName: _resolveDownloadFileName(
             downloaded.headers['content-disposition'],
             preferredName: fileName,
-            fallbackPath: filePath,
+            fallbackPath: fallbackPath,
           ),
         ),
       );
@@ -622,6 +645,32 @@ class FilesService with AuthenticatedService {
       await downloaded.delete();
     }
   }
+
+  /// Streams a file onto disk under [fileName], for handing to another app,
+  /// and returns where it landed. The body never enters memory: it used to
+  /// arrive whole as bytes first, however large the file.
+  ///
+  /// The other app reads the file after this returns, so it cannot be deleted
+  /// here. The previous one is deleted on the next call instead, which keeps
+  /// at most one such file on disk. Not available on web.
+  static Future<String> downloadForOpenWith(
+    String filePath, {
+    String? serial,
+    required String fileName,
+  }) async {
+    final downloaded = await instance.authenticatedDownload(
+      _buildDownloadUri(filePath, serial: serial),
+    );
+    final previous = _openWithDownload;
+    _openWithDownload = downloaded;
+    await previous?.delete();
+    // The other app picks a handler by extension, so the file needs its name.
+    final source = File(downloaded.path);
+    final named = await source.rename('${source.parent.path}/$fileName');
+    return named.path;
+  }
+
+  static DownloadedFile? _openWithDownload;
 
   /// Saves raw bytes to disk (or browser download) using the same logic as [saveFile].
   static Future<String?> saveBytesToFile(
@@ -646,22 +695,12 @@ class FilesService with AuthenticatedService {
     String? serial,
     bool convertImages = false,
   }) async {
-    final querySegments = <String>[
-      'filePath=${Uri.encodeQueryComponent(archivePath)}',
-      'entryPath=${Uri.encodeQueryComponent(entryPath)}',
-    ];
-    final serialValue = serial?.trim() ?? '';
-    if (serialValue.isNotEmpty) {
-      querySegments.add('serial=${Uri.encodeQueryComponent(serialValue)}');
-    }
-    if (convertImages &&
-        serverConvertedImageExtensions.contains(fileExtension(entryPath))) {
-      querySegments.add('format=jpeg');
-    }
-    final endpointUri = apiBaseUri.resolve(
-      '/api/v0/files/download-archive-file',
+    final uri = _buildArchiveFileUri(
+      archivePath,
+      entryPath,
+      serial: serial,
+      convertImages: convertImages,
     );
-    final uri = endpointUri.replace(query: querySegments.join('&'));
     final response = await instance.authenticatedGet(uri);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(
@@ -773,6 +812,50 @@ class FilesService with AuthenticatedService {
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return data['relPath'] as String;
+  }
+
+  /// Asks the Quark for a token that authenticates one download of the file
+  /// [downloadQuery] names, so the browser can fetch it with a plain link.
+  static Future<String> _createDownloadToken(
+    Map<String, String> downloadQuery,
+  ) async {
+    final uri = apiBaseUri
+        .resolve('/api/v0/files/download-token')
+        .replace(queryParameters: downloadQuery);
+    final response = await instance.authenticatedPost(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Failed to issue download token');
+    }
+    final decoded = jsonDecode(response.body);
+    final token = decoded is Map<String, dynamic> ? decoded['token'] : null;
+    if (token is! String || token.isEmpty) {
+      throw Exception('Download token response had no token');
+    }
+    return token;
+  }
+
+  static Uri _buildArchiveFileUri(
+    String archivePath,
+    String entryPath, {
+    String? serial,
+    bool convertImages = false,
+  }) {
+    final querySegments = <String>[
+      'filePath=${Uri.encodeQueryComponent(archivePath)}',
+      'entryPath=${Uri.encodeQueryComponent(entryPath)}',
+    ];
+    final serialValue = serial?.trim() ?? '';
+    if (serialValue.isNotEmpty) {
+      querySegments.add('serial=${Uri.encodeQueryComponent(serialValue)}');
+    }
+    if (convertImages &&
+        serverConvertedImageExtensions.contains(fileExtension(entryPath))) {
+      querySegments.add('format=jpeg');
+    }
+    final endpointUri = apiBaseUri.resolve(
+      '/api/v0/files/download-archive-file',
+    );
+    return endpointUri.replace(query: querySegments.join('&'));
   }
 
   static Uri _buildDownloadUri(String filePath, {String? serial}) {

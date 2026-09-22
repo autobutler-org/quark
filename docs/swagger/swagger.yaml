@@ -650,6 +650,13 @@ definitions:
       name:
         type: string
     type: object
+  v0_files.createDownloadTokenResponse:
+    properties:
+      expiresAt:
+        type: string
+      token:
+        type: string
+    type: object
   v0_files.createUploadSessionRequest:
     properties:
       fileName:
@@ -3210,6 +3217,12 @@ paths:
         in: query
         name: format
         type: string
+      - description: Single-use token from POST /files/download-token, for a browser
+          link that cannot send an Authorization header. The response is then always
+          an attachment.
+        in: query
+        name: downloadToken
+        type: string
       produces:
       - application/octet-stream
       responses:
@@ -3256,6 +3269,12 @@ paths:
         in: query
         name: format
         type: string
+      - description: Single-use token from POST /files/download-token, for a browser
+          link that cannot send an Authorization header. The response is then always
+          an attachment.
+        in: query
+        name: downloadToken
+        type: string
       produces:
       - application/octet-stream
       - image/jpeg
@@ -3283,6 +3302,49 @@ paths:
       security:
       - BearerAuth: []
       summary: Download a single file from inside an archive
+      tags:
+      - files
+  /files/download-token:
+    post:
+      description: Issues a token that authenticates one GET /files/download (or /files/download-archive-file,
+        where filePath is the archive) of the same filePath and serial, passed as
+        the downloadToken query parameter. A browser link cannot send an Authorization
+        header; this lets the web client hand the download to the browser, which streams
+        it to disk. The token works once, runs as the caller, makes the response an
+        attachment, and expires unused after about a minute. Needs read access on
+        the path.
+      parameters:
+      - description: File path the token is for
+        in: query
+        name: filePath
+        required: true
+        type: string
+      - description: Device serial number the token is for
+        in: query
+        name: serial
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_files.createDownloadTokenResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Issue a single-use download token
       tags:
       - files
   /files/extract:

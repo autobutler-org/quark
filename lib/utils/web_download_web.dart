@@ -16,3 +16,19 @@ Future<String?> saveBytesForDownload(Uint8List data, String fileName) async {
 
   return fileName;
 }
+
+/// Hands [url] to the browser as a download, so the browser streams it to
+/// disk rather than the app holding it in memory (#2226). [url] has to
+/// authenticate on its own: a link sends no Authorization header.
+Future<String?> saveUrlForDownload(Uri url, String fileName) async {
+  final anchor = web.HTMLAnchorElement()
+    ..href = url.toString()
+    ..download = fileName
+    ..style.display = 'none';
+
+  web.document.body?.append(anchor);
+  anchor.click();
+  anchor.remove();
+
+  return fileName;
+}

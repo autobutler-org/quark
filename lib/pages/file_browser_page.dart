@@ -1188,14 +1188,12 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         final entryPath = archive.subPath.isEmpty
             ? node.name
             : '${archive.subPath}/${node.name}';
-        final entry = await FilesService.downloadArchiveFileBytes(
+        await FilesService.saveArchiveFile(
           archive.archivePath,
           entryPath,
+          fileName: node.name,
         );
-        if (mounted) {
-          await FilesService.saveBytesToFile(entry.bytes, node.name);
-          _showMessage('Downloaded ${node.name}');
-        }
+        if (mounted) _showMessage('Downloaded ${node.name}');
       } catch (e) {
         if (mounted) {
           _showMessage(_controller.failureMessage(FileMenuAction.download, e));
@@ -1552,6 +1550,26 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         : '${archive.subPath}/${node.name}';
 
     try {
+      final kind = fileKindForName(node.name);
+      final mayPreview = switch (kind) {
+        FileKind.image ||
+        FileKind.svg ||
+        FileKind.text ||
+        FileKind.code => true,
+        _ => false,
+      };
+      if (!mayPreview) {
+        // Nothing to preview, so stream it to disk instead of fetching the
+        // whole entry into memory first (#2226).
+        await FilesService.saveArchiveFile(
+          archive.archivePath,
+          entryPath,
+          fileName: node.name,
+        );
+        if (mounted) _showMessage('Downloaded ${node.name}');
+        return;
+      }
+
       final entry = await FilesService.downloadArchiveFileBytes(
         archive.archivePath,
         entryPath,
@@ -1566,7 +1584,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       final canDecode =
           entry.isJpeg ||
           clientDecodedImageExtensions.contains(fileExtension(node.name));
-      final Widget? preview = switch (fileKindForName(node.name)) {
+      final Widget? preview = switch (kind) {
         FileKind.image when canDecode => ImageViewerPage(
           bytes: bytes,
           name: node.name,
@@ -1583,7 +1601,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         return;
       }
 
-      // Fallback: download the file.
+      // An image nothing could decode: its bytes are already here.
       await FilesService.saveBytesToFile(bytes, node.name);
       if (mounted) _showMessage('Downloaded ${node.name}');
     } catch (e) {

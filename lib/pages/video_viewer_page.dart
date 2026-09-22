@@ -1,15 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/local_media_proxy.dart';
 import 'package:quark/utils/error_text.dart';
-import 'package:quark/utils/web_download_stub.dart'
-    if (dart.library.html) 'package:quark/utils/web_download_web.dart'
-    as web_download;
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/video_viewer/fullscreen_video_page.dart';
 import 'package:quark/widgets/video_viewer/inline_video_player.dart';
@@ -195,11 +191,14 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
   Future<void> _downloadVideo() async {
     setState(() => _downloading = true);
     try {
-      final Uint8List? bytes = await FilesService.downloadFileBytes(
-        widget.url.path,
+      // The media URL carries the file's path and serial as query
+      // parameters; its own path is the download endpoint, not the file.
+      final params = widget.url.queryParameters;
+      await FilesService.saveFile(
+        params['filePath'] ?? '',
+        serial: params['serial'],
+        fileName: widget.name,
       );
-      if (bytes == null) throw Exception('Empty response from server');
-      await web_download.saveBytesForDownload(bytes, widget.name);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

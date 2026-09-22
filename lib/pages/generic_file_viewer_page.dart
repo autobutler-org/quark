@@ -79,17 +79,14 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
     if (_opening || kIsWeb) return;
     setState(() => _opening = true);
     try {
-      final bytes = await FilesService.downloadFileBytes(
+      final path = await FilesService.downloadForOpenWith(
         widget.node.apiPath,
         serial: widget.node.deviceSerial.isEmpty
             ? null
             : widget.node.deviceSerial,
+        fileName: widget.node.name,
       );
-      if (bytes == null) throw Exception('Download returned no data');
-      final message = await native_open.openFileWithSystem(
-        bytes,
-        widget.node.name,
-      );
+      final message = await native_open.openFileWithSystem(path);
       if (message.isNotEmpty && mounted) {
         ScaffoldMessenger.of(
           context,

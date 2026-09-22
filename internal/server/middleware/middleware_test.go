@@ -14,6 +14,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/gin-gonic/gin"
 	_ "modernc.org/sqlite"
 )
@@ -464,5 +465,70 @@ func TestRequireAuth_SetsPrincipalOnContext(t *testing.T) {
 	request()
 	if want := (accessutil.Principal{UserID: user.ID}); got != want {
 		t.Errorf("demoted principal = %+v, want %+v", got, want)
+	}
+}
+
+// TestRequireAuth_DownloadTokenGrantsOneDownload verifies a ?downloadToken=
+// authenticates exactly one download of the path it was
+// issued for, runs as the user it was issued to, and is refused anywhere else
+// (#2226).
+func TestRequireAuth_DownloadTokenGrantsOneDownload(t *testing.T) {
+	sqlDB, queries := newMiddlewareTestDB(t)
+	ctx := context.Background()
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
+		Username: "admin",
+		Password: "SecurePass1!",
+	}); err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	user, err := queries.GetUserByUsername(ctx, "admin")
+	if err != nil {
+		t.Fatalf("GetUserByUsername: %v", err)
+	}
+
+	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{Db: sqlDB, Queries: queries})
+	engine := newMiddlewareEngine(t, deps)
+	var (
+		gotUser     string
+		gotViaToken bool
+	)
+	download := func(c *gin.Context) {
+		gotUser, _ = ctxutil.Get[string](c, "username")
+		gotViaToken, _ = ctxutil.Get[bool](c, "downloadToken")
+		c.Status(http.StatusOK)
+	}
+	engine.GET("/api/v0/files/download", download)
+	engine.GET("/api/v0/files/download-archive-file", download)
+	issue := func() string {
+		result, err := deps.DownloadTokens().IssueToken(downloadutil.IssueTokenParams{
+			Username: "admin", UserID: user.ID, FilePath: "users/video.mp4",
+		})
+		if err != nil {
+			t.Fatalf("IssueToken: %v", err)
+		}
+		return result.Token
+	}
+	get := func(url string) int {
+		return doMiddlewareReq(engine, httptest.NewRequest(http.MethodGet, url, nil)).Code
+	}
+
+	url := "/api/v0/files/download?filePath=users/video.mp4&downloadToken=" + issue()
+	if code := get(url); code != http.StatusOK {
+		t.Fatalf("first download: got %d, want 200", code)
+	}
+	if gotUser != "admin" || !gotViaToken {
+		t.Errorf(`username = %q, downloadToken = %v; want "admin", true`, gotUser, gotViaToken)
+	}
+	if code := get(url); code != http.StatusUnauthorized {
+		t.Errorf("reused token: got %d, want 401", code)
+	}
+	if code := get("/api/v0/files/download?filePath=users/other.mp4&downloadToken=" + issue()); code != http.StatusUnauthorized {
+		t.Errorf("other path: got %d, want 401", code)
+	}
+	if code := get("/api/v0/files/download-archive-file?filePath=users/video.mp4&entryPath=a.txt&downloadToken=" + issue()); code != http.StatusOK {
+		t.Errorf("archive entry: got %d, want 200", code)
+	}
+	if code := get("/api/v0/protected?downloadToken=" + issue()); code != http.StatusUnauthorized {
+		t.Errorf("other route: got %d, want 401", code)
 	}
 }

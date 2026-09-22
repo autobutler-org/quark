@@ -24,6 +24,7 @@ import (
 // @Param filePath query string false "File path to download"
 // @Param serial query string false "Device serial number to filter by"
 // @Param format query string false "Output format conversion (e.g. 'jpeg' to convert HEIC to JPEG)"
+// @Param downloadToken query string false "Single-use token from POST /files/download-token, for a browser link that cannot send an Authorization header. The response is then always an attachment."
 // @Success 200 {file} file
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
@@ -86,7 +87,7 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 		// Before the first byte of the archive: writing the zip commits the
 		// headers, so a Content-Disposition set afterwards never reached the
 		// client and the download landed with no .zip extension.
-		c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", opened.FileName))
+		c.Writer.Header().Set("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("attachment; filename=%q", opened.FileName)))
 		c.Writer.Header().Set("Content-Type", "application/octet-stream")
 		if err := fileutil.ZipDir(c.Writer, opened.FullPath, strings.TrimSuffix(opened.FileName, ".zip")); err != nil {
 			return serverutil.InternalServerError(err)
@@ -118,7 +119,7 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 			// image on the heap per concurrent request (#1723). The trade is
 			// that a mid-encode failure arrives after the headers, so it can
 			// only be logged — same as the branch below.
-			c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", opened.FileName))
+			c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))
 			c.Header("Content-Type", "image/jpeg")
 			c.Status(http.StatusOK)
 			if err := fileutil.WriteRawJPEG(c.Writer, opened.FullPath); err != nil {
@@ -132,7 +133,7 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 			return serverutil.InternalServerError(err)
 		}
 
-		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", opened.FileName))
+		c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))
 		c.Header("Content-Type", "image/jpeg")
 		c.Status(http.StatusOK)
 		if err := fileutil.EncodeJPEG(c.Writer, img); err != nil {
@@ -143,7 +144,7 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 	}
 
 	opened.File.Close() // close before c.File re-opens it
-	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", opened.FileName))
+	c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))
 	c.Header("Content-Type", opened.ContentType)
 	c.File(opened.FullPath)
 	return nil // response written directly via c.File
