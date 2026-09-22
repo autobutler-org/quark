@@ -33,6 +33,9 @@ lib/widgets/
     add_to_album_sheet.dart     AddToAlbumSheet host for a photo in an album
                                 view: calls AlbumService, shows snack bars
   settings/
+    repair_installation_section.dart
+                                hosts RepairController: the repair button and
+                                its confirmation, or the one-time install step
     ssh_access_section.dart     hosts SshAccessPanel around SshAccessController,
                                 with its confirmation, key and password dialogs
   sharing/
