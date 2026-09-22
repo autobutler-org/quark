@@ -24,7 +24,7 @@ import (
 // @Param filePath query string false "File path to download"
 // @Param serial query string false "Device serial number to filter by"
 // @Param format query string false "Output format conversion (e.g. 'jpeg' to convert HEIC to JPEG)"
-// @Param downloadToken query string false "Single-use token from POST /files/download-token, for a browser link that cannot send an Authorization header. The response is then always an attachment."
+// @Param downloadToken query string false "Token from POST /files/download-token, for a browser link that cannot send an Authorization header. It is good for one download: the first request, then retries that resume it with a Range header or start it over without one, until the file is delivered or 10 minutes pass with no request. The response is then always an attachment."
 // @Success 200 {file} file
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
@@ -90,7 +90,7 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 		c.Writer.Header().Set("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("attachment; filename=%q", opened.FileName)))
 		c.Writer.Header().Set("Content-Type", "application/octet-stream")
 		if err := fileutil.ZipDir(c.Writer, opened.FullPath, strings.TrimSuffix(opened.FileName, ".zip")); err != nil {
-			return serverutil.InternalServerError(err)
+			return zipError(c, opened.FullPath, err)
 		}
 		return nil // response written directly to writer
 

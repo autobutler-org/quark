@@ -1,11 +1,13 @@
 package middleware_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
@@ -530,5 +532,134 @@ func TestRequireAuth_DownloadTokenGrantsOneDownload(t *testing.T) {
 	}
 	if code := get("/api/v0/protected?downloadToken=" + issue()); code != http.StatusUnauthorized {
 		t.Errorf("other route: got %d, want 401", code)
+	}
+}
+
+// TestRequireAuth_DownloadTokenResumesAnInterruptedDownload is #2270: the
+// browser loses its connection partway through a file and retries with a
+// Range header and the same token. The retry used to get a 401 because the
+// first request had spent the token; now it resumes, and the token ends once
+// the file has been delivered.
+func TestRequireAuth_DownloadTokenResumesAnInterruptedDownload(t *testing.T) {
+	sqlDB, queries := newMiddlewareTestDB(t)
+	ctx := context.Background()
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
+		Username: "admin",
+		Password: "SecurePass1!",
+	}); err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	user, err := queries.GetUserByUsername(ctx, "admin")
+	if err != nil {
+		t.Fatalf("GetUserByUsername: %v", err)
+	}
+
+	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{Db: sqlDB, Queries: queries})
+	engine := newMiddlewareEngine(t, deps)
+	content := []byte("0123456789")
+	// A request without Range stands in for a connection that dropped after
+	// four bytes; a Range request is served the way the download route
+	// serves a file.
+	engine.GET("/api/v0/files/download", func(c *gin.Context) {
+		if c.GetHeader("Range") == "" {
+			c.Header("Accept-Ranges", "bytes")
+			c.Header("Content-Length", "10")
+			c.Status(http.StatusOK)
+			_, _ = c.Writer.Write(content[:4])
+			return
+		}
+		http.ServeContent(c.Writer, c.Request, "video.mp4", time.Time{}, bytes.NewReader(content))
+	})
+	issue := func() string {
+		result, err := deps.DownloadTokens().IssueToken(downloadutil.IssueTokenParams{
+			Username: "admin", UserID: user.ID, FilePath: "users/video.mp4",
+		})
+		if err != nil {
+			t.Fatalf("IssueToken: %v", err)
+		}
+		return result.Token
+	}
+	get := func(url, rangeHeader string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		if rangeHeader != "" {
+			req.Header.Set("Range", rangeHeader)
+		}
+		return doMiddlewareReq(engine, req)
+	}
+
+	url := "/api/v0/files/download?filePath=users/video.mp4&downloadToken=" + issue()
+	if w := get(url, ""); w.Code != http.StatusOK {
+		t.Fatalf("first request: got %d, want 200", w.Code)
+	}
+	w := get(url, "bytes=4-")
+	if w.Code != http.StatusPartialContent || w.Body.String() != "456789" {
+		t.Fatalf("Range retry: got %d %q, want 206 %q", w.Code, w.Body.String(), "456789")
+	}
+	if w := get(url, "bytes=4-"); w.Code != http.StatusUnauthorized {
+		t.Errorf("retry after the file completed: got %d, want 401", w.Code)
+	}
+
+	url = "/api/v0/files/download?filePath=users/video.mp4&downloadToken=" + issue()
+	if w := get(url, ""); w.Code != http.StatusOK {
+		t.Fatalf("first request: got %d, want 200", w.Code)
+	}
+	// Firefox's Cancel then Retry discards the partial file and asks again
+	// with no Range: the download restarts from zero.
+	w = get(url, "")
+	if w.Code != http.StatusOK || w.Body.String() != "0123" {
+		t.Errorf("retry without Range: got %d %q, want 200 %q", w.Code, w.Body.String(), "0123")
+	}
+}
+
+// TestRequireAuth_DownloadTokenRestartsAnInterruptedZip verifies the handler's
+// "downloadInterrupted" mark reaches the token store: a folder zip cut off
+// partway keeps its token, so Firefox's plain Retry gets a fresh zip, while a
+// zip that completes still ends it.
+func TestRequireAuth_DownloadTokenRestartsAnInterruptedZip(t *testing.T) {
+	sqlDB, queries := newMiddlewareTestDB(t)
+	ctx := context.Background()
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
+		Username: "admin",
+		Password: "SecurePass1!",
+	}); err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	user, err := queries.GetUserByUsername(ctx, "admin")
+	if err != nil {
+		t.Fatalf("GetUserByUsername: %v", err)
+	}
+
+	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{Db: sqlDB, Queries: queries})
+	engine := newMiddlewareEngine(t, deps)
+	interrupt := true
+	// A zip: no Accept-Ranges, no Content-Length. The first response stands
+	// in for one whose client went away partway.
+	engine.GET("/api/v0/files/download", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+		_, _ = c.Writer.Write([]byte("PK"))
+		if interrupt {
+			ctxutil.With(c, "downloadInterrupted", true)
+		}
+	})
+	result, err := deps.DownloadTokens().IssueToken(downloadutil.IssueTokenParams{
+		Username: "admin", UserID: user.ID, FilePath: "users/big",
+	})
+	if err != nil {
+		t.Fatalf("IssueToken: %v", err)
+	}
+	get := func() int {
+		url := "/api/v0/files/download?filePath=users/big&downloadToken=" + result.Token
+		return doMiddlewareReq(engine, httptest.NewRequest(http.MethodGet, url, nil)).Code
+	}
+
+	if code := get(); code != http.StatusOK {
+		t.Fatalf("first request: got %d, want 200", code)
+	}
+	interrupt = false
+	if code := get(); code != http.StatusOK {
+		t.Fatalf("retry after an interrupted zip: got %d, want 200", code)
+	}
+	if code := get(); code != http.StatusUnauthorized {
+		t.Errorf("retry after a complete zip: got %d, want 401", code)
 	}
 }

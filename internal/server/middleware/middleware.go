@@ -90,7 +90,7 @@ func queryTokenAllowed(path string) bool {
 	return false
 }
 
-// downloadTokenPaths are the routes that accept a single-use ?downloadToken=
+// downloadTokenPaths are the routes that accept a ?downloadToken=
 // in place of a session. The web client sends the browser there with a plain
 // link, which cannot carry an Authorization header, so the browser streams the
 // file to disk instead of the app holding it in memory (#2226). The token is
@@ -148,7 +148,7 @@ func trackDevice(deps deputil.Dependencies) gin.HandlerFunc {
 //  1. Bearer token (Authorization: Bearer <token>)
 //  2. Session cookie
 //  3. Query parameter (?token=)
-//  4. Single-use download token (?downloadToken=, downloadTokenPaths only)
+//  4. Download token (?downloadToken=, downloadTokenPaths only)
 //  5. HTTP Basic Auth (Authorization: Basic <base64>)
 //
 // Exempt paths (setup, login, recover, status) are always allowed through.
@@ -232,16 +232,29 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 			}
 		}
 
-		// A download token is spent on first presentation, and only matches the
-		// filePath and serial it was issued for. The handler is told, so it can
-		// send the file as an attachment.
+		// A download token is good for one download of the filePath and serial
+		// it was issued for: the first request, then retries that resume it with
+		// Range or start it over (#2270). The store is told what each response delivered, so it can end
+		// the token once the file is complete. The handler is told too, so it
+		// can send the file as an attachment.
 		if dt := c.Query("downloadToken"); dt != "" && downloadTokenPaths[path] {
-			consumed, err := deps.DownloadTokens().ConsumeToken(downloadutil.ConsumeTokenParams{
+			tokens := deps.DownloadTokens()
+			consumed, err := tokens.ConsumeToken(downloadutil.ConsumeTokenParams{
 				Token:    dt,
 				FilePath: c.Query("filePath"),
 				Serial:   c.Query("serial"),
 			})
 			if err == nil {
+				defer func() {
+					interrupted, _ := ctxutil.Get[bool](c, "downloadInterrupted")
+					tokens.ReleaseToken(downloadutil.ReleaseTokenParams{
+						Token:       dt,
+						Status:      c.Writer.Status(),
+						Header:      c.Writer.Header(),
+						Written:     int64(max(c.Writer.Size(), 0)),
+						Interrupted: interrupted,
+					})
+				}()
 				c = ctxutil.With(c, "downloadToken", true)
 				authenticated(c, db.Queries, consumed.Username, consumed.UserID)
 				return

@@ -1,6 +1,14 @@
 package serverutil
 
-import "testing"
+import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+)
 
 func TestRedactQuery(t *testing.T) {
 	cases := []struct {
@@ -19,6 +27,11 @@ func TestRedactQuery(t *testing.T) {
 		{"a percent-encoded key", "/x?%74%6F%6B%65%6E=hunter2", "/x?%74%6F%6B%65%6E=REDACTED"},
 		{"a parameter that only starts with token", "/x?tokens=1", "/x?tokens=1"},
 		{"a token value on another key", "/x?q=token", "/x?q=token"},
+		{
+			"a download token",
+			"/api/v0/files/download?filePath=big&downloadToken=I2cAyRit_x",
+			"/api/v0/files/download?filePath=big&downloadToken=REDACTED",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -26,5 +39,30 @@ func TestRedactQuery(t *testing.T) {
 				t.Errorf("redactQuery(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestRecoveryRedactsTheRequestLine verifies a recovered panic's log, which
+// gin writes with a dump of the request, carries no credential from the URL.
+func TestRecoveryRedactsTheRequestLine(t *testing.T) {
+	gin.SetMode(gin.DebugMode)
+	t.Cleanup(func() { gin.SetMode(gin.TestMode) })
+	var out bytes.Buffer
+	engine := gin.New()
+	engine.Use(Recovery(&out))
+	engine.GET("/api/v0/files/download", func(*gin.Context) { panic("boom") })
+
+	engine.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet,
+		"/api/v0/files/download?filePath=big&downloadToken=secret1&token=secret2", nil))
+
+	logged := out.String()
+	if !strings.Contains(logged, "boom") {
+		t.Fatalf("panic not logged: %q", logged)
+	}
+	if strings.Contains(logged, "secret") {
+		t.Errorf("credential in the recovery log: %q", logged)
+	}
+	if !strings.Contains(logged, "/api/v0/files/download?filePath=big&downloadToken=REDACTED&token=REDACTED HTTP/1.1") {
+		t.Errorf("request line not redacted in place: %q", logged)
 	}
 }

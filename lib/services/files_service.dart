@@ -609,7 +609,8 @@ class FilesService with AuthenticatedService {
       // The browser saves the file itself, streaming it to disk. Holding the
       // response here instead ran the tab out of memory near a gigabyte
       // (#2226). A link cannot send the Authorization header, so it carries a
-      // single-use token issued for this path and serial.
+      // token issued for this path and serial. The token lasts for one
+      // download, so the browser can resume it with a Range request (#2270).
       final token = await _createDownloadToken(uri.queryParameters);
       return web_download.saveUrlForDownload(
         uri.replace(

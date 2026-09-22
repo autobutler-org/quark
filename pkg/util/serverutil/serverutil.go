@@ -7,6 +7,7 @@ package serverutil
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -166,6 +167,14 @@ func RegisterRouterWithGroup(group *gin.RouterGroup, router Router) {
 // put a live session in the log (#2152).
 func AccessLogger() gin.HandlerFunc {
 	return gin.LoggerWithConfig(gin.LoggerConfig{Formatter: redactedLogFormatter})
+}
+
+// Recovery is gin.Recovery writing to out, with credentials taken out of the
+// request dump gin logs alongside a recovered panic. That dump starts with the
+// request line, query string and all, so ?token= and ?downloadToken= would
+// otherwise land in the log.
+func Recovery(out io.Writer) gin.HandlerFunc {
+	return gin.RecoveryWithWriter(redactingWriter{out: out})
 }
 
 func RegisterRouter(engine *gin.Engine, router Router) {
