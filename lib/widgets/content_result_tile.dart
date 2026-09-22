@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/content_search_service.dart';
-import 'package:quark_icons/quark_icons.dart';
+import 'package:quark/widgets/doc_sheet_tile.dart';
 
-/// One full-text search hit in the docs or sheets list.
+/// One full-text search hit in the docs or sheets list, drawn as the same
+/// [DocSheetTile] a filename match gets (#2272).
 ///
 /// The hit's own extension decides its icon and which editor it opens, not the
 /// page showing it: a .qdoc hit on the Sheets page still opens the doc editor
@@ -12,52 +13,26 @@ import 'package:quark_icons/quark_icons.dart';
 class ContentResultTile extends StatelessWidget {
   final ContentSearchResult result;
 
-  const ContentResultTile({required this.result, super.key});
+  /// The hit carries only a serial, so the body supplies the device's name.
+  final String deviceName;
+  final bool showDevice;
 
-  /// Whether [relPath] names a spreadsheet rather than a document.
-  static bool isSheet(String relPath) =>
-      relPath.toLowerCase().endsWith('.qsheet');
-
-  /// Whether [relPath] names a document.
-  static bool isDoc(String relPath) => relPath.toLowerCase().endsWith('.qdoc');
+  const ContentResultTile({
+    required this.result,
+    required this.deviceName,
+    required this.showDevice,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final sheet = isSheet(result.relPath);
-
-    return ListTile(
-      leading: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: colorScheme.tertiaryContainer,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(
-          sheet
-              ? QuarkIcons.table_chart_outlined
-              : QuarkIcons.description_outlined,
-          size: 18,
-          color: colorScheme.onTertiaryContainer,
-        ),
-      ),
-      title: Text(
-        result.filename,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        result.plainSnippet,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: colorScheme.onSurface.withValues(alpha: 0.6),
-          fontSize: 12,
-        ),
-      ),
+    return DocSheetTile(
+      relPath: result.relPath,
+      deviceName: deviceName,
+      showDevice: showDevice,
+      snippet: result.plainSnippet,
       onTap: () => context.push(
-        sheet
+        DocSheetTile.isSheet(result.relPath)
             ? AppRoutes.sheetFile(result.relPath, serial: result.deviceSerial)
             : AppRoutes.docFile(result.relPath, serial: result.deviceSerial),
       ),

@@ -7,8 +7,7 @@ import 'package:quark/services/content_search_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/content_result_tile.dart';
-import 'package:quark/widgets/sheets/sheet_tile.dart';
-import 'package:quark/widgets/docs/doc_tile.dart';
+import 'package:quark/widgets/doc_sheet_tile.dart';
 import 'package:quark/widgets/search_section_header.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -97,17 +96,30 @@ class DocsBody extends StatelessWidget {
     // list read the same lists so they cannot disagree about whether there is
     // anything to show.
     final isSearching = searchQuery.isNotEmpty;
-    final ownContent = isSearching
-        ? contentResults
-              .where((r) => ContentResultTile.isDoc(r.relPath))
-              .toList()
-        : const <ContentSearchResult>[];
-    final otherContent = isSearching
-        ? contentResults
-              .where((r) => ContentResultTile.isSheet(r.relPath))
-              .toList()
-        : const <ContentSearchResult>[];
     final otherFiles = isSearching ? sheetFiles : const <FileNode>[];
+    // A file that matched by name and by content is listed once, in the
+    // filename rows, carrying the content hit's snippet (#2272).
+    final listed = {
+      for (final node in [...files, ...otherFiles])
+        DocSheetTile.fileKey(node.deviceSerial, node.apiPath),
+    };
+    final hits = isSearching ? contentResults : const <ContentSearchResult>[];
+    final snippets = {
+      for (final r in hits)
+        DocSheetTile.fileKey(r.deviceSerial, r.relPath): r.plainSnippet,
+    };
+    final contentOnly = hits
+        .where(
+          (r) =>
+              !listed.contains(DocSheetTile.fileKey(r.deviceSerial, r.relPath)),
+        )
+        .toList();
+    final ownContent = contentOnly
+        .where((r) => DocSheetTile.isDoc(r.relPath))
+        .toList();
+    final otherContent = contentOnly
+        .where((r) => DocSheetTile.isSheet(r.relPath))
+        .toList();
     final hasOther = otherFiles.isNotEmpty || otherContent.isNotEmpty;
 
     if (files.isEmpty && ownContent.isEmpty && !hasOther) {
@@ -154,24 +166,48 @@ class DocsBody extends StatelessWidget {
       );
     }
 
+    // The device name only tells rows apart when they span more than one
+    // device; on a single-storage Quark it would repeat on every row (#2272).
+    final serials = {
+      for (final node in [...files, ...otherFiles]) node.deviceSerial,
+      for (final r in [...ownContent, ...otherContent]) r.deviceSerial,
+    };
+    final showDevice = serials.length > 1;
+    // A content hit carries only a serial, so its device name comes from a
+    // filename match on the same device; with none, the row shows the folder.
+    final deviceNames = {
+      for (final node in [...files, ...otherFiles])
+        node.deviceSerial: node.deviceName,
+    };
+    DocSheetTile nodeTile(FileNode node, VoidCallback onTap) => DocSheetTile(
+      relPath: node.apiPath,
+      deviceName: node.deviceName,
+      showDevice: showDevice,
+      snippet: snippets[DocSheetTile.fileKey(node.deviceSerial, node.apiPath)],
+      onTap: onTap,
+    );
+    ContentResultTile hitTile(ContentSearchResult r) => ContentResultTile(
+      result: r,
+      deviceName: deviceNames[r.deviceSerial] ?? '',
+      showDevice: showDevice,
+    );
+
     // Built up front but laid out lazily by the builder.
     final items = <Widget>[
-      for (final node in files)
-        DocTile(node: node, onTap: () => onOpenDoc(node)),
+      for (final node in files) nodeTile(node, () => onOpenDoc(node)),
       if (ownContent.isNotEmpty)
         const SearchSectionHeader(
           icon: QuarkIcons.search_rounded,
           label: 'Content matches',
         ),
-      for (final result in ownContent) ContentResultTile(result: result),
+      for (final result in ownContent) hitTile(result),
       if (hasOther)
         const SearchSectionHeader(
           icon: QuarkIcons.table_chart_outlined,
           label: 'In Sheets',
         ),
-      for (final node in otherFiles)
-        SheetTile(node: node, onTap: () => onOpenSheet(node)),
-      for (final result in otherContent) ContentResultTile(result: result),
+      for (final node in otherFiles) nodeTile(node, () => onOpenSheet(node)),
+      for (final result in otherContent) hitTile(result),
     ];
 
     return ListView.builder(

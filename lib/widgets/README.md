@@ -43,6 +43,8 @@ lib/widgets/
                                 formats loader
   content_result_tile.dart      one docs/sheets content search hit; pushes the
                                 editor its extension names
+  doc_sheet_tile.dart           one doc or sheet row, shared by filename and
+                                content matches so they look alike (#2272)
   host_dialog.dart              edits AppSettings hosts
   host_manager.dart             edits AppSettings hosts
   quark_connect_form.dart       calls the connection services
