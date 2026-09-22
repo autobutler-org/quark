@@ -29,6 +29,11 @@ class _SheetsPageState extends State<SheetsPage>
     with SafeSetStateMixin, WidgetsBindingObserver, AutoRefreshMixin {
   List<FileNode> _files = [];
   List<FileNode> _filtered = [];
+
+  /// Every doc, so a search can list the ones that match in an
+  /// "In Docs" section (#2259).
+  List<FileNode> _docs = [];
+  List<FileNode> _docsFiltered = [];
   List<ContentSearchResult> _contentResults = [];
   bool _contentSearching = false;
 
@@ -54,9 +59,13 @@ class _SheetsPageState extends State<SheetsPage>
   @override
   Future<void> refresh() async {
     try {
-      final files = await FilesService.getFilesByType('qsheet');
+      final results = await Future.wait([
+        FilesService.getFilesByType('qsheet'),
+        FilesService.getFilesByType('qdoc'),
+      ]);
       setStateSafely(() {
-        _files = files;
+        _files = results[0];
+        _docs = results[1];
         _applyFilter();
         // Cleared on success rather than up front, so a poll against an
         // unreachable Quark does not blink the error view away and back.
@@ -92,23 +101,26 @@ class _SheetsPageState extends State<SheetsPage>
 
   void _applyFilter() {
     final query = _searchController.text.trim().toLowerCase();
+    bool matches(FileNode f) => f.matchesSearch(query);
     setStateSafely(() {
       _filtered = query.isEmpty
           ? List.of(_files)
-          : _files
-                .where(
-                  (f) =>
-                      f.name.toLowerCase().contains(query) ||
-                      f.dirPath.toLowerCase().contains(query) ||
-                      f.deviceName.toLowerCase().contains(query),
-                )
-                .toList();
+          : _files.where(matches).toList();
+      // The other type only appears as search results, never as the library.
+      _docsFiltered = query.isEmpty ? [] : _docs.where(matches).toList();
     });
   }
 
   Future<void> _openSheet(FileNode node) async {
     await context.push(
       AppRoutes.sheetFile(node.apiPath, serial: node.deviceSerial),
+    );
+    manualRefresh();
+  }
+
+  Future<void> _openDoc(FileNode node) async {
+    await context.push(
+      AppRoutes.docFile(node.apiPath, serial: node.deviceSerial),
     );
     manualRefresh();
   }
@@ -175,12 +187,14 @@ class _SheetsPageState extends State<SheetsPage>
               loading: isInitialLoad,
               error: _error,
               files: _filtered,
+              docFiles: _docsFiltered,
               contentResults: _contentResults,
               contentSearching: _contentSearching,
               searchQuery: _searchController.text,
               onRetry: manualRefresh,
               onCreateNew: _createNewSheet,
               onOpenSheet: _openSheet,
+              onOpenDoc: _openDoc,
             ),
           ),
         ],

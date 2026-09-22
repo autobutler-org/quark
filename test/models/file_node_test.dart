@@ -160,4 +160,27 @@ void main() {
       expect(node.apiPath, 'deep/path');
     });
   });
+
+  // Docs and Sheets both filter through matchesSearch. A doc on the device
+  // named "Data" used to match every "data" search (#2259).
+  group('FileNode.matchesSearch', () {
+    const doc = FileNode(
+      name: 'test.qdoc',
+      size: 1,
+      isDir: false,
+      deviceName: 'Data',
+      devicePath: '/quark/data',
+      deviceSerial: '',
+      dirPath: 'reports/test.qdoc',
+    );
+
+    test('matches the name and the folder path', () {
+      expect(doc.matchesSearch('test'), isTrue);
+      expect(doc.matchesSearch('reports'), isTrue);
+    });
+
+    test('does not match the device name', () {
+      expect(doc.matchesSearch('data'), isFalse);
+    });
+  });
 }
