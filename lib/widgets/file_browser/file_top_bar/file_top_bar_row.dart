@@ -61,13 +61,13 @@ class FileTopBarRow extends StatelessWidget {
           children: [
             QuarkBrandButton(label: 'Files', onTap: onOpenDrawer),
             const SizedBox(width: 16),
+            RefreshIconButton(isRefreshing: isRefreshing, onPressed: onRefresh),
+            const SizedBox(width: 8),
             FileTopBarNavButtons(
               navEnabled: navEnabled,
               currentPath: currentPath,
               rootPath: rootPath,
-              isRefreshing: isRefreshing,
               onGoUp: onGoUp,
-              onRefresh: onRefresh,
             ),
             const SizedBox(width: 8),
             // Middle area: expands to hold the search field when active,

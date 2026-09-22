@@ -57,13 +57,9 @@ class _HealthPageState extends State<HealthPage>
       appBar: QuarkAppBar(
         label: 'Health',
         icon: QuarkIcons.monitor_heart_outlined,
-        actions: [
-          RefreshIconButton(
-            isRefreshing: isRefreshing,
-            onPressed: manualRefresh,
-          ),
-          const AppThemeToggle(),
-        ],
+        onRefresh: manualRefresh,
+        isRefreshing: isRefreshing,
+        actions: const [AppThemeToggle()],
       ),
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.health),
       body: HealthBody(

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/vault_service.dart';
+import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/quark_widget.dart';
@@ -30,9 +31,9 @@ class VaultPage extends StatefulWidget {
   State<VaultPage> createState() => _VaultPageState();
 }
 
-class _VaultPageState extends State<VaultPage> {
+class _VaultPageState extends State<VaultPage>
+    with WidgetsBindingObserver, AutoRefreshMixin {
   VaultStatus? _status;
-  bool _loading = true;
 
   /// The thrown object, not its message — the render decides whether it means
   /// "your Quark is unreachable" or "the request failed" (#1637). Distinct
@@ -54,12 +55,6 @@ class _VaultPageState extends State<VaultPage> {
   bool _unlocking = false;
 
   @override
-  void initState() {
-    super.initState();
-    _loadStatus();
-  }
-
-  @override
   void dispose() {
     _setupPasswordCtrl.dispose();
     _setupConfirmCtrl.dispose();
@@ -67,25 +62,28 @@ class _VaultPageState extends State<VaultPage> {
     super.dispose();
   }
 
+  /// The whole vault state, in the order the page needs it: the status picks
+  /// the view, and an unlocked vault's entries follow. The app bar's refresh
+  /// comes through here rather than straight to [_loadEntries], so a vault
+  /// that locked itself since the last look is noticed instead of listed.
+  @override
+  Future<void> refresh() => _loadStatus();
+
   Future<void> _loadStatus() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
     try {
       final status = await VaultService.getStatus();
+      if (!mounted) return;
+      final loadsEntries = status.initialized && !status.locked;
       setState(() {
         _status = status;
-        _loading = false;
+        // Cleared on success rather than up front, so a poll against an
+        // unreachable Quark does not blink the error view away and back.
+        if (!loadsEntries) _error = null;
       });
-      if (status.initialized && !status.locked) {
-        _loadEntries();
-      }
+      if (loadsEntries) await _loadEntries();
     } catch (e) {
-      setState(() {
-        _loading = false;
-        _error = e;
-      });
+      if (!mounted) return;
+      setState(() => _error = e);
     }
   }
 
@@ -95,11 +93,14 @@ class _VaultPageState extends State<VaultPage> {
         VaultService.listEntries(),
         VaultService.listFolders(),
       ]);
+      if (!mounted) return;
       setState(() {
         _entries = results[0] as List<VaultEntryItem>;
         _folders = results[1] as List<VaultFolder>;
+        _error = null;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = e);
     }
   }
@@ -124,12 +125,16 @@ class _VaultPageState extends State<VaultPage> {
 
   @override
   Widget build(BuildContext context) {
+    final unlocked = _status?.initialized == true && !(_status?.locked ?? true);
     return Scaffold(
       appBar: QuarkAppBar(
         label: 'Vault',
         icon: QuarkIcons.lock_outline,
+        // A locked or uninitialized vault has nothing on screen to reload.
+        onRefresh: unlocked ? manualRefresh : null,
+        isRefreshing: isRefreshing,
         actions: [
-          if (_status?.initialized == true && !(_status?.locked ?? true)) ...[
+          if (unlocked) ...[
             IconButton(
               icon: const Icon(Icons.add),
               tooltip: 'New entry',
@@ -139,11 +144,6 @@ class _VaultPageState extends State<VaultPage> {
               icon: const Icon(QuarkIcons.lock_open),
               tooltip: 'Lock vault',
               onPressed: _lockVault,
-            ),
-            IconButton(
-              icon: const Icon(QuarkIcons.refresh),
-              tooltip: 'Refresh',
-              onPressed: _loadEntries,
             ),
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert),
@@ -194,9 +194,7 @@ class _VaultPageState extends State<VaultPage> {
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.vault),
       body: _buildBody(),
       floatingActionButton:
-          (_status?.initialized == true &&
-              !(_status?.locked ?? true) &&
-              MediaQuery.of(context).size.width < 860)
+          (unlocked && MediaQuery.of(context).size.width < 860)
           ? FloatingActionButton(
               onPressed: () => _showEntryEditor(context),
               child: const Icon(QuarkIcons.add),
@@ -208,7 +206,7 @@ class _VaultPageState extends State<VaultPage> {
   /// Picks the view for the current status. Every branch is one widget, so
   /// there is no subtree hiding in here.
   Widget _buildBody() {
-    if (_loading) {
+    if (isInitialLoad) {
       return const Center(child: CircularProgressIndicator());
     }
     final error = _error;

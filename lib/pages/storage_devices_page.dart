@@ -325,13 +325,9 @@ class _StorageDevicesPageState extends State<StorageDevicesPage>
       appBar: QuarkAppBar(
         label: 'Devices',
         icon: QuarkIcons.device_hub_outlined,
-        actions: [
-          RefreshIconButton(
-            isRefreshing: isRefreshing,
-            onPressed: manualRefresh,
-          ),
-          const AppThemeToggle(),
-        ],
+        onRefresh: manualRefresh,
+        isRefreshing: isRefreshing,
+        actions: const [AppThemeToggle()],
       ),
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.devices),
       // Every drive action is admin-only on the Quark (#1899), so anyone else

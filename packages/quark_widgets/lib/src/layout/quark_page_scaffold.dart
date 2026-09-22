@@ -9,24 +9,25 @@ import 'quark_app_bar.dart';
 /// ended up with eight slightly different ideas of what a page is. The bar,
 /// the drawer slot, and the bottom inset are decided here once.
 ///
-/// The default bar is a [QuarkAppBar] built from [title], [icon], and
-/// [actions]. A page that swaps its bar out for a mode of its own, a selection
-/// bar for instance, passes [appBar] instead, and [title], [icon], and
-/// [actions] are then unused.
+/// The default bar is a [QuarkAppBar] built from [title], [icon], [actions],
+/// and the refresh slot ([onRefresh] and [isRefreshing]). A page that swaps
+/// its bar out for a mode of its own, a selection bar for instance, passes
+/// [appBar] instead, and all of those are then unused.
 ///
 /// [bottomBar] is laid out inside a [SafeArea], so a bar handed to it clears
 /// the home indicator without the caller thinking about insets. The body is
 /// left alone: its content scrolls under the system bars, which is what a
 /// photo grid wants.
 ///
-/// Key prefixes: `brand_button`, from the [QuarkAppBar] it builds. The
-/// scaffold has nothing tappable of its own.
+/// Key prefixes: `brand_button` and `refresh_button`, from the [QuarkAppBar]
+/// it builds. The scaffold has nothing tappable of its own.
 ///
 /// ```dart
 /// QuarkPageScaffold(
 ///   title: 'Photos',
 ///   icon: QuarkIcons.photo_library_outlined,
-///   actions: [RefreshIconButton(isRefreshing: false, onPressed: reload)],
+///   onRefresh: reload,
+///   isRefreshing: false,
 ///   drawer: QuarkDrawer(activeSection: QuarkDrawerSection.photos),
 ///   bottomBar: PhotoSelectionBar(selectedCount: 3, ...),
 ///   body: QuarkSplitView(sidebar: sidebar, slivers: slivers),
@@ -39,6 +40,8 @@ class QuarkPageScaffold extends StatelessWidget {
     required this.icon,
     required this.body,
     this.actions = const [],
+    this.onRefresh,
+    this.isRefreshing = false,
     this.drawer,
     this.bottomBar,
     this.appBar,
@@ -54,8 +57,16 @@ class QuarkPageScaffold extends StatelessWidget {
   /// The page content, filling everything between the bars.
   final Widget body;
 
-  /// Trailing controls for the default app bar, rendered in order.
+  /// Trailing controls for the default app bar, rendered in order. Never a
+  /// refresh button — that is [onRefresh].
   final List<Widget> actions;
+
+  /// Reloads the page, rendered by the default app bar beside its brand
+  /// button. Null leaves the slot out.
+  final VoidCallback? onRefresh;
+
+  /// Whether that reload is already running. Ignored when [onRefresh] is null.
+  final bool isRefreshing;
 
   /// The navigation drawer, opened by the brand button. Null leaves the page
   /// without one, and the brand button then does nothing.
@@ -66,13 +77,22 @@ class QuarkPageScaffold extends StatelessWidget {
   final Widget? bottomBar;
 
   /// Replaces the default [QuarkAppBar] entirely, for a page with a second
-  /// mode. Null builds the default bar from [title], [icon], and [actions].
+  /// mode. Null builds the default bar from [title], [icon], [actions], and
+  /// the refresh slot.
   final PreferredSizeWidget? appBar;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: appBar ?? QuarkAppBar(label: title, icon: icon, actions: actions),
+      appBar:
+          appBar ??
+          QuarkAppBar(
+            label: title,
+            icon: icon,
+            actions: actions,
+            onRefresh: onRefresh,
+            isRefreshing: isRefreshing,
+          ),
       drawer: drawer,
       body: body,
       bottomNavigationBar: bottomBar == null

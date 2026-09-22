@@ -43,13 +43,9 @@ class _JobsPageState extends State<JobsPage>
       builder: (context, _) => QuarkPageScaffold(
         title: 'Jobs',
         icon: QuarkIcons.pending_actions_outlined,
-        actions: [
-          RefreshIconButton(
-            isRefreshing: isRefreshing,
-            onPressed: manualRefresh,
-          ),
-          const AppThemeToggle(),
-        ],
+        onRefresh: manualRefresh,
+        isRefreshing: isRefreshing,
+        actions: const [AppThemeToggle()],
         drawer: const AppDrawer(activeSection: QuarkDrawerSection.jobs),
         body: JobList(
           items: controller.items,
