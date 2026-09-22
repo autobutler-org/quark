@@ -12,8 +12,13 @@ import '../theme/quark_tokens.dart';
 /// [AlbumItem.children], passing every input down, so a whole tree is one
 /// widget per root.
 ///
-/// Key prefixes: `album_tile_<id>` on the row and `album_expand_<id>` on the
-/// disclosure chevron, which is only rendered when the album has children.
+/// Give it [onMenu] and the row offers a menu three ways: a `more_vert`
+/// button at its end, a long press, and a right-click (#2261, #2262).
+///
+/// Key prefixes: `album_tile_<id>` on the row, `album_expand_<id>` on the
+/// disclosure chevron, which is only rendered when the album has children,
+/// and `album_menu_<id>` on the menu button, which is only rendered with
+/// [onMenu].
 ///
 /// ```dart
 /// AlbumTreeTile(
@@ -32,7 +37,7 @@ class AlbumTreeTile extends StatelessWidget {
     required this.expandedIds,
     required this.onSelected,
     required this.onToggleExpanded,
-    this.onLongPress,
+    this.onMenu,
     this.depth = 0,
     this.systemIcon,
     super.key,
@@ -57,9 +62,10 @@ class AlbumTreeTile extends StatelessWidget {
   /// or removes it from [expandedIds].
   final ValueChanged<int> onToggleExpanded;
 
-  /// Called with the album that was long-pressed, for a context menu. Null
-  /// leaves long press unhandled, which is what system albums want.
-  final ValueChanged<AlbumItem>? onLongPress;
+  /// Called with the album whose menu was asked for: its `more_vert` button
+  /// tapped, its row long-pressed, or its row right-clicked. Null leaves out
+  /// the button and both gestures, which is what system albums want.
+  final ValueChanged<AlbumItem>? onMenu;
 
   /// How deep this row sits in the tree, which sets its indent. Callers pass
   /// zero for a root; the tile increments it for its own children.
@@ -78,7 +84,8 @@ class AlbumTreeTile extends StatelessWidget {
     final isExpanded = expandedIds.contains(album.id);
     final indent = depth * tokens.spacingMd;
     final radius = BorderRadius.circular(tokens.radiusMd);
-    final onLongPressAlbum = onLongPress;
+    final onMenu = this.onMenu;
+    final openMenu = onMenu == null ? null : () => onMenu(album);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,9 +94,8 @@ class AlbumTreeTile extends StatelessWidget {
         InkWell(
           key: ValueKey('album_tile_${album.id}'),
           onTap: () => onSelected(album),
-          onLongPress: onLongPressAlbum == null
-              ? null
-              : () => onLongPressAlbum(album),
+          onLongPress: openMenu,
+          onSecondaryTap: openMenu,
           borderRadius: radius,
           child: Container(
             decoration: BoxDecoration(
@@ -152,6 +158,22 @@ class AlbumTreeTile extends StatelessWidget {
                       color: colorScheme.onSurface.withValues(alpha: 0.4),
                     ),
                   ),
+                if (openMenu != null)
+                  IconButton(
+                    key: ValueKey('album_menu_${album.id}'),
+                    tooltip: 'Actions for ${album.name}',
+                    icon: const Icon(QuarkIcons.more_vert),
+                    iconSize: 16,
+                    // The row is 13px text; a default 48px button would
+                    // double its height.
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 24,
+                      height: 24,
+                    ),
+                    color: colorScheme.onSurfaceVariant,
+                    onPressed: openMenu,
+                  ),
               ],
             ),
           ),
@@ -164,7 +186,7 @@ class AlbumTreeTile extends StatelessWidget {
               expandedIds: expandedIds,
               onSelected: onSelected,
               onToggleExpanded: onToggleExpanded,
-              onLongPress: onLongPress,
+              onMenu: onMenu,
               depth: depth + 1,
             ),
       ],

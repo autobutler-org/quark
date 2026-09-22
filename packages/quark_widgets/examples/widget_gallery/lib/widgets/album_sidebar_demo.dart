@@ -51,8 +51,7 @@ class _AlbumSidebarDemoState extends State<AlbumSidebarDemo> {
         });
       },
       onCreateAlbum: () => widget.log('AlbumSidebar.onCreateAlbum'),
-      onAlbumLongPress: (a) =>
-          widget.log('AlbumSidebar.onAlbumLongPress(${a.name})'),
+      onAlbumMenu: (a) => widget.log('AlbumSidebar.onAlbumMenu(${a.name})'),
     );
   }
 }
