@@ -23,6 +23,8 @@ func (r *router) Routes() []*serverutil.Route {
 		deleteGroupRoute,
 		addGroupMemberRoute,
 		removeGroupMemberRoute,
+		getRepairStatusRoute,
+		repairInstallationRoute,
 	}
 }
 
@@ -50,4 +52,12 @@ type userSummary struct {
 	// Status is pending, active or disabled.
 	Status    string `json:"status"`
 	CreatedAt string `json:"createdAt"`
+}
+
+// repairStatusResponse is whether repairing the installation will work.
+type repairStatusResponse struct {
+	Available bool `json:"available"`
+	// Reason is why not, when available is false: unsupported_os,
+	// not_service or unit_outdated. Empty when available.
+	Reason string `json:"reason"`
 }

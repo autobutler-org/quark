@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
+	"github.com/autobutler-org/quark/pkg/util/repairutil"
 	"github.com/autobutler-org/quark/pkg/util/sshutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
@@ -29,6 +30,7 @@ type dependencies struct {
 	fileIndex      *storageutil.FileIndex
 	healthDatabase *db.DatabaseRaw
 	sshSystem      sshutil.System
+	repairSystem   repairutil.System
 	ioSemaphore    *iosemutil.Semaphore
 	storageService *storageutil.StorageService
 	uploadSessions *uploadutil.SessionStore
@@ -56,6 +58,15 @@ func (d *dependencies) SSHSystem() sshutil.System {
 
 func (d *dependencies) WithSSHSystem(system sshutil.System) Dependencies {
 	d.sshSystem = system
+	return d
+}
+
+func (d *dependencies) RepairSystem() repairutil.System {
+	return d.repairSystem
+}
+
+func (d *dependencies) WithRepairSystem(system repairutil.System) Dependencies {
+	d.repairSystem = system
 	return d
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
+	"github.com/autobutler-org/quark/pkg/util/repairutil"
 	"github.com/autobutler-org/quark/pkg/util/sshutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
@@ -31,6 +32,7 @@ type Dependencies interface {
 	HealthDatabase() *db.DatabaseRaw
 	IOSemaphore() *iosemutil.Semaphore
 	JobQueue() *jobutil.Queue
+	RepairSystem() repairutil.System
 	SSHSystem() sshutil.System
 	StorageService() *storageutil.StorageService
 	UploadSessions() *uploadutil.SessionStore
@@ -45,6 +47,7 @@ type Dependencies interface {
 	WithHealthDatabase(healthDatabase *db.DatabaseRaw) Dependencies
 	WithIOSemaphore(sem *iosemutil.Semaphore) Dependencies
 	WithJobQueue(q *jobutil.Queue) Dependencies
+	WithRepairSystem(system repairutil.System) Dependencies
 	WithSSHSystem(system sshutil.System) Dependencies
 	MetadataStore() vfs.MetadataStore
 	VFSRegistry() vfs.Registry
@@ -87,6 +90,9 @@ func NewDependencies() Dependencies {
 		// sshSystem is the real host. It runs nothing until an admin asks, and
 		// reports itself unavailable anywhere but the installed service (#2131).
 		sshSystem: sshutil.DefaultSystem(),
+		// repairSystem is the real host too: it reports itself unavailable
+		// anywhere but the installed service with a current unit (#2121).
+		repairSystem: repairutil.DefaultSystem(),
 	}
 }
 

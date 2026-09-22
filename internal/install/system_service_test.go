@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/autobutler-org/quark/pkg/util/repairutil"
 	"github.com/autobutler-org/quark/pkg/util/updateutil"
 )
 
@@ -31,6 +32,26 @@ func TestSystemdUnit_ReappliesSystemSetupBeforeEveryStart(t *testing.T) {
 	}
 	if startAt := strings.Index(systemdServiceContent, "ExecStart="); startAt < preAt {
 		t.Errorf("ExecStartPre should precede ExecStart:\n%s", systemdServiceContent)
+	}
+}
+
+// The admin repair button is only offered when the installed unit reapplies
+// the setup, so the unit this release writes must pass that check (#2121).
+func TestSystemdUnit_OffersRepair(t *testing.T) {
+	path := filepath.Join(t.TempDir(), systemdServiceName)
+	if err := os.WriteFile(path, []byte(systemdServiceContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	system := repairutil.System{
+		Service:  func() repairutil.Reason { return repairutil.ReasonNone },
+		UnitPath: path,
+	}
+	got, err := repairutil.GetStatus(repairutil.GetStatusParams{System: system})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Available {
+		t.Errorf("repair unavailable with the unit install writes: %q", got.Reason)
 	}
 }
 
