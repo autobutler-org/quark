@@ -695,7 +695,7 @@ class PhotosPageState extends State<PhotosPage>
                             onAlbumSelected: (item) => _showAlbum(item.id),
                             onToggleExpanded: c.toggleAlbumExpanded,
                             onCreateAlbum: _createAlbum,
-                            onAlbumLongPress: _showAlbumActions,
+                            onAlbumMenu: _showAlbumActions,
                           ),
                         ),
                         slivers: [

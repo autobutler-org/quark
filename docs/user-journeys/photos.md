@@ -176,8 +176,9 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
   slash.") and **Save** stays disabled.
 - If the Quark still refuses the name, because another device took it first, a snack bar shows the same message and
   the sidebar is unchanged.
-- Renaming an album from its actions (**Rename**) follows the same rules. Changing only the case of its own name is
-  allowed.
+- Renaming an album from its actions (**Rename**) follows the same rules. The actions open from the album's menu
+  button in the sidebar, a right-click, or a long press; Favorites and Inbox have none. Changing only the case of its
+  own name is allowed.
 
 ---
 

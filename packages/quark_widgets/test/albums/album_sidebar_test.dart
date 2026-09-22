@@ -38,7 +38,7 @@ void main() {
       onAlbumSelected: (a) => record('select:${a.id}'),
       onToggleExpanded: (id) => record('toggle:$id'),
       onCreateAlbum: () => record('create'),
-      onAlbumLongPress: (a) => record('long:${a.id}'),
+      onAlbumMenu: (a) => record('menu:${a.id}'),
       onAllPhotosSelected: withAllPhotos ? () => record('all') : null,
     );
   }
@@ -78,7 +78,7 @@ void main() {
     await tester.longPress(find.byKey(const ValueKey('album_tile_3')));
     await tester.pump();
 
-    expect(events, ['create', 'select:2', 'toggle:2', 'long:3']);
+    expect(events, ['create', 'select:2', 'toggle:2', 'menu:3']);
   });
 
   testBothViewports('shrink-wraps under unbounded height (#1599)', (
@@ -103,7 +103,7 @@ void main() {
     expect(find.text('Trips'), findsOneWidget);
   });
 
-  testBothViewports('gives system albums their glyph and no long press', (
+  testBothViewports('gives system albums their glyph and no menu', (
     tester,
     size,
   ) async {
@@ -111,8 +111,23 @@ void main() {
 
     expect(find.byIcon(QuarkIcons.star_rounded), findsOneWidget);
     final tiles = tester.widgetList<AlbumTreeTile>(find.byType(AlbumTreeTile));
-    expect(tiles.firstWhere((t) => t.album.id == 1).onLongPress, isNull);
-    expect(tiles.firstWhere((t) => t.album.id == 2).onLongPress, isNotNull);
+    expect(tiles.firstWhere((t) => t.album.id == 1).onMenu, isNull);
+    expect(tiles.firstWhere((t) => t.album.id == 2).onMenu, isNotNull);
+    expect(find.byKey(const ValueKey('album_menu_1')), findsNothing);
+    expect(find.byKey(const ValueKey('album_menu_2')), findsOneWidget);
+  });
+
+  testBothViewports('opens a user album menu from its button', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpAt(tester, bounded(sidebar(events: events)), size: size);
+
+    await tester.tap(find.byKey(const ValueKey('album_menu_2')));
+    await tester.pump();
+
+    expect(events, ['menu:2']);
   });
 
   testBothViewports('shows a progress bar while loading', (tester, size) async {

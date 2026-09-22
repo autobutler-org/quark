@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -23,7 +24,7 @@ void main() {
     int? selectedAlbumId,
     Set<int> expandedIds = const {},
     List<String>? events,
-    bool withLongPress = false,
+    bool withMenu = false,
     IconData? systemIcon,
   }) {
     void record(String e) => events?.add(e);
@@ -40,7 +41,7 @@ void main() {
             systemIcon: systemIcon,
             onSelected: (a) => record('select:${a.id}'),
             onToggleExpanded: (id) => record('toggle:$id'),
-            onLongPress: withLongPress ? (a) => record('long:${a.id}') : null,
+            onMenu: withMenu ? (a) => record('menu:${a.id}') : null,
           ),
         ),
       ),
@@ -151,7 +152,7 @@ void main() {
     expect(unselected.style?.fontWeight, FontWeight.normal);
   });
 
-  testBothViewports('long-presses the album under the finger', (
+  testBothViewports('long-press opens the menu of the album under the finger', (
     tester,
     size,
   ) async {
@@ -160,14 +161,63 @@ void main() {
       tester,
       size: size,
       expandedIds: const {1},
-      withLongPress: true,
+      withMenu: true,
       events: events,
     );
 
     await tester.longPress(find.byKey(const ValueKey('album_tile_2')));
     await tester.pump();
 
-    expect(events, ['long:2']);
+    expect(events, ['menu:2']);
+  });
+
+  testBothViewports('shows a menu button on every row, at any depth', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpTile(
+      tester,
+      size: size,
+      expandedIds: const {1},
+      withMenu: true,
+      events: events,
+    );
+
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const ValueKey('album_menu_1')));
+    await tester.tap(find.byKey(const ValueKey('album_menu_3')));
+    await tester.pump();
+
+    // The button opens the menu without selecting the album under it.
+    expect(events, ['menu:1', 'menu:3']);
+  });
+
+  testBothViewports('right-click opens the same menu', (tester, size) async {
+    final events = <String>[];
+    await pumpTile(tester, size: size, withMenu: true, events: events);
+
+    await tester.tap(
+      find.byKey(const ValueKey('album_tile_1')),
+      buttons: kSecondaryButton,
+    );
+    await tester.pump();
+
+    expect(events, ['menu:1']);
+  });
+
+  testBothViewports('offers no menu without a handler', (tester, size) async {
+    final events = <String>[];
+    await pumpTile(tester, size: size, events: events);
+
+    expect(find.byKey(const ValueKey('album_menu_1')), findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey('album_tile_1')),
+      buttons: kSecondaryButton,
+    );
+    await tester.pump();
+
+    expect(events, isEmpty);
   });
 
   testWidgets('replaces the glyph for a system album', (tester) async {

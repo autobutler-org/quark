@@ -12,7 +12,7 @@ import 'album_tree_tile.dart';
 /// Holds nothing. The albums, the selection, and which branches are expanded
 /// all come in, and every action goes out, so the caller can reload the list,
 /// expand a branch, or open a context menu of its own. System albums get
-/// their own glyph (a star for favorites) and no long press, since the server
+/// their own glyph (a star for favorites) and no menu, since the server
 /// maintains them rather than the user.
 ///
 /// By default the list fills its parent and scrolls on its own. Set
@@ -26,7 +26,8 @@ import 'album_tree_tile.dart';
 ///
 /// Key prefixes: `album_create` on the create button,
 /// `album_sidebar_all_photos` on the "All photos" row, and every album row's
-/// own `album_tile_<id>` and `album_expand_<id>` from [AlbumTreeTile].
+/// own `album_tile_<id>`, `album_expand_<id>`, and `album_menu_<id>` from
+/// [AlbumTreeTile].
 ///
 /// ```dart
 /// AlbumSidebar(
@@ -38,7 +39,7 @@ import 'album_tree_tile.dart';
 ///   onAlbumSelected: openAlbum,
 ///   onToggleExpanded: controller.toggleAlbumExpanded,
 ///   onCreateAlbum: promptForNewAlbum,
-///   onAlbumLongPress: showAlbumMenu,
+///   onAlbumMenu: showAlbumMenu,
 /// );
 /// ```
 class AlbumSidebar extends StatelessWidget {
@@ -49,7 +50,7 @@ class AlbumSidebar extends StatelessWidget {
     required this.onAlbumSelected,
     required this.onToggleExpanded,
     required this.onCreateAlbum,
-    this.onAlbumLongPress,
+    this.onAlbumMenu,
     this.onAllPhotosSelected,
     this.selectedAlbumId,
     this.isLoading = false,
@@ -73,9 +74,10 @@ class AlbumSidebar extends StatelessWidget {
   /// Called when the create button is tapped.
   final VoidCallback onCreateAlbum;
 
-  /// Called with a user album that was long-pressed, for a context menu.
-  /// Never called for a system album.
-  final ValueChanged<AlbumItem>? onAlbumLongPress;
+  /// Called with a user album whose menu button was tapped, or whose row was
+  /// long-pressed or right-clicked, for a context menu. Null renders no menu
+  /// buttons. Never called for a system album.
+  final ValueChanged<AlbumItem>? onAlbumMenu;
 
   /// Called when the "All photos" row (key `album_sidebar_all_photos`) is
   /// tapped. Null leaves the row out entirely.
@@ -125,7 +127,7 @@ class AlbumSidebar extends StatelessWidget {
           expandedIds: expandedIds,
           onSelected: onAlbumSelected,
           onToggleExpanded: onToggleExpanded,
-          onLongPress: album.isSystem ? null : onAlbumLongPress,
+          onMenu: album.isSystem ? null : onAlbumMenu,
           systemIcon: album.isSystem
               ? (album.isFavorites
                     ? QuarkIcons.star_rounded
