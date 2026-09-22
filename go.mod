@@ -2,6 +2,10 @@ module github.com/autobutler-org/quark
 
 go 1.26.6
 
+// node_modules holds npm tooling (cspell, fantasticon). One of its transitive
+// packages ships Go source, which would otherwise join this module.
+ignore ./node_modules
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.0
 	github.com/KononK/resize v0.0.0-20200801203131-21c514740ed6
