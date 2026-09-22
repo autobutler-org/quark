@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 
 	github "github.com/autobutler-org/quark/pkg/util/githubutil"
 	"github.com/autobutler-org/quark/pkg/util/versionutil"
@@ -432,3 +433,13 @@ const (
 	SelfUpdatableBinDir = "/opt/quark/bin"
 	LegacyBinPath       = "/usr/local/bin/quark"
 )
+
+// ExitForRestart exits the process after a short pause, so the process manager
+// (systemd's Restart=always, or launchd) starts Quark again. The pause lets the
+// HTTP response that asked for the restart reach the client first, so call it
+// in a goroutine and return the response.
+func ExitForRestart() {
+	fmt.Println("Exiting to allow process manager (launchctl/systemd) to restart...")
+	time.Sleep(2 * time.Second)
+	os.Exit(0)
+}

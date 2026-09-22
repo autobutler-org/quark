@@ -40,7 +40,7 @@ func doUpdate(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(err)
 	}
 
-	go restartQuark()
+	go updateutil.ExitForRestart()
 	return serverutil.Ok().WithData(params)
 }
 
