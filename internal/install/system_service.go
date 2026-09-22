@@ -35,6 +35,12 @@ const (
 
 	systemdServiceName = "quark.service"
 
+	// macOS has no journald, so the daemon's output still goes to files —
+	// named .log so log viewers recognize them, and rotated by newsyslog
+	// rather than growing until the disk fills (#2231).
+	plistLogPath    = "/var/log/quark.log"
+	plistErrLogPath = "/var/log/quark.err.log"
+
 	// systemdServiceContent grants CAP_NET_BIND_SERVICE as an ambient
 	// capability and deliberately leaves the bounding set alone. The bounding
 	// set also caps what a setuid-root program started by the service gets,
@@ -54,8 +60,6 @@ Environment="HTTPS_PORT=443"
 Environment="GIN_MODE=release"
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 Restart=always
-StandardOutput=append:/var/log/quark.app
-StandardError=append:/var/log/quark.err
 
 [Install]
 WantedBy=multi-user.target`
@@ -89,12 +93,34 @@ WantedBy=multi-user.target`
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/var/log/quark.app</string>
+    <string>/var/log/quark.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/quark.err</string>
+    <string>/var/log/quark.err.log</string>
 </dict>
 </plist>`
+
+	newsyslogConfPath = "/etc/newsyslog.d/quark.conf"
+
+	// Ten megabytes each, five generations, bzip2-compressed. `N` is what keeps
+	// newsyslog from HUPing syslogd, which owns none of this; `C` creates the
+	// file if the daemon has not written yet.
+	//
+	// launchd holds the file descriptor open, so a rotation while the daemon is
+	// running leaves it appending to the rotated inode until the next restart.
+	// That is still bounded — KeepAlive restarts it, and a reinstall or reboot
+	// reopens the path — and it beats the unbounded growth it replaces.
+	newsyslogConfContent = `# logfilename          [owner:group]  mode count size when  flags
+/var/log/quark.log                     644  5     10240 *     NCJ
+/var/log/quark.err.log                 644  5     10240 *     NCJ
+`
 )
+
+// legacyLogPaths are what installs before #2231 wrote to: unrotated, and named
+// so that no log viewer recognizes them. Nothing reads them and nothing writes
+// them any more, so `quark install` deletes them — a stale multi-gigabyte
+// quark.err is the disk pressure this change exists to stop, and leaving it
+// behind would mean the fix never reaches an existing install.
+var legacyLogPaths = []string{"/var/log/quark.app", "/var/log/quark.err"}
 
 func buildServiceFile() string {
 	switch runtime.GOOS {

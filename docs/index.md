@@ -19,6 +19,7 @@ Looking for setup instructions? Start with the [README](../README.md).
 ## Features
 
 - [Authentication](./auth.md) — local auth setup, login, recovery
+- [Logs](./logs.md) — where the service writes its logs on each platform
 - [Mobile Setup](./mobile-setup.md) — running the app on a physical Android or iOS device
 
 ## Reference

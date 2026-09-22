@@ -57,7 +57,35 @@ func installPlistService() error {
 	if err := exec.Command("launchctl", "load", serviceFilePath).Run(); err != nil {
 		return fmt.Errorf("failed to load plist service: %w", err)
 	}
+	return installNewsyslogConf()
+}
+
+// installNewsyslogConf gives the launchd daemon's log files a rotation policy.
+// Without one they grow without bound, and a crash loop fills the error log
+// fast: cobra prints its full usage text on every failed start (#2231).
+func installNewsyslogConf() error {
+	if err := os.MkdirAll(filepath.Dir(newsyslogConfPath), 0755); err != nil {
+		return fmt.Errorf("failed to create %s: %w", filepath.Dir(newsyslogConfPath), err)
+	}
+	if err := os.WriteFile(newsyslogConfPath, []byte(newsyslogConfContent), 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", newsyslogConfPath, err)
+	}
 	return nil
+}
+
+// removeLegacyLogs deletes the unrotated files older installs wrote to. They
+// are dead weight the moment the new service definition is in place, and the
+// whole point of #2231 is that they can be large, so a reinstall that left them
+// would not actually recover the disk.
+//
+// Failures are not fatal: the install has already succeeded by this point, and
+// a leftover log is not worth failing it over.
+func removeLegacyLogs() {
+	for _, path := range legacyLogPaths {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			fmt.Printf("warning: could not remove the old log file %s: %v\n", path, err)
+		}
+	}
 }
 
 const sudoersDropInPath = "/etc/sudoers.d/quark"
@@ -217,12 +245,20 @@ func Install() error {
 		if err := installSSHDropIn(); err != nil {
 			return fmt.Errorf("failed to install the sshd drop-in: %w", err)
 		}
-		return installSystemdService()
+		if err := installSystemdService(); err != nil {
+			return err
+		}
+		removeLegacyLogs()
+		return nil
 	case "darwin": // coverage: ignore - Not run in CI
 		if err := exec.Command("cp", "-v", executable, "/Applications/quark").Run(); err != nil {
 			return fmt.Errorf("failed to copy binary to /Applications: %w", err)
 		}
-		return installPlistService()
+		if err := installPlistService(); err != nil {
+			return err
+		}
+		removeLegacyLogs()
+		return nil
 	default:
 		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
