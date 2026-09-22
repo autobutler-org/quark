@@ -31,8 +31,9 @@ typedef EmptyTrashFn = Future<int> Function(String serial);
 /// The listing is handed to `FileBrowserView` as [FileNode]s so the trash
 /// reuses the Files viewer. Each node's path is `.trash/<trashName>` for a
 /// trashed item, or `.trash/<trashName>/<path>` for something inside a trashed
-/// folder: unique, where the item really sits on the device, and enough to
-/// address it in a restore or delete ([refFor]).
+/// folder: unique, the path the server keys the item's thumbnail and access
+/// on (the trash itself sits beside the files directory on disk), and enough
+/// to address it in a restore or delete ([refFor]).
 class TrashController extends ChangeNotifier {
   TrashController({
     TrashLocation? location,

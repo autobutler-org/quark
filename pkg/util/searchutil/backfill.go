@@ -84,7 +84,9 @@ func BackfillTree(ctx context.Context, db *sql.DB, serial, filesDir string) (Bac
 	return result, nil
 }
 
-// trashDirName mirrors storageutil.TrashDir. It is duplicated to keep
+// trashDirName mirrors the name storageutil.IsInternalName reserves inside a
+// files directory. The trash itself moved beside FilesDir (#2173); this skips
+// an old one that has not been moved out yet. It is duplicated to keep
 // searchutil free of a dependency on storageutil, which imports far more than
 // this package needs.
 const trashDirName = ".trash"
