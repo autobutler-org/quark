@@ -56,11 +56,16 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   String? _error;
 
-  /// Set when the last sign-in attempt never reached the Quark, so the page
-  /// says so plainly instead of rendering a socket error (#1637). This is the
-  /// only page that can be reached with an unreachable Quark configured, so it
-  /// is where the explanation matters most.
-  bool _disconnected = false;
+  /// Set when the status check or the last sign-in attempt never reached the
+  /// Quark, so the page says so plainly instead of rendering a socket error
+  /// (#1637), and holds whichever of the two failed so the banner's retry
+  /// repeats it. This is the only page that can be reached with an unreachable
+  /// Quark configured, so it is where the explanation matters most.
+  VoidCallback? _retry;
+
+  /// Bumped by every setup check, so an answer from a Quark the user has since
+  /// switched away from cannot raise or clear the banner.
+  int _setupGeneration = 0;
 
   /// Whether the inline host list is expanded.
   ///
@@ -99,16 +104,24 @@ class _LoginPageState extends State<LoginPage> {
 
   /// Asks the Quark whether it has been claimed, so the setup link is offered
   /// only where it leads somewhere. A failed or unanswered probe leaves
-  /// [_setupComplete] null, which keeps the link — the #1827 rule.
+  /// [_setupComplete] null, which keeps the link — the #1827 rule. An
+  /// unreachable Quark raises the disconnected banner; an answer clears it.
   Future<void> _checkSetupState() async {
     if (AppSettings.instance.activeHost == null) return;
+    final generation = ++_setupGeneration;
     try {
       final status = await authStatusProbe();
-      if (!mounted) return;
-      setState(() => _setupComplete = status.setupComplete);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _setupComplete = null);
+      if (!mounted || generation != _setupGeneration) return;
+      setState(() {
+        _setupComplete = status.setupComplete;
+        _retry = null;
+      });
+    } catch (e) {
+      if (!mounted || generation != _setupGeneration) return;
+      setState(() {
+        _setupComplete = null;
+        if (isQuarkUnreachableError(e)) _retry = _checkSetupState;
+      });
     }
   }
 
@@ -122,7 +135,7 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted) return;
     setState(() {
       _setupComplete = null;
-      _disconnected = false;
+      _retry = null;
       _error = null;
     });
     _checkAccessRequests();
@@ -146,7 +159,7 @@ class _LoginPageState extends State<LoginPage> {
     setState(() {
       _loading = true;
       _error = null;
-      _disconnected = false;
+      _retry = null;
     });
     try {
       final result = await AuthService.login(
@@ -170,8 +183,9 @@ class _LoginPageState extends State<LoginPage> {
       setState(() {
         // An unreachable Quark is not a failed sign-in, and saying so in the
         // credentials banner reads as "wrong password". It gets its own state.
-        _disconnected = isQuarkUnreachableError(e);
-        _error = _disconnected ? null : Errors.message(e, 'sign in');
+        final unreachable = isQuarkUnreachableError(e);
+        _retry = unreachable ? _submit : null;
+        _error = unreachable ? null : Errors.message(e, 'sign in');
         _loading = false;
       });
       // Announce error to screen readers
@@ -271,7 +285,8 @@ class _LoginPageState extends State<LoginPage> {
                         passwordFocus: _passwordFocus,
                         obscurePassword: _obscurePassword,
                         loading: _loading,
-                        disconnected: _disconnected,
+                        disconnected: _retry != null,
+                        onRetry: _retry,
                         error: _error,
                         notice: widget.notice,
                         managingHosts: _managingHosts,

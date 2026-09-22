@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/error_banner.dart';
 import 'package:quark/widgets/notice_banner.dart';
-import 'package:quark/widgets/host_manager.dart';
-import 'package:quark/widgets/login/active_host_card.dart';
+import 'package:quark/widgets/login/host_switcher.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -27,6 +26,10 @@ class SignInForm extends StatelessWidget {
   final VoidCallback onHostsChanged;
   final VoidCallback onTogglePassword;
   final VoidCallback onSubmit;
+
+  /// Repeats whatever found the Quark unreachable — the status check or the
+  /// sign-in. Falls back to [onSubmit] when null.
+  final VoidCallback? onRetry;
   final VoidCallback onForgotPassword;
 
   /// Manual route to the setup wizard, for a Quark that has no accounts yet.
@@ -67,6 +70,7 @@ class SignInForm extends StatelessWidget {
     required this.onHostsChanged,
     required this.onTogglePassword,
     required this.onSubmit,
+    this.onRetry,
     required this.onForgotPassword,
     required this.onSetUpQuark,
     this.onRequestAccess,
@@ -110,19 +114,18 @@ class SignInForm extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          ActiveHostCard(
+          HostSwitcher(
             managingHosts: managingHosts,
             onToggleManagingHosts: onToggleManagingHosts,
+            onHostsChanged: onHostsChanged,
           ),
-          if (managingHosts) ...[
-            const SizedBox(height: 8),
-            HostManager(onChanged: onHostsChanged),
-          ],
           const SizedBox(height: 24),
 
           // Error banner, or the notice when there is nothing wrong
           if (disconnected) ...[
-            QuarkDisconnectedBanner(onRetry: loading ? null : onSubmit),
+            QuarkDisconnectedBanner(
+              onRetry: loading ? null : onRetry ?? onSubmit,
+            ),
             const SizedBox(height: 16),
           ] else if (error != null) ...[
             ErrorBanner(message: error!),
