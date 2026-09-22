@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/sshutil"
 )
@@ -154,6 +155,27 @@ func installSSHDropIn() error {
 // it in. Accounts made before #2131 have nologin.
 func ensureLoginShell() error {
 	return exec.Command("usermod", "--shell", serviceLoginShell, serviceUserName).Run()
+}
+
+// lockRoot locks root's password (#2129). Armbian ships every image with root
+// password 1234 and the image turns off the forced first-login change, so
+// every Quark would otherwise share it. Root stays reachable through sudo.
+// It checks first so the unit's start-time run does not rewrite /etc/shadow.
+func lockRoot() error {
+	out, err := exec.Command("passwd", "-S", "root").Output()
+	if err != nil {
+		return err
+	}
+	if passwordLocked(string(out)) {
+		return nil
+	}
+	return exec.Command("passwd", "-l", "root").Run()
+}
+
+// passwordLocked reads the status field of a `passwd -S` line.
+func passwordLocked(status string) bool {
+	fields := strings.Fields(status)
+	return len(fields) > 1 && fields[1] == "L"
 }
 
 // writeRootFileIfChanged writes path with writeRootFile unless it already holds

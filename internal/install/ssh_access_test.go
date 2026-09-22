@@ -132,3 +132,16 @@ func TestWriteRootFileIfChanged_RewritesAStaleFile(t *testing.T) {
 		t.Errorf("file holds %q", got)
 	}
 }
+
+func TestPasswordLocked(t *testing.T) {
+	for status, want := range map[string]bool{
+		"root L 2026-01-01 0 99999 7 -1\n":  true,
+		"root P 2026-01-01 0 99999 7 -1\n":  false,
+		"root NP 2026-01-01 0 99999 7 -1\n": false,
+		"":                                  false,
+	} {
+		if got := passwordLocked(status); got != want {
+			t.Errorf("passwordLocked(%q) = %v, want %v", status, got, want)
+		}
+	}
+}
