@@ -1032,6 +1032,45 @@ final List<GalleryEntry> registry = [
     ),
   ),
 
+  // ── Sheets ────────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'SheetTabStrip',
+    group: 'Sheets',
+    build: (context, log) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SheetTabStrip(
+          tabNames: const [
+            'Sheet 1',
+            'Budget',
+            'A very long quarterly summary',
+          ],
+          selectedIndex: 1,
+          onSelect: (index) => log('SheetTabStrip.onSelect($index)'),
+          onAdd: () => log('SheetTabStrip.onAdd'),
+          onRename: (index) => log('SheetTabStrip.onRename($index)'),
+          onDuplicate: (index) => log('SheetTabStrip.onDuplicate($index)'),
+          onMoveLeft: (index) => log('SheetTabStrip.onMoveLeft($index)'),
+          onMoveRight: (index) => log('SheetTabStrip.onMoveRight($index)'),
+          onDelete: (index) => log('SheetTabStrip.onDelete($index)'),
+        ),
+        const SizedBox(height: 16),
+        // A 64-sheet workbook with the last sheet selected, scrolled into view.
+        SheetTabStrip(
+          tabNames: [for (var i = 1; i <= 64; i++) 'Sheet $i'],
+          selectedIndex: 63,
+          onSelect: (index) => log('SheetTabStrip.onSelect($index)'),
+          onAdd: () => log('SheetTabStrip.onAdd'),
+          onRename: (index) => log('SheetTabStrip.onRename($index)'),
+          onDuplicate: (index) => log('SheetTabStrip.onDuplicate($index)'),
+          onMoveLeft: (index) => log('SheetTabStrip.onMoveLeft($index)'),
+          onMoveRight: (index) => log('SheetTabStrip.onMoveRight($index)'),
+          onDelete: (index) => log('SheetTabStrip.onDelete($index)'),
+        ),
+      ],
+    ),
+  ),
+
   // ── Video─────────────────────────────────────────────────────────────────
   GalleryEntry(
     name: 'TranscodeDialog',
