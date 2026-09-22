@@ -669,6 +669,9 @@ final List<GalleryEntry> registry = [
                       log('PhotoGridTile.onLongPress(${item.id})'),
                   onDoubleTap: () =>
                       log('PhotoGridTile.onDoubleTap(${item.id})'),
+                  onMenu: selectionMode
+                      ? null
+                      : (_) => log('PhotoGridTile.onMenu(${item.id})'),
                 ),
               ),
               const SizedBox(height: 4),
@@ -704,6 +707,7 @@ final List<GalleryEntry> registry = [
             onTap: (i) => log('PhotoGrid.onTap($i)'),
             onLongPress: (i) => log('PhotoGrid.onLongPress($i)'),
             onDoubleTap: (i) => log('PhotoGrid.onDoubleTap($i)'),
+            onMenu: (i, position) => log('PhotoGrid.onMenu($i)'),
           ),
         ],
       ),

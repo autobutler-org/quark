@@ -59,7 +59,7 @@ something the package does not have or are only ever used by that page:
 `photos_selection_app_bar.dart` (`AppThemeToggle`), `photos_empty_state.dart`,
 the album dialogs and menu (`album_name_dialog.dart`,
 `delete_album_dialog.dart`, `album_actions_sheet.dart`), the menu and
-confirmation for a photo in an album view (`album_item_actions_sheet.dart`,
+confirmation for a photo in an album view (`album_item_menu.dart`,
 `remove_from_album_dialog.dart`), and
 `album_picker_sheet.dart`, which hosts the package `AlbumPickerSheet` around an
 injected loader. `device_upload_picker.dart` likewise only holds the choice for

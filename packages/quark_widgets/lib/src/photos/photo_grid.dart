@@ -25,9 +25,13 @@ import 'photo_grid_tile.dart';
 /// remote photos outside selection mode only, since those are the only ones
 /// that can be favorited; everywhere else a single tap fires immediately.
 ///
+/// [onMenu] gives every tile a menu outside selection mode — a button, a
+/// right-click and a long press, which then no longer calls [onLongPress].
+/// See [PhotoGridTile.onMenu].
+///
 /// Key prefixes: `photo_grid` on the grid, `photo_grid_loading_more` on the
-/// trailing spinner cell, and every tile's own `photo_tile_<id>` and
-/// `photo_tile_check_<id>`.
+/// trailing spinner cell, and every tile's own `photo_tile_<id>`,
+/// `photo_tile_check_<id>` and `photo_tile_menu_<id>`.
 ///
 /// ```dart
 /// CustomScrollView(
@@ -55,6 +59,7 @@ class PhotoGrid extends StatelessWidget {
     required this.onTap,
     required this.onLongPress,
     this.onDoubleTap,
+    this.onMenu,
     this.selectedIds = const {},
     this.selectionMode = false,
     this.isLoading = false,
@@ -86,6 +91,10 @@ class PhotoGrid extends StatelessWidget {
   /// Called with the index of the tile that was double-tapped. Only remote
   /// photos outside [selectionMode] offer it. Null offers it nowhere.
   final ValueChanged<int>? onDoubleTap;
+
+  /// Called with a tile's index and the global position to open its menu at.
+  /// Offered outside [selectionMode] only. Null gives the tiles no menu.
+  final void Function(int index, Offset globalPosition)? onMenu;
 
   /// The [PhotoItem.id]s in the selection.
   final Set<String> selectedIds;
@@ -129,6 +138,7 @@ class PhotoGrid extends StatelessWidget {
     }
 
     final onDoubleTap = this.onDoubleTap;
+    final onMenu = this.onMenu;
     return SliverPadding(
       padding: EdgeInsets.all(gap),
       sliver: SliverGrid(
@@ -159,6 +169,9 @@ class PhotoGrid extends StatelessWidget {
             onLongPress: () => onLongPress(index),
             onDoubleTap: onDoubleTap != null && photo.isRemote && !selectionMode
                 ? () => onDoubleTap(index)
+                : null,
+            onMenu: onMenu != null && !selectionMode
+                ? (position) => onMenu(index, position)
                 : null,
           );
         }, childCount: photos.length + (hasMore ? 1 : 0)),

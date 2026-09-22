@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -14,6 +15,7 @@ void main() {
     bool selectionMode = false,
     List<String>? events,
     bool withDoubleTap = false,
+    bool withMenu = false,
   }) {
     void record(String e) => events?.add(e);
     return pumpAt(
@@ -30,6 +32,7 @@ void main() {
             onTap: () => record('tap'),
             onLongPress: () => record('long'),
             onDoubleTap: withDoubleTap ? () => record('double') : null,
+            onMenu: withMenu ? (_) => record('menu') : null,
           ),
         ),
       ),
@@ -52,6 +55,29 @@ void main() {
     await tester.pump();
 
     expect(events, ['tap', 'long']);
+  });
+
+  testBothViewports('has no menu button without onMenu', (tester, size) async {
+    await pumpTile(tester, size: size);
+
+    expect(find.byKey(const ValueKey('photo_tile_menu_p1')), findsNothing);
+  });
+
+  testBothViewports('opens the menu from its button, a right-click and a '
+      'long press', (tester, size) async {
+    final events = <String>[];
+    await pumpTile(tester, size: size, events: events, withMenu: true);
+
+    await tester.tap(find.byKey(const ValueKey('photo_tile_menu_p1')));
+    await tester.tap(
+      find.byKey(const ValueKey('photo_tile_p1')),
+      buttons: kSecondaryButton,
+    );
+    await tester.longPress(find.byKey(const ValueKey('photo_tile_p1')));
+    await tester.pump();
+
+    // The long press opened the menu rather than reporting onLongPress.
+    expect(events, ['menu', 'menu', 'menu']);
   });
 
   testBothViewports('reports a double tap when one is offered', (

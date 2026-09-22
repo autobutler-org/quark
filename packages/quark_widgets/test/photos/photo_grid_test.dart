@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -22,6 +23,7 @@ void main() {
     bool selectionMode = false,
     Set<String> selectedIds = const {},
     List<String>? events,
+    bool withMenu = false,
   }) {
     void record(String e) => events?.add(e);
     return pumpAt(
@@ -43,6 +45,7 @@ void main() {
             onTap: (i) => record('tap:$i'),
             onLongPress: (i) => record('long:$i'),
             onDoubleTap: (i) => record('double:$i'),
+            onMenu: withMenu ? (i, _) => record('menu:$i') : null,
           ),
         ],
       ),
@@ -95,6 +98,25 @@ void main() {
     final tiles = tester.widgetList<PhotoGridTile>(find.byType(PhotoGridTile));
     expect(tiles.every((t) => t.onDoubleTap == null), isTrue);
     expect(tiles.first.isSelected, isTrue);
+  });
+
+  testBothViewports('gives every tile a menu outside selection mode', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpGrid(tester, size: size, events: events, withMenu: true);
+
+    await tester.tap(find.byKey(const ValueKey('photo_tile_menu_c')));
+    // c is remote, so the tile's double tap holds the tap until it times out.
+    await tester.pump(kDoubleTapTimeout);
+    expect(events, ['menu:2']);
+  });
+
+  testBothViewports('offers no menu in selection mode', (tester, size) async {
+    await pumpGrid(tester, size: size, withMenu: true, selectionMode: true);
+
+    expect(find.byKey(const ValueKey('photo_tile_menu_a')), findsNothing);
   });
 
   testBothViewports('shows a spinner while the first load has no photos', (
