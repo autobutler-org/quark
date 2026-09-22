@@ -15,12 +15,20 @@ Work one issue, `$ARGUMENTS`, end to end. Every rule in `AGENTS.md` applies; thi
    path the issue describes is the one you are about to change.
 4. **Find the siblings.** Grep for every other call site, route, file kind, or platform with the same defect,
    and fix them in the shared place.
-5. **Implement the minimal fix.** No new abstractions, dependencies, or forks without asking first.
-6. **Verify locally.** Re-run the repro and show it passing. Then `gmake check` and the relevant
+5. **Decide: stack or one PR.** Default to a stack. Split whenever the work has parts a reviewer could
+   merge on their own, and use the `gh-stack` skill for the mechanics — lay the layers out before writing
+   files, foundation at the bottom. One PR is for a single cohesive fix with nothing separable in it.
+   - A rule or doc change, then the code that follows it.
+   - A backend change, then the frontend that consumes it.
+   - A refactor, then the feature built on it.
+   - A Makefile or tooling fix found on the way: it ships first, as its own PR at the bottom.
+   - Every layer's body still carries `Closes #<N>`, plus a line naming the one under it: `Stacked on #<M>.`
+6. **Implement the minimal fix.** No new abstractions, dependencies, or forks without asking first.
+7. **Verify locally.** Re-run the repro and show it passing. Then `gmake check` and the relevant
    `gmake test/...` targets. Regenerate and commit anything `make generate` produces. Add new proper nouns to
    `.vscode/cspell.json`.
-7. **Commit.** One focused, signed-off commit (`git commit -s`), conventional-commit subject, American
+8. **Commit.** One focused, signed-off commit (`git commit -s`), conventional-commit subject, American
    spelling, no Claude Code session link.
-8. **Open the PR.** Push, then `gh pr create` with a conventional-commit title, `Closes #<N>` in the body,
+9. **Open the PR.** Push, then `gh pr create` with a conventional-commit title, `Closes #<N>` in the body,
    and the PR template filled in.
-9. **Report.** List exactly what you ran and what it showed. Never claim a manual check you did not perform.
+10. **Report.** List exactly what you ran and what it showed. Never claim a manual check you did not perform.

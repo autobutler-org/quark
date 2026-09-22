@@ -600,6 +600,8 @@ widgets and reads in one screen.
 - Fill out [the PR template](.github/pull_request_template.md): what changed, which surfaces it touches, and
   how it was tested
 - One focused commit per PR — this repository keeps a linear history — and commits are signed
+- **Work with independently reviewable parts is stacked, not one big PR.** Split it with `gh stack` (the
+  `gh-stack` skill); step 5 of the `resolve-issue` skill has the triggers
 - Run `make check` before pushing; the pre-commit hook runs it too, once `make setup/hooks` has
 
 ### Platform and generated code
