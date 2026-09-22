@@ -1,3 +1,5 @@
+// Package v0_vault serves /api/v0/vault, the encrypted password vault: setup, unlock and lock, entries and folders,
+// password generation, and import and export. Every route is admin-only.
 package v0_vault
 
 import "github.com/autobutler-org/quark/pkg/util/serverutil"

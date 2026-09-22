@@ -1,3 +1,4 @@
+// Package v0_jobs serves /api/v0/jobs: listing background jobs, and getting, canceling or retrying one.
 package v0_jobs
 
 import "github.com/autobutler-org/quark/pkg/util/serverutil"

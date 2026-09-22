@@ -1,3 +1,5 @@
+// Package ctxutil stores and fetches typed values on a gin context. It is how a handler gets the dependency graph:
+// ctxutil.Get[deputil.Dependencies](c, "deps").
 package ctxutil
 
 import "github.com/gin-gonic/gin"

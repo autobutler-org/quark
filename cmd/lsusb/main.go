@@ -1,3 +1,5 @@
+// Command lsusb prints the USB devices Quark can see, with their partitions and mount points; -storage narrows the
+// list to storage devices. It is a debugging aid, not part of the shipped server.
 package main
 
 import (

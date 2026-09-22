@@ -1,3 +1,5 @@
+// Command quark is the Quark binary: quark serve runs the API and the embedded web app, quark install sets it up as
+// a system service, and quark version reports the build.
 package main
 
 import (

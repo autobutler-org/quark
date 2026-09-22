@@ -1,3 +1,5 @@
+// Package serve is the quark serve subcommand: it builds the default dependency graph and starts the HTTP server,
+// over plain HTTP when --insecure is set.
 package serve
 
 import (

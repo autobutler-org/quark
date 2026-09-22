@@ -1,3 +1,5 @@
+// Package install sets Quark up as a systemd service on Linux, along with the root-owned helpers the service is
+// allowed to call but not rewrite.
 package install
 
 import (

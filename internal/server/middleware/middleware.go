@@ -1,3 +1,5 @@
+// Package middleware is the gin middleware every request passes through — dependency injection, connected-device
+// tracking, and session auth with its short list of exempt paths — plus RequireAdmin for the admin group.
 package middleware
 
 import (

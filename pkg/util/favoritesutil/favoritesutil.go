@@ -1,3 +1,5 @@
+// Package favoritesutil manages a user's Favorites, a system photo album created on first use, and toggles photos
+// in and out of it.
 package favoritesutil
 
 import (

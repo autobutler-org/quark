@@ -1,3 +1,5 @@
+// Package v0_devices serves /api/v0/devices: the clients that have connected to this Quark. Listing them is open to
+// any user; removing a record is admin-only.
 package v0_devices
 
 import (

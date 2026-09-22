@@ -1,3 +1,4 @@
+// Package version is the quark version subcommand, which prints the version this binary was built as.
 package version
 
 import (

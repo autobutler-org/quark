@@ -1,3 +1,5 @@
+// Package install is the quark install subcommand, which sets Quark up as a system service through
+// internal/install.
 package install
 
 import (

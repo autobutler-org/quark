@@ -1,3 +1,5 @@
+// Package v0_files serves /api/v0/files: listing, searching and stat-ing files, uploads (including resumable upload
+// sessions), downloads and archive views, and moves, deletes and new folders.
 package v0_files
 
 import (
