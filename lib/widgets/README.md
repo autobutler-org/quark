@@ -41,9 +41,13 @@ lib/widgets/
   video_viewer/
     transcode_dialog_host.dart  hosts TranscodeDialog around an injected
                                 formats loader
+  content_result_tile.dart      one docs/sheets content search hit; pushes the
+                                editor its extension names
   host_dialog.dart              edits AppSettings hosts
   host_manager.dart             edits AppSettings hosts
   quark_connect_form.dart       calls the connection services
+  search_section_header.dart    labels a group of docs/sheets search results,
+                                shared by both pages' bodies
   text_controller_scope.dart    owns a dialog's TextEditingController, so it is
                                 disposed with the dialog rather than when the
                                 dialog's future completes (#2012)

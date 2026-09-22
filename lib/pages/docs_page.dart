@@ -29,6 +29,11 @@ class _DocsPageState extends State<DocsPage>
     with SafeSetStateMixin, WidgetsBindingObserver, AutoRefreshMixin {
   List<FileNode> _files = [];
   List<FileNode> _filtered = [];
+
+  /// Every sheet, so a search can list the ones that match in an
+  /// "In Sheets" section (#2259).
+  List<FileNode> _sheets = [];
+  List<FileNode> _sheetsFiltered = [];
   List<ContentSearchResult> _contentResults = [];
   bool _contentSearching = false;
 
@@ -54,9 +59,13 @@ class _DocsPageState extends State<DocsPage>
   @override
   Future<void> refresh() async {
     try {
-      final files = await FilesService.getFilesByType('qdoc');
+      final results = await Future.wait([
+        FilesService.getFilesByType('qdoc'),
+        FilesService.getFilesByType('qsheet'),
+      ]);
       setStateSafely(() {
-        _files = files;
+        _files = results[0];
+        _sheets = results[1];
         _applyFilter();
         // Cleared on success rather than up front, so a poll against an
         // unreachable Quark does not blink the error view away and back.
@@ -92,17 +101,13 @@ class _DocsPageState extends State<DocsPage>
 
   void _applyFilter() {
     final query = _searchController.text.trim().toLowerCase();
+    bool matches(FileNode f) => f.matchesSearch(query);
     setStateSafely(() {
       _filtered = query.isEmpty
           ? List.of(_files)
-          : _files
-                .where(
-                  (f) =>
-                      f.name.toLowerCase().contains(query) ||
-                      f.dirPath.toLowerCase().contains(query) ||
-                      f.deviceName.toLowerCase().contains(query),
-                )
-                .toList();
+          : _files.where(matches).toList();
+      // The other type only appears as search results, never as the library.
+      _sheetsFiltered = query.isEmpty ? [] : _sheets.where(matches).toList();
     });
   }
 
@@ -111,6 +116,13 @@ class _DocsPageState extends State<DocsPage>
       AppRoutes.docFile(node.apiPath, serial: node.deviceSerial),
     );
     // Refresh in case the doc was renamed or deleted.
+    manualRefresh();
+  }
+
+  Future<void> _openSheet(FileNode node) async {
+    await context.push(
+      AppRoutes.sheetFile(node.apiPath, serial: node.deviceSerial),
+    );
     manualRefresh();
   }
 
@@ -174,12 +186,14 @@ class _DocsPageState extends State<DocsPage>
               loading: isInitialLoad,
               error: _error,
               files: _filtered,
+              sheetFiles: _sheetsFiltered,
               contentResults: _contentResults,
               contentSearching: _contentSearching,
               searchQuery: _searchController.text,
               onRetry: manualRefresh,
               onCreateNew: _createNewDoc,
               onOpenDoc: _openDoc,
+              onOpenSheet: _openSheet,
             ),
           ),
         ],

@@ -27,6 +27,12 @@ class FileNode {
     return raw.trim().replaceAll(RegExp(r'^/+|/+$'), '');
   }
 
+  /// Whether a library search for [query] (already trimmed and lowercased)
+  /// lists this file: its name or its folder path contains it.
+  bool matchesSearch(String query) =>
+      name.toLowerCase().contains(query) ||
+      dirPath.toLowerCase().contains(query);
+
   factory FileNode.fromJson(Map<String, dynamic> json) {
     int parseSize(Object? value) {
       if (value is int) {
