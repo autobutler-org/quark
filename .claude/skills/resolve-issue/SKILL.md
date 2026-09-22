@@ -22,7 +22,9 @@ Work one issue, `$ARGUMENTS`, end to end. Every rule in `AGENTS.md` applies; thi
    - A backend change, then the frontend that consumes it.
    - A refactor, then the feature built on it.
    - A Makefile or tooling fix found on the way: it ships first, as its own PR at the bottom.
-   - Every layer's body still carries `Closes #<N>`, plus a line naming the one under it: `Stacked on #<M>.`
+   - Every layer's body carries `Closes #<N>` for the same issue — the layers above the bottom included, not
+     only the one that merges first — plus a line naming the one under it: `Stacked on #<M>.` The issue
+     closing when the bottom layer merges is expected; never drop `Closes #<N>` from a layer because of it.
 6. **Implement the minimal fix.** No new abstractions, dependencies, or forks without asking first.
 7. **Verify locally.** Re-run the repro and show it passing. Then `gmake check` and the relevant
    `gmake test/...` targets. Regenerate and commit anything `make generate` produces. Add new proper nouns to

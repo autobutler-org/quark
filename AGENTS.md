@@ -595,7 +595,8 @@ widgets and reads in one screen.
   - `perf:` — performance improvement
 - The description should be lowercase, imperative mood: `fix: add null check` not `Fix: Added null check`
 - Include the issue number in the PR body (`Closes #N`), not the title. Some history also carries it as a
-  scope — `fix(1710): …` — which is accepted, but the body still needs `Closes #N`
+  scope — `fix(1710): …` — which is accepted, but the body still needs `Closes #N`. In a stack, every layer
+  carries `Closes #N` for the same issue, upper layers included
 - Branch names should reflect the issue: `fix/123-short-description`, `feat/456-short-description`
 - Fill out [the PR template](.github/pull_request_template.md): what changed, which surfaces it touches, and
   how it was tested
