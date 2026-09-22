@@ -39,7 +39,17 @@ class _RecordingClient implements HttpClient {
     if (url.path.endsWith('/api/v0/files')) {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     }
-    return _RecordingRequest(url, _bodyFor(url));
+    return _RecordingRequest(url, _bodyFor(url), _statusFor(url));
+  }
+
+  /// A path under `missing` does not exist: stat and listing both 404, as the
+  /// Quark answers for a deep link to a folder that is not there.
+  static int _statusFor(Uri url) {
+    final path =
+        url.queryParameters['filePath'] ?? url.queryParameters['rootDir'] ?? '';
+    return path.startsWith('missing') || path.startsWith('/missing')
+        ? 404
+        : 200;
   }
 
   /// Enough of a backend for the deep-link flow to run for real: the page has
@@ -93,15 +103,16 @@ class _RecordingClient implements HttpClient {
 }
 
 class _RecordingRequest implements HttpClientRequest {
-  _RecordingRequest(this.uri, this.body);
+  _RecordingRequest(this.uri, this.body, this.status);
   @override
   final Uri uri;
   final String body;
+  final int status;
   @override
   final HttpHeaders headers = _EmptyHeaders();
 
   @override
-  Future<HttpClientResponse> close() async => _RecordingResponse(body);
+  Future<HttpClientResponse> close() async => _RecordingResponse(body, status);
 
   @override
   Future<void> addStream(Stream<List<int>> stream) async {}
@@ -117,11 +128,11 @@ class _RecordingRequest implements HttpClientRequest {
 }
 
 class _RecordingResponse implements HttpClientResponse {
-  _RecordingResponse(this.body);
+  _RecordingResponse(this.body, this.statusCode);
   final String body;
 
   @override
-  int get statusCode => 200;
+  final int statusCode;
   @override
   int get contentLength => -1;
   @override
@@ -249,6 +260,28 @@ void main() {
             'GET /api/v0/files?rootDir=report.pdf can only 404 — the path '
             'names a file, not a directory',
       );
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  testWidgets('a folder route that does not exist ends in an error', (
+    tester,
+  ) async {
+    // #2073: the stat 404s, and a path that does not look like a file was
+    // handed to `_setPath` — which does nothing when the route already points
+    // there, as a deep link's does. No listing was ever issued, so the page
+    // sat on "Opening folder" forever with no way out but the browser's back.
+    final overrides = _RecordingHttpOverrides();
+    await HttpOverrides.runZoned(() async {
+      await tester.pumpWidget(
+        const MaterialApp(home: FileBrowserPage(initialPath: 'missing')),
+      );
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      expect(listingsOf(overrides.requested, 'missing'), isNotEmpty);
+      expect(find.text('Opening folder'), findsNothing);
+      expect(find.text('Go to /files'), findsOneWidget);
     }, createHttpClient: overrides.createHttpClient);
   });
 
