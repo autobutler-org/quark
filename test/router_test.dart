@@ -3,8 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/models/trash_item.dart';
+import 'package:quark/pages/login_page.dart';
+import 'package:quark/pages/recover_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/auth_service.dart';
 
 void main() {
   group('AppRoutes.encodeFilePath', () {
@@ -377,6 +380,204 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('terms'), findsOneWidget);
+    });
+  });
+
+  // #2063: browser Back did nothing on Forgot password, and /forgot-password
+  // typed as a URL was Page not found.
+  group('browser history', () {
+    final settings = AppSettings.instance;
+
+    const secureStorage = MethodChannel(
+      'plugins.it_nomads.com/flutter_secure_storage',
+    );
+
+    /// The browser's history stack, built from what the router reports to
+    /// the engine: on web each report is a pushState, or a replaceState when
+    /// it says `replace`.
+    final history = <String>[];
+
+    setUpAll(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(secureStorage, (_) async => null);
+    });
+
+    tearDownAll(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(secureStorage, null);
+    });
+
+    Future<void> reset() async {
+      while (settings.hosts.isNotEmpty) {
+        await settings.removeHost(settings.hosts.length - 1);
+      }
+      await settings.setSessionToken(null);
+      authStatusProbe = AuthService.checkStatus;
+    }
+
+    setUp(() async {
+      await reset();
+      history.clear();
+      await settings.addHost(
+        HostEntry(name: 'Home', hostAddress: 'http://history.local'),
+      );
+      await settings.acceptTerms();
+      authStatusProbe = () async => const AuthStatus(setupComplete: true);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.navigation, (call) async {
+            if (call.method != 'routeInformationUpdated') return null;
+            final args = call.arguments as Map;
+            final uri = (args['uri'] ?? args['location']).toString();
+            if (args['replace'] == true && history.isNotEmpty) {
+              history.last = uri;
+            } else {
+              history.add(uri);
+            }
+            return null;
+          });
+    });
+
+    tearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.navigation, null);
+      await reset();
+    });
+
+    /// Browser Back: the browser drops its current entry and the engine
+    /// hands the framework the one before it.
+    Future<void> browserBack(WidgetTester tester) async {
+      history.removeLast();
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        'flutter/navigation',
+        const JSONMethodCodec().encodeMethodCall(
+          MethodCall('pushRouteInformation', {
+            'location': history.last,
+            'state': null,
+          }),
+        ),
+        (_) {},
+      );
+      await tester.pumpAndSettle();
+    }
+
+    /// The app's real routes and gate.
+    Future<GoRouter> pumpRealRoutes(
+      WidgetTester tester,
+      String initialLocation,
+    ) async {
+      final testRouter = GoRouter(
+        initialLocation: initialLocation,
+        redirect: authRedirect,
+        refreshListenable: routerRefreshListenable,
+        routes: router.configuration.routes,
+      );
+      addTearDown(testRouter.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: testRouter));
+      await tester.pumpAndSettle();
+      return testRouter;
+    }
+
+    String location(GoRouter r) =>
+        r.routeInformationProvider.value.uri.toString();
+
+    testWidgets('/forgot-password opens recovery with the username kept', (
+      tester,
+    ) async {
+      final r = await pumpRealRoutes(tester, '/forgot-password?username=ada');
+
+      expect(find.byType(RecoverPage), findsOneWidget);
+      expect(location(r), '/recover?username=ada');
+      expect(find.text('ada'), findsOneWidget);
+    });
+
+    testWidgets('Forgot password is a history entry browser Back leaves', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final r = GoRouter(
+        initialLocation: AppRoutes.login,
+        redirect: authRedirect,
+        refreshListenable: routerRefreshListenable,
+        routes: [
+          GoRoute(
+            path: AppRoutes.login,
+            builder: (context, _) => LoginPage(
+              onLoginSuccess: () {},
+              checkStatus: () => authStatusProbe(),
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.recover,
+            builder: (_, state) => RecoverPage(
+              initialUsername: state.uri.queryParameters['username'],
+            ),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, 'ada');
+      await tester.tap(find.text('Forgot password?'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RecoverPage), findsOneWidget);
+      expect(location(r), '/recover?username=ada');
+      expect(history.last, '/recover?username=ada');
+
+      await browserBack(tester);
+
+      expect(find.byType(RecoverPage), findsNothing);
+      expect(find.byType(LoginPage), findsOneWidget);
+      expect(location(r), AppRoutes.login);
+    });
+
+    testWidgets('the recover page offers its own way back to sign in', (
+      tester,
+    ) async {
+      final r = await pumpRealRoutes(tester, AppRoutes.recover);
+
+      final back = find.byKey(const ValueKey('recover_back'));
+      await tester.ensureVisible(back);
+      await tester.tap(back);
+      await tester.pumpAndSettle();
+
+      expect(location(r), AppRoutes.login);
+    });
+
+    testWidgets('browser Back from Settings returns to Files', (tester) async {
+      await settings.setSessionToken('a-token');
+      final r = GoRouter(
+        initialLocation: AppRoutes.files,
+        redirect: authRedirect,
+        refreshListenable: routerRefreshListenable,
+        routes: [
+          GoRoute(
+            path: AppRoutes.files,
+            builder: (_, _) => const Scaffold(body: Text('files')),
+          ),
+          GoRoute(
+            path: AppRoutes.settings,
+            builder: (_, _) => const Scaffold(body: Text('settings')),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+
+      r.go(AppRoutes.settings);
+      await tester.pumpAndSettle();
+      expect(history, [AppRoutes.files, AppRoutes.settings]);
+
+      await browserBack(tester);
+
+      expect(find.text('files'), findsOneWidget);
+      expect(location(r), AppRoutes.files);
     });
   });
 }

@@ -209,9 +209,12 @@ class _LoginPageState extends State<LoginPage> {
   /// leave the address bar reading /login.
   void _goToRequestAccount() => context.go(AppRoutes.requestAccount);
 
+  /// Navigates rather than pushes, like [_goToSetup]: a pushed route leaves
+  /// the address bar reading /login and gives browser Back no entry to leave
+  /// (#2063).
   void _goToRecover() {
     final username = _usernameController.text.trim();
-    context.push(
+    context.go(
       Uri(
         path: AppRoutes.recover,
         queryParameters: username.isEmpty ? null : {'username': username},
@@ -219,7 +222,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  /// Unlike [_goToRecover] this navigates rather than pushes: go_router's
+  /// Navigates rather than pushes: go_router's
   /// `optionURLReflectsImperativeAPIs` is false, so a pushed route renders the
   /// setup wizard while the address bar still reads /login (#1827). /setup is
   /// a top-level page, not a drill-down, so `go` is the right call anyway.

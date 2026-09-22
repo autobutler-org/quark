@@ -96,6 +96,9 @@ class _RecoverPageState extends State<RecoverPage> {
     }
   }
 
+  /// The page is reached with `go`, so nothing sits under it to pop (#2063).
+  void _backToSignIn() => context.go(AppRoutes.login);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -272,6 +275,12 @@ class _RecoverPageState extends State<RecoverPage> {
                               ),
                             )
                           : const Text('Reset password'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      key: const ValueKey('recover_back'),
+                      onPressed: _loading ? null : _backToSignIn,
+                      child: const Text('Back to sign in'),
                     ),
                   ],
                 ),

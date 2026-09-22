@@ -62,6 +62,10 @@ class AppRoutes {
   static const login = '/login';
   static const recover = '/recover';
 
+  /// Alias for [recover]: the address people guess for password recovery
+  /// (#2063). Redirects there with the query kept.
+  static const forgotPassword = '/forgot-password';
+
   /// Asking this Quark for an account (#1908). Reachable without a session.
   static const requestAccount = '/request-account';
   static const terms = '/terms';
@@ -396,6 +400,11 @@ final router = GoRouter(
           RecoverPage(initialUsername: state.uri.queryParameters['username']),
     ),
     GoRoute(
+      path: AppRoutes.forgotPassword,
+      redirect: (context, state) =>
+          state.uri.replace(path: AppRoutes.recover).toString(),
+    ),
+    GoRoute(
       path: AppRoutes.requestAccount,
       builder: (context, state) => const RequestAccountPage(),
     ),
@@ -483,6 +492,7 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
   const publicRoutes = {
     AppRoutes.setup,
     AppRoutes.recover,
+    AppRoutes.forgotPassword,
     AppRoutes.requestAccount,
   };
   if (publicRoutes.contains(location)) return null;

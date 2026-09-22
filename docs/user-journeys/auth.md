@@ -100,7 +100,8 @@ Covers first-boot setup, login, logout, and password recovery.
 
 1. Navigate to `/login`, optionally typing a username.
 2. Tap **Forgot password** (or equivalent link).
-3. App navigates to `/recover`, with the username field prefilled from the login form when one was typed.
+3. App navigates to `/recover` (the address bar reads `/recover`), with the username field prefilled from the login
+   form when one was typed. Opening `/forgot-password` directly lands here too.
 4. Enter or confirm the username.
 5. Enter that account's recovery phrase.
 6. Enter a new password.
@@ -113,6 +114,7 @@ Covers first-boot setup, login, logout, and password recovery.
 - The named account can log in with the new password.
 - That account's old password no longer works.
 - Every other account's password is unchanged.
+- Before step 8, browser Back or **Back to sign in** returns to `/login`.
 
 ---
 
