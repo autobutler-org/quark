@@ -33,6 +33,14 @@ String fileExtension(String name) {
 FileKind fileKindForName(String name) =>
     _kindByExtension[fileExtension(name)] ?? FileKind.generic;
 
+/// Extensions of files people write prose in. Narrower than [FileKind.text] on
+/// purpose: a `.log` or `.env` file is text, but underlining its tokens as
+/// misspellings would be noise.
+const proseExtensions = {'.txt', '.md', '.markdown', '.rst'};
+
+/// Whether [name] is a file people write prose in, and so worth spell checking.
+bool isProseFile(String name) => proseExtensions.contains(fileExtension(name));
+
 /// Image extensions the server's thumbnail endpoint can decode. Narrower than
 /// [FileKind.image] on purpose: raw camera formats, BMP and TIFF are images
 /// the server cannot resize, so their rows keep the plain icon.

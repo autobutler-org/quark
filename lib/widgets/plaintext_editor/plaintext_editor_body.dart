@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/spell_check.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The plaintext editor's surface: a spinner while the file loads, whatever
@@ -15,11 +16,16 @@ class PlaintextEditorBody extends StatelessWidget {
   final VoidCallback onRetry;
   final TextEditingController controller;
 
+  /// Underline misspellings, for a file people write prose in. Only takes
+  /// effect on a platform with a spell checker (iOS and Android).
+  final bool spellCheck;
+
   const PlaintextEditorBody({
     required this.loading,
     required this.error,
     required this.onRetry,
     required this.controller,
+    this.spellCheck = false,
     super.key,
   });
 
@@ -64,6 +70,9 @@ class PlaintextEditorBody extends StatelessWidget {
         controller: controller,
         maxLines: null,
         keyboardType: TextInputType.multiline,
+        spellCheckConfiguration: spellCheck
+            ? proseSpellCheck()
+            : const SpellCheckConfiguration.disabled(),
         style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
         decoration: const InputDecoration(
           border: InputBorder.none,

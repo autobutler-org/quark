@@ -7,6 +7,7 @@ import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
+import 'package:quark/utils/file_kind.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/plaintext_editor/plaintext_editor_body.dart';
 
@@ -167,6 +168,7 @@ class _PlaintextEditorPageState extends State<PlaintextEditorPage> {
         error: _error,
         onRetry: _loadFile,
         controller: _textController,
+        spellCheck: isProseFile(widget.filePath),
       ),
     );
   }

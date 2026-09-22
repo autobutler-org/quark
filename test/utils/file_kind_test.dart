@@ -22,4 +22,14 @@ void main() {
       );
     }
   });
+
+  test('only prose files are spell checked', () {
+    for (final name in ['notes.txt', 'README.md', 'guide.markdown', 'a.RST']) {
+      expect(isProseFile(name), isTrue, reason: name);
+    }
+    // Text, but not prose: underlining its tokens would be noise.
+    for (final name in ['server.log', '.env', 'main.go', 'app.json', 'x']) {
+      expect(isProseFile(name), isFalse, reason: name);
+    }
+  });
 }
