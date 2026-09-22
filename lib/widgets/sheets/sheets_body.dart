@@ -41,6 +41,10 @@ class SheetsBody extends StatelessWidget {
   final ValueChanged<FileNode> onOpenSheet;
   final ValueChanged<FileNode> onOpenDoc;
 
+  /// Renames a listed file. Content-only hits carry no [FileNode], so their
+  /// rows have no menu.
+  final ValueChanged<FileNode>? onRename;
+
   const SheetsBody({
     required this.loading,
     required this.error,
@@ -53,6 +57,7 @@ class SheetsBody extends StatelessWidget {
     required this.onCreateNew,
     required this.onOpenSheet,
     required this.onOpenDoc,
+    this.onRename,
     super.key,
   });
 
@@ -179,12 +184,14 @@ class SheetsBody extends StatelessWidget {
       for (final node in [...files, ...otherFiles])
         node.deviceSerial: node.deviceName,
     };
+    final onRename = this.onRename;
     DocSheetTile nodeTile(FileNode node, VoidCallback onTap) => DocSheetTile(
       relPath: node.apiPath,
       deviceName: node.deviceName,
       showDevice: showDevice,
       snippet: snippets[DocSheetTile.fileKey(node.deviceSerial, node.apiPath)],
       onTap: onTap,
+      onRename: onRename == null ? null : () => onRename(node),
     );
     ContentResultTile hitTile(ContentSearchResult r) => ContentResultTile(
       result: r,

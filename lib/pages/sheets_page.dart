@@ -10,6 +10,7 @@ import 'package:quark/services/content_search_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
+import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -127,6 +128,15 @@ class _SheetsPageState extends State<SheetsPage>
     manualRefresh();
   }
 
+  Future<void> _renameFile(FileNode node) async {
+    final renamed = await renameDocOrSheet(
+      context,
+      node,
+      siblings: [..._files, ..._docs],
+    );
+    if (renamed) manualRefresh();
+  }
+
   Future<void> _createNewSheet() async {
     final name = await promptForNewFileName(
       context,
@@ -197,6 +207,7 @@ class _SheetsPageState extends State<SheetsPage>
               onCreateNew: _createNewSheet,
               onOpenSheet: _openSheet,
               onOpenDoc: _openDoc,
+              onRename: _renameFile,
             ),
           ),
         ],
