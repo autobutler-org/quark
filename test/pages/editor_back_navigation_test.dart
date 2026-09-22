@@ -114,19 +114,29 @@ void main() {
     }
   });
 
-  testWidgets('back from a doc pushed by the docs list returns to the list', (
-    tester,
-  ) async {
-    final router = await pumpEditors(tester, initialLocation: AppRoutes.docs);
-    router.push(AppRoutes.docFile('reports/2024/q1.qdoc'));
-    await tester.pumpAndSettle();
+  group('system back from an editor with nothing underneath', () {
+    // Every entry point now opens an editor at its own URL (#2078, #2081), so
+    // a system back that closed the app would be the common case, not a
+    // deep-link corner.
+    for (final entry in const {
+      'doc': '/docs/reports/2024/q1.qdoc',
+      'sheet': '/sheets/reports/2024/budget.qsheet',
+      'plaintext': '/edit/reports/2024/notes.txt',
+    }.entries) {
+      testWidgets('${entry.key} editor lands in the containing folder', (
+        tester,
+      ) async {
+        final router = await pumpEditors(tester, initialLocation: entry.value);
 
-    expect(find.byType(DocumentEditorPage), findsOneWidget);
+        final handled = await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(BackButton));
-    await tester.pumpAndSettle();
-
-    // Popping, not a jump to the folder: the list is where the user came from.
-    expect(find.text('docs list'), findsOneWidget);
+        expect(handled, isTrue, reason: 'the app must not close');
+        expect(
+          router.routeInformationProvider.value.uri.toString(),
+          '/files/reports/2024',
+        );
+      });
+    }
   });
 }

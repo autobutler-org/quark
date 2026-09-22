@@ -53,8 +53,6 @@ KeyEventResult? quillFindKeyInterceptor(KeyEvent event, VoidCallback onToggle) {
 class DocumentEditorPage extends StatefulWidget {
   final String filePath;
   final String deviceSerial;
-  final String? overlayTargetRoute;
-  final String? overlayCloseRoute;
 
   /// Opens ready to type instead of read-only. Set by the create flows: a
   /// document the user just made has nothing to read yet (#1568).
@@ -63,8 +61,6 @@ class DocumentEditorPage extends StatefulWidget {
   const DocumentEditorPage({
     required this.filePath,
     this.deviceSerial = '',
-    this.overlayTargetRoute,
-    this.overlayCloseRoute,
     this.startInEditMode = false,
     super.key,
   });
@@ -87,7 +83,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   /// The thrown object, not its message — the render decides whether it means
   /// "your Quark is unreachable" or "the request failed" (#1637).
   Object? _error;
-  bool _routeMovedExternally = false;
 
   // Read-only / edit mode (#939)
   late bool _isReadOnly = !widget.startInEditMode;
@@ -128,9 +123,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     WidgetsBinding.instance.addObserver(this);
     _displayName = _nameFromPath(widget.filePath);
     _controller = QuillController.basic()..readOnly = _isReadOnly;
-    if (widget.overlayTargetRoute != null) {
-      router.routeInformationProvider.addListener(_handleOverlayRouteChange);
-    }
     _loadPrefs();
     _loadDocument();
   }
@@ -143,9 +135,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     _wordCountTimer?.cancel();
     _docChanges?.cancel();
     _wordCount.dispose();
-    if (widget.overlayTargetRoute != null) {
-      router.routeInformationProvider.removeListener(_handleOverlayRouteChange);
-    }
     _controller.dispose();
     _editorFocus.dispose();
     _scrollController.dispose();
@@ -156,41 +145,13 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
 
   String _nameFromPath(String path) => fileNameWithoutExtension(path, '.qdoc');
 
-  /// The live location, canonicalized. go_router always reports it
-  /// percent-encoded while `overlayTargetRoute` is built from the raw path, so
-  /// comparing the two directly reported "moved externally" for every file
-  /// whose name needed encoding — a space being the common case — and popped
-  /// the editor the instant it opened (#1604).
-  String _currentRoute() => AppRoutes.canonicalRoute(
-    router.routeInformationProvider.value.uri.toString(),
-  );
-
-  bool _isOnRoute(String route) =>
-      _currentRoute() == AppRoutes.canonicalRoute(route);
-
-  Future<void> _handleOverlayRouteChange() async {
-    final targetRoute = widget.overlayTargetRoute;
-    if (targetRoute == null || !mounted || _isOnRoute(targetRoute)) {
-      return;
-    }
-
-    _routeMovedExternally = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) {
-        return;
-      }
-      await Navigator.of(context).maybePop();
-    });
-  }
-
   /// The editor's own way out when nothing was pushed underneath it.
   ///
-  /// [AppBar] implies a back button only when the navigator can pop, so a doc
-  /// reached by deep link or a pasted URL had no way out at all except the
-  /// browser's, which walked to whatever sat before the app. Returning null
-  /// leaves every other entry point — the docs list, a search hit, the file
-  /// browser's overlay — on the implied button, and their existing pop
-  /// handling (#1749).
+  /// [AppBar] implies a back button only when the navigator can pop. The
+  /// docs list, a search hit and the file browser all open a doc at its own
+  /// URL (#2078), so nothing is underneath it and this is the button every
+  /// entry point gets. It lands in the folder that holds the doc, not the
+  /// home folder (#1749).
   Widget? _backButton() => Navigator.of(context).canPop()
       ? null
       : BackButton(onPressed: _leaveForContainingFolder);
@@ -203,20 +164,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     }
     if (!mounted) return;
     context.go(AppRoutes.containingFolder(widget.filePath));
-  }
-
-  void _restoreOverlayCloseRoute() {
-    final targetRoute = widget.overlayTargetRoute;
-    final closeRoute = widget.overlayCloseRoute;
-    if (targetRoute == null || closeRoute == null) {
-      return;
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_routeMovedExternally && _isOnRoute(targetRoute)) {
-        router.go(closeRoute);
-      }
-    });
   }
 
   Future<void> _loadPrefs() async {
@@ -524,11 +471,15 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
 
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.of(context).canPop();
     return PopScope(
-      canPop: !_dirty,
+      // With nothing underneath, a system back would close the app; it
+      // leaves for the containing folder, as the app bar's back button does.
+      canPop: !_dirty && canPop,
       onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) {
-          _restoreOverlayCloseRoute();
+        if (didPop) return;
+        if (!canPop) {
+          await _leaveForContainingFolder();
           return;
         }
         final leave = await _confirmDiscard(context);
@@ -537,11 +488,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
         }
         if (leave) {
           Navigator.of(context).pop();
-          return;
-        }
-        if (_routeMovedExternally && widget.overlayTargetRoute != null) {
-          _routeMovedExternally = false;
-          router.go(widget.overlayTargetRoute!);
         }
       },
       child: CallbackShortcuts(

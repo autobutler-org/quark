@@ -53,14 +53,10 @@ class _SheetTab {
 class SpreadsheetEditorPage extends StatefulWidget {
   final String filePath;
   final String deviceSerial;
-  final String? overlayTargetRoute;
-  final String? overlayCloseRoute;
 
   const SpreadsheetEditorPage({
     required this.filePath,
     this.deviceSerial = '',
-    this.overlayTargetRoute,
-    this.overlayCloseRoute,
     super.key,
   });
 
@@ -76,7 +72,6 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   /// The thrown object, not its message — the render decides whether it means
   /// "your Quark is unreachable" or "the request failed" (#1637).
   Object? _error;
-  bool _routeMovedExternally = false;
 
   List<_SheetTab> _tabs = [];
   int _selected = 0;
@@ -87,77 +82,29 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   String get _displayName =>
       fileNameWithoutExtension(widget.filePath, '.qsheet');
 
-  /// The live location, canonicalized. go_router always reports it
-  /// percent-encoded while `overlayTargetRoute` is built from the raw path, so
-  /// comparing the two directly reported "moved externally" for every file
-  /// whose name needed encoding — a space being the common case — and popped
-  /// the editor the instant it opened (#1604).
-  String _currentRoute() => AppRoutes.canonicalRoute(
-    router.routeInformationProvider.value.uri.toString(),
-  );
-
-  bool _isOnRoute(String route) =>
-      _currentRoute() == AppRoutes.canonicalRoute(route);
-
-  Future<void> _handleOverlayRouteChange() async {
-    final targetRoute = widget.overlayTargetRoute;
-    if (targetRoute == null || !mounted || _isOnRoute(targetRoute)) {
-      return;
-    }
-
-    _routeMovedExternally = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) {
-        return;
-      }
-      await Navigator.of(context).maybePop();
-    });
-  }
-
   /// The editor's own way out when nothing was pushed underneath it.
   ///
-  /// [AppBar] implies a back button only when the navigator can pop, so a sheet
-  /// reached by deep link or a pasted URL had no way out at all except the
-  /// browser's, which walked to whatever sat before the app. Returning null
-  /// leaves every other entry point — the sheets list, a search hit, the file
-  /// browser's overlay — on the implied button, and their existing pop
-  /// handling (#1749).
+  /// [AppBar] implies a back button only when the navigator can pop. The
+  /// sheets list, a search hit and the file browser all open a sheet at its own
+  /// URL (#2078), so nothing is underneath it and this is the button every
+  /// entry point gets. It lands in the folder that holds the sheet, not the
+  /// home folder (#1749).
   Widget? _backButton() => Navigator.of(context).canPop()
       ? null
-      : BackButton(
-          onPressed: () =>
-              context.go(AppRoutes.containingFolder(widget.filePath)),
-        );
+      : BackButton(onPressed: _leaveForContainingFolder);
 
-  void _restoreOverlayCloseRoute() {
-    final targetRoute = widget.overlayTargetRoute;
-    final closeRoute = widget.overlayCloseRoute;
-    if (targetRoute == null || closeRoute == null) {
-      return;
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_routeMovedExternally && _isOnRoute(targetRoute)) {
-        router.go(closeRoute);
-      }
-    });
-  }
+  void _leaveForContainingFolder() =>
+      context.go(AppRoutes.containingFolder(widget.filePath));
 
   @override
   void initState() {
     super.initState();
-    if (widget.overlayTargetRoute != null) {
-      router.routeInformationProvider.addListener(_handleOverlayRouteChange);
-    }
     _loadFile();
   }
 
   @override
   void dispose() {
     _autoSaveTimer?.cancel();
-    if (widget.overlayTargetRoute != null) {
-      router.routeInformationProvider.removeListener(_handleOverlayRouteChange);
-    }
     for (final tab in _tabs) {
       tab.dispose();
     }
@@ -390,9 +337,11 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   @override
   Widget build(BuildContext context) {
     final title = widget.filePath.split('/').last;
+    final error = _error;
+    final Widget page;
 
     if (_loading) {
-      return Scaffold(
+      page = Scaffold(
         appBar: AppBar(
           leading: _backButton(),
           title: Text(title),
@@ -400,11 +349,8 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
-    }
-
-    final error = _error;
-    if (error != null) {
-      return Scaffold(
+    } else if (error != null) {
+      page = Scaffold(
         appBar: AppBar(
           leading: _backButton(),
           title: Text(title),
@@ -417,17 +363,9 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
               )
             : Center(child: Text(Errors.message(error, 'load the sheet'))),
       );
-    }
-
-    final tab = _tabs[_selected];
-
-    return PopScope(
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) {
-          _restoreOverlayCloseRoute();
-        }
-      },
-      child: Scaffold(
+    } else {
+      final tab = _tabs[_selected];
+      page = Scaffold(
         appBar: AppBar(
           leading: _backButton(),
           title: Text(title),
@@ -471,7 +409,18 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
             onDelete: _deleteTab,
           ),
         ),
-      ),
+      );
+    }
+
+    final canPop = Navigator.of(context).canPop();
+    return PopScope(
+      // With nothing underneath, a system back would close the app; it
+      // leaves for the containing folder, as the app bar's back button does.
+      canPop: canPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !canPop) _leaveForContainingFolder();
+      },
+      child: page,
     );
   }
 }

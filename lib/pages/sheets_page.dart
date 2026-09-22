@@ -113,19 +113,11 @@ class _SheetsPageState extends State<SheetsPage>
     });
   }
 
-  Future<void> _openSheet(FileNode node) async {
-    await context.push(
-      AppRoutes.sheetFile(node.apiPath, serial: node.deviceSerial),
-    );
-    manualRefresh();
-  }
+  void _openSheet(FileNode node) =>
+      context.go(AppRoutes.sheetFile(node.apiPath, serial: node.deviceSerial));
 
-  Future<void> _openDoc(FileNode node) async {
-    await context.push(
-      AppRoutes.docFile(node.apiPath, serial: node.deviceSerial),
-    );
-    manualRefresh();
-  }
+  void _openDoc(FileNode node) =>
+      context.go(AppRoutes.docFile(node.apiPath, serial: node.deviceSerial));
 
   Future<void> _createNewSheet() async {
     final name = await promptForNewFileName(
@@ -147,8 +139,7 @@ class _SheetsPageState extends State<SheetsPage>
       );
       await FilesService.uploadFilesFromFormData('', [file]);
       if (!mounted) return;
-      context.push(AppRoutes.sheetFile(fileName));
-      manualRefresh();
+      context.go(AppRoutes.sheetFile(fileName));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -14,10 +14,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/widgets/file_browser/file_browser_create_fab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// A folder of .qdoc files. Tapping one is the exact path #1811 describes:
-/// `.qdoc` is not a generic-viewer type, so the browser navigates by route
-/// (`context.go`) rather than pushing, and `/files/:path` rebuilds the very
-/// same [FileBrowserPage] State underneath the editor it then pushes.
+/// A folder of .qdoc files, for opening one the way a user does: by tapping
+/// its row, or by loading its `/files` URL.
 class _QdocListingClient implements HttpClient {
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async =>
@@ -149,6 +147,34 @@ void main() {
       .widget<FileBrowserCreateFab>(find.byType(FileBrowserCreateFab))
       .visible;
 
+  /// Both /files routes render FileBrowserPage, exactly as lib/router.dart
+  /// does. The editor routes stand in for the real editors, which would
+  /// download the file.
+  GoRouter buildRouter(String initialLocation) => GoRouter(
+    initialLocation: initialLocation,
+    routes: [
+      GoRoute(
+        path: AppRoutes.files,
+        builder: (_, _) => const FileBrowserPage(),
+        routes: [
+          GoRoute(
+            path: ':path(.*)',
+            builder: (_, state) =>
+                FileBrowserPage(initialPath: state.pathParameters['path']),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '${AppRoutes.docs}/:path(.*)',
+        builder: (_, state) =>
+            Text('doc editor ${state.pathParameters['path']}'),
+      ),
+    ],
+  );
+
+  String location(GoRouter router) =>
+      router.routeInformationProvider.value.uri.toString();
+
   testWidgets('the create FAB comes back after a routed qdoc open', (
     tester,
   ) async {
@@ -157,31 +183,11 @@ void main() {
     addTearDown(tester.view.reset);
 
     await HttpOverrides.runZoned(() async {
-      // Both routes render FileBrowserPage, exactly as lib/router.dart does,
-      // so the State survives the go and the bug has somewhere to live.
-      final router = GoRouter(
-        initialLocation: AppRoutes.files,
-        routes: [
-          GoRoute(
-            path: AppRoutes.files,
-            builder: (_, _) => const FileBrowserPage(),
-            routes: [
-              GoRoute(
-                path: ':path(.*)',
-                builder: (_, state) =>
-                    FileBrowserPage(initialPath: state.pathParameters['path']),
-              ),
-            ],
-          ),
-        ],
-      );
+      final router = buildRouter(AppRoutes.files);
       addTearDown(router.dispose);
 
       await tester.pumpWidget(MaterialApp.router(routerConfig: router));
       await tester.pumpAndSettle();
-
-      final browserState = tester.state(find.byType(FileBrowserPage));
-      expect(browserState.mounted, isTrue);
       expect(fabVisible(tester), isTrue, reason: 'FAB starts visible');
 
       await tester.drag(find.text('doc0.qdoc'), const Offset(0, -200));
@@ -190,23 +196,47 @@ void main() {
 
       await tester.tap(find.text('doc15.qdoc'));
       await tester.pumpAndSettle();
+      expect(find.text('doc editor doc15.qdoc'), findsOneWidget);
 
-      // The /files page has to still be alive underneath, or the FAB would
-      // reset for free and this would prove nothing about #1811.
-      expect(browserState.mounted, isTrue, reason: '/files stays alive');
-
-      // Close the editor the way the app does: the editor pops itself and
-      // then sends the router back to the containing folder.
-      final navigator = tester.state<NavigatorState>(
-        find.byType(Navigator).last,
-      );
-      expect(navigator.canPop(), isTrue, reason: 'an editor must be on top');
-      navigator.pop();
-      await tester.pumpAndSettle();
+      // Close the editor the way the app does: back to the containing folder.
       router.go(AppRoutes.files);
       await tester.pumpAndSettle();
 
       expect(fabVisible(tester), isTrue, reason: 'back on the list (#1811)');
+    }, createHttpClient: (c) => _QdocListingClient());
+  });
+
+  testWidgets('a doc opened from the home folder is at its own URL (#2078)', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      final router = buildRouter(AppRoutes.files);
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('doc1.qdoc'));
+      await tester.pumpAndSettle();
+
+      // A reload reads the address bar; /files would reopen the folder.
+      expect(location(router), AppRoutes.docFile('doc1.qdoc'));
+      expect(find.text('doc editor doc1.qdoc'), findsOneWidget);
+    }, createHttpClient: (c) => _QdocListingClient());
+  });
+
+  testWidgets('a /files deep link to a doc lands on the doc URL', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      final router = buildRouter(AppRoutes.filesPath('doc3.qdoc'));
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+
+      expect(location(router), AppRoutes.docFile('doc3.qdoc'));
+      expect(find.text('doc editor doc3.qdoc'), findsOneWidget);
     }, createHttpClient: (c) => _QdocListingClient());
   });
 }
