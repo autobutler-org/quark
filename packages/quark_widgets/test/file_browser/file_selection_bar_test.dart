@@ -108,6 +108,24 @@ void main() {
     expect(tester.getRect(find.byType(FileSelectionBar)).height, 56);
   });
 
+  // The count label and a Spacer used to split the free width between them,
+  // and a Row never hands on the part a loose child leaves unused, so the
+  // actions stopped about halfway across a wide window (#2246).
+  testBothViewports('sets the actions against the right edge', (
+    tester,
+    size,
+  ) async {
+    await pumpSelectionBar(tester, size: size);
+
+    final tokens = QuarkTokens.of(
+      tester.element(find.byType(FileSelectionBar)),
+    );
+    expect(
+      tester.getRect(find.byKey(const ValueKey('file_selection_delete'))).right,
+      size.width - tokens.spacingSm,
+    );
+  });
+
   testBothViewports('offers "Select all" until everything is selected', (
     tester,
     size,

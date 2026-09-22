@@ -92,16 +92,18 @@ class FileSelectionBar extends StatelessWidget {
                   tooltip: 'Cancel selection',
                   onPressed: onCancel,
                 ),
-                // Flexible so the count is clipped on a narrow phone rather
-                // than pushing the actions off the row (#1599).
-                Flexible(
+                // Expanded so the count is clipped on a narrow phone rather
+                // than pushing the actions off the row (#1599), and so it is
+                // the only flex child: beside a Spacer it was allotted half
+                // the free width, used a sliver of it, and left the actions
+                // stranded mid-row (#2246).
+                Expanded(
                   child: Text(
                     '$selectedCount selected',
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
-                const Spacer(),
                 TextButton(
                   key: const ValueKey('file_selection_toggle_all'),
                   onPressed: selectedCount < totalCount
