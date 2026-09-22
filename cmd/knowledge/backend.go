@@ -154,6 +154,13 @@ func handlerPackage(root, path string) string {
 var (
 	createTableRe = regexp.MustCompile(`(?is)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[` + "`" + `"\[]?([a-zA-Z_][a-zA-Z0-9_]*)`)
 	queryNameRe   = regexp.MustCompile(`(?m)^--\s*name:\s*(\w+)\s*(:\w+)?`)
+
+	// A leading CTE is common enough that the verb check has to look past it.
+	cte      = `(?is)^\s*(?:WITH\b.*?\)\s*)?`
+	selectRe = regexp.MustCompile(cte + `SELECT\b`)
+	insertRe = regexp.MustCompile(cte + `INSERT\b`)
+	updateRe = regexp.MustCompile(cte + `UPDATE\b`)
+	deleteRe = regexp.MustCompile(cte + `DELETE\b`)
 )
 
 // collectData reads the migrations for the schema and sql/queries for the sqlc
@@ -179,13 +186,20 @@ func collectData(root string, b *builder) error {
 				continue
 			}
 			tables[name] = regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(name) + `\b`)
+			meta := map[string]string{"created by": filepath.Base(m)}
+			doc := ""
+			if columns := tableColumns(string(raw), match[0]); len(columns) > 0 {
+				meta["columns"] = strconv.Itoa(len(columns))
+				doc = "Columns: " + truncate(strings.Join(columns, ", "), 200)
+			}
 			b.node(Node{
 				Kind:  "table",
 				ID:    "table:" + name,
 				Label: name,
 				Layer: "database",
 				Path:  filepath.ToSlash(filepath.Join("internal", "db", "migrations", filepath.Base(m))),
-				Meta:  map[string]string{"created by": filepath.Base(m)},
+				Doc:   doc,
+				Meta:  meta,
 			})
 		}
 	}
@@ -221,20 +235,161 @@ func collectData(root string, b *builder) error {
 			if kind != "" {
 				meta["returns"] = kind
 			}
+
+			var touched []string
+			for table, matcher := range tables {
+				if matcher.MatchString(statement) {
+					b.edge(id, "table:"+table, "touches")
+					touched = append(touched, table)
+				}
+			}
+			sort.Strings(touched)
+
 			b.node(Node{
 				ID:    id,
 				Kind:  "query",
 				Label: name,
 				Layer: "database",
 				Path:  rel,
+				Doc:   queryDoc(body, loc[0], statement, touched),
 				Meta:  meta,
 			})
-			for table, matcher := range tables {
-				if matcher.MatchString(statement) {
-					b.edge(id, "table:"+table, "touches")
-				}
-			}
 		}
 	}
 	return nil
+}
+
+// tableColumns pulls the column names out of a CREATE TABLE body, skipping the
+// table-level constraints that share the same comma-separated list.
+func tableColumns(migration, createClause string) []string {
+	start := strings.Index(migration, createClause)
+	if start < 0 {
+		return nil
+	}
+	open := strings.Index(migration[start:], "(")
+	if open < 0 {
+		return nil
+	}
+	open += start
+
+	depth, end := 0, -1
+	for i := open; i < len(migration) && end < 0; i++ {
+		switch migration[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				end = i
+			}
+		}
+	}
+	if end < 0 {
+		return nil
+	}
+
+	var columns []string
+	depth = 0
+	var field strings.Builder
+	flush := func() {
+		entry := strings.TrimSpace(field.String())
+		field.Reset()
+		// A table-level constraint can open its parenthesis with no space —
+		// UNIQUE(serial, rel_path) — so the name ends at punctuation, not just space.
+		name := entry
+		if cut := strings.IndexAny(entry, " \t("); cut >= 0 {
+			name = entry[:cut]
+		}
+		name = strings.Trim(name, "`\"[]")
+		if name == "" || isConstraintKeyword(name) {
+			return
+		}
+		columns = append(columns, name)
+	}
+	for _, r := range stripSQLComments(migration[open+1 : end]) {
+		switch {
+		case r == '(':
+			depth++
+		case r == ')':
+			depth--
+		case r == ',' && depth == 0:
+			flush()
+			continue
+		case r == '\n' || r == '\t':
+			r = ' '
+		}
+		field.WriteRune(r)
+	}
+	flush()
+	return columns
+}
+
+// stripSQLComments drops `--` to end of line. Migrations annotate columns inline, and
+// the comment text would otherwise be read as further columns.
+func stripSQLComments(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		if idx := strings.Index(line, "--"); idx >= 0 {
+			lines[i] = line[:idx]
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// isConstraintKeyword reports whether a comma-separated entry in a CREATE TABLE body
+// is a table-level constraint rather than a column.
+func isConstraintKeyword(word string) bool {
+	switch strings.ToUpper(word) {
+	case "PRIMARY", "FOREIGN", "UNIQUE", "CHECK", "CONSTRAINT":
+		return true
+	}
+	return false
+}
+
+// queryDoc prefers the comment a query was written with, and otherwise says what the
+// statement does in one mechanical sentence.
+func queryDoc(body string, headerStart int, statement string, touched []string) string {
+	if prose := commentAbove(body, headerStart); prose != "" {
+		return prose
+	}
+	verb := ""
+	switch {
+	case selectRe.MatchString(statement):
+		verb = "Reads"
+	case insertRe.MatchString(statement):
+		verb = "Inserts into"
+	case updateRe.MatchString(statement):
+		verb = "Updates"
+	case deleteRe.MatchString(statement):
+		verb = "Deletes from"
+	default:
+		return ""
+	}
+	if len(touched) == 0 {
+		return verb + " the database."
+	}
+	return verb + " " + strings.Join(touched, ", ") + "."
+}
+
+// commentAbove reads the `--` lines directly above a query's name header, stopping at
+// a blank line or another header.
+func commentAbove(body string, headerStart int) string {
+	// Drop only the newline that ends the line above the header. Trimming more would
+	// let a comment separated by a blank line attach to a query it does not describe.
+	lines := strings.Split(strings.TrimSuffix(body[:headerStart], "\n"), "\n")
+	var block []string
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			break
+		}
+		if !strings.HasPrefix(line, "--") || queryNameRe.MatchString(line) {
+			break
+		}
+		block = append([]string{strings.TrimSpace(strings.TrimPrefix(line, "--"))}, block...)
+	}
+	if len(block) == 0 {
+		return ""
+	}
+	return truncate(strings.Join(block, " "), 240)
 }

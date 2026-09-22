@@ -36,19 +36,20 @@ func collectDart(root string, b *builder) error {
 				return err
 			}
 			rel = filepath.ToSlash(rel)
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
 			b.node(Node{
 				ID:    "dart:" + rel,
 				Kind:  "dart-file",
 				Label: rel,
 				Layer: dartLayer(rel),
 				Path:  rel,
+				Doc:   dartFileDoc(string(raw)),
 				Meta:  map[string]string{"package": pkgName},
 			})
 
-			raw, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
 			for _, m := range dartImportRe.FindAllStringSubmatch(string(raw), -1) {
 				if target := resolveDartImport(root, libDirs, rel, m[1]); target != "" {
 					b.edge("dart:"+rel, "dart:"+target, "imports")
@@ -120,6 +121,76 @@ func resolveDartImport(root string, libDirs map[string]string, from, target stri
 	return resolved
 }
 
+// dartFileDoc returns the first `///` block that documents a top-level declaration,
+// which in this codebase is the file's main class, or the `library;` directive a
+// barrel or multi-declaration file documents instead. Both the comment and the thing it
+// documents have to sit at column zero, so a doc on an indented member — a route
+// constant inside AppRoutes, say — is not mistaken for the file's own summary.
+//
+// It returns "" when nothing qualifies, because a wrong description is worse than none.
+func dartFileDoc(content string) string {
+	lines := strings.Split(content, "\n")
+	for i := 0; i < len(lines); i++ {
+		if !strings.HasPrefix(lines[i], "///") {
+			continue
+		}
+		end := i
+		for end < len(lines) && strings.HasPrefix(lines[end], "///") {
+			end++
+		}
+		// Annotations sit between the doc and the declaration.
+		next := end
+		for next < len(lines) && (strings.TrimSpace(lines[next]) == "" || strings.HasPrefix(lines[next], "@")) {
+			next++
+		}
+		if next < len(lines) && declaresTopLevel(lines[next]) {
+			return firstParagraph(lines[i:end])
+		}
+		i = end
+	}
+	return ""
+}
+
+// declaresTopLevel reports whether a column-zero line begins a declaration, or the
+// library directive, rather than another directive or a comment.
+func declaresTopLevel(line string) bool {
+	if line == "" || line != strings.TrimLeft(line, " \t") {
+		return false
+	}
+	for _, skip := range []string{"//", "/*", "*", "import ", "export ", "part ", "@"} {
+		if strings.HasPrefix(line, skip) {
+			return false
+		}
+	}
+	return true
+}
+
+// firstParagraph joins a `///` run up to its first blank line into one sentence of
+// prose, so a long class doc contributes its summary rather than its whole body.
+func firstParagraph(block []string) string {
+	var parts []string
+	for _, l := range block {
+		text := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(l, "///"), " "))
+		if text == "" {
+			break
+		}
+		parts = append(parts, text)
+	}
+	return truncate(strings.Join(parts, " "), 240)
+}
+
+// truncate keeps a description to one readable line, cutting at a word boundary.
+func truncate(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	cut := strings.LastIndex(s[:limit], " ")
+	if cut < limit/2 {
+		cut = limit
+	}
+	return strings.TrimRight(s[:cut], " ,;:") + "…"
+}
+
 // dartLayer names the layer a Dart file sits in, following the structure AGENTS.md
 // lays out for lib/.
 func dartLayer(rel string) string {
@@ -151,15 +222,81 @@ func collectAppRoutes(root string, b *builder) error {
 	if err != nil {
 		return fmt.Errorf("router: %w", err)
 	}
-	for _, m := range appRouteRe.FindAllStringSubmatch(string(raw), -1) {
+	lines := strings.Split(string(raw), "\n")
+	pages := routeBuilders(lines)
+
+	for i, line := range lines {
+		m := appRouteRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		meta := map[string]string{"constant": "AppRoutes." + m[1]}
+		doc := docAbove(lines, i)
+		if page, ok := pages[m[1]]; ok {
+			meta["page"] = page
+			if doc == "" {
+				doc = "Renders " + page + "."
+			}
+		}
 		b.node(Node{
 			ID:    "app-route:" + m[2],
 			Kind:  "app-route",
 			Label: m[2],
 			Layer: "app route",
 			Path:  rel,
-			Meta:  map[string]string{"constant": "AppRoutes." + m[1]},
+			Doc:   doc,
+			Meta:  meta,
 		})
 	}
 	return nil
+}
+
+var (
+	routePathRe = regexp.MustCompile(`path:\s*AppRoutes\.(\w+)`)
+	// [^=]* rather than .* so this stops at the builder's own arrow. Greedy matching
+	// ran past it into the next GoRoute and gave /vault the JobsPage builder.
+	routeBuilderRe = regexp.MustCompile(`builder:[^=]*=>\s*(?:const\s+)?(\w+)\s*\(`)
+)
+
+// routeBuilders maps each AppRoutes constant to the page its GoRoute builds. The two
+// sit a few lines apart inside one GoRoute, so this pairs a path with the next
+// builder it sees and drops the pairing at the following path. A builder whose arrow
+// and page wrap onto separate lines still has to match, which is why it joins the
+// following lines before testing.
+func routeBuilders(lines []string) map[string]string {
+	pages := map[string]string{}
+	pending := ""
+	for i, line := range lines {
+		if m := routePathRe.FindStringSubmatch(line); m != nil {
+			pending = m[1]
+		}
+		// A one-line GoRoute carries its path and builder together, so the path line
+		// has to be tested for a builder too rather than skipped.
+		if pending == "" || !strings.Contains(line, "builder:") {
+			continue
+		}
+		end := min(i+3, len(lines))
+		if m := routeBuilderRe.FindStringSubmatch(strings.Join(lines[i:end], " ")); m != nil {
+			pages[pending] = m[1]
+			pending = ""
+		}
+	}
+	return pages
+}
+
+// docAbove returns the `///` block immediately above a line, at any indent, which is
+// how the route constants inside AppRoutes are documented.
+func docAbove(lines []string, idx int) string {
+	end := idx
+	for end > 0 && strings.HasPrefix(strings.TrimSpace(lines[end-1]), "///") {
+		end--
+	}
+	if end == idx {
+		return ""
+	}
+	block := make([]string, 0, idx-end)
+	for _, l := range lines[end:idx] {
+		block = append(block, strings.TrimSpace(l))
+	}
+	return firstParagraph(block)
 }
