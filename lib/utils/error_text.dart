@@ -84,6 +84,12 @@ abstract final class Errors {
   /// An album name with a `/` in it, which the Quark refuses with a 400.
   static const String albumNameHasSlash = "Album names can't contain a slash.";
 
+  /// A file or folder name that is nothing but spaces, or nothing at all.
+  static const String nameBlank = "The name can't be blank.";
+
+  /// A file or folder name longer than a filesystem allows one name to be.
+  static const String nameTooLong = 'That name is too long. Try a shorter one.';
+
   /// A failed album create, rename or move. A 409 gets [albumNameTaken] — the
   /// generic "it changed while you were working" would send the user to retry
   /// a name that will clash again. [action] is as in [message].
