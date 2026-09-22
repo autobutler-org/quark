@@ -29,6 +29,11 @@ lib/widgets/
   layout/
     app_drawer.dart             AppDrawer, QuarkDrawer wired to the router
     theme_toggle_button.dart    AppThemeToggle, ThemeToggleButton wired to AppSettings
+  login/
+    active_host_card.dart       the active Quark from AppSettings, with the
+                                button that expands the host list
+    host_switcher.dart          ActiveHostCard plus the inline HostManager,
+                                shared by the login and setup pages
   photos/
     add_to_album_sheet.dart     AddToAlbumSheet host for a photo in an album
                                 view: calls AlbumService, shows snack bars

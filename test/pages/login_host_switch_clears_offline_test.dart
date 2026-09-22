@@ -36,7 +36,11 @@ void main() {
     );
     await settings.setActiveIndex(0);
     authHttpClientFactory = _SilentClient.new;
-    authStatusProbe = () async => throw TimeoutException('no answer');
+    // Only the broken Quark is unreachable; the probe now raises the offline
+    // banner too, so the healthy one has to answer for the switch to clear it.
+    authStatusProbe = () async => settings.activeHost == 'http://localhost:8099'
+        ? throw TimeoutException('no answer')
+        : const AuthStatus(setupComplete: true);
   });
 
   tearDown(() async {

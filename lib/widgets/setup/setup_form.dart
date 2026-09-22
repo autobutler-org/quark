@@ -36,6 +36,10 @@ class SetupForm extends StatefulWidget {
   /// The submit button's label.
   final String submitLabel;
 
+  /// Shown between the subtitle and the fields — the setup page's host
+  /// switcher and connection banner. Nothing when null.
+  final Widget? header;
+
   const SetupForm({
     super.key,
     required this.formKey,
@@ -57,6 +61,7 @@ class SetupForm extends StatefulWidget {
         'Create your owner account. This is the only account that can manage '
         'the quark.',
     this.submitLabel = 'Create account',
+    this.header,
   });
 
   @override
@@ -119,6 +124,8 @@ class _SetupFormState extends State<SetupForm> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
+
+          if (widget.header != null) widget.header!,
 
           if (widget.error != null) ...[
             ErrorBanner(message: widget.error!),
