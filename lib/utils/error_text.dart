@@ -87,6 +87,10 @@ abstract final class Errors {
   /// A file or folder name that is nothing but spaces, or nothing at all.
   static const String nameBlank = "The name can't be blank.";
 
+  /// A spreadsheet tab name another tab in the same sheet has, ignoring case.
+  static const String sheetNameTaken =
+      "There's already a sheet with that name here.";
+
   /// A file or folder name longer than a filesystem allows one name to be.
   static const String nameTooLong = 'That name is too long. Try a shorter one.';
 

@@ -12,6 +12,7 @@ import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
+import 'package:quark/utils/sheet_tab_names.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/spreadsheet_editor/sheet_tab_view.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -65,8 +66,7 @@ class SpreadsheetEditorPage extends StatefulWidget {
   State<SpreadsheetEditorPage> createState() => _SpreadsheetEditorPageState();
 }
 
-class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
-    with TickerProviderStateMixin {
+class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   bool _loading = true;
   bool _saving = false;
   bool _dirty = false;
@@ -76,8 +76,8 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
   Object? _error;
   bool _routeMovedExternally = false;
 
-  late TabController _tabController;
   List<_SheetTab> _tabs = [];
+  int _selected = 0;
 
   static const _autoSaveDelay = Duration(seconds: 2);
   Timer? _autoSaveTimer;
@@ -147,7 +147,6 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
     if (widget.overlayTargetRoute != null) {
       router.routeInformationProvider.addListener(_handleOverlayRouteChange);
     }
-    _tabController = TabController(length: 1, vsync: this);
     _loadFile();
   }
 
@@ -157,7 +156,6 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
     if (widget.overlayTargetRoute != null) {
       router.routeInformationProvider.removeListener(_handleOverlayRouteChange);
     }
-    _tabController.dispose();
     for (final tab in _tabs) {
       tab.dispose();
     }
@@ -180,15 +178,13 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
 
       final tabs = _parseTabs(bytes);
 
-      _tabController.dispose();
-      final tc = TabController(length: tabs.length, vsync: this);
       for (final tab in tabs) {
         tab.controller.addListener(_onSheetChanged);
       }
 
       setState(() {
         _tabs = tabs;
-        _tabController = tc;
+        _selected = 0;
         _loading = false;
         _dirty = false;
       });
@@ -209,27 +205,30 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
     final tabsJson = jsonData['tabs'] as List<dynamic>? ?? [];
     if (tabsJson.isEmpty) return [_makeEmptyTab('Sheet 1')];
 
-    return tabsJson.map((t) {
-      final tabMap = t as Map<String, dynamic>;
-      final name = (tabMap['name'] as String?) ?? 'Sheet';
-      final dataMap = tabMap['data'] as Map<String, dynamic>? ?? {};
-      final table = DataTable.fromJson(dataMap);
-      if (table.rows.isEmpty) {
-        table.rows.add(DataRow([DataCell('')]));
-      }
-      final columnWidths = (tabMap['columnWidths'] as List<dynamic>?)
-          ?.map((v) => (v as num).toDouble())
-          .toList();
-      final rowHeights = (tabMap['rowHeights'] as List<dynamic>?)
-          ?.map((v) => (v as num).toDouble())
-          .toList();
-      final controller = DataSheetController.fromTable(
-        table,
-        columnWidths: columnWidths,
-        rowHeights: rowHeights,
-      );
-      return _SheetTab(name: name, table: table, controller: controller);
-    }).toList();
+    return tabsJson
+        .map((t) => _tabFromJson(t as Map<String, dynamic>))
+        .toList();
+  }
+
+  _SheetTab _tabFromJson(Map<String, dynamic> tabMap) {
+    final name = (tabMap['name'] as String?) ?? 'Sheet';
+    final dataMap = tabMap['data'] as Map<String, dynamic>? ?? {};
+    final table = DataTable.fromJson(dataMap);
+    if (table.rows.isEmpty) {
+      table.rows.add(DataRow([DataCell('')]));
+    }
+    final columnWidths = (tabMap['columnWidths'] as List<dynamic>?)
+        ?.map((v) => (v as num).toDouble())
+        .toList();
+    final rowHeights = (tabMap['rowHeights'] as List<dynamic>?)
+        ?.map((v) => (v as num).toDouble())
+        .toList();
+    final controller = DataSheetController.fromTable(
+      table,
+      columnWidths: columnWidths,
+      rowHeights: rowHeights,
+    );
+    return _SheetTab(name: name, table: table, controller: controller);
   }
 
   _SheetTab _makeEmptyTab(String name) {
@@ -238,6 +237,91 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
     ]);
     final controller = DataSheetController.fromTable(table);
     return _SheetTab(name: name, table: table, controller: controller);
+  }
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+
+  List<String> get _tabNames => [for (final tab in _tabs) tab.name];
+
+  /// Puts [tab] at [index], selects it, and saves through the autosave.
+  void _insertTab(int index, _SheetTab tab) {
+    tab.controller.addListener(_onSheetChanged);
+    setState(() {
+      _tabs.insert(index, tab);
+      _selected = index;
+    });
+    _onSheetChanged();
+  }
+
+  void _addTab() =>
+      _insertTab(_tabs.length, _makeEmptyTab(nextSheetName(_tabNames)));
+
+  /// A deep copy, made by round-tripping the tab through its saved form.
+  void _duplicateTab(int index) {
+    final json =
+        jsonDecode(jsonEncode(_tabs[index].toJson())) as Map<String, dynamic>;
+    json['name'] = copySheetName(_tabs[index].name, _tabNames);
+    _insertTab(index + 1, _tabFromJson(json));
+  }
+
+  void _moveTab(int from, int to) {
+    setState(() {
+      _tabs.insert(to, _tabs.removeAt(from));
+      _selected = to;
+    });
+    _onSheetChanged();
+  }
+
+  /// Opens the rename dialog. A refused name shows in the open dialog.
+  Future<void> _renameTab(int index) async {
+    final tab = _tabs[index];
+    String? error;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => QuarkNameDialog(
+          title: 'Rename ${tab.name}',
+          label: 'Sheet name',
+          submitLabel: 'Rename',
+          initialName: tab.name,
+          error: error,
+          onCancel: () => Navigator.of(dialogContext).pop(),
+          onSubmit: (name) {
+            final refusal = sheetNameError(name, _tabNames, index);
+            if (refusal != null) {
+              setDialogState(() => error = refusal);
+              return;
+            }
+            Navigator.of(dialogContext).pop();
+            if (name == tab.name) return;
+            setState(() => tab.name = name);
+            _onSheetChanged();
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteTab(int index) async {
+    final tab = _tabs[index];
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => ConfirmDeleteDialog(
+        title: 'Delete ${tab.name}?',
+        body: 'Everything on this sheet is deleted with it.',
+        keyPrefix: 'delete_sheet',
+        onConfirm: () => Navigator.of(dialogContext).pop(true),
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _tabs.removeAt(index);
+      if (_selected > index || _selected == _tabs.length) _selected--;
+    });
+    // The grid showing it lets go of the controller on the next frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) => tab.dispose());
+    _onSheetChanged();
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────
@@ -333,7 +417,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
       );
     }
 
-    final multiTab = _tabs.length > 1;
+    final tab = _tabs[_selected];
 
     return PopScope(
       onPopInvokedWithResult: (didPop, _) {
@@ -365,29 +449,26 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage>
               ),
             const AppThemeToggle(),
           ],
-          bottom: multiTab
-              ? TabBar(
-                  controller: _tabController,
-                  tabs: _tabs.map((t) => Tab(text: t.name)).toList(),
-                )
-              : null,
         ),
-        body: multiTab
-            ? TabBarView(
-                controller: _tabController,
-                children: _tabs
-                    .map(
-                      (t) => SheetTabView(
-                        controller: t.controller,
-                        table: t.table,
-                      ),
-                    )
-                    .toList(),
-              )
-            : SheetTabView(
-                controller: _tabs.first.controller,
-                table: _tabs.first.table,
-              ),
+        body: SheetTabView(
+          key: ObjectKey(tab),
+          controller: tab.controller,
+          table: tab.table,
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: SheetTabStrip(
+            tabNames: _tabNames,
+            selectedIndex: _selected,
+            onSelect: (index) => setState(() => _selected = index),
+            onAdd: _addTab,
+            onRename: _renameTab,
+            onDuplicate: _duplicateTab,
+            onMoveLeft: (index) => _moveTab(index, index - 1),
+            onMoveRight: (index) => _moveTab(index, index + 1),
+            onDelete: _deleteTab,
+          ),
+        ),
       ),
     );
   }
