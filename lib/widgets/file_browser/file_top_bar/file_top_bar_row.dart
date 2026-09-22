@@ -45,9 +45,10 @@ class FileTopBarRow extends StatelessWidget {
 
   /// Enters multi-select. Null hides the control.
   ///
-  /// Selecting has always been here — long-press a row — but a long press is
-  /// a gesture a mouse does not make, so on the web the whole feature was
-  /// invisible and Files looked like it had no bulk actions at all (#2057).
+  /// Selecting used to be a long press on a row, a gesture a mouse does not
+  /// make, so on the web the whole feature was invisible and Files looked like
+  /// it had no bulk actions at all (#2057). This button is the only way in now
+  /// that a long press opens the row's menu instead (#2245).
   final VoidCallback? onStartSelection;
 
   @override

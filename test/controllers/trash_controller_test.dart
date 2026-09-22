@@ -209,7 +209,7 @@ void main() {
       final c = controller();
       await c.load();
       c.enterSelection();
-      c.toggleSelection(c.nodes![0], enterSelectionMode: false);
+      c.toggleSelection(c.nodes![0]);
       var notifications = 0;
       c.addListener(() => notifications++);
 
@@ -223,8 +223,9 @@ void main() {
   test('restores one request per device and drops what came back', () async {
     final c = controller();
     await c.load();
-    c.toggleSelection(c.nodes![0], enterSelectionMode: true);
-    c.toggleSelection(c.nodes![2], enterSelectionMode: false);
+    c.enterSelection();
+    c.toggleSelection(c.nodes![0]);
+    c.toggleSelection(c.nodes![2]);
 
     final count = await c.restore(c.selectedNodes);
 
@@ -308,8 +309,9 @@ void main() {
     test('restores and deletes nested items by path', () async {
       final c = controller(location: album);
       await c.load();
-      c.toggleSelection(c.nodes![0], enterSelectionMode: true);
-      c.toggleSelection(c.nodes![1], enterSelectionMode: false);
+      c.enterSelection();
+      c.toggleSelection(c.nodes![0]);
+      c.toggleSelection(c.nodes![1]);
 
       expect(await c.restore(c.selectedNodes), 2);
       expect(calls.last, 'restore [USB1] x_album/2024,x_album/cover.jpg');

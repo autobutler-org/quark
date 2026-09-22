@@ -140,8 +140,20 @@ void main() {
 
       final tile = tester.widget<ListTile>(find.byType(ListTile));
       expect(tile.onTap, isNull);
-      // Long-press still starts a selection.
-      expect(tile.onLongPress, isNotNull);
+      // The row's menu is still one long press away (#2245).
+      expect(
+        tester
+            .widget<GestureDetector>(
+              find
+                  .ancestor(
+                    of: find.byType(ListTile),
+                    matching: find.byType(GestureDetector),
+                  )
+                  .first,
+            )
+            .onLongPressStart,
+        isNotNull,
+      );
     });
 
     testWidgets('the Files page keeps its menu', (tester) async {

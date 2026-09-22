@@ -280,8 +280,8 @@ class TrashController extends ChangeNotifier {
 
   // ── Selection ────────────────────────────────────────────────────────────
 
-  /// Starts a selection with nothing in it, for a pointer that cannot
-  /// long-press a row (#2250).
+  /// Starts a selection with nothing in it, from the app bar — the only way
+  /// in, since a long press opens the row's menu instead (#2245).
   void enterSelection() {
     if (_selectionMode) return;
     _selectionMode = true;
@@ -289,11 +289,7 @@ class TrashController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleSelection(FileNode node, {required bool enterSelectionMode}) {
-    if (enterSelectionMode && !_selectionMode) {
-      _selectionMode = true;
-      _selectedPaths.clear();
-    }
+  void toggleSelection(FileNode node) {
     if (!_selectedPaths.remove(node.apiPath)) _selectedPaths.add(node.apiPath);
     notifyListeners();
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
+import 'package:quark/widgets/file_browser/file_browser_view/file_menu.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_menu_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 
@@ -25,13 +26,15 @@ Future<List<String>> _menuFor(
     MaterialApp(
       home: Scaffold(
         body: FileMenuButton(
-          item: item,
-          menuActions: FileBrowserView.defaultMenuActions,
-          extractingPaths: const {},
-          inArchive: false,
-          isSearchMode: false,
-          isAdmin: isAdmin,
-          onDispatchMenuAction: (_, _, _) {},
+          menu: FileMenu(
+            item: item,
+            menuActions: FileBrowserView.defaultMenuActions,
+            extractingPaths: const {},
+            inArchive: false,
+            isSearchMode: false,
+            isAdmin: isAdmin,
+            onDispatchMenuAction: (_, _, _) {},
+          ),
         ),
       ),
     ),

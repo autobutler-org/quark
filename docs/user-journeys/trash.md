@@ -83,8 +83,7 @@ folder.
 
 **Steps:**
 
-1. Enter selection mode (long-press an item on mobile, or the **Select items** button in the app bar on
-   desktop/web).
+1. Tap **Select items** in the app bar to enter selection mode.
 2. Select two or more items (or tap **Select all**).
 3. Tap the restore button — or the delete button, then confirm **Delete permanently**.
 
@@ -196,8 +195,8 @@ expired items. The page also refreshes on `access_changed` (JN-TR-013).
 
 **Steps:**
 
-1. Open the context menu on a file inside it and select **Restore** — or enter selection mode (long-press an
-   item, or the **Select items** button in the app bar), pick several, and tap the restore button.
+1. Open the context menu on a file inside it (long-press the row, or use its three-dot menu) and select
+   **Restore** — or tap **Select items** in the app bar, pick several, and tap the restore button.
 2. Open the context menu on another file, select **Delete permanently**, and confirm.
 
 **Expected result:**
