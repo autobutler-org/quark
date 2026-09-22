@@ -399,5 +399,9 @@ with `openssh-server` installed, as on every Quark image. SSH access starts off.
 - On a Quark that can't manage SSH (not the installed service, no SSH server, or an install from before this
   feature), the section shows why and the command that fixes it, instead of the controls.
 
+Root's password is locked on every Quark: `quark install` locks it, and so does every service start, so Armbian's
+default root password never works. For a console login with a keyboard and monitor, sign in as `quark` with the
+password set under **SSH access** — set one there first, and clear it afterwards.
+
 **Notes:** Admin-only; other accounts don't see the section, and `/api/v0/ssh/*` answers them 403. Quark never
 stores the password. Keys live in `/var/lib/quark/.ssh/authorized_keys`.
