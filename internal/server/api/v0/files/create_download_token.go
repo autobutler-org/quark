@@ -13,8 +13,8 @@ import (
 )
 
 // createDownloadToken godoc
-// @Summary Issue a single-use download token
-// @Description Issues a token that authenticates one GET /files/download (or /files/download-archive-file, where filePath is the archive) of the same filePath and serial, passed as the downloadToken query parameter. A browser link cannot send an Authorization header; this lets the web client hand the download to the browser, which streams it to disk. The token works once, runs as the caller, makes the response an attachment, and expires unused after about a minute. Needs read access on the path.
+// @Summary Issue a download token
+// @Description Issues a token that authenticates one download by GET /files/download (or /files/download-archive-file, where filePath is the archive) of the same filePath and serial, passed as the downloadToken query parameter. A browser link cannot send an Authorization header; this lets the web client hand the download to the browser, which streams it to disk. The token is good for one download: the first request, then retries of an interrupted one, resuming with a Range header or starting over without one, until the file is delivered or 10 minutes pass with no request. A folder is zipped on the fly and cannot be resumed. The token runs as the caller, makes the response an attachment, and expires unused after about a minute. Needs read access on the path.
 // @Tags files
 // @Produce json
 // @Param filePath query string true "File path the token is for"

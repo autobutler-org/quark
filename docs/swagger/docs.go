@@ -2756,7 +2756,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Single-use token from POST /files/download-token, for a browser link that cannot send an Authorization header. The response is then always an attachment.",
+                        "description": "Token from POST /files/download-token, for a browser link that cannot send an Authorization header. It is good for one download: the first request, then retries that resume it with a Range header or start it over without one, until the file is delivered or 10 minutes pass with no request. The response is then always an attachment.",
                         "name": "downloadToken",
                         "in": "query"
                     }
@@ -2828,7 +2828,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Single-use token from POST /files/download-token, for a browser link that cannot send an Authorization header. The response is then always an attachment.",
+                        "description": "Token from POST /files/download-token, for a browser link that cannot send an Authorization header. It is good for one download: the first request, then retries that resume it with a Range header or start it over without one, until the file is delivered or 10 minutes pass with no request. The response is then always an attachment.",
                         "name": "downloadToken",
                         "in": "query"
                     }
@@ -2874,14 +2874,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Issues a token that authenticates one GET /files/download (or /files/download-archive-file, where filePath is the archive) of the same filePath and serial, passed as the downloadToken query parameter. A browser link cannot send an Authorization header; this lets the web client hand the download to the browser, which streams it to disk. The token works once, runs as the caller, makes the response an attachment, and expires unused after about a minute. Needs read access on the path.",
+                "description": "Issues a token that authenticates one download by GET /files/download (or /files/download-archive-file, where filePath is the archive) of the same filePath and serial, passed as the downloadToken query parameter. A browser link cannot send an Authorization header; this lets the web client hand the download to the browser, which streams it to disk. The token is good for one download: the first request, then retries of an interrupted one, resuming with a Range header or starting over without one, until the file is delivered or 10 minutes pass with no request. A folder is zipped on the fly and cannot be resumed. The token runs as the caller, makes the response an attachment, and expires unused after about a minute. Needs read access on the path.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "files"
                 ],
-                "summary": "Issue a single-use download token",
+                "summary": "Issue a download token",
                 "parameters": [
                     {
                         "type": "string",

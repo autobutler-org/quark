@@ -24,7 +24,7 @@ import (
 // @Param entryPath query string true "Path of the entry inside the archive"
 // @Param serial query string false "Device serial number"
 // @Param format query string false "Output format conversion ('jpeg' converts HEIC, TIFF, BMP and other decodable images to JPEG)"
-// @Param downloadToken query string false "Single-use token from POST /files/download-token, for a browser link that cannot send an Authorization header. The response is then always an attachment."
+// @Param downloadToken query string false "Token from POST /files/download-token, for a browser link that cannot send an Authorization header. It is good for one download: the first request, then retries that resume it with a Range header or start it over without one, until the file is delivered or 10 minutes pass with no request. The response is then always an attachment."
 // @Success 200 {file} binary "File content"
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 404 {object} serverutil.Response "Entry not found"

@@ -123,6 +123,21 @@ func fileError(err error) *serverutil.Response {
 	return serverutil.InternalServerError(err)
 }
 
+// zipError answers a folder download whose archive failed. Once any of the
+// archive has been sent the status is committed, so the failure (usually the
+// client going away) is only logged: answering 500 then made gin warn that
+// the headers were already written and log the write error again. The request
+// is marked "downloadInterrupted" so a download token survives it, and a
+// retry starts the zip over instead of getting a 401 (#2270).
+func zipError(c *gin.Context, p string, err error) *serverutil.Response {
+	if c.Writer.Written() {
+		slog.Warn("download: folder archive stopped partway", "path", p, "err", err)
+		ctxutil.With(c, "downloadInterrupted", true)
+		return nil
+	}
+	return serverutil.InternalServerError(err)
+}
+
 // downloadFileVFS handles file downloads via the VFS layer.
 // RAW files (needing OS path for dcraw/LibRaw) are excluded before calling this.
 func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, access accessutil.Access, filePath string, wantsJPEG bool) *serverutil.Response {
@@ -144,7 +159,7 @@ func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, ac
 		c.Writer.Header().Set("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("attachment; filename=%q", opened.FileName)))
 		c.Writer.Header().Set("Content-Type", "application/octet-stream")
 		if err := fileutil.ZipVFSDir(ctx, fsys, filePath, strings.TrimSuffix(opened.FileName, ".zip"), access, c.Writer); err != nil {
-			return serverutil.InternalServerError(err)
+			return zipError(c, filePath, err)
 		}
 		return nil
 

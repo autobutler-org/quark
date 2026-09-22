@@ -12,8 +12,8 @@ import (
 // credentialQueryParams are the query parameters that carry a credential:
 // the session token the media, download and event-stream routes accept in
 // the URL (#1332), because a <video> tag or an EventSource cannot send a
-// header.
-var credentialQueryParams = map[string]bool{"token": true}
+// header, and the download token a browser download link carries (#2226).
+var credentialQueryParams = map[string]bool{"token": true, "downloadToken": true}
 
 // redactedValue replaces a credential in a logged URL.
 const redactedValue = "REDACTED"
