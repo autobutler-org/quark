@@ -4,9 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/local_media_proxy.dart';
 import 'package:quark/utils/error_text.dart';
-import 'package:quark/utils/web_download_stub.dart'
-    if (dart.library.html) 'package:quark/utils/web_download_web.dart'
-    as web_download;
 import 'package:quark/widgets/audio_player/audio_controls.dart';
 import 'package:quark/widgets/audio_player/error_view.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
@@ -99,9 +96,14 @@ class _AudioPlayerPageState extends State<AudioPlayerPage> {
   Future<void> _download() async {
     setState(() => _downloading = true);
     try {
-      final bytes = await FilesService.downloadFileBytes(widget.url.path);
-      if (bytes == null) throw Exception('Empty response from server');
-      await web_download.saveBytesForDownload(bytes, widget.name);
+      // The media URL carries the file's path and serial as query
+      // parameters; its own path is the download endpoint, not the file.
+      final params = widget.url.queryParameters;
+      await FilesService.saveFile(
+        params['filePath'] ?? '',
+        serial: params['serial'],
+        fileName: widget.name,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

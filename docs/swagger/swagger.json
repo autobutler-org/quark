@@ -2746,6 +2746,12 @@
                         "description": "Output format conversion (e.g. 'jpeg' to convert HEIC to JPEG)",
                         "name": "format",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Single-use token from POST /files/download-token, for a browser link that cannot send an Authorization header. The response is then always an attachment.",
+                        "name": "downloadToken",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -2812,6 +2818,12 @@
                         "description": "Output format conversion ('jpeg' converts HEIC, TIFF, BMP and other decodable images to JPEG)",
                         "name": "format",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Single-use token from POST /files/download-token, for a browser link that cannot send an Authorization header. The response is then always an attachment.",
+                        "name": "downloadToken",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -2841,6 +2853,64 @@
                     },
                     "503": {
                         "description": "Server busy converting other images",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/files/download-token": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Issues a token that authenticates one GET /files/download (or /files/download-archive-file, where filePath is the archive) of the same filePath and serial, passed as the downloadToken query parameter. A browser link cannot send an Authorization header; this lets the web client hand the download to the browser, which streams it to disk. The token works once, runs as the caller, makes the response an attachment, and expires unused after about a minute. Needs read access on the path.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Issue a single-use download token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "File path the token is for",
+                        "name": "filePath",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Device serial number the token is for",
+                        "name": "serial",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_files.createDownloadTokenResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -8119,6 +8189,17 @@
                     "type": "boolean"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_files.createDownloadTokenResponse": {
+            "type": "object",
+            "properties": {
+                "expiresAt": {
+                    "type": "string"
+                },
+                "token": {
                     "type": "string"
                 }
             }

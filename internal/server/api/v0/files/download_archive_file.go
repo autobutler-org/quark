@@ -24,6 +24,7 @@ import (
 // @Param entryPath query string true "Path of the entry inside the archive"
 // @Param serial query string false "Device serial number"
 // @Param format query string false "Output format conversion ('jpeg' converts HEIC, TIFF, BMP and other decodable images to JPEG)"
+// @Param downloadToken query string false "Single-use token from POST /files/download-token, for a browser link that cannot send an Authorization header. The response is then always an attachment."
 // @Success 200 {file} binary "File content"
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 404 {object} serverutil.Response "Entry not found"
@@ -89,7 +90,7 @@ func downloadArchiveFile(c *gin.Context) *serverutil.Response {
 			return serverutil.InternalServerError(err)
 		}
 
-		c.Header("Content-Disposition", "inline; filename=\""+entry.FileName+"\"")
+		c.Header("Content-Disposition", contentDisposition(c, entry.FileName, "inline; filename=\""+entry.FileName+"\""))
 		c.Header("Content-Type", entry.ContentType)
 		c.Status(http.StatusOK)
 		if err := fileutil.EncodeJPEG(c.Writer, img); err != nil {
@@ -99,7 +100,7 @@ func downloadArchiveFile(c *gin.Context) *serverutil.Response {
 		return nil
 	}
 
-	c.Header("Content-Disposition", "attachment; filename=\""+entry.FileName+"\"")
+	c.Header("Content-Disposition", contentDisposition(c, entry.FileName, "attachment; filename=\""+entry.FileName+"\""))
 	if entry.Size >= 0 {
 		c.Header("Content-Length", strconv.FormatInt(entry.Size, 10))
 	}

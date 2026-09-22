@@ -5,6 +5,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/backup"
+	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
@@ -23,6 +24,7 @@ type dependencies struct {
 	vaultRateLimiter *ratelimitutil.Limiter
 
 	database       *db.DatabaseSqlc
+	downloadTokens *downloadutil.TokenStore
 	eventBus       *eventbus.Bus
 	fileIndex      *storageutil.FileIndex
 	healthDatabase *db.DatabaseRaw
@@ -126,6 +128,15 @@ func (d *dependencies) WithIOSemaphore(sem *iosemutil.Semaphore) Dependencies {
 
 func (d *dependencies) StorageService() *storageutil.StorageService {
 	return d.storageService
+}
+
+func (d *dependencies) DownloadTokens() *downloadutil.TokenStore {
+	return d.downloadTokens
+}
+
+func (d *dependencies) WithDownloadTokens(store *downloadutil.TokenStore) Dependencies {
+	d.downloadTokens = store
+	return d
 }
 
 func (d *dependencies) UploadSessions() *uploadutil.SessionStore {

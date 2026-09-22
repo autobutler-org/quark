@@ -13,6 +13,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 
 	"github.com/gin-contrib/cors"
@@ -89,6 +90,17 @@ func queryTokenAllowed(path string) bool {
 	return false
 }
 
+// downloadTokenPaths are the routes that accept a single-use ?downloadToken=
+// in place of a session. The web client sends the browser there with a plain
+// link, which cannot carry an Authorization header, so the browser streams the
+// file to disk instead of the app holding it in memory (#2226). The token is
+// bound to filePath, which on the archive route names the archive: the caller
+// can read every entry of an archive they can read.
+var downloadTokenPaths = map[string]bool{
+	"/api/v0/files/download":              true,
+	"/api/v0/files/download-archive-file": true,
+}
+
 // authExemptPaths are API paths that don't require a valid session.
 var authExemptPaths = map[string]bool{
 	"/api/v0/auth/setup":           true,
@@ -136,7 +148,8 @@ func trackDevice(deps deputil.Dependencies) gin.HandlerFunc {
 //  1. Bearer token (Authorization: Bearer <token>)
 //  2. Session cookie
 //  3. Query parameter (?token=)
-//  4. HTTP Basic Auth (Authorization: Basic <base64>)
+//  4. Single-use download token (?downloadToken=, downloadTokenPaths only)
+//  5. HTTP Basic Auth (Authorization: Basic <base64>)
 //
 // Exempt paths (setup, login, recover, status) are always allowed through.
 // If no users have been set up yet, all requests are allowed through (first-boot).
@@ -215,6 +228,22 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 			username, userID, err := authutil.ValidateSession(ctx, db.Queries, t)
 			if err == nil {
 				authenticated(c, db.Queries, username, userID)
+				return
+			}
+		}
+
+		// A download token is spent on first presentation, and only matches the
+		// filePath and serial it was issued for. The handler is told, so it can
+		// send the file as an attachment.
+		if dt := c.Query("downloadToken"); dt != "" && downloadTokenPaths[path] {
+			consumed, err := deps.DownloadTokens().ConsumeToken(downloadutil.ConsumeTokenParams{
+				Token:    dt,
+				FilePath: c.Query("filePath"),
+				Serial:   c.Query("serial"),
+			})
+			if err == nil {
+				c = ctxutil.With(c, "downloadToken", true)
+				authenticated(c, db.Queries, consumed.Username, consumed.UserID)
 				return
 			}
 		}

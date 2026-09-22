@@ -8,6 +8,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/backup"
+	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
@@ -24,6 +25,7 @@ type Dependencies interface {
 	AuthRateLimiter() *ratelimitutil.Limiter
 	BackupJobStore() backup.BackupJobStore
 	Database() *db.DatabaseSqlc
+	DownloadTokens() *downloadutil.TokenStore
 	EventBus() *eventbus.Bus
 	FileIndex() *storageutil.FileIndex
 	HealthDatabase() *db.DatabaseRaw
@@ -37,6 +39,7 @@ type Dependencies interface {
 	VaultSession() *vaultcrypto.VaultSession
 	Worker() workerutil.Worker
 	WithDatabase(database *db.DatabaseSqlc) Dependencies
+	WithDownloadTokens(store *downloadutil.TokenStore) Dependencies
 	WithEventBus(b *eventbus.Bus) Dependencies
 	WithFileIndex(idx *storageutil.FileIndex) Dependencies
 	WithHealthDatabase(healthDatabase *db.DatabaseRaw) Dependencies
@@ -69,6 +72,9 @@ func NewDependencies() Dependencies {
 	return &dependencies{
 		backupJobStore: backup.NewInMemoryBackupJobStore(),
 		uploadSessions: uploadutil.NewSessionStore(uploadutil.NewSessionStoreParams{}),
+		// downloadTokens is built here for the same reason: a map and nothing
+		// else, swept lazily on each issue (#2226).
+		downloadTokens: downloadutil.NewTokenStore(downloadutil.NewTokenStoreParams{}),
 		// authRateLimiter protects auth endpoints (login, setup, recover) from
 		// brute-force attacks. Shared across all requests — 5 req/s per IP, burst 10.
 		authRateLimiter: ratelimitutil.New(),

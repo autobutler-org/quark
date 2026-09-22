@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,6 +26,18 @@ import (
 // errNoAccess is what a caller hears about a path they may not see. It reads
 // the same as a path that does not exist, because to them it does not.
 var errNoAccess = errors.New("file not found")
+
+// contentDisposition is the Content-Disposition header for a download named
+// name. A request that authenticated with a download token is a browser saving
+// the file, so it is always an attachment, with the name encoded per RFC 6266
+// (#2226). Every other request keeps fallback: the video player and the
+// in-app viewers rely on inline.
+func contentDisposition(c *gin.Context, name, fallback string) string {
+	if viaToken, _ := ctxutil.Get[bool](c, "downloadToken"); viaToken {
+		return mime.FormatMediaType("attachment", map[string]string{"filename": name})
+	}
+	return fallback
+}
 
 // errReadOnly is what a caller hears when they may see a path but not change
 // it.
@@ -128,7 +141,7 @@ func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, ac
 	switch opened.Kind {
 	case fileutil.DownloadFolder:
 		// Zip and stream the directory contents.
-		c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", opened.FileName))
+		c.Writer.Header().Set("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("attachment; filename=%q", opened.FileName)))
 		c.Writer.Header().Set("Content-Type", "application/octet-stream")
 		if err := fileutil.ZipVFSDir(ctx, fsys, filePath, strings.TrimSuffix(opened.FileName, ".zip"), access, c.Writer); err != nil {
 			return serverutil.InternalServerError(err)
@@ -162,7 +175,7 @@ func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, ac
 			return serverutil.InternalServerError(err)
 		}
 
-		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", opened.FileName))
+		c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))
 		c.Header("Content-Type", opened.ContentType)
 		c.Status(http.StatusOK)
 		if err := fileutil.EncodeJPEG(c.Writer, img); err != nil {
@@ -177,7 +190,7 @@ func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, ac
 	}
 	defer r.Close()
 
-	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=%s", opened.FileName))
+	c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))
 	c.Header("Content-Type", opened.ContentType)
 
 	// If the underlying VFS returns an io.ReadSeeker (e.g. *os.File from LocalVFS

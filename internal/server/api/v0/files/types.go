@@ -11,6 +11,7 @@ type router struct{}
 func (r *router) Routes() []*serverutil.Route {
 	return []*serverutil.Route{
 		convertXlsxRoute,
+		createDownloadTokenRoute,
 		deleteFilesRoute,
 		downloadArchiveFileRoute,
 		downloadFileRoute,
@@ -31,6 +32,11 @@ func (r *router) Routes() []*serverutil.Route {
 		getUploadSessionRoute,
 		deleteUploadSessionRoute,
 	}
+}
+
+type createDownloadTokenResponse struct {
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expiresAt"`
 }
 
 type createUploadSessionRequest struct {
