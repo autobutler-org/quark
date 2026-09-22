@@ -21,6 +21,19 @@ func TestSystemdUnit_RunsFromTheSelfUpdatableDirectory(t *testing.T) {
 	}
 }
 
+// Every start reapplies the system setup as root, and a failed setup must not
+// keep Quark from starting (#2120).
+func TestSystemdUnit_ReappliesSystemSetupBeforeEveryStart(t *testing.T) {
+	pre := "ExecStartPre=-+" + serviceBinPath + " install --system-only"
+	preAt := strings.Index(systemdServiceContent, pre)
+	if preAt < 0 {
+		t.Fatalf("systemd unit should carry %q:\n%s", pre, systemdServiceContent)
+	}
+	if startAt := strings.Index(systemdServiceContent, "ExecStart="); startAt < preAt {
+		t.Errorf("ExecStartPre should precede ExecStart:\n%s", systemdServiceContent)
+	}
+}
+
 func TestSystemdUnit_RunsUnprivileged(t *testing.T) {
 	// The whole reason the install layout has to change: this stays unprivileged.
 	if !strings.Contains(systemdServiceContent, "User="+serviceUserName) {

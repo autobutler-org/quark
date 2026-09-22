@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/sshutil"
 )
@@ -79,5 +80,55 @@ func TestSSHDropIn(t *testing.T) {
 	}
 	if !strings.HasPrefix(sshdDropInPath, sshdDropInDir+"/") || !strings.HasSuffix(sshdDropInPath, ".conf") {
 		t.Errorf("sshd includes only *.conf from %s, not %s", sshdDropInDir, sshdDropInPath)
+	}
+}
+
+// --system-only runs on every start, so a current file must not be rewritten
+// (#2120).
+func TestWriteRootFileIfChanged_LeavesACurrentFileAlone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "quark")
+	if err := os.WriteFile(path, []byte("current\n"), 0o440); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Unix(1_000_000_000, 0)
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	changed, err := writeRootFileIfChanged(path, "current\n", 0o440)
+	if err != nil {
+		t.Fatalf("writeRootFileIfChanged: %v", err)
+	}
+	if changed {
+		t.Error("reported a write for a file that was already current")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.ModTime().Equal(old) {
+		t.Errorf("file was rewritten: mtime %v, want %v", info.ModTime(), old)
+	}
+}
+
+func TestWriteRootFileIfChanged_RewritesAStaleFile(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("writeRootFile gives the file to root, which needs root")
+	}
+	path := filepath.Join(t.TempDir(), "quark")
+	if err := os.WriteFile(path, []byte("stale\n"), 0o440); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []os.FileMode{0o440, 0o400} {
+		changed, err := writeRootFileIfChanged(path, "current\n", mode)
+		if err != nil {
+			t.Fatalf("writeRootFileIfChanged: %v", err)
+		}
+		if !changed {
+			t.Errorf("mode %o: reported no write for a stale file", mode)
+		}
+	}
+	if got, _ := os.ReadFile(path); string(got) != "current\n" {
+		t.Errorf("file holds %q", got)
 	}
 }

@@ -41,6 +41,17 @@ const (
 	// so restricting it to CAP_NET_BIND_SERVICE left `sudo` without the
 	// capabilities to switch groups or mount, and every `sudo mount` failed
 	// (#2115).
+	//
+	// ExecStartPre reapplies the system setup before every start (#2120). The
+	// `+` runs it as root although the service runs as quark, so a release
+	// that changes the sudoers rule or this unit reaches devices on the restart
+	// that ends every self-update. The `-` lets Quark start even when the setup
+	// fails: a device serving with outdated setup beats one not serving.
+	//
+	// Security tradeoff: root runs a binary the quark user can overwrite, which
+	// self-update needs, so a compromised quark account gets root on the next
+	// restart. That is close to true already through the NOPASSWD mount rule;
+	// installing through apt instead is what removes it.
 	systemdServiceContent = `[Unit]
 Description=Quark Service
 After=network.target
@@ -48,6 +59,7 @@ After=network.target
 [Service]
 User=quark
 Group=quark
+ExecStartPre=-+/opt/quark/bin/quark install --system-only
 ExecStart=/opt/quark/bin/quark serve
 Environment="PORT=80"
 Environment="HTTPS_PORT=443"

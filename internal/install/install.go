@@ -11,18 +11,25 @@ import (
 	"strings"
 )
 
-func installSystemdService() error {
+// installSystemdService writes the unit and enables it. restart starts the
+// service on the new unit; --system-only passes false, since it runs from the
+// unit's own ExecStartPre and must never touch the run state (#2120).
+func installSystemdService(restart bool) error {
 	serviceFilePath := filepath.Join("/etc/systemd/system", systemdServiceName)
-	if err := os.WriteFile(serviceFilePath, []byte(buildServiceFile()), 0644); err != nil {
+	changed, err := writeRootFileIfChanged(serviceFilePath, buildServiceFile(), 0o644)
+	if err != nil {
 		return fmt.Errorf("failed to write systemd service file: %w", err)
 	}
 	// /run/systemd/system exists only when systemd is the running init (the
 	// sd_booted(3) check). Without it — an OS image build running `quark install`
 	// in a chroot — there is no daemon to reload or start the service on, but
 	// `systemctl enable` still works offline.
-	_, err := os.Stat("/run/systemd/system")
+	_, err = os.Stat("/run/systemd/system")
 	booted := err == nil
-	if booted {
+	// A reload during ExecStartPre does not disturb the start in progress:
+	// systemd carries a running unit's position in its command list across a
+	// reload. The new unit applies from the next start.
+	if booted && changed {
 		if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
 			return fmt.Errorf("failed to reload systemd daemon: %w", err)
 		}
@@ -31,7 +38,7 @@ func installSystemdService() error {
 	if err := exec.Command("systemctl", "enable", strings.Split(systemdServiceName, ".")[0]).Run(); err != nil {
 		return fmt.Errorf("failed to enable systemctl service: %w", err)
 	}
-	if !booted {
+	if !booted || !restart {
 		return nil
 	}
 	// Start the service immediately
@@ -76,13 +83,28 @@ func createServiceUser() error {
 	).Run()
 }
 
-func createServiceDataDir() error {
+// createServiceDataDir makes the data directory and hands it to the service
+// account. recursive also hands over everything inside it; --system-only skips
+// that, since it runs on every start and the tree holds all user data and any
+// mounted drives.
+func createServiceDataDir(recursive bool) error {
 	if err := os.MkdirAll(serviceDataDir, 0750); err != nil {
 		return fmt.Errorf("failed to create service data dir: %w", err)
 	}
 	svcUser, err := user.Lookup(serviceUserName)
 	if err != nil {
 		return fmt.Errorf("failed to look up service user: %w", err)
+	}
+	if !recursive {
+		uid, err := strconv.Atoi(svcUser.Uid)
+		if err != nil {
+			return fmt.Errorf("service user %q has a non-numeric uid %q: %w", serviceUserName, svcUser.Uid, err)
+		}
+		gid, err := strconv.Atoi(svcUser.Gid)
+		if err != nil {
+			return fmt.Errorf("service user %q has a non-numeric gid %q: %w", serviceUserName, svcUser.Gid, err)
+		}
+		return os.Chown(serviceDataDir, uid, gid)
 	}
 	return exec.Command("chown", "-R",
 		fmt.Sprintf("%s:%s", svcUser.Uid, svcUser.Gid),
@@ -91,7 +113,8 @@ func createServiceDataDir() error {
 }
 
 func installSudoersRule() error {
-	return os.WriteFile(sudoersDropInPath, []byte(sudoersContent()), 0440)
+	_, err := writeRootFileIfChanged(sudoersDropInPath, sudoersContent(), 0o440)
+	return err
 }
 
 // serviceGroupID returns the numeric gid the service runs as. An explicit
@@ -187,7 +210,11 @@ func linkLegacyBinPath() error {
 	return nil
 }
 
-func Install() error {
+// Install sets Quark up as a system service. systemOnly is what the unit's
+// ExecStartPre runs before every start (#2120): it reapplies the system setup
+// — writing a file only when its content differs — and skips the binary copy
+// and anything that would start, stop or restart the service.
+func Install(systemOnly bool) error {
 	executable, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
@@ -199,10 +226,12 @@ func Install() error {
 		if err := createServiceUser(); err != nil {
 			return fmt.Errorf("failed to create service user: %w", err)
 		}
-		if err := installBinary(executable); err != nil {
-			return err
+		if !systemOnly {
+			if err := installBinary(executable); err != nil {
+				return err
+			}
 		}
-		if err := createServiceDataDir(); err != nil {
+		if err := createServiceDataDir(!systemOnly); err != nil {
 			return fmt.Errorf("failed to create service data directory: %w", err)
 		}
 		if err := installSudoersRule(); err != nil {
@@ -217,8 +246,11 @@ func Install() error {
 		if err := installSSHDropIn(); err != nil {
 			return fmt.Errorf("failed to install the sshd drop-in: %w", err)
 		}
-		return installSystemdService()
+		return installSystemdService(!systemOnly)
 	case "darwin": // coverage: ignore - Not run in CI
+		if systemOnly {
+			return fmt.Errorf("--system-only needs systemd; on macOS run `sudo quark install` instead")
+		}
 		if err := exec.Command("cp", "-v", executable, "/Applications/quark").Run(); err != nil {
 			return fmt.Errorf("failed to copy binary to /Applications: %w", err)
 		}
