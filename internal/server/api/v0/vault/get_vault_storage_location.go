@@ -15,26 +15,26 @@ import (
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /vault/storage-location [get]
-var getVaultStorageLocationRoute = serverutil.ApiRoute(
-	"GET", "/vault/storage-location", func(c *gin.Context) *serverutil.Response {
-		deps, errResp := getDeps(c)
-		if errResp != nil {
-			return errResp
-		}
+func getVaultStorageLocation(c *gin.Context) *serverutil.Response {
+	deps, errResp := getDeps(c)
+	if errResp != nil {
+		return errResp
+	}
 
-		result, err := vaultutil.GetLocation(c.Request.Context(), vaultutil.GetLocationParams{
-			MainQueries: deps.Database().Queries,
-			Storage:     deps.StorageService(),
-		})
-		if err != nil {
-			return serverutil.InternalServerError(err)
-		}
+	result, err := vaultutil.GetLocation(c.Request.Context(), vaultutil.GetLocationParams{
+		MainQueries: deps.Database().Queries,
+		Storage:     deps.StorageService(),
+	})
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 
-		return serverutil.Ok().WithData(storageLocationResponse{
-			DeviceSerial:    result.DeviceSerial,
-			IsExternal:      result.IsExternal,
-			DeviceConnected: result.DeviceConnected,
-			DeviceName:      result.DeviceName,
-		})
-	},
-)
+	return serverutil.Ok().WithData(storageLocationResponse{
+		DeviceSerial:    result.DeviceSerial,
+		IsExternal:      result.IsExternal,
+		DeviceConnected: result.DeviceConnected,
+		DeviceName:      result.DeviceName,
+	})
+}
+
+var getVaultStorageLocationRoute = serverutil.ApiRoute("GET", "/vault/storage-location", getVaultStorageLocation)

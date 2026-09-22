@@ -527,6 +527,21 @@ definitions:
       type:
         type: string
     type: object
+  v0_devices.ConnectedDeviceJSON:
+    properties:
+      firstSeenAt:
+        type: string
+      id:
+        type: integer
+      ipAddress:
+        type: string
+      lastSeenAt:
+        type: string
+      requestCount:
+        type: integer
+      userAgent:
+        type: string
+    type: object
   v0_favorites.favoriteItemJSON:
     properties:
       createdAt:
@@ -930,6 +945,127 @@ definitions:
       serial:
         type: string
     type: object
+  v0_vault.changePasswordRequest:
+    properties:
+      currentPassword:
+        type: string
+      newPassword:
+        type: string
+    required:
+    - currentPassword
+    - newPassword
+    type: object
+  v0_vault.createEntryRequest:
+    properties:
+      customFields:
+        items:
+          $ref: '#/definitions/vaultutil.CustomField'
+        type: array
+      folderId:
+        type: integer
+      name:
+        type: string
+      notes:
+        type: string
+      password:
+        type: string
+      totpSecret:
+        type: string
+      url:
+        type: string
+      username:
+        type: string
+    required:
+    - name
+    type: object
+  v0_vault.createFolderRequest:
+    properties:
+      name:
+        type: string
+      parentId:
+        type: integer
+      sortOrder:
+        type: integer
+    required:
+    - name
+    type: object
+  v0_vault.generateRequest:
+    properties:
+      avoidAmbiguous:
+        type: boolean
+      digits:
+        type: boolean
+      length:
+        type: integer
+      lowercase:
+        type: boolean
+      symbols:
+        type: boolean
+      uppercase:
+        type: boolean
+    type: object
+  v0_vault.importBackupRequest:
+    properties:
+      deviceSerial:
+        type: string
+      recoveryPassword:
+        type: string
+    required:
+    - deviceSerial
+    - recoveryPassword
+    type: object
+  v0_vault.setStorageLocationRequest:
+    properties:
+      password:
+        type: string
+      targetDeviceSerial:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  v0_vault.setupRequest:
+    properties:
+      masterPassword:
+        type: string
+    required:
+    - masterPassword
+    type: object
+  v0_vault.storageLocationResponse:
+    properties:
+      deviceConnected:
+        type: boolean
+      deviceName:
+        type: string
+      deviceSerial:
+        type: string
+      isExternal:
+        type: boolean
+    type: object
+  v0_vault.unlockRequest:
+    properties:
+      masterPassword:
+        type: string
+    required:
+    - masterPassword
+    type: object
+  v0_vault.vaultStatusResponse:
+    properties:
+      autoLockSeconds:
+        type: integer
+      deviceConnected:
+        type: boolean
+      initialized:
+        type: boolean
+      lockReason:
+        type: string
+      locked:
+        type: boolean
+      storageDevice:
+        type: string
+    type: object
   v0_version.SbomDependencyJSON:
     properties:
       path:
@@ -1096,6 +1232,102 @@ definitions:
     properties:
       relPath:
         type: string
+    type: object
+  vaultutil.CustomField:
+    properties:
+      hidden:
+        type: boolean
+      name:
+        type: string
+      value:
+        type: string
+    type: object
+  vaultutil.EntryDetail:
+    properties:
+      createdAt:
+        type: string
+      customFields:
+        items:
+          $ref: '#/definitions/vaultutil.CustomField'
+        type: array
+      folderId:
+        type: integer
+      id:
+        type: integer
+      name:
+        type: string
+      notes:
+        type: string
+      password:
+        type: string
+      totpSecret:
+        type: string
+      updatedAt:
+        type: string
+      url:
+        type: string
+      urlHost:
+        type: string
+      username:
+        type: string
+    type: object
+  vaultutil.ExportEntry:
+    properties:
+      customFields:
+        items:
+          $ref: '#/definitions/vaultutil.CustomField'
+        type: array
+      folderName:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      password:
+        type: string
+      totpSecret:
+        type: string
+      url:
+        type: string
+      urlHost:
+        type: string
+      username:
+        type: string
+    type: object
+  vaultutil.ExportJSON:
+    properties:
+      entries:
+        items:
+          $ref: '#/definitions/vaultutil.ExportEntry'
+        type: array
+      folders:
+        items:
+          type: string
+        type: array
+    type: object
+  vaultutil.Folder:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      parentId:
+        type: integer
+      sortOrder:
+        type: integer
+    type: object
+  vaultutil.ImportResult:
+    properties:
+      errors:
+        items:
+          type: string
+        type: array
+      imported:
+        type: integer
+      skipped:
+        type: integer
     type: object
 info:
   contact: {}
@@ -2672,6 +2904,55 @@ paths:
       summary: List books
       tags:
       - books
+  /devices:
+    get:
+      description: Returns all unique client IP + User-Agent combinations that have
+        connected to the quark
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/v0_devices.ConnectedDeviceJSON'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: List connected devices
+      tags:
+      - devices
+  /devices/{id}:
+    delete:
+      description: Deletes a connected device entry by ID
+      parameters:
+      - description: Device ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Remove a connected device record
+      tags:
+      - devices
   /events:
     get:
       description: Upgrades the connection to WebSocket and pushes JSON events for
@@ -4671,6 +4952,52 @@ paths:
       summary: Enable (mount) a USB storage device
       tags:
       - storage
+  /thumbnails/{filePath}:
+    get:
+      description: Generates and returns a thumbnail (resized image) for the specified
+        file
+      parameters:
+      - description: Path to the image file
+        in: path
+        name: filePath
+        required: true
+        type: string
+      - description: Device serial number (for device-specific files)
+        in: query
+        name: serial
+        type: string
+      - description: 'Thumbnail size tier: sm (96px), md (240px), lg (400px). Defaults
+          to lg.'
+        enum:
+        - sm
+        - md
+        - lg
+        in: query
+        name: size
+        type: string
+      produces:
+      - image/png
+      - image/jpeg
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "304":
+          description: Not Modified
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Get thumbnail for an image
+      tags:
+      - thumbnails
   /trash:
     get:
       description: Lists a device's trashed items, most recently trashed first, with
@@ -4881,6 +5208,686 @@ paths:
       summary: Restore items from the trash
       tags:
       - trash
+  /vault/change-password:
+    put:
+      consumes:
+      - application/json
+      description: Re-derives the vault key from a new master password and re-encrypts
+        every entry under it.
+      parameters:
+      - description: Current and new master password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_vault.changePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: changed and reEncrypted flags
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Incorrect current password
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "423":
+          description: Vault is locked
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "503":
+          description: Vault storage device is disconnected
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Change the master password
+      tags:
+      - vault
+  /vault/entries:
+    get:
+      description: Returns every entry's clear-text metadata. Passwords and notes
+        stay encrypted; read one entry to decrypt it.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'entries: array of vaultutil.EntryListItem'
+          schema:
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: List vault entries
+      tags:
+      - vault
+    post:
+      consumes:
+      - application/json
+      description: Encrypts a new entry with the unlocked vault key and stores it.
+      parameters:
+      - description: Entry fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_vault.createEntryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vaultutil.EntryDetail'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "423":
+          description: Vault is locked
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "503":
+          description: Vault storage device is disconnected
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Create a vault entry
+      tags:
+      - vault
+  /vault/entries/{id}:
+    delete:
+      description: Removes one entry from the vault.
+      parameters:
+      - description: Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: deleted flag
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "423":
+          description: Vault is locked
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "503":
+          description: Vault storage device is disconnected
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Delete a vault entry
+      tags:
+      - vault
+    get:
+      description: Decrypts and returns one entry in full, including its password.
+        Requires the vault unlocked.
+      parameters:
+      - description: Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vaultutil.EntryDetail'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "423":
+          description: Vault is locked
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "503":
+          description: Vault storage device is disconnected
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Get a decrypted vault entry
+      tags:
+      - vault
+    put:
+      consumes:
+      - application/json
+      description: 'Replaces an entry wholesale: any field omitted from the body is
+        cleared, not kept.'
+      parameters:
+      - description: Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Replacement entry fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_vault.createEntryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: id of the updated entry
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "423":
+          description: Vault is locked
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "503":
+          description: Vault storage device is disconnected
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Update a vault entry
+      tags:
+      - vault
+  /vault/export:
+    get:
+      description: Decrypts every entry and returns it as a download. This is plaintext
+        secrets, so the response is never cached.
+      parameters:
+      - description: json (default) or csv
+        enum:
+        - json
+        - csv
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vaultutil.ExportJSON'
+        "423":
+          description: Vault is locked
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "503":
+          description: Vault storage device is disconnected
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Export the vault in the clear
+      tags:
+      - vault
+  /vault/folders:
+    get:
+      description: Returns every folder. Folder names are not encrypted.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'folders: array of vaultutil.Folder'
+          schema:
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: List vault folders
+      tags:
+      - vault
+    post:
+      consumes:
+      - application/json
+      description: Adds a folder, optionally nested under a parent.
+      parameters:
+      - description: Folder fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_vault.createFolderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vaultutil.Folder'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Create a vault folder
+      tags:
+      - vault
+  /vault/folders/{id}:
+    delete:
+      description: Removes one folder.
+      parameters:
+      - description: Folder ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: deleted flag
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "423":
+          description: Vault is locked
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "503":
+          description: Vault storage device is disconnected
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Delete a vault folder
+      tags:
+      - vault
+    put:
+      consumes:
+      - application/json
+      description: Renames or re-parents one folder.
+      parameters:
+      - description: Folder ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Replacement folder fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_vault.createFolderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: id of the updated folder
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Update a vault folder
+      tags:
+      - vault
+  /vault/generate:
+    post:
+      consumes:
+      - application/json
+      description: Returns a random password. An absent or unparsable body falls back
+        to 20 characters of every class.
+      parameters:
+      - description: Generator options
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/v0_vault.generateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: generated password
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Generate a password
+      tags:
+      - vault
+  /vault/import:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Takes an uploaded export and writes its entries in. Existing name
+        plus host matches are skipped, not duplicated.
+      parameters:
+      - description: Export file
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: Source format; sniffed from the bytes when absent
+        in: formData
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vaultutil.ImportResult'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "423":
+          description: Vault is locked
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "503":
+          description: Vault storage device is disconnected
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Import entries from a file
+      tags:
+      - vault
+  /vault/import-backup:
+    post:
+      consumes:
+      - application/json
+      description: Reads the encrypted backup on a managed device, unlocks it with
+        its recovery password, and merges it in.
+      parameters:
+      - description: Device serial and recovery password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_vault.importBackupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/vaultutil.ImportResult'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "423":
+          description: Vault is locked
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "503":
+          description: Vault storage device is disconnected
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Import a vault backup from a device
+      tags:
+      - vault
+  /vault/lock:
+    post:
+      description: Drops the in-memory vault key immediately, before the auto-lock
+        window expires.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: locked flag
+          schema:
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Lock the vault
+      tags:
+      - vault
+  /vault/setup:
+    post:
+      consumes:
+      - application/json
+      description: Creates the vault with a master password and leaves it unlocked.
+        Fails if it already exists.
+      parameters:
+      - description: Master password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_vault.setupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: initialized and locked flags
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Initialize the vault
+      tags:
+      - vault
+  /vault/status:
+    get:
+      description: Reports whether the vault is initialized and unlocked, its auto-lock
+        window, and which device holds it.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_vault.vaultStatusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Get vault status
+      tags:
+      - vault
+  /vault/storage-location:
+    get:
+      description: Returns which device the vault is stored on
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_vault.storageLocationResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Get vault storage location
+      tags:
+      - vault
+    put:
+      consumes:
+      - application/json
+      description: Migrates vault data to a different device. Requires vault unlocked
+        and admin auth.
+      parameters:
+      - description: Migration request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_vault.setStorageLocationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "423":
+          description: Locked
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Change vault storage location
+      tags:
+      - vault
+  /vault/unlock:
+    post:
+      consumes:
+      - application/json
+      description: Derives the vault key from the master password and holds it for
+        the auto-lock window.
+      parameters:
+      - description: Master password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_vault.unlockRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: locked flag
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Incorrect master password
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Unlock the vault
+      tags:
+      - vault
   /version:
     get:
       description: Retrieves the installed version of the application
