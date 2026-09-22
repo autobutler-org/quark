@@ -280,6 +280,15 @@ class TrashController extends ChangeNotifier {
 
   // ── Selection ────────────────────────────────────────────────────────────
 
+  /// Starts a selection with nothing in it, for a pointer that cannot
+  /// long-press a row (#2250).
+  void enterSelection() {
+    if (_selectionMode) return;
+    _selectionMode = true;
+    _selectedPaths.clear();
+    notifyListeners();
+  }
+
   void toggleSelection(FileNode node, {required bool enterSelectionMode}) {
     if (enterSelectionMode && !_selectionMode) {
       _selectionMode = true;
