@@ -125,7 +125,8 @@ func installSSHHelper() error {
 	if err := os.Chown(dir, 0, 0); err != nil {
 		return fmt.Errorf("failed to set ownership on %s: %w", dir, err)
 	}
-	return writeRootFile(sshutil.HelperPath, sshAccessHelperContent, 0o755)
+	_, err := writeRootFileIfChanged(sshutil.HelperPath, sshAccessHelperContent, 0o755)
+	return err
 }
 
 // installSSHDropIn writes the sshd drop-in when sshd is installed, and has a
@@ -135,7 +136,8 @@ func installSSHDropIn() error {
 	if _, err := os.Stat(sshdDropInDir); err != nil {
 		return nil
 	}
-	if err := writeRootFile(sshdDropInPath, sshdDropInContent, 0o644); err != nil {
+	changed, err := writeRootFileIfChanged(sshdDropInPath, sshdDropInContent, 0o644)
+	if err != nil || !changed {
 		return err
 	}
 	if _, err := os.Stat("/run/systemd/system"); err != nil {
@@ -152,6 +154,18 @@ func installSSHDropIn() error {
 // it in. Accounts made before #2131 have nologin.
 func ensureLoginShell() error {
 	return exec.Command("usermod", "--shell", serviceLoginShell, serviceUserName).Run()
+}
+
+// writeRootFileIfChanged writes path with writeRootFile unless it already holds
+// content with mode, and reports whether it wrote. These are small files Quark
+// writes itself, so reading one whole is fine.
+func writeRootFileIfChanged(path, content string, mode os.FileMode) (bool, error) {
+	if info, err := os.Stat(path); err == nil && info.Mode().Perm() == mode {
+		if existing, err := os.ReadFile(path); err == nil && string(existing) == content {
+			return false, nil
+		}
+	}
+	return true, writeRootFile(path, content, mode)
 }
 
 // writeRootFile replaces path atomically with a root-owned file.
