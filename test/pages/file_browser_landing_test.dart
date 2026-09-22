@@ -275,6 +275,39 @@ void main() {
     }, createHttpClient: overrides.createHttpClient);
   });
 
+  testWidgets('switching Quarks leaves the old one\'s folder behind', (
+    tester,
+  ) async {
+    // #2230: the drawer switches Quarks without leaving /files, so the page
+    // stays mounted and has to drop the folder it had open on the last one.
+    // addHost makes the new entry active, so step back to the first one.
+    await AppSettings.instance.addHost(
+      HostEntry(name: 'Cabin', hostAddress: 'http://cabin.local'),
+    );
+    final cabin = AppSettings.instance.activeIndex;
+    await AppSettings.instance.setActiveIndex(cabin - 1);
+
+    await HttpOverrides.runZoned(() async {
+      await pumpBrowser(tester, initialPath: '/users/bob/shared');
+      overrides.requested.clear();
+
+      await AppSettings.instance.setActiveIndex(cabin);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final listings = overrides.requested.where(
+        (u) => u.path.endsWith('/api/v0/files'),
+      );
+      expect(listings, isNotEmpty, reason: 'the new Quark is listed');
+      expect(listings.map((u) => u.host).toSet(), {'cabin.local'});
+      expect(
+        listedPaths(overrides.requested),
+        isNot(contains('users/bob/shared')),
+        reason: 'that folder belonged to the last Quark',
+      );
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
   testWidgets('a member sees My files and Groups, an admin All files too', (
     tester,
   ) async {

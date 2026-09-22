@@ -203,8 +203,8 @@ final List<GalleryEntry> registry = [
         ),
         drawer: QuarkDrawer(
           activeSection: QuarkDrawerSection.photos,
-          hostName: 'Home',
-          hostAddress: 'quark.home.local',
+          hosts: const [HostItem(name: 'Home', address: 'quark.home.local')],
+          activeHostIndex: 0,
           onTapFiles: () => log('QuarkDrawer files'),
         ),
         body: const Center(child: Text('Tap the brand button')),
@@ -283,6 +283,12 @@ final List<GalleryEntry> registry = [
       width: 304,
       child: QuarkDrawer(
         activeSection: QuarkDrawerSection.photos,
+        hosts: const [
+          HostItem(name: 'Home', address: 'quark.home.local'),
+          HostItem(name: 'Cabin', address: 'cabin.local:8443'),
+        ],
+        activeHostIndex: 0,
+        onSelectHost: (index) => log('QuarkDrawer.onSelectHost($index)'),
         onTapFiles: () => log('QuarkDrawer.onTapFiles'),
         onTapPhotos: () => log('QuarkDrawer.onTapPhotos'),
         onTapTrash: () => log('QuarkDrawer.onTapTrash'),

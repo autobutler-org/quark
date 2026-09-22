@@ -160,8 +160,8 @@ void main() {
       tester,
       const QuarkDrawer(
         activeSection: QuarkDrawerSection.files,
-        hostName: 'Cabin',
-        hostAddress: 'cabin.local:8443',
+        hosts: [HostItem(name: 'Cabin', address: 'cabin.local:8443')],
+        activeHostIndex: 0,
       ),
       size: size,
     );
@@ -190,12 +190,133 @@ void main() {
       tester,
       const QuarkDrawer(
         activeSection: QuarkDrawerSection.files,
-        hostName: 'The Quark in the basement behind the water heater',
-        hostAddress: 'https://quark-in-the-basement.home.local:8443',
+        hosts: [
+          HostItem(
+            name: 'The Quark in the basement behind the water heater',
+            address: 'https://quark-in-the-basement.home.local:8443',
+          ),
+          HostItem(name: 'Cabin', address: 'cabin.local'),
+        ],
+        activeHostIndex: 0,
+        onSelectHost: _ignore,
       ),
       size: narrowViewport,
     );
 
     expect(tester.takeException(), isNull);
   });
+
+  /// #2230: switching Quarks used to mean a trip to Settings.
+  const hosts = [
+    HostItem(name: 'Home', address: 'quark.home.local'),
+    HostItem(name: 'Cabin', address: 'cabin.local:8443'),
+  ];
+
+  testBothViewports('a single Quark is a label, not a menu', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      QuarkDrawer(
+        activeSection: QuarkDrawerSection.files,
+        hosts: const [HostItem(name: 'Home', address: 'quark.home.local')],
+        activeHostIndex: 0,
+        onSelectHost: (_) => fail('no menu to select from'),
+      ),
+      size: size,
+    );
+
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.byKey(const ValueKey('drawer_host_header')), findsNothing);
+    expect(find.byIcon(Icons.unfold_more_rounded), findsNothing);
+  });
+
+  testBothViewports('lists every Quark with the active one checked', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      QuarkDrawer(
+        activeSection: QuarkDrawerSection.files,
+        hosts: hosts,
+        activeHostIndex: 1,
+        onSelectHost: (_) {},
+      ),
+      size: size,
+    );
+
+    expect(find.byIcon(Icons.unfold_more_rounded), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('drawer_host_header')));
+    await tester.pumpAndSettle();
+
+    final home = tester.widget<CheckedPopupMenuItem<int>>(
+      find.byKey(const ValueKey('drawer_host_0')),
+    );
+    final cabin = tester.widget<CheckedPopupMenuItem<int>>(
+      find.byKey(const ValueKey('drawer_host_1')),
+    );
+    expect(home.checked, isFalse);
+    expect(cabin.checked, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testBothViewports('picking a Quark calls back with its index', (
+    tester,
+    size,
+  ) async {
+    final picked = <int>[];
+    await pumpAt(
+      tester,
+      QuarkDrawer(
+        activeSection: QuarkDrawerSection.files,
+        hosts: hosts,
+        activeHostIndex: 0,
+        onSelectHost: picked.add,
+      ),
+      size: size,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('drawer_host_header')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('drawer_host_1')));
+    await tester.pumpAndSettle();
+
+    expect(picked, [1]);
+  });
+
+  testBothViewports('the menu opens under the switcher icon', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      QuarkDrawer(
+        activeSection: QuarkDrawerSection.files,
+        hosts: hosts,
+        activeHostIndex: 0,
+        onSelectHost: (_) {},
+      ),
+      size: size,
+    );
+
+    final icon = tester.getRect(find.byIcon(Icons.unfold_more_rounded));
+    await tester.tap(find.byKey(const ValueKey('drawer_host_header')));
+    await tester.pumpAndSettle();
+
+    final menu = tester.getRect(
+      find
+          .ancestor(
+            of: find.byKey(const ValueKey('drawer_host_0')),
+            matching: find.byType(Material),
+          )
+          .last,
+    );
+    expect(menu.right, closeTo(icon.right, 1));
+    expect(menu.top, greaterThanOrEqualTo(icon.bottom));
+    expect(find.byTooltip('Switch Quark'), findsNothing);
+  });
 }
+
+void _ignore(int _) {}
