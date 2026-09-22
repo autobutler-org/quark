@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -20,7 +21,7 @@ import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/photos/add_to_album_sheet.dart';
 import 'package:quark/widgets/photos/album_actions_sheet.dart';
-import 'package:quark/widgets/photos/album_item_actions_sheet.dart';
+import 'package:quark/widgets/photos/album_item_menu.dart';
 import 'package:quark/widgets/photos/album_name_dialog.dart';
 import 'package:quark/widgets/photos/album_picker_sheet.dart';
 import 'package:quark/widgets/photos/delete_album_dialog.dart';
@@ -95,6 +96,9 @@ class PhotosPageState extends State<PhotosPage>
     _scheduleNavMeasure();
     _controller.addListener(_scheduleAlbumUrlSync);
     _controller.showAlbumLink(widget.album);
+    // A right-click on an album photo opens its menu (#2260); the browser's
+    // own menu would open on top of it.
+    if (kIsWeb) unawaited(BrowserContextMenu.disableContextMenu());
   }
 
   /// go_router keeps this State when only the query changes, so a new
@@ -206,6 +210,7 @@ class PhotosPageState extends State<PhotosPage>
 
   @override
   void dispose() {
+    if (kIsWeb) unawaited(BrowserContextMenu.enableContextMenu());
     _eventSub?.cancel();
     _reconnectSub?.cancel();
     _scrollController.removeListener(_onScroll);
@@ -492,14 +497,13 @@ class PhotosPageState extends State<PhotosPage>
     _showAlbum(null);
   }
 
-  /// What a long press does while an album shows: that photo's menu.
-  /// Selection stays a library feature. Demo albums refuse edits, so they
-  /// get no menu, as before.
-  void _showAlbumItemActions(PhotoAlbum album, String id) {
+  /// A photo's menu while an album shows, opened at [position] by the tile's
+  /// button, a right-click or a long press. Selection stays a library
+  /// feature. Demo albums refuse edits, so they get no menu, as before.
+  void _showAlbumItemActions(PhotoAlbum album, String id, Offset position) {
     final path = _controller.quarkPathOf(id);
     if (_demo || path == null) return;
-    AlbumItemActionsSheet.show(
-      context,
+    AlbumItemMenu(
       onAddToAnotherAlbum: () => AddToAlbumSheetHost.show(
         context,
         deviceSerial: path.serial,
@@ -511,7 +515,7 @@ class PhotosPageState extends State<PhotosPage>
       onRemoveFromAlbum: album.isSystemAlbum
           ? null
           : () => _removeFromAlbum(id),
-    );
+    ).showAt(context, position);
   }
 
   Future<void> _removeFromAlbum(String id) async {
@@ -741,9 +745,16 @@ class PhotosPageState extends State<PhotosPage>
                                   asset: c.assetFor(photo.id),
                                 ),
                             onTap: (i) => _onPhotoTap(photos, i),
-                            onLongPress: (i) => album == null
-                                ? c.selectFromLongPress(photos[i].id)
-                                : _showAlbumItemActions(album, photos[i].id),
+                            // In an album the menu takes the long press.
+                            onLongPress: (i) =>
+                                c.selectFromLongPress(photos[i].id),
+                            onMenu: album == null || _demo
+                                ? null
+                                : (i, position) => _showAlbumItemActions(
+                                    album,
+                                    photos[i].id,
+                                    position,
+                                  ),
                             onDoubleTap: (i) => _toggleFavorite(photos[i].id),
                           ),
                         ],

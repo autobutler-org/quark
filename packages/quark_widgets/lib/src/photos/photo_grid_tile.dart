@@ -20,8 +20,16 @@ import 'live_badge.dart';
 /// The overlay colors are fixed rather than themed on purpose: like
 /// [LiveBadge], they are drawn on top of a photograph, not on a surface.
 ///
-/// Key prefixes: `photo_tile_<id>` on the tile and `photo_tile_check_<id>` on
-/// the selection checkbox, which is only rendered in [selectionMode].
+/// Give it [onMenu] and the tile has a menu: a `more_vert` button in the top
+/// right corner, and a right-click or a long press that open the same menu
+/// where the pointer is. A long press then calls [onMenu] instead of
+/// [onLongPress]. On the web the browser shows its own menu on a right-click
+/// too, unless the caller has turned it off with `BrowserContextMenu`.
+///
+/// Key prefixes: `photo_tile_<id>` on the tile, `photo_tile_check_<id>` on
+/// the selection checkbox, which is only rendered in [selectionMode], and
+/// `photo_tile_menu_<id>` on the menu button, which is only rendered with
+/// [onMenu].
 ///
 /// ```dart
 /// PhotoGridTile(
@@ -43,6 +51,7 @@ class PhotoGridTile extends StatelessWidget {
     this.isSelected = false,
     this.selectionMode = false,
     this.onDoubleTap,
+    this.onMenu,
     super.key,
   });
 
@@ -71,16 +80,28 @@ class PhotoGridTile extends StatelessWidget {
   /// second one follows.
   final VoidCallback? onDoubleTap;
 
+  /// Called with the global position to open the tile's menu at: below the
+  /// menu button when it is tapped, or where the tile was right-clicked or
+  /// long-pressed. Null leaves the tile without a menu.
+  final ValueChanged<Offset>? onMenu;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final onMenu = this.onMenu;
 
     return MouseRegion(
       cursor: selectionMode ? MouseCursor.defer : SystemMouseCursors.click,
       child: GestureDetector(
         key: ValueKey('photo_tile_${item.id}'),
         onTap: onTap,
-        onLongPress: onLongPress,
+        onLongPress: onMenu == null ? onLongPress : null,
+        onLongPressStart: onMenu == null
+            ? null
+            : (details) => onMenu(details.globalPosition),
+        onSecondaryTapUp: onMenu == null
+            ? null
+            : (details) => onMenu(details.globalPosition),
         onDoubleTap: onDoubleTap,
         child: Stack(
           fit: StackFit.expand,
@@ -97,6 +118,36 @@ class PhotoGridTile extends StatelessWidget {
                   size: 16,
                   color: Colors.white,
                   shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+                ),
+              ),
+            if (onMenu != null)
+              Positioned(
+                top: 2,
+                right: 2,
+                // A Builder for the button's own box, which the menu opens
+                // under.
+                child: Builder(
+                  builder: (context) => IconButton(
+                    key: ValueKey('photo_tile_menu_${item.id}'),
+                    tooltip: 'More',
+                    iconSize: 18,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    style: IconButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: Colors.black38,
+                    ),
+                    icon: const Icon(QuarkIcons.more_vert),
+                    onPressed: () {
+                      final box = context.findRenderObject()! as RenderBox;
+                      onMenu(
+                        box.localToGlobal(box.size.bottomLeft(Offset.zero)),
+                      );
+                    },
+                  ),
                 ),
               ),
             if (selectionMode && !isSelected)

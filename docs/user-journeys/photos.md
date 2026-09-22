@@ -231,8 +231,9 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 - Renaming the showing album updates the URL to its new name; deleting it returns to All photos.
 - On a narrow screen, where the sidebar sits above the grid, tapping a row scrolls the grid back into view.
 - Tapping a photo opens the viewer over the album's photos only.
-- Long-pressing a photo offers **Add to another album**, plus **Remove from album** (with a confirmation) in a user
-  album or **Remove from favorites** in Favorites.
+- Each photo has a menu button; it opens, like a long press or a right-click on the photo, at the pointer. The menu
+  offers **Add to another album**, plus **Remove from album** (with a confirmation) in a user album or **Remove from
+  favorites** in Favorites.
 - An empty album says so: "Star a photo to add it here." for Favorites, and "Add photos to "<name>" from All
   photos." for a user album. An unreachable quark shows the disconnected view instead.
 - Tapping **All photos** returns the grid to the library, in the category that was showing before, at `/photos`.
