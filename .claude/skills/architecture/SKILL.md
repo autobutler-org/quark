@@ -63,6 +63,30 @@ tier from `middleware.go` (`public` for `authExemptPaths`, `admin` for anything 
 mounts behind `RequireAdmin`, `user` otherwise), and the `@Summary` from the handler's
 swagger godoc.
 
+## Browsing it
+
+`make serve/knowledge` opens an explorer on `:5173` — the same tree as a graph a person can click through:
+Go packages and Dart files with their imports, HTTP routes and the handler packages that serve them, tables
+and the sqlc queries that touch them, client routes, and the `JN-XXX` journeys with the routes they visit.
+Offer it when someone wants to *see* the shape of an area rather than be told it.
+
+The graph behind it is `docs/architecture/knowledge-graph.json` (`make generate/knowledge`, gitignored,
+rebuilt in seconds). Query it with `jq` when the question is about edges rather than a single list:
+
+```bash
+G=docs/architecture/knowledge-graph.json
+# What imports pkg/vfs? The blast radius of changing it.
+jq -r '.edges[] | select(.to == "go:github.com/autobutler-org/quark/pkg/vfs" and .kind == "imports") | .from' $G
+# Which queries touch the users table?
+jq -r '.edges[] | select(.to == "table:users" and .kind == "touches") | .from' $G
+# Which journeys exercise /files?
+jq -r '.edges[] | select(.to == "app-route:/files") | .from' $G
+```
+
+Edge kinds are `imports`, `handles` (handler package → route), `touches` (query → table) and `visits`
+(journey → client route). `handles` and `visits` are inferred and dropped when the target does not exist, so a
+missing edge means "not matched", not "not connected".
+
 ## Answering "how does X work?"
 
 1. **Name the surface.** A URL, a screen, a button. `map.py api` or `map.py app` turns it

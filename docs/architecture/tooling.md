@@ -41,10 +41,11 @@ flowchart TB
 | `make watch/backend`        | backend with hot reload (air), HTTP on `:8080`           |
 | `make watch/backend/secure` | the same over HTTPS on `:443`, self-signed               |
 | `make serve/frontend`       | Flutter web dev server pointed at the backend            |
+| `make serve/knowledge`      | the architecture explorer on `:5173`                     |
 
 ## Knowledge base
 
-There is no generated graph to keep in sync. The knowledge base is these pages plus the
+There is no committed graph to keep in sync. The knowledge base is these pages plus the
 `architecture` skill in [`.claude/skills/architecture/`](../../.claude/skills/architecture/SKILL.md),
 which tells an agent which source answers which question and ships a script that derives the
 rest from the tree on demand.
@@ -85,3 +86,21 @@ Swag only reads an annotation block that sits directly above a named `func`. A h
 written as an inline closure inside `var xRoute = serverutil.ApiRoute(...)` is skipped
 silently, annotations and all — which is why `--audit` compares against the router rather
 than trusting `docs/swagger/` to be complete.
+
+### Browsing it
+
+`make serve/knowledge` puts the same tree in front of a person rather than an agent. `cmd/knowledge` reads it
+once — `go list -json ./...` for Go packages and their imports, the swagger spec for routes, the migrations and
+`sql/queries/` for tables and queries, `lib/` and each `packages/*/lib/` for Dart files and their imports, and
+`docs/user-journeys/` for the journeys — and `docs/architecture/explorer.html` renders the result: search,
+filter by kind, click a node, and walk its edges in either direction.
+
+```bash
+make serve/knowledge       # KNOWLEDGE_PORT=8000 to move it off :5173
+make generate/knowledge    # just docs/architecture/knowledge-graph.json, for jq
+```
+
+The graph is a build output, gitignored and rebuilt in a couple of seconds, so it holds to the rule above: no
+cache to go stale. It overlaps `map.py` on routes, tables and client routes, and adds what an explorer needs
+that a one-shot query does not — the import graph on both sides, and the edges between routes, handlers,
+queries, tables and journeys.

@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quark Knowledge Explorer</title>
+<style>
+  :root {
+    --bg: #fbfbfd; --panel: #ffffff; --line: #e3e3ea; --text: #1d1d21;
+    --muted: #6b6b78; --accent: #3b5bdb; --accent-soft: #edf0fd; --shadow: rgba(20, 20, 40, 0.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a; --panel: #1d1d22; --line: #2e2e36; --text: #e8e8ee;
+      --muted: #9a9aa8; --accent: #7d95f5; --accent-soft: #262a3d; --shadow: rgba(0, 0, 0, 0.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+  header .counts { color: var(--muted); font-size: 12px; }
+  #search {
+    flex: 1; min-width: 200px; padding: 7px 11px; border: 1px solid var(--line);
+    border-radius: 7px; background: var(--bg); color: var(--text); font-size: 13px;
+  }
+  #search:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  main { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.4fr); gap: 16px; padding: 16px; align-items: start; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 3px var(--shadow); }
+  .filters { padding: 10px 12px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 11.5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line);
+    background: transparent; color: var(--muted); cursor: pointer; font-family: inherit;
+  }
+  .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  #results { list-style: none; margin: 0; padding: 6px; max-height: 70vh; overflow-y: auto; }
+  #results li { padding: 0; }
+  #results button {
+    width: 100%; text-align: left; border: 0; background: transparent; color: inherit;
+    padding: 7px 10px; border-radius: 7px; cursor: pointer; font: inherit; display: block;
+  }
+  #results button:hover { background: var(--accent-soft); }
+  #results button[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+  .row-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; word-break: break-all; }
+  .row-meta { color: var(--muted); font-size: 11px; margin-top: 1px; }
+  .row-label + .row-meta { margin-left: 8px; }
+  .empty { padding: 24px 14px; color: var(--muted); text-align: center; }
+  #detail { padding: 16px 18px; }
+  #detail h2 { font-size: 15px; margin: 0 0 2px; font-family: ui-monospace, Menlo, monospace; word-break: break-all; }
+  #detail .doc { color: var(--muted); margin: 8px 0 14px; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0 0 16px; font-size: 12.5px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-family: ui-monospace, Menlo, monospace; word-break: break-all; }
+  h3 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 16px 0 7px; }
+  .links { display: flex; flex-direction: column; gap: 2px; }
+  .links button {
+    text-align: left; border: 0; background: transparent; color: var(--accent); cursor: pointer;
+    font: 12.5px ui-monospace, Menlo, monospace; padding: 3px 6px; border-radius: 5px; word-break: break-all;
+  }
+  .links button:hover { background: var(--accent-soft); }
+  .links .verb { color: var(--muted); font-style: normal; }
+  canvas { width: 100%; height: 260px; display: block; border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Quark Knowledge Explorer</h1>
+  <input id="search" type="search" placeholder="Search packages, routes, tables, queries, files, journeys…" autocomplete="off">
+  <span class="counts" id="counts"></span>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="filters" id="filters"></div>
+    <ul id="results"></ul>
+  </section>
+  <section class="panel">
+    <div id="detail"></div>
+    <canvas id="map" width="600" height="260"></canvas>
+  </section>
+</main>
+
+<script>
+const state = { nodes: [], edges: [], byId: new Map(), out: new Map(), in: new Map(), kinds: new Set(), active: new Set(), selected: null, query: "" };
+
+fetch("knowledge-graph.json")
+  .then(r => { if (!r.ok) throw new Error(r.status + " " + r.statusText); return r.json(); })
+  .then(init)
+  .catch(err => {
+    document.getElementById("detail").innerHTML =
+      '<p class="empty">Could not load <code>knowledge-graph.json</code> (' + err.message +
+      ').<br>Run <code>make generate/knowledge</code>, then serve this page with <code>make serve/knowledge</code>.</p>';
+  });
+
+function init(graph) {
+  state.nodes = graph.nodes;
+  state.edges = graph.edges;
+  for (const n of graph.nodes) { state.byId.set(n.id, n); state.kinds.add(n.kind); }
+  for (const e of graph.edges) {
+    if (!state.out.has(e.from)) state.out.set(e.from, []);
+    if (!state.in.has(e.to)) state.in.set(e.to, []);
+    state.out.get(e.from).push(e);
+    state.in.get(e.to).push(e);
+  }
+  state.active = new Set(state.kinds);
+
+  document.getElementById("counts").textContent = graph.nodes.length + " nodes · " + graph.edges.length + " edges";
+  const filters = document.getElementById("filters");
+  for (const kind of [...state.kinds].sort()) {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = kind;
+    b.setAttribute("aria-pressed", "true");
+    b.onclick = () => {
+      const on = b.getAttribute("aria-pressed") === "true";
+      b.setAttribute("aria-pressed", String(!on));
+      on ? state.active.delete(kind) : state.active.add(kind);
+      render();
+    };
+    filters.appendChild(b);
+  }
+  document.getElementById("search").addEventListener("input", e => { state.query = e.target.value.toLowerCase(); render(); });
+  render();
+  showIntro();
+}
+
+// What the graph holds and how to read a row, shown until something is selected.
+const KINDS = [
+  ["go-package", "A Go package. Its edges are the imports between packages — that is the blast radius of changing it."],
+  ["route", "One HTTP endpoint, read from the swagger spec. Its handler package points at it."],
+  ["table", "A SQLite table, from the migration that creates it."],
+  ["query", "A named sqlc query, linked to every table its SQL mentions."],
+  ["dart-file", "One file in the Flutter app or a workspace package, with its imports."],
+  ["app-route", "A client route declared in lib/router.dart."],
+  ["journey", "A user journey from docs/user-journeys/ — JN-<area>-<number>, e.g. JN-HE-001 is a health journey."],
+];
+
+function showIntro() {
+  const detail = document.getElementById("detail");
+  detail.innerHTML = "";
+
+  const h = document.createElement("h2");
+  h.style.fontFamily = "inherit";
+  h.textContent = "How to read this";
+  detail.appendChild(h);
+
+  const p = document.createElement("p");
+  p.className = "doc";
+  p.textContent = "Everything here is derived from the repository itself. Search or filter on the left, " +
+    "click a node, then walk its edges — every neighbor is clickable, so you can follow a route to its " +
+    "handler, a handler to the packages it imports, or a query to the tables it touches.";
+  detail.appendChild(p);
+
+  const dl = document.createElement("dl");
+  dl.style.gridTemplateColumns = "auto";
+  for (const [kind, blurb] of KINDS) {
+    const count = state.nodes.filter(n => n.kind === kind).length;
+    const dt = document.createElement("dt");
+    dt.style.color = "var(--accent)";
+    dt.style.fontFamily = "ui-monospace, Menlo, monospace";
+    dt.textContent = kind + " (" + count + ")";
+    const dd = document.createElement("dd");
+    dd.style.fontFamily = "inherit";
+    dd.style.marginBottom = "8px";
+    dd.textContent = blurb;
+    dl.append(dt, dd);
+  }
+  detail.appendChild(dl);
+
+  const h3 = document.createElement("h3");
+  h3.textContent = "Try one of these";
+  detail.appendChild(h3);
+  const box = document.createElement("div");
+  box.className = "links";
+  const starts = [
+    ["go:github.com/autobutler-org/quark/pkg/vfs", "pkg/vfs — every file access goes through it"],
+    ["go:github.com/autobutler-org/quark/internal/server", "internal/server — where the routers are mounted"],
+    ["table:users", "the users table, and the queries that touch it"],
+    ["journey:JN-HE-001", "a health journey, and the routes it visits"],
+  ];
+  for (const [id, blurb] of starts) {
+    if (!state.byId.has(id)) continue;
+    const b = document.createElement("button");
+    b.style.fontFamily = "inherit";
+    b.textContent = blurb;
+    b.onclick = () => select(id);
+    box.appendChild(b);
+  }
+  detail.appendChild(box);
+  drawMap(null);
+}
+
+// The second line of a row. A node's own summary beats repeating its kind, and
+// "journey · journey" helps nobody.
+function describe(n) {
+  const tag = n.layer && n.layer !== n.kind ? n.kind + " · " + n.layer : n.kind;
+  return n.doc ? tag + " — " + n.doc : tag;
+}
+
+function matches(n) {
+  if (!state.active.has(n.kind)) return false;
+  if (!state.query) return true;
+  return (n.label + " " + (n.doc || "") + " " + (n.path || "")).toLowerCase().includes(state.query);
+}
+
+function render() {
+  const list = document.getElementById("results");
+  const hits = state.nodes.filter(matches);
+  list.innerHTML = "";
+  if (!hits.length) {
+    list.innerHTML = '<li class="empty">Nothing matches.</li>';
+    return;
+  }
+  for (const n of hits.slice(0, 400)) {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.innerHTML = '<span class="row-label"></span><span class="row-meta"></span>';
+    b.querySelector(".row-label").textContent = n.label;
+    b.querySelector(".row-meta").textContent = describe(n);
+    if (state.selected === n.id) b.setAttribute("aria-current", "true");
+    b.onclick = () => select(n.id);
+    li.appendChild(b);
+    list.appendChild(li);
+  }
+  if (hits.length > 400) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = "…and " + (hits.length - 400) + " more. Narrow the search.";
+    list.appendChild(li);
+  }
+}
+
+function select(id) {
+  state.selected = id;
+  const n = state.byId.get(id);
+  const detail = document.getElementById("detail");
+  detail.innerHTML = "";
+
+  const h = document.createElement("h2");
+  h.textContent = n.label;
+  detail.appendChild(h);
+  if (n.doc) {
+    const p = document.createElement("p");
+    p.className = "doc";
+    p.textContent = n.doc;
+    detail.appendChild(p);
+  }
+
+  const dl = document.createElement("dl");
+  const facts = [["kind", n.kind], ["layer", n.layer]];
+  if (n.path) facts.push(["path", n.path]);
+  for (const [k, v] of Object.entries(n.meta || {})) facts.push([k, v]);
+  for (const [k, v] of facts) {
+    const dt = document.createElement("dt"); dt.textContent = k;
+    const dd = document.createElement("dd"); dd.textContent = v;
+    dl.append(dt, dd);
+  }
+  detail.appendChild(dl);
+
+  addLinks(detail, "Outgoing", state.out.get(id) || [], e => e.to);
+  addLinks(detail, "Incoming", state.in.get(id) || [], e => e.from);
+
+  render();
+  drawMap(id);
+}
+
+function addLinks(parent, title, edges, pick) {
+  if (!edges.length) return;
+  const h3 = document.createElement("h3");
+  h3.textContent = title + " (" + edges.length + ")";
+  parent.appendChild(h3);
+  const box = document.createElement("div");
+  box.className = "links";
+  const sorted = [...edges].sort((a, b) => pick(a).localeCompare(pick(b)));
+  for (const e of sorted.slice(0, 60)) {
+    const other = state.byId.get(pick(e));
+    if (!other) continue;
+    const b = document.createElement("button");
+    b.innerHTML = '<span class="verb"></span> <span></span>';
+    b.querySelector(".verb").textContent = e.kind;
+    b.querySelectorAll("span")[1].textContent = other.label;
+    b.onclick = () => select(other.id);
+    box.appendChild(b);
+  }
+  if (sorted.length > 60) {
+    const more = document.createElement("div");
+    more.className = "row-meta";
+    more.style.padding = "3px 6px";
+    more.textContent = "…and " + (sorted.length - 60) + " more.";
+    box.appendChild(more);
+  }
+  parent.appendChild(box);
+}
+
+// A one-hop neighborhood, laid out as a ring around the selected node. Enough to see
+// shape and fan-out at a glance; the lists above are the exhaustive view.
+function drawMap(id) {
+  const canvas = document.getElementById("map");
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = 260;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  if (!id) return;
+
+  const css = getComputedStyle(document.documentElement);
+  const accent = css.getPropertyValue("--accent").trim();
+  const line = css.getPropertyValue("--line").trim();
+  const muted = css.getPropertyValue("--muted").trim();
+
+  const neighbors = [];
+  const seen = new Set([id]);
+  for (const e of (state.out.get(id) || [])) if (!seen.has(e.to)) { seen.add(e.to); neighbors.push({ id: e.to, dir: "out" }); }
+  for (const e of (state.in.get(id) || [])) if (!seen.has(e.from)) { seen.add(e.from); neighbors.push({ id: e.from, dir: "in" }); }
+
+  const cx = w / 2, cy = h / 2;
+  const shown = neighbors.slice(0, 28);
+  const radius = Math.min(w, h) / 2 - 34;
+
+  shown.forEach((nb, i) => {
+    const angle = (i / shown.length) * Math.PI * 2 - Math.PI / 2;
+    const x = cx + Math.cos(angle) * radius, y = cy + Math.sin(angle) * radius;
+    ctx.strokeStyle = nb.dir === "out" ? accent : line;
+    ctx.globalAlpha = nb.dir === "out" ? 0.5 : 0.85;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = nb.dir === "out" ? accent : muted;
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+
+    const node = state.byId.get(nb.id);
+    const label = node.label.length > 20 ? "…" + node.label.slice(-19) : node.label;
+    ctx.fillStyle = muted;
+    ctx.font = "10px ui-monospace, Menlo, monospace";
+    ctx.textAlign = Math.cos(angle) < -0.2 ? "right" : Math.cos(angle) > 0.2 ? "left" : "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + Math.cos(angle) * 9, y + Math.sin(angle) * 9);
+  });
+
+  ctx.fillStyle = accent;
+  ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.fill();
+
+  if (neighbors.length > shown.length) {
+    ctx.fillStyle = muted;
+    ctx.font = "10px -apple-system, sans-serif";
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillText("showing " + shown.length + " of " + neighbors.length + " neighbors", 10, 10);
+  }
+}
+</script>
+</body>
+</html>
