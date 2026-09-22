@@ -108,17 +108,17 @@ void main() {
 
     expect(find.text('In Docs'), findsOneWidget);
     expect(find.text('budget plan'), findsOneWidget);
-    expect(find.text('notes.qdoc'), findsOneWidget);
-    expect(find.text('budget.qsheet'), findsOneWidget);
+    expect(find.text('notes'), findsOneWidget);
+    expect(find.text('budget'), findsOneWidget);
     expect(find.text('readme.txt'), findsNothing);
 
     // The sheet's own content match comes before the other type's section.
     expect(
-      tester.getTopLeft(find.text('budget.qsheet')).dy,
+      tester.getTopLeft(find.text('budget')).dy,
       lessThan(tester.getTopLeft(find.text('In Docs')).dy),
     );
 
-    await tester.tap(find.text('notes.qdoc'));
+    await tester.tap(find.text('notes'));
     await tester.pumpAndSettle();
     expect(find.text('doc editor notes.qdoc'), findsOneWidget);
   });
@@ -130,11 +130,11 @@ void main() {
     expect(find.text('budget 2026'), findsOneWidget);
     expect(find.text('readme.txt'), findsNothing);
     expect(
-      tester.getTopLeft(find.text('notes.qdoc')).dy,
+      tester.getTopLeft(find.text('notes')).dy,
       lessThan(tester.getTopLeft(find.text('In Sheets')).dy),
     );
 
-    await tester.tap(find.text('budget.qsheet'));
+    await tester.tap(find.text('budget'));
     await tester.pumpAndSettle();
     expect(find.text('sheet editor budget.qsheet'), findsOneWidget);
   });
