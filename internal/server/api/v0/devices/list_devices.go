@@ -16,27 +16,27 @@ import (
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Security BearerAuth
 // @Router /devices [get]
-var listDevicesRoute = serverutil.ApiRoute(
-	"GET", "/devices", func(c *gin.Context) *serverutil.Response {
-		deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
-		if !ok {
-			return serverutil.InternalServerError(nil)
+func listDevices(c *gin.Context) *serverutil.Response {
+	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
+	if !ok {
+		return serverutil.InternalServerError(nil)
+	}
+	rows, err := deps.Database().Queries.ListConnectedDevices(c.Request.Context())
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	result := make([]ConnectedDeviceJSON, len(rows))
+	for i, d := range rows {
+		result[i] = ConnectedDeviceJSON{
+			ID:           d.ID,
+			IPAddress:    d.IpAddress,
+			UserAgent:    d.UserAgent,
+			FirstSeenAt:  d.FirstSeenAt,
+			LastSeenAt:   d.LastSeenAt,
+			RequestCount: d.RequestCount,
 		}
-		rows, err := deps.Database().Queries.ListConnectedDevices(c.Request.Context())
-		if err != nil {
-			return serverutil.InternalServerError(err)
-		}
-		result := make([]ConnectedDeviceJSON, len(rows))
-		for i, d := range rows {
-			result[i] = ConnectedDeviceJSON{
-				ID:           d.ID,
-				IPAddress:    d.IpAddress,
-				UserAgent:    d.UserAgent,
-				FirstSeenAt:  d.FirstSeenAt,
-				LastSeenAt:   d.LastSeenAt,
-				RequestCount: d.RequestCount,
-			}
-		}
-		return serverutil.Ok().WithData(result)
-	},
-)
+	}
+	return serverutil.Ok().WithData(result)
+}
+
+var listDevicesRoute = serverutil.ApiRoute("GET", "/devices", listDevices)

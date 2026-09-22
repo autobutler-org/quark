@@ -25,51 +25,51 @@ import (
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /vault/storage-location [put]
-var setVaultStorageLocationRoute = serverutil.ApiRoute(
-	"PUT", "/vault/storage-location", func(c *gin.Context) *serverutil.Response {
-		deps, _, errResp := requireUnlockedVault(c)
-		if errResp != nil {
-			return errResp
-		}
+func setVaultStorageLocation(c *gin.Context) *serverutil.Response {
+	deps, _, errResp := requireUnlockedVault(c)
+	if errResp != nil {
+		return errResp
+	}
 
-		var req setStorageLocationRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			return serverutil.BadRequest(err)
-		}
+	var req setStorageLocationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		return serverutil.BadRequest(err)
+	}
 
-		ctx := c.Request.Context()
+	ctx := c.Request.Context()
 
-		if sessionUser, ok := ctxutil.Get[string](c, "username"); ok && sessionUser != req.Username {
-			return serverutil.Unauthorized(fmt.Errorf("username does not match session"))
-		}
-		if _, _, err := authutil.ValidateBasicAuth(ctx, deps.Database().Queries, req.Username, req.Password); err != nil {
-			return serverutil.Unauthorized(fmt.Errorf("invalid credentials"))
-		}
+	if sessionUser, ok := ctxutil.Get[string](c, "username"); ok && sessionUser != req.Username {
+		return serverutil.Unauthorized(fmt.Errorf("username does not match session"))
+	}
+	if _, _, err := authutil.ValidateBasicAuth(ctx, deps.Database().Queries, req.Username, req.Password); err != nil {
+		return serverutil.Unauthorized(fmt.Errorf("invalid credentials"))
+	}
 
-		result, err := vaultutil.SetLocation(ctx, vaultutil.SetLocationParams{
-			MainDB:       deps.Database(),
-			VaultDB:      deps.VaultDB(),
-			Storage:      deps.StorageService(),
-			TargetSerial: req.TargetDeviceSerial,
-		})
-		switch {
-		case errors.Is(err, vaultutil.ErrVaultAlreadyOnDevice):
-			return serverutil.BadRequest(err)
-		case errors.Is(err, vaultutil.ErrDeviceNotFound):
-			return serverutil.BadRequest(fmt.Errorf("device %q not found or not connected", req.TargetDeviceSerial))
-		case err != nil:
-			return serverutil.InternalServerError(err)
-		}
+	result, err := vaultutil.SetLocation(ctx, vaultutil.SetLocationParams{
+		MainDB:       deps.Database(),
+		VaultDB:      deps.VaultDB(),
+		Storage:      deps.StorageService(),
+		TargetSerial: req.TargetDeviceSerial,
+	})
+	switch {
+	case errors.Is(err, vaultutil.ErrVaultAlreadyOnDevice):
+		return serverutil.BadRequest(err)
+	case errors.Is(err, vaultutil.ErrDeviceNotFound):
+		return serverutil.BadRequest(fmt.Errorf("device %q not found or not connected", req.TargetDeviceSerial))
+	case err != nil:
+		return serverutil.InternalServerError(err)
+	}
 
-		if req.TargetDeviceSerial == "" {
-			deps.ClearVaultDB()
-		} else {
-			deps.SetVaultDB(result.TargetDB)
-		}
+	if req.TargetDeviceSerial == "" {
+		deps.ClearVaultDB()
+	} else {
+		deps.SetVaultDB(result.TargetDB)
+	}
 
-		return serverutil.Ok().WithData(gin.H{
-			"deviceSerial": req.TargetDeviceSerial,
-			"migrated":     true,
-		})
-	},
-)
+	return serverutil.Ok().WithData(gin.H{
+		"deviceSerial": req.TargetDeviceSerial,
+		"migrated":     true,
+	})
+}
+
+var setVaultStorageLocationRoute = serverutil.ApiRoute("PUT", "/vault/storage-location", setVaultStorageLocation)
