@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Commit-msg hook — rejects AI attribution in the commit message.
+# Install: make setup/hooks
+#
+# This is a commit-msg hook rather than a pre-commit one because pre-commit runs
+# before the message exists: git passes the message file to commit-msg only.
+set -euo pipefail
+
+message_file="$1"
+
+# Reduce the file to what git will actually keep. `--verbose` appends the staged
+# diff below a scissors line, and that diff is not commented out, so a commit
+# touching this very hook would otherwise match its own patterns.
+subject_and_body="$(
+  sed '/^# *-\{1,\} *>8 *-\{1,\}/,$d' "${message_file}" | git stripspace --strip-comments
+)"
+
+# Each entry is a description followed by an extended regular expression.
+patterns=(
+  "Co-authored-by trailer crediting Claude" '^[[:space:]]*co-authored-by:.*claude'
+  "Co-authored-by trailer using an Anthropic address" '^[[:space:]]*co-authored-by:.*anthropic\.com'
+  "\"Generated with Claude Code\" footer" 'generated with.*claude'
+  "Claude Code session link" 'claude\.ai/code'
+)
+
+matched=""
+for ((i = 0; i < ${#patterns[@]}; i += 2)); do
+  description="${patterns[i]}"
+  pattern="${patterns[i + 1]}"
+  if hits="$(printf '%s\n' "${subject_and_body}" | grep -inE "${pattern}")"; then
+    matched="${matched}  ${description}:"$'\n'
+    matched="${matched}$(printf '%s\n' "${hits}" | sed 's/^/    /')"$'\n'
+  fi
+done
+
+if [[ -n "${matched}" ]]; then
+  echo ""
+  echo "❌ This commit message carries AI attribution. Commits are authored by you alone."
+  echo ""
+  printf '%s' "${matched}"
+  echo ""
+  echo "Remove those lines and commit again."
+  exit 1
+fi

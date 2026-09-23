@@ -257,6 +257,7 @@ setup/swag: ## Install swag tool
 .PHONY: setup/hooks
 setup/hooks: ## Install git hooks
 	ln -sf "$(PWD)/git/hooks/pre-commit" .git/hooks/pre-commit
+	ln -sf "$(PWD)/git/hooks/commit-msg" .git/hooks/commit-msg
 	echo "✅ Git hooks installed"
 
 .PHONY: setup/node
