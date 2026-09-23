@@ -68,12 +68,22 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
     currentAbsolutePath = currentAbsolutePath; // keep empty
   }
 
-  // Replaced only when the folder changes. A new future on every rebuild,
-  // including each character of the name, kept the previous listing's rows
-  // on screen under the new path (#2075).
-  Future<List<FileNode>> filesFuture = controller.fetchFiles(
-    currentAbsolutePath,
-  );
+  // Created on the first build for a path, not before the dialog is up.
+  // Starting the request earlier lets it fail with nobody listening: widget
+  // tests answer every HTTP call with 400, and that became an uncaught
+  // exception (#2075). Replaced only when the folder changes, so typing in
+  // the name does not start a new request and paint the previous rows.
+  Future<List<FileNode>>? filesFuture;
+  String? listedPath;
+
+  Future<List<FileNode>> listingFor(String path) {
+    final current = filesFuture;
+    if (listedPath != path || current == null) {
+      listedPath = path;
+      return filesFuture = controller.fetchFiles(path);
+    }
+    return current;
+  }
 
   // Only show device picker when there are multiple devices
   final showDevicePicker = devices.length > 1;
@@ -90,10 +100,7 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
           builder: (context, setState) {
             void goTo(String path) {
               if (path == currentAbsolutePath) return;
-              setState(() {
-                currentAbsolutePath = path;
-                filesFuture = controller.fetchFiles(path);
-              });
+              setState(() => currentAbsolutePath = path);
             }
 
             void openDirectory(FileNode node) {
@@ -197,7 +204,7 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
                       height: 300,
                       child: FileBrowserView(
                         key: ValueKey(currentAbsolutePath),
-                        filesFuture: filesFuture,
+                        filesFuture: listingFor(currentAbsolutePath),
                         onFileMenuAction: (node, action) async {},
                         onOpenDirectory: openDirectory,
                         isGridView: false,
