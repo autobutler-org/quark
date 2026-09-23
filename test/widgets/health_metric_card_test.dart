@@ -3,11 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/health/metric_card.dart';
 import 'package:quark_icons/quark_icons.dart';
 
-/// #2048: Health showed a green "All systems healthy" banner over a memory
-/// meter painted warning-orange at 82.5%, with nothing to explain the
-/// contradiction. Both were telling the truth about different rules — the
-/// Quark alerts on memory at 95%, the meter turns orange at three quarters of
-/// that, 71.25% — and the meter is where the explanation belongs.
+/// #2095: the banner now follows the meter, and the note names the alert
+/// limit without saying nothing is wrong.
 void main() {
   Future<void> pumpCard(
     WidgetTester tester, {
@@ -39,15 +36,20 @@ void main() {
     expect(note, findsNothing);
   });
 
-  testWidgets('the orange band says it is normal and names the limit', (
+  testWidgets('the orange band counts as a warning and names the limit', (
     tester,
   ) async {
     await pumpCard(tester, value: 82.5);
 
     expect(note, findsOneWidget);
-    expect(find.textContaining('Elevated'), findsOneWidget);
-    // The number the Quark actually alerts on, not the one the color uses.
-    expect(find.textContaining('95%'), findsOneWidget);
+    expect(find.textContaining('Nothing is wrong'), findsNothing);
+    expect(
+      find.text(
+        'Elevated. The summary counts this as a warning. '
+        'An alert is raised at 95%.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a value over the limit says an alert is raised', (tester) async {
@@ -63,6 +65,13 @@ void main() {
     await pumpCard(tester, value: 70, criticalThreshold: 90, label: 'Disk');
 
     expect(find.byKey(const ValueKey('metric_note_disk')), findsOneWidget);
-    expect(find.textContaining('90%'), findsOneWidget);
+    expect(find.textContaining('Nothing is wrong'), findsNothing);
+    expect(
+      find.text(
+        'Elevated. The summary counts this as a warning. '
+        'An alert is raised at 90%.',
+      ),
+      findsOneWidget,
+    );
   });
 }

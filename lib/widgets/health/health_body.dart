@@ -3,6 +3,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/health_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/widgets/health/health_severity.dart';
 import 'package:quark/widgets/health/metric_card.dart';
 import 'package:quark/widgets/health/status_banner.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -95,7 +96,10 @@ class HealthBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        StatusBanner(healthy: status.healthy, alerts: status.alerts),
+        StatusBanner(
+          severity: overallHealthSeverity(status),
+          alerts: status.alerts,
+        ),
         const SizedBox(height: 16),
         const Text(
           'System',
@@ -107,7 +111,7 @@ class HealthBody extends StatelessWidget {
           icon: QuarkIcons.memory,
           value: status.cpuPercent,
           unit: '%',
-          criticalThreshold: 90,
+          criticalThreshold: healthCpuCriticalPercent,
           detail: status.cpuCorePercents.isNotEmpty
               ? '${(status.cpuPercent / 100 * status.cpuCorePercents.length).toStringAsFixed(1)} of ${status.cpuCorePercents.length} cores'
               : null,
@@ -121,7 +125,7 @@ class HealthBody extends StatelessWidget {
           icon: QuarkIcons.storage,
           value: status.memPercent,
           unit: '%',
-          criticalThreshold: 95,
+          criticalThreshold: healthMemoryCriticalPercent,
           detail:
               '${_formatBytes(status.memUsedBytes)} used of ${_formatBytes(status.memTotalBytes)}',
         ),
@@ -131,7 +135,7 @@ class HealthBody extends StatelessWidget {
           icon: QuarkIcons.disc_full,
           value: status.diskPercent,
           unit: '%',
-          criticalThreshold: 90,
+          criticalThreshold: healthDiskCriticalPercent,
           detail:
               '${_formatBytes(status.diskUsedBytes)} used of ${_formatBytes(status.diskTotalBytes)}',
         ),
@@ -142,7 +146,7 @@ class HealthBody extends StatelessWidget {
             icon: QuarkIcons.thermostat,
             value: status.temperatureCelsius,
             unit: '°C',
-            criticalThreshold: 80,
+            criticalThreshold: healthTemperatureCriticalCelsius,
             maxValue: 100,
           ),
         ],
