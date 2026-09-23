@@ -133,6 +133,33 @@ void main() {
     );
   });
 
+  // #2311: Photos selects through the same bar as Files and the trash — a
+  // leading close button, the count, and Select all — not a Cancel of its own.
+  testWidgets('selecting wears the shared selection bar', (tester) async {
+    await settings.setDemoMode(true);
+    await pumpPhotos(tester);
+
+    await tester.tap(find.byKey(const ValueKey('photos_select')));
+    await tester.pump();
+
+    expect(find.byType(FileSelectionBar), findsOneWidget);
+    expect(find.text('0 selected'), findsOneWidget);
+    expect(find.byKey(const ValueKey('file_selection_delete')), findsNothing);
+    expect(find.text('Cancel'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('file_selection_toggle_all')));
+    await tester.pump();
+    expect(
+      find.text('${DemoPhotosService.photos.length} selected'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('file_selection_cancel')));
+    await tester.pump();
+    expect(find.byType(FileSelectionBar), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   // #1916: an album opens in place on the Photos page, and the URL follows.
   group('albums open in place', () {
     int count(int albumId) => DemoPhotosService.listAlbumItems(albumId).length;

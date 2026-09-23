@@ -685,6 +685,18 @@ class PhotosController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Selects every photo the grid shows.
+  void selectAll() {
+    _selectedIds.addAll(_visible().map((photo) => photo.id));
+    notifyListeners();
+  }
+
+  /// Clears the selection but keeps selecting.
+  void deselectAll() {
+    _selectedIds.clear();
+    notifyListeners();
+  }
+
   /// What a long press does: starts selecting if nothing is being selected,
   /// then toggles [id].
   void selectFromLongPress(String id) {

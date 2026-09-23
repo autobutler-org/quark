@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/pump.dart';
@@ -165,7 +166,7 @@ void main() {
   ) async {
     await pumpSelectionBar(tester, canDelete: false);
 
-    final button = tester.widget<IconButton>(
+    final button = tester.widget<QuarkBarIconButton>(
       find.byKey(const ValueKey('file_selection_delete')),
     );
     expect(button.onPressed, isNull);
@@ -199,4 +200,99 @@ void main() {
 
     expect(events, ['restore', 'delete']);
   });
+
+  testWidgets('leaves delete out when the listing does not delete', (
+    tester,
+  ) async {
+    await pumpAt(
+      tester,
+      Column(
+        children: [
+          FileSelectionBar(
+            selectedCount: 1,
+            totalCount: 3,
+            onSelectAll: () {},
+            onDeselectAll: () {},
+            onCancel: () {},
+            showDelete: false,
+          ),
+        ],
+      ),
+      size: narrowViewport,
+    );
+
+    expect(find.byKey(const ValueKey('file_selection_delete')), findsNothing);
+  });
+
+  testBothViewports('names its purpose and carries the page\'s actions', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpAt(
+      tester,
+      Column(
+        children: [
+          FileSelectionBar(
+            selectedCount: 2,
+            totalCount: 3,
+            onSelectAll: () {},
+            onDeselectAll: () {},
+            onCancel: () {},
+            showDelete: false,
+            title: 'Adding to Hiking',
+            actions: [
+              QuarkBarChip(
+                key: const ValueKey('done'),
+                icon: QuarkIcons.check_rounded,
+                label: 'Done (2)',
+                onPressed: () => events.add('done'),
+              ),
+            ],
+          ),
+        ],
+      ),
+      size: size,
+    );
+
+    expect(find.text('Adding to Hiking'), findsOneWidget);
+    expect(find.text('2 selected'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('done')));
+    await tester.pump();
+    expect(events, ['done']);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final (label, brightness, tokens) in [
+    ('dark', Brightness.dark, QuarkTokens.dark),
+    ('light', Brightness.light, QuarkTokens.light),
+  ]) {
+    testWidgets('$label: wears the app bar background', (tester) async {
+      await pumpAt(
+        tester,
+        Column(
+          children: [
+            FileSelectionBar(
+              selectedCount: 1,
+              totalCount: 3,
+              onSelectAll: () {},
+              onDeselectAll: () {},
+              onCancel: () {},
+            ),
+          ],
+        ),
+        brightness: brightness,
+      );
+
+      final bar = tester.widget<Container>(
+        find
+            .descendant(
+              of: find.byType(FileSelectionBar),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      expect(bar.color, tokens.sidebar);
+    });
+  }
 }

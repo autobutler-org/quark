@@ -17,5 +17,5 @@ test "photos page shows the library and enters selection"
   wait until #photo_grid appears
   see #album_create
   tap #photos_select
-  see #photo_selection_cancel
-  tap #photo_selection_cancel
+  see #file_selection_cancel
+  tap #file_selection_cancel
