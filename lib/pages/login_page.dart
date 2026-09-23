@@ -185,11 +185,40 @@ class _LoginPageState extends State<LoginPage> {
         // credentials banner reads as "wrong password". It gets its own state.
         final unreachable = isQuarkUnreachableError(e);
         _retry = unreachable ? _submit : null;
-        _error = unreachable ? null : Errors.message(e, 'sign in');
+        _error = unreachable ? null : _signInError(e);
         _loading = false;
       });
       // Announce error to screen readers
     }
+  }
+
+  /// Copy for a sign-in the Quark answered and refused.
+  ///
+  /// A 401 on a Quark with no owner is not a mistyped password (#2105).
+  /// Otherwise that same 401 names which host refused it. Anything else stays
+  /// the generic sign-in sentence.
+  String _signInError(Object error) {
+    if (error is MessageException &&
+        error.message == Errors.invalidCredentials) {
+      if (_setupComplete == false) return Errors.quarkNotSetUp;
+      return Errors.invalidCredentialsOn(_activeHostLabel());
+    }
+    return Errors.message(error, 'sign in');
+  }
+
+  /// `Name (address)` for the Quark being signed in to, or the address when
+  /// that entry has no name. The active host string, or "this Quark", when
+  /// no saved entry is selected.
+  String _activeHostLabel() {
+    final settings = AppSettings.instance;
+    final hosts = settings.hosts;
+    final index = settings.activeIndex;
+    if (index >= 0 && index < hosts.length) {
+      final entry = hosts[index];
+      if (entry.name.isEmpty) return entry.hostAddress;
+      return '${entry.name} (${entry.hostAddress})';
+    }
+    return settings.activeHost ?? 'this Quark';
   }
 
   /// Stores the held session once its phrase has been acknowledged, which

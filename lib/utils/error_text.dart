@@ -232,6 +232,30 @@ abstract final class Errors {
   static const String accountDisabled =
       'This account is turned off. Ask an admin of this Quark.';
 
+  /// A sign-in the Quark refused with a 401.
+  ///
+  /// The same sentence for a wrong password and an unknown username, so the
+  /// copy does not say which. The login page may rephrase it to name the
+  /// Quark, or to say the Quark is not set up yet (#2105).
+  static const String invalidCredentials = 'Invalid username or password.';
+
+  /// A 401 from a Quark the status probe said has no owner account yet.
+  ///
+  /// There is nothing to mistype a password for, so the credentials sentence
+  /// would send the user to retry a sign-in that cannot succeed.
+  static const String quarkNotSetUp =
+      "This Quark isn't set up yet. Create the owner account before "
+      'signing in.';
+
+  /// A 401 that names the Quark which refused the password.
+  ///
+  /// [hostLabel] is `Name (address)` when the saved host has a name, and the
+  /// address alone when it does not. Signing in to the wrong Quark then reads
+  /// as that Quark refusing the password, not as a typo on the one the user
+  /// meant (#2105).
+  static String invalidCredentialsOn(String hostLabel) =>
+      'Invalid username or password on $hostLabel.';
+
   /// Requesting an account from a Quark that is not taking requests, which it
   /// answers with a 404.
   static const String accessRequestsOff =
