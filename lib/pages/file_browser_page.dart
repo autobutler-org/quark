@@ -352,7 +352,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       if (!mounted) {
         return;
       }
-      setState(() => _recentFilesSectionKey++);
       _refreshFileState();
       _showMessage(
         _uploadReport(result),
@@ -501,7 +500,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     unawaited(_loadSharedRoots());
     await _loadDevices();
     if (!mounted) return;
-    setState(() => _reloadFiles());
+    setState(() {
+      // The strip only loads in initState, so a new key is the reload (#2080).
+      _recentFilesSectionKey++;
+      _reloadFiles();
+    });
     // `_reloadFiles` may issue nothing while a deep link is still resolving.
     // Awaiting the sentinel would hang the refresh, and with it the mixin's
     // in-flight flag, for the rest of the session.
