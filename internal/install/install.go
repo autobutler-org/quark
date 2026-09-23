@@ -248,6 +248,9 @@ func Install(systemOnly bool) error {
 		if err := installSSHDropIn(); err != nil {
 			return fmt.Errorf("failed to install the sshd drop-in: %w", err)
 		}
+		if err := installDNSSDService(); err != nil {
+			return fmt.Errorf("failed to install the DNS-SD service file: %w", err)
+		}
 		if err := lockRoot(); err != nil {
 			return fmt.Errorf("failed to lock the root password: %w", err)
 		}
