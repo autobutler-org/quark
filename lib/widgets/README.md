@@ -57,6 +57,8 @@ lib/widgets/
                                 content matches so they look alike (#2272)
   host_dialog.dart              edits AppSettings hosts
   host_manager.dart             edits AppSettings hosts
+  nearby_quarks.dart            hosts DiscoveredQuarkList around a
+                                QuarkDiscoveryController browsing mDNS
   quark_connect_form.dart       calls the connection services
   search_section_header.dart    labels a group of docs/sheets search results,
                                 shared by both pages' bodies

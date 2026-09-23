@@ -66,7 +66,7 @@ packages:
     source: hosted
     version: "2.0.13"
   bonsoir:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: bonsoir
       sha256: "2e2cf3be580deccad9a48dcaddddf90de092e74b7de2015ef58fb24e11d66496"
