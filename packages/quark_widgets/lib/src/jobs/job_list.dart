@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../core/empty_state_widget.dart';
+import '../core/quark_loader.dart';
 import '../models/job_item.dart';
 import '../theme/quark_tokens.dart';
 import 'job_list/job_row.dart';
@@ -66,7 +67,7 @@ class JobList extends StatelessWidget {
           );
 
     if (items.isEmpty) {
-      if (isLoading) return const Center(child: CircularProgressIndicator());
+      if (isLoading) return const Center(child: QuarkLoader());
       if (errorText != null) return Center(child: errorText);
       return const EmptyStateWidget(
         icon: QuarkIcons.pending_actions_outlined,

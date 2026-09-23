@@ -200,7 +200,7 @@ class _VaultPageState extends State<VaultPage>
   /// there is no subtree hiding in here.
   Widget _buildBody() {
     if (isInitialLoad) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: QuarkLoader());
     }
     final error = _error;
     if (error != null) {

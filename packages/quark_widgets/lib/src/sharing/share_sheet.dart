@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/quark_loader.dart';
 import '../models/access_level.dart';
 import '../models/grant_item.dart';
 import '../models/principal_item.dart';
@@ -168,7 +169,7 @@ class ShareSheet extends StatelessWidget {
               if (isLoading)
                 Padding(
                   padding: EdgeInsets.all(tokens.spacingLg),
-                  child: const Center(child: CircularProgressIndicator()),
+                  child: const Center(child: QuarkLoader()),
                 )
               else if (hasAccess) ...[
                 if (canManage && onAdd != null) ...[

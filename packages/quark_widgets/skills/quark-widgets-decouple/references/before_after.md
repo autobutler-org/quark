@@ -53,7 +53,7 @@ class _FavoritesListState extends State<FavoritesList> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: QuarkLoader());
     if (_error != null) return Center(child: Text(_error!));
     if (_photos.isEmpty) return const Center(child: Text('No favorites yet'));
     return ListView(
@@ -173,7 +173,7 @@ class FavoritesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) return const Center(child: CircularProgressIndicator());
+    if (isLoading) return const Center(child: QuarkLoader());
     if (error != null) return Center(child: Text(error!));
     if (photos.isEmpty) return Center(child: Text(emptyMessage));
     return ListView(

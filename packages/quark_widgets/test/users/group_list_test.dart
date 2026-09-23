@@ -32,7 +32,7 @@ void main() {
       size: size,
     );
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byKey(const ValueKey('group_row_1')), findsNothing);
     expect(find.text('No groups yet'), findsNothing);
   });
@@ -49,7 +49,7 @@ void main() {
 
     expect(find.text("Couldn't load groups."), findsOneWidget);
     expect(find.byKey(const ValueKey('group_row_1')), findsNothing);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(QuarkLoader), findsNothing);
   });
 
   testBothViewports('shows the empty copy when there are no groups', (
@@ -59,7 +59,7 @@ void main() {
     await pumpAt(tester, const GroupList(groups: []), size: size);
 
     expect(find.text('No groups yet'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(QuarkLoader), findsNothing);
   });
 
   testBothViewports('renders one row per group with who is in it', (
@@ -199,7 +199,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('group_row_2')),
-        matching: find.byType(CircularProgressIndicator),
+        matching: find.byType(QuarkLoader),
       ),
       findsOneWidget,
     );

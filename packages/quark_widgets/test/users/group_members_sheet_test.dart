@@ -110,7 +110,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('group_member_1')),
-        matching: find.byType(CircularProgressIndicator),
+        matching: find.byType(QuarkLoader),
       ),
       findsOneWidget,
     );

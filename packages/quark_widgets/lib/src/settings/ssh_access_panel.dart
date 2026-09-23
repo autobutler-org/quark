@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_loader.dart';
 import '../models/ssh_key_item.dart';
 import '../theme/quark_tokens.dart';
 import 'ssh_access_panel/ssh_key_row.dart';
@@ -90,7 +91,7 @@ class SshAccessPanel extends StatelessWidget {
     if (isLoading) {
       return Padding(
         padding: EdgeInsets.all(tokens.spacingMd),
-        child: const Center(child: CircularProgressIndicator()),
+        child: const Center(child: QuarkLoader()),
       );
     }
 

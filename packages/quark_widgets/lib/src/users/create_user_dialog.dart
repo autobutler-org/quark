@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/password_strength_bar.dart';
+import '../core/quark_loader.dart';
 import '../models/create_user_input.dart';
 import '../theme/quark_tokens.dart';
 
@@ -201,10 +202,7 @@ class _CreateUserDialogState extends State<CreateUserDialog> {
           key: const ValueKey('create_user_submit'),
           onPressed: widget.isSubmitting ? null : _submit,
           child: widget.isSubmitting
-              ? const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const QuarkLoader(size: 20)
               : const Text('Add user'),
         ),
       ],

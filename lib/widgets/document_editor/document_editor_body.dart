@@ -65,7 +65,7 @@ class DocumentEditorBody extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     if (loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: QuarkLoader());
     }
 
     final error = this.error;

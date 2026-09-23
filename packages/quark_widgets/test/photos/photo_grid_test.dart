@@ -125,7 +125,7 @@ void main() {
   ) async {
     await pumpGrid(tester, size: size, photos: const [], isLoading: true);
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.text('No photos yet'), findsNothing);
   });
 

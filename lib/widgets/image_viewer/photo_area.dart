@@ -64,9 +64,7 @@ class PhotoArea extends StatelessWidget {
             itemCount: math.max(imageCount, 1),
             onPageChanged: onPageChanged,
             itemBuilder: (_, index) => Center(
-              child: index == currentIndex
-                  ? currentPhoto
-                  : const CircularProgressIndicator(color: Colors.white),
+              child: index == currentIndex ? currentPhoto : const QuarkLoader(),
             ),
           ),
           if (isLive && !loading)

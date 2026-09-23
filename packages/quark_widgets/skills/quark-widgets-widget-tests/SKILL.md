@@ -88,14 +88,14 @@ fails.
 ```dart
 testBothViewports('shows a spinner while loading', (tester, size) async {
   await pumpAt(tester, const ThingList(items: [], isLoading: true), size: size);
-  expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  expect(find.byType(QuarkLoader), findsOneWidget);
   expect(find.text('Nothing here yet'), findsNothing);
 });
 
 testBothViewports('shows the empty copy when there is nothing', (tester, size) async {
   await pumpAt(tester, const ThingList(items: []), size: size);
   expect(find.text('Nothing here yet'), findsOneWidget);
-  expect(find.byType(CircularProgressIndicator), findsNothing);
+  expect(find.byType(QuarkLoader), findsNothing);
 });
 
 testBothViewports('renders the error the caller handed it', (tester, size) async {

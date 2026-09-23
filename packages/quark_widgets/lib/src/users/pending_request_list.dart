@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../core/empty_state_widget.dart';
+import '../core/quark_loader.dart';
 import '../models/user_account_item.dart';
 import '../theme/quark_tokens.dart';
 import 'pending_request_list/pending_request_row.dart';
@@ -66,7 +67,7 @@ class PendingRequestList extends StatelessWidget {
     if (isLoading) {
       return Padding(
         padding: EdgeInsets.all(tokens.spacingLg),
-        child: const Center(child: CircularProgressIndicator()),
+        child: const Center(child: QuarkLoader()),
       );
     }
     if (error != null) {

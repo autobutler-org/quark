@@ -66,7 +66,7 @@ class DocsBody extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     if (loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: QuarkLoader());
     }
     final error = this.error;
     if (error != null) {
@@ -147,11 +147,7 @@ class DocsBody extends StatelessWidget {
             ),
             if (contentSearching) ...const [
               SizedBox(height: 16),
-              SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              QuarkLoader(size: 20),
             ],
             const SizedBox(height: 16),
             // Offered while searching too (#2044). A search that found

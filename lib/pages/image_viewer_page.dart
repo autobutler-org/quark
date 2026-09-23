@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/photo_bytes_cache.dart';
@@ -750,8 +751,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (loadError == null)
-                    const CircularProgressIndicator(color: Colors.white),
+                  if (loadError == null) const QuarkLoader(),
                   const SizedBox(height: 16),
                   Text(
                     loadError ?? _currentName,

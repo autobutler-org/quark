@@ -137,7 +137,7 @@ void main() {
       scaffold: false,
     );
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(
       tester
           .widget<IconButton>(

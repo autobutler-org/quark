@@ -95,7 +95,7 @@ void main() {
       size: size,
     );
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byIcon(QuarkIcons.check_circle_outline), findsNothing);
 
     await tester.tap(find.byKey(key), warnIfMissed: false);

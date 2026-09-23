@@ -35,7 +35,7 @@ void main() {
       size: size,
     );
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.text('Nothing here yet'), findsNothing);
   });
 
@@ -46,7 +46,7 @@ void main() {
     await pumpAt(tester, const ThingList(items: []), size: size);
 
     expect(find.text('Nothing here yet'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(QuarkLoader), findsNothing);
   });
 
   testBothViewports('renders the error the caller handed it', (
@@ -258,7 +258,7 @@ class ThingList extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<QuarkTokens>()!;
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: QuarkLoader());
     }
     if (error != null) {
       return Center(child: Text(error!));

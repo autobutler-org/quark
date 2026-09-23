@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -137,11 +138,7 @@ class _HostDialogState extends State<HostDialog> {
         TextButton(
           onPressed: _checking ? null : _submit,
           child: _checking
-              ? const SizedBox(
-                  height: 16,
-                  width: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const QuarkLoader(size: 16)
               : Text(_offersSaveAnyway ? 'Save anyway' : 'Save'),
         ),
       ],

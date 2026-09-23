@@ -32,7 +32,7 @@ void main() {
       size: size,
     );
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byKey(const ValueKey('user_row_ada')), findsNothing);
     expect(find.text('No accounts yet'), findsNothing);
   });
@@ -49,7 +49,7 @@ void main() {
 
     expect(find.text("Couldn't load the accounts."), findsOneWidget);
     expect(find.byKey(const ValueKey('user_row_ada')), findsNothing);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(QuarkLoader), findsNothing);
   });
 
   testBothViewports('shows the empty copy when there are no accounts', (
@@ -59,7 +59,7 @@ void main() {
     await pumpAt(tester, const UserList(users: []), size: size);
 
     expect(find.text('No accounts yet'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(QuarkLoader), findsNothing);
   });
 
   testBothViewports('renders one row per account with what it is', (
@@ -249,7 +249,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('user_row_bob')),
-        matching: find.byType(CircularProgressIndicator),
+        matching: find.byType(QuarkLoader),
       ),
       findsOneWidget,
     );

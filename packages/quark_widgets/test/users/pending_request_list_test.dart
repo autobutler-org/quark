@@ -22,7 +22,7 @@ void main() {
       size: size,
     );
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byKey(const ValueKey('request_row_bob')), findsNothing);
     expect(find.text('No requests waiting'), findsNothing);
   });
@@ -45,7 +45,7 @@ void main() {
     await pumpAt(tester, const PendingRequestList(requests: []), size: size);
 
     expect(find.text('No requests waiting'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(QuarkLoader), findsNothing);
   });
 
   testBothViewports('approves and denies the request that was tapped', (

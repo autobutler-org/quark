@@ -159,7 +159,7 @@ void main() {
     await pumpDialog(tester, size: size, formats: const [], isLoading: true);
 
     expect(tester.takeException(), isNull);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(convertEnabled(tester), isFalse);
   });
 

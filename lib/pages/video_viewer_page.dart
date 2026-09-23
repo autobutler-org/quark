@@ -193,11 +193,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
       FilledButton.icon(
         onPressed: _downloading ? null : _downloadVideo,
         icon: _downloading
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+            ? const QuarkLoader(size: 16)
             : const Icon(Icons.download_rounded, size: 16),
         label: Text(_downloading ? 'Downloading…' : 'Download'),
       ),
@@ -382,11 +378,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
               if (_exportingTrim)
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                  child: QuarkLoader(size: 20),
                 )
               else if (_trimMode) ...[
                 TextButton(
@@ -443,7 +435,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
       ),
       body: Center(
         child: _loading
-            ? const CircularProgressIndicator()
+            ? const QuarkLoader()
             : _errorMessage != null
             ? Padding(
                 padding: const EdgeInsets.all(16),

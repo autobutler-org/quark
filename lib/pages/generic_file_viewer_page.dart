@@ -150,11 +150,7 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
                   FilledButton.icon(
                     onPressed: _downloading ? null : _handleDownload,
                     icon: _downloading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? const QuarkLoader(size: 18)
                         : const Icon(Icons.download),
                     label: const Text('Download'),
                   ),
@@ -162,11 +158,7 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
                     OutlinedButton.icon(
                       onPressed: _opening ? null : _handleOpenWith,
                       icon: _opening
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
+                          ? const QuarkLoader(size: 18)
                           : const Icon(Icons.open_in_new),
                       label: const Text('Open with…'),
                     ),

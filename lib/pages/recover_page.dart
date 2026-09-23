@@ -265,13 +265,7 @@ class _RecoverPageState extends State<RecoverPage> {
                     FilledButton(
                       onPressed: _loading ? null : _submit,
                       child: _loading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator.adaptive(
-                                strokeWidth: 2,
-                              ),
-                            )
+                          ? const QuarkLoader(size: 20)
                           : const Text('Reset password'),
                     ),
                     const SizedBox(height: 12),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../../core/quark_loader.dart';
 import '../../models/group_item.dart';
 import '../../theme/quark_tokens.dart';
 
@@ -74,10 +75,7 @@ class GroupRow extends StatelessWidget {
         style: TextStyle(color: tokens.mutedForeground),
       ),
       trailing: isBusy
-          ? const SizedBox.square(
-              dimension: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+          ? const QuarkLoader(size: 24)
           : actions.isEmpty
           ? null
           : PopupMenuButton<VoidCallback>(

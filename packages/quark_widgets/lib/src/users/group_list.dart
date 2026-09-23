@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../core/empty_state_widget.dart';
+import '../core/quark_loader.dart';
 import '../models/group_item.dart';
 import '../theme/quark_tokens.dart';
 import 'group_list/group_row.dart';
@@ -105,7 +106,7 @@ class GroupList extends StatelessWidget {
         if (isLoading)
           Padding(
             padding: EdgeInsets.all(tokens.spacingLg),
-            child: const Center(child: CircularProgressIndicator()),
+            child: const Center(child: QuarkLoader()),
           )
         else if (error != null)
           Padding(

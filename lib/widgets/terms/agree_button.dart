@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -36,11 +37,7 @@ class _AgreeButtonState extends State<AgreeButton> {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: _accepting
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator.adaptive(strokeWidth: 2),
-              )
+            ? const QuarkLoader(size: 20)
             : const Text('I Agree', style: TextStyle(fontSize: 16)),
       ),
     );

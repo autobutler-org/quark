@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../../core/quark_loader.dart';
 import '../../theme/quark_tokens.dart';
 
 /// One request in a [PendingRequestList]: who asked, and approve and deny.
@@ -47,10 +48,7 @@ class PendingRequestRow extends StatelessWidget {
         style: TextStyle(color: tokens.mutedForeground),
       ),
       trailing: isBusy
-          ? const SizedBox.square(
-              dimension: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+          ? const QuarkLoader(size: 24)
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [

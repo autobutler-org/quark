@@ -230,11 +230,7 @@ class _SetupFormState extends State<SetupForm> {
           FilledButton(
             onPressed: widget.loading ? null : widget.onSubmit,
             child: widget.loading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator.adaptive(strokeWidth: 2),
-                  )
+                ? const QuarkLoader(size: 20)
                 : Text(widget.submitLabel),
           ),
         ],
