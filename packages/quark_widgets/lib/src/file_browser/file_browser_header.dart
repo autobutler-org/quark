@@ -10,7 +10,9 @@ import '../theme/quark_tokens.dart';
 /// the sort headers live inside the listing itself.
 ///
 /// The result count is an input rather than a future the widget awaits — the
-/// page owns the load, and a null count is the "still counting" state.
+/// page owns the load. A null count shows zero. While [isPending] is set the
+/// summary says it is searching for the current query instead of quoting a
+/// count, and the close button stays.
 ///
 /// Key prefixes: `file_header_close_search` on the close button.
 ///
@@ -26,6 +28,7 @@ class FileBrowserHeader extends StatelessWidget {
   /// Creates the header strip.
   const FileBrowserHeader({
     required this.isSearchMode,
+    this.isPending = false,
     this.resultCount,
     this.searchQuery,
     this.onClose,
@@ -35,8 +38,14 @@ class FileBrowserHeader extends StatelessWidget {
   /// Whether the listing is showing search results. False renders nothing.
   final bool isSearchMode;
 
-  /// How many results the search returned, or null while it is still running,
-  /// which shows a count of zero rather than a spinner.
+  /// Replaces the result count with a searching line for [searchQuery].
+  ///
+  /// The close button stays. A null [resultCount] still shows zero when this
+  /// is false.
+  final bool isPending;
+
+  /// How many results the search returned. A null count shows zero when
+  /// [isPending] is false.
   final int? resultCount;
 
   /// The query the results are for, quoted back to the user.
@@ -56,6 +65,9 @@ class FileBrowserHeader extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
     final count = resultCount ?? 0;
     final query = searchQuery ?? '';
+    final summary = isPending
+        ? "Searching for '$query'…"
+        : "$count result${count == 1 ? '' : 's'} for '$query'";
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -74,10 +86,7 @@ class FileBrowserHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              "$count result${count == 1 ? '' : 's'} for '$query'",
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            child: Text(summary, style: Theme.of(context).textTheme.bodyMedium),
           ),
           IconButton(
             key: const ValueKey('file_header_close_search'),

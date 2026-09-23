@@ -25,6 +25,7 @@ class FileTopBar extends StatefulWidget {
     this.onPathSelected,
     required this.onToggleView,
     required this.onSearchChanged,
+    this.onSearchDraft,
     required this.onSearchClosed,
     required this.onRefresh,
     required this.onUploadPressed,
@@ -65,6 +66,14 @@ class FileTopBar extends StatefulWidget {
   final ValueChanged<String>? onPathSelected;
   final VoidCallback onToggleView;
   final ValueChanged<String> onSearchChanged;
+
+  /// The trimmed field text, including `''` when the field is cleared.
+  ///
+  /// Called synchronously on every change, before the debounced
+  /// [onSearchChanged], so a banner can follow what is being typed instead of
+  /// the search that has not started yet.
+  final ValueChanged<String>? onSearchDraft;
+
   final VoidCallback onSearchClosed;
   final VoidCallback onRefresh;
   final VoidCallback onUploadPressed;
@@ -143,19 +152,24 @@ class _FileTopBarState extends State<FileTopBar> {
     setState(() => _searchExpanded = false);
     _searchController.clear();
     _searchDebounce?.cancel();
+    widget.onSearchDraft?.call('');
     widget.onSearchClosed();
   }
 
   void _onSearchChanged(String query) {
+    final trimmed = query.trim();
+    // Before the debounce, including when the field is cleared, so the banner
+    // can follow the field instead of the previous search.
+    widget.onSearchDraft?.call(trimmed);
     _searchDebounce?.cancel();
-    if (query.trim().isEmpty) {
+    if (trimmed.isEmpty) {
       // Empty query — close search immediately.
       widget.onSearchClosed();
       return;
     }
     // Debounce 350 ms so we don't fire on every keystroke.
     _searchDebounce = Timer(const Duration(milliseconds: 350), () {
-      widget.onSearchChanged(query.trim());
+      widget.onSearchChanged(trimmed);
     });
   }
 
