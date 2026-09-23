@@ -6,6 +6,7 @@ import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/local_media_proxy.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/media_autoplay.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/video_viewer/fullscreen_video_page.dart';
 import 'package:quark/widgets/video_viewer/inline_video_player.dart';
@@ -18,7 +19,15 @@ class VideoViewerPage extends StatefulWidget {
   final Uri url;
   final String name;
 
-  const VideoViewerPage({super.key, required this.url, required this.name});
+  /// Whether playback may start without the user pressing play.
+  final bool Function() canAutoplay;
+
+  const VideoViewerPage({
+    super.key,
+    required this.url,
+    required this.name,
+    this.canAutoplay = canAutoplayMedia,
+  });
 
   @override
   State<VideoViewerPage> createState() => _VideoViewerPageState();
@@ -121,14 +130,19 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
       _loading = false;
     });
 
-    // Best-effort autoplay. On web, the browser may block play() if the page
-    // was opened without a prior user gesture (e.g. a direct deep-link URL).
-    // In that case the video shows in a paused state — the user can tap the
-    // play button to start playback.
-    try {
-      await controller.play();
-    } catch (_) {
-      // Autoplay blocked or unsupported; stay paused.
+    // Autoplay only when the browser will allow it. A tab opened straight
+    // onto a video's URL has no user gesture behind it, and the browser
+    // rejects play() there. video_player_web reports that rejection on the
+    // event stream instead of throwing, which puts the controller into an
+    // error state: the progress bar spins forever and play does nothing
+    // (#2002). So a blocked play() cannot be tried and caught; skip it and
+    // leave the video paused for the user to start.
+    if (widget.canAutoplay()) {
+      try {
+        await controller.play();
+      } catch (_) {
+        // A native player that refuses to start leaves the video paused.
+      }
     }
   }
 
