@@ -959,6 +959,19 @@ final List<GalleryEntry> registry = [
 
   // ── Settings ──────────────────────────────────────────────────────────────
   GalleryEntry(
+    name: 'DiscoveredQuarkList',
+    group: 'Settings',
+    build: (context, log) => DiscoveredQuarkList(
+      quarks: const [
+        HostItem(name: 'Quark on quark', address: 'https://quark.local'),
+        HostItem(name: 'Quark on quark-2', address: 'https://quark-2.local'),
+      ],
+      isLoading: true,
+      onSelect: (quark) =>
+          log('DiscoveredQuarkList.onSelect(${quark.address})'),
+    ),
+  ),
+  GalleryEntry(
     name: 'SshAccessPanel',
     group: 'Settings',
     build: (context, log) => Column(

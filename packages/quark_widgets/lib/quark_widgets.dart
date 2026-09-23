@@ -70,6 +70,7 @@ export 'src/photos/photo_grid.dart';
 export 'src/photos/photo_grid_tile.dart';
 export 'src/photos/photo_library_sidebar.dart';
 export 'src/photos/photo_selection_bar.dart';
+export 'src/settings/discovered_quark_list.dart';
 export 'src/settings/ssh_access_panel.dart';
 export 'src/sheets/sheet_tab_strip.dart';
 export 'src/sharing/share_sheet.dart';
