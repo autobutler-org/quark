@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/local_media_proxy.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/media_autoplay.dart';
 import 'package:quark/widgets/audio_player/audio_controls.dart';
 import 'package:quark/widgets/audio_player/error_view.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
@@ -14,7 +15,15 @@ class AudioPlayerPage extends StatefulWidget {
   final Uri url;
   final String name;
 
-  const AudioPlayerPage({super.key, required this.url, required this.name});
+  /// Whether playback may start without the user pressing play.
+  final bool Function() canAutoplay;
+
+  const AudioPlayerPage({
+    super.key,
+    required this.url,
+    required this.name,
+    this.canAutoplay = canAutoplayMedia,
+  });
 
   @override
   State<AudioPlayerPage> createState() => _AudioPlayerPageState();
@@ -80,9 +89,16 @@ class _AudioPlayerPageState extends State<AudioPlayerPage> {
       _loading = false;
     });
 
-    try {
-      await controller.play();
-    } catch (_) {}
+    // A play() the browser blocks for lack of a user gesture does not throw;
+    // it leaves the controller in an error state where play does nothing
+    // (#2002). Start playback only when the browser will allow it.
+    if (widget.canAutoplay()) {
+      try {
+        await controller.play();
+      } catch (_) {
+        // A native player that refuses to start leaves the audio paused.
+      }
+    }
   }
 
   @override
