@@ -14,6 +14,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/overlay_history.dart';
 import 'package:quark/utils/photo_grid_config.dart';
 import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/widgets/device_upload_picker.dart';
@@ -274,12 +275,12 @@ class PhotosPageState extends State<PhotosPage>
     if (_isOpeningPhoto) return;
     _isOpeningPhoto = true;
     try {
-      final navigator = Navigator.of(context);
       final album = _controller.selectedAlbum;
       final opened = await _controller.openPhotoAt(index);
       if (opened == null || !mounted) return;
       final (bytes, name, relPath, serial) = _forViewer(opened);
-      final changed = await navigator.push<bool>(
+      final changed = await pushWithBrowserBack<bool>(
+        context,
         MaterialPageRoute(
           builder: (_) => ImageViewerPage(
             bytes: bytes!,
