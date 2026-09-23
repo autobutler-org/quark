@@ -37,8 +37,9 @@ void main() {
         .setMockMethodCallHandler(secureStorage, null);
   });
 
-  /// Answers the two calls a trash listing makes, with [items] in the trash.
-  void serve(List<Map<String, Object>> items) {
+  /// Answers the calls a trash listing makes, with [items] at the trash root.
+  /// [contents] is what a folder listing returns, when the page is inside one.
+  void serve(List<Map<String, Object>> items, {Map<String, Object>? contents}) {
     sharedHttpClientFactory = () => MockClient((request) async {
       if (request.url.path.startsWith('/api/v0/storage/devices')) {
         return http.Response(jsonEncode({'devices': <Object>[]}), 200);
@@ -48,6 +49,9 @@ void main() {
           jsonEncode({'retentionDays': 30, 'items': items}),
           200,
         );
+      }
+      if (request.url.path == '/api/v0/trash/contents' && contents != null) {
+        return http.Response(jsonEncode(contents), 200);
       }
       return http.Response('{}', 200);
     });
@@ -83,19 +87,20 @@ void main() {
   }
 
   final select = find.byKey(const ValueKey('trash_select'));
+  final emptyTrash = find.byKey(const ValueKey('trash_empty'));
+
+  const trashedNote = <String, Object>{
+    'trashName': 'notes.txt.1',
+    'name': 'notes.txt',
+    'originalPath': 'Docs/notes.txt',
+    'isDir': false,
+    'size': 12,
+    'trashedAt': '2026-09-10T00:00:00Z',
+    'expiresAt': '2026-10-10T00:00:00Z',
+  };
 
   testWidgets('the app bar starts a selection', (tester) async {
-    serve([
-      {
-        'trashName': 'notes.txt.1',
-        'name': 'notes.txt',
-        'originalPath': 'Docs/notes.txt',
-        'isDir': false,
-        'size': 12,
-        'trashedAt': '2026-09-10T00:00:00Z',
-        'expiresAt': '2026-10-10T00:00:00Z',
-      },
-    ]);
+    serve([trashedNote]);
     await pumpTrash(tester);
 
     expect(find.byType(FileSelectionBar), findsNothing);
@@ -111,6 +116,85 @@ void main() {
     await pumpTrash(tester);
 
     expect(tester.widget<IconButton>(select).onPressed, isNull);
+  });
+
+  // #2096: disabled, like select, until the root listing has items.
+  testWidgets('empty trash is disabled when there is nothing to clear', (
+    tester,
+  ) async {
+    await pumpTrash(tester);
+
+    expect(tester.widget<IconButton>(emptyTrash).onPressed, isNull);
+    expect(tester.widget<IconButton>(select).onPressed, isNull);
+  });
+
+  testWidgets('empty trash is enabled when the trash has items', (
+    tester,
+  ) async {
+    serve([trashedNote]);
+    await pumpTrash(tester);
+
+    expect(emptyTrash, findsOneWidget);
+    expect(tester.widget<IconButton>(emptyTrash).onPressed, isNotNull);
+  });
+
+  testWidgets('empty trash stays hidden inside a folder', (tester) async {
+    serve(
+      const [],
+      contents: const {
+        'items': [
+          {'name': 'one.jpg', 'path': 'one.jpg', 'isDir': false, 'size': 12},
+        ],
+        'originalPath': 'Pictures/album',
+        'expiresAt': '2026-10-01T12:00:00Z',
+      },
+    );
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: TrashPage(location: (serial: '', trashName: 'x_album', path: '')),
+      ),
+    );
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(emptyTrash, findsNothing);
+    expect(tester.widget<IconButton>(select).onPressed, isNotNull);
+  });
+
+  testWidgets('empty trash stays disabled while the listing is loading', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    sharedHttpClientFactory = () => MockClient((request) async {
+      if (request.url.path.startsWith('/api/v0/storage/devices')) {
+        return http.Response(jsonEncode({'devices': <Object>[]}), 200);
+      }
+      if (request.url.path == '/api/v0/trash') {
+        await gate.future;
+        return http.Response(
+          jsonEncode({
+            'retentionDays': 30,
+            'items': [trashedNote],
+          }),
+          200,
+        );
+      }
+      return http.Response('{}', 200);
+    });
+    resetSharedHttpClient();
+
+    await tester.pumpWidget(const MaterialApp(home: TrashPage()));
+    await tester.pump();
+
+    expect(tester.widget<IconButton>(emptyTrash).onPressed, isNull);
+
+    gate.complete();
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(tester.widget<IconButton>(emptyTrash).onPressed, isNotNull);
   });
 }
 
