@@ -1826,6 +1826,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     }
   }
 
+  /// Pushes the viewer [builder] makes for [filePath] and keeps the URL on the
+  /// file while it is open, so browser back closes it and a reload reopens it.
+  /// Once it closes, the URL returns to the file's folder.
   Future<void> _openEditorWithUrl({
     required String filePath,
     required Widget Function(String targetRoute, String closeRoute) builder,
@@ -1833,26 +1836,45 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     FileBrowserCache.instance.markFileOpen(filePath);
 
     final navigator = Navigator.of(context);
-    final targetRoute = AppRoutes.filesPath(filePath);
+    final routeInformation = GoRouter.of(context).routeInformationProvider;
     // The live location is always percent-encoded, so both sides go through
     // canonicalRoute before comparing. Comparing the raw strings made every
     // name containing a space look like a different route, which fired a
     // spurious mid-push context.go and popped the viewer straight back (#1604).
-    final routeBeforeOpen = AppRoutes.canonicalRoute(
-      GoRouter.of(context).routeInformationProvider.value.uri.toString(),
-    );
-    final isAlreadyOnTarget =
-        routeBeforeOpen == AppRoutes.canonicalRoute(targetRoute);
+    String currentRoute() =>
+        AppRoutes.canonicalRoute(routeInformation.value.uri.toString());
+    final targetRoute = AppRoutes.filesPath(filePath);
+    final canonicalTarget = AppRoutes.canonicalRoute(targetRoute);
+    final routeBeforeOpen = currentRoute();
+    final isAlreadyOnTarget = routeBeforeOpen == canonicalTarget;
     // From the home folder the file's URL is a different, nested go_router
-    // page: syncing to it stacks a second browser over the viewer and hides
-    // it. Only a folder route, which go_router updates in place, can follow.
-    final shouldSyncRoute =
-        !isAlreadyOnTarget && routeBeforeOpen != AppRoutes.files;
+    // page: going to it after the push stacks a second browser over the
+    // viewer and hides it. So that page is opened first and the viewer pushed
+    // over it (#2002). A folder route, which go_router updates in place, can
+    // follow the push instead.
+    final opensNestedPage =
+        !isAlreadyOnTarget && routeBeforeOpen == AppRoutes.files;
+    final shouldSyncRoute = !isAlreadyOnTarget && !opensNestedPage;
     final closeRoute = routeBeforeOpen.isEmpty || isAlreadyOnTarget
         ? AppRoutes.filesPath(parentPath(filePath))
         : routeBeforeOpen;
-    var routeSyncFailed = false;
+    final route = MaterialPageRoute<void>(
+      builder: (_) => builder(targetRoute, closeRoute),
+    );
     var routeSynced = false;
+    var urlLeftFile = false;
+
+    // Browser back moves the URL off the file, and a folder route is updated
+    // in place with the viewer still over it, so close the viewer here.
+    void closeWhenUrlLeavesFile() {
+      if (currentRoute() == canonicalTarget || !route.isActive) {
+        return;
+      }
+      urlLeftFile = true;
+      navigator.removeRoute(route);
+    }
+
+    void followUrl() => routeInformation.addListener(closeWhenUrlLeavesFile);
 
     void syncRouteOnce() {
       if (!mounted || routeSynced || !shouldSyncRoute) {
@@ -1861,8 +1883,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       routeSynced = true;
       try {
         context.go(targetRoute);
+        followUrl();
       } catch (_) {
-        routeSyncFailed = true;
         if (navigator.canPop()) {
           navigator.pop();
         }
@@ -1871,9 +1893,15 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     }
 
     try {
-      final route = MaterialPageRoute(
-        builder: (_) => builder(targetRoute, closeRoute),
-      );
+      if (opensNestedPage) {
+        context.go(targetRoute);
+        // The nested page is built on the next frame; the viewer goes on top.
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) {
+          return;
+        }
+      }
+
       late final AnimationStatusListener statusListener;
       statusListener = (status) {
         if (status == AnimationStatus.completed) {
@@ -1883,6 +1911,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       };
 
       final pushFuture = navigator.push(route);
+      if (!shouldSyncRoute) {
+        followUrl();
+      }
       final animation = route.animation;
       if (animation != null) {
         animation.addStatusListener(statusListener);
@@ -1892,16 +1923,15 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
       await pushFuture;
     } finally {
+      routeInformation.removeListener(closeWhenUrlLeavesFile);
       FileBrowserCache.instance.markFileClosed(filePath);
     }
 
-    if (!mounted) {
+    // Leaving by URL already landed where the user asked to go.
+    if (!mounted || urlLeftFile) {
       return;
     }
-
-    if (routeSyncFailed) {
-      context.go(AppRoutes.filesPath(parentPath(filePath)));
-    }
+    context.go(AppRoutes.filesPath(parentPath(filePath)));
   }
 
   /// Shows [path] as a folder once resolution is over, whether the stat said
@@ -2084,8 +2114,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
             serial: serial,
           ),
         );
-        if (!mounted) return;
-        context.go(AppRoutes.filesPath(parentPath(filePath)));
         return;
 
       case FileKind.svg:
@@ -2111,8 +2139,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           filePath: filePath,
           builder: (_, _) => SvgViewerPage(bytes: svgBytes, name: fileName),
         );
-        if (!mounted) return;
-        context.go(AppRoutes.filesPath(parentPath(filePath)));
         return;
 
       case FileKind.video || FileKind.audio:
@@ -2130,8 +2156,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
               ? AudioPlayerPage(url: url, name: fileName)
               : VideoViewerPage(url: url, name: fileName),
         );
-        if (!mounted) return;
-        context.go(AppRoutes.filesPath(parentPath(filePath)));
         return;
 
       default:
