@@ -9,12 +9,14 @@ import 'package:flutter_quill_to_pdf/flutter_quill_to_pdf.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:printing/printing.dart';
+import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/editor_focus_restore.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
+import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/widgets/document_editor/document_editor_body.dart';
 import 'package:quark/widgets/document_editor/highlight_picker_dialog.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
@@ -49,7 +51,7 @@ KeyEventResult? quillFindKeyInterceptor(KeyEvent event, VoidCallback onToggle) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 /// The editor for one `.qdoc` document: read-only until the user starts editing, with auto-save, find, a word
-/// count, and PDF export and printing.
+/// count, and PDF export and printing. Once the document has loaded, the title renames the file itself.
 class DocumentEditorPage extends StatefulWidget {
   final String filePath;
   final String deviceSerial;
@@ -79,6 +81,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   bool _saving = false;
   bool _dirty = false;
   bool _exporting = false;
+  bool _renaming = false;
 
   /// The thrown object, not its message — the render decides whether it means
   /// "your Quark is unreachable" or "the request failed" (#1637).
@@ -115,13 +118,12 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   // Focus restoration across a browser tab switch (#1856)
   AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
 
-  late String _displayName;
+  String get _displayName => _nameFromPath(widget.filePath);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _displayName = _nameFromPath(widget.filePath);
     _controller = QuillController.basic()..readOnly = _isReadOnly;
     _loadPrefs();
     _loadDocument();
@@ -407,6 +409,71 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
     }
   }
 
+  /// Renames the document file from the title.
+  ///
+  /// A dirty document is saved first, and a failed save stops here instead of
+  /// renaming. Cancelling the dialog leaves the document where it is.
+  Future<void> _renameDocument() async {
+    if (_renaming) return;
+    _renaming = true;
+    try {
+      if (_dirty) {
+        _autoSaveTimer?.cancel();
+        try {
+          await _doSave();
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(Errors.message(e, 'save the document'))),
+          );
+          return;
+        }
+        if (!mounted || _dirty) return;
+      }
+
+      final List<FileNode> siblings;
+      try {
+        final serial = serialOrNull(widget.deviceSerial);
+        siblings = await FilesService.getFiles(
+          parentPath(widget.filePath),
+          serials: serial == null ? null : [serial],
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(Errors.message(e, 'rename the document'))),
+        );
+        return;
+      }
+      if (!mounted) return;
+
+      final apiPath = widget.filePath.trim().replaceAll(RegExp(r'^/+|/+$'), '');
+      final renamed = await renameDocOrSheet(
+        context,
+        FileNode(
+          name: apiPath.split('/').last,
+          size: 0,
+          isDir: false,
+          deviceName: '',
+          devicePath: '',
+          deviceSerial: widget.deviceSerial,
+          dirPath: apiPath,
+        ),
+        siblings: siblings,
+      );
+      if (renamed == null || !mounted) return;
+      _autoSaveTimer?.cancel();
+      context.go(
+        AppRoutes.docFile(
+          renamed,
+          serial: widget.deviceSerial.isEmpty ? null : widget.deviceSerial,
+        ),
+      );
+    } finally {
+      _renaming = false;
+    }
+  }
+
   // ── PDF / Print ────────────────────────────────────────────────────────────
 
   Future<Uint8List?> _buildPdfBytes() async {
@@ -510,7 +577,14 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
           child: Scaffold(
             appBar: AppBar(
               leading: _backButton(),
-              title: Text(_dirty ? '$_displayName •' : _displayName),
+              title: Tooltip(
+                message: 'Rename',
+                child: InkWell(
+                  key: const ValueKey('doc_rename_title'),
+                  onTap: _loading || _error != null ? null : _renameDocument,
+                  child: Text(_dirty ? '$_displayName •' : _displayName),
+                ),
+              ),
               actions: _buildAppBarActions(context),
             ),
             body: DocumentEditorBody(
