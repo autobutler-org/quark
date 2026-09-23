@@ -59,6 +59,9 @@ abstract final class QuarkTheme {
         foregroundColor: tokens.foreground,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        // Bar buttons are bordered, so they need a gap from the screen edge
+        // that a bare icon's own padding used to provide.
+        actionsPadding: EdgeInsets.only(right: tokens.spacingSm),
       ),
       cardTheme: CardThemeData(
         color: tokens.card,

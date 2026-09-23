@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/pump.dart';
@@ -13,7 +14,7 @@ void main() {
       size: size,
     );
 
-    expect(find.byIcon(Icons.dark_mode), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.dark_mode_rounded), findsOneWidget);
     expect(find.byTooltip('Switch to dark mode'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('theme_toggle')));
@@ -30,7 +31,7 @@ void main() {
       size: size,
     );
 
-    expect(find.byIcon(Icons.light_mode), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.light_mode_rounded), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('theme_toggle')));
     await tester.pump();
@@ -46,7 +47,7 @@ void main() {
       size: narrowViewport,
     );
 
-    expect(find.byIcon(Icons.brightness_auto), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.brightness_auto_rounded), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('theme_toggle')));
     await tester.pump();

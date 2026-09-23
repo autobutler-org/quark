@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
-/// A refresh [IconButton] that swaps its glyph for a spinner while a refresh
-/// is in flight, and refuses taps until it finishes.
+import 'quark_bar_icon_button.dart';
+
+/// A refresh [QuarkBarIconButton] that swaps its glyph for a spinner while a
+/// refresh is in flight, and refuses taps until it finishes.
 ///
 /// Whether a refresh is running is an input, not something the button tracks:
 /// the page owns the load.
@@ -37,27 +39,12 @@ class RefreshIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The theme's icon style, not the ambient one: an AppBar swaps in a larger
-    // icon and its own foreground color, which made the app bar's refresh look
-    // unlike the one in the file browser's top bar (#2254).
-    final iconTheme = Theme.of(context).iconTheme;
-    final size = iconTheme.size ?? 20;
-    return IconButton(
+    return QuarkBarIconButton(
       key: const ValueKey('refresh_button'),
+      icon: QuarkIcons.refresh,
       tooltip: tooltip,
-      iconSize: size,
-      color: iconTheme.color,
-      onPressed: isRefreshing ? null : onPressed,
-      icon: isRefreshing
-          ? SizedBox(
-              width: size,
-              height: size,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: iconTheme.color,
-              ),
-            )
-          : const Icon(QuarkIcons.refresh),
+      isBusy: isRefreshing,
+      onPressed: onPressed,
     );
   }
 }

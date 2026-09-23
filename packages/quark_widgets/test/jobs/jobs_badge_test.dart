@@ -19,7 +19,7 @@ void main() {
     await pumpAt(tester, JobsBadge(runningCount: 3, onTap: () {}), size: size);
     expect(tester.takeException(), isNull);
     expect(find.text('3'), findsOneWidget);
-    final button = tester.widget<IconButton>(
+    final button = tester.widget<QuarkBarIconButton>(
       find.byKey(const ValueKey('jobs_badge')),
     );
     expect(button.tooltip, '3 jobs running');

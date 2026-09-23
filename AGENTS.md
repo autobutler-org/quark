@@ -507,13 +507,29 @@ yet rather than a rule violation. Decouple it with the `page-decoupler` agent in
   `test/widgets/app_bar_refresh_placement_test.dart`. A page that only offers refresh in some state passes
   `onRefresh: condition ? manualRefresh : null`. This is the app bar only — a retry or refresh button inside a
   page body is unaffected.
-- **All refresh buttons must use `RefreshIconButton`** (`lib/widgets/refresh_icon_button.dart`).
+- **All refresh buttons must use `RefreshIconButton`**
+  (`packages/quark_widgets/lib/src/layout/refresh_icon_button.dart`).
   - Pass `isRefreshing: isRefreshing` (from the mixin) and `onPressed: manualRefresh`.
   - Do NOT use raw `IconButton(icon: Icon(Icons.refresh))` for refresh actions.
 - **Loading state must distinguish initial load from subsequent refreshes:**
   - Show a full-screen spinner only when `isInitialLoad == true` (no data yet).
   - While refreshing with existing data, keep current content visible — do not replace it with a spinner.
   - For `FutureBuilder`-based pages, pass `initialData: _cachedData` to preserve stale content during refresh.
+
+### Top bar actions (always follow this)
+
+Every page's top bar looks like Files' (#2311): bordered, filled buttons at one glyph size.
+
+- **Use the package bar buttons, never a bare `IconButton` or `TextButton`.** `QuarkBarIconButton` for an icon
+  action, `QuarkBarChip` for a labeled one (create actions — "Upload", "New folder" — are chips, not a lone `+`),
+  `QuarkBarSegmentedToggle` for mutually exclusive views. `RefreshIconButton`, `ThemeToggleButton` and `JobsBadge`
+  are built on the same button.
+- **QuarkIcons only.** A glyph `QuarkIcons` lacks gets an alias in `packages/quark_icons/lib/quark_icons.dart`
+  first. One action has one icon and one tooltip everywhere: select is `check_circle_outline` / "Select".
+- **Every action has a tooltip and a `ValueKey`**, so it is readable on hover and reachable from a `.probe`
+  script.
+- **No anonymous `⋮` on a drawer page.** Put the actions in the bar; when they do not fit a phone, a
+  `QuarkAppBarBottom` row collapses them into a labeled menu at its breakpoint.
 
 ### Navigation and routing (always follow this)
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark_icons/quark_icons.dart';
 
 import '../theme/quark_tokens.dart';
 
@@ -88,7 +89,7 @@ class FileSelectionBar extends StatelessWidget {
               children: [
                 IconButton(
                   key: const ValueKey('file_selection_cancel'),
-                  icon: const Icon(Icons.close),
+                  icon: const Icon(QuarkIcons.close_rounded),
                   tooltip: 'Cancel selection',
                   onPressed: onCancel,
                 ),
@@ -117,14 +118,14 @@ class FileSelectionBar extends StatelessWidget {
                 if (onRestore != null)
                   IconButton(
                     key: const ValueKey('file_selection_restore'),
-                    icon: const Icon(Icons.restore),
+                    icon: const Icon(QuarkIcons.restore),
                     tooltip: 'Restore selected',
                     onPressed: onRestore,
                   ),
                 IconButton(
                   key: const ValueKey('file_selection_delete'),
                   icon: Icon(
-                    Icons.delete_outline,
+                    QuarkIcons.delete_outline,
                     color: onDelete != null
                         ? colors.error
                         : colors.onSurface.withValues(alpha: 0.38),
