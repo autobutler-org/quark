@@ -14,6 +14,9 @@ import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:video_player_platform_interface/video_player_platform_interface.dart';
+
+import '../support/fake_video_player_platform.dart';
 
 /// Records the paths every outgoing request is sent to, and answers each one
 /// with an empty JSON listing so nothing under test hangs waiting.
@@ -89,6 +92,13 @@ class _RecordingClient implements HttpClient {
           'isDir': false,
           'dirPath': '${url.queryParameters['rootDir'] ?? ''}/song.mp3',
           'fileType': 'audio',
+        },
+        {
+          'name': 'clip.mp4',
+          'size': 12,
+          'isDir': false,
+          'dirPath': '${url.queryParameters['rootDir'] ?? ''}/clip.mp4',
+          'fileType': 'video',
         },
       ]);
     }
@@ -387,8 +397,11 @@ void main() {
     final router = await clickFile(tester, location, 'beach.jpg');
     // #1564: a click routed to the photo's URL, stat-ed it and downloaded it
     // whole before the viewer appeared. The listing already knows the type, so
-    // the viewer is built on the tap's frame (offstage only while the route
-    // sets up its hero flight) and it is the viewer that asks for the bytes.
+    // the viewer is built within a frame of the tap (offstage only while the
+    // route sets up its hero flight) and it is the viewer that asks for the
+    // bytes. From the home folder that one frame builds the file's own page,
+    // which the viewer lands on (#2002).
+    await tester.pump();
     expect(find.byType(ImageViewerPage, skipOffstage: false), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 1));
@@ -415,15 +428,84 @@ void main() {
     }, createHttpClient: overrides.createHttpClient);
   });
 
-  testWidgets('clicking a photo in the home folder keeps it on screen', (
+  testWidgets('clicking a photo in the home folder shows its URL', (
     tester,
   ) async {
-    // /files/beach.jpg is a nested page under /files; syncing to it would
-    // stack a second browser over the viewer.
+    // /files/beach.jpg is a nested page under /files. Going to it used to
+    // stack a second browser over the viewer, so the URL stayed on /files.
     await HttpOverrides.runZoned(() async {
       final router = await clickPhoto(tester, '/files');
-      expect(router.state.uri.path, '/files');
+      expect(router.state.uri.path, '/files/beach.jpg');
     }, createHttpClient: overrides.createHttpClient);
+  });
+
+  group('clicking a video', () {
+    final realPlatform = VideoPlayerPlatform.instance;
+    setUp(() => VideoPlayerPlatform.instance = FakeVideoPlayerPlatform());
+    tearDown(() => VideoPlayerPlatform.instance = realPlatform);
+
+    /// [clickFile] on clip.mp4 in [folder], once its viewer is up.
+    Future<GoRouter> clickVideo(WidgetTester tester, String folder) async {
+      final router = await clickFile(tester, folder, 'clip.mp4');
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      return router;
+    }
+
+    /// Unmounts the viewer so the player's timers do not outlive the test.
+    Future<void> unmount(WidgetTester tester) =>
+        tester.pumpWidget(const SizedBox());
+
+    for (final folder in ['/files', '/files/movies']) {
+      final clip = folder == '/files' ? '/files/clip.mp4' : '$folder/clip.mp4';
+
+      testWidgets('in $folder shows the video at $clip', (tester) async {
+        // #2002: from the home folder the URL stayed on /files.
+        await HttpOverrides.runZoned(() async {
+          final router = await clickVideo(tester, folder);
+          expect(router.state.uri.path, clip);
+          expect(find.byType(VideoViewerPage), findsOneWidget);
+          await unmount(tester);
+        }, createHttpClient: overrides.createHttpClient);
+      });
+
+      testWidgets('in $folder, browser back closes it', (tester) async {
+        await HttpOverrides.runZoned(() async {
+          final router = await clickVideo(tester, folder);
+          // What the engine hands the router when the browser goes back.
+          await router.routeInformationProvider.didPushRouteInformation(
+            RouteInformation(uri: Uri.parse(folder)),
+          );
+          await tester.pump();
+          await tester.pump(const Duration(seconds: 1));
+
+          expect(router.state.uri.path, folder);
+          expect(find.byType(VideoViewerPage), findsNothing);
+          expect(find.byType(FileBrowserPage), findsOneWidget);
+          expect(
+            FileBrowserCache.instance.isFileOpen(clip.substring(7)),
+            isFalse,
+          );
+          await unmount(tester);
+        }, createHttpClient: overrides.createHttpClient);
+      });
+
+      testWidgets('in $folder, closing it returns to the folder', (
+        tester,
+      ) async {
+        await HttpOverrides.runZoned(() async {
+          final router = await clickVideo(tester, folder);
+          Navigator.of(tester.element(find.byType(VideoViewerPage))).pop();
+          await tester.pump();
+          await tester.pump(const Duration(seconds: 1));
+
+          expect(router.state.uri.path, folder);
+          expect(find.byType(VideoViewerPage), findsNothing);
+          expect(find.byType(FileBrowserPage), findsOneWidget);
+          await unmount(tester);
+        }, createHttpClient: overrides.createHttpClient);
+      });
+    }
   });
 
   testWidgets('clicking an audio file opens the audio player', (tester) async {
