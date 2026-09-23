@@ -68,6 +68,13 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
     currentAbsolutePath = currentAbsolutePath; // keep empty
   }
 
+  // Replaced only when the folder changes. A new future on every rebuild,
+  // including each character of the name, kept the previous listing's rows
+  // on screen under the new path (#2075).
+  Future<List<FileNode>> filesFuture = controller.fetchFiles(
+    currentAbsolutePath,
+  );
+
   // Only show device picker when there are multiple devices
   final showDevicePicker = devices.length > 1;
   StorageDevice? selectedDevice = devices.isNotEmpty ? devices.first : null;
@@ -81,34 +88,36 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
         bool hasInvalidChar = nameController.text.contains('/');
         return StatefulBuilder(
           builder: (context, setState) {
-            Future<List<FileNode>> filesFuture() {
-              return controller.fetchFiles(currentAbsolutePath);
+            void goTo(String path) {
+              if (path == currentAbsolutePath) return;
+              setState(() {
+                currentAbsolutePath = path;
+                filesFuture = controller.fetchFiles(path);
+              });
             }
 
             void openDirectory(FileNode node) {
               if (!node.isDir) return;
+              final next = controller.nextPathForOpenDirectory(
+                currentPath: currentAbsolutePath,
+                node: node,
+              );
               // Prevent opening the folder that's being moved into itself
               if (initialName != null && initialName.trim().isNotEmpty) {
                 final targetOfNode = normalizePath(
                   joinPath(startPath, initialName),
                 );
-                final candidate = normalizePath(
-                  joinPath(currentAbsolutePath, node.name),
-                );
-                if (candidate == targetOfNode) {
+                if (next == targetOfNode) {
                   // Do nothing to prevent selecting the node itself as a destination
                   return;
                 }
               }
-              setState(() {
-                currentAbsolutePath = joinPath(currentAbsolutePath, node.name);
-              });
+              if (next == currentAbsolutePath) return;
+              goTo(next);
             }
 
             void goUp() {
-              setState(() {
-                currentAbsolutePath = parentPath(currentAbsolutePath);
-              });
+              goTo(parentPath(currentAbsolutePath));
             }
 
             String relativeToStart() {
@@ -179,23 +188,16 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
                     ],
                     FileBreadcrumbBar(
                       currentPath: currentAbsolutePath,
-                      onGoHome: () {
-                        setState(() {
-                          currentAbsolutePath = '';
-                        });
-                      },
+                      onGoHome: () => goTo(''),
                       onGoUp: goUp,
-                      onPathSelected: (path) {
-                        setState(() {
-                          currentAbsolutePath = path;
-                        });
-                      },
+                      onPathSelected: goTo,
                       isSearchMode: false,
                     ),
                     SizedBox(
                       height: 300,
                       child: FileBrowserView(
-                        filesFuture: filesFuture(),
+                        key: ValueKey(currentAbsolutePath),
+                        filesFuture: filesFuture,
                         onFileMenuAction: (node, action) async {},
                         onOpenDirectory: openDirectory,
                         isGridView: false,
