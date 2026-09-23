@@ -104,7 +104,7 @@ void main() {
     await pumpTrash(tester);
 
     expect(find.byType(FileSelectionBar), findsNothing);
-    expect(tester.widget<IconButton>(select).onPressed, isNotNull);
+    expect(tester.widget<QuarkBarIconButton>(select).onPressed, isNotNull);
 
     await tester.tap(select);
     await tester.pump();
@@ -115,7 +115,7 @@ void main() {
   testWidgets('an empty trash has nothing to select', (tester) async {
     await pumpTrash(tester);
 
-    expect(tester.widget<IconButton>(select).onPressed, isNull);
+    expect(tester.widget<QuarkBarIconButton>(select).onPressed, isNull);
   });
 
   // #2096: disabled, like select, until the root listing has items.
@@ -124,8 +124,8 @@ void main() {
   ) async {
     await pumpTrash(tester);
 
-    expect(tester.widget<IconButton>(emptyTrash).onPressed, isNull);
-    expect(tester.widget<IconButton>(select).onPressed, isNull);
+    expect(tester.widget<QuarkBarIconButton>(emptyTrash).onPressed, isNull);
+    expect(tester.widget<QuarkBarIconButton>(select).onPressed, isNull);
   });
 
   testWidgets('empty trash is enabled when the trash has items', (
@@ -135,7 +135,7 @@ void main() {
     await pumpTrash(tester);
 
     expect(emptyTrash, findsOneWidget);
-    expect(tester.widget<IconButton>(emptyTrash).onPressed, isNotNull);
+    expect(tester.widget<QuarkBarIconButton>(emptyTrash).onPressed, isNotNull);
   });
 
   testWidgets('empty trash stays hidden inside a folder', (tester) async {
@@ -159,7 +159,7 @@ void main() {
     }
 
     expect(emptyTrash, findsNothing);
-    expect(tester.widget<IconButton>(select).onPressed, isNotNull);
+    expect(tester.widget<QuarkBarIconButton>(select).onPressed, isNotNull);
   });
 
   testWidgets('empty trash stays disabled while the listing is loading', (
@@ -187,14 +187,14 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: TrashPage()));
     await tester.pump();
 
-    expect(tester.widget<IconButton>(emptyTrash).onPressed, isNull);
+    expect(tester.widget<QuarkBarIconButton>(emptyTrash).onPressed, isNull);
 
     gate.complete();
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    expect(tester.widget<IconButton>(emptyTrash).onPressed, isNotNull);
+    expect(tester.widget<QuarkBarIconButton>(emptyTrash).onPressed, isNotNull);
   });
 }
 

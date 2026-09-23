@@ -613,31 +613,28 @@ class PhotosPageState extends State<PhotosPage>
               title: 'Photos',
               icon: QuarkIcons.photo_library_outlined,
               actions: [
-                IconButton(
-                  icon: c.isUploading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.add),
-                  tooltip: 'Upload photos',
+                QuarkBarChip(
+                  key: const ValueKey('photos_upload'),
+                  icon: QuarkIcons.upload_rounded,
+                  label: c.isUploading ? 'Uploading...' : 'Upload',
                   onPressed: c.isUploading ? null : _uploadPhotos,
                 ),
                 if (album == null)
-                  TextButton(
+                  QuarkBarIconButton(
+                    key: const ValueKey('photos_select'),
+                    icon: QuarkIcons.check_circle_outline,
+                    tooltip: 'Select',
                     onPressed: c.enterSelectionMode,
-                    child: const Text('Select'),
                   ),
                 // The Quark fills system albums itself and refuses edits (#992).
                 // An empty album carries this button in its empty state
                 // instead, so the page never shows two.
                 if (album != null && !album.isSystemAlbum && photos.isNotEmpty)
-                  TextButton.icon(
+                  QuarkBarChip(
                     key: const ValueKey('photos_add_to_album'),
+                    icon: QuarkIcons.add_rounded,
+                    label: 'Add photos',
                     onPressed: () => _addPhotosTo(album.toAlbumItem()),
-                    icon: const Icon(QuarkIcons.add_rounded, size: 18),
-                    label: const Text('Add Photos'),
                   ),
                 const AppThemeToggle(),
               ],

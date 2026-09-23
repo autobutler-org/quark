@@ -156,7 +156,7 @@ void main() {
         findsNothing,
         reason: 'the categories filter the library, so they hide in an album',
       );
-      expect(find.text('Add Photos'), findsOneWidget);
+      expect(find.byKey(const ValueKey('photos_add_to_album')), findsOneWidget);
       expect(recorder.requests, isEmpty);
 
       await tester.tap(find.byKey(const ValueKey('album_sidebar_all_photos')));
@@ -178,7 +178,7 @@ void main() {
         assetImages(),
         findsNWidgets(count(DemoPhotosService.favoritesAlbumId)),
       );
-      expect(find.text('Add Photos'), findsNothing);
+      expect(find.byKey(const ValueKey('photos_add_to_album')), findsNothing);
     });
 
     testWidgets('a link to an album lands on it', (tester) async {

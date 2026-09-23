@@ -166,15 +166,11 @@ class _DocsPageState extends State<DocsPage>
         onRefresh: manualRefresh,
         isRefreshing: isRefreshing,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: 'New document',
+          QuarkBarChip(
+            key: const ValueKey('docs_new'),
+            icon: QuarkIcons.add_rounded,
+            label: 'New document',
             onPressed: _createNewDoc,
-          ),
-          IconButton(
-            icon: const Icon(QuarkIcons.settings_outlined),
-            tooltip: 'Settings',
-            onPressed: () => context.go('/settings'),
           ),
           const AppThemeToggle(),
         ],
