@@ -46,6 +46,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final tokens = QuarkTokens.of(context);
 
     final trimmed = currentPath.startsWith('/')
         ? currentPath.substring(1)
@@ -59,9 +60,9 @@ class FileTopBarBreadcrumb extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        border: Border.all(color: colorScheme.outline),
-        borderRadius: BorderRadius.circular(QuarkColors.radiusLg),
+        color: tokens.input,
+        border: Border.all(color: tokens.border),
+        borderRadius: BorderRadius.circular(tokens.radiusLg),
       ),
       // LayoutBuilder inside the Container so constraints.maxWidth already
       // reflects the width after the Container's padding is subtracted.

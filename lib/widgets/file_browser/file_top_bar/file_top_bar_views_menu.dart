@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:quark/services/storage_service.dart';
-import 'package:quark/widgets/file_browser/file_top_bar/top_bar_chip.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/view_grouping_copy.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/top_bar_menu_radio_item.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/top_bar_menu_section_header.dart';
 import 'package:quark_icons/quark_icons.dart';
-import 'package:quark_widgets/quark_widgets.dart';
 
-/// The compact layout's single "Views" popup, holding everything the wide
-/// layout spreads across the path row: device filter, layout and grouping.
+/// What the compact layout's labeled Views menu holds: everything the wide
+/// layout spreads across the path row — device filter, layout and grouping.
+/// The menu itself, and the chip that opens it, belong to the bar's
+/// `QuarkAppBarBottom`.
+///
+/// Probe keys: `file_top_bar_views_list`, `file_top_bar_views_grid` and
+/// `file_top_bar_views_grouping`.
 class FileTopBarViewsMenu extends StatelessWidget {
   const FileTopBarViewsMenu({
-    required this.controller,
     required this.isGridView,
     required this.isUnifiedView,
     required this.onToggleView,
@@ -22,7 +24,6 @@ class FileTopBarViewsMenu extends StatelessWidget {
     super.key,
   });
 
-  final MenuController controller;
   final bool isGridView;
   final bool isUnifiedView;
   final VoidCallback onToggleView;
@@ -36,20 +37,10 @@ class FileTopBarViewsMenu extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final hasDeviceFilter = devices != null && devices!.length > 1;
 
-    return MenuAnchor(
-      controller: controller,
-      style: MenuStyle(
-        minimumSize: const WidgetStatePropertyAll(Size(220, 0)),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(QuarkColors.radiusLg),
-          ),
-        ),
-        padding: const WidgetStatePropertyAll(
-          EdgeInsets.symmetric(vertical: 8),
-        ),
-      ),
-      menuChildren: [
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         // ── Device filter section ──
         if (hasDeviceFilter) ...[
           const TopBarMenuSectionHeader(title: 'Filter devices'),
@@ -76,6 +67,7 @@ class FileTopBarViewsMenu extends StatelessWidget {
         // ── Layout section ──
         const TopBarMenuSectionHeader(title: 'Layout'),
         TopBarMenuRadioItem(
+          key: const ValueKey('file_top_bar_views_list'),
           icon: QuarkIcons.view_list_rounded,
           label: 'List',
           selected: !isGridView,
@@ -84,6 +76,7 @@ class FileTopBarViewsMenu extends StatelessWidget {
           },
         ),
         TopBarMenuRadioItem(
+          key: const ValueKey('file_top_bar_views_grid'),
           icon: QuarkIcons.grid_view_rounded,
           label: 'Grid',
           selected: isGridView,
@@ -96,6 +89,7 @@ class FileTopBarViewsMenu extends StatelessWidget {
         // ── Device grouping section ──
         const TopBarMenuSectionHeader(title: 'Grouping'),
         ListTile(
+          key: const ValueKey('file_top_bar_views_grouping'),
           dense: true,
           visualDensity: VisualDensity.compact,
           leading: Icon(
@@ -120,18 +114,6 @@ class FileTopBarViewsMenu extends StatelessWidget {
           onTap: onToggleUnifiedView,
         ),
       ],
-      child: TopBarChip(
-        icon: QuarkIcons.tune_rounded,
-        label: 'Views',
-        iconOnly: true,
-        onTap: () {
-          if (controller.isOpen) {
-            controller.close();
-          } else {
-            controller.open();
-          }
-        },
-      ),
     );
   }
 }

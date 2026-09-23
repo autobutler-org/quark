@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:quark/widgets/file_browser/file_top_bar/top_bar_chip.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// One Upload chip, whatever this platform can upload.
 ///
@@ -18,6 +18,8 @@ import 'package:quark_icons/quark_icons.dart';
 /// While an upload runs the chip shows progress and stays live if there is a
 /// way out: a batch failing its way through a large folder must not leave the
 /// user watching a disabled button.
+///
+/// Probe keys: `file_top_bar_upload`.
 class FileTopBarUploadChip extends StatelessWidget {
   const FileTopBarUploadChip({
     required this.isUploading,
@@ -77,27 +79,29 @@ class FileTopBarUploadChip extends StatelessWidget {
         if (onUploadFolder != null)
           MenuItemButton(
             onPressed: onUploadFolder,
-            leadingIcon: const Icon(Icons.drive_folder_upload_outlined),
+            leadingIcon: const Icon(QuarkIcons.drive_folder_upload_outlined),
             child: const Text('Folder'),
           ),
       ];
     }
 
     if (menuItems == null) {
-      return TopBarChip(
+      return QuarkBarChip(
+        key: const ValueKey('file_top_bar_upload'),
         icon: QuarkIcons.upload_rounded,
         label: label,
-        onTap: isUploading ? null : onUploadPressed,
+        onPressed: isUploading ? null : onUploadPressed,
       );
     }
 
     return MenuAnchor(
       menuChildren: menuItems,
       builder: (context, controller, _) {
-        return TopBarChip(
+        return QuarkBarChip(
+          key: const ValueKey('file_top_bar_upload'),
           icon: QuarkIcons.upload_rounded,
           label: label,
-          onTap: () =>
+          onPressed: () =>
               controller.isOpen ? controller.close() : controller.open(),
         );
       },

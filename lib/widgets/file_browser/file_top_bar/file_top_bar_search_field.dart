@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// The expanded inline search field. Height is explicit so the field fits the
-/// 56-px navbar without clipping.
+/// The expanded inline search field, as tall as a bar button so it lines up
+/// with the rest of the bar.
 class FileTopBarSearchField extends StatelessWidget {
   const FileTopBarSearchField({
     required this.controller,
@@ -21,9 +21,9 @@ class FileTopBarSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final tokens = QuarkTokens.of(context);
     return SizedBox(
-      height: 36,
+      height: QuarkBarIconButton.size,
       child: Focus(
         // Handle ESC to close without needing a separate KeyboardListener
         // (which requires a managed FocusNode that would outlive rebuilds).
@@ -46,30 +46,30 @@ class FileTopBarSearchField extends StatelessWidget {
             prefixIcon: Icon(
               QuarkIcons.search_rounded,
               size: 18,
-              color: colorScheme.onSurfaceVariant,
+              color: tokens.secondaryForeground,
             ),
             suffixIcon: IconButton(
               icon: Icon(
                 QuarkIcons.close_rounded,
                 size: 16,
-                color: colorScheme.onSurfaceVariant,
+                color: tokens.secondaryForeground,
               ),
               tooltip: 'Close search',
               onPressed: onClose,
             ),
             filled: true,
-            fillColor: colorScheme.surfaceContainerHighest,
+            fillColor: tokens.input,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(QuarkColors.radiusLg),
-              borderSide: BorderSide(color: colorScheme.outline),
+              borderRadius: BorderRadius.circular(tokens.radiusLg),
+              borderSide: BorderSide(color: tokens.border),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(QuarkColors.radiusLg),
-              borderSide: BorderSide(color: colorScheme.outline),
+              borderRadius: BorderRadius.circular(tokens.radiusLg),
+              borderSide: BorderSide(color: tokens.border),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(QuarkColors.radiusLg),
-              borderSide: BorderSide(color: colorScheme.primary),
+              borderRadius: BorderRadius.circular(tokens.radiusLg),
+              borderSide: BorderSide(color: tokens.primary),
             ),
           ),
           onChanged: onChanged,

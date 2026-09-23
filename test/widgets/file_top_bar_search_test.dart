@@ -18,7 +18,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: FileTopBar(
+          appBar: FileTopBar(
             currentPath: '/docs',
             rootPath: '',
             isGridView: false,
@@ -38,7 +38,6 @@ void main() {
             onUploadPressed: () {},
             onCreateFolderPressed: () {},
             onNewFilePressed: () {},
-            onOpenDrawer: () {},
           ),
         ),
       ),
