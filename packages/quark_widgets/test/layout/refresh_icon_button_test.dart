@@ -34,7 +34,7 @@ void main() {
       size: size,
     );
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byIcon(QuarkIcons.refresh), findsNothing);
     expect(
       tester.widget<IconButton>(find.byType(IconButton)).onPressed,

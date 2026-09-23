@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -122,16 +123,7 @@ class _QuarkConnectFormState extends State<QuarkConnectForm> {
         const SizedBox(height: 16),
         FilledButton(
           onPressed: _saving ? null : _connect,
-          child: _saving
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Text('Connect'),
+          child: _saving ? const QuarkLoader(size: 20) : const Text('Connect'),
         ),
       ],
     );

@@ -32,7 +32,7 @@ class PlaintextEditorBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: QuarkLoader());
     }
 
     final error = this.error;

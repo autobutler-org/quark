@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/quark_loader.dart';
 import '../theme/quark_tokens.dart';
 
 /// A square, bordered, filled icon button: the one shape a top bar action
@@ -85,12 +86,7 @@ class QuarkBarIconButton extends StatelessWidget {
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         visualDensity: VisualDensity.standard,
       ),
-      icon: isBusy
-          ? SizedBox.square(
-              dimension: glyphSize,
-              child: CircularProgressIndicator(strokeWidth: 2, color: color),
-            )
-          : Icon(icon),
+      icon: isBusy ? QuarkLoader(size: glyphSize) : Icon(icon),
     );
   }
 }

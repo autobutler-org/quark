@@ -194,11 +194,7 @@ class SignInForm extends StatelessWidget {
             key: const ValueKey('login_submit'),
             onPressed: loading ? null : onSubmit,
             child: loading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator.adaptive(strokeWidth: 2),
-                  )
+                ? const QuarkLoader(size: 20)
                 : const Text('Sign in'),
           ),
           const SizedBox(height: 12),

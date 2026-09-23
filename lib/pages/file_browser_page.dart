@@ -2223,13 +2223,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                 ),
               ListTile(
                 leading: _isUploading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator.adaptive(
-                          strokeWidth: 2,
-                        ),
-                      )
+                    ? const QuarkLoader(size: 24)
                     : const Icon(QuarkIcons.upload_rounded),
                 title: Text(
                   _isUploading

@@ -43,7 +43,7 @@ void main() {
     size,
   ) async {
     await pumpAt(tester, const JobList(items: [], isLoading: true), size: size);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.text('No jobs yet'), findsNothing);
   });
 
@@ -53,7 +53,7 @@ void main() {
   ) async {
     await pumpAt(tester, const JobList(items: []), size: size);
     expect(find.text('No jobs yet'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(QuarkLoader), findsNothing);
   });
 
   testBothViewports('renders the error the caller handed it', (
@@ -80,7 +80,7 @@ void main() {
     );
     expect(find.text('Host unreachable'), findsOneWidget);
     expect(find.byKey(const ValueKey('job_row_3')), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(QuarkLoader), findsNothing);
   });
 
   testBothViewports('describes each job and lays out cleanly', (

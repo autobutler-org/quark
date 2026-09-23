@@ -82,7 +82,7 @@ class _RepairInstallationSectionState extends State<RepairInstallationSection> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (_controller.isLoading && status == null)
-                      const Center(child: CircularProgressIndicator())
+                      const Center(child: QuarkLoader())
                     else if (_controller.needsInstall) ...[
                       const Text(
                         'This Quark was installed before it could repair '

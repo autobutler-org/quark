@@ -157,7 +157,7 @@ class _AudioPlayerPageState extends State<AudioPlayerPage> {
       ),
       body: Center(
         child: _loading
-            ? const CircularProgressIndicator()
+            ? const QuarkLoader()
             : _errorMessage != null
             ? ErrorView(
                 message: _errorMessage!,

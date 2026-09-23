@@ -168,11 +168,7 @@ class DeviceCard extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: isMounting ? null : onMount,
                 icon: isMounting
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const QuarkLoader(size: 14)
                     : const Icon(QuarkIcons.link_outlined, size: 16),
                 label: Text(isMounting ? 'Mounting…' : 'Mount'),
               ),

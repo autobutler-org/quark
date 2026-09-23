@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/quark_loader.dart';
 import '../../models/access_level.dart';
 import '../../models/principal_item.dart';
 import '../../theme/quark_tokens.dart';
@@ -94,12 +95,7 @@ class _AddGrantFormState extends State<AddGrantForm> {
               onPressed: picked == null || isBusy
                   ? null
                   : () => widget.onAdd(picked, level),
-              child: isBusy
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Share'),
+              child: isBusy ? const QuarkLoader(size: 20) : const Text('Share'),
             ),
           ],
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_loader.dart';
 import '../models/album_item.dart';
 import '../theme/quark_tokens.dart';
 
@@ -90,7 +91,7 @@ class AddToAlbumSheet extends StatelessWidget {
           SizedBox(height: tokens.spacingSm),
           Expanded(
             child: isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: QuarkLoader())
                 : error != null
                 ? Center(child: Text(error, textAlign: TextAlign.center))
                 : albums.isEmpty

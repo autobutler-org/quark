@@ -303,7 +303,7 @@ void main() {
       reason: 'a failed album load must not erase the link',
     );
     expect(find.byType(QuarkDisconnectedView), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(QuarkLoader), findsNothing);
   });
 
   testWidgets('renders none of the sample library when off', (tester) async {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/quark_loader.dart';
 import '../models/photo_item.dart';
 import '../theme/quark_tokens.dart';
 import 'photo_grid_tile.dart';
@@ -124,7 +125,7 @@ class PhotoGrid extends StatelessWidget {
     if (isLoading && photos.isEmpty) {
       return const SliverFillRemaining(
         hasScrollBody: false,
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: QuarkLoader()),
       );
     }
     if (error != null) {
@@ -152,10 +153,7 @@ class PhotoGrid extends StatelessWidget {
           if (index >= photos.length) {
             return const Center(
               key: ValueKey('photo_grid_loading_more'),
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              child: Padding(padding: EdgeInsets.all(16), child: QuarkLoader()),
             );
           }
           final photo = photos[index];

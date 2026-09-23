@@ -15,7 +15,7 @@ const _bare = SshKeyItem(fingerprint: 'SHA256:xyz', type: 'ssh-rsa');
 void main() {
   testBothViewports('shows a spinner while loading', (tester, size) async {
     await pumpAt(tester, const SshAccessPanel(isLoading: true), size: size);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.byKey(const ValueKey('ssh_enabled_switch')), findsNothing);
   });
 

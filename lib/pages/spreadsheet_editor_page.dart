@@ -408,7 +408,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
           title: Text(title),
           actions: const [AppThemeToggle()],
         ),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: QuarkLoader()),
       );
     } else if (error != null) {
       page = Scaffold(

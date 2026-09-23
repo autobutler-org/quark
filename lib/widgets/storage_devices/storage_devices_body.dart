@@ -76,7 +76,7 @@ class StorageDevicesBody extends StatelessWidget {
     }
     final devices = this.devices;
     if (devices == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: QuarkLoader());
     }
     if (devices.isEmpty) {
       return const Center(child: Text('No storage devices detected.'));

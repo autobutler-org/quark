@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/quark_loader.dart';
 import '../models/transcode_format_option.dart';
 import '../models/transcode_quality.dart';
 import '../theme/quark_tokens.dart';
@@ -155,7 +156,7 @@ class _TranscodeDialogState extends State<TranscodeDialog> {
             if (widget.isLoading)
               Padding(
                 padding: EdgeInsets.all(tokens.spacingMd),
-                child: const Center(child: CircularProgressIndicator()),
+                child: const Center(child: QuarkLoader()),
               )
             else if (error != null)
               Column(

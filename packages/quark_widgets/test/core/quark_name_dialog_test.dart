@@ -132,7 +132,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('name_dialog_submit')),
-        matching: find.byType(CircularProgressIndicator),
+        matching: find.byType(QuarkLoader),
       ),
       findsOneWidget,
     );

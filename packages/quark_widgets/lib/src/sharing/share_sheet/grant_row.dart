@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../../core/quark_loader.dart';
 import '../../models/access_level.dart';
 import '../../models/grant_item.dart';
 import '../../models/principal_item.dart';
@@ -89,10 +90,7 @@ class GrantRow extends StatelessWidget {
           ? Text('Every account', style: muted)
           : null,
       trailing: isBusy
-          ? const SizedBox.square(
-              dimension: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+          ? const QuarkLoader(size: 24)
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [

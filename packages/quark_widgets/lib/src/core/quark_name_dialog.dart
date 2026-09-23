@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/quark_tokens.dart';
+import 'quark_loader.dart';
 
 /// Asks for one name, to create something or rename it: a title, a text
 /// field, and a submit button.
@@ -149,10 +150,7 @@ class _QuarkNameDialogState extends State<QuarkNameDialog> {
           key: const ValueKey('name_dialog_submit'),
           onPressed: _canSubmit ? _submit : null,
           child: widget.isSubmitting
-              ? const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const QuarkLoader(size: 20)
               : Text(widget.submitLabel),
         ),
       ],

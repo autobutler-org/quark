@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 /// The form that unlocks the vault with its master password, saying why it is locked.
@@ -64,11 +65,7 @@ class VaultUnlockView extends StatelessWidget {
                 child: FilledButton(
                   onPressed: unlocking ? null : onUnlock,
                   child: unlocking
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const QuarkLoader(size: 20)
                       : const Text('Unlock'),
                 ),
               ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The audio player's failure state: why it could not play, and a way to
 /// download the file instead.
@@ -28,11 +29,7 @@ class ErrorView extends StatelessWidget {
           FilledButton.icon(
             onPressed: downloading ? null : onDownload,
             icon: downloading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const QuarkLoader(size: 16)
                 : const Icon(Icons.download_rounded, size: 16),
             label: Text(downloading ? 'Downloading…' : 'Download'),
           ),

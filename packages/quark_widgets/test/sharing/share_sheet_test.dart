@@ -84,7 +84,7 @@ void main() {
   ) async {
     await pumpAt(tester, sheet(isLoading: true), size: size);
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(key('share_grant_user_1'), findsNothing);
     expect(key('share_add_submit'), findsNothing);
   });
@@ -218,7 +218,7 @@ void main() {
     expect(
       find.descendant(
         of: key('share_grant_user_2'),
-        matching: find.byType(CircularProgressIndicator),
+        matching: find.byType(QuarkLoader),
       ),
       findsOneWidget,
     );
@@ -257,7 +257,7 @@ void main() {
     expect(
       find.descendant(
         of: key('share_add_submit'),
-        matching: find.byType(CircularProgressIndicator),
+        matching: find.byType(QuarkLoader),
       ),
       findsOneWidget,
     );

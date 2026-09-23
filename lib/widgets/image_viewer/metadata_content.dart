@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/models/photo_metadata.dart';
 import 'package:quark/widgets/image_viewer/info_row.dart';
 import 'package:quark/widgets/image_viewer/section.dart';
@@ -17,10 +18,7 @@ class MetadataContent {
     if (loading) {
       return const [
         Center(
-          child: Padding(
-            padding: EdgeInsets.all(32),
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+          child: Padding(padding: EdgeInsets.all(32), child: QuarkLoader()),
         ),
       ];
     }

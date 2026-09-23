@@ -444,6 +444,9 @@ yet rather than a rule violation. Decouple it with the `page-decoupler` agent in
 - Respect safe areas and platform insets (`SafeArea`, keyboard insets) for production UI.
 - Keep top-level page navigation consistent: pages should use a hamburger menu in the app bar/drawer pattern by default
   (for example, Files/Photos/Settings), not a back button, unless a page is explicitly a drill-down/detail flow.
+- Indeterminate loading is a `QuarkLoader` (`QuarkLoader(size: 20)` in a button or row), never a
+  `CircularProgressIndicator()`. Determinate progress — anything with a real `value:` — still uses the Material
+  indicators.
 
 ### Custom Widget Guidelines (spreadsheet editor)
 

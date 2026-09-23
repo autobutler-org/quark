@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_loader.dart';
 import '../models/group_item.dart';
 import '../models/principal_item.dart';
 import '../theme/quark_tokens.dart';
@@ -122,10 +123,7 @@ class GroupMembersSheet extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     trailing: busyIds.contains(member.id)
-                        ? const SizedBox.square(
-                            dimension: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? const QuarkLoader(size: 24)
                         : IconButton(
                             key: ValueKey('group_member_remove_${member.id}'),
                             tooltip: 'Remove ${member.name}',

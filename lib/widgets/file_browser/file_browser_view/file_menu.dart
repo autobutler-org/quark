@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
@@ -102,11 +103,7 @@ class FileMenu {
           extracting
               ? const Row(
                   children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
+                    QuarkLoader(size: 16),
                     SizedBox(width: 8),
                     Text('Extracting...'),
                   ],

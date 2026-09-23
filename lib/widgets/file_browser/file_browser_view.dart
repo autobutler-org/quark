@@ -231,7 +231,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
           if (widget.loadingBuilder != null) {
             return widget.loadingBuilder!(context);
           }
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: QuarkLoader());
         }
 
         if (snapshot.hasError) {

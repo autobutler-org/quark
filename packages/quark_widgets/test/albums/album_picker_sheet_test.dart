@@ -61,7 +61,7 @@ void main() {
   testBothViewports('shows a spinner while loading', (tester, size) async {
     await pumpSheet(tester, size: size, isLoading: true);
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
   });
 
   testBothViewports('offers a retry under an error', (tester, size) async {
