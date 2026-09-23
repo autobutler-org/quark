@@ -1,6 +1,6 @@
 /// How a Quark's address reads in the app's chrome (#2033).
 ///
-/// The stored address is a URL — `https://quark.home.local/` — and the chrome
+/// The stored address is a URL — `https://quark.local/` — and the chrome
 /// has a drawer header's width to say which device is on screen. The scheme is
 /// the same on every entry and a trailing slash is noise, so neither earns its
 /// space; a port does, because two Quarks on one machine differ only by it.

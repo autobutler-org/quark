@@ -60,6 +60,20 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  // #2310: the image answers mDNS as quark.local; nothing produces
+  // quark.home.local, so the hint must not suggest it.
+  testWidgets('the address hint names quark.local', (tester) async {
+    await openDialog(tester);
+
+    expect(find.text('https://quark.local'), findsOneWidget);
+    expect(
+      find.text(
+        'Usually https://quark.local or the IP address shown on your device.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a reachable address is checked, then saved', (tester) async {
     await openDialog(tester);
     await fillIn(tester, 'http://cabin.local');

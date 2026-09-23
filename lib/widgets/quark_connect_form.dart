@@ -112,9 +112,8 @@ class _QuarkConnectFormState extends State<QuarkConnectForm> {
           onSubmitted: (_) => _connect(),
           decoration: InputDecoration(
             labelText: 'Quark address',
-            hintText: 'https://quark.home.local',
-            helperText:
-                'Usually https://quark.home.local or https://192.168.x.x',
+            hintText: 'https://quark.local',
+            helperText: 'Usually https://quark.local or https://192.168.x.x',
             errorText: _error,
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(QuarkIcons.link_rounded),

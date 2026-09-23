@@ -112,7 +112,7 @@ class _HostDialogState extends State<HostDialog> {
             onChanged: (_) {
               if (_unreachableAddress != null) setState(() {});
             },
-            hintText: 'https://quark.home.local',
+            hintText: 'https://quark.local',
           ),
           const SizedBox(height: 6),
           if (_offersSaveAnyway)
@@ -124,7 +124,7 @@ class _HostDialogState extends State<HostDialog> {
             )
           else
             const Text(
-              'Usually https://quark.home.local or the IP address shown on your device.',
+              'Usually https://quark.local or the IP address shown on your device.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
         ],

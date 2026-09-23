@@ -202,7 +202,7 @@ final List<GalleryEntry> registry = [
         ),
         drawer: QuarkDrawer(
           activeSection: QuarkDrawerSection.photos,
-          hosts: const [HostItem(name: 'Home', address: 'quark.home.local')],
+          hosts: const [HostItem(name: 'Home', address: 'quark.local')],
           activeHostIndex: 0,
           onTapFiles: () => log('QuarkDrawer files'),
         ),
@@ -278,7 +278,7 @@ final List<GalleryEntry> registry = [
       child: QuarkDrawer(
         activeSection: QuarkDrawerSection.photos,
         hosts: const [
-          HostItem(name: 'Home', address: 'quark.home.local'),
+          HostItem(name: 'Home', address: 'quark.local'),
           HostItem(name: 'Cabin', address: 'cabin.local:8443'),
         ],
         activeHostIndex: 0,
