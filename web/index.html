@@ -21,6 +21,32 @@
     <meta name="description" content="Quark — your own cloud, at home." />
     <meta name="theme-color" content="#070D19" />
 
+    <!--
+      The theme picked in Settings, applied before the splash below paints, so
+      someone who chose Light does not sit through a dark splash (#2341).
+      AppSettings saves it through shared_preferences, which on web is
+      localStorage under a `flutter.` prefix, JSON-encoded. System, a missing
+      value, or storage that throws (a private window) follows the OS.
+    -->
+    <script>
+      (function () {
+        var saved = null;
+        try {
+          saved = JSON.parse(localStorage.getItem("flutter.themeMode"));
+        } catch (e) {}
+        var theme =
+          saved === "light" || saved === "dark"
+            ? saved
+            : window.matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+        document.documentElement.setAttribute("data-theme", theme);
+        document
+          .querySelector('meta[name="theme-color"]')
+          .setAttribute("content", theme === "light" ? "#F8FAFC" : "#070D19");
+      })();
+    </script>
+
     <!-- iOS meta tags & icons -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
@@ -54,10 +80,13 @@
         load, and a blank white viewport for that long reads as broken (#2019).
 
         Its colors are QuarkTokens, copied rather than imported because
-        nothing Dart has loaded yet — dark is the app's default appearance,
-        light follows the OS the way ThemeMode.system does.
+        nothing Dart has loaded yet. Dark is the app's default appearance;
+        `data-theme`, set by the script in the head from the saved theme,
+        picks light. Without it, light follows the OS the way ThemeMode.system
+        does.
       */
       :root {
+        color-scheme: dark;
         --quark-background: #070d19;
         --quark-foreground: #e2e8f0;
         --quark-muted: #94a3b8;
@@ -65,8 +94,17 @@
         --quark-primary: #0ea5e9;
       }
 
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --quark-background: #f8fafc;
+        --quark-foreground: #0f172a;
+        --quark-muted: #64748b;
+        --quark-border: #e2e8f0;
+      }
+
       @media (prefers-color-scheme: light) {
-        :root {
+        :root:not([data-theme]) {
+          color-scheme: light;
           --quark-background: #f8fafc;
           --quark-foreground: #0f172a;
           --quark-muted: #64748b;
