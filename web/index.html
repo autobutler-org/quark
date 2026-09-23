@@ -108,6 +108,15 @@
         pointer-events: none;
       }
 
+      /*
+        A debug `flutter run` pins its own blue bar to the top of the page
+        and only takes it down on `dart-app-ready`, which can land well after
+        the splash has gone. The splash already says the app is loading.
+      */
+      .flutter-loader {
+        display: none;
+      }
+
       #quark-splash .quark-wordmark {
         font-size: 28px;
         font-weight: 600;
