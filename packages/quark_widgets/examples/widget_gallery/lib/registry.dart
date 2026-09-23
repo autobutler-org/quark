@@ -461,7 +461,6 @@ final List<GalleryEntry> registry = [
         bottomBar: PhotoSelectionBar(
           selectedCount: 3,
           onAddToAlbum: () => log('PhotoSelectionBar.onAddToAlbum'),
-          onCancel: () => log('PhotoSelectionBar.onCancel'),
         ),
         body: const Center(child: Text('The page body goes here')),
       ),
@@ -743,13 +742,11 @@ final List<GalleryEntry> registry = [
         PhotoSelectionBar(
           selectedCount: 3,
           onAddToAlbum: () => log('PhotoSelectionBar.onAddToAlbum'),
-          onCancel: () => log('PhotoSelectionBar.onCancel'),
         ),
         const SizedBox(height: 16),
         PhotoSelectionBar(
           selectedCount: 0,
           onAddToAlbum: () => log('never called'),
-          onCancel: () => log('PhotoSelectionBar.onCancel'),
         ),
       ],
     ),

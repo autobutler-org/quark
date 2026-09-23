@@ -28,7 +28,6 @@ import 'package:quark/widgets/photos/album_picker_sheet.dart';
 import 'package:quark/widgets/photos/delete_album_dialog.dart';
 import 'package:quark/widgets/photos/photo_thumbnail.dart';
 import 'package:quark/widgets/photos/photos_empty_state.dart';
-import 'package:quark/widgets/photos/photos_selection_app_bar.dart';
 import 'package:quark/widgets/photos/remove_from_album_dialog.dart';
 import 'package:quark/widgets/upload_drop_zone.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -640,14 +639,30 @@ class PhotosPageState extends State<PhotosPage>
               ],
               onRefresh: manualRefresh,
               isRefreshing: isRefreshing,
+              // The same selection bar Files and the trash swap in (#2311).
               appBar: c.selectionMode
-                  ? PhotosSelectionAppBar(
+                  ? FileSelectionBar(
                       selectedCount: selectedIds.length,
-                      albumName: c.addingToAlbum?.name,
-                      onConfirm: selectedIds.isNotEmpty
-                          ? () => _addSelectedTo(c.addingToAlbum!)
-                          : null,
+                      totalCount: photos.length,
+                      onSelectAll: c.selectAll,
+                      onDeselectAll: c.deselectAll,
                       onCancel: c.exitSelectionMode,
+                      showDelete: false,
+                      title: c.addingToAlbum == null
+                          ? null
+                          : 'Adding to ${c.addingToAlbum!.name}',
+                      actions: [
+                        if (c.addingToAlbum != null)
+                          QuarkBarChip(
+                            key: const ValueKey('photos_selection_done'),
+                            icon: QuarkIcons.check_rounded,
+                            label: 'Done (${selectedIds.length})',
+                            keepLabel: true,
+                            onPressed: selectedIds.isNotEmpty
+                                ? () => _addSelectedTo(c.addingToAlbum!)
+                                : null,
+                          ),
+                      ],
                     )
                   : null,
               drawer: const AppDrawer(activeSection: QuarkDrawerSection.photos),
@@ -655,7 +670,6 @@ class PhotosPageState extends State<PhotosPage>
                   ? PhotoSelectionBar(
                       selectedCount: selectedIds.length,
                       onAddToAlbum: _pickAlbumForSelection,
-                      onCancel: c.exitSelectionMode,
                     )
                   : null,
               body: UploadDropZone(

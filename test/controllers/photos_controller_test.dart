@@ -421,6 +421,25 @@ void main() {
       expect(controller.selectionMode, isTrue);
     });
 
+    test(
+      'select all takes every photo on screen, and deselect all none',
+      () async {
+        final controller = _FakeQuark().controller();
+        await controller.refresh();
+        controller.enterSelectionMode();
+
+        controller.selectAll();
+        expect(controller.selectedIds, {
+          for (final photo in controller.photos) photo.id,
+        });
+        expect(controller.selectedIds, isNotEmpty);
+
+        controller.deselectAll();
+        expect(controller.selectedIds, isEmpty);
+        expect(controller.selectionMode, isTrue);
+      },
+    );
+
     test('adding counts what was added, skipped and refused', () async {
       final quark = _FakeQuark()..failingAdds.add('camera/2.jpg');
       final controller = quark.controller();

@@ -5,7 +5,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testBothViewports('counts the selection and emits both actions', (
+  testBothViewports('counts the selection and adds it to an album', (
     tester,
     size,
   ) async {
@@ -15,7 +15,6 @@ void main() {
       PhotoSelectionBar(
         selectedCount: 3,
         onAddToAlbum: () => events.add('add'),
-        onCancel: () => events.add('cancel'),
       ),
       size: size,
     );
@@ -25,10 +24,10 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('photo_selection_add_to_album')),
     );
-    await tester.tap(find.byKey(const ValueKey('photo_selection_cancel')));
     await tester.pump();
 
-    expect(events, ['add', 'cancel']);
+    expect(events, ['add']);
+    expect(find.text('Cancel'), findsNothing);
   });
 
   testWidgets('keeps the action flush with the right edge', (tester) async {
@@ -36,7 +35,7 @@ void main() {
     // label width on a narrow phone; this pins the wide layout it replaced.
     await pumpAt(
       tester,
-      PhotoSelectionBar(selectedCount: 3, onAddToAlbum: () {}, onCancel: () {}),
+      PhotoSelectionBar(selectedCount: 3, onAddToAlbum: () {}),
       size: wideViewport,
     );
 
@@ -51,7 +50,7 @@ void main() {
   testWidgets('says "photo" for exactly one', (tester) async {
     await pumpAt(
       tester,
-      PhotoSelectionBar(selectedCount: 1, onAddToAlbum: () {}, onCancel: () {}),
+      PhotoSelectionBar(selectedCount: 1, onAddToAlbum: () {}),
       size: narrowViewport,
     );
 
@@ -65,11 +64,7 @@ void main() {
     var adds = 0;
     await pumpAt(
       tester,
-      PhotoSelectionBar(
-        selectedCount: 0,
-        onAddToAlbum: () => adds++,
-        onCancel: () {},
-      ),
+      PhotoSelectionBar(selectedCount: 0, onAddToAlbum: () => adds++),
       size: size,
     );
 

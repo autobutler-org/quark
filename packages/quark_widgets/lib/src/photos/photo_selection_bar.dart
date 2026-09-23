@@ -4,18 +4,21 @@ import 'package:quark_icons/quark_icons.dart';
 import '../theme/quark_tokens.dart';
 
 /// The bar that sits at the bottom of the photo grid while photos are being
-/// selected: cancel, a count, and the add-to-album action.
+/// selected: a count and the add-to-album action.
+///
+/// Leaving selection is the top bar's job — the same `FileSelectionBar` close
+/// button Files and the trash use — so this bar no longer carries a second
+/// Cancel (#2311).
 ///
 /// Adding is disabled at a count of zero, so the button never opens a picker
 /// that would do nothing.
 ///
-/// Key prefixes: `photo_selection_cancel` and `photo_selection_add_to_album`.
+/// Key prefixes: `photo_selection_add_to_album`.
 ///
 /// ```dart
 /// PhotoSelectionBar(
 ///   selectedCount: controller.selectedKeys.length,
 ///   onAddToAlbum: () => showAlbumPicker(context),
-///   onCancel: controller.exitSelectionMode,
 /// );
 /// ```
 class PhotoSelectionBar extends StatelessWidget {
@@ -23,7 +26,6 @@ class PhotoSelectionBar extends StatelessWidget {
   const PhotoSelectionBar({
     required this.selectedCount,
     required this.onAddToAlbum,
-    required this.onCancel,
     super.key,
   });
 
@@ -32,9 +34,6 @@ class PhotoSelectionBar extends StatelessWidget {
 
   /// Opens the album picker. Not called while [selectedCount] is zero.
   final VoidCallback onAddToAlbum;
-
-  /// Leaves selection mode.
-  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -66,19 +65,13 @@ class PhotoSelectionBar extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            TextButton(
-              key: const ValueKey('photo_selection_cancel'),
-              onPressed: onCancel,
-              child: const Text('Cancel'),
-            ),
             Flexible(
               child: Text(
                 '$selectedCount ${selectedCount == 1 ? 'photo' : 'photos'} '
                 'selected',
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: colorScheme.onSurface.withValues(alpha: 0.6),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: tokens.secondaryForeground,
                 ),
               ),
             ),
