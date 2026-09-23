@@ -134,8 +134,9 @@ class _NewFileDialogState extends State<NewFileDialog> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final tokens = QuarkTokens.of(context);
-    final labelStyle = Theme.of(context).textTheme.labelMedium
-        ?.copyWith(color: colorScheme.onSurface.withValues(alpha: 0.5));
+    final labelStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: colorScheme.onSurface.withValues(alpha: 0.5),
+    );
 
     return AlertDialog(
       title: const Text('New file'),
