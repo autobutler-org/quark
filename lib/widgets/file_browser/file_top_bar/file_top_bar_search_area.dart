@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_search_field.dart';
-import 'package:quark/widgets/file_browser/file_top_bar/top_bar_icon_button.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// Inline search. When collapsed shows just the search icon pinned to the
 /// right; when expanded the field fills all available width.
 ///
 /// This widget lives inside an [Expanded] in the top row, so it always has
 /// bounded horizontal constraints — no double.infinity needed.
+///
+/// Probe keys: `file_top_bar_search`.
 class FileTopBarSearchArea extends StatelessWidget {
   const FileTopBarSearchArea({
     required this.expanded,
@@ -38,16 +40,20 @@ class FileTopBarSearchArea extends StatelessWidget {
       );
     }
 
-    // Collapsed: push the search icon to the trailing edge.
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        TopBarIconButton(
+    // Collapsed: push the search icon to the trailing edge. On a phone this
+    // is the bar's last bit of slack, so the button scales down rather than
+    // overflow when a jobs badge or a long name takes the room.
+    return Align(
+      alignment: AlignmentDirectional.centerEnd,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: QuarkBarIconButton(
+          key: const ValueKey('file_top_bar_search'),
           icon: QuarkIcons.search_rounded,
-          onTap: onOpen,
+          onPressed: onOpen,
           tooltip: 'Search',
         ),
-      ],
+      ),
     );
   }
 }

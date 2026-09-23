@@ -2292,94 +2292,92 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     // while the debounce is still running cannot collapse the field, and the
     // deferred search comes back (#2098).
     final searchActive = _isSearchMode || _searchDraft.isNotEmpty;
+    // When inside an archive, show the archive path as the breadcrumb.
+    final archive = _archiveContext;
+    final displayPath = archive != null
+        ? (archive.subPath.isEmpty
+              ? archive.archivePath
+              : '${archive.archivePath}/${archive.subPath}')
+        : _currentPath;
+    final disableNavigation =
+        _handlingPendingFile && isLikelyFilePath(_currentPath);
     return Scaffold(
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.files),
+      // Selection swaps the bar for FileSelectionBar in the body, as the
+      // trash does.
+      appBar: _selectionMode
+          ? null
+          : FileTopBar(
+              currentPath: displayPath,
+              // Inside an archive every crumb is the archive's own, so
+              // nothing is out of reach there.
+              rootPath: archive != null ? '' : _landingPath,
+              isGridView: _isGridView,
+              isSearchMode: searchActive,
+              isUploading: _isUploading,
+              isCreatingFolder: _isCreatingFolder,
+              disableNavigation: disableNavigation,
+              isRefreshing: isRefreshing,
+              onGoHome: archive != null ? _exitArchive : _goHome,
+              onGoUp: _goUpOneLevel,
+              onPathSelected: archive != null ? null : _setPath,
+              isUnifiedView: _isUnifiedView,
+              onToggleView: () => setState(() => _isGridView = !_isGridView),
+              onToggleUnifiedView: () =>
+                  setState(() => _isUnifiedView = !_isUnifiedView),
+              onSearchChanged: _handleSearchChanged,
+              onSearchDraft: _handleSearchDraft,
+              onSearchClosed: _handleSearchClosed,
+              onRefresh: _refreshFileState,
+              onUploadPressed: _handleUploadPressed,
+              onUploadPhotosPressed: _controller.isPhotoUploadSupported
+                  ? _handleUploadPhotosPressed
+                  : null,
+              onUploadFolderPressed: _controller.isFolderUploadSupported
+                  ? _handleUploadFolderPressed
+                  : null,
+              onCancelUploadPressed: UploadManager.instance.cancel,
+              onCreateFolderPressed: _handleCreateFolderPressed,
+              onNewFilePressed: _handleNewFilePressed,
+              uploadTotal: _uploadTotal,
+              uploadCompleted: _uploadCompleted,
+              // Inside an archive there is nothing to select: the entries
+              // are read-only and batch delete does not reach them.
+              onStartSelection: archive == null
+                  ? () => setState(() {
+                      _selectionMode = true;
+                      _selectedPaths.clear();
+                    })
+                  : null,
+              devices: _allDevices.length > 1 ? _allDevices : null,
+              activeDevicePaths: _activeDevicePaths,
+              onDeviceToggled: (devicePath) {
+                setState(() {
+                  if (_activeDevicePaths.contains(devicePath)) {
+                    _activeDevicePaths.remove(devicePath);
+                    if (_activeDevicePaths.isEmpty) {
+                      _activeDevicePaths = _allDevices
+                          .map((d) => d.devicePath)
+                          .toSet();
+                    }
+                  } else {
+                    _activeDevicePaths.add(devicePath);
+                  }
+                  _reloadFiles();
+                });
+              },
+            ),
       body: Column(
         children: [
-          Builder(
-            builder: (context) {
-              // When inside an archive, show the archive path as the breadcrumb.
-              final archive = _archiveContext;
-              final displayPath = archive != null
-                  ? (archive.subPath.isEmpty
-                        ? archive.archivePath
-                        : '${archive.archivePath}/${archive.subPath}')
-                  : _currentPath;
-              final disableNavigation =
-                  _handlingPendingFile && isLikelyFilePath(_currentPath);
-              if (_selectionMode) {
-                return FileSelectionBar(
-                  selectedCount: _selectedPaths.length,
-                  totalCount: _allCurrentFiles.length,
-                  onSelectAll: _selectAll,
-                  onDeselectAll: () => setState(() => _selectedPaths.clear()),
-                  onCancel: _exitSelectionMode,
-                  onDelete: _selectedPaths.isNotEmpty ? _deleteSelected : null,
-                );
-              }
-              return FileTopBar(
-                currentPath: displayPath,
-                // Inside an archive every crumb is the archive's own, so
-                // nothing is out of reach there.
-                rootPath: archive != null ? '' : _landingPath,
-                isGridView: _isGridView,
-                isSearchMode: searchActive,
-                isUploading: _isUploading,
-                isCreatingFolder: _isCreatingFolder,
-                disableNavigation: disableNavigation,
-                isRefreshing: isRefreshing,
-                onGoHome: archive != null ? _exitArchive : _goHome,
-                onGoUp: _goUpOneLevel,
-                onPathSelected: archive != null ? null : _setPath,
-                isUnifiedView: _isUnifiedView,
-                onToggleView: () => setState(() => _isGridView = !_isGridView),
-                onToggleUnifiedView: () =>
-                    setState(() => _isUnifiedView = !_isUnifiedView),
-                onSearchChanged: _handleSearchChanged,
-                onSearchDraft: _handleSearchDraft,
-                onSearchClosed: _handleSearchClosed,
-                onRefresh: _refreshFileState,
-                onUploadPressed: _handleUploadPressed,
-                onUploadPhotosPressed: _controller.isPhotoUploadSupported
-                    ? _handleUploadPhotosPressed
-                    : null,
-                onUploadFolderPressed: _controller.isFolderUploadSupported
-                    ? _handleUploadFolderPressed
-                    : null,
-                onCancelUploadPressed: UploadManager.instance.cancel,
-                onCreateFolderPressed: _handleCreateFolderPressed,
-                onNewFilePressed: _handleNewFilePressed,
-                uploadTotal: _uploadTotal,
-                uploadCompleted: _uploadCompleted,
-                // Inside an archive there is nothing to select: the entries
-                // are read-only and batch delete does not reach them.
-                onStartSelection: archive == null
-                    ? () => setState(() {
-                        _selectionMode = true;
-                        _selectedPaths.clear();
-                      })
-                    : null,
-                onOpenDrawer: () => Scaffold.of(context).openDrawer(),
-                devices: _allDevices.length > 1 ? _allDevices : null,
-                activeDevicePaths: _activeDevicePaths,
-                onDeviceToggled: (devicePath) {
-                  setState(() {
-                    if (_activeDevicePaths.contains(devicePath)) {
-                      _activeDevicePaths.remove(devicePath);
-                      if (_activeDevicePaths.isEmpty) {
-                        _activeDevicePaths = _allDevices
-                            .map((d) => d.devicePath)
-                            .toSet();
-                      }
-                    } else {
-                      _activeDevicePaths.add(devicePath);
-                    }
-                    _reloadFiles();
-                  });
-                },
-              );
-            },
-          ),
+          if (_selectionMode)
+            FileSelectionBar(
+              selectedCount: _selectedPaths.length,
+              totalCount: _allCurrentFiles.length,
+              onSelectAll: _selectAll,
+              onDeselectAll: () => setState(() => _selectedPaths.clear()),
+              onCancel: _exitSelectionMode,
+              onDelete: _selectedPaths.isNotEmpty ? _deleteSelected : null,
+            ),
           if (!_selectionMode && !searchActive && !_noHostSelected)
             FileShortcutBar(
               shortcuts: [for (final s in _shortcuts) s.key],

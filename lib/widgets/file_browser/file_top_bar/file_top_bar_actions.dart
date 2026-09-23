@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_upload_chip.dart';
-import 'package:quark/widgets/file_browser/file_top_bar/top_bar_chip.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The three things the wide layout lets the user add to the current folder.
+///
+/// Probe keys: `file_top_bar_upload`, `file_top_bar_new_folder` and
+/// `file_top_bar_new_file`.
 class FileTopBarActions extends StatelessWidget {
   const FileTopBarActions({
     required this.isUploading,
@@ -45,16 +48,18 @@ class FileTopBarActions extends StatelessWidget {
           onCancelUploadPressed: onCancelUploadPressed,
         ),
         const SizedBox(width: 6),
-        TopBarChip(
+        QuarkBarChip(
+          key: const ValueKey('file_top_bar_new_folder'),
           icon: QuarkIcons.create_new_folder_outlined,
           label: 'New folder',
-          onTap: isCreatingFolder ? null : onCreateFolderPressed,
+          onPressed: isCreatingFolder ? null : onCreateFolderPressed,
         ),
         const SizedBox(width: 6),
-        TopBarChip(
+        QuarkBarChip(
+          key: const ValueKey('file_top_bar_new_file'),
           icon: QuarkIcons.edit_document,
           label: 'New file',
-          onTap: onNewFilePressed,
+          onPressed: onNewFilePressed,
         ),
       ],
     );

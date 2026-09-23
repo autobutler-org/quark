@@ -15,7 +15,9 @@ on its page's decoupling issue (see #1600), after which it moves too.
 lib/widgets/
   file_browser/
     file_browser_view.dart      lists files, calls FilesService
-    file_top_bar.dart           search and sort chrome, calls FilesService
+    file_top_bar.dart           Files' QuarkAppBar: holds the inline search
+                                state and takes the app's StorageDevice
+    file_top_bar/               its parts, on the package bar buttons
     file_storage_footer.dart    capacity row, takes the app's HealthStatus
     recent_files_section.dart   calls FilesService
     new_file_dialog.dart        one-line wrapper that pops NewFileDialog

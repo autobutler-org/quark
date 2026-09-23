@@ -18,7 +18,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: FileTopBar(
+          appBar: FileTopBar(
             currentPath: '/docs',
             rootPath: '',
             isGridView: false,
@@ -37,7 +37,6 @@ void main() {
             onUploadPressed: () {},
             onCreateFolderPressed: () {},
             onNewFilePressed: () {},
-            onOpenDrawer: () {},
             onStartSelection: onStartSelection,
           ),
         ),
@@ -52,7 +51,7 @@ void main() {
 
     final select = find.byKey(const ValueKey('file_top_bar_select'));
     expect(select, findsOneWidget);
-    expect(find.byTooltip('Select files'), findsOneWidget);
+    expect(find.byTooltip('Select'), findsOneWidget);
 
     await tester.tap(select);
     await tester.pump();

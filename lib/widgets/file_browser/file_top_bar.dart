@@ -1,12 +1,25 @@
 import 'dart:async';
 
 import 'package:quark/services/storage_service.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_nav_buttons.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_path_row.dart';
-import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_row.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_search_area.dart';
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
-/// The Files page's top bar: the breadcrumb for the current folder, the way up, and search.
-class FileTopBar extends StatefulWidget {
+/// The Files page's top bar: the breadcrumb for the current folder, the way
+/// up, and search, on the same [QuarkAppBar] every other page wears (#2311).
+///
+/// Search lives here rather than in the page because the inline field owns a
+/// controller, a focus node and a debounce. The path row below is a
+/// [FileTopBarPathRow], whose actions collapse into the bar's labeled menu on
+/// a phone.
+///
+/// Probe keys: `file_top_bar_select`, plus those of [FileTopBarNavButtons],
+/// [FileTopBarSearchArea] and [FileTopBarPathRow].
+class FileTopBar extends StatefulWidget implements PreferredSizeWidget {
   const FileTopBar({
     required this.currentPath,
     required this.rootPath,
@@ -34,7 +47,6 @@ class FileTopBar extends StatefulWidget {
     this.onCancelUploadPressed,
     required this.onCreateFolderPressed,
     required this.onNewFilePressed,
-    required this.onOpenDrawer,
     this.onStartSelection,
     this.devices,
     this.activeDevicePaths,
@@ -101,17 +113,21 @@ class FileTopBar extends StatefulWidget {
   final VoidCallback? onCancelUploadPressed;
   final VoidCallback onCreateFolderPressed;
   final VoidCallback onNewFilePressed;
-  final VoidCallback onOpenDrawer;
   final List<StorageDevice>? devices;
   final Set<String>? activeDevicePaths;
   final ValueChanged<String>? onDeviceToggled;
+
+  /// One bar row, plus the path row outside search.
+  @override
+  Size get preferredSize => Size.fromHeight(
+    kToolbarHeight + (isSearchMode ? 0 : QuarkAppBarBottom.height),
+  );
 
   @override
   State<FileTopBar> createState() => _FileTopBarState();
 }
 
 class _FileTopBarState extends State<FileTopBar> {
-  final _viewsMenuController = MenuController();
   final _hiddenCrumbsController = MenuController();
 
   // ── Inline search ─────────────────────────────────────────────────────────
@@ -175,63 +191,76 @@ class _FileTopBarState extends State<FileTopBar> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.secondary,
-        border: Border(bottom: BorderSide(color: colorScheme.outline)),
+    final onStartSelection = widget.onStartSelection;
+    return QuarkAppBar(
+      label: 'Files',
+      icon: QuarkIcons.storage_rounded,
+      onRefresh: widget.onRefresh,
+      isRefreshing: widget.isRefreshing,
+      middle: Row(
+        spacing: QuarkTokens.of(context).spacingXs,
+        children: [
+          FileTopBarNavButtons(
+            navEnabled: !widget.disableNavigation,
+            currentPath: widget.currentPath,
+            rootPath: widget.rootPath,
+            onGoUp: widget.onGoUp,
+          ),
+          // Holds the search field when it is open and pins the search button
+          // to the trailing edge when it is not.
+          Expanded(
+            child: FileTopBarSearchArea(
+              expanded: _searchExpanded,
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              onOpen: _openSearch,
+              onChanged: _onSearchChanged,
+              onClose: _closeSearch,
+            ),
+          ),
+        ],
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FileTopBarRow(
+      actions: [
+        // Selecting used to be a long press on a row, a gesture a mouse does
+        // not make, so on the web the whole feature was invisible (#2057).
+        // This button is the only way in now that a long press opens the
+        // row's menu instead (#2245).
+        if (onStartSelection != null)
+          QuarkBarIconButton(
+            key: const ValueKey('file_top_bar_select'),
+            icon: QuarkIcons.check_circle_outline,
+            tooltip: 'Select',
+            onPressed: onStartSelection,
+          ),
+        const AppThemeToggle(),
+      ],
+      bottom: widget.isSearchMode
+          ? null
+          : FileTopBarPathRow(
               currentPath: widget.currentPath,
               rootPath: widget.rootPath,
               navEnabled: !widget.disableNavigation,
-              isRefreshing: widget.isRefreshing,
-              searchExpanded: _searchExpanded,
-              searchController: _searchController,
-              searchFocusNode: _searchFocusNode,
-              onGoUp: widget.onGoUp,
-              onRefresh: widget.onRefresh,
-              onOpenSearch: _openSearch,
-              onSearchChanged: _onSearchChanged,
-              onCloseSearch: _closeSearch,
-              onOpenDrawer: widget.onOpenDrawer,
-              onStartSelection: widget.onStartSelection,
+              hiddenCrumbsController: _hiddenCrumbsController,
+              isGridView: widget.isGridView,
+              isUnifiedView: widget.isUnifiedView,
+              isUploading: widget.isUploading,
+              isCreatingFolder: widget.isCreatingFolder,
+              uploadTotal: widget.uploadTotal,
+              uploadCompleted: widget.uploadCompleted,
+              onGoHome: widget.onGoHome,
+              onToggleView: widget.onToggleView,
+              onToggleUnifiedView: widget.onToggleUnifiedView,
+              onUploadPressed: widget.onUploadPressed,
+              onCreateFolderPressed: widget.onCreateFolderPressed,
+              onNewFilePressed: widget.onNewFilePressed,
+              onPathSelected: widget.onPathSelected,
+              onUploadPhotosPressed: widget.onUploadPhotosPressed,
+              onUploadFolderPressed: widget.onUploadFolderPressed,
+              onCancelUploadPressed: widget.onCancelUploadPressed,
+              devices: widget.devices,
+              activeDevicePaths: widget.activeDevicePaths,
+              onDeviceToggled: widget.onDeviceToggled,
             ),
-            if (!widget.isSearchMode)
-              FileTopBarPathRow(
-                currentPath: widget.currentPath,
-                rootPath: widget.rootPath,
-                navEnabled: !widget.disableNavigation,
-                viewsMenuController: _viewsMenuController,
-                hiddenCrumbsController: _hiddenCrumbsController,
-                isGridView: widget.isGridView,
-                isUnifiedView: widget.isUnifiedView,
-                isUploading: widget.isUploading,
-                isCreatingFolder: widget.isCreatingFolder,
-                uploadTotal: widget.uploadTotal,
-                uploadCompleted: widget.uploadCompleted,
-                onGoHome: widget.onGoHome,
-                onToggleView: widget.onToggleView,
-                onToggleUnifiedView: widget.onToggleUnifiedView,
-                onUploadPressed: widget.onUploadPressed,
-                onCreateFolderPressed: widget.onCreateFolderPressed,
-                onNewFilePressed: widget.onNewFilePressed,
-                onPathSelected: widget.onPathSelected,
-                onUploadPhotosPressed: widget.onUploadPhotosPressed,
-                onUploadFolderPressed: widget.onUploadFolderPressed,
-                onCancelUploadPressed: widget.onCancelUploadPressed,
-                devices: widget.devices,
-                activeDevicePaths: widget.activeDevicePaths,
-                onDeviceToggled: widget.onDeviceToggled,
-              ),
-          ],
-        ),
-      ),
     );
   }
 }

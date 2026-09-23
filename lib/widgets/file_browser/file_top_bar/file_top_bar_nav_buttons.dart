@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:quark/widgets/file_browser/file_top_bar/top_bar_icon_button.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// Back and up. Back and up both go up one level: the browser has no
 /// history of its own, and the arrow the user reaches for should not depend on
@@ -9,6 +9,8 @@ import 'package:quark_icons/quark_icons.dart';
 /// Both stop at [rootPath], the lowest folder the caller can open, so a member
 /// pressing up in their own files is not walked into the `users` folder they
 /// have no use for (#2139).
+///
+/// Probe keys: `file_top_bar_back` and `file_top_bar_up`.
 class FileTopBarNavButtons extends StatelessWidget {
   const FileTopBarNavButtons({
     required this.navEnabled,
@@ -31,16 +33,18 @@ class FileTopBarNavButtons extends StatelessWidget {
         navEnabled && currentPath.isNotEmpty && currentPath != rootPath;
     return Row(
       mainAxisSize: MainAxisSize.min,
+      spacing: QuarkTokens.of(context).spacingXs,
       children: [
-        TopBarIconButton(
+        QuarkBarIconButton(
+          key: const ValueKey('file_top_bar_back'),
           icon: QuarkIcons.arrow_back_rounded,
-          onTap: canGoUp ? onGoUp : null,
+          onPressed: canGoUp ? onGoUp : null,
           tooltip: 'Back',
         ),
-        const SizedBox(width: 4),
-        TopBarIconButton(
+        QuarkBarIconButton(
+          key: const ValueKey('file_top_bar_up'),
           icon: QuarkIcons.arrow_upward_rounded,
-          onTap: canGoUp ? onGoUp : null,
+          onPressed: canGoUp ? onGoUp : null,
           tooltip: 'Up one level',
         ),
       ],
