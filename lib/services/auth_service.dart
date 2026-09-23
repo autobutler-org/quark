@@ -261,7 +261,7 @@ class AuthService {
         )
         .timeout(kAuthRequestTimeout);
     if (response.statusCode == 401) {
-      throw const MessageException('Invalid username or password.');
+      throw const MessageException(Errors.invalidCredentials);
     }
     if (response.statusCode == 403) {
       _throwAccountRefusal(response.body, 'Login failed');

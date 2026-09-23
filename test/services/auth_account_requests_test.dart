@@ -112,7 +112,7 @@ void main() {
 
       await expectLater(
         AuthService.login(username: 'bob', password: 'nope'),
-        refusedWith('Invalid username or password.'),
+        refusedWith(Errors.invalidCredentials),
       );
     });
   });

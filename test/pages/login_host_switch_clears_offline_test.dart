@@ -8,6 +8,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// A Quark that never answers, which is what an address with nothing behind
@@ -75,6 +76,8 @@ void main() {
     await failSignIn(tester);
 
     expect(find.byType(QuarkDisconnectedBanner), findsOneWidget);
+    expect(find.textContaining('Invalid username or password'), findsNothing);
+    expect(find.text(Errors.quarkNotSetUp), findsNothing);
   });
 
   testWidgets('switching to another Quark clears the offline banner', (
@@ -94,15 +97,76 @@ void main() {
     tester,
   ) async {
     await pumpLogin(tester);
-    // A Quark that answers, and refuses.
+    // A Quark that answers, and refuses. The probe never answered, so this is
+    // not "not set up" — the refusal names the host that rejected it.
     authHttpClientFactory = () => _RefusingClient();
     await failSignIn(tester);
-    expect(find.text('Invalid username or password.'), findsOneWidget);
+    final refused = Errors.invalidCredentialsOn(
+      'Broken (http://localhost:8099)',
+    );
+    expect(find.text(refused), findsOneWidget);
+    expect(find.text(Errors.quarkNotSetUp), findsNothing);
 
     await settings.setActiveIndex(1);
     await tester.pumpAndSettle();
 
-    expect(find.text('Invalid username or password.'), findsNothing);
+    expect(find.text(refused), findsNothing);
+  });
+
+  testWidgets('a set-up Quark that refuses names itself', (tester) async {
+    while (settings.hosts.isNotEmpty) {
+      await settings.removeHost(settings.hosts.length - 1);
+    }
+    await settings.addHost(
+      HostEntry(name: 'Virgin', hostAddress: 'http://localhost:8081'),
+    );
+    authStatusProbe = () async => const AuthStatus(setupComplete: true);
+    authHttpClientFactory = () => _RefusingClient();
+
+    await pumpLogin(tester);
+    await failSignIn(tester);
+
+    expect(
+      find.text(Errors.invalidCredentialsOn('Virgin (http://localhost:8081)')),
+      findsOneWidget,
+    );
+    expect(find.text(Errors.quarkNotSetUp), findsNothing);
+    expect(find.byType(QuarkDisconnectedBanner), findsNothing);
+  });
+
+  testWidgets('a Quark with no nickname is named by its address', (
+    tester,
+  ) async {
+    while (settings.hosts.isNotEmpty) {
+      await settings.removeHost(settings.hosts.length - 1);
+    }
+    await settings.addHost(
+      HostEntry(name: '', hostAddress: 'http://localhost:8081'),
+    );
+    authStatusProbe = () async => const AuthStatus(setupComplete: true);
+    authHttpClientFactory = () => _RefusingClient();
+
+    await pumpLogin(tester);
+    await failSignIn(tester);
+
+    expect(
+      find.text(Errors.invalidCredentialsOn('http://localhost:8081')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a Quark with no owner yet is not a wrong password', (
+    tester,
+  ) async {
+    authStatusProbe = () async => const AuthStatus(setupComplete: false);
+    authHttpClientFactory = () => _RefusingClient();
+
+    await pumpLogin(tester);
+    await failSignIn(tester);
+
+    expect(find.text(Errors.quarkNotSetUp), findsOneWidget);
+    expect(find.textContaining('Invalid username or password'), findsNothing);
+    expect(find.byType(QuarkDisconnectedBanner), findsNothing);
   });
 }
 
