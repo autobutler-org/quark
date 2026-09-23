@@ -86,6 +86,16 @@ void main() {
       expect(find.text('Sign in'), findsNothing);
     });
 
+    // #2310: the image answers mDNS as quark.local; nothing produces
+    // quark.home.local, so the hint must not suggest it.
+    testWidgets('the address hint names quark.local', (tester) async {
+      await pumpLogin(tester);
+
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.decoration!.hintText, 'https://quark.local');
+      expect(field.decoration!.helperText, contains('https://quark.local '));
+    });
+
     testWidgets('connecting saves the host, normalizing a bare address', (
       tester,
     ) async {

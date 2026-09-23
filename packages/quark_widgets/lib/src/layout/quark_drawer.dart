@@ -69,7 +69,7 @@ enum QuarkDrawerSection {
 /// QuarkDrawer(
 ///   activeSection: QuarkDrawerSection.photos,
 ///   hosts: const [
-///     HostItem(name: 'Home', address: 'quark.home.local'),
+///     HostItem(name: 'Home', address: 'quark.local'),
 ///     HostItem(name: 'Cabin', address: 'cabin.local:8443'),
 ///   ],
 ///   activeHostIndex: 0,

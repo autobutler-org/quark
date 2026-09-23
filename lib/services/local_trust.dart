@@ -13,7 +13,7 @@ library;
 /// Hostname suffixes that only ever resolve inside a local network.
 ///
 /// `.local` is mDNS/Bonjour — the primary way the app reaches a quark
-/// (`openclaw.local`, `quark.home.local`). The rest are the conventional
+/// (`openclaw.local`, `quark.local`). The rest are the conventional
 /// private-network suffixes; `.home.arpa` is the RFC 8375 standard one.
 const _localSuffixes = <String>[
   '.local',
