@@ -18,6 +18,7 @@ export 'src/core/empty_state_widget.dart';
 export 'src/core/password_strength_bar.dart';
 export 'src/core/quark_disconnected_state.dart';
 export 'src/core/quark_file_icon.dart';
+export 'src/core/quark_loader.dart';
 export 'src/core/quark_name_dialog.dart';
 export 'src/core/quark_storage_bar.dart';
 export 'src/core/scroll_up_hint.dart';

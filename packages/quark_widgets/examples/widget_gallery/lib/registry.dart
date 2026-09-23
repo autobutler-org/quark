@@ -88,6 +88,23 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkLoader',
+    group: 'Core',
+    build: (context, log) => Wrap(
+      spacing: 32,
+      runSpacing: 24,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (final size in const [24.0, 36.0, 64.0]) QuarkLoader(size: size),
+        // The reduced-motion fallback: rings hold their tilt, opacity pulses.
+        MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: const QuarkLoader(size: 64),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkStorageBar',
     group: 'Core',
     build: (context, log) => Column(
