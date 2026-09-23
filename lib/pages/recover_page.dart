@@ -105,8 +105,6 @@ class _RecoverPageState extends State<RecoverPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Recover account'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
         actions: const [AppThemeToggle()],
       ),
       body: SafeArea(

@@ -3,6 +3,7 @@ import 'package:quark/services/vault_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The page for creating a new vault entry.
 class EntryEditorPage extends StatefulWidget {
@@ -40,11 +41,19 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
       appBar: AppBar(
         title: const Text('New Entry'),
         actions: [
-          TextButton(
-            onPressed: _saving ? null : _save,
-            child: const Text('Save'),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: QuarkTokens.of(context).spacingSm,
+            children: [
+              QuarkBarChip(
+                key: const ValueKey('vault_entry_save'),
+                icon: QuarkIcons.save_outlined,
+                label: _saving ? 'Saving...' : 'Save',
+                onPressed: _saving ? null : _save,
+              ),
+              const AppThemeToggle(),
+            ],
           ),
-          const AppThemeToggle(),
         ],
       ),
       body: SingleChildScrollView(

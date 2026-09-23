@@ -438,24 +438,20 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
             ),
           ),
           actions: [
-            if (_saving)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: QuarkTokens.of(context).spacingSm,
+              children: [
+                QuarkBarChip(
+                  key: const ValueKey('spreadsheet_editor_save'),
+                  // Filled while there is unsaved work for the autosave.
+                  icon: _dirty ? QuarkIcons.save : QuarkIcons.save_outlined,
+                  label: _saving ? 'Saving...' : 'Save',
+                  onPressed: _saving ? null : _manualSave,
                 ),
-              )
-            else
-              IconButton(
-                icon: Icon(_dirty ? QuarkIcons.save : QuarkIcons.save_outlined),
-                tooltip: 'Save',
-                onPressed: _manualSave,
-              ),
-            const AppThemeToggle(),
+                const AppThemeToggle(),
+              ],
+            ),
           ],
         ),
         body: SheetTabView(

@@ -13,6 +13,7 @@ import 'package:quark/widgets/video_viewer/inline_video_player.dart';
 import 'package:quark/widgets/video_viewer/transcode_dialog_host.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:video_player/video_player.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// Full-screen player for a video file on the Quark.
 class VideoViewerPage extends StatefulWidget {
@@ -374,58 +375,70 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
       appBar: AppBar(
         title: Text(widget.name),
         actions: [
-          if (_exportingTrim)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else if (_trimMode) ...[
-            TextButton(onPressed: _exportTrim, child: const Text('Save Clip')),
-            TextButton(
-              onPressed: () => setState(() {
-                _trimMode = false;
-                _trimStart = 0.0;
-                _trimEnd = 1.0;
-              }),
-              child: const Text('Cancel'),
-            ),
-          ] else if (!_savingFrame)
-            PopupMenuButton<String>(
-              tooltip: 'More options',
-              onSelected: (action) {
-                if (action == 'saveFrame') _saveFrame();
-                if (action == 'trim') _enterTrimMode();
-                if (action == 'convert') _convert();
-              },
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'saveFrame',
-                  child: Text('Save Frame'),
-                ),
-                const PopupMenuItem(value: 'trim', child: Text('Trim Clip')),
-                // Converting is most useful for a format the player cannot
-                // open, so it is offered whether or not playback started.
-                if ((widget.url.queryParameters['filePath'] ?? '').isNotEmpty)
-                  const PopupMenuItem(
-                    value: 'convert',
-                    child: Text('Convert…'),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: QuarkTokens.of(context).spacingSm,
+            children: [
+              if (_exportingTrim)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-              ],
-            )
-          else
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          const AppThemeToggle(),
+                )
+              else if (_trimMode) ...[
+                TextButton(
+                  onPressed: _exportTrim,
+                  child: const Text('Save Clip'),
+                ),
+                TextButton(
+                  onPressed: () => setState(() {
+                    _trimMode = false;
+                    _trimStart = 0.0;
+                    _trimEnd = 1.0;
+                  }),
+                  child: const Text('Cancel'),
+                ),
+              ] else
+                MenuAnchor(
+                  menuChildren: [
+                    MenuItemButton(
+                      key: const ValueKey('video_viewer_save_frame'),
+                      onPressed: _saveFrame,
+                      child: const Text('Save Frame'),
+                    ),
+                    MenuItemButton(
+                      key: const ValueKey('video_viewer_trim'),
+                      onPressed: _enterTrimMode,
+                      child: const Text('Trim Clip'),
+                    ),
+                    // Converting is most useful for a format the player
+                    // cannot open, so it is offered whether or not playback
+                    // started.
+                    if ((widget.url.queryParameters['filePath'] ?? '')
+                        .isNotEmpty)
+                      MenuItemButton(
+                        key: const ValueKey('video_viewer_convert'),
+                        onPressed: _convert,
+                        child: const Text('Convert…'),
+                      ),
+                  ],
+                  builder: (context, controller, _) => QuarkBarIconButton(
+                    key: const ValueKey('video_viewer_more'),
+                    icon: QuarkIcons.more_vert,
+                    tooltip: 'More options',
+                    // Saving a frame spins here until the frame lands.
+                    isBusy: _savingFrame,
+                    onPressed: () => controller.isOpen
+                        ? controller.close()
+                        : controller.open(),
+                  ),
+                ),
+              const AppThemeToggle(),
+            ],
+          ),
         ],
       ),
       body: Center(

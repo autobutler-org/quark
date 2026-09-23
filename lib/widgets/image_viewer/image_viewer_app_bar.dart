@@ -2,18 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
-
-enum MoreAction {
-  favorite,
-  rotate,
-  download,
-  info,
-  addToAlbum,
-  removeFromAlbum,
-  makeACopy,
-  share,
-  delete,
-}
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The photo viewer's top bar.
 ///
@@ -86,188 +75,144 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = QuarkTokens.of(context);
     final showNav = imageCount > 1;
     return AppBar(
-      backgroundColor: Colors.black,
-      foregroundColor: Colors.white,
-      leading: IconButton(
-        icon: const Icon(QuarkIcons.close),
-        tooltip: 'Close (Esc)',
-        onPressed: onClose,
+      leading: Center(
+        child: QuarkBarIconButton(
+          key: const ValueKey('image_viewer_close'),
+          icon: QuarkIcons.close,
+          tooltip: 'Close (Esc)',
+          onPressed: onClose,
+        ),
       ),
       title: showNav
           ? Text(
               '${currentIndex + 1} / $imageCount',
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: tokens.secondaryForeground,
+              ),
             )
           : null,
       actions: [
-        if (showNav) ...[
-          IconButton(
-            icon: const Icon(QuarkIcons.chevron_left),
-            tooltip: 'Previous (←)',
-            onPressed: hasPrev ? onPrevious : null,
-          ),
-          IconButton(
-            icon: const Icon(QuarkIcons.chevron_right),
-            tooltip: 'Next (→)',
-            onPressed: hasNext ? onNext : null,
-          ),
-          const SizedBox(width: 8),
-        ],
-        if (isDesktop) ...[
-          Tooltip(
-            message: 'Favorite (F)',
-            child: IconButton(
-              icon: Icon(
-                isFavorite ? QuarkIcons.star : QuarkIcons.star_border,
-                color: isFavorite
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.white,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: QuarkTokens.of(context).spacingSm,
+          children: [
+            if (showNav) ...[
+              QuarkBarIconButton(
+                key: const ValueKey('image_viewer_previous'),
+                icon: QuarkIcons.chevron_left,
+                tooltip: 'Previous (←)',
+                onPressed: hasPrev ? onPrevious : null,
               ),
-              onPressed: onToggleFavorite,
-            ),
-          ),
-          Tooltip(
-            message: 'Rotate 90° CW (R)',
-            child: IconButton(
-              icon: const Icon(QuarkIcons.rotate_90_degrees_cw_outlined),
-              onPressed: onRotate,
-            ),
-          ),
-          if (relPath != null)
-            Tooltip(
-              message: 'Download',
-              child: IconButton(
-                icon: const Icon(QuarkIcons.download_outlined),
-                onPressed: onDownload,
+              QuarkBarIconButton(
+                key: const ValueKey('image_viewer_next'),
+                icon: QuarkIcons.chevron_right,
+                tooltip: 'Next (→)',
+                onPressed: hasNext ? onNext : null,
               ),
-            ),
-          Tooltip(
-            message: 'Info (I)',
-            child: IconButton(
-              icon: Icon(
-                sidebarOpen ? QuarkIcons.info : QuarkIcons.info_outline,
-                color: sidebarOpen
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.white,
-              ),
-              onPressed: onToggleSidebar,
-            ),
-          ),
-        ],
-        if (!isDesktop || relPath != null)
-          PopupMenuButton<MoreAction>(
-            icon: const Icon(QuarkIcons.more_vert),
-            color: const Color(0xFF1E1E1E),
-            onSelected: (action) {
-              switch (action) {
-                case MoreAction.favorite:
-                  onToggleFavorite();
-                case MoreAction.rotate:
-                  onRotate();
-                case MoreAction.download:
-                  onDownload();
-                case MoreAction.info:
-                  onToggleSidebar();
-                case MoreAction.addToAlbum:
-                  onAddToAlbum();
-                case MoreAction.removeFromAlbum:
-                  onRemoveFromAlbum();
-                case MoreAction.makeACopy:
-                  onMakeACopy();
-                case MoreAction.share:
-                  onShare();
-                case MoreAction.delete:
-                  onDelete();
-              }
-            },
-            itemBuilder: (_) => [
-              if (!isDesktop) ...[
-                PopupMenuItem(
-                  value: MoreAction.favorite,
-                  child: Text(
-                    isFavorite ? 'Unfavorite' : 'Favorite',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: MoreAction.rotate,
-                  child: Text(
-                    'Rotate 90° CW',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-                if (relPath != null)
-                  const PopupMenuItem(
-                    value: MoreAction.download,
-                    child: Text(
-                      'Download',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                PopupMenuItem(
-                  value: MoreAction.info,
-                  child: Text(
-                    sidebarOpen ? 'Hide info' : 'Show info',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
-              if (relPath != null) ...[
-                if (!isDesktop) const PopupMenuDivider(),
-                if (sourceAlbum != null)
-                  PopupMenuItem(
-                    value: MoreAction.removeFromAlbum,
-                    child: Text(
-                      'Remove from ${sourceAlbum!.name}',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  )
-                else
-                  const PopupMenuItem(
-                    value: MoreAction.addToAlbum,
-                    child: Text(
-                      'Add to Album',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                const PopupMenuItem(
-                  value: MoreAction.makeACopy,
-                  child: Text(
-                    'Make a Copy',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: MoreAction.share,
-                  child: Text('Share…', style: TextStyle(color: Colors.white)),
-                ),
-                PopupMenuItem(
-                  value: MoreAction.delete,
-                  child: Text(
-                    'Delete photo',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              ],
             ],
-          ),
-        // Keyboard shortcuts and the theme toggle need a keyboard and a wider
-        // bar; on a phone they stay on the pages that have room for them.
-        if (isDesktop) ...[
-          Tooltip(
-            message: 'Keyboard shortcuts (?)',
-            child: IconButton(
-              icon: const Icon(QuarkIcons.keyboard_outlined, size: 20),
-              onPressed: onShowShortcuts,
-            ),
-          ),
-          const SizedBox(width: 4),
-          const AppThemeToggle(),
-        ],
+            if (isDesktop) ...[
+              QuarkBarIconButton(
+                key: const ValueKey('image_viewer_favorite'),
+                icon: isFavorite ? QuarkIcons.star : QuarkIcons.star_border,
+                tooltip: 'Favorite (F)',
+                onPressed: onToggleFavorite,
+              ),
+              QuarkBarIconButton(
+                key: const ValueKey('image_viewer_rotate'),
+                icon: QuarkIcons.rotate_90_degrees_cw_outlined,
+                tooltip: 'Rotate 90° CW (R)',
+                onPressed: onRotate,
+              ),
+              if (relPath != null)
+                QuarkBarIconButton(
+                  key: const ValueKey('image_viewer_download'),
+                  icon: QuarkIcons.download_outlined,
+                  tooltip: 'Download',
+                  onPressed: onDownload,
+                ),
+              QuarkBarIconButton(
+                key: const ValueKey('image_viewer_info'),
+                icon: sidebarOpen ? QuarkIcons.info : QuarkIcons.info_outline,
+                tooltip: 'Info (I)',
+                onPressed: onToggleSidebar,
+              ),
+            ],
+            if (!isDesktop || relPath != null)
+              MenuAnchor(
+                menuChildren: [
+                  if (!isDesktop) ...[
+                    MenuItemButton(
+                      onPressed: onToggleFavorite,
+                      child: Text(isFavorite ? 'Unfavorite' : 'Favorite'),
+                    ),
+                    MenuItemButton(
+                      onPressed: onRotate,
+                      child: const Text('Rotate 90° CW'),
+                    ),
+                    if (relPath != null)
+                      MenuItemButton(
+                        onPressed: onDownload,
+                        child: const Text('Download'),
+                      ),
+                    MenuItemButton(
+                      onPressed: onToggleSidebar,
+                      child: Text(sidebarOpen ? 'Hide info' : 'Show info'),
+                    ),
+                  ],
+                  if (relPath != null) ...[
+                    if (!isDesktop) const Divider(height: 1),
+                    if (sourceAlbum != null)
+                      MenuItemButton(
+                        onPressed: onRemoveFromAlbum,
+                        child: Text('Remove from ${sourceAlbum!.name}'),
+                      )
+                    else
+                      MenuItemButton(
+                        onPressed: onAddToAlbum,
+                        child: const Text('Add to Album'),
+                      ),
+                    MenuItemButton(
+                      onPressed: onMakeACopy,
+                      child: const Text('Make a Copy'),
+                    ),
+                    MenuItemButton(
+                      onPressed: onShare,
+                      child: const Text('Share…'),
+                    ),
+                    MenuItemButton(
+                      onPressed: onDelete,
+                      style: MenuItemButton.styleFrom(
+                        foregroundColor: tokens.error,
+                      ),
+                      child: const Text('Delete photo'),
+                    ),
+                  ],
+                ],
+                builder: (context, controller, _) => QuarkBarIconButton(
+                  key: const ValueKey('image_viewer_more'),
+                  icon: QuarkIcons.more_vert,
+                  tooltip: 'More options',
+                  onPressed: () => controller.isOpen
+                      ? controller.close()
+                      : controller.open(),
+                ),
+              ),
+            // Keyboard shortcuts and the theme toggle need a keyboard and a
+            // wider bar; on a phone they stay on the pages that have room.
+            if (isDesktop) ...[
+              QuarkBarIconButton(
+                key: const ValueKey('image_viewer_shortcuts'),
+                icon: QuarkIcons.keyboard_outlined,
+                tooltip: 'Keyboard shortcuts (?)',
+                onPressed: onShowShortcuts,
+              ),
+              const AppThemeToggle(),
+            ],
+          ],
+        ),
       ],
     );
   }

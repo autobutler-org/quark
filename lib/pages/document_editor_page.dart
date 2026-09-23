@@ -22,6 +22,7 @@ import 'package:quark/widgets/document_editor/highlight_picker_dialog.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 // ── Find shortcut ─────────────────────────────────────────────────────────────
 
@@ -612,98 +613,79 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   }
 
   List<Widget> _buildAppBarActions(BuildContext context) {
+    final tokens = QuarkTokens.of(context);
     return [
-      // In-document find bar (#1046)
-      IconButton(
-        icon: Icon(_showFindBar ? Icons.close : QuarkIcons.search_rounded),
-        tooltip: _showFindBar ? 'Close find bar' : 'Find in document (Ctrl+F)',
-        onPressed: _toggleFindBar,
-      ),
-      // Settings shortcut
-      IconButton(
-        icon: const Icon(QuarkIcons.settings_outlined),
-        tooltip: 'Settings',
-        onPressed: () => context.go(AppRoutes.settings),
-      ),
-      const AppThemeToggle(),
-      // Auto-save toggle (only relevant in edit mode)
-      if (!_isReadOnly)
-        IconButton(
-          icon: Icon(
-            _autoSaveEnabled
-                ? QuarkIcons.cloud_sync_outlined
-                : QuarkIcons.cloud_off_outlined,
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: QuarkTokens.of(context).spacingSm,
+        children: [
+          // In-document find bar (#1046)
+          QuarkBarIconButton(
+            key: const ValueKey('document_editor_find'),
+            icon: _showFindBar
+                ? QuarkIcons.close_rounded
+                : QuarkIcons.search_rounded,
+            tooltip: _showFindBar
+                ? 'Close find bar'
+                : 'Find in document (Ctrl+F)',
+            onPressed: _toggleFindBar,
           ),
-          tooltip: _autoSaveEnabled ? 'Auto-save on' : 'Auto-save off',
-          onPressed: () => _setAutoSaveEnabled(!_autoSaveEnabled),
-        ),
-      // Overflow menu
-      if (_exporting)
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
-          child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        )
-      else
-        IconButton(
-          icon: const Icon(QuarkIcons.more_horiz),
-          tooltip: 'More options',
-          onPressed: () => _showOverflowMenu(context),
-        ),
-      // Save button (only in edit mode)
-      if (!_isReadOnly)
-        if (_saving)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+          // Auto-save toggle (only relevant in edit mode)
+          if (!_isReadOnly)
+            QuarkBarIconButton(
+              key: const ValueKey('document_editor_autosave'),
+              icon: _autoSaveEnabled
+                  ? QuarkIcons.cloud_sync_outlined
+                  : QuarkIcons.cloud_off_outlined,
+              tooltip: _autoSaveEnabled ? 'Auto-save on' : 'Auto-save off',
+              onPressed: () => _setAutoSaveEnabled(!_autoSaveEnabled),
             ),
-          )
-        else
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: FilledButton.icon(
-              onPressed: _dirty ? _saveDocument : null,
-              icon: const Icon(QuarkIcons.save_outlined, size: 16),
-              label: const Text('Save'),
-            ),
+          QuarkBarIconButton(
+            key: const ValueKey('document_editor_more'),
+            icon: QuarkIcons.more_vert,
+            tooltip: 'More options',
+            isBusy: _exporting,
+            onPressed: () => _showOverflowMenu(context),
           ),
-      // Edit / Done toggle button (#939) with glow hint (#940)
-      Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: _hintEditButton
-              ? BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.6),
-                      blurRadius: 12,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                )
-              : null,
-          child: _isReadOnly
-              ? FilledButton.icon(
-                  onPressed: _enterEditMode,
-                  icon: const Icon(QuarkIcons.edit_outlined, size: 16),
-                  label: const Text('Edit'),
-                )
-              : OutlinedButton.icon(
-                  onPressed: _exitEditMode,
-                  icon: const Icon(QuarkIcons.check, size: 16),
-                  label: const Text('Done'),
-                ),
-        ),
+          // Save (only in edit mode)
+          if (!_isReadOnly)
+            QuarkBarChip(
+              key: const ValueKey('document_editor_save'),
+              icon: QuarkIcons.save_outlined,
+              label: _saving ? 'Saving...' : 'Save',
+              onPressed: _dirty && !_saving ? _saveDocument : null,
+            ),
+          // Edit / Done toggle button (#939) with glow hint (#940)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            decoration: _hintEditButton
+                ? BoxDecoration(
+                    borderRadius: BorderRadius.circular(tokens.radiusLg),
+                    boxShadow: [
+                      BoxShadow(
+                        color: tokens.primary.withValues(alpha: 0.6),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  )
+                : null,
+            child: _isReadOnly
+                ? QuarkBarChip(
+                    key: const ValueKey('document_editor_edit'),
+                    icon: QuarkIcons.edit_outlined,
+                    label: 'Edit',
+                    onPressed: _enterEditMode,
+                  )
+                : QuarkBarChip(
+                    key: const ValueKey('document_editor_done'),
+                    icon: QuarkIcons.check,
+                    label: 'Done',
+                    onPressed: _exitEditMode,
+                  ),
+          ),
+          const AppThemeToggle(),
+        ],
       ),
     ];
   }

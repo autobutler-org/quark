@@ -10,6 +10,8 @@ import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/plaintext_editor/plaintext_editor_body.dart';
+import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// A simple plaintext editor for text-like files (txt, md, json, yaml, etc.)
 class PlaintextEditorPage extends StatefulWidget {
@@ -146,22 +148,19 @@ class _PlaintextEditorPageState extends State<PlaintextEditorPage> {
           title: Text(title),
           leading: BackButton(onPressed: canPop ? context.pop : leave),
           actions: [
-            if (_saving)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: QuarkTokens.of(context).spacingSm,
+              children: [
+                QuarkBarChip(
+                  key: const ValueKey('plaintext_editor_save'),
+                  icon: QuarkIcons.save_outlined,
+                  label: _saving ? 'Saving...' : 'Save',
+                  onPressed: _dirty && !_saving ? _saveFile : null,
                 ),
-              )
-            else
-              IconButton(
-                icon: const Icon(Icons.save_outlined),
-                tooltip: 'Save',
-                onPressed: _dirty ? _saveFile : null,
-              ),
-            const AppThemeToggle(),
+                const AppThemeToggle(),
+              ],
+            ),
           ],
         ),
         body: PlaintextEditorBody(
