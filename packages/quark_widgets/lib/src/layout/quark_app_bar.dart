@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../theme/quark_tokens.dart';
+import 'quark_app_bar_bottom.dart';
 import 'quark_app_bar_trailing.dart';
+import 'quark_bar_icon_button.dart';
 import 'quark_brand_button.dart';
 import 'refresh_icon_button.dart';
 
 /// The app bar every main page wears: a [QuarkBrandButton] on the left that
-/// opens the drawer, an optional refresh button beside it, no title, and the
-/// page's own actions on the right.
+/// opens the drawer, an optional refresh button beside it, no page title, and
+/// the page's own actions on the right, above a hairline.
 ///
 /// Refresh is a slot, not an action. Files has always kept its reload next to
 /// the navigation arrows while every other page buried it somewhere in
@@ -14,12 +17,19 @@ import 'refresh_icon_button.dart';
 /// [onRefresh] and [isRefreshing] instead of building one. There is no way to
 /// put it anywhere else, which is the point.
 ///
-/// The theme toggle is not built in. It reads the app's settings, so the page
-/// appends its own wired copy to [actions] and the package stays free of app
-/// state.
+/// Every action is a bar button — a [QuarkBarIconButton], a [QuarkBarChip],
+/// or a package widget built on one, such as the theme toggle and the jobs
+/// badge — so every page's actions share one shape and one glyph size
+/// (#2311). The theme toggle is not built in. It reads the app's settings, so
+/// the page appends its own wired copy to [actions] and the package stays
+/// free of app state.
 ///
 /// App-wide controls, such as a running-jobs badge, come from a
 /// [QuarkAppBarTrailing] scope and follow [actions].
+///
+/// [middle] fills the space between the leading slot and the actions, for a
+/// page whose bar holds more than buttons (Files' navigation and inline
+/// search). [bottom] adds a second row, usually a [QuarkAppBarBottom].
 ///
 /// Key prefixes: `brand_button`, from the [QuarkBrandButton] it renders, and
 /// `refresh_button`, from the [RefreshIconButton] it renders when [onRefresh]
@@ -44,12 +54,10 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.actions = const [],
     this.onRefresh,
     this.isRefreshing = false,
+    this.middle,
+    this.bottom,
     super.key,
   });
-
-  /// The gap between the brand button and what follows it, matching the one
-  /// the file browser's top bar leaves.
-  static const double _brandGap = 16;
 
   /// The page name shown in the brand button.
   final String label;
@@ -72,45 +80,86 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// further taps. Ignored when [onRefresh] is null.
   final bool isRefreshing;
 
+  /// Fills the bar between the refresh slot and [actions], and is what gives
+  /// way first when the bar is narrow. Null leaves that space empty.
+  final Widget? middle;
+
+  /// A second row below the bar. Null renders a single row.
+  final PreferredSizeWidget? bottom;
+
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize =>
+      Size.fromHeight(kToolbarHeight + (bottom?.preferredSize.height ?? 0));
 
   @override
   Widget build(BuildContext context) {
+    final tokens = QuarkTokens.of(context);
     final refresh = onRefresh;
-    return AppBar(
-      leadingWidth:
-          QuarkBrandButton.preferredWidth +
-          8 +
-          (refresh == null ? 0 : _brandGap + kMinInteractiveDimension),
-      leading: Builder(
-        builder: (ctx) => Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Flexible, so a page name longer than the slot is clipped by
-              // the brand button rather than overflowing the bar.
-              Flexible(
-                child: QuarkBrandButton(
-                  label: label,
-                  icon: icon,
-                  onTap: () => Scaffold.of(ctx).openDrawer(),
-                ),
-              ),
-              if (refresh != null) ...[
-                const SizedBox(width: _brandGap),
-                RefreshIconButton(
-                  isRefreshing: isRefreshing,
-                  onPressed: refresh,
-                ),
-              ],
-            ],
+    final trailing = [...actions, ...QuarkAppBarTrailing.of(context)];
+    final middle = this.middle;
+    final slotWidth =
+        QuarkBrandButton.preferredWidth +
+        (refresh == null ? 0 : tokens.spacingSm + QuarkBarIconButton.size);
+    Widget brandAndRefresh(BuildContext ctx) => Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: tokens.spacingSm,
+      children: [
+        // Flexible, so a page name longer than the slot is clipped by the
+        // brand button rather than overflowing the bar.
+        Flexible(
+          child: QuarkBrandButton(
+            label: label,
+            icon: icon,
+            onTap: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-      ),
-      title: null,
-      actions: [...actions, ...QuarkAppBarTrailing.of(context)],
+        if (refresh != null)
+          RefreshIconButton(isRefreshing: isRefreshing, onPressed: refresh),
+      ],
+    );
+    return AppBar(
+      shape: Border(bottom: BorderSide(color: tokens.border)),
+      automaticallyImplyLeading: false,
+      // Without a middle, the brand and refresh hold a fixed leading slot, so
+      // the brand stays whole however many actions a page has.
+      leadingWidth: middle == null ? tokens.spacingSm + slotWidth : null,
+      leading: middle == null
+          ? Builder(
+              builder: (ctx) => Padding(
+                padding: EdgeInsets.only(left: tokens.spacingSm),
+                child: brandAndRefresh(ctx),
+              ),
+            )
+          : null,
+      // With one, they share a row with it and take only the width the label
+      // needs, which is what leaves Files room for its navigation and search
+      // on a phone.
+      title: middle == null
+          ? null
+          : Builder(
+              builder: (ctx) => Row(
+                spacing: tokens.spacingSm,
+                children: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: slotWidth),
+                    child: brandAndRefresh(ctx),
+                  ),
+                  Expanded(child: middle),
+                ],
+              ),
+            ),
+      titleSpacing: tokens.spacingSm,
+      centerTitle: false,
+      actions: trailing.isEmpty
+          ? null
+          : [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: tokens.spacingSm,
+                children: trailing,
+              ),
+            ],
+      bottom: bottom,
     );
   }
 }

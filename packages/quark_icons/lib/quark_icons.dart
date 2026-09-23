@@ -230,6 +230,10 @@ class QuarkIcons {
   static const IconData copy = Icons.copy;
   static const IconData casino = Icons.casino;
   static const IconData delete_outline = Icons.delete_outline;
+  static const IconData delete_forever_outlined = Icons.delete_forever_outlined;
+  static const IconData restore = Icons.restore;
+  static const IconData drive_folder_upload_outlined =
+      Icons.drive_folder_upload_outlined;
   static const IconData link_outlined = Icons.link_outlined;
   static const IconData link_rounded = Icons.link_rounded;
   static const IconData link_off = Icons.link_off;

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../layout/quark_bar_icon_button.dart';
 import '../theme/quark_tokens.dart';
 
-/// A top-bar button counting the jobs running now. Renders nothing while
+/// A top bar [QuarkBarIconButton] counting the jobs running now. Renders nothing while
 /// [runningCount] is zero, so it only takes space when there is news.
 ///
 /// Key prefixes: `jobs_badge` on the button.
@@ -28,17 +29,17 @@ class JobsBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     if (runningCount <= 0) return const SizedBox.shrink();
     final tokens = QuarkTokens.of(context);
-    return IconButton(
-      key: const ValueKey('jobs_badge'),
-      tooltip: runningCount == 1
-          ? '1 job running'
-          : '$runningCount jobs running',
-      onPressed: onTap,
-      icon: Badge(
-        label: Text('$runningCount'),
-        backgroundColor: tokens.primary,
-        textColor: tokens.primaryForeground,
-        child: const Icon(QuarkIcons.pending_actions_outlined),
+    return Badge(
+      label: Text('$runningCount'),
+      backgroundColor: tokens.primary,
+      textColor: tokens.primaryForeground,
+      child: QuarkBarIconButton(
+        key: const ValueKey('jobs_badge'),
+        icon: QuarkIcons.pending_actions_outlined,
+        tooltip: runningCount == 1
+            ? '1 job running'
+            : '$runningCount jobs running',
+        onPressed: onTap,
       ),
     );
   }

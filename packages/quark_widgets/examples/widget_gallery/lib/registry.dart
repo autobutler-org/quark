@@ -236,6 +236,153 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkAppBarBottom',
+    group: 'Layout',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final width in const [1000.0, 360.0]) ...[
+          Text(
+            width >= QuarkAppBarBottom.collapseBreakpoint
+                ? 'wide: the actions sit in the row'
+                : 'narrow: they collapse into a labeled menu',
+          ),
+          const SizedBox(height: 8),
+          FramedViewport(
+            width: width,
+            height: 200,
+            child: Scaffold(
+              appBar: QuarkAppBar(
+                label: 'Files',
+                icon: QuarkIcons.folder_outlined,
+                bottom: QuarkAppBarBottom(
+                  lead: const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Home / Documents'),
+                  ),
+                  actions: [
+                    QuarkBarChip(
+                      icon: QuarkIcons.upload_rounded,
+                      label: 'Upload',
+                      onPressed: () => log('QuarkAppBarBottom action: Upload'),
+                    ),
+                    QuarkBarChip(
+                      icon: QuarkIcons.create_new_folder_outlined,
+                      label: 'New folder',
+                      onPressed: () =>
+                          log('QuarkAppBarBottom action: New folder'),
+                    ),
+                  ],
+                  menuChildren: [
+                    MenuItemButton(
+                      onPressed: () => log('QuarkAppBarBottom menu: List'),
+                      leadingIcon: const Icon(QuarkIcons.view_list_rounded),
+                      child: const Text('List'),
+                    ),
+                    MenuItemButton(
+                      onPressed: () => log('QuarkAppBarBottom menu: Grid'),
+                      leadingIcon: const Icon(QuarkIcons.grid_view_rounded),
+                      child: const Text('Grid'),
+                    ),
+                  ],
+                ),
+              ),
+              body: const SizedBox.shrink(),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkBarChip',
+    group: 'Layout',
+    build: (context, log) => Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        QuarkBarChip(
+          icon: QuarkIcons.upload_rounded,
+          label: 'Upload',
+          onPressed: () => log('QuarkBarChip(Upload).onPressed'),
+        ),
+        QuarkBarChip(
+          icon: QuarkIcons.folder_copy_outlined,
+          label: 'Unified',
+          tooltip: 'All your drives shown together',
+          active: true,
+          onPressed: () => log('QuarkBarChip(Unified).onPressed'),
+        ),
+        const QuarkBarChip(
+          icon: QuarkIcons.create_new_folder_outlined,
+          label: 'New folder',
+          onPressed: null,
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkBarIconButton',
+    group: 'Layout',
+    build: (context, log) => Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        QuarkBarIconButton(
+          icon: QuarkIcons.check_circle_outline,
+          tooltip: 'Select',
+          onPressed: () => log('QuarkBarIconButton(Select).onPressed'),
+        ),
+        QuarkBarIconButton(
+          icon: QuarkIcons.search_rounded,
+          tooltip: 'Search',
+          onPressed: () => log('QuarkBarIconButton(Search).onPressed'),
+        ),
+        QuarkBarIconButton(
+          icon: QuarkIcons.delete_outline,
+          tooltip: 'Delete',
+          destructive: true,
+          onPressed: () => log('QuarkBarIconButton(Delete).onPressed'),
+        ),
+        const QuarkBarIconButton(
+          icon: QuarkIcons.save_outlined,
+          tooltip: 'Saving',
+          isBusy: true,
+          onPressed: null,
+        ),
+        const QuarkBarIconButton(
+          icon: QuarkIcons.arrow_upward_rounded,
+          tooltip: 'Up one level',
+          onPressed: null,
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkBarSegmentedToggle',
+    group: 'Layout',
+    build: (context, log) => Align(
+      alignment: Alignment.centerLeft,
+      child: QuarkBarSegmentedToggle(
+        segments: const [
+          QuarkBarSegment(
+            id: 'list',
+            icon: QuarkIcons.view_list_rounded,
+            label: 'List',
+          ),
+          QuarkBarSegment(
+            id: 'grid',
+            icon: QuarkIcons.grid_view_rounded,
+            label: 'Grid',
+          ),
+        ],
+        selectedId: 'list',
+        onSelected: (id) => log('QuarkBarSegmentedToggle.onSelected($id)'),
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkBrandButton',
     group: 'Layout',
     build: (context, log) => Align(

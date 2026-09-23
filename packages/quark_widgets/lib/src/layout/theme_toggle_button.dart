@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:quark_icons/quark_icons.dart';
 
-/// An [IconButton] that switches the app between light and dark.
+import 'quark_bar_icon_button.dart';
+
+/// A [QuarkBarIconButton] that switches the app between light and dark.
 ///
 /// The current [mode] comes in and the chosen one goes out; the package never
 /// reads or writes the app's settings. From [ThemeMode.system] the button
@@ -31,28 +34,27 @@ class ThemeToggleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final IconData iconData;
-    final String tooltip;
-    final ThemeMode nextMode;
+    final (icon, tooltip, nextMode) = switch (mode) {
+      ThemeMode.light => (
+        QuarkIcons.dark_mode_rounded,
+        'Switch to dark mode',
+        ThemeMode.dark,
+      ),
+      ThemeMode.dark => (
+        QuarkIcons.light_mode_rounded,
+        'Switch to light mode',
+        ThemeMode.light,
+      ),
+      ThemeMode.system => (
+        QuarkIcons.brightness_auto_rounded,
+        'Switch to light mode',
+        ThemeMode.light,
+      ),
+    };
 
-    switch (mode) {
-      case ThemeMode.light:
-        iconData = Icons.dark_mode;
-        tooltip = 'Switch to dark mode';
-        nextMode = ThemeMode.dark;
-      case ThemeMode.dark:
-        iconData = Icons.light_mode;
-        tooltip = 'Switch to light mode';
-        nextMode = ThemeMode.light;
-      case ThemeMode.system:
-        iconData = Icons.brightness_auto;
-        tooltip = 'Switch to light mode';
-        nextMode = ThemeMode.light;
-    }
-
-    return IconButton(
+    return QuarkBarIconButton(
       key: const ValueKey('theme_toggle'),
-      icon: Icon(iconData),
+      icon: icon,
       tooltip: tooltip,
       onPressed: () => onChanged(nextMode),
     );

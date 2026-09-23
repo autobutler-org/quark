@@ -269,7 +269,12 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(
       tester
-          .widget<IconButton>(find.byKey(const ValueKey('refresh_button')))
+          .widget<IconButton>(
+            find.descendant(
+              of: find.byKey(const ValueKey('refresh_button')),
+              matching: find.byType(IconButton),
+            ),
+          )
           .onPressed,
       isNull,
     );
