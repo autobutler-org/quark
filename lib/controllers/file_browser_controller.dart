@@ -325,10 +325,19 @@ class FileBrowserController {
     return targetPath;
   }
 
+  /// Where opening [node] goes.
+  ///
+  /// A directory opens at [FileNode.apiPath], the path the listing already
+  /// gave it. Joining [node.name] onto [currentPath] repeats the segment when
+  /// the row is still the parent's (#2075). A file has no path of its own and
+  /// still joins its name onto [currentPath].
   String nextPathForOpenDirectory({
     required String currentPath,
     required FileNode node,
   }) {
+    if (node.isDir && node.apiPath.isNotEmpty) {
+      return normalizePath(node.apiPath);
+    }
     return joinPath(currentPath, node.name);
   }
 

@@ -68,6 +68,23 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
     currentAbsolutePath = currentAbsolutePath; // keep empty
   }
 
+  // Created on the first build for a path, not before the dialog is up.
+  // Starting the request earlier lets it fail with nobody listening: widget
+  // tests answer every HTTP call with 400, and that became an uncaught
+  // exception (#2075). Replaced only when the folder changes, so typing in
+  // the name does not start a new request and paint the previous rows.
+  Future<List<FileNode>>? filesFuture;
+  String? listedPath;
+
+  Future<List<FileNode>> listingFor(String path) {
+    final current = filesFuture;
+    if (listedPath != path || current == null) {
+      listedPath = path;
+      return filesFuture = controller.fetchFiles(path);
+    }
+    return current;
+  }
+
   // Only show device picker when there are multiple devices
   final showDevicePicker = devices.length > 1;
   StorageDevice? selectedDevice = devices.isNotEmpty ? devices.first : null;
@@ -81,34 +98,33 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
         bool hasInvalidChar = nameController.text.contains('/');
         return StatefulBuilder(
           builder: (context, setState) {
-            Future<List<FileNode>> filesFuture() {
-              return controller.fetchFiles(currentAbsolutePath);
+            void goTo(String path) {
+              if (path == currentAbsolutePath) return;
+              setState(() => currentAbsolutePath = path);
             }
 
             void openDirectory(FileNode node) {
               if (!node.isDir) return;
+              final next = controller.nextPathForOpenDirectory(
+                currentPath: currentAbsolutePath,
+                node: node,
+              );
               // Prevent opening the folder that's being moved into itself
               if (initialName != null && initialName.trim().isNotEmpty) {
                 final targetOfNode = normalizePath(
                   joinPath(startPath, initialName),
                 );
-                final candidate = normalizePath(
-                  joinPath(currentAbsolutePath, node.name),
-                );
-                if (candidate == targetOfNode) {
+                if (next == targetOfNode) {
                   // Do nothing to prevent selecting the node itself as a destination
                   return;
                 }
               }
-              setState(() {
-                currentAbsolutePath = joinPath(currentAbsolutePath, node.name);
-              });
+              if (next == currentAbsolutePath) return;
+              goTo(next);
             }
 
             void goUp() {
-              setState(() {
-                currentAbsolutePath = parentPath(currentAbsolutePath);
-              });
+              goTo(parentPath(currentAbsolutePath));
             }
 
             String relativeToStart() {
@@ -179,23 +195,16 @@ Future<MoveRenameResult?> promptForMoveRenamePath(
                     ],
                     FileBreadcrumbBar(
                       currentPath: currentAbsolutePath,
-                      onGoHome: () {
-                        setState(() {
-                          currentAbsolutePath = '';
-                        });
-                      },
+                      onGoHome: () => goTo(''),
                       onGoUp: goUp,
-                      onPathSelected: (path) {
-                        setState(() {
-                          currentAbsolutePath = path;
-                        });
-                      },
+                      onPathSelected: goTo,
                       isSearchMode: false,
                     ),
                     SizedBox(
                       height: 300,
                       child: FileBrowserView(
-                        filesFuture: filesFuture(),
+                        key: ValueKey(currentAbsolutePath),
+                        filesFuture: listingFor(currentAbsolutePath),
                         onFileMenuAction: (node, action) async {},
                         onOpenDirectory: openDirectory,
                         isGridView: false,
