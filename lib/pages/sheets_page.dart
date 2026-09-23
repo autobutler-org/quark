@@ -168,15 +168,11 @@ class _SheetsPageState extends State<SheetsPage>
         onRefresh: manualRefresh,
         isRefreshing: isRefreshing,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: 'New spreadsheet',
+          QuarkBarChip(
+            key: const ValueKey('sheets_new'),
+            icon: QuarkIcons.add_rounded,
+            label: 'New spreadsheet',
             onPressed: _createNewSheet,
-          ),
-          IconButton(
-            icon: const Icon(QuarkIcons.settings_outlined),
-            tooltip: 'Settings',
-            onPressed: () => context.go('/settings'),
           ),
           const AppThemeToggle(),
         ],

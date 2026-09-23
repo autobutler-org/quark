@@ -214,10 +214,10 @@ class _TrashPageState extends State<TrashPage>
                     // The whole trash, so only at its root: inside a folder
                     // it would read as emptying that folder.
                     if (location == null)
-                      IconButton(
+                      QuarkBarIconButton(
                         key: const ValueKey('trash_empty'),
                         tooltip: 'Empty trash',
-                        icon: const Icon(Icons.delete_forever_outlined),
+                        icon: QuarkIcons.delete_forever_outlined,
                         onPressed: (_controller.nodes?.isNotEmpty ?? false)
                             ? _emptyTrash
                             : null,
@@ -226,10 +226,10 @@ class _TrashPageState extends State<TrashPage>
                     // row; that gesture opens the row's menu now (#2245), so
                     // this button is the only way in. An empty trash has
                     // nothing to select.
-                    IconButton(
+                    QuarkBarIconButton(
                       key: const ValueKey('trash_select'),
-                      tooltip: 'Select items',
-                      icon: const Icon(QuarkIcons.check_circle_outline),
+                      tooltip: 'Select',
+                      icon: QuarkIcons.check_circle_outline,
                       onPressed: (_controller.nodes?.isNotEmpty ?? false)
                           ? _controller.enterSelection
                           : null,

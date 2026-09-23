@@ -528,6 +528,8 @@ Every page's top bar looks like Files' (#2311): bordered, filled buttons at one 
   first. One action has one icon and one tooltip everywhere: select is `check_circle_outline` / "Select".
 - **Every action has a tooltip and a `ValueKey`**, so it is readable on hover and reachable from a `.probe`
   script.
+- `test/widgets/app_bar_actions_style_test.dart` fails on a Material button or `Icons.` glyph in a bar's
+  `actions:`.
 - **No anonymous `⋮` on a drawer page.** Put the actions in the bar; when they do not fit a phone, a
   `QuarkAppBarBottom` row collapses them into a labeled menu at its breakpoint.
 

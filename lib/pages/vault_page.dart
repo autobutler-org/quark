@@ -127,6 +127,7 @@ class _VaultPageState extends State<VaultPage>
   @override
   Widget build(BuildContext context) {
     final unlocked = _status?.initialized == true && !(_status?.locked ?? true);
+    final showFab = unlocked && MediaQuery.of(context).size.width < 860;
     return Scaffold(
       appBar: QuarkAppBar(
         label: 'Vault',
@@ -136,57 +137,49 @@ class _VaultPageState extends State<VaultPage>
         isRefreshing: isRefreshing,
         actions: [
           if (unlocked) ...[
-            IconButton(
-              icon: const Icon(Icons.add),
-              tooltip: 'New entry',
-              onPressed: () => _showEntryEditor(context),
-            ),
-            IconButton(
-              icon: const Icon(QuarkIcons.lock_open),
+            // Below the floating button's breakpoint the button is the way
+            // in, and a second one in a full bar would crowd out the rest.
+            if (!showFab)
+              QuarkBarChip(
+                key: const ValueKey('vault_new_entry'),
+                icon: QuarkIcons.add_rounded,
+                label: 'New entry',
+                onPressed: () => _showEntryEditor(context),
+              ),
+            QuarkBarIconButton(
+              key: const ValueKey('vault_lock'),
+              icon: QuarkIcons.lock_open,
               tooltip: 'Lock vault',
               onPressed: _lockVault,
             ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
-              onSelected: (value) {
-                switch (value) {
-                  case 'import':
-                    _showImportDialog(context);
-                  case 'export_json':
-                    _doExport('json');
-                  case 'export_csv':
-                    _doExport('csv');
-                }
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(
-                  value: 'import',
-                  child: ListTile(
-                    leading: Icon(Icons.file_upload_outlined),
-                    title: Text('Import'),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
+            MenuAnchor(
+              menuChildren: [
+                MenuItemButton(
+                  key: const ValueKey('vault_import'),
+                  leadingIcon: const Icon(QuarkIcons.upload_rounded),
+                  onPressed: () => _showImportDialog(context),
+                  child: const Text('Import'),
                 ),
-                PopupMenuItem(
-                  value: 'export_json',
-                  child: ListTile(
-                    leading: Icon(Icons.file_download_outlined),
-                    title: Text('Export as JSON'),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
+                MenuItemButton(
+                  key: const ValueKey('vault_export_json'),
+                  leadingIcon: const Icon(QuarkIcons.download_outlined),
+                  onPressed: () => _doExport('json'),
+                  child: const Text('Export as JSON'),
                 ),
-                PopupMenuItem(
-                  value: 'export_csv',
-                  child: ListTile(
-                    leading: Icon(Icons.file_download_outlined),
-                    title: Text('Export as CSV'),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
+                MenuItemButton(
+                  key: const ValueKey('vault_export_csv'),
+                  leadingIcon: const Icon(QuarkIcons.download_outlined),
+                  onPressed: () => _doExport('csv'),
+                  child: const Text('Export as CSV'),
                 ),
               ],
+              builder: (context, controller, _) => QuarkBarIconButton(
+                key: const ValueKey('vault_more'),
+                icon: QuarkIcons.more_vert,
+                tooltip: 'Import and export',
+                onPressed: () =>
+                    controller.isOpen ? controller.close() : controller.open(),
+              ),
             ),
           ],
           const AppThemeToggle(),
@@ -194,8 +187,7 @@ class _VaultPageState extends State<VaultPage>
       ),
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.vault),
       body: _buildBody(),
-      floatingActionButton:
-          (unlocked && MediaQuery.of(context).size.width < 860)
+      floatingActionButton: showFab
           ? FloatingActionButton(
               onPressed: () => _showEntryEditor(context),
               child: const Icon(QuarkIcons.add),
