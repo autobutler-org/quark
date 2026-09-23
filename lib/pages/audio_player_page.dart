@@ -9,6 +9,8 @@ import 'package:quark/widgets/audio_player/audio_controls.dart';
 import 'package:quark/widgets/audio_player/error_view.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:video_player/video_player.dart';
+import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// Full-screen player for an audio file on the Quark.
 class AudioPlayerPage extends StatefulWidget {
@@ -137,18 +139,20 @@ class _AudioPlayerPageState extends State<AudioPlayerPage> {
       appBar: AppBar(
         title: Text(widget.name),
         actions: [
-          IconButton(
-            onPressed: _downloading ? null : _download,
-            icon: _downloading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.download_rounded),
-            tooltip: 'Download',
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: QuarkTokens.of(context).spacingSm,
+            children: [
+              QuarkBarIconButton(
+                key: const ValueKey('audio_player_download'),
+                icon: QuarkIcons.download_outlined,
+                tooltip: 'Download',
+                isBusy: _downloading,
+                onPressed: _download,
+              ),
+              const AppThemeToggle(),
+            ],
           ),
-          const AppThemeToggle(),
         ],
       ),
       body: Center(

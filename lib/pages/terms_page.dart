@@ -3,6 +3,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/terms/agree_button.dart';
 import 'package:quark/widgets/terms/terms_summary.dart';
 import 'package:quark/widgets/terms/terms_section.dart';
+import 'package:quark/widgets/layout/theme_toggle_button.dart';
 
 /// Terms and Conditions acceptance gate.
 ///
@@ -16,7 +17,10 @@ class TermsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Terms & Conditions')),
+      appBar: AppBar(
+        title: const Text('Terms & Conditions'),
+        actions: const [AppThemeToggle()],
+      ),
       body: Column(
         children: [
           Expanded(

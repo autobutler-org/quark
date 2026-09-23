@@ -6,6 +6,7 @@ import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/vault/entry_detail_view.dart';
 import 'package:quark/widgets/vault/entry_edit_form.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The page for one vault entry, from which it can be edited or deleted.
 class EntryDetailPage extends StatefulWidget {
@@ -63,19 +64,34 @@ class _EntryDetailPageState extends State<EntryDetailPage> {
       appBar: AppBar(
         title: Text(_editing ? 'Edit Entry' : widget.entry.name),
         actions: [
-          if (!_editing)
-            IconButton(
-              icon: const Icon(QuarkIcons.edit),
-              onPressed: () => setState(() => _editing = true),
-            ),
-          if (!_editing)
-            IconButton(
-              icon: const Icon(QuarkIcons.delete_outline),
-              onPressed: _confirmDelete,
-            ),
-          if (_editing)
-            TextButton(onPressed: _saveEntry, child: const Text('Save')),
-          const AppThemeToggle(),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: QuarkTokens.of(context).spacingSm,
+            children: [
+              if (!_editing) ...[
+                QuarkBarIconButton(
+                  key: const ValueKey('vault_entry_edit'),
+                  icon: QuarkIcons.edit_outlined,
+                  tooltip: 'Edit entry',
+                  onPressed: () => setState(() => _editing = true),
+                ),
+                QuarkBarIconButton(
+                  key: const ValueKey('vault_entry_delete'),
+                  icon: QuarkIcons.delete_outline,
+                  tooltip: 'Delete entry',
+                  destructive: true,
+                  onPressed: _confirmDelete,
+                ),
+              ] else
+                QuarkBarChip(
+                  key: const ValueKey('vault_entry_save'),
+                  icon: QuarkIcons.save_outlined,
+                  label: 'Save',
+                  onPressed: _saveEntry,
+                ),
+              const AppThemeToggle(),
+            ],
+          ),
         ],
       ),
       body: SingleChildScrollView(

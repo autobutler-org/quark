@@ -7,8 +7,16 @@ import 'package:flutter_test/flutter_test.dart';
 /// Material `Icons.` glyph, in a bar's actions is how the same action ended
 /// up with a different shape, size and icon on every page.
 void main() {
-  /// The bars whose `actions:` this test reads.
-  final bar = RegExp(r'\b(QuarkAppBar|QuarkPageScaffold)\(');
+  /// The bars whose `actions:` this test reads: the drawer pages' and every
+  /// detail, editor and viewer page's.
+  final bar = RegExp(r'\b(QuarkAppBar|QuarkPageScaffold|AppBar)\(');
+
+  /// Bars allowed an exception, each with the reason.
+  const exempt = {
+    // The trim mode's Save Clip and Cancel stay text buttons, as #2313 left
+    // them; the rest of this bar follows the rule.
+    'lib/pages/video_viewer_page.dart',
+  };
 
   final offender = RegExp(
     r'\bIconButton\(|\bTextButton(\.icon)?\(|\bFilledButton(\.icon)?\('
@@ -49,6 +57,7 @@ void main() {
     final offenders = <String>[];
     for (final entity in Directory('lib').listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
+      if (exempt.contains(entity.path)) continue;
       final source = entity.readAsStringSync();
       for (final match in bar.allMatches(source)) {
         final actions = actionsOf(balanced(source, match.end - 1));
