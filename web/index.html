@@ -166,57 +166,79 @@
         color: var(--quark-muted);
       }
 
-      #quark-splash .quark-progress {
-        width: 180px;
-        max-width: 60vw;
-        height: 3px;
-        border-radius: 999px;
-        background-color: var(--quark-border);
-        overflow: hidden;
+      /*
+        The Atom loader from loading.dev (loading-dev 0.3.4, MIT (c) 2026
+        Jakub Krehel), ported to plain CSS: a shell with three rings tilted
+        60deg apart, each spinning a third of a turn behind the last. 36px
+        matches QuarkLoader's default, the footprint of a
+        CircularProgressIndicator.
+      */
+      #quark-splash .quark-atom {
+        position: relative;
+        width: 36px;
+        height: 36px;
+        color: var(--quark-primary);
       }
 
-      #quark-splash .quark-progress span {
-        display: block;
-        width: 30%;
-        height: 100%;
-        border-radius: inherit;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          var(--quark-primary),
-          transparent
-        );
-        animation: quark-progress-beam 1.2s ease-in-out infinite alternate;
+      #quark-splash .quark-atom-shell {
+        position: absolute;
+        inset: 0;
+        box-sizing: border-box;
+        border: 1.98px solid var(--quark-border);
+        border-radius: 9999px;
       }
 
-      /* A beam that sweeps to the far edge and bounces back. 70% of the bar
-         left over is 233% of the beam's own 30% width. */
-      @keyframes quark-progress-beam {
-        from {
-          transform: translateX(0);
-        }
+      #quark-splash .quark-atom-orbit {
+        position: absolute;
+        inset: 0;
+        transform-style: preserve-3d;
+        transform: rotate(calc(var(--quark-atom-index) * 60deg)) rotateX(90deg);
+      }
+
+      #quark-splash .quark-atom-spin {
+        position: absolute;
+        inset: 0;
+        transform-style: preserve-3d;
+        transform-origin: center;
+        animation: quark-atom-rotate 1000ms linear infinite;
+        animation-delay: calc(1000ms * (var(--quark-atom-index) - 3) / 3);
+      }
+
+      #quark-splash .quark-atom-ring {
+        position: absolute;
+        inset: 0;
+        box-sizing: border-box;
+        border: 1.62px solid currentColor;
+        border-radius: 9999px;
+        transform: rotateX(90deg);
+      }
+
+      @keyframes quark-atom-rotate {
         to {
-          transform: translateX(233.34%);
+          transform: rotate(360deg);
         }
       }
 
       /*
-        A wait is reassuring; a moving bar for someone who asked for stillness
-        is not. The bar fills in place and pulses instead of sweeping.
+        A wait is reassuring; a spinning atom for someone who asked for
+        stillness is not. The rings hold still and the loader pulses instead.
       */
       @media (prefers-reduced-motion: reduce) {
         #quark-splash {
           transition: none;
         }
 
-        #quark-splash .quark-progress span {
-          animation: quark-progress-pulse 1.6s ease-in-out infinite alternate;
-          width: 100%;
-          background: var(--quark-primary);
+        #quark-splash .quark-atom {
+          animation: quark-atom-pulse 1.6s ease-in-out infinite alternate;
+        }
+
+        #quark-splash .quark-atom-spin {
+          animation: none;
+          transform: rotate(60deg);
         }
       }
 
-      @keyframes quark-progress-pulse {
+      @keyframes quark-atom-pulse {
         from {
           opacity: 0.25;
         }
@@ -241,7 +263,18 @@
       />
       <div class="quark-wordmark">Quark</div>
       <div class="quark-status">Starting your Quark…</div>
-      <div class="quark-progress" aria-hidden="true"><span></span></div>
+      <div class="quark-atom" aria-hidden="true">
+        <div class="quark-atom-shell"></div>
+        <div class="quark-atom-orbit" style="--quark-atom-index: 0">
+          <div class="quark-atom-spin"><div class="quark-atom-ring"></div></div>
+        </div>
+        <div class="quark-atom-orbit" style="--quark-atom-index: 1">
+          <div class="quark-atom-spin"><div class="quark-atom-ring"></div></div>
+        </div>
+        <div class="quark-atom-orbit" style="--quark-atom-index: 2">
+          <div class="quark-atom-spin"><div class="quark-atom-ring"></div></div>
+        </div>
+      </div>
     </div>
 
     <!--
