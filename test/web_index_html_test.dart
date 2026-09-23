@@ -51,6 +51,20 @@ void main() {
       expect(html, contains('background-color: var(--quark-background);'));
     });
 
+    /// #2341: the splash followed only the OS, so a user who picked Light or
+    /// Dark in Settings saw the other one until Flutter painted. The choice
+    /// lives in `localStorage` under shared_preferences' `flutter.` prefix,
+    /// and has to be read before the splash markup is parsed.
+    test('follows the saved theme before it paints', () {
+      final html = flattened();
+      final read = html.indexOf("localStorage.getItem(\"flutter.themeMode\")");
+
+      expect(read, isNonNegative);
+      expect(read, lessThan(html.indexOf('id="quark-splash"')));
+      expect(html, contains(':root[data-theme="light"]'));
+      expect(html, contains('name="theme-color"'));
+    });
+
     test('leaves on the engine first frame, not a timer', () {
       final html = flattened();
 
