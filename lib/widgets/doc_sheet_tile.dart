@@ -21,12 +21,17 @@ class DocSheetTile extends StatelessWidget {
   final String? snippet;
   final VoidCallback onTap;
 
+  /// Offered from the row's menu, keyed `doc_sheet_menu_<relPath>` and
+  /// `doc_sheet_rename_<relPath>`. With none the row has no menu.
+  final VoidCallback? onRename;
+
   const DocSheetTile({
     required this.relPath,
     required this.deviceName,
     required this.showDevice,
     required this.onTap,
     this.snippet,
+    this.onRename,
     super.key,
   });
 
@@ -105,6 +110,21 @@ class DocSheetTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: subtitleStyle,
                   ),
+              ],
+            ),
+      trailing: onRename == null
+          ? null
+          : PopupMenuButton<VoidCallback>(
+              key: ValueKey('doc_sheet_menu_$relPath'),
+              tooltip: 'More',
+              icon: const Icon(Icons.more_vert),
+              onSelected: (action) => action(),
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  key: ValueKey('doc_sheet_rename_$relPath'),
+                  value: onRename,
+                  child: const Text('Rename'),
+                ),
               ],
             ),
       onTap: onTap,

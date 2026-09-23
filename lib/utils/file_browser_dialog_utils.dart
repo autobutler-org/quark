@@ -443,12 +443,15 @@ Future<String?> _promptForText({
 /// the name flat is what makes "the path we navigate to" and "the path the
 /// backend wrote" the same string.
 ///
+/// [initialName] prefills the field, for renaming.
+///
 /// Returns the trimmed name, or null when cancelled or left empty.
 Future<String?> promptForNewFileName(
   BuildContext context, {
   required String title,
   required String hintText,
   String confirmLabel = 'Create',
+  String initialName = '',
 }) async {
   await Future<void>.delayed(Duration.zero);
   if (!context.mounted) {
@@ -459,6 +462,7 @@ Future<String?> promptForNewFileName(
     context,
     useRootNavigator: true,
     builder: (dialogContext) => TextControllerScope(
+      initialText: initialName,
       builder: (_, nameController) {
         bool hasInvalidChar = false;
         return StatefulBuilder(
