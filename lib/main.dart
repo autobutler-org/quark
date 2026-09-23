@@ -8,16 +8,17 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/local_trust_overrides_stub.dart'
     if (dart.library.io) 'package:quark/services/local_trust_overrides_io.dart';
+import 'package:quark/utils/first_frame_gate.dart';
 import 'package:quark/widgets/jobs/job_finish_announcer.dart';
 import 'package:quark/widgets/jobs/jobs_badge_host.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/probe_bootstrap.dart';
 
 /// Loads the saved settings, trusts the local Quark's self-signed certificate, starts the jobs watcher, and runs
-/// the app.
+/// the app, holding its first frame until the router has a page to show.
 Future<void> main() async {
   usePathUrlStrategy();
-  WidgetsFlutterBinding.ensureInitialized();
+  final binding = WidgetsFlutterBinding.ensureInitialized();
   await maybeStartProbeAgent();
   await AppSettings.instance.load();
   // Quarks on the local network serve self-signed certificates. Install the
@@ -26,6 +27,7 @@ Future<void> main() async {
   // Finish announcements and the jobs list outlive every page.
   JobsController.instance.start();
   AuthService.watchAccount();
+  deferFirstFrameUntilRouted(binding, router.routerDelegate);
   runApp(const QuarkApp());
 }
 
