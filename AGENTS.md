@@ -184,6 +184,19 @@ When a change genuinely needs the database:
    `NNN_description.down.sql` (golang-migrate).
 2. Add or edit the query in `sql/queries/`.
 3. Run `make generate/backend/sqlc` and commit the regenerated `internal/db/*.sql.go`.
+### OS image changes are a last resort
+
+- Change the device image (`autobutler-org/armbian-build`) only as an absolute last resort. Before adding
+  something there, show why the backend cannot do the job.
+- Let the backend set itself up. `quark install` runs as root on every service start, so it owns system files,
+  drop-ins, users, and service registrations; the running server handles everything else.
+- Install-time setup is versioned with the code, reapplied after every self-update, and reaches devices already
+  in the field. An image change reaches only freshly flashed devices, is invisible to this repository, and
+  whatever it writes goes stale.
+- The image keeps what Quark cannot do for itself: the kernel, board support, base packages Quark depends on
+  (installing `avahi-daemon`, say), and first boot before the `quark` binary exists.
+
+See #2312: the DNS-SD service file baked into the image moved into `quark install`.
 
 ### SQL goes through sqlc
 
