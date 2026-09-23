@@ -43,6 +43,29 @@ void main() {
     expect(find.text("0 results for 'invoice'"), findsOneWidget);
   });
 
+  testBothViewports('says it is searching while the query is pending', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      const FileBrowserHeader(
+        isSearchMode: true,
+        isPending: true,
+        searchQuery: 'mountain',
+        resultCount: 4,
+      ),
+      size: size,
+    );
+
+    expect(find.text("Searching for 'mountain'…"), findsOneWidget);
+    expect(find.textContaining('result'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('file_header_close_search')),
+      findsOneWidget,
+    );
+  });
+
   testBothViewports('leaves search through its callback', (tester, size) async {
     var closes = 0;
     await pumpAt(

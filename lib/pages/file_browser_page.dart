@@ -140,6 +140,12 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   Future<List<FileNode>>? _searchFuture;
   String? _searchQuery;
 
+  /// Trimmed text in the search field, including `''` when it is clear.
+  ///
+  /// Updated before the debounced search, so the banner can follow the field
+  /// while [_searchQuery] is still the previous one (#2098).
+  String _searchDraft = '';
+
   // Multi-select / batch delete state (#986)
   bool _selectionMode = false;
   final Set<String> _selectedPaths = {};
@@ -247,9 +253,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
     _archiveContext = null;
     _routeFailure = null;
-    _isSearchMode = false;
-    _searchFuture = null;
-    _searchQuery = null;
+    _clearSearchState();
     _currentPath = normalized;
     // Only a requested path can name a file. The landing path is a folder, so
     // resolving it would cost a stat call that can only answer "directory".
@@ -1639,9 +1643,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         subPath: '',
         archiveSerial: node.deviceSerial,
       );
-      _isSearchMode = false;
-      _searchFuture = null;
-      _searchQuery = null;
+      _clearSearchState();
       _reloadFiles();
     });
   }
@@ -1670,31 +1672,50 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     });
   }
 
+  void _handleSearchDraft(String query) {
+    if (query == _searchDraft) {
+      return;
+    }
+    setState(() => _searchDraft = query);
+  }
+
   void _handleSearchChanged(String query) {
+    // The field may have been cleared while this debounce was in flight.
+    // Starting the search anyway would bring the banner back for a query the
+    // user already dismissed.
+    if (_searchDraft != query) {
+      return;
+    }
     setState(() {
       _isSearchMode = true;
       _searchFuture = FilesService.searchFiles(query);
       _searchQuery = query;
+      // Keep the draft on the query this search is for, so a completed future
+      // does not leave the banner pending.
+      _searchDraft = query;
     });
   }
 
   void _handleSearchClosed() {
-    setState(() {
-      _isSearchMode = false;
-      _searchFuture = null;
-      _searchQuery = null;
-    });
+    setState(_clearSearchState);
+  }
+
+  /// Drops search mode and the query still being typed.
+  ///
+  /// The draft has to go too: a non-empty one that outlives [_searchQuery]
+  /// keeps the banner on "searching" after the field is gone (#2098).
+  void _clearSearchState() {
+    _isSearchMode = false;
+    _searchFuture = null;
+    _searchQuery = null;
+    _searchDraft = '';
   }
 
   void _navigateToFolder(FileNode node) {
     // Use the node's API path to determine the containing folder and switch to it.
     final parent = parentPath(node.apiPath);
     _setPath(parent);
-    setState(() {
-      _isSearchMode = false;
-      _searchFuture = null;
-      _searchQuery = null;
-    });
+    setState(_clearSearchState);
   }
 
   void _goUpOneLevel() {
@@ -1761,9 +1782,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
     if (_currentPath == _landingPath) {
       setState(() {
-        _isSearchMode = false;
-        _searchFuture = null;
-        _searchQuery = null;
+        _clearSearchState();
         _activeDevicePaths = _allDevices.map((d) => d.devicePath).toSet();
         _reloadFiles();
       });
@@ -2245,6 +2264,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   @override
   Widget build(BuildContext context) {
     final routeFailure = _routeFailure;
+    // Typing counts as search for the chrome. Otherwise closing the banner
+    // while the debounce is still running cannot collapse the field, and the
+    // deferred search comes back (#2098).
+    final searchActive = _isSearchMode || _searchDraft.isNotEmpty;
     return Scaffold(
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.files),
       body: Column(
@@ -2276,7 +2299,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                 // nothing is out of reach there.
                 rootPath: archive != null ? '' : _landingPath,
                 isGridView: _isGridView,
-                isSearchMode: _isSearchMode,
+                isSearchMode: searchActive,
                 isUploading: _isUploading,
                 isCreatingFolder: _isCreatingFolder,
                 disableNavigation: disableNavigation,
@@ -2289,6 +2312,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                 onToggleUnifiedView: () =>
                     setState(() => _isUnifiedView = !_isUnifiedView),
                 onSearchChanged: _handleSearchChanged,
+                onSearchDraft: _handleSearchDraft,
                 onSearchClosed: _handleSearchClosed,
                 onRefresh: _refreshFileState,
                 onUploadPressed: _handleUploadPressed,
@@ -2332,7 +2356,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
               );
             },
           ),
-          if (!_selectionMode && !_isSearchMode && !_noHostSelected)
+          if (!_selectionMode && !searchActive && !_noHostSelected)
             FileShortcutBar(
               shortcuts: [for (final s in _shortcuts) s.key],
               onSelected: (id) {
@@ -2348,23 +2372,30 @@ class _FileBrowserPageState extends State<FileBrowserPage>
             future: _isSearchMode
                 ? (_searchFuture ?? Future.value(const <FileNode>[]))
                 : _filesFuture,
-            builder: (context, snapshot) => FileBrowserHeader(
-              isSearchMode: _isSearchMode,
-              resultCount: snapshot.data?.length,
-              searchQuery: _searchQuery,
-              onClose: () {
-                setState(() {
-                  _isSearchMode = false;
-                  _searchFuture = null;
-                  _searchQuery = null;
-                  _reloadFiles();
-                });
-              },
-            ),
+            builder: (context, snapshot) {
+              // The field can be ahead of [_searchQuery], and a finished
+              // future still carries the previous count. Either one is pending.
+              final pending =
+                  (_searchDraft.isNotEmpty && _searchDraft != _searchQuery) ||
+                  (_isSearchMode &&
+                      snapshot.connectionState != ConnectionState.done);
+              return FileBrowserHeader(
+                isSearchMode: _isSearchMode || pending,
+                isPending: pending,
+                resultCount: pending ? null : snapshot.data?.length,
+                searchQuery: pending ? _searchDraft : _searchQuery,
+                onClose: () {
+                  setState(() {
+                    _clearSearchState();
+                    _reloadFiles();
+                  });
+                },
+              );
+            },
           ),
 
           // Hide Recent Files on mobile — show only on tablet/desktop (#959).
-          if (!_isSearchMode &&
+          if (!searchActive &&
               _currentPath == _landingPath &&
               !_noHostSelected &&
               MediaQuery.sizeOf(context).width >= 600)
