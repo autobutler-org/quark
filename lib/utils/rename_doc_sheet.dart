@@ -47,8 +47,9 @@ Future<String?> renameDocOrSheet(
         normalizePath(other.apiPath).toLowerCase() == newPath,
   );
   if (taken) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text(Errors.fileNameTaken)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text(Errors.fileNameTaken)));
     return null;
   }
 
