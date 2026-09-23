@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
+import 'package:quark/services/quark_discovery.dart';
+import 'package:quark/widgets/nearby_quarks.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark/utils/error_text.dart';
 
@@ -9,17 +11,24 @@ import 'package:quark/utils/error_text.dart';
 ///
 /// Shown wherever the app has no host configured at all — the login page
 /// (#1639) and the file browser's first-run state.
+///
+/// On iOS and Android it also lists the Quarks found on the local network
+/// (#2312); tapping one fills in its address. Typing one stays the fallback.
 class QuarkConnectForm extends StatefulWidget {
   const QuarkConnectForm({
     super.key,
     required this.onConnected,
     this.autofocus = true,
+    this.browse,
   });
 
   /// Fired once the address has been saved as the active host.
   final VoidCallback onConnected;
 
   final bool autofocus;
+
+  /// Passed to [NearbyQuarks]; a test passes a fake browser.
+  final QuarkBrowser? browse;
 
   @override
   State<QuarkConnectForm> createState() => _QuarkConnectFormState();
@@ -104,7 +113,15 @@ class _QuarkConnectFormState extends State<QuarkConnectForm> {
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
+        NearbyQuarks(
+          browse: widget.browse,
+          onSelect: (quark) => setState(() {
+            _controller.text = quark.hostAddress;
+            _error = null;
+          }),
+        ),
+        const SizedBox(height: 16),
         TextField(
           controller: _controller,
           autofocus: widget.autofocus,

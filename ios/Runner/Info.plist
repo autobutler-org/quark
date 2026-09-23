@@ -35,8 +35,12 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Quark can take a photo with the camera when you pick a file to upload to your Quark server.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_quark._tcp</string>
+	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Quark connects to your Quark server on your local network to browse files, photos, and device settings.</string>
+	<string>Quark finds Quark servers on your local network and connects to them to browse files, photos, and device settings.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Quark reads the location stored in your photos so it can show where they were taken; it never tracks your location.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

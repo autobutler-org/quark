@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
+import 'package:quark/services/quark_discovery.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/widgets/nearby_quarks.dart';
 
 /// Add/edit dialog for a single Quark.
 ///
@@ -22,11 +24,23 @@ import 'package:quark/utils/quark_widget.dart';
 /// (#2032). A failed check keeps the dialog open on the address that failed,
 /// because a typo is the likeliest reason; the second press saves it anyway,
 /// for the Quark that is simply switched off right now.
+///
+/// On iOS and Android it also lists the Quarks found on the local network
+/// (#2312); tapping one fills in its address, and its name when the nickname
+/// is still empty.
 class HostDialog extends StatefulWidget {
-  const HostDialog({super.key, required this.isEdit, this.initial});
+  const HostDialog({
+    super.key,
+    required this.isEdit,
+    this.initial,
+    this.browse,
+  });
 
   final bool isEdit;
   final HostEntry? initial;
+
+  /// Passed to [NearbyQuarks]; a test passes a fake browser.
+  final QuarkBrowser? browse;
 
   @override
   State<HostDialog> createState() => _HostDialogState();
@@ -86,16 +100,28 @@ class _HostDialogState extends State<HostDialog> {
     Navigator.of(context).pop(entry);
   }
 
+  /// Fills the form from a Quark found on the network. A nickname already
+  /// typed is kept.
+  void _pickDiscovered(HostEntry quark) {
+    if (_name.text.trim().isEmpty) _name.text = quark.name;
+    _address.text = quark.hostAddress;
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     return QuarkWidget.alertDialog(
       title: Text(widget.isEdit ? 'Edit Quark' : 'Add Quark'),
+      // The found Quarks make the content taller than a short screen.
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          NearbyQuarks(browse: widget.browse, onSelect: _pickDiscovered),
+          const SizedBox(height: 8),
           QuarkWidget.textField(
             controller: _name,
             autofocus: true,
