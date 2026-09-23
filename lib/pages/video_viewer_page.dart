@@ -370,23 +370,14 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
               ),
             )
           else if (_trimMode) ...[
-            TextButton(
-              onPressed: _exportTrim,
-              child: const Text(
-                'Save Clip',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
+            TextButton(onPressed: _exportTrim, child: const Text('Save Clip')),
             TextButton(
               onPressed: () => setState(() {
                 _trimMode = false;
                 _trimStart = 0.0;
                 _trimEnd = 1.0;
               }),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: Colors.white70),
-              ),
+              child: const Text('Cancel'),
             ),
           ] else if (!_savingFrame)
             PopupMenuButton<String>(
