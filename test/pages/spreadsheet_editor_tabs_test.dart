@@ -1,11 +1,16 @@
 import 'dart:convert';
+import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:data_table/data_sheet.dart';
+import 'package:data_table/data_table.dart' show DataCell;
+import 'package:flutter/material.dart' hide DataCell;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quark/pages/spreadsheet_editor_page.dart';
+import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -46,7 +51,11 @@ void main() {
       ],
     });
     sharedHttpClientFactory = () => MockClient((request) async {
-      if (request.method == 'GET') return http.Response(sheet, 200);
+      // The editor downloads the sheet and, to rename it, lists its folder.
+      if (request.url.path.endsWith('/download')) {
+        return http.Response(sheet, 200);
+      }
+      if (request.method == 'GET') return http.Response('[]', 200);
       return http.Response('{}', 200);
     });
     resetSharedHttpClient();
@@ -140,4 +149,108 @@ void main() {
     expect(find.byKey(const ValueKey('sheet_tab_1')), findsNothing);
     await expectPendingSave(tester);
   });
+
+  String location(GoRouter router) =>
+      router.routeInformationProvider.value.uri.toString();
+
+  Future<GoRouter> pumpRoutedEditor(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final router = GoRouter(
+      initialLocation: AppRoutes.sheetFile('reports/budget.qsheet'),
+      routes: [
+        GoRoute(
+          path: '${AppRoutes.sheets}/:path(.*)',
+          builder: (_, state) => SpreadsheetEditorPage(
+            filePath: state.pathParameters['path'] ?? '',
+            deviceSerial: state.uri.queryParameters['serial'] ?? '',
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+    return router;
+  }
+
+  testWidgets('the title offers rename, and cancel leaves the sheet', (
+    tester,
+  ) async {
+    final router = await pumpRoutedEditor(tester);
+
+    expect(find.byKey(const ValueKey('sheet_rename_title')), findsOneWidget);
+    expect(find.byTooltip('Rename'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('sheet_rename_title')));
+    await tester.pumpAndSettle();
+    expect(find.text('Rename spreadsheet'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Rename spreadsheet'), findsNothing);
+    expect(location(router), AppRoutes.sheetFile('reports/budget.qsheet'));
+    expect(find.text('budget.qsheet'), findsOneWidget);
+  });
+
+  testWidgets('renaming the title follows the new name', (tester) async {
+    final router = await pumpRoutedEditor(tester);
+
+    await tester.tap(find.byKey(const ValueKey('sheet_rename_title')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'forecast',
+    );
+    await tester.tap(find.widgetWithText(TextButton, 'Rename'));
+    await tester.pumpAndSettle();
+
+    expect(location(router), AppRoutes.sheetFile('reports/forecast.qsheet'));
+    expect(find.text('forecast.qsheet'), findsOneWidget);
+    expect(find.text('budget.qsheet'), findsNothing);
+  });
+
+  testWidgets('a failed save does not rename', (tester) async {
+    final router = await pumpRoutedEditor(tester);
+    // The save upload opens its own client, so the mock never sees it. Refuse
+    // that connection instead of hoping nothing is listening on the port.
+    final previous = HttpOverrides.current;
+    HttpOverrides.global = _RefuseHttp();
+    addTearDown(() => HttpOverrides.global = previous);
+
+    tester
+        .widget<DataSheet>(find.byType(DataSheet))
+        .controller!
+        .updateCell(0, 0, DataCell('x'));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('sheet_rename_title')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Rename spreadsheet'), findsNothing);
+    expect(
+      find.text(
+        Errors.message(http.ClientException('refused'), 'save the sheet'),
+      ),
+      findsOneWidget,
+    );
+    expect(location(router), AppRoutes.sheetFile('reports/budget.qsheet'));
+  });
+}
+
+/// Real sockets fail immediately. The editor's upload does not use the shared
+/// test client, so this is what makes a save fail without a live Quark.
+class _RefuseHttp extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..connectionFactory = (uri, proxyHost, proxyPort) {
+        throw const SocketException('refused');
+      };
+  }
 }

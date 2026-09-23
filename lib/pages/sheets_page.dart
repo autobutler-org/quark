@@ -126,7 +126,7 @@ class _SheetsPageState extends State<SheetsPage>
       node,
       siblings: [..._files, ..._docs],
     );
-    if (renamed) manualRefresh();
+    if (renamed != null) manualRefresh();
   }
 
   Future<void> _createNewSheet() async {

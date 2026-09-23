@@ -126,7 +126,7 @@ class _DocsPageState extends State<DocsPage>
       node,
       siblings: [..._files, ..._sheets],
     );
-    if (renamed) manualRefresh();
+    if (renamed != null) manualRefresh();
   }
 
   Future<void> _createNewDoc() async {

@@ -1,11 +1,19 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:quark/models/file_node.dart';
+import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/content_search_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/widgets/docs/docs_body.dart';
 import 'package:quark/widgets/sheets/sheets_body.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// #2056: a sheet or doc could only be renamed from Files → Move/Rename.
 void main() {
@@ -120,7 +128,7 @@ void main() {
   });
 
   group('renameDocOrSheet', () {
-    final outcome = <bool>[];
+    final outcome = <String?>[];
 
     Future<void> open(
       WidgetTester tester,
@@ -159,7 +167,18 @@ void main() {
       // An unchanged name is not a rename.
       await tester.tap(find.text('Rename'));
       await tester.pumpAndSettle();
-      expect(outcome, [false]);
+      expect(outcome, [null]);
+    });
+
+    testWidgets('cancel leaves the file where it is', (tester) async {
+      final budget = node('reports/budget.qsheet');
+      await open(tester, budget, [budget]);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(outcome, [null]);
+      expect(find.text('Rename spreadsheet'), findsNothing);
     });
 
     testWidgets('refuses a name another file in the folder has', (
@@ -173,8 +192,48 @@ void main() {
       await tester.tap(find.text('Rename'));
       await tester.pumpAndSettle();
 
-      expect(outcome, [false]);
+      expect(outcome, [null]);
       expect(find.text(Errors.fileNameTaken), findsOneWidget);
+    });
+
+    testWidgets('returns the new path and keeps the extension', (tester) async {
+      const secureStorage = MethodChannel(
+        'plugins.it_nomads.com/flutter_secure_storage',
+      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(secureStorage, (_) async => null);
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(secureStorage, null);
+      });
+      SharedPreferences.setMockInitialValues({});
+      await AppSettings.instance.load();
+      await AppSettings.instance.addHost(
+        HostEntry(name: 'Test', hostAddress: 'http://localhost:8080'),
+      );
+      await AppSettings.instance.setSessionToken('a-token');
+      String? putBody;
+      sharedHttpClientFactory = () => MockClient((request) async {
+        putBody = request.body;
+        return http.Response('{}', 200);
+      });
+      resetSharedHttpClient();
+      addTearDown(() async {
+        sharedHttpClientFactory = buildLocalTrustHttpClient;
+        resetSharedHttpClient();
+        await AppSettings.instance.setSessionToken(null);
+      });
+
+      final budget = node('reports/budget.qsheet');
+      await open(tester, budget, [budget]);
+      await tester.enterText(find.byType(TextField), 'forecast');
+      await tester.tap(find.text('Rename'));
+      await tester.pumpAndSettle();
+
+      expect(outcome, ['reports/forecast.qsheet']);
+      final sent = jsonDecode(putBody!) as Map<String, dynamic>;
+      expect(sent['newFilePath'], '/reports/forecast.qsheet');
+      expect(sent['oldFilePath'], '/reports/budget.qsheet');
     });
   });
 }
