@@ -72,7 +72,9 @@ mismatch review sends back.
 ### What the checks enforce
 
 `make check` is installed as a pre-commit hook (`make setup/hooks`), and `.github/workflows/check.yml` runs the
-same targets, so nothing here is advisory.
+same targets, so nothing here is advisory. `make setup/hooks` also installs a commit-msg hook that rejects AI
+attribution in a commit message — a `Co-authored-by:` trailer naming Claude or an `anthropic.com` address, a
+"Generated with Claude Code" footer, or a `claude.ai/code` session link.
 
 - **Formatting and lint** — `gofmt`, golangci-lint, `scripts/check-go-structure.bash`, `sqlc vet`,
   `dart format --set-exit-if-changed`, and `flutter analyze`.
