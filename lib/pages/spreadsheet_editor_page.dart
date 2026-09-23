@@ -6,12 +6,14 @@ import 'package:data_table/data_table.dart';
 import 'package:flutter/material.dart' hide DataTable, DataRow, DataCell;
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
+import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/utils/sheet_tab_names.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/spreadsheet_editor/sheet_tab_view.dart';
@@ -49,7 +51,7 @@ class _SheetTab {
 // ---------------------------------------------------------------------------
 
 /// The editor for one spreadsheet: a tab per sheet, which can be added, renamed or deleted, all saved back to the
-/// Quark.
+/// Quark. Once the sheet has loaded, the title renames the file itself.
 class SpreadsheetEditorPage extends StatefulWidget {
   final String filePath;
   final String deviceSerial;
@@ -68,6 +70,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   bool _loading = true;
   bool _saving = false;
   bool _dirty = false;
+  bool _renaming = false;
 
   /// The thrown object, not its message — the render decides whether it means
   /// "your Quark is unreachable" or "the request failed" (#1637).
@@ -321,14 +324,71 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     try {
       await _doSave();
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Saved')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Saved')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(Errors.message(e, 'save the sheet'))),
       );
+    }
+  }
+
+  /// Renames the spreadsheet file from the title.
+  ///
+  /// A dirty sheet is saved first. [_doSave] reports a failure itself and
+  /// leaves the sheet dirty, so a failed save stops here instead of renaming.
+  /// Cancelling the dialog leaves the sheet where it is.
+  Future<void> _renameSpreadsheet() async {
+    if (_renaming) return;
+    _renaming = true;
+    try {
+      if (_dirty) {
+        _autoSaveTimer?.cancel();
+        await _doSave();
+        if (!mounted || _dirty) return;
+      }
+
+      final List<FileNode> siblings;
+      try {
+        final serial = serialOrNull(widget.deviceSerial);
+        siblings = await FilesService.getFiles(
+          parentPath(widget.filePath),
+          serials: serial == null ? null : [serial],
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(Errors.message(e, 'rename the sheet'))),
+        );
+        return;
+      }
+      if (!mounted) return;
+
+      final apiPath = widget.filePath.trim().replaceAll(RegExp(r'^/+|/+$'), '');
+      final renamed = await renameDocOrSheet(
+        context,
+        FileNode(
+          name: apiPath.split('/').last,
+          size: 0,
+          isDir: false,
+          deviceName: '',
+          devicePath: '',
+          deviceSerial: widget.deviceSerial,
+          dirPath: apiPath,
+        ),
+        siblings: siblings,
+      );
+      if (renamed == null || !mounted) return;
+      _autoSaveTimer?.cancel();
+      context.go(
+        AppRoutes.sheetFile(
+          renamed,
+          serial: widget.deviceSerial.isEmpty ? null : widget.deviceSerial,
+        ),
+      );
+    } finally {
+      _renaming = false;
     }
   }
 
@@ -368,7 +428,14 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       page = Scaffold(
         appBar: AppBar(
           leading: _backButton(),
-          title: Text(title),
+          title: Tooltip(
+            message: 'Rename',
+            child: InkWell(
+              key: const ValueKey('sheet_rename_title'),
+              onTap: _renameSpreadsheet,
+              child: Text(title),
+            ),
+          ),
           actions: [
             if (_saving)
               const Padding(

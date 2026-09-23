@@ -8,12 +8,16 @@ import 'package:quark/utils/file_browser_path_utils.dart';
 final _extension = RegExp(r'\.(qdoc|qsheet)$', caseSensitive: false);
 
 /// Asks for a new name for a doc or sheet and renames it in place, keeping its
-/// extension. Returns whether the file was renamed.
+/// extension.
+///
+/// Returns the new API path — no leading slash, the path `moveRenameNode`
+/// writes with that slash removed — when the file was renamed. Returns null
+/// when the dialog was cancelled, the name was unchanged, or the rename failed.
 ///
 /// [siblings] is every file the page has listed. A move onto a taken path
 /// replaces what is there, so a name another listed file in the same folder
 /// already has is refused here rather than sent.
-Future<bool> renameDocOrSheet(
+Future<String?> renameDocOrSheet(
   BuildContext context,
   FileNode node, {
   required Iterable<FileNode> siblings,
@@ -31,10 +35,11 @@ Future<bool> renameDocOrSheet(
     confirmLabel: 'Rename',
     initialName: currentName,
   );
-  if (name == null || name == currentName || !context.mounted) return false;
+  if (name == null || name == currentName || !context.mounted) return null;
 
   final newFileName = '$name$extension';
-  final newPath = joinPath(parentPath(node.apiPath), newFileName).toLowerCase();
+  final destination = joinPath(parentPath(node.apiPath), newFileName);
+  final newPath = destination.toLowerCase();
   final taken = siblings.any(
     (other) =>
         other.deviceSerial == node.deviceSerial &&
@@ -42,15 +47,13 @@ Future<bool> renameDocOrSheet(
         normalizePath(other.apiPath).toLowerCase() == newPath,
   );
   if (taken) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text(Errors.fileNameTaken)));
-    return false;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text(Errors.fileNameTaken)));
+    return null;
   }
 
   try {
     await moveRenameNode(node: node, targetInput: newFileName);
-    return true;
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -61,6 +64,7 @@ Future<bool> renameDocOrSheet(
         ),
       );
     }
-    return false;
+    return null;
   }
+  return toRootDir(destination);
 }
