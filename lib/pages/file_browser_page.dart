@@ -14,10 +14,8 @@ import 'package:quark/controllers/file_browser_controller.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/path_grant.dart';
 import 'package:quark/pages/audio_player_page.dart';
-import 'package:quark/pages/document_editor_page.dart';
 import 'package:quark/pages/generic_file_viewer_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
-import 'package:quark/pages/spreadsheet_editor_page.dart';
 import 'package:quark/pages/svg_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/router.dart';
@@ -1169,7 +1167,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         case FileKind.qdoc || FileKind.qsheet:
           _openResolvedFile(filePath, kind, fileName, justCreated: true);
         case FileKind.text || FileKind.code:
-          context.push(AppRoutes.plaintextEditorPath(filePath));
+          _goToEditor(filePath, AppRoutes.plaintextEditorPath(filePath));
         default:
           break;
       }
@@ -1518,9 +1516,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       // Excel workbooks — offer to convert to .qsheet (#1741).
       case FileKind.xlsx:
         return _handleXlsxOpen(node);
-      // Text and code — open in the plaintext editor via push so back works.
+      // Text and code open in the plaintext editor, at its own URL.
       case FileKind.text || FileKind.code:
-        context.push(AppRoutes.plaintextEditorPath(node.apiPath));
+        _goToEditor(node.apiPath, AppRoutes.plaintextEditorPath(node.apiPath));
         return;
       default:
         break;
@@ -1789,6 +1787,23 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     await _refreshFileState();
   }
 
+  /// Docs, sheets and text files open at their own `/docs`, `/sheets` or
+  /// `/edit` URL rather than over this page, so a reload reopens the editor instead of the folder
+  /// (#2078). Arriving from the file's own `/files` URL replaces that history
+  /// entry: left in place, browser back would land on it and bounce straight
+  /// into the editor again.
+  void _goToEditor(String filePath, String route, {Object? extra}) {
+    final current = AppRoutes.canonicalRoute(
+      GoRouter.of(context).routeInformationProvider.value.uri.toString(),
+    );
+    void go() => context.go(route, extra: extra);
+    if (current == AppRoutes.canonicalRoute(AppRoutes.filesPath(filePath))) {
+      Router.neglect(context, go);
+    } else {
+      go();
+    }
+  }
+
   Future<void> _openEditorWithUrl({
     required String filePath,
     required Widget Function(String targetRoute, String closeRoute) builder,
@@ -2021,28 +2036,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
     switch (kind) {
       case FileKind.qdoc:
-        await _openEditorWithUrl(
-          filePath: filePath,
-          builder: (targetRoute, closeRoute) => DocumentEditorPage(
-            filePath: filePath,
-            overlayTargetRoute: targetRoute,
-            overlayCloseRoute: closeRoute,
-            startInEditMode: justCreated,
-          ),
-        );
-        if (!mounted) return;
+        _goToEditor(filePath, AppRoutes.docFile(filePath), extra: justCreated);
         return;
 
       case FileKind.qsheet:
-        await _openEditorWithUrl(
-          filePath: filePath,
-          builder: (targetRoute, closeRoute) => SpreadsheetEditorPage(
-            filePath: filePath,
-            overlayTargetRoute: targetRoute,
-            overlayCloseRoute: closeRoute,
-          ),
-        );
-        if (!mounted) return;
+        _goToEditor(filePath, AppRoutes.sheetFile(filePath));
         return;
 
       // Source and config files open in the same plaintext editor for now —
@@ -2050,14 +2048,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       case FileKind.text || FileKind.code:
         // Matches what clicking the row does — without this a deep link to a
         // file the browser opens happily reports "No supported editor".
-        FileBrowserCache.instance.markFileOpen(filePath);
-        try {
-          await context.push<void>(AppRoutes.plaintextEditorPath(filePath));
-        } finally {
-          FileBrowserCache.instance.markFileClosed(filePath);
-        }
-        if (!mounted) return;
-        context.go(AppRoutes.filesPath(parentPath(filePath)));
+        _goToEditor(filePath, AppRoutes.plaintextEditorPath(filePath));
         return;
 
       case FileKind.image:

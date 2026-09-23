@@ -31,7 +31,7 @@ class ContentResultTile extends StatelessWidget {
       deviceName: deviceName,
       showDevice: showDevice,
       snippet: result.plainSnippet,
-      onTap: () => context.push(
+      onTap: () => context.go(
         DocSheetTile.isSheet(result.relPath)
             ? AppRoutes.sheetFile(result.relPath, serial: result.deviceSerial)
             : AppRoutes.docFile(result.relPath, serial: result.deviceSerial),

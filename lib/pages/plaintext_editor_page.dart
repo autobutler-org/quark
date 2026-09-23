@@ -129,46 +129,48 @@ class _PlaintextEditorPageState extends State<PlaintextEditorPage> {
   @override
   Widget build(BuildContext context) {
     final title = _dirty ? '$_displayName •' : _displayName;
+    // Nothing underneath is the usual case: every entry point opens the
+    // editor at its own URL (#2078). The home folder is not where this file
+    // lives, so leaving goes to the folder that holds it (#1749).
+    final canPop = context.canPop();
+    void leave() => context.go(AppRoutes.containingFolder(widget.filePath));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        leading: BackButton(
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-              return;
-            }
-            // Nothing underneath — a deep link, or a pasted URL. The home
-            // folder is not where this file lives (#1749).
-            context.go(AppRoutes.containingFolder(widget.filePath));
-          },
-        ),
-        actions: [
-          if (_saving)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+    return PopScope(
+      // A system back with nothing underneath would close the app.
+      canPop: canPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !canPop) leave();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(title),
+          leading: BackButton(onPressed: canPop ? context.pop : leave),
+          actions: [
+            if (_saving)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.save_outlined),
+                tooltip: 'Save',
+                onPressed: _dirty ? _saveFile : null,
               ),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.save_outlined),
-              tooltip: 'Save',
-              onPressed: _dirty ? _saveFile : null,
-            ),
-          const AppThemeToggle(),
-        ],
-      ),
-      body: PlaintextEditorBody(
-        loading: _loading,
-        error: _error,
-        onRetry: _loadFile,
-        controller: _textController,
-        spellCheck: isProseFile(widget.filePath),
+            const AppThemeToggle(),
+          ],
+        ),
+        body: PlaintextEditorBody(
+          loading: _loading,
+          error: _error,
+          onRetry: _loadFile,
+          controller: _textController,
+          spellCheck: isProseFile(widget.filePath),
+        ),
       ),
     );
   }
