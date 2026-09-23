@@ -54,6 +54,33 @@ void main() {
     expect(created, ['notes.qdoc']);
   });
 
+  testBothViewports('hints a name that matches the selected type', (
+    tester,
+    size,
+  ) async {
+    await pumpDialog(tester, size: size);
+
+    expect(find.text('Untitled document'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('new_file_type_qsheet')));
+    await tester.pump();
+
+    expect(find.text('Untitled spreadsheet'), findsOneWidget);
+    expect(find.text('Untitled document'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('new_file_type_qdoc')));
+    await tester.pump();
+
+    expect(find.text('Untitled document'), findsOneWidget);
+    expect(find.text('Untitled spreadsheet'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('new_file_type_generic')));
+    await tester.pump();
+
+    expect(find.text('filename.txt'), findsOneWidget);
+    expect(find.text('Untitled document'), findsNothing);
+  });
+
   testBothViewports('switches the extension with the type', (
     tester,
     size,

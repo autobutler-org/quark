@@ -24,6 +24,17 @@ class NewFileType {
 
   /// The glyph on the type card.
   final IconData icon;
+
+  /// Placeholder for the name field while it is empty.
+  ///
+  /// `.qsheet` hints `Untitled spreadsheet` and an empty [extension] hints
+  /// `filename.txt`. Every other extension, including `.qdoc`, hints
+  /// `Untitled document`.
+  String get nameHint => switch (extension) {
+    '.qsheet' => 'Untitled spreadsheet',
+    '' => 'filename.txt',
+    _ => 'Untitled document',
+  };
 }
 
 /// The file types the dialog offers by default.
@@ -123,9 +134,8 @@ class _NewFileDialogState extends State<NewFileDialog> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final tokens = QuarkTokens.of(context);
-    final labelStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
-      color: colorScheme.onSurface.withValues(alpha: 0.5),
-    );
+    final labelStyle = Theme.of(context).textTheme.labelMedium
+        ?.copyWith(color: colorScheme.onSurface.withValues(alpha: 0.5));
 
     return AlertDialog(
       title: const Text('New file'),
@@ -165,9 +175,7 @@ class _NewFileDialogState extends State<NewFileDialog> {
                 controller: _nameController,
                 autofocus: true,
                 decoration: InputDecoration(
-                  hintText: _selected.extension.isEmpty
-                      ? 'filename.txt'
-                      : 'Untitled document',
+                  hintText: _selected.nameHint,
                   suffixText: _selected.extension.isEmpty
                       ? null
                       : _selected.extension,
