@@ -76,6 +76,9 @@ var (
 	ErrPasswordTooShort = errors.New("password must be at least 8 characters")
 	// ErrSelfAction refuses an admin action aimed at the admin's own account.
 	ErrSelfAction = errors.New("use Settings to change your own account")
+	// ErrIncorrectPassword refuses a destructive action whose password is not
+	// the caller's (#2346).
+	ErrIncorrectPassword = errors.New("incorrect password")
 )
 
 // DisableUserParams names the account an admin turns off.
@@ -246,6 +249,35 @@ func HashPassword(password string) (string, error) {
 // CheckPassword verifies a plaintext password against a bcrypt hash.
 func CheckPassword(password, hash string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}
+
+// VerifyPasswordParams names the signed-in account and the password it gave.
+type VerifyPasswordParams struct {
+	Queries  *db.Queries
+	Username string
+	Password string
+}
+
+// VerifyPasswordResult is empty; a correct password has nothing to report.
+type VerifyPasswordResult struct{}
+
+// VerifyPassword checks that Password is the stored password of Username, so a
+// session on its own is not enough to delete an account or reset the Quark
+// (#2346). It returns ErrIncorrectPassword for a wrong password,
+// ErrUserNotFound when no account has the username, and any other error for a
+// failed lookup.
+func VerifyPassword(ctx context.Context, params VerifyPasswordParams) (VerifyPasswordResult, error) {
+	user, err := params.Queries.GetUserByUsername(ctx, params.Username)
+	if errors.Is(err, sql.ErrNoRows) {
+		return VerifyPasswordResult{}, ErrUserNotFound
+	}
+	if err != nil {
+		return VerifyPasswordResult{}, fmt.Errorf("look up the account: %w", err)
+	}
+	if !CheckPassword(params.Password, user.PasswordHash) {
+		return VerifyPasswordResult{}, ErrIncorrectPassword
+	}
+	return VerifyPasswordResult{}, nil
 }
 
 // GenerateSessionToken returns a cryptographically random hex session token.
