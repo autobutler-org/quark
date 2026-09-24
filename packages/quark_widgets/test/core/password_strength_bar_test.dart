@@ -48,6 +48,52 @@ void main() {
     expect(find.text('Weak'), findsOneWidget);
   });
 
+  testBothViewports(
+    'jumps straight to the level when animations are disabled',
+    (tester, size) async {
+      Widget bar(String password) => MediaQuery(
+        data: const MediaQueryData(disableAnimations: true),
+        child: PasswordStrengthBar(password: password),
+      );
+      await pumpAt(tester, bar(''), size: size);
+      await pumpAt(tester, bar('abcdefgh'), size: size);
+
+      _expectFraction(tester, PasswordStrength.weak.fraction);
+    },
+  );
+
+  testBothViewports(
+    'jumps straight to the level under platform reduce motion',
+    (tester, size) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(reduceMotion: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+
+      await pumpAt(tester, const PasswordStrengthBar(password: ''), size: size);
+      await pumpAt(
+        tester,
+        const PasswordStrengthBar(password: 'abcdefgh'),
+        size: size,
+      );
+
+      _expectFraction(tester, PasswordStrength.weak.fraction);
+    },
+  );
+
+  testWidgets('stops animating when reduce motion turns on', (tester) async {
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await pumpAt(tester, const PasswordStrengthBar(password: ''));
+
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(reduceMotion: true);
+    await tester.pump();
+    await pumpAt(tester, const PasswordStrengthBar(password: 'abcdefgh'));
+
+    _expectFraction(tester, PasswordStrength.weak.fraction);
+  });
+
   group('scorePassword', () {
     test('rates an empty password as empty', () {
       expect(scorePassword(''), PasswordStrength.empty);
@@ -83,4 +129,11 @@ void main() {
       );
     }
   });
+}
+
+void _expectFraction(WidgetTester tester, double fraction) {
+  final indicator = tester.widget<LinearProgressIndicator>(
+    find.byType(LinearProgressIndicator),
+  );
+  expect(indicator.value, fraction);
 }
