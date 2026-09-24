@@ -148,7 +148,18 @@ final List<GalleryEntry> registry = [
   GalleryEntry(
     name: 'PasswordStrengthBar',
     group: 'Core',
-    build: (context, log) => const PasswordStrengthDemo(),
+    build: (context, log) => Wrap(
+      spacing: 32,
+      runSpacing: 24,
+      children: [
+        const PasswordStrengthDemo(),
+        // The reduced-motion fallback: the fill jumps instead of sliding.
+        MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: const PasswordStrengthDemo(),
+        ),
+      ],
+    ),
   ),
   GalleryEntry(
     name: 'ConfirmDeleteDialog',

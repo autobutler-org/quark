@@ -93,12 +93,16 @@ PasswordStrength scorePassword(String password) {
 /// Place it beneath a password field. It is advisory only and never blocks a
 /// form: validation stays with the field.
 ///
+/// Under reduced motion, when either `MediaQuery.disableAnimationsOf` or the
+/// platform's `accessibilityFeatures.reduceMotion` (iOS Reduce Motion) is set,
+/// the fill jumps straight to the new level instead of sliding.
+///
 /// Emits no `ValueKey`s; it is not interactive.
 ///
 /// ```dart
 /// PasswordStrengthBar(password: passwordController.text);
 /// ```
-class PasswordStrengthBar extends StatelessWidget {
+class PasswordStrengthBar extends StatefulWidget {
   /// Creates a bar reflecting the strength of [password].
   const PasswordStrengthBar({required this.password, super.key});
 
@@ -106,10 +110,49 @@ class PasswordStrengthBar extends StatelessWidget {
   final String password;
 
   @override
+  State<PasswordStrengthBar> createState() => _PasswordStrengthBarState();
+}
+
+class _PasswordStrengthBarState extends State<PasswordStrengthBar>
+    with WidgetsBindingObserver {
+  late bool _reduceMotion;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateMotion();
+  }
+
+  @override
+  void didChangeAccessibilityFeatures() => setState(_updateMotion);
+
+  void _updateMotion() {
+    _reduceMotion =
+        MediaQuery.disableAnimationsOf(context) ||
+        WidgetsBinding
+            .instance
+            .platformDispatcher
+            .accessibilityFeatures
+            .reduceMotion;
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final tokens = QuarkTokens.of(context);
-    final strength = scorePassword(password);
+    final strength = scorePassword(widget.password);
     final color = strength.color(tokens);
 
     return Column(
@@ -119,7 +162,9 @@ class PasswordStrengthBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(tokens.radiusSm / 2),
           child: TweenAnimationBuilder<double>(
             tween: Tween(begin: 0.0, end: strength.fraction),
-            duration: const Duration(milliseconds: 250),
+            duration: _reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 250),
             curve: Curves.easeOut,
             builder: (context, value, _) {
               return LinearProgressIndicator(
