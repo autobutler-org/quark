@@ -247,7 +247,7 @@ void main() {
       )!;
       expect(a.message, "Couldn't convert vacation.mkv to MOV.");
       expect(a.actionLabel, 'View');
-      expect(a.route, AppRoutes.jobs);
+      expect(a.route, AppRoutes.systemTab(SystemTab.jobs));
     });
 
     test('an unknown kind falls back to its name with no Show', () {
@@ -265,7 +265,7 @@ void main() {
         ),
       )!;
       expect(failed.message, "Back up didn't finish.");
-      expect(failed.route, AppRoutes.jobs);
+      expect(failed.route, AppRoutes.systemTab(SystemTab.jobs));
     });
 
     test('nothing to say for a job that did not complete or fail', () {

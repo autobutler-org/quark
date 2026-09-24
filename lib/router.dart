@@ -5,8 +5,6 @@ import 'package:quark/pages/account_and_data_page.dart';
 import 'package:quark/pages/docs_page.dart';
 import 'package:quark/pages/document_editor_page.dart';
 import 'package:quark/pages/file_browser_page.dart';
-import 'package:quark/pages/health_page.dart';
-import 'package:quark/pages/jobs_page.dart';
 import 'package:quark/pages/login_page.dart';
 import 'package:quark/pages/photos_page.dart';
 import 'package:quark/pages/plaintext_editor_page.dart';
@@ -16,7 +14,7 @@ import 'package:quark/pages/settings_page.dart';
 import 'package:quark/pages/setup_page.dart';
 import 'package:quark/pages/sheets_page.dart';
 import 'package:quark/pages/spreadsheet_editor_page.dart';
-import 'package:quark/pages/storage_devices_page.dart';
+import 'package:quark/pages/system_page.dart';
 import 'package:quark/pages/terms_page.dart';
 import 'package:quark/pages/trash_page.dart';
 import 'package:quark/pages/users_page.dart';
@@ -51,9 +49,33 @@ class AppRoutes {
   static const trash = '/trash';
   static const docs = '/docs';
   static const sheets = '/sheets';
-  static const devices = '/devices';
-  static const health = '/health';
   static const vault = '/vault';
+
+  /// The System page (#2351): the Quark's health, its drives and its jobs,
+  /// one tab each. Its tabs have their own URLs, see [systemTab]; this bare
+  /// path redirects to the first one.
+  static const system = '/system';
+
+  /// One tab of the System page, e.g. systemTab(SystemTab.jobs) →
+  /// '/system/jobs'.
+  static String systemTab(SystemTab tab) => '$system/${tab.slug}';
+
+  /// Legacy alias. Health was its own page before the System page took it
+  /// in as a tab (#2351), so links and bookmarks exist. This redirects to
+  /// its tab with the query kept.
+  ///
+  // TODO(pre-v1.0.0, #1601): delete this constant and its redirect GoRoute.
+  static const health = '/health';
+
+  /// Legacy alias for the System page's Storage tab, the drives. See
+  /// [health].
+  ///
+  // TODO(pre-v1.0.0, #1601): delete this constant and its redirect GoRoute.
+  static const devices = '/devices';
+
+  /// Legacy alias for the System page's Jobs tab. See [health].
+  ///
+  // TODO(pre-v1.0.0, #1601): delete this constant and its redirect GoRoute.
   static const jobs = '/jobs';
 
   /// The admin-only Users page (#1662). Its tabs have their own URLs, see
@@ -230,6 +252,18 @@ enum UsersTab implements RouteTab {
   groups('groups');
 
   const UsersTab(this.slug);
+
+  @override
+  final String slug;
+}
+
+/// The System page's tabs (#2351). Health is the overview, so it comes first.
+enum SystemTab implements RouteTab {
+  health('health'),
+  storage('storage'),
+  jobs('jobs');
+
+  const SystemTab(this.slug);
 
   @override
   final String slug;
@@ -421,18 +455,28 @@ final router = GoRouter(
       },
     ),
     GoRoute(
-      path: AppRoutes.devices,
-      builder: (context, state) => const StorageDevicesPage(),
-    ),
-    GoRoute(
-      path: AppRoutes.health,
-      builder: (context, state) => const HealthPage(),
-    ),
-    GoRoute(
       path: AppRoutes.vault,
       builder: (context, state) => const VaultPage(),
     ),
-    GoRoute(path: AppRoutes.jobs, builder: (context, _) => JobsPage()),
+    ...tabbedRoutes(
+      path: AppRoutes.system,
+      tabs: SystemTab.values,
+      builder: (tab, onTabSelected) =>
+          SystemPage(tab: tab, onTabSelected: onTabSelected),
+    ),
+    // TODO(pre-v1.0.0, #1601): delete these three with their constants.
+    // Health, Devices and Jobs were pages of their own before the System
+    // page (#2351); old links land on the matching tab with the query kept.
+    for (final (legacy, tab) in [
+      (AppRoutes.health, SystemTab.health),
+      (AppRoutes.devices, SystemTab.storage),
+      (AppRoutes.jobs, SystemTab.jobs),
+    ])
+      GoRoute(
+        path: legacy,
+        redirect: (_, state) =>
+            state.uri.replace(path: AppRoutes.systemTab(tab)).toString(),
+      ),
     ...tabbedRoutes(
       path: AppRoutes.users,
       tabs: UsersTab.values,

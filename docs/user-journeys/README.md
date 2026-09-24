@@ -32,8 +32,9 @@ Journey IDs are stable — don't renumber when adding new ones.
 | [docs.md](docs.md)                       | Document editor (.qdoc files)                         |
 | [sheets.md](sheets.md)                   | Spreadsheet editor (.qsheet files)                    |
 | [vault.md](vault.md)                     | Password vault (setup, entries, import/export)         |
-| [health.md](health.md)                   | System health dashboard                                |
-| [storage-devices.md](storage-devices.md) | Storage device management                              |
+| [health.md](health.md)                   | System page, Health tab: live metrics                  |
+| [storage-devices.md](storage-devices.md) | System page, Storage tab: drive management             |
+| [jobs.md](jobs.md)                       | System page, Jobs tab: the job queue                   |
 | [settings.md](settings.md)               | App settings, hosts, updates, remote access            |
 | [users.md](users.md)                     | Admin-only Users page (accounts, admin roles)          |
 

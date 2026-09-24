@@ -12,7 +12,7 @@ import '../theme/quark_tokens.dart';
 /// ```dart
 /// JobsBadge(
 ///   runningCount: controller.runningCount,
-///   onTap: () => context.go(AppRoutes.jobs),
+///   onTap: () => context.go(AppRoutes.systemTab(SystemTab.jobs)),
 /// );
 /// ```
 class JobsBadge extends StatelessWidget {
