@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/ws_connect_stub.dart'
     if (dart.library.io) 'package:quark/services/ws_connect_io.dart';
@@ -84,6 +85,9 @@ class EventsService {
   bool _listeningForToken = false;
   int _attempt = 0;
 
+  /// The address the last [_connect] aimed at.
+  String? _connectedTo;
+
   static const _baseReconnectDelay = Duration(seconds: 2);
   static const _maxReconnectDelay = Duration(minutes: 1);
 
@@ -95,6 +99,7 @@ class EventsService {
     // changing (re-login as another user) has to drive a reconnect.
     if (!_listeningForToken) {
       AppSettings.instance.sessionTokenNotifier.addListener(_onTokenChanged);
+      ConnectionController.instance.addListener(_onConnectionChanged);
       _listeningForToken = true;
     }
     if (_channel != null) return;
@@ -106,6 +111,7 @@ class EventsService {
     _disposed = true;
     if (_listeningForToken) {
       AppSettings.instance.sessionTokenNotifier.removeListener(_onTokenChanged);
+      ConnectionController.instance.removeListener(_onConnectionChanged);
       _listeningForToken = false;
     }
     _reconnectTimer?.cancel();
@@ -127,9 +133,17 @@ class EventsService {
     if (AppSettings.instance.sessionToken != null) _connect();
   }
 
+  /// Reconnects when the app moves between the Quark's home and remote-access
+  /// address (#1880): a socket held open on the address that stopped
+  /// answering would otherwise sit dead until it timed out.
+  void _onConnectionChanged() {
+    if (activeBaseUrl != _connectedTo) _onTokenChanged();
+  }
+
   void _connect() {
     if (_disposed) return;
-    final host = AppSettings.instance.activeHost;
+    final host = activeBaseUrl;
+    _connectedTo = host;
     if (host == null) {
       // No host configured — don't schedule reconnect; caller must call start()
       // again once a host is set (e.g. from AppSettings change listener).

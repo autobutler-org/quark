@@ -26,7 +26,7 @@ const Duration kConnectTimeout = Duration(seconds: 5);
 /// Returns an [http.Client] that trusts self-signed certificates when the
 /// host it is built for is a local/LAN address (see [isLocalTrustHost]).
 ///
-/// [hostAddress] defaults to the active host. A caller passes one only to
+/// [hostAddress] defaults to [activeBaseUrl]. A caller passes one only to
 /// reach a Quark that is not active yet — probing an address before it is
 /// saved (#2032) has to make the same trust decision the app would make once
 /// that address is the one in use.
@@ -36,7 +36,7 @@ const Duration kConnectTimeout = Duration(seconds: 5);
 http.Client buildLocalTrustHttpClient([String? hostAddress]) {
   if (kIsWeb) return http.Client();
 
-  final host = _extractHost(hostAddress ?? AppSettings.instance.activeHost);
+  final host = _extractHost(hostAddress ?? activeBaseUrl);
 
   final inner = HttpClient()..connectionTimeout = kConnectTimeout;
   if (isLocalTrustHost(host)) {
@@ -76,11 +76,12 @@ http.Client Function() sharedHttpClientFactory = buildLocalTrustHttpClient;
 /// cheap: a 304 revalidation only saves anything when it does not have to
 /// build a connection to ask.
 ///
-/// The client is rebuilt when [AppSettings.activeHost] changes, because trust
+/// The client is rebuilt when [activeBaseUrl] changes host, because trust
 /// (see [isLocalTrustHost]) is decided per host and pooled connections to the
-/// old one are worthless.
+/// old one are worthless. That covers a switch between a Quark's home and
+/// remote-access address (#1880) as well as a switch of Quark.
 http.Client get sharedHttpClient {
-  final host = _extractHost(AppSettings.instance.activeHost);
+  final host = _extractHost(activeBaseUrl);
   final cached = _sharedClient;
   if (cached != null && _sharedClientHost == host) return cached;
 

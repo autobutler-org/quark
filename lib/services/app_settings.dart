@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 // flutter_secure_storage requires a secure context (HTTPS) on web.
 // We only use it on native platforms; on web we fall back to in-memory only.
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -38,12 +39,22 @@ String normalizeHostAddress(String address) {
 /// null — a configured host always wins.
 const String defaultApiBaseUrl = 'http://localhost:8080';
 
-/// The configured quark base URL, falling back to [defaultApiBaseUrl].
+/// The address requests to the active Quark go to right now, or null with no
+/// Quark configured.
+///
+/// Its remote-access address while [ConnectionController] has switched to it
+/// (#1880), and [AppSettings.activeHost] otherwise. Anything that builds a URL
+/// for the active Quark reads this rather than [AppSettings.activeHost], which
+/// stays the Quark's identity: the key its session and terms are stored under.
+String? get activeBaseUrl =>
+    ConnectionController.instance.baseUrl ?? AppSettings.instance.activeHost;
+
+/// [activeBaseUrl], falling back to [defaultApiBaseUrl].
 ///
 /// `API_BASE_URL` overrides the fallback at build time via
 /// `--dart-define=API_BASE_URL=...`.
 String get apiBaseUrl =>
-    AppSettings.instance.activeHost ??
+    activeBaseUrl ??
     const String.fromEnvironment(
       'API_BASE_URL',
       defaultValue: defaultApiBaseUrl,
@@ -65,15 +76,40 @@ Uri get apiBaseUri {
   return uri;
 }
 
+/// A saved Quark: its name, the address it answers on at home, and the
+/// remote-access address it reported, if any.
 class HostEntry {
   final String name;
   final String hostAddress;
-  HostEntry({required this.name, required this.hostAddress});
 
-  Map<String, String> toJson() => {'name': name, 'hostAddress': hostAddress};
+  /// Where the Quark answers through remote access, learned from
+  /// `GET /settings/remote-access` while on [hostAddress] (#1880). Null until
+  /// then, and again once remote access is turned off.
+  ///
+  /// Left out of [toJson] while null, so an entry without one saves exactly as
+  /// entries did before the field existed, and those load with it null.
+  final String? remoteAddress;
 
-  static HostEntry fromJson(Map<String, dynamic> m) =>
-      HostEntry(name: m['name'] ?? '', hostAddress: m['hostAddress'] ?? '');
+  HostEntry({
+    required this.name,
+    required this.hostAddress,
+    this.remoteAddress,
+  });
+
+  Map<String, String> toJson() => {
+    'name': name,
+    'hostAddress': hostAddress,
+    'remoteAddress': ?remoteAddress,
+  };
+
+  static HostEntry fromJson(Map<String, dynamic> m) {
+    final remote = m['remoteAddress'];
+    return HostEntry(
+      name: m['name'] ?? '',
+      hostAddress: m['hostAddress'] ?? '',
+      remoteAddress: remote is String && remote.isNotEmpty ? remote : null,
+    );
+  }
 }
 
 /// The app's saved state: the known Quarks and which one is active, each one's session token and username, the
@@ -349,9 +385,36 @@ class AppSettings {
     }
   }
 
-  String? get activeHost => (_activeIndex >= 0 && _activeIndex < _hosts.length)
-      ? _hosts[_activeIndex].hostAddress
+  String? get activeHost => activeHostEntry?.hostAddress;
+
+  /// The whole saved entry for [activeHost], remote address included.
+  HostEntry? get activeHostEntry =>
+      (_activeIndex >= 0 && _activeIndex < _hosts.length)
+      ? _hosts[_activeIndex]
       : null;
+
+  /// Records [remoteAddress] on every saved entry for [hostAddress], or
+  /// clears it when null. Saves only when something changed.
+  Future<void> setRemoteAddress(
+    String hostAddress,
+    String? remoteAddress,
+  ) async {
+    final key = _hostKey(hostAddress);
+    var changed = false;
+    for (var i = 0; i < _hosts.length; i++) {
+      final h = _hosts[i];
+      if (_hostKey(h.hostAddress) != key || h.remoteAddress == remoteAddress) {
+        continue;
+      }
+      _hosts[i] = HostEntry(
+        name: h.name,
+        hostAddress: h.hostAddress,
+        remoteAddress: remoteAddress,
+      );
+      changed = true;
+    }
+    if (changed) await _saveHosts();
+  }
 
   /// Publishes the current [activeHost] to [activeHostNotifier] and recomputes
   /// [hasAcceptedTerms] for it.
@@ -416,7 +479,11 @@ class AppSettings {
   HostEntry _normalizeHost(HostEntry h) {
     final normalized = normalizeHostAddress(h.hostAddress);
     if (normalized == h.hostAddress) return h;
-    return HostEntry(name: h.name, hostAddress: normalized);
+    return HostEntry(
+      name: h.name,
+      hostAddress: normalized,
+      remoteAddress: h.remoteAddress,
+    );
   }
 
   Future<void> removeHost(int idx) async {

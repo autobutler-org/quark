@@ -59,6 +59,83 @@ void main() {
       expect(entry.name, 'Test');
       expect(entry.hostAddress, 'http://test.local');
     });
+
+    // #1880: the remote-access address is optional and must not change how a
+    // host without one is saved or loaded.
+    test('a host saved before remoteAddress existed loads without one', () {
+      final entry = HostEntry.fromJson({
+        'name': 'Pi',
+        'hostAddress': 'https://quark.local',
+      });
+
+      expect(entry.remoteAddress, isNull);
+    });
+
+    test('toJson leaves remoteAddress out while there is none', () {
+      final json = HostEntry(
+        name: 'Pi',
+        hostAddress: 'https://quark.local',
+      ).toJson();
+
+      expect(json.containsKey('remoteAddress'), isFalse);
+    });
+
+    test('roundtrip preserves remoteAddress', () {
+      final original = HostEntry(
+        name: 'Pi',
+        hostAddress: 'https://quark.local',
+        remoteAddress: 'http://100.64.0.7:80',
+      );
+      final restored = HostEntry.fromJson(original.toJson());
+
+      expect(restored.name, original.name);
+      expect(restored.hostAddress, original.hostAddress);
+      expect(restored.remoteAddress, 'http://100.64.0.7:80');
+    });
+
+    test('fromJson reads an empty or mistyped remoteAddress as none', () {
+      for (final value in ['', 42, null]) {
+        final entry = HostEntry.fromJson({
+          'name': 'Pi',
+          'hostAddress': 'https://quark.local',
+          'remoteAddress': value,
+        });
+        expect(entry.remoteAddress, isNull, reason: '$value');
+      }
+    });
+  });
+
+  group('AppSettings.setRemoteAddress', () {
+    final settings = AppSettings.instance;
+
+    Future<void> clearHosts() async {
+      while (settings.hosts.isNotEmpty) {
+        await settings.removeHost(settings.hosts.length - 1);
+      }
+    }
+
+    setUp(clearHosts);
+    tearDown(clearHosts);
+
+    test('records and clears the address on the matching host only', () async {
+      await settings.addHost(
+        HostEntry(name: 'One', hostAddress: 'https://one.local'),
+      );
+      await settings.addHost(
+        HostEntry(name: 'Two', hostAddress: 'https://two.local'),
+      );
+
+      await settings.setRemoteAddress(
+        'https://ONE.local/',
+        'http://100.64.0.7:80',
+      );
+      expect(settings.hosts[0].remoteAddress, 'http://100.64.0.7:80');
+      expect(settings.hosts[0].name, 'One');
+      expect(settings.hosts[1].remoteAddress, isNull);
+
+      await settings.setRemoteAddress('https://one.local', null);
+      expect(settings.hosts[0].remoteAddress, isNull);
+    });
   });
 
   group('normalizeHostAddress', () {
