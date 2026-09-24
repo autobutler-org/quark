@@ -4727,12 +4727,6 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
-                    },
-                    "503": {
-                        "description": "This build has no provisioning secret",
-                        "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
-                        }
                     }
                 }
             },
