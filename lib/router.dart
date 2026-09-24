@@ -56,8 +56,14 @@ class AppRoutes {
   static const vault = '/vault';
   static const jobs = '/jobs';
 
-  /// The admin-only Users page (#1662).
+  /// The admin-only Users page (#1662). Its tabs have their own URLs, see
+  /// [usersTab]; this bare path redirects to the first one.
   static const users = '/users';
+
+  /// One tab of the Users page, e.g. usersTab(UsersTab.groups) →
+  /// '/users/groups'.
+  static String usersTab(UsersTab tab) => '$users/${tab.slug}';
+
   static const settings = '/settings';
 
   /// Delete account and, for admins, Reset this Quark (#2346). A drill-down
@@ -208,6 +214,61 @@ class AppRoutes {
         ? folder
         : '$folder?serial=${Uri.encodeQueryComponent(serial)}';
   }
+}
+
+/// A tab of a page whose tabs have their own URLs, `/<page>/<slug>`. Each such
+/// page declares an enum of its tabs, in the order they show, implementing
+/// this; see [tabbedRoutes].
+abstract interface class RouteTab {
+  /// The tab's URL segment: lowercase, stable, never shown to the user.
+  String get slug;
+}
+
+/// The Users page's tabs (#2349).
+enum UsersTab implements RouteTab {
+  accounts('accounts'),
+  groups('groups');
+
+  const UsersTab(this.slug);
+
+  @override
+  final String slug;
+}
+
+/// The routes of a page at [path] whose [tabs] have their own URLs (#2349):
+/// `<path>/<slug>` shows the page on that tab, and bare [path] or an unknown
+/// slug redirects to the first tab with the query kept, since a stale link is
+/// not a broken app.
+///
+/// [builder] gets the tab to show and `onTabSelected`, which the page wires to
+/// its `QuarkTabView`: it moves with `context.go`, never `push`, so the address
+/// bar follows (see AGENTS.md, Navigation and routing).
+///
+/// Every tab is the one `<path>/:tab` route, and go_router keys a page by its
+/// route pattern rather than its location, so switching tabs hands the new
+/// tab to the page already on screen: its `State` survives and nothing is
+/// loaded again. Keep the tabs in that one route for this to hold.
+List<GoRoute> tabbedRoutes<T extends RouteTab>({
+  required String path,
+  required List<T> tabs,
+  required Widget Function(T tab, ValueChanged<T> onTabSelected) builder,
+}) {
+  String firstTab(GoRouterState state) =>
+      state.uri.replace(path: '$path/${tabs.first.slug}').toString();
+  return [
+    GoRoute(path: path, redirect: (_, state) => firstTab(state)),
+    GoRoute(
+      path: '$path/:tab',
+      redirect: (_, state) {
+        final slug = state.pathParameters['tab'];
+        return tabs.any((tab) => tab.slug == slug) ? null : firstTab(state);
+      },
+      builder: (context, state) => builder(
+        tabs.firstWhere((tab) => tab.slug == state.pathParameters['tab']),
+        (tab) => context.go('$path/${tab.slug}'),
+      ),
+    ),
+  ];
 }
 
 /// Everything that can invalidate the [authRedirect] gate.
@@ -372,9 +433,11 @@ final router = GoRouter(
       builder: (context, state) => const VaultPage(),
     ),
     GoRoute(path: AppRoutes.jobs, builder: (context, _) => JobsPage()),
-    GoRoute(
+    ...tabbedRoutes(
       path: AppRoutes.users,
-      builder: (context, state) => const UsersPage(),
+      tabs: UsersTab.values,
+      builder: (tab, onTabSelected) =>
+          UsersPage(tab: tab, onTabSelected: onTabSelected),
     ),
     GoRoute(
       path: AppRoutes.settings,
@@ -442,9 +505,16 @@ final router = GoRouter(
 /// with a real server to take down.
 Future<AuthStatus> Function() authStatusProbe = AuthService.checkStatus;
 
-/// Pages only an admin can use. [authRedirect] sends anyone else to
-/// [AppRoutes.files]; the Quark refuses their requests either way.
+/// Pages only an admin can use, with everything under them, such as a tab's
+/// URL. [authRedirect] sends anyone else to [AppRoutes.files]; the Quark
+/// refuses their requests either way.
 const adminRoutes = {AppRoutes.vault, AppRoutes.users};
+
+/// Whether [location] is one of [routes] or a path under one: `/users/groups`
+/// is under `/users`, `/users-old` is not. An exact match let a page's tab URLs
+/// past the gate the page itself was behind (#2349).
+bool _isUnderAny(Set<String> routes, String location) =>
+    routes.any((route) => location == route || location.startsWith('$route/'));
 
 /// Whether the Quark says the signed-in caller is an admin. False when it
 /// cannot say.
@@ -506,14 +576,14 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
     AppRoutes.forgotPassword,
     AppRoutes.requestAccount,
   };
-  if (publicRoutes.contains(location)) return null;
+  if (_isUnderAny(publicRoutes, location)) return null;
 
   // Admin-only pages (#1928). [AppSettings.isAdmin] is not persisted and
   // starts false on every launch, so trusting it would bounce an admin who
   // opens one of these from a link; the Quark is asked instead. A failed call
   // counts as no: the page could only render refusals.
   if (AppSettings.instance.sessionToken != null &&
-      adminRoutes.contains(location)) {
+      _isUnderAny(adminRoutes, location)) {
     return await _callerIsAdmin() ? null : AppRoutes.files;
   }
 

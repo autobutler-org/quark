@@ -93,8 +93,9 @@ void main() {
           path: AppRoutes.vault,
           builder: (_, _) => const Scaffold(body: Text('vault')),
         ),
-        GoRoute(
+        ...tabbedRoutes(
           path: AppRoutes.users,
+          tabs: UsersTab.values,
           builder: (_, _) => const Scaffold(body: Text('users')),
         ),
         GoRoute(path: AppRoutes.terms, builder: (_, _) => const TermsPage()),
@@ -456,6 +457,47 @@ void main() {
 
       expect(find.text('files'), findsOneWidget);
       expect(find.text('users'), findsNothing);
+    });
+  });
+
+  // #2349: a tab's URL is under its page, so it is gated like the page. The
+  // gate used to match exact paths, and /users/groups matched nothing.
+  group('a tab of an admin-only page', () {
+    setUp(() async {
+      await addUnacceptedHost();
+      await settings.acceptTerms();
+      await settings.setSessionToken('a-token');
+    });
+
+    tearDown(() => settings.setSessionToken(null));
+
+    testWidgets('sends a non-admin who types its URL to files', (tester) async {
+      authStatusProbe = () async =>
+          const AuthStatus(setupComplete: true, username: 'bob');
+
+      await pumpGatedRouter(
+        tester,
+        initialLocation: AppRoutes.usersTab(UsersTab.groups),
+      );
+
+      expect(find.text('files'), findsOneWidget);
+      expect(find.text('users'), findsNothing);
+    });
+
+    testWidgets('opens for an admin', (tester) async {
+      authStatusProbe = () async =>
+          const AuthStatus(setupComplete: true, username: 'ada', isAdmin: true);
+
+      final router = await pumpGatedRouter(
+        tester,
+        initialLocation: AppRoutes.usersTab(UsersTab.groups),
+      );
+
+      expect(find.text('users'), findsOneWidget);
+      expect(
+        router.routerDelegate.currentConfiguration.uri.path,
+        '/users/groups',
+      );
     });
   });
 
