@@ -26,9 +26,10 @@ lib/widgets/
   jobs/
     job_finish_announcer.dart   shows a snack bar for every job JobsController
                                 announces finished, and navigates its action
-    jobs_badge_host.dart        provides the QuarkAppBarTrailing scope with a
-                                JobsBadge fed by JobsController
   layout/
+    app_bar_trailing_host.dart  provides the QuarkAppBarTrailing scope with a
+                                ConnectionIndicator fed by ConnectionController
+                                and a JobsBadge fed by JobsController
     app_drawer.dart             AppDrawer, QuarkDrawer wired to the router
     theme_toggle_button.dart    AppThemeToggle, ThemeToggleButton wired to AppSettings
   login/

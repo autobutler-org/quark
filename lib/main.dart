@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -10,7 +11,7 @@ import 'package:quark/services/local_trust_overrides_stub.dart'
     if (dart.library.io) 'package:quark/services/local_trust_overrides_io.dart';
 import 'package:quark/utils/first_frame_gate.dart';
 import 'package:quark/widgets/jobs/job_finish_announcer.dart';
-import 'package:quark/widgets/jobs/jobs_badge_host.dart';
+import 'package:quark/widgets/layout/app_bar_trailing_host.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/probe_bootstrap.dart';
 
@@ -26,6 +27,9 @@ Future<void> main() async {
   installLocalTrustHttpOverrides();
   // Finish announcements and the jobs list outlive every page.
   JobsController.instance.start();
+  // Picks the home or remote-access address before the first request goes
+  // out, and keeps picking (#1880).
+  ConnectionController.instance.start();
   AuthService.watchAccount();
   deferFirstFrameUntilRouted(binding, router.routerDelegate);
   runApp(const QuarkApp());
@@ -36,7 +40,8 @@ Future<void> main() async {
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-/// The app's root: the theme, the router, and the job announcements and badge that sit above every page.
+/// The app's root: the theme, the router, and the job announcements, jobs badge and connection indicator that sit
+/// above every page.
 class QuarkApp extends StatelessWidget {
   const QuarkApp({super.key});
 
@@ -57,8 +62,9 @@ class QuarkApp extends StatelessWidget {
             controller: JobsController.instance,
             messengerKey: rootScaffoldMessengerKey,
             onNavigate: router.go,
-            child: JobsBadgeHost(
-              controller: JobsController.instance,
+            child: AppBarTrailingHost(
+              jobs: JobsController.instance,
+              connection: ConnectionController.instance,
               onNavigate: router.go,
               child: child ?? const SizedBox.shrink(),
             ),

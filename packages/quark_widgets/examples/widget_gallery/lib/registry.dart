@@ -210,6 +210,19 @@ final List<GalleryEntry> registry = [
 
   // ── Layout ────────────────────────────────────────────────────────────────
   GalleryEntry(
+    name: 'ConnectionIndicator',
+    group: 'Layout',
+    build: (context, log) => const Row(
+      spacing: 8,
+      children: [
+        ConnectionIndicator(mode: ConnectionMode.local, label: 'Local'),
+        ConnectionIndicator(mode: ConnectionMode.remote, label: 'Remote'),
+        ConnectionIndicator(mode: ConnectionMode.offline, label: 'Offline'),
+        Text('local, remote, offline'),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkAppBar',
     group: 'Layout',
     build: (context, log) => SizedBox(
