@@ -580,4 +580,114 @@ void main() {
       expect(location(r), AppRoutes.files);
     });
   });
+
+  // #2349: a page whose tabs have their own URLs.
+  group('tabbedRoutes', () {
+    Future<GoRouter> pumpTabbed(WidgetTester tester, String location) async {
+      final r = GoRouter(
+        initialLocation: location,
+        routes: tabbedRoutes(
+          path: AppRoutes.users,
+          tabs: UsersTab.values,
+          builder: (tab, onTabSelected) =>
+              _TabbedPage(tab: tab, onTabSelected: onTabSelected),
+        ),
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+      return r;
+    }
+
+    String at(GoRouter r) =>
+        r.routerDelegate.currentConfiguration.uri.toString();
+
+    setUp(() => _TabbedPageState.created = 0);
+
+    testWidgets('the base path redirects to the first tab', (tester) async {
+      final r = await pumpTabbed(tester, AppRoutes.users);
+
+      expect(at(r), AppRoutes.usersTab(UsersTab.accounts));
+      expect(find.text('tab accounts'), findsOneWidget);
+    });
+
+    testWidgets('a tab URL opens on that tab', (tester) async {
+      final r = await pumpTabbed(tester, AppRoutes.usersTab(UsersTab.groups));
+
+      expect(at(r), '/users/groups');
+      expect(find.text('tab groups'), findsOneWidget);
+    });
+
+    testWidgets('an unknown tab redirects to the first tab', (tester) async {
+      final r = await pumpTabbed(tester, '/users/bogus');
+
+      expect(at(r), '/users/accounts');
+      expect(find.text('tab accounts'), findsOneWidget);
+    });
+
+    testWidgets('the query string survives the redirect', (tester) async {
+      final base = await pumpTabbed(tester, '/users?serial=abc');
+      expect(at(base), '/users/accounts?serial=abc');
+
+      base.go('/users/bogus?serial=abc');
+      await tester.pumpAndSettle();
+      expect(at(base), '/users/accounts?serial=abc');
+    });
+
+    testWidgets('switching tabs keeps the same page State', (tester) async {
+      final r = await pumpTabbed(tester, AppRoutes.users);
+      final before = tester.state(find.byType(_TabbedPage));
+
+      await tester.tap(find.byKey(const ValueKey('select_groups')));
+      await tester.pumpAndSettle();
+
+      expect(at(r), '/users/groups');
+      expect(find.text('tab groups'), findsOneWidget);
+      expect(tester.state(find.byType(_TabbedPage)), same(before));
+
+      // The browser's back button lands as a go to the earlier URL.
+      r.go(AppRoutes.usersTab(UsersTab.accounts));
+      await tester.pumpAndSettle();
+
+      expect(find.text('tab accounts'), findsOneWidget);
+      expect(tester.state(find.byType(_TabbedPage)), same(before));
+      expect(_TabbedPageState.created, 1);
+    });
+  });
+}
+
+/// A tabbed page that counts how often its State is created: every creation
+/// past the first is a tab switch that rebuilt the page and would refetch.
+class _TabbedPage extends StatefulWidget {
+  const _TabbedPage({required this.tab, required this.onTabSelected});
+
+  final UsersTab tab;
+  final ValueChanged<UsersTab> onTabSelected;
+
+  @override
+  State<_TabbedPage> createState() => _TabbedPageState();
+}
+
+class _TabbedPageState extends State<_TabbedPage> {
+  static var created = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    created++;
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Column(
+      children: [
+        Text('tab ${widget.tab.slug}'),
+        TextButton(
+          key: const ValueKey('select_groups'),
+          onPressed: () => widget.onTabSelected(UsersTab.groups),
+          child: const Text('groups'),
+        ),
+      ],
+    ),
+  );
 }

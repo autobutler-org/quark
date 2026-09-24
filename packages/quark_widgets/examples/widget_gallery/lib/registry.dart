@@ -625,6 +625,60 @@ final List<GalleryEntry> registry = [
       ),
     ),
   ),
+  GalleryEntry(
+    name: 'QuarkTabView (controlled)',
+    group: 'Layout',
+    // The caller holds the tab, the way a page whose tabs have URLs does
+    // (#2349). Five tabs, so a narrow window shows the bar scrolling. Both
+    // views share the selection: picking a tab in one moves the other from
+    // outside, and the lower one, under reduced motion, switches without
+    // sliding.
+    build: (context, log) {
+      var selected = 0;
+      const labels = [
+        'General',
+        'Account',
+        'Storage',
+        'Notifications',
+        'About',
+      ];
+      return StatefulBuilder(
+        builder: (context, setState) {
+          final view = QuarkTabView(
+            selectedIndex: selected,
+            onTabSelected: (index) {
+              log('QuarkTabView: onTabSelected($index)');
+              setState(() => selected = index);
+            },
+            tabs: [
+              for (final label in labels)
+                QuarkTab(
+                  label: label,
+                  child: Center(child: Text(label)),
+                ),
+            ],
+          );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(height: 200, child: view),
+              const SizedBox(height: 16),
+              const Text('Reduced motion'),
+              SizedBox(
+                height: 200,
+                child: MediaQuery(
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(disableAnimations: true),
+                  child: view,
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  ),
 
   // ── File browser ──────────────────────────────────────────────────────────
   GalleryEntry(

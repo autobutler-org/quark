@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/groups_controller.dart';
 import 'package:quark/controllers/users_controller.dart';
+import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
@@ -19,10 +20,23 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// the Quark takes requests at all. **Groups** (#1910): the groups, creating,
 /// renaming and deleting one, and who is in each.
 ///
+/// Each tab has its own URL (#2349): the router passes the [tab] to show and
+/// [onTabSelected] to move to another.
+///
 /// The router only opens it for an admin, and the Quark refuses its requests
 /// from anyone else.
 class UsersPage extends StatefulWidget {
-  const UsersPage({super.key});
+  const UsersPage({
+    this.tab = UsersTab.accounts,
+    this.onTabSelected,
+    super.key,
+  });
+
+  /// The tab to show.
+  final UsersTab tab;
+
+  /// Called with the tab the user picked. Null keeps the choice in the view.
+  final ValueChanged<UsersTab>? onTabSelected;
 
   @override
   State<UsersPage> createState() => _UsersPageState();
@@ -249,6 +263,10 @@ class _UsersPageState extends State<UsersPage>
           actions: const [AppThemeToggle()],
           drawer: const AppDrawer(activeSection: QuarkDrawerSection.users),
           body: QuarkTabView(
+            selectedIndex: widget.tab.index,
+            onTabSelected: widget.onTabSelected == null
+                ? null
+                : (index) => widget.onTabSelected!(UsersTab.values[index]),
             tabs: [
               QuarkTab(
                 label: 'Accounts',
