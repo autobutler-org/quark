@@ -8,7 +8,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// replaces the route rather than stacking it, so Back could only repeat up
 /// (#2314). Web keeps the browser's own Back, which walks the visited-folder
 /// URLs. The tooltip names the folder it lands in — "Back to docs", or
-/// "Back to Files" at the top — so it does not read as history either.
+/// "Back to Files" at the top — so it does not read as history either. A
+/// disabled arrow has nowhere to go, so it has no tooltip.
 ///
 /// Up stops at [rootPath], the lowest folder the caller can open, so a member
 /// pressing up in their own files is not walked into the `users` folder they
@@ -43,7 +44,7 @@ class FileTopBarNavButtons extends StatelessWidget {
       key: const ValueKey('file_top_bar_up'),
       icon: QuarkIcons.arrow_back_rounded,
       onPressed: canGoUp ? onGoUp : null,
-      tooltip: 'Back to $parentName',
+      tooltip: canGoUp ? 'Back to $parentName' : null,
     );
   }
 }

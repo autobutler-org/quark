@@ -49,8 +49,9 @@ class QuarkBarIconButton extends StatelessWidget {
 
   /// What the button does, shown on hover and read by screen readers. Every
   /// bar action has one; an unexplained glyph is how the vault's menu ended
-  /// up anonymous.
-  final String tooltip;
+  /// up anonymous. Null only for a disabled button whose tooltip would name
+  /// something that is not there, such as Files' back arrow at the top.
+  final String? tooltip;
 
   /// Runs the action. Null renders the button disabled.
   final VoidCallback? onPressed;
