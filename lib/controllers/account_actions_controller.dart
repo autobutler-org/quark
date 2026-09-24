@@ -6,24 +6,23 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/settings/reset_quark_dialog.dart';
 
-/// The destructive account actions on the settings page, kept out of its
-/// [State] (#1762).
+/// The destructive account actions on the account and data page, kept out of
+/// its [State] (#1762, #2346).
 ///
-/// Narrow on purpose: it owns the one thing the settings page must not do for
-/// itself, which is call a service. The page still owns its dialogs and its
-/// navigation. This is not a decoupling of the settings page — that page is
-/// 1300 lines and its own job.
+/// Narrow on purpose: it owns the one thing the page must not do for itself,
+/// which is call a service. The page still owns its dialogs and its
+/// navigation.
 ///
 /// Service calls arrive as function parameters defaulting to the real static
 /// methods, so a test passes fakes without a mocking library.
 class AccountActionsController extends ChangeNotifier {
   /// Creates a controller talking to the real [AuthService] unless overridden.
   AccountActionsController({
-    Future<DeleteAccountResult> Function({required String confirmUsername})
+    Future<DeleteAccountResult> Function({required String password})
         deleteAccountRequest =
         AuthService.deleteAccount,
     Future<DeleteAccountResult> Function({
-          required String confirmUsername,
+          required String password,
           required bool database,
           required bool files,
           required bool devices,
@@ -36,10 +35,10 @@ class AccountActionsController extends ChangeNotifier {
        _resetQuarkRequest = resetQuarkRequest,
        _signedOutDestination = signedOutDestination;
 
-  final Future<DeleteAccountResult> Function({required String confirmUsername})
+  final Future<DeleteAccountResult> Function({required String password})
   _deleteAccountRequest;
   final Future<DeleteAccountResult> Function({
-    required String confirmUsername,
+    required String password,
     required bool database,
     required bool files,
     required bool devices,
@@ -64,9 +63,9 @@ class AccountActionsController extends ChangeNotifier {
   /// decides what counts as data left behind. The page says so on the way out.
   bool get filesRetained => _filesRetained;
 
-  /// The account the confirmation dialogs should name, or null when this
-  /// session never named one (it was recovered by phrase, or predates the app
-  /// recording it). The dialog leaves the check to the Quark in that case.
+  /// The account the deletion dialog should name, or null when this session
+  /// never named one (it was recovered by phrase, or predates the app
+  /// recording it). Only used for copy: the password is the confirmation.
   String? get username => AppSettings.instance.username;
 
   /// Deletes the signed-in account, and nothing else.
@@ -75,8 +74,8 @@ class AccountActionsController extends ChangeNotifier {
   /// failed and [error] now says why. Success revokes the session on the
   /// Quark, so there is always somewhere to go: setup when this was the last
   /// account on the appliance, login otherwise.
-  Future<String?> deleteAccount({required String confirmUsername}) => _run(
-    () => _deleteAccountRequest(confirmUsername: confirmUsername),
+  Future<String?> deleteAccount({required String password}) => _run(
+    () => _deleteAccountRequest(password: password),
     'delete your account',
   );
 
@@ -85,10 +84,10 @@ class AccountActionsController extends ChangeNotifier {
   /// Same contract as [deleteAccount]: a route on success, null on failure.
   Future<String?> resetQuark({
     required QuarkResetSelection selection,
-    required String confirmUsername,
+    required String password,
   }) => _run(
     () => _resetQuarkRequest(
-      confirmUsername: confirmUsername,
+      password: password,
       database: selection.database,
       files: selection.files,
       devices: selection.devices,

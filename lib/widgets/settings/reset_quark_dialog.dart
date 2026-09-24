@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/widgets/settings/confirm_password_field.dart';
 import 'package:quark/widgets/settings/reset_quark_warning.dart';
 
 /// The aspects of an appliance a reset can wipe, as chosen in the dialog.
@@ -114,39 +115,36 @@ const String kResetQuarkDriveWarning =
 /// because "what will this actually erase" is the question the dialog exists
 /// to answer, and it reads back both halves, kept as well as erased (#2052).
 ///
+/// The account's password gates the reset (#2346), on top of the boxes rather
+/// than instead of them: it proves who is asking, the boxes say what goes.
+///
 /// Key prefixes: `reset_quark_database`, `reset_quark_files`,
 /// `reset_quark_devices`, `reset_quark_scope`, `reset_quark_warning`,
-/// `reset_quark_devices_warning`, `reset_quark_confirm_field`,
-/// `reset_quark_cancel`, and `reset_quark_submit`.
+/// `reset_quark_devices_warning`, `reset_quark_password_field`,
+/// `reset_quark_password_visibility`, `reset_quark_cancel`, and
+/// `reset_quark_submit`.
 ///
 /// ```dart
 /// QuarkWidget.showDialog<(QuarkResetSelection, String)>(
 ///   context,
 ///   builder: (ctx) => ResetQuarkDialog(
-///     username: AppSettings.instance.username,
-///     onConfirm: (selection, confirm) =>
-///         Navigator.of(ctx).pop((selection, confirm)),
+///     onConfirm: (selection, password) =>
+///         Navigator.of(ctx).pop((selection, password)),
 ///     onCancel: () => Navigator.of(ctx).pop(),
 ///   ),
 /// );
 /// ```
 class ResetQuarkDialog extends StatefulWidget {
-  /// Creates the reset confirmation for the Quark [username] is signed in to.
+  /// Creates the reset confirmation.
   const ResetQuarkDialog({
     required this.onConfirm,
     required this.onCancel,
-    this.username,
     super.key,
   });
 
-  /// The signed-in account, or null when this session never named one. Only
-  /// used to check and phrase the confirmation.
-  final String? username;
-
-  /// Called with the chosen aspects and the typed confirmation, once the
-  /// confirmation matches and at least one aspect is selected.
-  final void Function(QuarkResetSelection selection, String confirmUsername)
-  onConfirm;
+  /// Called with the chosen aspects and the typed password, once a password
+  /// has been typed and at least one aspect is selected.
+  final void Function(QuarkResetSelection selection, String password) onConfirm;
 
   /// Called when the user backs out through the cancel button.
   final VoidCallback onCancel;
@@ -156,31 +154,26 @@ class ResetQuarkDialog extends StatefulWidget {
 }
 
 class _ResetQuarkDialogState extends State<ResetQuarkDialog> {
-  final _confirmController = TextEditingController();
+  final _passwordController = TextEditingController();
   QuarkResetSelection _selection = const QuarkResetSelection();
 
   @override
   void dispose() {
-    _confirmController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  bool get _isConfirmed {
-    final typed = _confirmController.text.trim();
-    final expected = widget.username;
-    return expected == null ? typed.isNotEmpty : typed == expected;
-  }
+  bool get _hasPassword => _passwordController.text.isNotEmpty;
 
   void _submit() {
-    if (!_isConfirmed || _selection.isEmpty) return;
-    widget.onConfirm(_selection, _confirmController.text.trim());
+    if (!_hasPassword || _selection.isEmpty) return;
+    widget.onConfirm(_selection, _passwordController.text);
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final username = widget.username;
 
     return QuarkWidget.alertDialog(
       title: const Text('Reset this Quark'),
@@ -263,19 +256,11 @@ class _ResetQuarkDialogState extends State<ResetQuarkDialog> {
             ),
           ],
           const SizedBox(height: 16),
-          Text(
-            username == null
-                ? 'Type your username to confirm.'
-                : 'Type $username to confirm.',
-          ),
+          const Text('Enter your password to confirm.'),
           const SizedBox(height: 8),
-          QuarkWidget.textField(
-            key: const ValueKey('reset_quark_confirm_field'),
-            controller: _confirmController,
-            autofocus: true,
-            autocorrect: false,
-            enableSuggestions: false,
-            hintText: username ?? 'username',
+          ConfirmPasswordField(
+            keyPrefix: 'reset_quark',
+            controller: _passwordController,
             onChanged: (_) => setState(() {}),
             onSubmitted: (_) => _submit(),
           ),
@@ -293,7 +278,7 @@ class _ResetQuarkDialogState extends State<ResetQuarkDialog> {
             backgroundColor: colorScheme.error,
             foregroundColor: colorScheme.onError,
           ),
-          onPressed: _isConfirmed && !_selection.isEmpty ? _submit : null,
+          onPressed: _hasPassword && !_selection.isEmpty ? _submit : null,
           child: const Text('Reset this Quark'),
         ),
       ],

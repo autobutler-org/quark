@@ -3,15 +3,21 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:quark/pages/account_and_data_page.dart';
 import 'package:quark/pages/settings_page.dart';
+import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 
 import '../support/unreachable_quark.dart';
 
 /// #1762: App Store Review Guideline 5.1.1(v) rejects an app that supports
 /// account creation without letting a user start deleting their account from
-/// inside it — and rejects one where a reviewer cannot find the control. It
-/// lives in Settings, in the Account section, under Sign out.
+/// inside it — and rejects one where a reviewer cannot find the control.
+///
+/// #2346: it must also be hard to reach by accident. Settings' Account section
+/// carries one labeled row, **Account and data**, and the destructive actions
+/// sit on the page behind it.
 void main() {
   final settings = AppSettings.instance;
 
@@ -81,54 +87,112 @@ void main() {
       priorOnError?.call(details);
     };
 
-    await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
+    await tester.pumpWidget(
+      MaterialApp.router(
+        routerConfig: GoRouter(
+          initialLocation: AppRoutes.settings,
+          routes: [
+            GoRoute(
+              path: AppRoutes.settings,
+              builder: (_, _) => const SettingsPage(),
+            ),
+            GoRoute(
+              path: AppRoutes.accountAndData,
+              builder: (_, _) => const AccountAndDataPage(),
+            ),
+          ],
+        ),
+      ),
+    );
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }
   }
 
+  /// The drill-down on its own: it loads nothing from the Quark.
+  Future<void> pumpAccountAndData(
+    WidgetTester tester, {
+    Size size = const Size(1280, 800),
+  }) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const MaterialApp(home: AccountAndDataPage()));
+    await tester.pump();
+  }
+
+  final row = find.byKey(const ValueKey('settings_account_and_data'));
+
   final entry = find.byKey(const ValueKey('settings_delete_account'));
   final resetEntry = find.byKey(const ValueKey('settings_reset_quark'));
 
-  testWidgets('offers deletion next to sign out', (tester) async {
+  testWidgets('offers a labeled row under sign out, nothing destructive', (
+    tester,
+  ) async {
     await signIn();
 
     await pumpSettings(tester);
 
-    expect(entry, findsOneWidget);
-    expect(find.text('Delete account'), findsOneWidget);
-    // The reviewer's path: Settings, Account, under Sign out.
+    expect(row, findsOneWidget);
+    expect(find.text('Account and data'), findsOneWidget);
     expect(
-      tester.getTopLeft(entry).dy,
+      tester.getTopLeft(row).dy,
       greaterThan(tester.getTopLeft(find.text('Sign out')).dy),
     );
-  });
-
-  testWidgets('keeps the reset in its own section, below', (tester) async {
-    await signIn();
-
-    await pumpSettings(tester);
-
-    // Two intents, two entries, under two headings. Nothing here reads as a
-    // way to reset the appliance by deleting an account.
-    expect(resetEntry, findsOneWidget);
-    expect(find.text('Reset'), findsOneWidget);
-    expect(
-      tester.getTopLeft(resetEntry).dy,
-      greaterThan(tester.getTopLeft(find.text('Reset')).dy),
-    );
-    expect(
-      tester.getTopLeft(resetEntry).dy,
-      greaterThan(tester.getTopLeft(entry).dy),
-    );
-  });
-
-  testWidgets('offers neither without a session', (tester) async {
-    await pumpSettings(tester);
-
+    // Nothing destructive on the main page any more.
     expect(entry, findsNothing);
     expect(resetEntry, findsNothing);
+    expect(find.text('Delete account'), findsNothing);
+    expect(find.text('Reset this Quark'), findsNothing);
   });
+
+  testWidgets('offers no row without a session', (tester) async {
+    await pumpSettings(tester);
+
+    expect(row, findsNothing);
+  });
+
+  testWidgets('the row drills down to the account and data page', (
+    tester,
+  ) async {
+    await signIn();
+    await pumpSettings(tester);
+
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('account_and_data_page')), findsOneWidget);
+    expect(entry, findsOneWidget);
+    // A detail flow, so it gets a back button rather than the drawer.
+    expect(find.byType(BackButton), findsOneWidget);
+  });
+
+  for (final (label, size) in [
+    ('narrow', const Size(360, 640)),
+    ('wide', const Size(1280, 800)),
+  ]) {
+    testWidgets('keeps the reset in its own section, below ($label)', (
+      tester,
+    ) async {
+      await signIn();
+
+      await pumpAccountAndData(tester, size: size);
+
+      // Two intents, two entries, under two headings. Nothing here reads as a
+      // way to reset the appliance by deleting an account.
+      expect(entry, findsOneWidget);
+      expect(resetEntry, findsOneWidget);
+      expect(find.text('Reset'), findsOneWidget);
+      expect(
+        tester.getTopLeft(resetEntry).dy,
+        greaterThan(tester.getTopLeft(find.text('Reset')).dy),
+      );
+      expect(
+        tester.getTopLeft(resetEntry).dy,
+        greaterThan(tester.getTopLeft(entry).dy),
+      );
+    });
+  }
 
   // #1899: resetting the appliance is admin-only on the Quark, so a member
   // keeps their own account deletion and never sees the reset.
@@ -136,28 +200,28 @@ void main() {
     await signIn();
     settings.isAdmin.value = false;
 
-    await pumpSettings(tester);
+    await pumpAccountAndData(tester);
 
     expect(entry, findsOneWidget);
     expect(resetEntry, findsNothing);
     expect(find.text('Reset'), findsNothing);
   });
 
-  testWidgets('asks for the username before anything is deleted', (
+  testWidgets('asks for the password before anything is deleted', (
     tester,
   ) async {
     await signIn();
-    await pumpSettings(tester);
+    await pumpAccountAndData(tester);
 
     await tester.tap(entry);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(
-      find.byKey(const ValueKey('delete_account_confirm_field')),
+      find.byKey(const ValueKey('delete_account_password_field')),
       findsOneWidget,
     );
-    // Nothing can be sent until the username is typed.
+    // Nothing can be sent until the password is typed.
     expect(
       tester
           .widget<FilledButton>(
@@ -168,17 +232,16 @@ void main() {
     );
   });
 
-  testWidgets('asks for the username before anything is reset', (tester) async {
+  testWidgets('asks for the password before anything is reset', (tester) async {
     await signIn();
-    await pumpSettings(tester);
+    await pumpAccountAndData(tester);
 
-    await tester.scrollUntilVisible(resetEntry, 200);
     await tester.tap(resetEntry);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(
-      find.byKey(const ValueKey('reset_quark_confirm_field')),
+      find.byKey(const ValueKey('reset_quark_password_field')),
       findsOneWidget,
     );
     expect(

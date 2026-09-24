@@ -4,15 +4,18 @@ import 'package:quark/widgets/settings/delete_account_dialog.dart';
 
 /// #1762: App Store Review Guideline 5.1.1(v) needs deletion initiated in the
 /// app, and a destructive action needs friction in front of it. These pin the
-/// friction — the typed confirmation — and the two things the dialog must not
+/// friction — the account's password (#2346) — and the two things the dialog must not
 /// do: reach anything but the account, or stay quiet about the files it leaves
 /// behind for whoever sets the Quark up next.
 void main() {
   const narrowViewport = Size(360, 640);
   const wideViewport = Size(1280, 800);
 
-  final confirmField = find.byKey(
-    const ValueKey('delete_account_confirm_field'),
+  final passwordField = find.byKey(
+    const ValueKey('delete_account_password_field'),
+  );
+  final visibility = find.byKey(
+    const ValueKey('delete_account_password_visibility'),
   );
   final filesWarning = find.byKey(
     const ValueKey('delete_account_files_warning'),
@@ -83,7 +86,7 @@ void main() {
     expect(find.byType(Switch), findsNothing);
   });
 
-  testBothViewports('does not confirm until the username is typed', (
+  testBothViewports('does not confirm until a password is typed', (
     tester,
     size,
   ) async {
@@ -96,31 +99,45 @@ void main() {
     expect(confirmations, isEmpty);
   });
 
-  testBothViewports('refuses a username that does not match', (
+  // The username is on the screen; knowing it proves nothing (#2346).
+  testBothViewports('asks for the password, not the username', (
     tester,
     size,
   ) async {
-    final confirmations = await pumpDialog(tester, size: size);
+    await pumpDialog(tester, size: size);
 
-    await tester.enterText(confirmField, 'adam');
-    await tester.pump();
-
-    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
-    await tester.tap(submit);
-    await tester.pump();
-
-    expect(confirmations, isEmpty);
+    expect(find.text('Enter your password to confirm.'), findsOneWidget);
+    expect(find.textContaining('Type ada'), findsNothing);
   });
 
-  testBothViewports('confirms once the username matches', (tester, size) async {
+  testBothViewports('sends the typed password', (tester, size) async {
     final confirmations = await pumpDialog(tester, size: size);
 
-    await tester.enterText(confirmField, 'ada');
+    await tester.enterText(passwordField, 'hunter2hunter2');
     await tester.pump();
     await tester.tap(submit);
     await tester.pump();
 
-    expect(confirmations, ['ada']);
+    expect(confirmations, ['hunter2hunter2']);
+  });
+
+  testWidgets('hides the password until asked to show it', (tester) async {
+    await pumpDialog(tester, size: narrowViewport);
+    bool obscured() => tester
+        .widget<EditableText>(
+          find.descendant(
+            of: passwordField,
+            matching: find.byType(EditableText),
+          ),
+        )
+        .obscureText;
+
+    expect(obscured(), isTrue);
+    await tester.ensureVisible(visibility);
+    await tester.pump();
+    await tester.tap(visibility);
+    await tester.pump();
+    expect(obscured(), isFalse);
   });
 
   testBothViewports('warns that the files outlive the account', (
@@ -143,7 +160,7 @@ void main() {
     expect(find.textContaining('the Quark returns to setup'), findsOneWidget);
   });
 
-  testWidgets('leaves the check to the Quark when no username is known', (
+  testWidgets('still asks for the password when no username is known', (
     tester,
   ) async {
     final confirmations = await pumpDialog(
@@ -152,13 +169,13 @@ void main() {
       username: null,
     );
 
-    expect(find.text('Type your username to confirm.'), findsOneWidget);
-    await tester.enterText(confirmField, 'whoever');
+    expect(find.textContaining('Your account will be deleted'), findsOneWidget);
+    await tester.enterText(passwordField, 'hunter2hunter2');
     await tester.pump();
     await tester.tap(submit);
     await tester.pump();
 
-    expect(confirmations, ['whoever']);
+    expect(confirmations, ['hunter2hunter2']);
   });
 
   testWidgets('cancels without confirming', (tester) async {

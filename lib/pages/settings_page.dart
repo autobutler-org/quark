@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:quark/controllers/account_actions_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
@@ -15,7 +14,6 @@ import 'package:quark/services/settings_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
-import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/utils/remote_access_config.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark/widgets/settings/help_support_card.dart';
@@ -28,8 +26,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/settings/code_block.dart';
-import 'package:quark/widgets/settings/delete_account_dialog.dart';
-import 'package:quark/widgets/settings/reset_quark_dialog.dart';
 import 'package:quark/widgets/text_controller_scope.dart';
 
 /// The commit a `make serve/...` or `make watch/frontend` run was built from.
@@ -126,9 +122,6 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   ThemeMode _theme = ThemeMode.system;
-
-  /// Owns the account actions' service calls, so this [State] does not (#1762).
-  final _accountActions = AccountActionsController();
 
   /// How this app's own version reads, per [appVersionLabel] (#1606).
   ///
@@ -740,64 +733,25 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             // Account deletion has to be initiated in the app and has to be
-            // findable, per App Store Review Guideline 5.1.1(v). Directly
-            // under Sign out, in the Account section, is where a person
-            // looking for it looks (#1762).
+            // findable, per App Store Review Guideline 5.1.1(v) (#1762). A
+            // labeled row in the Account section leading to it is the
+            // accepted pattern, and keeps anything destructive away from Sign
+            // out, one mis-tap from the deletion flow (#2346).
             Card(
               child: ListTile(
-                key: const ValueKey('settings_delete_account'),
-                leading: Icon(
-                  Icons.delete_forever_outlined,
-                  color: Theme.of(context).colorScheme.error,
+                key: const ValueKey('settings_account_and_data'),
+                leading: const Icon(QuarkIcons.person_outline),
+                title: const Text('Account and data'),
+                subtitle: Text(
+                  AppSettings.instance.isAdmin.value
+                      ? 'Delete your account or reset this Quark'
+                      : 'Delete your account',
                 ),
-                title: Text(
-                  'Delete account',
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-                subtitle: const Text(
-                  'Permanently deletes your account on this Quark',
-                ),
-                onTap: _accountActions.isWorking ? null : _deleteAccount,
+                trailing: const Icon(QuarkIcons.chevron_right),
+                onTap: () => context.push(AppRoutes.accountAndData),
               ),
             ),
             const SizedBox(height: 24),
-            // The other intent, kept a section away from the first. Resetting
-            // the appliance is not an account action and must never read like
-            // one, so it gets its own heading and its own words rather than a
-            // checkbox on the deletion dialog (#1762). Only an admin may reset
-            // the appliance (#1899).
-            if (AppSettings.instance.isAdmin.value) ...[
-              const Text(
-                'Reset',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Card(
-                child: ListTile(
-                  key: const ValueKey('settings_reset_quark'),
-                  leading: Icon(
-                    Icons.restart_alt,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                  title: Text(
-                    'Reset this Quark',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  // Says what the dialog will ask rather than promising the
-                  // widest possible wipe: attached drives are left alone
-                  // unless the user asks for them (#2052).
-                  subtitle: const Text(
-                    'Returns this Quark to first-boot setup. You choose what '
-                    'it erases; attached drives are left alone unless you say '
-                    'otherwise',
-                  ),
-                  onTap: _accountActions.isWorking ? null : _resetQuark,
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
           ],
           Card(
             child: Padding(
@@ -1558,95 +1512,10 @@ class _SettingsPageState extends State<SettingsPage> {
     if (mounted) context.go(AppRoutes.files);
   }
 
-  /// Confirms deleting the account, then routes out.
-  ///
-  /// The controller does the deleting; the dialog and the navigation stay
-  /// here, where a page's do.
-  Future<void> _deleteAccount() async {
-    final confirmUsername = await QuarkWidget.showDialog<String>(
-      context,
-      builder: (ctx) => DeleteAccountDialog(
-        username: _accountActions.username,
-        onConfirm: (typed) => Navigator.of(ctx).pop(typed),
-        onCancel: () => Navigator.of(ctx).pop(),
-      ),
-    );
-    if (confirmUsername == null || !mounted) return;
-
-    await _leaveAfter(
-      () => _accountActions.deleteAccount(confirmUsername: confirmUsername),
-      'Your account is gone.',
-    );
-  }
-
-  /// Confirms a factory reset, then routes out.
-  ///
-  /// A separate entry, separate copy and separate call from [_deleteAccount]:
-  /// nothing that starts as "delete my account" can end as a wiped appliance.
-  Future<void> _resetQuark() async {
-    final confirmation =
-        await QuarkWidget.showDialog<(QuarkResetSelection, String)>(
-          context,
-          builder: (ctx) => ResetQuarkDialog(
-            username: _accountActions.username,
-            onConfirm: (selection, typed) =>
-                Navigator.of(ctx).pop((selection, typed)),
-            onCancel: () => Navigator.of(ctx).pop(),
-          ),
-        );
-    if (confirmation == null || !mounted) return;
-
-    await _leaveAfter(
-      () => _accountActions.resetQuark(
-        selection: confirmation.$1,
-        confirmUsername: confirmation.$2,
-      ),
-      'This Quark has been reset.',
-    );
-  }
-
-  /// Runs [action], then either reports why it failed or leaves the app for
-  /// wherever a signed-out user belongs.
-  ///
-  /// [done] is what the user is told on the way out. The Quark reports whether
-  /// files survived, so the notice about them is the truth after the fact
-  /// rather than a second guess at what was asked for. The snack bar is shown
-  /// before navigating on purpose: the root [ScaffoldMessenger] outlives this
-  /// route, so the message survives the trip to setup or login.
-  Future<void> _leaveAfter(
-    Future<String?> Function() action,
-    String done,
-  ) async {
-    setState(() {});
-    final destination = await action();
-    if (!mounted) return;
-    setState(() {});
-
-    final messenger = ScaffoldMessenger.of(context);
-    if (destination == null) {
-      messenger.showSnackBar(SnackBar(content: Text(_accountActions.error!)));
-      return;
-    }
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          _accountActions.filesRetained
-              ? '$done Your files are still on this Quark.'
-              : done,
-        ),
-      ),
-    );
-    // The token is already gone, so the router's gate would move the user on
-    // regardless. Going straight there means they never watch this page fail
-    // to load against a Quark they can no longer sign in to.
-    context.go(destination);
-  }
-
   @override
   void dispose() {
     AppSettings.instance.isAdmin.removeListener(_onAdminChanged);
     _remoteAccessPoll?.cancel();
-    _accountActions.dispose();
     super.dispose();
   }
 

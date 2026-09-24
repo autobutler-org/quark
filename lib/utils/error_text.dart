@@ -232,6 +232,11 @@ abstract final class Errors {
   static const String accountDisabled =
       'This account is turned off. Ask an admin of this Quark.';
 
+  /// Deleting an account or resetting the Quark with a password that isn't
+  /// the account's: a 403 whose error is `incorrect password` (#2346).
+  static const String incorrectPassword =
+      "That password isn't right. Nothing was deleted.";
+
   /// A sign-in the Quark refused with a 401.
   ///
   /// The same sentence for a wrong password and an unknown username, so the

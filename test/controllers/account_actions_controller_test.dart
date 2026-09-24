@@ -12,7 +12,7 @@ import 'package:quark/widgets/settings/reset_quark_dialog.dart';
 /// not on a dead screen.
 void main() {
   String? deletedFor;
-  ({String confirm, bool database, bool files, bool devices})? reset;
+  ({String password, bool database, bool files, bool devices})? reset;
 
   AccountActionsController controllerThat({
     Object? throwing,
@@ -20,20 +20,20 @@ void main() {
     bool filesRetained = false,
   }) {
     return AccountActionsController(
-      deleteAccountRequest: ({required String confirmUsername}) async {
-        deletedFor = confirmUsername;
+      deleteAccountRequest: ({required String password}) async {
+        deletedFor = password;
         if (throwing != null) throw throwing;
         return DeleteAccountResult(filesRetained: filesRetained);
       },
       resetQuarkRequest:
           ({
-            required String confirmUsername,
+            required String password,
             required bool database,
             required bool files,
             required bool devices,
           }) async {
             reset = (
-              confirm: confirmUsername,
+              password: password,
               database: database,
               files: files,
               devices: devices,
@@ -53,9 +53,9 @@ void main() {
   test('deleting an account never reaches the appliance', () async {
     final controller = controllerThat();
 
-    await controller.deleteAccount(confirmUsername: 'ada');
+    await controller.deleteAccount(password: 'pw');
 
-    expect(deletedFor, 'ada');
+    expect(deletedFor, 'pw');
     expect(reset, isNull);
   });
 
@@ -64,17 +64,17 @@ void main() {
 
     await controller.resetQuark(
       selection: const QuarkResetSelection(devices: true),
-      confirmUsername: 'ada',
+      password: 'pw',
     );
 
-    expect(reset, (confirm: 'ada', database: true, files: true, devices: true));
+    expect(reset, (password: 'pw', database: true, files: true, devices: true));
     expect(deletedFor, isNull);
   });
 
   test('routes to setup when that was the last account', () async {
     final controller = controllerThat(destination: AppRoutes.setup);
 
-    final destination = await controller.deleteAccount(confirmUsername: 'ada');
+    final destination = await controller.deleteAccount(password: 'pw');
 
     expect(destination, AppRoutes.setup);
     expect(controller.error, isNull);
@@ -83,16 +83,13 @@ void main() {
   test('routes to login when the Quark still has an account', () async {
     final controller = controllerThat(destination: AppRoutes.login);
 
-    expect(
-      await controller.deleteAccount(confirmUsername: 'ada'),
-      AppRoutes.login,
-    );
+    expect(await controller.deleteAccount(password: 'pw'), AppRoutes.login);
   });
 
   test('reports the files the Quark kept', () async {
     final controller = controllerThat(filesRetained: true);
 
-    await controller.deleteAccount(confirmUsername: 'ada');
+    await controller.deleteAccount(password: 'pw');
 
     expect(controller.filesRetained, isTrue);
   });
@@ -103,21 +100,21 @@ void main() {
       destination: AppRoutes.setup,
     );
 
-    final destination = await controller.deleteAccount(confirmUsername: 'ada');
+    final destination = await controller.deleteAccount(password: 'pw');
 
     expect(destination, AppRoutes.setup);
     expect(controller.error, isNull);
   });
 
-  test('a refused confirmation stays put with copy a user can read', () async {
+  test('a wrong password stays put with the Errors copy', () async {
     final controller = controllerThat(
-      throwing: const MessageException('confirm must match your username'),
+      throwing: const MessageException(Errors.incorrectPassword),
     );
 
-    final destination = await controller.deleteAccount(confirmUsername: 'nope');
+    final destination = await controller.deleteAccount(password: 'nope');
 
     expect(destination, isNull);
-    expect(controller.error, 'Confirm must match your username.');
+    expect(controller.error, Errors.incorrectPassword);
   });
 
   // #1909: the Quark refuses with 409 and the service maps it to lastAdmin.
@@ -128,9 +125,7 @@ void main() {
         throwing: const MessageException(Errors.lastAdmin),
       );
 
-      final destination = await controller.deleteAccount(
-        confirmUsername: 'ada',
-      );
+      final destination = await controller.deleteAccount(password: 'pw');
 
       expect(destination, isNull);
       expect(controller.error, Errors.lastAdmin);
@@ -140,7 +135,7 @@ void main() {
   test('an unexplained failure falls back to the generic sentence', () async {
     final controller = controllerThat(throwing: const ApiException(500));
 
-    await controller.deleteAccount(confirmUsername: 'ada');
+    await controller.deleteAccount(password: 'pw');
 
     expect(controller.error, 'Your Quark ran into a problem. Try again.');
   });
@@ -150,7 +145,7 @@ void main() {
 
     await controller.resetQuark(
       selection: const QuarkResetSelection(),
-      confirmUsername: 'ada',
+      password: 'pw',
     );
 
     expect(
@@ -164,7 +159,7 @@ void main() {
     final seen = <bool>[];
     controller.addListener(() => seen.add(controller.isWorking));
 
-    await controller.deleteAccount(confirmUsername: 'ada');
+    await controller.deleteAccount(password: 'pw');
 
     expect(seen, [true, false]);
     expect(controller.isWorking, isFalse);

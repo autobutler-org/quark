@@ -95,22 +95,34 @@ void main() {
   test('deleting an account selects the account and nothing else', () async {
     final client = serve();
 
-    await AuthService.deleteAccount(confirmUsername: 'ada');
+    await AuthService.deleteAccount(password: 'pw');
 
     final request = client.requests.single;
     expect(request.method, 'DELETE');
     expect(request.url.path, '/api/v0/auth/account');
     // Not "account plus some false flags": the appliance-wide aspects are not
     // this call's to send, so they are not in it at all.
-    expect(request.url.queryParameters, {'account': 'true', 'confirm': 'ada'});
+    expect(request.url.queryParameters, {'account': 'true'});
     expect(request.headers['Authorization'], 'Bearer one-token');
+  });
+
+  // #2346: query strings end up in access and proxy logs.
+  test('sends the password in the body, never the URL', () async {
+    final client = serve();
+
+    await AuthService.deleteAccount(password: 'hunter2hunter2');
+
+    final request = client.requests.single as http.Request;
+    expect(request.url.toString(), isNot(contains('hunter2')));
+    expect(request.headers['Content-Type'], startsWith('application/json'));
+    expect(jsonDecode(request.body), {'password': 'hunter2hunter2'});
   });
 
   test('resetting selects the appliance and never the account', () async {
     final client = serve();
 
     await AuthService.resetQuark(
-      confirmUsername: 'ada',
+      password: 'pw',
       database: true,
       files: true,
       devices: false,
@@ -120,7 +132,9 @@ void main() {
       'database': 'true',
       'files': 'true',
       'devices': 'false',
-      'confirm': 'ada',
+    });
+    expect(jsonDecode((client.requests.single as http.Request).body), {
+      'password': 'pw',
     });
   });
 
@@ -128,7 +142,7 @@ void main() {
     final client = serve();
 
     await AuthService.resetQuark(
-      confirmUsername: 'ada',
+      password: 'pw',
       database: false,
       files: true,
       devices: true,
@@ -142,7 +156,7 @@ void main() {
   test('reports the files the Quark says it kept', () async {
     serve(body: '{"deleted":{"account":true},"filesRetained":true}');
 
-    final result = await AuthService.deleteAccount(confirmUsername: 'ada');
+    final result = await AuthService.deleteAccount(password: 'pw');
 
     expect(result.filesRetained, isTrue);
   });
@@ -150,7 +164,7 @@ void main() {
   test('claims nothing about files when the Quark did not say', () async {
     serve(body: '{"deleted":{"account":true}}');
 
-    final result = await AuthService.deleteAccount(confirmUsername: 'ada');
+    final result = await AuthService.deleteAccount(password: 'pw');
 
     expect(result.filesRetained, isFalse);
   });
@@ -158,7 +172,7 @@ void main() {
   test('forgets the session on this Quark only', () async {
     serve();
 
-    await AuthService.deleteAccount(confirmUsername: 'ada');
+    await AuthService.deleteAccount(password: 'pw');
 
     expect(settings.sessionTokenFor('http://one.local'), isNull);
     expect(settings.usernameFor('http://one.local'), isNull);
@@ -166,15 +180,42 @@ void main() {
     expect(settings.usernameFor('http://two.local'), 'grace');
   });
 
-  test('keeps the session when the Quark refuses the confirmation', () async {
-    serve(
-      statusCode: 400,
-      body: '{"error":"confirm must be the authenticated username"}',
-    );
+  test(
+    'a wrong password reads the Errors copy and keeps the session',
+    () async {
+      serve(statusCode: 403, body: '{"error":"incorrect password"}');
+
+      await expectLater(
+        AuthService.deleteAccount(password: 'nope'),
+        throwsA(
+          isA<MessageException>().having(
+            (e) => e.message,
+            'message',
+            Errors.incorrectPassword,
+          ),
+        ),
+      );
+      expect(settings.sessionToken, 'one-token');
+    },
+  );
+
+  test('a wrong password on a reset reads the same copy', () async {
+    serve(statusCode: 403, body: '{"error":"incorrect password"}');
 
     await expectLater(
-      AuthService.deleteAccount(confirmUsername: 'nope'),
-      throwsA(isA<MessageException>()),
+      AuthService.resetQuark(
+        password: 'nope',
+        database: true,
+        files: true,
+        devices: false,
+      ),
+      throwsA(
+        isA<MessageException>().having(
+          (e) => e.message,
+          'message',
+          Errors.incorrectPassword,
+        ),
+      ),
     );
     expect(settings.sessionToken, 'one-token');
   });
@@ -187,7 +228,7 @@ void main() {
     );
 
     await expectLater(
-      AuthService.deleteAccount(confirmUsername: 'ada'),
+      AuthService.deleteAccount(password: 'pw'),
       throwsA(
         isA<MessageException>().having(
           (e) => e.message,
@@ -203,7 +244,7 @@ void main() {
     serve(statusCode: 401, body: '{"error":"not authenticated"}');
 
     await expectLater(
-      AuthService.deleteAccount(confirmUsername: 'ada'),
+      AuthService.deleteAccount(password: 'pw'),
       throwsA(isA<UnauthorizedException>()),
     );
     expect(settings.sessionToken, isNull);

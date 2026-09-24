@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/widgets/settings/confirm_password_field.dart';
 
 /// What the user reads when their files will outlive their account.
 ///
@@ -12,8 +13,8 @@ const String kDeleteAccountFilesWarning =
 /// The confirmation body for deleting the signed-in account (#1762).
 ///
 /// Data in, callbacks out: it neither deletes anything nor closes itself.
-/// [onConfirm] fires with the typed confirmation, and the caller that pushed
-/// the dialog is the one that pops it.
+/// [onConfirm] fires with the typed password, and the caller that pushed the
+/// dialog is the one that pops it.
 ///
 /// Deleting an account and factory-resetting an appliance are two intents, and
 /// this dialog only has one of them. There is no control here that can reach
@@ -26,21 +27,20 @@ const String kDeleteAccountFilesWarning =
 /// whoever claims it next can read it. [kDeleteAccountFilesWarning] says so,
 /// above the confirmation rather than under it.
 ///
-/// The typed confirmation goes to the Quark, which rejects anything but the
-/// authenticated username. Checking it here too keeps a typo from spending a
-/// round trip, and is skipped when [username] is null: a session recovered by
-/// phrase never named a user, so the Quark is the only thing that can judge.
+/// The confirmation is the account's password (#2346), not its username:
+/// anyone holding an unlocked phone can read the username off the screen. The
+/// Quark checks it; this dialog only refuses to send an empty one.
 ///
-/// Key prefixes: `delete_account_confirm_field`,
-/// `delete_account_files_warning`, `delete_account_cancel`, and
-/// `delete_account_submit`.
+/// Key prefixes: `delete_account_password_field`,
+/// `delete_account_password_visibility`, `delete_account_files_warning`,
+/// `delete_account_cancel`, and `delete_account_submit`.
 ///
 /// ```dart
 /// QuarkWidget.showDialog<String>(
 ///   context,
 ///   builder: (ctx) => DeleteAccountDialog(
 ///     username: AppSettings.instance.username,
-///     onConfirm: (confirmUsername) => Navigator.of(ctx).pop(confirmUsername),
+///     onConfirm: (password) => Navigator.of(ctx).pop(password),
 ///     onCancel: () => Navigator.of(ctx).pop(),
 ///   ),
 /// );
@@ -55,9 +55,10 @@ class DeleteAccountDialog extends StatefulWidget {
   });
 
   /// The account being deleted, or null when this session never named one.
+  /// Only used to phrase the dialog.
   final String? username;
 
-  /// Called with the typed confirmation, once it matches [username].
+  /// Called with the typed password, once one has been typed.
   final ValueChanged<String> onConfirm;
 
   /// Called when the user backs out through the cancel button.
@@ -68,28 +69,19 @@ class DeleteAccountDialog extends StatefulWidget {
 }
 
 class _DeleteAccountDialogState extends State<DeleteAccountDialog> {
-  final _confirmController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   @override
   void dispose() {
-    _confirmController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  /// Whether what has been typed is enough to send.
-  ///
-  /// With a known username nothing but that username will do. Without one the
-  /// only check available is that the user typed something, and the Quark
-  /// rejects it if they typed the wrong thing.
-  bool get _isConfirmed {
-    final typed = _confirmController.text.trim();
-    final expected = widget.username;
-    return expected == null ? typed.isNotEmpty : typed == expected;
-  }
+  bool get _hasPassword => _passwordController.text.isNotEmpty;
 
   void _submit() {
-    if (!_isConfirmed) return;
-    widget.onConfirm(_confirmController.text.trim());
+    if (!_hasPassword) return;
+    widget.onConfirm(_passwordController.text);
   }
 
   @override
@@ -146,19 +138,11 @@ class _DeleteAccountDialogState extends State<DeleteAccountDialog> {
             ),
           ),
           const SizedBox(height: 16),
-          Text(
-            username == null
-                ? 'Type your username to confirm.'
-                : 'Type $username to confirm.',
-          ),
+          const Text('Enter your password to confirm.'),
           const SizedBox(height: 8),
-          QuarkWidget.textField(
-            key: const ValueKey('delete_account_confirm_field'),
-            controller: _confirmController,
-            autofocus: true,
-            autocorrect: false,
-            enableSuggestions: false,
-            hintText: username ?? 'username',
+          ConfirmPasswordField(
+            keyPrefix: 'delete_account',
+            controller: _passwordController,
             onChanged: (_) => setState(() {}),
             onSubmitted: (_) => _submit(),
           ),
@@ -176,7 +160,7 @@ class _DeleteAccountDialogState extends State<DeleteAccountDialog> {
             backgroundColor: colorScheme.error,
             foregroundColor: colorScheme.onError,
           ),
-          onPressed: _isConfirmed ? _submit : null,
+          onPressed: _hasPassword ? _submit : null,
           child: const Text('Delete my account'),
         ),
       ],

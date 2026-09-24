@@ -313,7 +313,7 @@ account on this Quark.
 **Steps:**
 
 1. Navigate to **Settings**.
-2. Choose to delete your account, and confirm with your username.
+2. Tap **Account and data**, then **Delete account**, and confirm with your password (JN-ST-026).
 
 **Expected result:**
 
