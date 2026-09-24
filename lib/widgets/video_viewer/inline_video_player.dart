@@ -6,6 +6,9 @@ import 'package:video_player/video_player.dart';
 class InlineVideoPlayer extends StatelessWidget {
   final VideoPlayerController controller;
   final VoidCallback onToggleFullscreen;
+
+  /// Passed to [VideoSurfaceWithControls.frameKey] for Save Frame.
+  final GlobalKey? frameKey;
   final bool trimMode;
   final double trimStart;
   final double trimEnd;
@@ -16,6 +19,7 @@ class InlineVideoPlayer extends StatelessWidget {
     super.key,
     required this.controller,
     required this.onToggleFullscreen,
+    this.frameKey,
     this.trimMode = false,
     this.trimStart = 0.0,
     this.trimEnd = 1.0,
@@ -31,6 +35,7 @@ class InlineVideoPlayer extends StatelessWidget {
         controller: controller,
         isFullscreen: false,
         onToggleFullscreen: onToggleFullscreen,
+        frameKey: frameKey,
         trimMode: trimMode,
         trimStart: trimStart,
         trimEnd: trimEnd,
