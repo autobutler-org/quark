@@ -1,0 +1,21 @@
+name: quark_tsnet
+description: Embedded tsnet node with a loopback reverse proxy, bound with dart:ffi (#1881 spike).
+version: 0.0.1
+homepage: "https://github.com/autobutler-org/quark"
+environment:
+  sdk: ^3.11.0
+
+resolution: workspace
+
+publish_to: none
+
+# Pure Dart package. hook/build.dart compiles go/ into a native code asset.
+
+dependencies:
+  code_assets: ^2.1.0
+  ffi: ^2.2.0
+  hooks: ^2.2.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.15

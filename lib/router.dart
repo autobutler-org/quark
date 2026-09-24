@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/models/trash_item.dart';
@@ -17,6 +18,7 @@ import 'package:quark/pages/spreadsheet_editor_page.dart';
 import 'package:quark/pages/system_page.dart';
 import 'package:quark/pages/terms_page.dart';
 import 'package:quark/pages/trash_page.dart';
+import 'package:quark/pages/tsnet_debug_page.dart';
 import 'package:quark/pages/users_page.dart';
 import 'package:quark/pages/vault_page.dart';
 import 'package:quark/services/app_settings.dart';
@@ -91,6 +93,10 @@ class AppRoutes {
   /// Delete account and, for admins, Reset this Quark (#2346). A drill-down
   /// from Settings, reached with `context.push`.
   static const accountAndData = '/settings/account-and-data';
+
+  /// The embedded tailnet debug screen (#1881 spike). Registered only in
+  /// debug builds, and reached with `context.push` from Settings.
+  static const tsnetDebug = '/settings/tsnet-debug';
   static const setup = '/setup';
   static const login = '/login';
   static const recover = '/recover';
@@ -491,6 +497,11 @@ final router = GoRouter(
       path: AppRoutes.accountAndData,
       builder: (context, state) => const AccountAndDataPage(),
     ),
+    if (kDebugMode)
+      GoRoute(
+        path: AppRoutes.tsnetDebug,
+        builder: (context, state) => const TsnetDebugPage(),
+      ),
     GoRoute(
       path: AppRoutes.setup,
       builder: (context, state) =>

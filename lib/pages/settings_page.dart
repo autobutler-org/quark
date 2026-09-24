@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -1422,6 +1423,16 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () => context.push(AppRoutes.terms),
                   ),
                 ),
+                if (kDebugMode)
+                  Card(
+                    child: ListTile(
+                      key: const ValueKey('settings_tsnet_debug'),
+                      leading: const Icon(Icons.bug_report_outlined),
+                      title: const Text('Embedded tailnet (debug)'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push(AppRoutes.tsnetDebug),
+                    ),
+                  ),
               ],
             ),
           ),

@@ -88,4 +88,48 @@ class RemoteAccessService with AuthenticatedService {
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     return RemoteAccessStatus.fromJson(json);
   }
+
+  /// Asks the Quark for a key that adds this device to its household
+  /// (`POST /settings/remote-access/devices`, #2359). Call it on the home
+  /// network. A Quark older than #2359 answers 404.
+  static Future<DevicePairing> pairDevice() async {
+    final uri = apiBaseUri.resolve('/api/v0/settings/remote-access/devices');
+    final response = await sharedHttpClient.post(uri, headers: _authHeaders);
+    if (response.statusCode == 404) {
+      throw ApiException(404, 'Quark has no pairing endpoint');
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>?;
+      throwApiError(response.statusCode, body?['error'], 'Failed to pair');
+    }
+    return DevicePairing.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+}
+
+/// What a device needs to join its Quark's household and reach the Quark.
+class DevicePairing {
+  /// Creates a pairing.
+  const DevicePairing({
+    required this.authKey,
+    required this.controlUrl,
+    required this.quarkAddress,
+  });
+
+  /// Parses the `POST /settings/remote-access/devices` response.
+  factory DevicePairing.fromJson(Map<String, dynamic> json) => DevicePairing(
+    authKey: json['authKey'] as String? ?? '',
+    controlUrl: json['controlUrl'] as String? ?? '',
+    quarkAddress: json['quarkAddress'] as String? ?? '',
+  );
+
+  /// A single-use Headscale pre-auth key.
+  final String authKey;
+
+  /// The Headscale server to register with.
+  final String controlUrl;
+
+  /// The Quark's URL on the tailnet, `http://100.x.y.z:80`.
+  final String quarkAddress;
 }

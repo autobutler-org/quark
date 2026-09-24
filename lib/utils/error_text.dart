@@ -187,6 +187,14 @@ abstract final class Errors {
       "Remote access is on, but your Quark couldn't start it. Its log has "
       'the details.';
 
+  /// Pairing this device for remote access (#2359). A 404 means the Quark
+  /// predates the pairing endpoint.
+  static String pairDevice(Object? error) => switch (error) {
+    ApiException(statusCode: 404) =>
+      "This Quark can't pair devices yet. Update it, or enter a key by hand.",
+    _ => message(error, 'pair this device'),
+  };
+
   /// Demo mode's sample albums are bundled with the app, so there is no Quark
   /// to change them on.
   static const String demoModeReadOnly =

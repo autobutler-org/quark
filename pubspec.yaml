@@ -31,6 +31,7 @@ workspace:
   - packages/quark_formula
   - packages/quark_icons
   - packages/quark_icons/examples/icon_gallery
+  - packages/quark_tsnet
   - packages/quark_widgets
   - packages/quark_widgets/examples/widget_gallery
 
@@ -78,6 +79,9 @@ dependencies:
     path: packages/data_table
   quark_icons:
     path: packages/quark_icons
+  # Embedded tsnet node for the #1881 spike.
+  quark_tsnet:
+    path: packages/quark_tsnet
   quark_widgets:
     path: packages/quark_widgets
 
