@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -6,7 +7,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// as "leave this folder". There is no separate Back: folder navigation
 /// replaces the route rather than stacking it, so Back could only repeat up
 /// (#2314). Web keeps the browser's own Back, which walks the visited-folder
-/// URLs.
+/// URLs. The tooltip names the folder it lands in — "Back to docs", or
+/// "Back to Files" at the top — so it does not read as history either.
 ///
 /// Up stops at [rootPath], the lowest folder the caller can open, so a member
 /// pressing up in their own files is not walked into the `users` folder they
@@ -33,11 +35,15 @@ class FileTopBarNavButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     final canGoUp =
         navEnabled && currentPath.isNotEmpty && currentPath != rootPath;
+    final parent = parentPath(currentPath);
+    final parentName = parent.isEmpty
+        ? 'Files'
+        : parent.substring(parent.lastIndexOf('/') + 1);
     return QuarkBarIconButton(
       key: const ValueKey('file_top_bar_up'),
       icon: QuarkIcons.arrow_back_rounded,
       onPressed: canGoUp ? onGoUp : null,
-      tooltip: 'Up one level',
+      tooltip: 'Back to $parentName',
     );
   }
 }
