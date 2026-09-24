@@ -4,6 +4,7 @@ package remoteutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"tailscale.com/tsnet"
 )
 
@@ -34,7 +36,89 @@ var (
 	// ponytail: package state like the rest of this file; it belongs on
 	// deputil.Dependencies (#1674) once remote access is reworked there.
 	lastErr error
+	// testStatus, when set, is what Status reports; see SetStatusForTesting.
+	testStatus *StatusResult
 )
+
+// PairDevice's refusals. Each says what to do next.
+var (
+	// ErrCustomTailnet means the Quark joins a tailnet the user runs (#1810),
+	// where Quark cannot mint keys.
+	ErrCustomTailnet = errors.New("this Quark is on your own tailnet; add the device there instead")
+	// ErrRemoteAccessOff means an admin has not turned remote access on.
+	ErrRemoteAccessOff = errors.New("remote access is off; ask an admin to turn it on in Settings")
+	// ErrNoHousehold means the Quark enrolled before households (#2358), or
+	// with a key an admin supplied, so it has no credential to pair with.
+	ErrNoHousehold = errors.New("this Quark has no household to add devices to; an admin can turn remote access off and on again to re-enroll it")
+	// ErrNotConnected means remote access is on but the node has not joined
+	// the tailnet yet.
+	ErrNotConnected = errors.New("remote access is still connecting; try again in a moment")
+)
+
+// PairDeviceResult is what a device needs to join the Quark's household and
+// reach it.
+type PairDeviceResult struct {
+	// AuthKey is a single-use pre-auth key in the Quark's household.
+	AuthKey string
+	// ControlURL is the Headscale server the device registers with.
+	ControlURL string
+	// QuarkAddress is the Quark's URL on the tailnet.
+	QuarkAddress string
+}
+
+// PairDevice asks the provisioning service for a key that adds one more
+// device, such as a phone, to this Quark's household (#2359). It presents the
+// household credential from settings (pair mode, #2358) with a fresh random
+// device ID, since each device is its own node. It fails with ErrCustomTailnet,
+// ErrRemoteAccessOff, ErrNoHousehold or ErrNotConnected before any network
+// call when a key could not be used.
+func PairDevice() (PairDeviceResult, error) {
+	control := controlURL()
+	if control != defaultControlURL {
+		return PairDeviceResult{}, ErrCustomTailnet
+	}
+	if !settingsutil.GetRemoteAccess() {
+		return PairDeviceResult{}, ErrRemoteAccessOff
+	}
+	household, token := settingsutil.GetHousehold()
+	if household == "" || token == "" {
+		return PairDeviceResult{}, ErrNoHousehold
+	}
+	status := Status()
+	if !status.Connected || status.RemoteURL == "" {
+		return PairDeviceResult{}, ErrNotConnected
+	}
+	deviceID, err := newPairDeviceID()
+	if err != nil {
+		return PairDeviceResult{}, err
+	}
+	key, err := provisionutil.ProvisionAuthKey(provisionutil.ProvisionAuthKeyParams{
+		DeviceID:       deviceID,
+		Household:      household,
+		HouseholdToken: token,
+	})
+	if err != nil {
+		return PairDeviceResult{}, fmt.Errorf("provision a device key: %w", err)
+	}
+	return PairDeviceResult{
+		AuthKey:      key.AuthKey,
+		ControlURL:   control,
+		QuarkAddress: status.RemoteURL,
+	}, nil
+}
+
+// SetStatusForTesting makes Status report s until the returned function is
+// called, so a handler test can stand in a connected node without a tailnet.
+func SetStatusForTesting(s StatusResult) (restore func()) {
+	mu.Lock()
+	defer mu.Unlock()
+	testStatus = &s
+	return func() {
+		mu.Lock()
+		defer mu.Unlock()
+		testStatus = nil
+	}
+}
 
 // StatusResult is what the tsnet node is doing right now.
 type StatusResult struct {
@@ -103,6 +187,10 @@ func IsRunning() bool {
 // IsRunning() are never blocked by I/O.
 func Status() StatusResult {
 	mu.Lock()
+	if testStatus != nil {
+		defer mu.Unlock()
+		return *testStatus
+	}
 	s := srv
 	result := StatusResult{}
 	if lastErr != nil {

@@ -4759,6 +4759,55 @@
                 }
             }
         },
+        "/settings/remote-access/devices": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mints a single-use pre-auth key that adds the caller's device, such as a phone, to this Quark's Headscale household, and returns what the device needs to join the tailnet and reach the Quark. Any signed-in user may call it. 409 when the Quark is on the user's own tailnet, when remote access is off, or when the Quark has no household to add to; 503 while remote access is still connecting.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Pair a device for remote access",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.PairDeviceResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Custom tailnet, remote access off, or no household",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "503": {
+                        "description": "Remote access is still connecting",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/ssh/enabled": {
             "put": {
                 "security": [
@@ -8552,6 +8601,23 @@
                     "type": "integer"
                 },
                 "serial": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_settings.PairDeviceResponse": {
+            "type": "object",
+            "properties": {
+                "authKey": {
+                    "description": "AuthKey is a single-use Headscale pre-auth key in the Quark's household.",
+                    "type": "string"
+                },
+                "controlUrl": {
+                    "description": "ControlURL is the Headscale server the device registers with.",
+                    "type": "string"
+                },
+                "quarkAddress": {
+                    "description": "QuarkAddress is the Quark's URL on the tailnet.",
                     "type": "string"
                 }
             }
