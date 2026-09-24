@@ -28,7 +28,7 @@ class JobAnnouncement {
 
 /// The jobs on the Quark, for the whole app session.
 ///
-/// One instance, [instance], feeds the Jobs page and the finish announcements,
+/// One instance, [instance], feeds the System page's Jobs tab and the finish announcements,
 /// so both read the same list and a single events subscription. The list is
 /// fetched again on every terminal `job_*` event rather than trusted to the
 /// event stream, which drops events when a subscriber lags.
@@ -116,7 +116,7 @@ class JobsController extends ChangeNotifier {
   Stream<JobAnnouncement> get announcements => _announcements.stream;
 
   /// Subscribes to the events stream and the session, loading whenever a user
-  /// is signed in so [runningCount] is right before the Jobs page is opened.
+  /// is signed in so [runningCount] is right before the Jobs tab is opened.
   /// Safe to call more than once.
   void start() {
     if (_subscription != null) return;
@@ -218,7 +218,7 @@ class JobsController extends ChangeNotifier {
             name: job.name,
           ),
           actionLabel: 'View',
-          route: AppRoutes.jobs,
+          route: AppRoutes.systemTab(SystemTab.jobs),
         );
       default:
         return null;

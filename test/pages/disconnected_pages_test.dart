@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quark/pages/health_page.dart';
 import 'package:quark/pages/settings_page.dart';
+import 'package:quark/pages/system_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 
@@ -111,7 +111,11 @@ void main() {
 
   group('a page with nothing left to show', () {
     testWidgets('takes the full disconnected state', (tester) async {
-      await pumpPage(tester, AppRoutes.health, (_) => const HealthPage());
+      await pumpPage(
+        tester,
+        AppRoutes.systemTab(SystemTab.health),
+        (_) => const SystemPage(),
+      );
       expectOnlyKnownLayoutErrors();
 
       expect(find.byType(QuarkDisconnectedView), findsOneWidget);
@@ -122,7 +126,11 @@ void main() {
     });
 
     testWidgets('never shows the underlying exception', (tester) async {
-      await pumpPage(tester, AppRoutes.health, (_) => const HealthPage());
+      await pumpPage(
+        tester,
+        AppRoutes.systemTab(SystemTab.health),
+        (_) => const SystemPage(),
+      );
       expectOnlyKnownLayoutErrors();
 
       // The leakage from the bug report, in the shape it arrived.
@@ -133,7 +141,11 @@ void main() {
     });
 
     testWidgets('offers a way to the address that failed', (tester) async {
-      await pumpPage(tester, AppRoutes.health, (_) => const HealthPage());
+      await pumpPage(
+        tester,
+        AppRoutes.systemTab(SystemTab.health),
+        (_) => const SystemPage(),
+      );
       expectOnlyKnownLayoutErrors();
 
       expect(find.text('https://quark.local'), findsOneWidget);

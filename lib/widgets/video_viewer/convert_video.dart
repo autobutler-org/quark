@@ -53,7 +53,8 @@ Future<void> convertVideo(
         action: SnackBarAction(
           label: 'View',
           onPressed: () {
-            if (context.mounted) context.go(AppRoutes.jobs);
+            if (!context.mounted) return;
+            context.go(AppRoutes.systemTab(SystemTab.jobs));
           },
         ),
       ),

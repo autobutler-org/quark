@@ -1,6 +1,6 @@
 # Storage Devices Journeys
 
-Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, and backing up storage devices connected to the quark.
+Covers the System page's Storage tab (`/system/storage`) — listing, mounting, renaming, and backing up storage devices connected to the quark.
 
 ---
 
@@ -10,12 +10,17 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 
 **Steps:**
 
-1. Navigate to `/devices`.
+1. Navigate to `/system/storage`.
 
 **Expected result:**
 
 - List of storage devices is displayed.
 - Each device shows: name, serial, mount status, and storage usage bar.
+
+**Notes:**
+
+- The **Storage** tab of the System page, which **System** in the drawer opens. The old `/devices` address
+  redirects here.
 
 ---
 
@@ -25,7 +30,7 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 
 **Steps:**
 
-1. Navigate to `/devices`.
+1. Navigate to `/system/storage`.
 
 **Expected result:**
 
@@ -39,7 +44,7 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 
 **Steps:**
 
-1. Navigate to `/devices`.
+1. Navigate to `/system/storage`.
 2. Find the unmounted device in the list.
 3. Tap **Mount**.
 
@@ -53,7 +58,7 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 
 ### JN-SD-004: Auto-refresh device list
 
-**Preconditions:** User is on `/devices`.
+**Preconditions:** User is on `/system/storage`.
 
 **Steps:**
 
@@ -68,7 +73,7 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 
 ### JN-SD-005: Manually refresh device list
 
-**Preconditions:** User is on `/devices`.
+**Preconditions:** User is on `/system/storage`.
 
 **Steps:**
 
@@ -86,7 +91,7 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 
 **Steps:**
 
-1. Navigate to `/devices`.
+1. Navigate to `/system/storage`.
 2. Tap the rename action on a device (or long-press for context menu).
 3. Enter a new name.
 4. Confirm.
@@ -103,7 +108,7 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 
 **Steps:**
 
-1. Navigate to `/devices`.
+1. Navigate to `/system/storage`.
 
 **Expected result:**
 
@@ -118,7 +123,7 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 
 **Steps:**
 
-1. Navigate to `/devices`.
+1. Navigate to `/system/storage`.
 2. Initiate a backup for a device.
 3. Monitor the backup status.
 
@@ -136,7 +141,7 @@ Covers the Storage Devices page (`/devices`) — listing, mounting, renaming, an
 
 **Steps:**
 
-1. Navigate to `/devices`.
+1. Navigate to `/system/storage`.
 
 **Expected result:**
 
@@ -151,7 +156,7 @@ including one that is not mounted.
 
 **Steps:**
 
-1. Navigate to `/devices`.
+1. Navigate to `/system/storage`.
 
 **Expected result:**
 

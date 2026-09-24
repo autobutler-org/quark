@@ -32,7 +32,7 @@ class JobsBadgeHost extends StatelessWidget {
           listenable: controller,
           builder: (context, _) => JobsBadge(
             runningCount: controller.runningCount,
-            onTap: () => onNavigate(AppRoutes.jobs),
+            onTap: () => onNavigate(AppRoutes.systemTab(SystemTab.jobs)),
           ),
         ),
       ],

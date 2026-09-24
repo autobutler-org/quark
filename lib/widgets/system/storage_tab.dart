@@ -9,23 +9,23 @@ import 'package:quark/services/vault_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/quark_widget.dart';
-import 'package:quark_icons/quark_icons.dart';
-import 'package:quark_widgets/quark_widgets.dart';
-import 'package:quark/widgets/layout/app_drawer.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/storage_devices/role_dialog.dart';
 import 'package:quark/widgets/storage_devices/storage_devices_body.dart';
 
-/// The Storage page: the drives the Quark can see, their status and role, and the actions to mount, rename or
-/// back them up.
-class StorageDevicesPage extends StatefulWidget {
-  const StorageDevicesPage({super.key});
+/// The System page's Storage tab: the drives the Quark can see, their status
+/// and role, and the actions to mount, rename or back them up.
+class StorageTab extends StatefulWidget {
+  const StorageTab({this.onRefreshingChanged, super.key});
+
+  /// Called with whether a refresh is in flight whenever that changes, so
+  /// the page's app bar can show it.
+  final ValueChanged<bool>? onRefreshingChanged;
 
   @override
-  State<StorageDevicesPage> createState() => _StorageDevicesPageState();
+  State<StorageTab> createState() => _StorageTabState();
 }
 
-class _StorageDevicesPageState extends State<StorageDevicesPage>
+class _StorageTabState extends State<StorageTab>
     with WidgetsBindingObserver, AutoRefreshMixin {
   List<StorageDevice>? _devices;
 
@@ -37,6 +37,9 @@ class _StorageDevicesPageState extends State<StorageDevicesPage>
   BackupJobStatus? _backupStatus;
   Timer? _pollTimer;
   String _vaultDeviceSerial = '';
+
+  @override
+  void didChangeRefreshing() => widget.onRefreshingChanged?.call(isRefreshing);
 
   @override
   Future<void> refresh() async {
@@ -61,7 +64,7 @@ class _StorageDevicesPageState extends State<StorageDevicesPage>
         _error = null;
       });
     } catch (e) {
-      debugPrint('[storage_devices_page.dart] Error: $e');
+      debugPrint('[storage_tab.dart] Error: $e');
       if (!mounted) return;
       setState(() => _error = e);
     }
@@ -278,7 +281,7 @@ class _StorageDevicesPageState extends State<StorageDevicesPage>
         await refresh();
       }
     } catch (e) {
-      debugPrint('[storage_devices_page.dart] Poll error: $e');
+      debugPrint('[storage_tab.dart] Poll error: $e');
     }
   }
 
@@ -323,34 +326,24 @@ class _StorageDevicesPageState extends State<StorageDevicesPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: QuarkAppBar(
-        label: 'Devices',
-        icon: QuarkIcons.device_hub_outlined,
-        onRefresh: manualRefresh,
-        isRefreshing: isRefreshing,
-        actions: const [AppThemeToggle()],
-      ),
-      drawer: const AppDrawer(activeSection: QuarkDrawerSection.devices),
-      // Every drive action is admin-only on the Quark (#1899), so anyone else
-      // gets the list without them (#1928).
-      body: ValueListenableBuilder<bool>(
-        valueListenable: AppSettings.instance.isAdmin,
-        builder: (context, isAdmin, _) => StorageDevicesBody(
-          devices: _devices,
-          error: _error,
-          mounting: _mounting,
-          vaultDeviceSerial: _vaultDeviceSerial,
-          backupStatus: _backupStatus,
-          activeBackupJobId: _activeBackupJobId,
-          onRefresh: refresh,
-          onRetry: manualRefresh,
-          onManageHosts: () => context.go(AppRoutes.settings),
-          onMount: isAdmin ? _mountDevice : null,
-          onSetRole: isAdmin ? _showRoleDialog : null,
-          onBackup: isAdmin ? _startBackup : null,
-          onVerify: isAdmin ? _verifyBackup : null,
-        ),
+    // Every drive action is admin-only on the Quark (#1899), so anyone else
+    // gets the list without them (#1928).
+    return ValueListenableBuilder<bool>(
+      valueListenable: AppSettings.instance.isAdmin,
+      builder: (context, isAdmin, _) => StorageDevicesBody(
+        devices: _devices,
+        error: _error,
+        mounting: _mounting,
+        vaultDeviceSerial: _vaultDeviceSerial,
+        backupStatus: _backupStatus,
+        activeBackupJobId: _activeBackupJobId,
+        onRefresh: refresh,
+        onRetry: manualRefresh,
+        onManageHosts: () => context.go(AppRoutes.settings),
+        onMount: isAdmin ? _mountDevice : null,
+        onSetRole: isAdmin ? _showRoleDialog : null,
+        onBackup: isAdmin ? _startBackup : null,
+        onVerify: isAdmin ? _verifyBackup : null,
       ),
     );
   }

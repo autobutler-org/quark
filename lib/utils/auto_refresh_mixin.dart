@@ -59,6 +59,12 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
   /// connection pool reaches that easily, which a large upload creates.
   Duration get refreshTimeout => const Duration(seconds: 30);
 
+  /// Called right after [isRefreshing] changes, for a parent that shows it
+  /// where this State does not build, such as the app bar of the page a tab
+  /// sits in. It can run from [initState], mid-build, so an override that
+  /// sets another widget's state has to wait for the frame.
+  void didChangeRefreshing() {}
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
@@ -132,6 +138,7 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
     _lastRefreshStarted = now;
     if (mounted) {
       setState(() => isRefreshing = true);
+      didChangeRefreshing();
     }
     try {
       await refresh();
@@ -145,6 +152,7 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
           isRefreshing = false;
           if (initial) isInitialLoad = false;
         });
+        didChangeRefreshing();
       }
     }
   }

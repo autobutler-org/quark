@@ -1,6 +1,6 @@
 # Health Journeys
 
-Covers the Health dashboard (`/health`) — system metrics and status for the quark device.
+Covers the System page's Health tab (`/system/health`) — system metrics and status for the quark device.
 
 ---
 
@@ -10,18 +10,22 @@ Covers the Health dashboard (`/health`) — system metrics and status for the qu
 
 **Steps:**
 
-1. Navigate to `/health`.
+1. Navigate to `/system/health`.
 
 **Expected result:**
 
 - Health metrics are displayed: CPU usage, disk usage, memory, temperature, uptime, etc.
 - Values are current (fetched on load).
 
+**Notes:**
+
+- **System** in the drawer opens `/system`, which lands on this tab. The old `/health` address redirects here.
+
 ---
 
 ### JN-HE-002: Auto-refresh health metrics
 
-**Preconditions:** User is on `/health`.
+**Preconditions:** User is on `/system/health`.
 
 **Steps:**
 
@@ -32,11 +36,15 @@ Covers the Health dashboard (`/health`) — system metrics and status for the qu
 - Metrics update automatically without a manual refresh.
 - No visible flash or layout shift during refresh.
 
+**Notes:**
+
+- Only while this tab is on screen: on the Storage or Jobs tab, Health stops polling.
+
 ---
 
 ### JN-HE-003: Manually refresh health metrics
 
-**Preconditions:** User is on `/health`.
+**Preconditions:** User is on `/system/health`.
 
 **Steps:**
 
@@ -55,7 +63,7 @@ Covers the Health dashboard (`/health`) — system metrics and status for the qu
 
 **Steps:**
 
-1. Navigate to `/health`.
+1. Navigate to `/system/health`.
 
 **Expected result:**
 
@@ -70,7 +78,7 @@ Covers the Health dashboard (`/health`) — system metrics and status for the qu
 
 **Steps:**
 
-1. Navigate to `/health`.
+1. Navigate to `/system/health`.
 
 **Expected result:**
 

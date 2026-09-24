@@ -23,10 +23,8 @@ void main() {
     onTapTrash: callbacks[QuarkDrawerSection.trash],
     onTapDocs: callbacks[QuarkDrawerSection.docs],
     onTapSheets: callbacks[QuarkDrawerSection.sheets],
-    onTapDevices: callbacks[QuarkDrawerSection.devices],
-    onTapHealth: callbacks[QuarkDrawerSection.health],
+    onTapSystem: callbacks[QuarkDrawerSection.system],
     onTapVault: callbacks[QuarkDrawerSection.vault],
-    onTapJobs: callbacks[QuarkDrawerSection.jobs],
     onTapUsers: callbacks[QuarkDrawerSection.users],
     onTapSettings: callbacks[QuarkDrawerSection.settings],
   );
@@ -58,10 +56,8 @@ void main() {
       'Trash',
       'Docs',
       'Sheets',
-      'Devices',
-      'Health',
+      'System',
       'Vault',
-      'Jobs',
       'Users',
       'Settings',
     ]) {

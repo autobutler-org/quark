@@ -23,17 +23,11 @@ enum QuarkDrawerSection {
   /// The spreadsheet list.
   sheets,
 
-  /// Storage devices attached to the Quark.
-  devices,
-
-  /// System health.
-  health,
+  /// The Quark itself: its health, its drives and its jobs.
+  system,
 
   /// The encrypted vault.
   vault,
-
-  /// Long-running jobs on the Quark, such as video conversions.
-  jobs,
 
   /// The accounts on the Quark.
   users,
@@ -90,10 +84,8 @@ class QuarkDrawer extends StatelessWidget {
     this.onTapTrash,
     this.onTapDocs,
     this.onTapSheets,
-    this.onTapDevices,
-    this.onTapHealth,
+    this.onTapSystem,
     this.onTapVault,
-    this.onTapJobs,
     this.onTapUsers,
     this.onTapSettings,
     super.key,
@@ -130,17 +122,11 @@ class QuarkDrawer extends StatelessWidget {
   /// Called when the Sheets row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapSheets;
 
-  /// Called when the Devices row is tapped. Null hides the row.
-  final FutureOr<void> Function()? onTapDevices;
-
-  /// Called when the Health row is tapped. Null hides the row.
-  final FutureOr<void> Function()? onTapHealth;
+  /// Called when the System row is tapped. Null hides the row.
+  final FutureOr<void> Function()? onTapSystem;
 
   /// Called when the Vault row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapVault;
-
-  /// Called when the Jobs row is tapped. Null hides the row.
-  final FutureOr<void> Function()? onTapJobs;
 
   /// Called when the Users row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapUsers;
@@ -182,25 +168,8 @@ class QuarkDrawer extends StatelessWidget {
         'Sheets',
         onTapSheets,
       ),
-      (
-        QuarkDrawerSection.devices,
-        QuarkIcons.device_hub_outlined,
-        'Devices',
-        onTapDevices,
-      ),
-      (
-        QuarkDrawerSection.health,
-        QuarkIcons.monitor_heart_outlined,
-        'Health',
-        onTapHealth,
-      ),
+      (QuarkDrawerSection.system, QuarkIcons.memory, 'System', onTapSystem),
       (QuarkDrawerSection.vault, QuarkIcons.lock_outline, 'Vault', onTapVault),
-      (
-        QuarkDrawerSection.jobs,
-        QuarkIcons.pending_actions_outlined,
-        'Jobs',
-        onTapJobs,
-      ),
       (
         QuarkDrawerSection.users,
         QuarkIcons.person_outline,

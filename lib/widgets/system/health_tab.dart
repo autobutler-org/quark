@@ -4,21 +4,22 @@ import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/health_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
-import 'package:quark_icons/quark_icons.dart';
-import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/widgets/health/health_body.dart';
-import 'package:quark/widgets/layout/app_drawer.dart';
-import 'package:quark/widgets/layout/theme_toggle_button.dart';
 
-/// The Health page: the Quark's live device metrics, refreshed on a timer.
-class HealthPage extends StatefulWidget {
-  const HealthPage({super.key});
+/// The System page's Health tab: the Quark's live device metrics, refreshed
+/// every 15 seconds while the tab is on screen.
+class HealthTab extends StatefulWidget {
+  const HealthTab({this.onRefreshingChanged, super.key});
+
+  /// Called with whether a refresh is in flight whenever that changes, so
+  /// the page's app bar can show it.
+  final ValueChanged<bool>? onRefreshingChanged;
 
   @override
-  State<HealthPage> createState() => _HealthPageState();
+  State<HealthTab> createState() => _HealthTabState();
 }
 
-class _HealthPageState extends State<HealthPage>
+class _HealthTabState extends State<HealthTab>
     with WidgetsBindingObserver, AutoRefreshMixin {
   HealthStatus? _status;
 
@@ -28,6 +29,9 @@ class _HealthPageState extends State<HealthPage>
 
   @override
   Duration? get refreshInterval => const Duration(seconds: 15);
+
+  @override
+  void didChangeRefreshing() => widget.onRefreshingChanged?.call(isRefreshing);
 
   @override
   Future<void> refresh() async {
@@ -46,7 +50,7 @@ class _HealthPageState extends State<HealthPage>
         _error = null;
       });
     } catch (e) {
-      debugPrint('[health_page.dart] Error: $e');
+      debugPrint('[health_tab.dart] Error: $e');
       if (!mounted) return;
       setState(() => _error = e);
     }
@@ -54,22 +58,12 @@ class _HealthPageState extends State<HealthPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: QuarkAppBar(
-        label: 'Health',
-        icon: QuarkIcons.monitor_heart_outlined,
-        onRefresh: manualRefresh,
-        isRefreshing: isRefreshing,
-        actions: const [AppThemeToggle()],
-      ),
-      drawer: const AppDrawer(activeSection: QuarkDrawerSection.health),
-      body: HealthBody(
-        status: _status,
-        error: _error,
-        isInitialLoad: isInitialLoad,
-        onRetry: manualRefresh,
-        onManageHosts: () => context.go(AppRoutes.settings),
-      ),
+    return HealthBody(
+      status: _status,
+      error: _error,
+      isInitialLoad: isInitialLoad,
+      onRetry: manualRefresh,
+      onManageHosts: () => context.go(AppRoutes.settings),
     );
   }
 }

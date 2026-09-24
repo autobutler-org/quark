@@ -654,6 +654,56 @@ void main() {
       expect(_TabbedPageState.created, 1);
     });
   });
+
+  // #2351: Health, Devices and Jobs became tabs of the System page.
+  group('the pages the System page took in', () {
+    Future<GoRouter> pumpLegacy(WidgetTester tester, String location) async {
+      const legacy = {AppRoutes.health, AppRoutes.devices, AppRoutes.jobs};
+      final r = GoRouter(
+        initialLocation: location,
+        routes: [
+          // The app's own redirects, under a stand-in for the page.
+          ...router.configuration.routes.whereType<GoRoute>().where(
+            (route) => legacy.contains(route.path),
+          ),
+          ...tabbedRoutes(
+            path: AppRoutes.system,
+            tabs: SystemTab.values,
+            builder: (tab, _) => Text('system ${tab.slug}'),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+      return r;
+    }
+
+    String at(GoRouter r) =>
+        r.routerDelegate.currentConfiguration.uri.toString();
+
+    testWidgets('/system opens Health', (tester) async {
+      final r = await pumpLegacy(tester, AppRoutes.system);
+
+      expect(at(r), '/system/health');
+      expect(find.text('system health'), findsOneWidget);
+    });
+
+    for (final (old, tab) in [
+      ('/health', SystemTab.health),
+      ('/devices', SystemTab.storage),
+      ('/jobs', SystemTab.jobs),
+    ]) {
+      testWidgets('$old redirects to its tab with the query kept', (
+        tester,
+      ) async {
+        final r = await pumpLegacy(tester, '$old?serial=abc');
+
+        expect(at(r), '${AppRoutes.systemTab(tab)}?serial=abc');
+        expect(find.text('system ${tab.slug}'), findsOneWidget);
+      });
+    }
+  });
 }
 
 /// A tabbed page that counts how often its State is created: every creation

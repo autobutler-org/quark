@@ -83,10 +83,8 @@ void main() {
       QuarkDrawerSection.trash,
       QuarkDrawerSection.docs,
       QuarkDrawerSection.sheets,
-      QuarkDrawerSection.devices,
-      QuarkDrawerSection.health,
+      QuarkDrawerSection.system,
       QuarkDrawerSection.vault,
-      QuarkDrawerSection.jobs,
       QuarkDrawerSection.users,
       QuarkDrawerSection.settings,
     ]) {
