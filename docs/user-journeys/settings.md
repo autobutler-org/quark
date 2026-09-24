@@ -425,3 +425,46 @@ stores the password. Keys live in `/var/lib/quark/.ssh/authorized_keys`.
 
 **Notes:** Admin-only; other accounts don't see the section, and `/api/v0/admin/repair` answers them 403. The button
 asks for a restart and nothing more: no new privileges or sudoers entries.
+
+### JN-ST-026: Delete your account
+
+**Preconditions:** Logged in (JN-AUTH-002), as any account.
+
+**Steps:**
+
+1. Navigate to `/settings`. Under **Account**, below **Sign out**, tap **Account and data**.
+2. Tap **Delete account**.
+3. Type a wrong password and tap **Delete my account**.
+4. Tap **Delete account** again, type your password and tap **Delete my account**.
+
+**Expected result:**
+
+- The Settings page shows no Delete account or Reset entry itself, only the **Account and data** row. It opens
+  a page with a back button, not the drawer.
+- Step 2 asks for your password, hidden with a show/hide toggle, and says your files stay on the Quark. The button
+  stays disabled until something is typed.
+- Step 3 shows "That password isn't right. Nothing was deleted." You stay signed in and nothing is deleted.
+- Step 4 deletes the account, signs you out everywhere, and goes to `/login`, or to `/setup` when it was the last
+  account.
+
+**Notes:** Required by App Store Review Guideline 5.1.1(v): deletion starts in the app and is easy to find (#1762).
+The password travels in the request body, never the URL, and attempts share the sign-in rate limit (#2346).
+
+### JN-ST-027: Reset this Quark
+
+**Preconditions:** Logged in as an admin (JN-AUTH-002).
+
+**Steps:**
+
+1. Navigate to `/settings` and tap **Account and data**.
+2. Under **Reset**, tap **Reset this Quark**.
+3. Choose what to erase, type your password and tap **Reset this Quark**.
+
+**Expected result:**
+
+- The **Reset** section sits below **Delete account**, under its own heading. Other accounts don't see it.
+- Step 2 offers **Accounts and settings** and **Stored files** checked, and **Quark data on attached drives**
+  unchecked, and reads back what the reset erases and keeps. Nothing can be sent without a password and at least
+  one box.
+- A wrong password shows "That password isn't right. Nothing was deleted."
+- The right one erases what was chosen and returns the Quark to first-boot setup.

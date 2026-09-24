@@ -381,13 +381,13 @@ class AuthService {
   /// from "Delete account" may reach them. Two intents, two call sites, so no
   /// stray parameter can turn one into the other.
   ///
-  /// [confirmUsername] is what the user typed to confirm. The Quark answers
-  /// 400 unless it equals the authenticated username, so holding a session is
-  /// not on its own consent to delete the account.
+  /// [password] is the account's password, which the Quark checks before
+  /// deleting anything, so holding a session is not on its own consent to
+  /// delete the account (#2346).
   static Future<DeleteAccountResult> deleteAccount({
-    required String confirmUsername,
+    required String password,
   }) => _deleteAspects(
-    confirmUsername: confirmUsername,
+    password: password,
     aspects: const {'account': 'true'},
     context: 'Account deletion failed',
   );
@@ -404,13 +404,15 @@ class AuthService {
   /// `account` is not selected: [database] takes the user rows with it, and a
   /// reset that selected nothing but the account would be a deletion wearing a
   /// reset's copy. Passing all three as false is a 400 from the Quark.
+  ///
+  /// [password] gates it the same way it gates [deleteAccount].
   static Future<DeleteAccountResult> resetQuark({
-    required String confirmUsername,
+    required String password,
     required bool database,
     required bool files,
     required bool devices,
   }) => _deleteAspects(
-    confirmUsername: confirmUsername,
+    password: password,
     aspects: {
       'database': database.toString(),
       'files': files.toString(),
@@ -421,11 +423,14 @@ class AuthService {
 
   /// Issues the delete with [aspects] selected, and forgets the local session.
   ///
+  /// [password] travels in the JSON body, never the URL: query strings end
+  /// up in access and proxy logs.
+  ///
   /// The Quark revokes the session either way, so the token is dropped on
   /// success and the caller routes the user out. Failure keeps it: nothing was
   /// destroyed and the session still works.
   static Future<DeleteAccountResult> _deleteAspects({
-    required String confirmUsername,
+    required String password,
     required Map<String, String> aspects,
     required String context,
   }) async {
@@ -433,9 +438,16 @@ class AuthService {
     if (token == null) throw const UnauthorizedException();
     final uri = _baseUri
         .resolve('/api/v0/auth/account')
-        .replace(queryParameters: {...aspects, 'confirm': confirmUsername});
+        .replace(queryParameters: aspects);
     final response = await authHttpClientFactory()
-        .delete(uri, headers: {'Authorization': 'Bearer $token'})
+        .delete(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'password': password}),
+        )
         .timeout(kAuthRequestTimeout);
     // A session the Quark no longer honors is handled the way the rest of the
     // app handles one, rather than as a failure: the token is dropped and the
@@ -454,6 +466,12 @@ class AuthService {
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = _tryDecodeError(response.body);
+      // A wrong password is a 403 like a member asking for a reset, so the
+      // Quark's error text is what tells them apart (ErrIncorrectPassword in
+      // authutil). Nothing was deleted and the session stays.
+      if (response.statusCode == 403 && body == 'incorrect password') {
+        throw const MessageException(Errors.incorrectPassword);
+      }
       throwApiError(response.statusCode, body, context);
     }
     await _forgetLocalSession();

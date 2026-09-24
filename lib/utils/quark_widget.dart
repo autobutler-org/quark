@@ -374,7 +374,12 @@ class QuarkWidget {
         onAppPrivateCommand: onAppPrivateCommand,
         ignorePointers: ignorePointers,
         cursorErrorColor: cursorErrorColor,
-        decoration: material.InputDecoration(hintText: hintText ?? ''),
+        // [suffix] is the trailing control on both platforms, so a password
+        // field's show/hide toggle needs no platform branch at the call site.
+        decoration: material.InputDecoration(
+          hintText: hintText ?? '',
+          suffixIcon: suffix,
+        ),
         onTapAlwaysCalled: onTapAlwaysCalled,
         onTapUpOutside: onTapUpOutside,
         mouseCursor: mouseCursor,

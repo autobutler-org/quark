@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/models/trash_item.dart';
+import 'package:quark/pages/account_and_data_page.dart';
 import 'package:quark/pages/docs_page.dart';
 import 'package:quark/pages/document_editor_page.dart';
 import 'package:quark/pages/file_browser_page.dart';
@@ -58,6 +59,10 @@ class AppRoutes {
   /// The admin-only Users page (#1662).
   static const users = '/users';
   static const settings = '/settings';
+
+  /// Delete account and, for admins, Reset this Quark (#2346). A drill-down
+  /// from Settings, reached with `context.push`.
+  static const accountAndData = '/settings/account-and-data';
   static const setup = '/setup';
   static const login = '/login';
   static const recover = '/recover';
@@ -374,6 +379,10 @@ final router = GoRouter(
     GoRoute(
       path: AppRoutes.settings,
       builder: (context, state) => const SettingsPage(),
+    ),
+    GoRoute(
+      path: AppRoutes.accountAndData,
+      builder: (context, state) => const AccountAndDataPage(),
     ),
     GoRoute(
       path: AppRoutes.setup,

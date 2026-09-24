@@ -11,7 +11,9 @@ void main() {
   const narrowViewport = Size(360, 640);
   const wideViewport = Size(1280, 800);
 
-  final confirmField = find.byKey(const ValueKey('reset_quark_confirm_field'));
+  final passwordField = find.byKey(
+    const ValueKey('reset_quark_password_field'),
+  );
   final database = find.byKey(const ValueKey('reset_quark_database'));
   final files = find.byKey(const ValueKey('reset_quark_files'));
   final devices = find.byKey(const ValueKey('reset_quark_devices'));
@@ -40,7 +42,6 @@ void main() {
   Future<List<(QuarkResetSelection, String)>> pumpDialog(
     WidgetTester tester, {
     Size size = wideViewport,
-    String? username = 'ada',
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
@@ -51,7 +52,6 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: ResetQuarkDialog(
-            username: username,
             onConfirm: (selection, typed) =>
                 confirmations.add((selection, typed)),
             onCancel: () {},
@@ -167,34 +167,32 @@ void main() {
     expect(warning, findsNothing);
   });
 
-  testBothViewports('does not reset until the username matches', (
+  // #2346: the password gates the reset; typing a username no longer does.
+  testBothViewports('does not reset until a password is typed', (
     tester,
     size,
   ) async {
     final confirmations = await pumpDialog(tester, size: size);
 
+    expect(find.text('Enter your password to confirm.'), findsOneWidget);
     expect(tester.widget<FilledButton>(submit).onPressed, isNull);
-    await tester.enterText(confirmField, 'adam');
-    await tester.pump();
-    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
-
     await tapVisible(tester, submit);
 
     expect(confirmations, isEmpty);
   });
 
-  testBothViewports('confirms the selection once the username matches', (
+  testBothViewports('confirms the selection with the typed password', (
     tester,
     size,
   ) async {
     final confirmations = await pumpDialog(tester, size: size);
 
     await tapVisible(tester, devices);
-    await tester.enterText(confirmField, 'ada');
+    await tester.enterText(passwordField, 'hunter2hunter2');
     await tester.pump();
     await tapVisible(tester, submit);
 
-    expect(confirmations.single.$2, 'ada');
+    expect(confirmations.single.$2, 'hunter2hunter2');
     final selection = confirmations.single.$1;
     expect(selection.database, isTrue);
     expect(selection.files, isTrue);
@@ -204,7 +202,7 @@ void main() {
   testWidgets('refuses to send a reset that would do nothing', (tester) async {
     final confirmations = await pumpDialog(tester, size: narrowViewport);
 
-    await tester.enterText(confirmField, 'ada');
+    await tester.enterText(passwordField, 'hunter2hunter2');
     await tester.pump();
     await tapVisible(tester, database);
     await tapVisible(tester, files);
