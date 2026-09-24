@@ -91,6 +91,15 @@ injected loader. `device_upload_picker.dart` likewise only holds the choice for
 the package `UploadTargetPicker`. Selecting wears the package
 `FileSelectionBar`, the same bar Files and the trash use.
 
+Settings is split into tabs (#2350), one widget each under `settings/`:
+`settings_general_tab.dart`, `settings_account_tab.dart`,
+`settings_network_tab.dart`, `settings_updates_tab.dart` and
+`settings_about_tab.dart`, with the Network tab's `remote_access_card.dart` and
+`connected_devices_card.dart`. The page still loads everything and hands each
+tab its values and callbacks; the tabs stay app-side because they take the
+app's service models and host `HostManager`, `SshAccessSection` and
+`RepairInstallationSection`.
+
 ## Adding a widget
 
 If it is presentational — data in, callbacks out, no services and no

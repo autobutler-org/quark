@@ -208,7 +208,8 @@ class _VaultPageState extends State<VaultPage>
         return QuarkDisconnectedView(
           hostAddress: AppSettings.instance.activeHost,
           onRetry: _loadStatus,
-          onManageHosts: () => context.go(AppRoutes.settings),
+          onManageHosts: () =>
+              context.go(AppRoutes.settingsTab(SettingsTab.general)),
         );
       }
       return VaultErrorView(

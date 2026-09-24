@@ -15,9 +15,9 @@ import '../support/unreachable_quark.dart';
 /// account creation without letting a user start deleting their account from
 /// inside it — and rejects one where a reviewer cannot find the control.
 ///
-/// #2346: it must also be hard to reach by accident. Settings' Account section
-/// carries one labeled row, **Account and data**, and the destructive actions
-/// sit on the page behind it.
+/// #2346: it must also be hard to reach by accident. Settings' Account tab
+/// (#2350) carries one labeled row, **Account and data**, below Sign out, and
+/// the destructive actions sit on the page behind it.
 void main() {
   final settings = AppSettings.instance;
 
@@ -90,11 +90,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp.router(
         routerConfig: GoRouter(
-          initialLocation: AppRoutes.settings,
+          initialLocation: AppRoutes.settingsTab(SettingsTab.account),
           routes: [
             GoRoute(
-              path: AppRoutes.settings,
-              builder: (_, _) => const SettingsPage(),
+              path: AppRoutes.settingsTab(SettingsTab.account),
+              builder: (_, _) => const SettingsPage(tab: SettingsTab.account),
             ),
             GoRoute(
               path: AppRoutes.accountAndData,

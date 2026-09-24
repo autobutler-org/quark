@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:quark/pages/settings_page.dart';
+import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 
 import '../support/unreachable_quark.dart';
@@ -53,7 +54,9 @@ void main() {
       priorOnError?.call(details);
     };
 
-    await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
+    await tester.pumpWidget(
+      const MaterialApp(home: SettingsPage(tab: SettingsTab.about)),
+    );
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }

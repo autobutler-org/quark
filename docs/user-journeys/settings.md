@@ -2,6 +2,17 @@
 
 Covers the Settings page (`/settings`) — host management, theme, version updates, remote access, connected devices, and sign out.
 
+Settings is split into five tabs, each with its own URL (#2350). `/settings` redirects to `/settings/general`, and an
+unknown tab lands on General too.
+
+| Tab | URL | Holds |
+| --- | --- | --- |
+| **General** | `/settings/general` | Backend hosts, theme, auto-refresh interval, demo mode, a link to the drives |
+| **Account** | `/settings/account` | Sign out, then an **Account and data** row at the bottom that leads to Delete account and (admins) Reset this Quark |
+| **Network** | `/settings/network` | Remote access, connected devices, SSH access (admins) |
+| **Updates** | `/settings/updates` | The Quark's version, updates and automatic updates (admins), Repair installation (admins) |
+| **About** | `/settings/about` | The app's version, Help & Support, Terms of Service, the software bill of materials |
+
 ---
 
 ### JN-ST-001: View settings page
@@ -11,16 +22,25 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 **Steps:**
 
 1. Navigate to `/settings`.
+2. Tap each tab in turn.
+3. Use the browser's Back button.
+4. Reload the page.
 
 **Expected result:**
 
-- Settings page loads with all sections visible: hosts, theme, version, remote access, connected devices, storage devices, network drive, SBOM, help.
+- Step 1 lands on `/settings/general`, the General tab.
+- Each tab in step 2 changes the address bar to its own URL (the table above) and shows that tab's sections.
+- Back returns to the previous tab.
+- A reload, or opening any tab's URL directly, shows that same tab.
+- Nothing destructive is on any tab. Delete account and Reset this Quark sit behind the **Account and data** row at
+  the bottom of the Account tab, below Sign out (JN-ST-026, JN-ST-027).
+- While the Quark cannot be reached, a banner at the top of every tab says so.
 
 ---
 
 ### JN-ST-002: Add a new quark host
 
-**Preconditions:** User is on the Settings page.
+**Preconditions:** User is on the General tab of Settings (`/settings/general`).
 
 **Steps:**
 
@@ -41,7 +61,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 **Steps:**
 
-1. Navigate to `/settings`.
+1. Navigate to `/settings/general`.
 2. Tap a non-active host in the list.
 
 **Expected result:**
@@ -57,7 +77,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 **Steps:**
 
-1. Navigate to `/settings`.
+1. Navigate to `/settings/general`.
 2. Tap the edit action on a host entry.
 3. Modify the URL or label.
 4. Confirm.
@@ -74,7 +94,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 **Steps:**
 
-1. Navigate to `/settings`.
+1. Navigate to `/settings/general`.
 2. Tap the remove/delete action on a non-active host.
 3. Confirm.
 
@@ -103,11 +123,11 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-007: View installed version
 
-**Preconditions:** User is on the Settings page.
+**Preconditions:** User is on the Updates tab of Settings (`/settings/updates`).
 
 **Steps:**
 
-1. Scroll to the version section.
+1. Find the **Quark version (installed)** card.
 
 **Expected result:**
 
@@ -117,11 +137,11 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-008: Check for available updates
 
-**Preconditions:** User is on the Settings page. Quark can reach the update source.
+**Preconditions:** User is on the Updates tab of Settings (`/settings/updates`). Quark can reach the update source.
 
 **Steps:**
 
-1. Scroll to the version/update section.
+1. Find the **Quark version (installed)** card.
 2. Tap **Check for updates** (or wait for it to load automatically).
 
 **Expected result:**
@@ -149,7 +169,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-010: Enable auto-update
 
-**Preconditions:** User is signed in as an admin and on the Settings page.
+**Preconditions:** User is signed in as an admin and on the Updates tab of Settings (`/settings/updates`).
 
 **Steps:**
 
@@ -165,11 +185,11 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-011: Enable remote access
 
-**Preconditions:** User is signed in as an admin and on the Settings page. Remote access is currently disabled.
+**Preconditions:** User is signed in as an admin and on the Network tab of Settings (`/settings/network`). Remote access is currently disabled.
 
 **Steps:**
 
-1. Scroll to the Remote Access section.
+1. Find the Remote access section.
 2. Tap **Enable remote access**.
 
 **Expected result:**
@@ -193,7 +213,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 **Steps:**
 
-1. Navigate to `/settings` → Remote Access.
+1. Navigate to `/settings/network`, the Remote access section.
 2. Tap **Disable**.
 
 **Expected result:**
@@ -225,8 +245,8 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 **Steps:**
 
-1. Navigate to `/settings`.
-2. Scroll to the Connected Devices section.
+1. Navigate to `/settings/network`.
+2. Find the Connected devices section.
 
 **Expected result:**
 
@@ -250,60 +270,41 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ---
 
-### JN-ST-016: View storage devices in settings
+### JN-ST-016: Open storage devices from settings
 
-**Preconditions:** At least one storage device is connected.
+**Preconditions:** A Quark is configured.
 
 **Steps:**
 
-1. Navigate to `/settings`.
-2. Scroll to the Storage Devices section.
+1. Navigate to `/settings/general`.
+2. Tap **Storage devices**.
 
 **Expected result:**
 
-- Devices are listed with name and mount status.
+- The System page opens on its Storage tab (`/system/storage`), listing the drives (JN-SD-001).
+- Settings keeps no drive list of its own (#2350): viewing, mounting and renaming drives happen on the System page's Storage tab.
 
 ---
 
 ### JN-ST-017: Mount a storage device from settings
 
-**Preconditions:** User is signed in as an admin. An unmounted device is listed in settings.
-
-**Steps:**
-
-1. Tap **Mount** on the unmounted device.
-
-**Expected result:**
-
-- Device mounts and status updates.
-- See also JN-SD-003.
+**Status:** Retired (#2350). Mounting is on the System page's Storage tab, JN-SD-003.
 
 ---
 
 ### JN-ST-018: Rename a storage device from settings
 
-**Preconditions:** User is signed in as an admin. A storage device is listed.
-
-**Steps:**
-
-1. Tap the rename action.
-2. Enter a new name.
-3. Confirm.
-
-**Expected result:**
-
-- Device name is updated everywhere in the UI.
-- See also JN-SD-006.
+**Status:** Retired (#2350). Renaming is on the System page's Storage tab, JN-SD-006.
 
 ---
 
 ### JN-ST-020: View Software Bill of Materials (SBOM)
 
-**Preconditions:** User is on the Settings page.
+**Preconditions:** User is on the About tab of Settings (`/settings/about`).
 
 **Steps:**
 
-1. Scroll to the **Software Bill of Materials** section.
+1. Find the **Software Bill of Materials** section.
 2. Expand the Go dependencies tile.
 3. Expand the Flutter packages tile.
 
@@ -315,7 +316,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-021: Adjust auto-refresh interval
 
-**Preconditions:** User is on the Settings page.
+**Preconditions:** User is on the General tab of Settings (`/settings/general`).
 
 **Steps:**
 
@@ -334,8 +335,8 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 **Steps:**
 
-1. Navigate to `/settings`.
-2. Tap **Sign out**.
+1. Navigate to `/settings/account`.
+2. Tap **Sign out**, the first entry on the tab.
 3. Confirm if prompted.
 
 **Expected result:**
@@ -348,7 +349,7 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-023: Toggle demo mode
 
-**Preconditions:** User is on the Settings page. No quark needs to be configured.
+**Preconditions:** User is on the General tab of Settings (`/settings/general`). No quark needs to be configured.
 
 **Steps:**
 
@@ -376,7 +377,7 @@ with `openssh-server` installed, as on every Quark image. SSH access starts off.
 
 **Steps:**
 
-1. Navigate to `/settings` and find **SSH access**.
+1. Navigate to `/settings/network` and find **SSH access**.
 2. Tap **Add key**, paste a public key (the contents of `~/.ssh/id_ed25519.pub`), and tap **Add key**.
 3. Optionally tap **Set password**, type a password of at least 12 characters twice, and tap **Set password**.
 4. Switch **SSH access** on and confirm **Turn on**.
@@ -408,7 +409,7 @@ stores the password. Keys live in `/var/lib/quark/.ssh/authorized_keys`.
 
 **Steps:**
 
-1. Navigate to `/settings` and find **Repair installation**.
+1. Navigate to `/settings/updates` and find **Repair installation**.
 2. Tap **Repair installation**, then **Cancel** in the confirmation.
 3. Tap **Repair installation** again and confirm **Repair**.
 4. Wait a few seconds, then reload the settings page.
@@ -432,14 +433,14 @@ asks for a restart and nothing more: no new privileges or sudoers entries.
 
 **Steps:**
 
-1. Navigate to `/settings`. Under **Account**, below **Sign out**, tap **Account and data**.
+1. Navigate to `/settings/account`. Below **Sign out**, tap **Account and data**.
 2. Tap **Delete account**.
 3. Type a wrong password and tap **Delete my account**.
 4. Tap **Delete account** again, type your password and tap **Delete my account**.
 
 **Expected result:**
 
-- The Settings page shows no Delete account or Reset entry itself, only the **Account and data** row. It opens
+- The Account tab shows no Delete account or Reset entry itself, only the **Account and data** row. It opens
   a page with a back button, not the drawer.
 - Step 2 asks for your password, hidden with a show/hide toggle, and says your files stay on the Quark. The button
   stays disabled until something is typed.
@@ -456,7 +457,7 @@ The password travels in the request body, never the URL, and attempts share the 
 
 **Steps:**
 
-1. Navigate to `/settings` and tap **Account and data**.
+1. Navigate to `/settings/account` and tap **Account and data**.
 2. Under **Reset**, tap **Reset this Quark**.
 3. Choose what to erase, type your password and tap **Reset this Quark**.
 

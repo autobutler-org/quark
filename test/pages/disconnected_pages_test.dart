@@ -90,7 +90,7 @@ void main() {
         GoRoute(path: path, builder: (context, _) => page(context)),
         if (path != AppRoutes.settings)
           GoRoute(
-            path: AppRoutes.settings,
+            path: AppRoutes.settingsTab(SettingsTab.general),
             builder: (_, _) => const Scaffold(body: Text('settings')),
           ),
       ],

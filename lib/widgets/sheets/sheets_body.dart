@@ -74,7 +74,8 @@ class SheetsBody extends StatelessWidget {
         return QuarkDisconnectedView(
           hostAddress: AppSettings.instance.activeHost,
           onRetry: onRetry,
-          onManageHosts: () => context.go(AppRoutes.settings),
+          onManageHosts: () =>
+              context.go(AppRoutes.settingsTab(SettingsTab.general)),
         );
       }
       return Center(

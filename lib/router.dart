@@ -86,11 +86,17 @@ class AppRoutes {
   /// '/users/groups'.
   static String usersTab(UsersTab tab) => '$users/${tab.slug}';
 
+  /// The Settings page. Its tabs have their own URLs, see [settingsTab];
+  /// this bare path redirects to the first one (#2350).
   static const settings = '/settings';
 
   /// Delete account and, for admins, Reset this Quark (#2346). A drill-down
-  /// from Settings, reached with `context.push`.
+  /// from Settings' Account tab, reached with `context.push`.
   static const accountAndData = '/settings/account-and-data';
+
+  /// One tab of the Settings page, e.g. settingsTab(SettingsTab.general) →
+  /// '/settings/general', where the backend hosts are managed.
+  static String settingsTab(SettingsTab tab) => '$settings/${tab.slug}';
   static const setup = '/setup';
   static const login = '/login';
   static const recover = '/recover';
@@ -264,6 +270,21 @@ enum SystemTab implements RouteTab {
   jobs('jobs');
 
   const SystemTab(this.slug);
+
+  @override
+  final String slug;
+}
+
+/// The Settings page's tabs (#2350). General comes first: it holds the
+/// backend hosts every "manage hosts" link in the app points at.
+enum SettingsTab implements RouteTab {
+  general('general'),
+  account('account'),
+  network('network'),
+  updates('updates'),
+  about('about');
+
+  const SettingsTab(this.slug);
 
   @override
   final String slug;
@@ -483,13 +504,17 @@ final router = GoRouter(
       builder: (tab, onTabSelected) =>
           UsersPage(tab: tab, onTabSelected: onTabSelected),
     ),
-    GoRoute(
-      path: AppRoutes.settings,
-      builder: (context, state) => const SettingsPage(),
-    ),
+    // Before the Settings tabs: go_router takes the first match, and
+    // `/settings/:tab` would redirect this unknown slug to General.
     GoRoute(
       path: AppRoutes.accountAndData,
       builder: (context, state) => const AccountAndDataPage(),
+    ),
+    ...tabbedRoutes(
+      path: AppRoutes.settings,
+      tabs: SettingsTab.values,
+      builder: (tab, onTabSelected) =>
+          SettingsPage(tab: tab, onTabSelected: onTabSelected),
     ),
     GoRoute(
       path: AppRoutes.setup,

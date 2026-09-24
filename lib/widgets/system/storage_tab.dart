@@ -339,7 +339,8 @@ class _StorageTabState extends State<StorageTab>
         activeBackupJobId: _activeBackupJobId,
         onRefresh: refresh,
         onRetry: manualRefresh,
-        onManageHosts: () => context.go(AppRoutes.settings),
+        onManageHosts: () =>
+            context.go(AppRoutes.settingsTab(SettingsTab.general)),
         onMount: isAdmin ? _mountDevice : null,
         onSetRole: isAdmin ? _showRoleDialog : null,
         onBackup: isAdmin ? _startBackup : null,
