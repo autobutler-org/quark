@@ -2451,7 +2451,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                     isUnsupported: routeFailure.isUnsupported,
                     isUnauthorized: routeFailure.isUnauthorized,
                     onRetry: () => _retryRouteFailure(routeFailure),
-                    onManageHosts: () => context.go(AppRoutes.settings),
+                    onManageHosts: () =>
+                        context.go(AppRoutes.settingsTab(SettingsTab.general)),
                     onOpenPath: _setPath,
                     onGoHome: _goHome,
                   )
@@ -2526,8 +2527,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                                   error: error,
                                   currentPath: _currentPath,
                                   onRetry: _refreshFileState,
-                                  onManageHosts: () =>
-                                      context.go(AppRoutes.settings),
+                                  onManageHosts: () => context.go(
+                                    AppRoutes.settingsTab(SettingsTab.general),
+                                  ),
                                   onOpenPath: _setPath,
                                   onGoHome: _goHome,
                                 ),

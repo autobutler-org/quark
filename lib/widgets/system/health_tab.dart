@@ -63,7 +63,8 @@ class _HealthTabState extends State<HealthTab>
       error: _error,
       isInitialLoad: isInitialLoad,
       onRetry: manualRefresh,
-      onManageHosts: () => context.go(AppRoutes.settings),
+      onManageHosts: () =>
+          context.go(AppRoutes.settingsTab(SettingsTab.general)),
     );
   }
 }

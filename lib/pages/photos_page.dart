@@ -740,8 +740,9 @@ class PhotosPageState extends State<PhotosPage>
                               albumName: album?.name,
                               hostAddress: c.activeHost,
                               onRetry: manualRefresh,
-                              onManageHosts: () =>
-                                  context.go(AppRoutes.settings),
+                              onManageHosts: () => context.go(
+                                AppRoutes.settingsTab(SettingsTab.general),
+                              ),
                               onUploadPhotos: c.isUploading
                                   ? null
                                   : _uploadPhotos,

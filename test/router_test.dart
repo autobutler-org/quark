@@ -579,6 +579,37 @@ void main() {
       expect(find.text('files'), findsOneWidget);
       expect(location(r), AppRoutes.files);
     });
+
+    // #2350: a tab switch is a history entry, so Back returns to the tab.
+    testWidgets('browser Back from a Settings tab returns to the last tab', (
+      tester,
+    ) async {
+      final r = GoRouter(
+        initialLocation: AppRoutes.settings,
+        routes: tabbedRoutes(
+          path: AppRoutes.settings,
+          tabs: SettingsTab.values,
+          builder: (tab, onTabSelected) => Scaffold(
+            body: TextButton(
+              onPressed: () => onTabSelected(SettingsTab.account),
+              child: Text('settings ${tab.slug}'),
+            ),
+          ),
+        ),
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('settings general'));
+      await tester.pumpAndSettle();
+      expect(location(r), AppRoutes.settingsTab(SettingsTab.account));
+
+      await browserBack(tester);
+
+      expect(find.text('settings general'), findsOneWidget);
+      expect(location(r), AppRoutes.settingsTab(SettingsTab.general));
+    });
   });
 
   // #2349: a page whose tabs have their own URLs.
@@ -703,6 +734,147 @@ void main() {
         expect(find.text('system ${tab.slug}'), findsOneWidget);
       });
     }
+  });
+
+  // #2350: Settings' tabs each have a URL, and General comes first.
+  group('Settings tabs', () {
+    test('the app mounts every Settings tab under one route', () {
+      final paths = router.configuration.routes.whereType<GoRoute>().map(
+        (route) => route.path,
+      );
+      expect(paths, containsAll([AppRoutes.settings, '/settings/:tab']));
+    });
+
+    test('the app declares account and data before the Settings tabs', () {
+      final paths = router.configuration.routes
+          .whereType<GoRoute>()
+          .map((route) => route.path)
+          .toList();
+      expect(
+        paths.indexOf(AppRoutes.accountAndData),
+        lessThan(paths.indexOf('/settings/:tab')),
+      );
+      expect(paths.indexOf(AppRoutes.accountAndData), isNot(-1));
+    });
+
+    test('are General, Account, Network, Updates and About, in order', () {
+      expect(SettingsTab.values.map(AppRoutes.settingsTab), [
+        '/settings/general',
+        '/settings/account',
+        '/settings/network',
+        '/settings/updates',
+        '/settings/about',
+      ]);
+    });
+
+    Future<GoRouter> pumpSettings(WidgetTester tester, String location) async {
+      final r = GoRouter(
+        initialLocation: location,
+        routes: tabbedRoutes(
+          path: AppRoutes.settings,
+          tabs: SettingsTab.values,
+          builder: (tab, _) =>
+              Text('settings ${tab.slug}', textDirection: TextDirection.ltr),
+        ),
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+      return r;
+    }
+
+    String at(GoRouter r) =>
+        r.routerDelegate.currentConfiguration.uri.toString();
+
+    testWidgets('/settings redirects to General', (tester) async {
+      final r = await pumpSettings(tester, AppRoutes.settings);
+
+      expect(at(r), '/settings/general');
+      expect(find.text('settings general'), findsOneWidget);
+    });
+
+    for (final tab in SettingsTab.values) {
+      testWidgets('/settings/${tab.slug} opens that tab', (tester) async {
+        final r = await pumpSettings(tester, AppRoutes.settingsTab(tab));
+
+        expect(at(r), '/settings/${tab.slug}');
+        expect(find.text('settings ${tab.slug}'), findsOneWidget);
+      });
+    }
+
+    testWidgets('an unknown tab lands on General', (tester) async {
+      final r = await pumpSettings(tester, '/settings/storage');
+
+      expect(at(r), '/settings/general');
+      expect(find.text('settings general'), findsOneWidget);
+    });
+
+    // A page under Settings that is not a tab, such as #2346's account and
+    // data drill-down. go_router takes the first route that matches.
+    Future<GoRouter> pumpWithDrillDown(
+      WidgetTester tester,
+      String drillDown, {
+      required bool before,
+    }) async {
+      final page = GoRoute(
+        path: drillDown,
+        builder: (_, _) =>
+            const Text('drill-down', textDirection: TextDirection.ltr),
+      );
+      final tabs = tabbedRoutes(
+        path: AppRoutes.settings,
+        tabs: SettingsTab.values,
+        builder: (tab, _) =>
+            Text('settings ${tab.slug}', textDirection: TextDirection.ltr),
+      );
+      final r = GoRouter(
+        initialLocation: drillDown,
+        routes: before ? [page, ...tabs] : [...tabs, page],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+      return r;
+    }
+
+    testWidgets('a sibling of the tabs resolves when declared before them', (
+      tester,
+    ) async {
+      final r = await pumpWithDrillDown(
+        tester,
+        '/settings/account-and-data',
+        before: true,
+      );
+
+      expect(at(r), '/settings/account-and-data');
+      expect(find.text('drill-down'), findsOneWidget);
+    });
+
+    testWidgets('a sibling declared after the tabs is taken for a tab', (
+      tester,
+    ) async {
+      final r = await pumpWithDrillDown(
+        tester,
+        '/settings/account-and-data',
+        before: false,
+      );
+
+      expect(at(r), '/settings/general');
+      expect(find.text('drill-down'), findsNothing);
+    });
+
+    testWidgets('a page under a tab resolves wherever it is declared', (
+      tester,
+    ) async {
+      final r = await pumpWithDrillDown(
+        tester,
+        '/settings/account/data',
+        before: false,
+      );
+
+      expect(at(r), '/settings/account/data');
+      expect(find.text('drill-down'), findsOneWidget);
+    });
   });
 }
 

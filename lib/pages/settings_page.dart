@@ -11,22 +11,21 @@ import 'package:quark/services/files_service.dart';
 import 'package:quark/services/remote_access_service.dart';
 import 'package:quark/services/sbom_service.dart';
 import 'package:quark/services/settings_service.dart';
-import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/remote_access_config.dart';
-import 'package:quark/widgets/host_manager.dart';
-import 'package:quark/widgets/settings/help_support_card.dart';
-import 'package:quark/widgets/settings/sbom_expansion_tile.dart';
-import 'package:quark/widgets/settings/repair_installation_section.dart';
-import 'package:quark/widgets/settings/ssh_access_section.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
-import 'package:quark/widgets/settings/code_block.dart';
-import 'package:quark/widgets/text_controller_scope.dart';
+import 'package:quark/widgets/settings/connected_devices_card.dart';
+import 'package:quark/widgets/settings/remote_access_card.dart';
+import 'package:quark/widgets/settings/settings_about_tab.dart';
+import 'package:quark/widgets/settings/settings_account_tab.dart';
+import 'package:quark/widgets/settings/settings_general_tab.dart';
+import 'package:quark/widgets/settings/settings_network_tab.dart';
+import 'package:quark/widgets/settings/settings_updates_tab.dart';
 
 /// The commit a `make serve/...` or `make watch/frontend` run was built from.
 ///
@@ -111,10 +110,29 @@ String shortGitSha(String commit) => (commit.isEmpty || commit == 'NOCOMMIT')
     ? ''
     : commit.substring(0, commit.length.clamp(0, 7));
 
-/// The Settings page: the account, updates, remote access, theme, storage and connected devices, help, and the
-/// software bill of materials. Admins also get SSH access and, where the Quark supports it, installation repair.
+/// The Settings page, in tabs that each have their own URL (#2350): General
+/// (backend hosts, theme, auto-refresh, demo mode, a link to the drives),
+/// Account (sign out, then deleting the account and resetting the Quark),
+/// Network (remote access, connected devices, SSH), Updates (the Quark's
+/// version, updates, repair) and About (the app's version, help and terms,
+/// the software bill of materials). SSH access, updating, automatic updates,
+/// repair and reset are admin-only.
+///
+/// The router passes the [tab] to show and [onTabSelected] to move to
+/// another. The page loads every tab's data up front, so one unreachable
+/// Quark raises one banner above the tabs whichever is showing.
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({
+    this.tab = SettingsTab.general,
+    this.onTabSelected,
+    super.key,
+  });
+
+  /// The tab to show.
+  final SettingsTab tab;
+
+  /// Called with the tab the user picked. Null keeps the choice in the view.
+  final ValueChanged<SettingsTab>? onTabSelected;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -172,11 +190,6 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isLoadingDevices = false;
   String? _devicesError;
 
-  // Storage devices state
-  List<StorageDevice> _storageDevices = [];
-  bool _isLoadingStorage = false;
-  String? _storageError;
-
   /// Whether the last section load failed to reach the Quark at all (#1637).
   ///
   /// Page-level rather than per-section: every section talks to the same
@@ -223,7 +236,6 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadSettings();
     _loadSbom();
     _loadDevices();
-    _loadStorageDevices();
     _loadRemoteAccess();
   }
 
@@ -425,94 +437,6 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _loadStorageDevices() async {
-    if (AppSettings.instance.activeHost == null) {
-      setState(() {
-        _storageDevices = [];
-        _storageError = null;
-        _isLoadingStorage = false;
-      });
-      return;
-    }
-    setState(() {
-      _isLoadingStorage = true;
-      _storageError = null;
-    });
-    try {
-      final devices = await StorageService.listDevices();
-      if (!mounted) return;
-      setState(() {
-        _storageDevices = devices;
-        _isLoadingStorage = false;
-      });
-      _noteReachability(null);
-    } catch (e) {
-      debugPrint('[settings_page.dart] Error loading storage devices: $e');
-      if (!mounted) return;
-      setState(() {
-        _storageError = Errors.message(e, 'load your drives');
-        _isLoadingStorage = false;
-      });
-      _noteReachability(e);
-    }
-  }
-
-  Future<void> _mountDevice(StorageDevice device) async {
-    try {
-      await StorageService.mountDevice(device.serial);
-      await _loadStorageDevices();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Device mounted successfully')),
-      );
-    } catch (e) {
-      debugPrint('[settings_page.dart] Error mounting device: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'mount the drive'))),
-      );
-    }
-  }
-
-  Future<void> _renameStorageDevice(StorageDevice device) async {
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (ctx) => TextControllerScope(
-        initialText: device.name,
-        builder: (_, controller) => AlertDialog(
-          title: const Text('Rename device'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(labelText: 'Display name'),
-            autofocus: true,
-            onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-              child: const Text('Rename'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (newName == null || newName.isEmpty) return;
-    try {
-      await StorageService.renameDevice(device.devicePath, newName);
-      await _loadStorageDevices();
-    } catch (e) {
-      debugPrint('[settings_page.dart] Error renaming storage device: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'rename the drive'))),
-      );
-    }
-  }
-
   Future<void> _loadSbom() async {
     setState(() {
       _isLoadingSbom = true;
@@ -674,6 +598,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final hasHost = AppSettings.instance.activeHost != null;
+    final isAdmin = AppSettings.instance.isAdmin.value;
+    // Heads every tab, since it explains every "Not connected" row and the
+    // address it points at is on General (#1637). It scrolls with the tab's
+    // content: pinned above the tabs, it left a phone almost no room.
+    final banner = _disconnected
+        ? QuarkDisconnectedBanner(onRetry: _load)
+        : null;
     return Scaffold(
       appBar: QuarkAppBar(
         label: 'Settings',
@@ -681,811 +613,140 @@ class _SettingsPageState extends State<SettingsPage> {
         actions: const [AppThemeToggle()],
       ),
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.settings),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Above everything, because it explains every "Not connected" row
-          // below it — and the address it points at is on this page (#1637).
-          if (_disconnected) ...[
-            QuarkDisconnectedBanner(onRetry: _load),
-            const SizedBox(height: 24),
-          ],
-          const Text(
-            'Quark',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      body: QuarkTabView(
+        selectedIndex: widget.tab.index,
+        onTabSelected: widget.onTabSelected == null
+            ? null
+            : (index) => widget.onTabSelected!(SettingsTab.values[index]),
+        tabs: [
+          QuarkTab(
+            label: 'General',
+            child: SettingsGeneralTab(
+              header: banner,
+              theme: _theme,
+              onThemeChanged: _setTheme,
+              refreshIntervalSeconds: _refreshIntervalSeconds,
+              onRefreshIntervalChanged: _setRefreshInterval,
+              demoMode: _demoMode,
+              onDemoModeChanged: _setDemoMode,
+              onHostsChanged: _load,
+              onOpenStorage: hasHost
+                  ? () => context.go(AppRoutes.systemTab(SystemTab.storage))
+                  : null,
+            ),
           ),
-          if (_appVersion != null)
-            // Tapping the version is the whole affordance here: a button under
-            // a one-line header would outweigh the line it annotates (#1756).
-            Align(
-              alignment: Alignment.centerLeft,
-              child: InkWell(
-                onTap: _appReleaseUrl == null
-                    ? null
-                    : () => _openReleaseNotes(_appReleaseUrl!),
-                child: Text(
-                  _appVersion!,
-                  style: _appReleaseUrl == null
-                      ? Theme.of(context).textTheme.bodySmall
-                      : Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          decoration: TextDecoration.underline,
-                          decorationColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
-                        ),
-                ),
+          QuarkTab(
+            label: 'Account',
+            child: SettingsAccountTab(
+              header: banner,
+              signedIn: AppSettings.instance.sessionToken != null,
+              isAdmin: isAdmin,
+              onSignOut: _signOut,
+              onOpenAccountAndData: () =>
+                  context.push(AppRoutes.accountAndData),
+            ),
+          ),
+          QuarkTab(
+            label: 'Network',
+            child: SettingsNetworkTab(
+              header: banner,
+              hasHost: hasHost,
+              isAdmin: isAdmin,
+              remoteAccess: RemoteAccessCard(
+                status: _remoteAccessStatus,
+                isLoading: _isLoadingRemoteAccess,
+                isToggling: _isTogglingRemoteAccess,
+                error: _remoteAccessError,
+                disconnected: _disconnected,
+                isAdmin: isAdmin,
+                onRetry: _loadRemoteAccess,
+                onEnable: _enableRemoteAccess,
+                onDisable: _disableRemoteAccess,
               ),
-            ),
-          const SizedBox(height: 8),
-          // Sign out — only show if there's an active session
-          if (AppSettings.instance.sessionToken != null) ...[
-            const Text(
-              'Account',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Card(
-              child: ListTile(
-                leading: const Icon(QuarkIcons.logout),
-                title: const Text('Sign out'),
-                onTap: _signOut,
-              ),
-            ),
-            // Account deletion has to be initiated in the app and has to be
-            // findable, per App Store Review Guideline 5.1.1(v) (#1762). A
-            // labeled row in the Account section leading to it is the
-            // accepted pattern, and keeps anything destructive away from Sign
-            // out, one mis-tap from the deletion flow (#2346).
-            Card(
-              child: ListTile(
-                key: const ValueKey('settings_account_and_data'),
-                leading: const Icon(QuarkIcons.person_outline),
-                title: const Text('Account and data'),
-                subtitle: Text(
-                  AppSettings.instance.isAdmin.value
-                      ? 'Delete your account or reset this Quark'
-                      : 'Delete your account',
-                ),
-                trailing: const Icon(QuarkIcons.chevron_right),
-                onTap: () => context.push(AppRoutes.accountAndData),
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Names whose version this is. "Installed version" alone
-                  // sat opposite the app's own line and left the reader to
-                  // work out which was which (#2035).
-                  const Text(
-                    'Quark version (installed)',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 6),
-                  if (AppSettings.instance.activeHost == null)
-                    const Text(
-                      'Not connected — add your Quark address under Backend hosts',
-                    )
-                  else if (_isLoadingVersionInfo)
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else if (_versionLoadError != null)
-                    Text(
-                      _disconnected
-                          ? quarkDisconnectedShort
-                          : _versionLoadError!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    )
-                  else
-                    Text(
-                      _installedVersion ?? 'Unknown',
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  if (_installedReleaseUrl != null && !_isLoadingVersionInfo)
-                    TextButton.icon(
-                      onPressed: () => _openReleaseNotes(_installedReleaseUrl!),
-                      icon: const Icon(QuarkIcons.open_in_new, size: 16),
-                      label: const Text("What's in this release"),
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    ),
-                  const SizedBox(height: 16),
-                  if (_availableVersions.isEmpty &&
-                      !_isLoadingVersionInfo &&
-                      _versionLoadError == null &&
-                      AppSettings.instance.activeHost != null)
-                    const Text('No updates available')
-                  else if (_availableVersions.isNotEmpty &&
-                      AppSettings.instance.isAdmin.value) ...[
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedUpdateVersion,
-                      items: _availableVersions
-                          .map(
-                            (v) => DropdownMenuItem<String>(
-                              value: v,
-                              child: Text(v),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (_isLoadingVersionInfo || _isUpdatingVersion)
-                          ? null
-                          : (v) {
-                              setState(() {
-                                _selectedUpdateVersion = v;
-                              });
-                            },
-                      decoration: const InputDecoration(
-                        labelText: 'Update Quark to version',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: ElevatedButton.icon(
-                        onPressed:
-                            (_selectedUpdateVersion == null ||
-                                _isUpdatingVersion)
-                            ? null
-                            : _performUpdate,
-                        icon: _isUpdatingVersion
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(QuarkIcons.update),
-                        label: Text(
-                          _isUpdatingVersion ? 'Updating...' : 'Start update',
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+              connectedDevices: ConnectedDevicesCard(
+                devices: _connectedDevices,
+                isLoading: _isLoadingDevices,
+                error: _devicesError,
+                disconnected: _disconnected,
+                isAdmin: isAdmin,
+                onRefresh: _loadDevices,
+                onRemove: _deleteDevice,
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          if (AppSettings.instance.activeHost != null &&
-              AppSettings.instance.isAdmin.value)
-            Card(
-              child: _isLoadingAutoUpdate
-                  ? const ListTile(
-                      title: Text('Automatic updates'),
-                      subtitle: Text(
-                        'Quark will check for and install updates daily',
-                      ),
-                      trailing: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    )
-                  : SwitchListTile(
-                      title: const Text('Automatic updates'),
-                      subtitle: _autoUpdateError != null
-                          ? Text(
-                              _disconnected
-                                  ? quarkDisconnectedShort
-                                  : _autoUpdateError!,
-                              style: const TextStyle(color: Colors.red),
-                            )
-                          : const Text(
-                              'Quark will check for and install updates daily',
-                            ),
-                      value: _autoUpdate,
-                      onChanged: _autoUpdateError != null
-                          ? null
-                          : (newValue) async {
-                              setState(() {
-                                _autoUpdate = newValue;
-                              });
-                              final messenger = ScaffoldMessenger.of(context);
-                              try {
-                                await SettingsService.setAutoUpdate(newValue);
-                              } catch (e) {
-                                debugPrint(
-                                  '[settings_page.dart] Error saving auto-update: $e',
-                                );
-                                if (!mounted) return;
-                                setState(() {
-                                  _autoUpdate = !newValue;
-                                });
-                                messenger.showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      Errors.message(e, 'save the setting'),
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-                    ),
-            ),
-          const SizedBox(height: 16),
-          Card(
-            child: SwitchListTile(
-              title: const Text('Demo mode'),
-              subtitle: const Text(
-                'Shows bundled sample photos and albums instead of your '
-                'library. Your real files are not affected.',
-              ),
-              value: _demoMode,
-              onChanged: (newValue) async {
-                setState(() => _demoMode = newValue);
-                await AppSettings.instance.setDemoMode(newValue);
-              },
+          QuarkTab(
+            label: 'Updates',
+            child: SettingsUpdatesTab(
+              header: banner,
+              hasHost: hasHost,
+              isAdmin: isAdmin,
+              disconnected: _disconnected,
+              installedVersion: _installedVersion,
+              installedReleaseUrl: _installedReleaseUrl,
+              availableVersions: _availableVersions,
+              selectedVersion: _selectedUpdateVersion,
+              isLoadingVersion: _isLoadingVersionInfo,
+              isUpdating: _isUpdatingVersion,
+              versionError: _versionLoadError,
+              onSelectVersion: (v) =>
+                  setState(() => _selectedUpdateVersion = v),
+              onUpdate: _performUpdate,
+              onOpenReleaseNotes: _openReleaseNotes,
+              autoUpdate: _autoUpdate,
+              isLoadingAutoUpdate: _isLoadingAutoUpdate,
+              autoUpdateError: _autoUpdateError,
+              onAutoUpdateChanged: _setAutoUpdate,
             ),
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'Auto-refresh interval',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<int>(
-            initialValue: _refreshIntervalSeconds,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            ),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Disabled')),
-              DropdownMenuItem(value: 10, child: Text('10 seconds')),
-              DropdownMenuItem(value: 15, child: Text('15 seconds')),
-              DropdownMenuItem(value: 30, child: Text('30 seconds')),
-              DropdownMenuItem(value: 60, child: Text('1 minute')),
-              DropdownMenuItem(value: 120, child: Text('2 minutes')),
-              DropdownMenuItem(value: 300, child: Text('5 minutes')),
-            ],
-            onChanged: (v) async {
-              if (v == null) return;
-              await AppSettings.instance.setRefreshIntervalSeconds(v);
-              setState(() => _refreshIntervalSeconds = v);
-            },
-          ),
-          if (AppSettings.instance.activeHost != null) ...[
-            const SizedBox(height: 24),
-            const Text(
-              'Remote Access',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: _isLoadingRemoteAccess
-                    ? const Center(
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : _remoteAccessError != null
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _disconnected
-                                ? quarkDisconnectedShort
-                                : _remoteAccessError!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          OutlinedButton.icon(
-                            onPressed: _loadRemoteAccess,
-                            icon: const Icon(QuarkIcons.refresh, size: 16),
-                            label: const Text('Retry'),
-                          ),
-                        ],
-                      )
-                    : _remoteAccessStatus?.enabled == true
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // On is the Quark's setting; on the tailnet is a
-                          // separate fact that can lag it or never arrive.
-                          if (_remoteAccessStatus!.error != null)
-                            Row(
-                              children: [
-                                Icon(
-                                  QuarkIcons.error_outline,
-                                  size: 16,
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    Errors.remoteAccessFailing,
-                                    key: const ValueKey(
-                                      'settings_remote_access_failing',
-                                    ),
-                                    style: TextStyle(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.error,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            )
-                          else if (!_remoteAccessStatus!.connected)
-                            const Row(
-                              children: [
-                                Icon(QuarkIcons.cloud_sync_outlined, size: 16),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Connecting…',
-                                  key: ValueKey(
-                                    'settings_remote_access_connecting',
-                                  ),
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            )
-                          else
-                            const Row(
-                              children: [
-                                Icon(
-                                  QuarkIcons.cloud_done_outlined,
-                                  size: 16,
-                                  color: Colors.green,
-                                ),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Connected via Tailscale',
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            ),
-                          if (_remoteAccessStatus?.remoteUrl != null &&
-                              _remoteAccessStatus!.remoteUrl!.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            CodeBlock(text: _remoteAccessStatus!.remoteUrl!),
-                          ],
-                          if (AppSettings.instance.isAdmin.value) ...[
-                            const SizedBox(height: 12),
-                            OutlinedButton.icon(
-                              onPressed: _isTogglingRemoteAccess
-                                  ? null
-                                  : _disableRemoteAccess,
-                              icon: _isTogglingRemoteAccess
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(QuarkIcons.link_off, size: 16),
-                              label: const Text('Disable'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.error,
-                              ),
-                            ),
-                          ],
-                        ],
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Access your quark from anywhere using Tailscale.',
-                          ),
-                          if (!RemoteAccessConfig.enableAvailable) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              key: const ValueKey('remote_access_coming_soon'),
-                              children: [
-                                Chip(
-                                  label: const Text('Coming soon'),
-                                  visualDensity: VisualDensity.compact,
-                                  side: BorderSide(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.outlineVariant,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Not available yet. Your Quark is '
-                                    'reachable on your home network in the '
-                                    'meantime.',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ] else if (AppSettings.instance.isAdmin.value) ...[
-                            const SizedBox(height: 12),
-                            OutlinedButton.icon(
-                              onPressed: _isTogglingRemoteAccess
-                                  ? null
-                                  : _enableRemoteAccess,
-                              icon: _isTogglingRemoteAccess
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      QuarkIcons.vpn_key_outlined,
-                                      size: 16,
-                                    ),
-                              label: const Text('Enable remote access'),
-                            ),
-                          ],
-                        ],
-                      ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 24),
-          // Admin-only: a shell login on the device (#2131).
-          if (AppSettings.instance.activeHost != null &&
-              AppSettings.instance.isAdmin.value) ...[
-            const Text(
-              'SSH access',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const SshAccessSection(),
-            const SizedBox(height: 24),
-            // Renders nothing unless this Quark can repair itself (#2121).
-            const RepairInstallationSection(),
-          ],
-          const Text(
-            'Theme',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          RadioGroup<ThemeMode>(
-            groupValue: _theme,
-            onChanged: (v) async {
-              if (v == null) return;
-              await AppSettings.instance.setThemeMode(v);
-              setState(() {
-                _theme = v;
-              });
-            },
-            child: const Column(
-              children: [
-                RadioListTile<ThemeMode>(
-                  title: Text('System'),
-                  value: ThemeMode.system,
-                ),
-                RadioListTile<ThemeMode>(
-                  title: Text('Light'),
-                  value: ThemeMode.light,
-                ),
-                RadioListTile<ThemeMode>(
-                  title: Text('Dark'),
-                  value: ThemeMode.dark,
-                ),
-              ],
-            ),
-          ),
-          // Storage devices
-          if (AppSettings.instance.activeHost != null) ...[
-            const Text(
-              'Storage',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Card(
-              child: ExpansionTile(
-                title: const Text(
-                  'Storage devices',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  _isLoadingStorage
-                      ? 'Loading...'
-                      : _storageError != null
-                      ? Errors.loadFailedShort
-                      : _storageDevices.isEmpty
-                      ? 'No devices found'
-                      : '${_storageDevices.length} device${_storageDevices.length == 1 ? '' : 's'}',
-                ),
-                children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: RefreshIconButton(
-                        isRefreshing: _isLoadingStorage,
-                        onPressed: _loadStorageDevices,
-                        tooltip: 'Refresh',
-                      ),
-                    ),
-                  ),
-                  if (_isLoadingStorage)
-                    const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Center(
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    )
-                  else if (_storageError != null)
-                    ListTile(
-                      leading: Icon(
-                        QuarkIcons.error_outline,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                      title: Text(
-                        _disconnected ? quarkDisconnectedShort : _storageError!,
-                      ),
-                    )
-                  else if (_storageDevices.isEmpty)
-                    const ListTile(title: Text('No storage devices found'))
-                  else
-                    ..._storageDevices.map((device) {
-                      return ListTile(
-                        leading: Icon(
-                          device.isInternal
-                              ? QuarkIcons.storage_rounded
-                              : device.isUnmounted
-                              ? QuarkIcons.usb_off_rounded
-                              : QuarkIcons.usb_rounded,
-                        ),
-                        title: Text(
-                          device.name.isNotEmpty
-                              ? device.name
-                              : device.devicePath,
-                        ),
-                        subtitle: device.isUnmounted
-                            ? const Text(
-                                'Detected but not mounted',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.orange,
-                                ),
-                              )
-                            : Text(
-                                '${device.usedDisplay} · ${device.usedPercent.toStringAsFixed(1)}% used · ${device.fileSystem}',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                        // Mounting and renaming a drive is admin-only (#1899).
-                        trailing: !AppSettings.instance.isAdmin.value
-                            ? null
-                            : device.isUnmounted
-                            ? FilledButton.tonalIcon(
-                                icon: const Icon(QuarkIcons.play_arrow_rounded),
-                                label: const Text('Mount'),
-                                onPressed: device.serial.isNotEmpty
-                                    ? () => _mountDevice(device)
-                                    : null,
-                              )
-                            : IconButton(
-                                icon: const Icon(QuarkIcons.edit_outlined),
-                                tooltip: 'Rename',
-                                onPressed: () => _renameStorageDevice(device),
-                              ),
-                      );
-                    }),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 24),
-          const Text(
-            'Backend hosts',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          HostManager(onChanged: _load),
-          const SizedBox(height: 24),
-          const Text(
-            'Connected Devices',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          if (AppSettings.instance.activeHost == null)
-            const Text(
-              'Not connected — add your Quark address under Backend hosts',
-            )
-          else
-            Card(
-              child: ExpansionTile(
-                title: const Text(
-                  'Client connections',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  _isLoadingDevices
-                      ? 'Loading...'
-                      : _devicesError != null
-                      ? Errors.loadFailedShort
-                      : _connectedDevices.isEmpty
-                      ? 'No devices recorded yet'
-                      : '${_connectedDevices.length} device${_connectedDevices.length == 1 ? '' : 's'}',
-                ),
-                children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: RefreshIconButton(
-                        isRefreshing: _isLoadingDevices,
-                        onPressed: _loadDevices,
-                        tooltip: 'Refresh devices',
-                      ),
-                    ),
-                  ),
-                  if (_isLoadingDevices)
-                    const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Center(
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    )
-                  else if (_devicesError != null)
-                    ListTile(
-                      leading: Icon(
-                        QuarkIcons.error_outline,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                      title: Text(
-                        _disconnected ? quarkDisconnectedShort : _devicesError!,
-                      ),
-                    )
-                  else if (_connectedDevices.isEmpty)
-                    const ListTile(title: Text('No devices recorded yet'))
-                  else
-                    ..._connectedDevices.map((device) {
-                      return ListTile(
-                        leading: const Icon(QuarkIcons.devices),
-                        title: Text(device.ipAddress),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (device.userAgent.isNotEmpty)
-                              Text(
-                                device.userAgent,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            Text(
-                              '${device.requestCount} request${device.requestCount == 1 ? '' : 's'} · last seen ${_formatRelative(device.lastSeenAt)}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                        isThreeLine: device.userAgent.isNotEmpty,
-                        // Removing a device record is admin-only (#1899).
-                        trailing: AppSettings.instance.isAdmin.value
-                            ? IconButton(
-                                icon: const Icon(QuarkIcons.delete_outline),
-                                tooltip: 'Remove',
-                                onPressed: () => _deleteDevice(device.id),
-                              )
-                            : null,
-                      );
-                    }),
-                ],
-              ),
-            ),
-          const SizedBox(height: 24),
-
-          QuarkSection(
-            title: 'Help & Support',
-            icon: QuarkIcons.info_outline,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const HelpSupportCard(),
-                const SizedBox(height: 16),
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.gavel_outlined),
-                    title: const Text('Terms of Service'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push(AppRoutes.terms),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          QuarkSection(
-            title: 'Software Bill of Materials',
-            icon: QuarkIcons.info_outline,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (_isLoadingSbom)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: CircularProgressIndicator(),
-                    ),
-                  )
-                else ...[
-                  if (_sbomError != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        _sbomError!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  if (_flutterSbom != null)
-                    SbomExpansionTile(
-                      title: 'Flutter dependencies',
-                      subtitle: '${_flutterSbom!.length} packages',
-                      items: _flutterSbom!
-                          .map(
-                            (p) => SbomEntry(
-                              name: p.name,
-                              version: p.version,
-                              url: p.url,
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  const SizedBox(height: 8),
-                  if (_goSbom != null)
-                    SbomExpansionTile(
-                      title: 'Go dependencies',
-                      subtitle:
-                          '${_goSbom!.dependencies.length} packages · ${_goSbom!.goVersion}',
-                      items: _goSbom!.dependencies
-                          .map(
-                            (d) => SbomEntry(name: d.path, version: d.version),
-                          )
-                          .toList(),
-                    ),
-                  if (_goSbom == null && _flutterSbom == null)
-                    const Text('No SBOM data available.'),
-                ],
-              ],
+          QuarkTab(
+            label: 'About',
+            child: SettingsAboutTab(
+              header: banner,
+              appVersion: _appVersion,
+              appReleaseUrl: _appReleaseUrl,
+              onOpenReleaseNotes: _openReleaseNotes,
+              onOpenTerms: () => context.push(AppRoutes.terms),
+              isLoadingSbom: _isLoadingSbom,
+              sbomError: _sbomError,
+              flutterSbom: _flutterSbom,
+              goSbom: _goSbom,
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _setTheme(ThemeMode mode) async {
+    await AppSettings.instance.setThemeMode(mode);
+    if (mounted) setState(() => _theme = mode);
+  }
+
+  Future<void> _setRefreshInterval(int seconds) async {
+    await AppSettings.instance.setRefreshIntervalSeconds(seconds);
+    if (mounted) setState(() => _refreshIntervalSeconds = seconds);
+  }
+
+  Future<void> _setDemoMode(bool enabled) async {
+    setState(() => _demoMode = enabled);
+    await AppSettings.instance.setDemoMode(enabled);
+  }
+
+  /// Saves the automatic-updates switch, flipping it back if the Quark
+  /// refuses.
+  Future<void> _setAutoUpdate(bool enabled) async {
+    setState(() => _autoUpdate = enabled);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await SettingsService.setAutoUpdate(enabled);
+    } catch (e) {
+      debugPrint('[settings_page.dart] Error saving auto-update: $e');
+      if (!mounted) return;
+      setState(() => _autoUpdate = !enabled);
+      messenger.showSnackBar(
+        SnackBar(content: Text(Errors.message(e, 'save the setting'))),
+      );
+    }
   }
 
   Future<void> _signOut() async {
@@ -1517,13 +778,5 @@ class _SettingsPageState extends State<SettingsPage> {
     AppSettings.instance.isAdmin.removeListener(_onAdminChanged);
     _remoteAccessPoll?.cancel();
     super.dispose();
-  }
-
-  String _formatRelative(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 60) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
   }
 }

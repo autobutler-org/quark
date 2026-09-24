@@ -144,9 +144,8 @@ Covers first-boot setup, login, logout, and password recovery.
 **Steps:**
 
 1. Open the navigation drawer.
-2. Navigate to **Settings** (`/settings`).
-3. Scroll to the sign-out section.
-4. Tap **Sign out**.
+2. Navigate to **Settings**, then the **Account** tab (`/settings/account`).
+3. Tap **Sign out**.
 
 **Expected result:**
 
@@ -312,7 +311,7 @@ account on this Quark.
 
 **Steps:**
 
-1. Navigate to **Settings**.
+1. Navigate to **Settings**, then the **Account** tab (`/settings/account`).
 2. Tap **Account and data**, then **Delete account**, and confirm with your password (JN-ST-026).
 
 **Expected result:**

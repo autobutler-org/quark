@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quark/pages/settings_page.dart';
+import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -96,7 +97,9 @@ void main() {
       priorOnError?.call(details);
     };
 
-    await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
+    await tester.pumpWidget(
+      const MaterialApp(home: SettingsPage(tab: SettingsTab.network)),
+    );
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }
