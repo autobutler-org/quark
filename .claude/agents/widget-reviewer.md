@@ -21,6 +21,10 @@ For each widget, check:
 - No `Expanded` or `Flexible` inside a sliver or other unbounded parent.
 - No hardcoded color, radius, or spacing; tokens come through the theme.
 - No user-facing error sentence composed in the package.
+- A widget that animates checks both `MediaQuery.disableAnimationsOf(context)` and
+  `accessibilityFeatures.reduceMotion`, re-evaluates on `didChangeAccessibilityFeatures`, drops decorative motion
+  under reduced motion while keeping a subtle signal where motion carries meaning, and has a reduced-motion test case
+  and gallery variant. A bare `repeat()` with no reduced-motion branch is a finding; `QuarkLoader` is the reference.
 - `///` docs on the class, every parameter, every callback.
 - One widget class per file. A private widget class or a `Widget _build*()` method in any file is a finding; name the
   file it should become.
