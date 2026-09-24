@@ -12,12 +12,16 @@ typedef TranscodeVideoFn =
       String relPath, {
       String? serial,
       required String format,
-      required String quality,
     });
 
-/// Converts the video at [relPath] on the device [serial]: asks for a format
-/// and quality in the [TranscodeDialogHost], queues the job, and says so in a
-/// snack bar whose View opens the Jobs page. A refusal shows as a snack bar
+/// Lists the formats [relPath] converts to —
+/// [FilesService.listTranscodeFormats].
+typedef LoadTranscodeFormatsFn =
+    Future<List<TranscodeFormat>> Function(String relPath, {String? serial});
+
+/// Converts the video at [relPath] on the device [serial]: asks for one of the
+/// formats its streams fit in the [TranscodeDialogHost], queues the job, and
+/// says so in a snack bar whose View opens the Jobs page. A refusal shows as a snack bar
 /// too. The video viewer and the Files menu both run this.
 ///
 /// [loadFormats] and [transcode] default to the real calls and are injectable
@@ -26,26 +30,19 @@ Future<void> convertVideo(
   BuildContext context, {
   required String relPath,
   String? serial,
-  Future<List<TranscodeFormat>> Function() loadFormats =
-      FilesService.listTranscodeFormats,
+  LoadTranscodeFormatsFn loadFormats = FilesService.listTranscodeFormats,
   TranscodeVideoFn transcode = FilesService.transcodeVideo,
 }) async {
   final fileName = relPath.split('/').last;
   final dot = fileName.lastIndexOf('.');
-  final choice = await TranscodeDialogHost.show(
+  final format = await TranscodeDialogHost.show(
     context,
-    loadFormats: loadFormats,
+    loadFormats: () => loadFormats(relPath, serial: serial),
     sourceFormat: dot <= 0 ? null : fileName.substring(dot + 1),
   );
-  if (choice == null || !context.mounted) return;
-  final (format, quality) = choice;
+  if (format == null || !context.mounted) return;
   try {
-    await transcode(
-      relPath,
-      serial: serial,
-      format: format,
-      quality: quality.name,
-    );
+    await transcode(relPath, serial: serial, format: format);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

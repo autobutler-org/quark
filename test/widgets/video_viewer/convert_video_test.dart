@@ -5,6 +5,9 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/video_viewer/convert_video.dart';
 
 void main() {
+  final listed = <(String, String?)>[];
+  setUp(listed.clear);
+
   Future<void> pumpAndConvert(
     WidgetTester tester,
     TranscodeVideoFn transcode,
@@ -18,9 +21,10 @@ void main() {
                 context,
                 relPath: 'clips/trip.mov',
                 serial: 'SN1',
-                loadFormats: () async => const [
-                  TranscodeFormat(format: 'mp4', label: 'MP4'),
-                ],
+                loadFormats: (relPath, {serial}) async {
+                  listed.add((relPath, serial));
+                  return const [TranscodeFormat(format: 'mp4', label: 'MP4')];
+                },
                 transcode: transcode,
               ),
               child: const Text('open'),
@@ -40,18 +44,15 @@ void main() {
   testWidgets('queues the chosen conversion and says it started', (
     tester,
   ) async {
-    final calls = <(String, String?, String, String)>[];
-    await pumpAndConvert(tester, (
-      relPath, {
-      serial,
-      required format,
-      required quality,
-    }) async {
-      calls.add((relPath, serial, format, quality));
+    final calls = <(String, String?, String)>[];
+    await pumpAndConvert(tester, (relPath, {serial, required format}) async {
+      calls.add((relPath, serial, format));
       return 1;
     });
 
-    expect(calls, [('clips/trip.mov', 'SN1', 'mp4', 'original')]);
+    // The formats are the ones this video's streams fit.
+    expect(listed, [('clips/trip.mov', 'SN1')]);
+    expect(calls, [('clips/trip.mov', 'SN1', 'mp4')]);
     expect(find.text('Conversion started'), findsOneWidget);
     expect(find.text('View'), findsOneWidget);
   });
@@ -59,11 +60,10 @@ void main() {
   testWidgets('shows the refusal when the job cannot be queued', (
     tester,
   ) async {
-    const error = ApiException(501);
+    const error = ApiException(403);
     await pumpAndConvert(
       tester,
-      (relPath, {serial, required format, required quality}) async =>
-          throw error,
+      (relPath, {serial, required format}) async => throw error,
     );
 
     expect(find.text(Errors.transcode(error)), findsOneWidget);
