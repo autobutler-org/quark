@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:quark/router.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/local_media_proxy.dart';
 import 'package:quark/utils/error_text.dart';
@@ -10,7 +8,7 @@ import 'package:quark/utils/media_autoplay.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/video_viewer/fullscreen_video_page.dart';
 import 'package:quark/widgets/video_viewer/inline_video_player.dart';
-import 'package:quark/widgets/video_viewer/transcode_dialog_host.dart';
+import 'package:quark/widgets/video_viewer/convert_video.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:video_player/video_player.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -324,43 +322,13 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
     }
   }
 
-  Future<void> _convert() async {
+  Future<void> _convert() {
     final params = widget.url.queryParameters;
-    final relPath = params['filePath'] ?? '';
-    final fileName = relPath.split('/').last;
-    final dot = fileName.lastIndexOf('.');
-    final choice = await TranscodeDialogHost.show(
+    return convertVideo(
       context,
-      loadFormats: FilesService.listTranscodeFormats,
-      sourceFormat: dot <= 0 ? null : fileName.substring(dot + 1),
+      relPath: params['filePath'] ?? '',
+      serial: params['serial'],
     );
-    if (choice == null || !mounted) return;
-    final (format, quality) = choice;
-    try {
-      await FilesService.transcodeVideo(
-        relPath,
-        serial: params['serial'],
-        format: format,
-        quality: quality.name,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Conversion started'),
-          action: SnackBarAction(
-            label: 'View',
-            onPressed: () {
-              if (mounted) context.go(AppRoutes.jobs);
-            },
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(Errors.transcode(e))));
-    }
   }
 
   @override
