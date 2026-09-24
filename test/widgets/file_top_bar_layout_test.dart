@@ -62,7 +62,6 @@ void main() {
       expect(find.byType(QuarkAppBar), findsOneWidget);
       for (final key in const [
         'refresh_button',
-        'file_top_bar_back',
         'file_top_bar_up',
         'file_top_bar_search',
         'file_top_bar_select',
@@ -85,6 +84,8 @@ void main() {
         );
       }
       expect(find.byKey(const ValueKey('file_top_bar_home')), findsOneWidget);
+      // Back and up did the same thing; only up is left (#2314).
+      expect(find.byKey(const ValueKey('file_top_bar_back')), findsNothing);
       expect(tester.takeException(), isNull);
     });
   }
