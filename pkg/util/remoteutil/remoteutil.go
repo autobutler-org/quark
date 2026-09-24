@@ -13,10 +13,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/provisionutil"
 	"tailscale.com/tsnet"
 )
-
-const hostname = "quark"
 
 const defaultControlURL = "https://quark.ts.autobutler.org"
 
@@ -60,7 +59,7 @@ func Start(authKey string) error {
 		return lastErr
 	}
 	srv = &tsnet.Server{
-		Hostname:   hostname,
+		Hostname:   nodeHostname(provisionutil.DeviceID()),
 		AuthKey:    authKey,
 		Dir:        dir,
 		ControlURL: controlURL(),

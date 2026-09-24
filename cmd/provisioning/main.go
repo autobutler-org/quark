@@ -1,12 +1,20 @@
 // Command provisioning mints single-use Headscale pre-auth keys for quarks that
-// POST /provision (#1876). The endpoint takes no secret (#1879): the per-IP and
-// per-device rate limits bound it. It runs on the Headscale VM
-// as the headscale user and shells out to the local headscale CLI, which talks
-// to the server over its unix socket, so no Headscale API key is involved.
+// POST /provision (#1876). It runs on the Headscale VM as the headscale user
+// and shells out to the local headscale CLI, which talks to the server over its
+// unix socket, so no Headscale API key is involved.
+//
+// Each Quark is its own Headscale user, a "household" (#2358). A request with
+// no household credential is a first enrollment: the service creates a user
+// with a random name and returns its key along with the household name and
+// household_token, HMAC-SHA256(PROVISIONING_HOUSEHOLD_KEY, household). A
+// request that presents both is pair mode: the token is checked by recomputing
+// it, and the key is minted for that household's user. Nothing is stored. The
+// caller's device_id never picks the household (#2317). The endpoint takes no
+// secret (#1879): cold enrollment is bounded per IP, pair mode per household.
 //
 // Environment:
 //
-//	HEADSCALE_USER                 user keys are minted for (default quark)
+//	PROVISIONING_HOUSEHOLD_KEY     required; the HMAC key household tokens are signed with
 //	HEADSCALE_BIN                  headscale CLI (default headscale, looked up on PATH)
 //	PROVISIONING_LISTEN_ADDR       listen address (default :8081)
 //	PROVISIONING_KEY_EXPIRY_HOURS  key lifetime in whole hours (default 1)
@@ -15,6 +23,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,13 +46,14 @@ var (
 	// as the headscale user, so the CLI reaches the server over its unix
 	// socket and needs no API key.
 	headscaleBin string
-	// headscaleUser is the Headscale user every key is minted for.
-	headscaleUser string
-	keyExpiry     time.Duration
+	// householdKey signs household tokens. It never leaves the service.
+	householdKey []byte
+	keyExpiry    time.Duration
 )
 
 const (
-	// maxRequestBytes caps a /provision body; a real one is a 64-char device ID.
+	// maxRequestBytes caps a /provision body; a real one is a 64-char device
+	// ID plus, in pair mode, a household name and its 64-char token.
 	maxRequestBytes = 1024
 	// maxCLIOutputBytes caps what is kept of the CLI's stdout and stderr.
 	maxCLIOutputBytes = 64 * 1024
@@ -51,10 +64,15 @@ const (
 
 type provisionRequest struct {
 	DeviceID string `json:"device_id"`
+	// Household and HouseholdToken are set together, in pair mode only.
+	Household      string `json:"household,omitempty"`
+	HouseholdToken string `json:"household_token,omitempty"`
 }
 
 type provisionResponse struct {
-	AuthKey string `json:"auth_key"`
+	AuthKey        string `json:"auth_key"`
+	Household      string `json:"household"`
+	HouseholdToken string `json:"household_token"`
 }
 
 type errorResponse struct {
@@ -74,8 +92,11 @@ var (
 )
 
 const (
+	// maxRequestsPerHour applies to the ip: and device: buckets.
 	maxRequestsPerHour = 5
-	pruneInterval      = 10 * time.Minute
+	// maxHouseholdRequestsPerHour is looser because a valid household token is a much stronger caller signal than an IP.
+	maxHouseholdRequestsPerHour = 30
+	pruneInterval               = 10 * time.Minute
 )
 
 // pruneRateStore removes entries that have had no activity in the past hour.
@@ -100,11 +121,14 @@ func pruneRateStore(now time.Time) {
 	lastPrune = now
 }
 
-// checkRateLimit returns true if the request should be allowed, false if rate-limited.
-// It rate-limits by both source IP and device_id, taking the stricter result.
-// Both keys are checked before any timestamps are recorded to avoid partial updates
-// when one key is over limit and the other is not.
-func checkRateLimit(sourceIP, deviceID string) bool {
+// checkRateLimit returns true if the request should be allowed, false if
+// rate-limited. It counts the request in every bucket in keys, taking the
+// strictest result: "ip:" and "device:" for cold enrollment, "household:" and
+// "device:" in pair mode (#2358), so a family behind one NAT address is not
+// capped by the per-IP limit. Every key is checked before any timestamps are
+// recorded to avoid partial updates when one key is over limit and another is
+// not.
+func checkRateLimit(keys ...string) bool {
 	rateMu.Lock()
 	defer rateMu.Unlock()
 
@@ -113,7 +137,6 @@ func checkRateLimit(sourceIP, deviceID string) bool {
 
 	pruneRateStore(now)
 
-	keys := []string{"ip:" + sourceIP, "device:" + deviceID}
 	filtered := make([][]time.Time, len(keys))
 
 	for i, key := range keys {
@@ -129,7 +152,11 @@ func checkRateLimit(sourceIP, deviceID string) bool {
 			}
 		}
 		filtered[i] = f
-		if len(f) >= maxRequestsPerHour {
+		limit := maxRequestsPerHour
+		if strings.HasPrefix(key, "household:") {
+			limit = maxHouseholdRequestsPerHour
+		}
+		if len(f) >= limit {
 			entry.Timestamps = f
 			return false
 		}
@@ -205,9 +232,13 @@ func (b *cappedBuffer) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-// resolveUserID looks up headscaleUser's numeric ID, which is what
-// `preauthkeys create --user` takes in Headscale v0.28.
-func resolveUserID(ctx context.Context) (uint64, error) {
+// ensureUserID returns the numeric ID of the Headscale user named household,
+// which is what `preauthkeys create --user` takes, creating the user first
+// if it does not exist. Creating a user is not idempotent in Headscale, so
+// this lists, then creates only when the name is absent. No policy reload is
+// needed: the policy's one static grant, each user to its own nodes, covers
+// every user (#2320).
+func ensureUserID(ctx context.Context, household string) (uint64, error) {
 	out, err := runHeadscale(ctx, "users", "list", "-o", "json")
 	if err != nil {
 		return 0, err
@@ -217,20 +248,56 @@ func resolveUserID(ctx context.Context) (uint64, error) {
 		return 0, fmt.Errorf("parse `headscale users list` output: %w", err)
 	}
 	for _, u := range users {
-		if u.Name == headscaleUser && u.ID != 0 {
+		if u.Name == household && u.ID != 0 {
 			return u.ID, nil
 		}
 	}
-	return 0, fmt.Errorf("headscale user %q does not exist; create it with `headscale users create %s`, or set HEADSCALE_USER", headscaleUser, headscaleUser)
+	out, err = runHeadscale(ctx, "users", "create", household, "-o", "json")
+	if err != nil {
+		return 0, err
+	}
+	var created headscaleUserJSON
+	if err := json.Unmarshal(out, &created); err != nil {
+		return 0, fmt.Errorf("parse `headscale users create` output: %w", err)
+	}
+	if created.ID == 0 {
+		return 0, fmt.Errorf("`headscale users create %s` returned no user ID", household)
+	}
+	log.Printf("created household %q", household)
+	return created.ID, nil
 }
 
-// createPreAuthKey mints a single-use, non-ephemeral key for headscaleUser.
-// The key is never logged: it is not in any error, and only stderr is.
-func createPreAuthKey(ctx context.Context) (string, error) {
+// newHousehold returns a random household name. Random names mean nobody can
+// claim a household before its Quark enrolls.
+func newHousehold() (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate household name: %w", err)
+	}
+	return "household-" + hex.EncodeToString(b), nil
+}
+
+// householdToken is HMAC-SHA256(householdKey, household), hex-encoded. The
+// service checks a token by recomputing it, so nothing is stored.
+func householdToken(household string) string {
+	mac := hmac.New(sha256.New, householdKey)
+	mac.Write([]byte(household))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// validHouseholdToken reports whether token is household's, in constant time.
+func validHouseholdToken(household, token string) bool {
+	return hmac.Equal([]byte(token), []byte(householdToken(household)))
+}
+
+// createPreAuthKey mints a single-use, non-ephemeral key for the household's
+// user, creating the user if needed. The key is never logged: it is not in any
+// error, and only stderr is.
+func createPreAuthKey(ctx context.Context, household string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, cliTimeout)
 	defer cancel()
 
-	userID, err := resolveUserID(ctx)
+	userID, err := ensureUserID(ctx, household)
 	if err != nil {
 		return "", err
 	}
@@ -318,26 +385,56 @@ func handleProvision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !checkRateLimit(clientIP(r), req.DeviceID) {
-		writeJSON(w, http.StatusTooManyRequests, errorResponse{Error: "rate limit exceeded, max 5 requests per hour"})
+	household := req.Household
+	pairing := household != "" || req.HouseholdToken != ""
+	if pairing && (household == "" || !validHouseholdToken(household, req.HouseholdToken)) {
+		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid household credential"})
 		return
 	}
 
-	key, err := createPreAuthKey(r.Context())
+	bucket := "ip:" + clientIP(r)
+	if pairing {
+		bucket = "household:" + household
+	}
+	if !checkRateLimit(bucket, "device:"+req.DeviceID) {
+		writeJSON(w, http.StatusTooManyRequests, errorResponse{Error: "rate limit exceeded, try again later"})
+		return
+	}
+
+	if !pairing {
+		var err error
+		if household, err = newHousehold(); err != nil {
+			log.Printf("failed to enroll: %v", err)
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to provision key"})
+			return
+		}
+	}
+
+	key, err := createPreAuthKey(r.Context(), household)
 	if err != nil {
-		log.Printf("failed to create pre-auth key: %v", err)
+		log.Printf("failed to create pre-auth key for household %q: %v", household, err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to provision key"})
 		return
 	}
+	log.Printf("minted a key in household %q for device %q (pair mode %v)", household, req.DeviceID, pairing)
 
-	writeJSON(w, http.StatusOK, provisionResponse{AuthKey: key})
+	writeJSON(w, http.StatusOK, provisionResponse{
+		AuthKey:        key,
+		Household:      household,
+		HouseholdToken: householdToken(household),
+	})
 }
 
 func main() {
-	headscaleUser = envOr("HEADSCALE_USER", "quark")
 	headscaleBin = envOr("HEADSCALE_BIN", "headscale")
 	if _, err := exec.LookPath(headscaleBin); err != nil {
 		log.Fatalf("headscale CLI not found at %q; install headscale or set HEADSCALE_BIN to its path", headscaleBin)
+	}
+
+	householdKey = []byte(os.Getenv("PROVISIONING_HOUSEHOLD_KEY"))
+	if len(householdKey) == 0 {
+		log.Fatal("PROVISIONING_HOUSEHOLD_KEY is required: it signs household tokens. Set it to a long random value, " +
+			"for example `openssl rand -hex 32`, and keep it: changing it invalidates every Quark's household token")
 	}
 
 	var err error
@@ -350,7 +447,7 @@ func main() {
 	mux.HandleFunc("/provision", handleProvision)
 
 	addr := envOr("PROVISIONING_LISTEN_ADDR", ":8081")
-	log.Printf("provisioning service listening on %s, minting keys for headscale user %q", addr, headscaleUser)
+	log.Printf("provisioning service listening on %s", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("server error: %v", err)
 	}

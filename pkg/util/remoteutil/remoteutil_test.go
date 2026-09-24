@@ -256,3 +256,15 @@ func TestStatus_ReportsProxyFailureUntilDisable(t *testing.T) {
 		t.Error("HasPersistedState() = true after Disable; want the state dir removed")
 	}
 }
+
+// TestNodeHostname verifies the tsnet hostname is per device and stable, and
+// never the shared "quark" every node used before #2358.
+func TestNodeHostname(t *testing.T) {
+	id := strings.Repeat("ab12", 16)
+	if got := nodeHostname(id); got != "quark-ab12ab12" {
+		t.Errorf("nodeHostname() = %q; want quark-ab12ab12", got)
+	}
+	if nodeHostname(id) == nodeHostname(strings.Repeat("cd34", 16)) {
+		t.Error("two device IDs gave one hostname")
+	}
+}

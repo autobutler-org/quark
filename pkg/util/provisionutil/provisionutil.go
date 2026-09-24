@@ -11,6 +11,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 )
 
 const defaultProvisioningURL = "https://quark.ts.autobutler.org/provision"
@@ -21,15 +23,56 @@ type ProvisionAuthKeyParams struct {
 	// URL is the provisioning endpoint. Empty means QUARK_PROVISIONING_URL,
 	// or the production endpoint when that is unset.
 	URL string
-	// DeviceID identifies this Quark to the service's rate limiter. Empty
-	// means the sha256 of the hostname and machine-id.
+	// DeviceID identifies the device the key is for to the service's rate
+	// limiter. Empty means this Quark's DeviceID.
 	DeviceID string
+	// Household and HouseholdToken are the credential a first enrollment
+	// returned (#2358). Set, they ask for a key in that household (pair
+	// mode); empty, the service creates a new household.
+	Household      string
+	HouseholdToken string
 }
 
-// ProvisionAuthKeyResult carries the key the service minted.
+// ProvisionAuthKeyResult carries the key the service minted and the
+// household it belongs to.
 type ProvisionAuthKeyResult struct {
 	// AuthKey is a single-use Headscale pre-auth key.
 	AuthKey string
+	// Household is the Headscale user the key belongs to.
+	Household string
+	// HouseholdToken authenticates later pair requests for Household.
+	HouseholdToken string
+}
+
+// EnrollResult carries the key for this Quark's own tsnet node.
+type EnrollResult struct {
+	// AuthKey is a single-use Headscale pre-auth key.
+	AuthKey string
+}
+
+// DeviceID is this Quark's stable device ID: the sha256 of the hostname and
+// machine-id, hex-encoded. Hosts without a machine-id (macOS, some containers)
+// hash the hostname alone.
+func DeviceID() string {
+	return defaultDeviceID()
+}
+
+// Enroll asks for a key for this Quark's own node. It presents the household
+// credential stored in settings when there is one, so a Quark re-enabled
+// after Disable rejoins its own household; otherwise the service creates a
+// household, and its credential is stored for next time (#2358).
+func Enroll() (EnrollResult, error) {
+	household, token := settingsutil.GetHousehold()
+	result, err := ProvisionAuthKey(ProvisionAuthKeyParams{Household: household, HouseholdToken: token})
+	if err != nil {
+		return EnrollResult{}, err
+	}
+	if result.Household != household || result.HouseholdToken != token {
+		if err := settingsutil.SetHousehold(result.Household, result.HouseholdToken); err != nil {
+			return EnrollResult{}, fmt.Errorf("store household credential: %w", err)
+		}
+	}
+	return EnrollResult{AuthKey: result.AuthKey}, nil
 }
 
 // ProvisionAuthKey asks the provisioning service for a fresh pre-auth key.
@@ -44,7 +87,11 @@ func ProvisionAuthKey(params ProvisionAuthKeyParams) (ProvisionAuthKeyResult, er
 		deviceID = defaultDeviceID()
 	}
 
-	body, err := json.Marshal(provisionRequest{DeviceID: deviceID})
+	body, err := json.Marshal(provisionRequest{
+		DeviceID:       deviceID,
+		Household:      params.Household,
+		HouseholdToken: params.HouseholdToken,
+	})
 	if err != nil {
 		return ProvisionAuthKeyResult{}, fmt.Errorf("marshal provision request: %w", err)
 	}

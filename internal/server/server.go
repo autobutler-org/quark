@@ -443,7 +443,7 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 	if settingsutil.GetRemoteAccess() {
 		go func() {
 			if err := remoteutil.EnsureStarted(portNum, !opts.Insecure, func() (string, error) {
-				result, err := provisionutil.ProvisionAuthKey(provisionutil.ProvisionAuthKeyParams{})
+				result, err := provisionutil.Enroll()
 				return result.AuthKey, err
 			}); err != nil {
 				log.Printf("[remote] failed to start: %v", err)

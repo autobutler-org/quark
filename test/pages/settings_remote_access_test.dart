@@ -102,27 +102,25 @@ void main() {
     }
   }
 
-  // #2036: the enable path cannot succeed until #1815 is wired up, and a
-  // button that always fails reads as a broken product rather than a feature
-  // that has not shipped. Settings says so instead of offering it.
-  testWidgets('says remote access is coming rather than offering it', (
-    tester,
-  ) async {
+  // #2358: the Quark enrolls itself as its own household, so the enable path
+  // succeeds and an admin is offered the button again instead of the
+  // Coming soon note from #2036.
+  testWidgets('offers an admin the enable button', (tester) async {
     await pumpWithStatus(tester, {'enabled': false, 'connected': false});
 
     expect(
       find.byKey(const ValueKey('settings_remote_access_experimental')),
       findsNothing,
     );
-    expect(find.text('Enable remote access'), findsNothing);
+    expect(find.text('Enable remote access'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('remote_access_coming_soon')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('Coming soon'), findsOneWidget);
+    expect(find.text('Coming soon'), findsNothing);
   });
 
-  testWidgets('says the same thing to a non-admin', (tester) async {
+  testWidgets('no longer says it is coming to a non-admin', (tester) async {
     await pumpWithStatus(tester, {
       'enabled': false,
       'connected': false,
@@ -130,7 +128,7 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('remote_access_coming_soon')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 

@@ -1,18 +1,13 @@
 /// Tuning for the remote access section of Settings (#1876).
 abstract final class RemoteAccessConfig {
-  /// Whether a user can turn remote access on from Settings.
+  /// Whether an admin can turn remote access on from Settings.
   ///
-  /// False: the enable path cannot succeed today — the app posts an empty
-  /// body and the endpoint refuses it for want of an auth key (#1815) — and
-  /// an Enable button that always fails reads as a broken product rather than
-  /// a feature that has not shipped (#2036). The soft-launch docs already
-  /// describe remote access as coming later; this makes Settings say the
-  /// same thing.
-  ///
-  /// Flip it back to true with the wiring in #1815, and the button returns
-  /// exactly as it was. A Quark that is already connected still shows its
+  /// True: the Quark fetches its own key from the provisioning service and
+  /// enrolls as its own Headscale household (#2358), so the empty-body enable
+  /// the app posts succeeds. Setting it to false shows **Coming soon** in place
+  /// of the button (#2036); a Quark that is already connected still shows its
   /// address and its Disable button either way.
-  static const bool enableAvailable = false;
+  static const bool enableAvailable = true;
 
   /// How often Settings re-reads the status while remote access is on but the
   /// Quark has not joined the tailnet yet.
