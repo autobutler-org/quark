@@ -133,15 +133,13 @@ void main() {
   });
 
   group('Errors.transcode', () {
-    test('a 501 says ffmpeg is missing', () {
-      expect(Errors.transcode(const ApiException(501)), Errors.ffmpegMissing);
-    });
-
-    test('anything else reads like Errors.message', () {
-      expect(
-        Errors.transcode(const ApiException(404)),
-        Errors.message(const ApiException(404), 'convert the video'),
-      );
+    test('anything but a 403 reads like Errors.message', () {
+      for (final status in [404, 501]) {
+        expect(
+          Errors.transcode(ApiException(status)),
+          Errors.message(ApiException(status), 'convert the video'),
+        );
+      }
     });
   });
 

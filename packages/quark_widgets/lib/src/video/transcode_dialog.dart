@@ -2,34 +2,32 @@ import 'package:flutter/material.dart';
 
 import '../core/quark_loader.dart';
 import '../models/transcode_format_option.dart';
-import '../models/transcode_quality.dart';
 import '../theme/quark_tokens.dart';
 
-/// A dialog for converting a video: choose a quality and a target format.
+/// A dialog for converting a video: choose a target format.
 ///
-/// It never loads: [formats], [isLoading], and [error] come in, and the caller
-/// loads again when [onRetry] fires. The chosen format and quality are [State]
-/// because they are the form's own transient input, thrown away when the
-/// dialog closes; the one outcome that matters leaves through [onConvert].
+/// A conversion copies the video's streams into the new container, so there
+/// is no quality to choose. It never loads: [formats], [isLoading], and
+/// [error] come in, and the caller loads again when [onRetry] fires. The
+/// chosen format is [State] because it is the form's own transient input,
+/// thrown away when the dialog closes; the one outcome that matters leaves
+/// through [onConvert].
 ///
-/// At [TranscodeQuality.original] the video's own format, [sourceFormat], is
-/// shown but disabled, since converting to it would only copy the file.
-/// Choosing it at [TranscodeQuality.small] and then switching back to original
-/// clears the choice. Chips carry no checkmark and every quality description
-/// reserves the same height, so nothing in the dialog moves under a tap.
+/// The video's own format, [sourceFormat], is shown but disabled, since
+/// converting to it would only copy the file. Chips carry no checkmark, so
+/// nothing in the dialog moves under a tap.
 ///
-/// Key prefixes: `transcode_quality_<quality>` on each quality chip,
-/// `transcode_format_<format>` on each format chip, `transcode_convert`,
-/// `transcode_cancel`, and `transcode_retry`, rendered only with an [error].
+/// Key prefixes: `transcode_format_<format>` on each format chip,
+/// `transcode_convert`, `transcode_cancel`, and `transcode_retry`, rendered
+/// only with an [error].
 ///
 /// ```dart
-/// showDialog<(String, TranscodeQuality)>(
+/// showDialog<String>(
 ///   context: context,
 ///   builder: (context) => TranscodeDialog(
 ///     formats: formats,
-///     sourceFormat: 'mov',
-///     onConvert: (format, quality) =>
-///         Navigator.of(context).pop((format, quality)),
+///     sourceFormat: 'mp4',
+///     onConvert: (format) => Navigator.of(context).pop(format),
 ///     onCancel: () => Navigator.of(context).pop(),
 ///     onRetry: reload,
 ///   ),
@@ -51,9 +49,9 @@ class TranscodeDialog extends StatefulWidget {
   /// The formats the video can be converted to, in the order to offer them.
   final List<TranscodeFormatOption> formats;
 
-  /// Called with the chosen format and quality when the convert button is
-  /// tapped. The button is disabled until a format is chosen.
-  final void Function(String format, TranscodeQuality quality) onConvert;
+  /// Called with the chosen format when the convert button is tapped. The
+  /// button is disabled until a format is chosen.
+  final ValueChanged<String> onConvert;
 
   /// Called when the cancel button is tapped.
   final VoidCallback onCancel;
@@ -62,7 +60,7 @@ class TranscodeDialog extends StatefulWidget {
   final VoidCallback onRetry;
 
   /// The video's own format, the extension without the dot, compared without
-  /// regard to case. Null offers every format at every quality.
+  /// regard to case. Null offers every format.
   final String? sourceFormat;
 
   /// Whether the formats are loading, which shows a spinner in their place.
@@ -77,19 +75,9 @@ class TranscodeDialog extends StatefulWidget {
 
 class _TranscodeDialogState extends State<TranscodeDialog> {
   String? _format;
-  TranscodeQuality _quality = TranscodeQuality.original;
 
   bool _offered(String format) =>
-      _quality != TranscodeQuality.original ||
       format.toLowerCase() != widget.sourceFormat?.toLowerCase();
-
-  void _chooseQuality(TranscodeQuality quality) {
-    setState(() {
-      _quality = quality;
-      final format = _format;
-      if (format != null && !_offered(format)) _format = null;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,15 +87,12 @@ class _TranscodeDialogState extends State<TranscodeDialog> {
       color: colorScheme.onSurface.withValues(alpha: 0.5),
     );
     final error = widget.error;
-    final offered = [
-      for (final option in widget.formats)
-        if (_offered(option.format)) option,
-    ];
     final chosen = _format;
     final canConvert =
         !widget.isLoading &&
         error == null &&
-        offered.any((option) => option.format == chosen);
+        chosen != null &&
+        widget.formats.any((o) => o.format == chosen && _offered(o.format));
 
     return AlertDialog(
       title: const Text('Convert video'),
@@ -118,37 +103,9 @@ class _TranscodeDialogState extends State<TranscodeDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Quality', style: labelStyle),
-            SizedBox(height: tokens.spacingXs),
-            Wrap(
-              spacing: tokens.spacingSm,
-              runSpacing: tokens.spacingXs,
-              children: [
-                for (final quality in TranscodeQuality.values)
-                  ChoiceChip(
-                    key: ValueKey('transcode_quality_${quality.name}'),
-                    label: Text(quality.label),
-                    selected: _quality == quality,
-                    // A checkmark would widen the chosen chip and reflow the row.
-                    showCheckmark: false,
-                    onSelected: (_) => _chooseQuality(quality),
-                  ),
-              ],
-            ),
-            SizedBox(height: tokens.spacingXs),
-            // Every description is laid out so the tallest sets the height,
-            // and switching quality never moves what sits below.
-            Stack(
-              children: [
-                for (final quality in TranscodeQuality.values)
-                  Visibility(
-                    visible: _quality == quality,
-                    maintainSize: true,
-                    maintainAnimation: true,
-                    maintainState: true,
-                    child: Text(quality.description),
-                  ),
-              ],
+            const Text(
+              'The video is copied into the new format as it is: quick, '
+              'and at full quality.',
             ),
             SizedBox(height: tokens.spacingMd),
             Text('Format', style: labelStyle),
@@ -183,9 +140,8 @@ class _TranscodeDialogState extends State<TranscodeDialog> {
                       key: ValueKey('transcode_format_${option.format}'),
                       label: Text(option.label),
                       selected: chosen == option.format,
+                      // A checkmark would widen the chosen chip and reflow the row.
                       showCheckmark: false,
-                      // Disabled rather than removed, so switching quality
-                      // never adds or drops a chip from the row.
                       onSelected: _offered(option.format)
                           ? (_) => setState(() => _format = option.format)
                           : null,
@@ -203,9 +159,7 @@ class _TranscodeDialogState extends State<TranscodeDialog> {
         ),
         FilledButton(
           key: const ValueKey('transcode_convert'),
-          onPressed: canConvert && chosen != null
-              ? () => widget.onConvert(chosen, _quality)
-              : null,
+          onPressed: canConvert ? () => widget.onConvert(chosen) : null,
           child: const Text('Convert'),
         ),
       ],

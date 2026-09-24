@@ -4,9 +4,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/pump.dart';
 
-/// The dialog a video is converted from: a quality, a format that disables the
-/// video's own at original quality, a layout that never shifts under a tap,
-/// and the loading, error, and cancel paths.
+/// The dialog a video is converted from: a format that disables the video's
+/// own, no quality to choose, a layout that never shifts under a tap, and the
+/// loading, error, and cancel paths.
 void main() {
   const formats = [
     TranscodeFormatOption(format: 'mp4', label: 'MP4'),
@@ -29,8 +29,7 @@ void main() {
         sourceFormat: 'MOV',
         isLoading: isLoading,
         error: error,
-        onConvert: (format, quality) =>
-            events?.add('convert:$format:${quality.name}'),
+        onConvert: (format) => events?.add('convert:$format'),
         onCancel: () => events?.add('cancel'),
         onRetry: () => events?.add('retry'),
       ),
@@ -39,8 +38,6 @@ void main() {
   }
 
   Finder format(String name) => find.byKey(ValueKey('transcode_format_$name'));
-  Finder quality(TranscodeQuality q) =>
-      find.byKey(ValueKey('transcode_quality_${q.name}'));
   final convert = find.byKey(const ValueKey('transcode_convert'));
 
   bool convertEnabled(WidgetTester tester) =>
@@ -56,7 +53,7 @@ void main() {
     convert.evaluate().single.widget.key: tester.getRect(convert),
   };
 
-  testBothViewports('disables the video\'s own format at original quality', (
+  testBothViewports('disables the video\'s own format and offers no quality', (
     tester,
     size,
   ) async {
@@ -67,8 +64,8 @@ void main() {
     expect(chipEnabled(tester, 'mkv'), isTrue);
     expect(format('mov'), findsOneWidget);
     expect(chipEnabled(tester, 'mov'), isFalse);
-    expect(quality(TranscodeQuality.original), findsOneWidget);
-    expect(quality(TranscodeQuality.small), findsOneWidget);
+    // One chip per format, and no quality chips beside them.
+    expect(find.byType(ChoiceChip), findsNWidgets(formats.length));
     expect(convertEnabled(tester), isFalse);
 
     await tester.tap(format('mov'), warnIfMissed: false);
@@ -76,10 +73,7 @@ void main() {
     expect(convertEnabled(tester), isFalse);
   });
 
-  testBothViewports('choosing a format or quality moves nothing', (
-    tester,
-    size,
-  ) async {
+  testBothViewports('choosing a format moves nothing', (tester, size) async {
     const many = [
       TranscodeFormatOption(format: 'mp4', label: 'MP4'),
       TranscodeFormatOption(format: 'mov', label: 'MOV'),
@@ -98,21 +92,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(layout(tester), before, reason: 'after choosing $name');
     }
-    for (final q in [
-      TranscodeQuality.small,
-      TranscodeQuality.original,
-      TranscodeQuality.small,
-    ]) {
-      await tester.tap(quality(q));
-      await tester.pumpAndSettle();
-      expect(layout(tester), before, reason: 'after choosing ${q.name}');
-    }
   });
 
-  testBothViewports('reports the chosen format and quality', (
-    tester,
-    size,
-  ) async {
+  testBothViewports('reports the chosen format', (tester, size) async {
     final events = <String>[];
     await pumpDialog(tester, size: size, events: events);
 
@@ -122,35 +104,8 @@ void main() {
     await tester.tap(convert);
     await tester.pump();
 
-    await tester.tap(quality(TranscodeQuality.small));
-    await tester.pump();
-    await tester.tap(convert);
-    await tester.pump();
-
-    expect(events, ['convert:mkv:original', 'convert:mkv:small']);
+    expect(events, ['convert:mkv']);
   });
-
-  testBothViewports(
-    'small enables the video\'s own format, and original clears that choice',
-    (tester, size) async {
-      final events = <String>[];
-      await pumpDialog(tester, size: size, events: events);
-
-      await tester.tap(quality(TranscodeQuality.small));
-      await tester.pump();
-      expect(chipEnabled(tester, 'mov'), isTrue);
-      await tester.tap(format('mov'));
-      await tester.pump();
-      expect(convertEnabled(tester), isTrue);
-
-      await tester.tap(quality(TranscodeQuality.original));
-      await tester.pump();
-      expect(chipEnabled(tester, 'mov'), isFalse);
-      expect(tester.widget<ChoiceChip>(format('mov')).selected, isFalse);
-      expect(convertEnabled(tester), isFalse);
-      expect(events, isEmpty);
-    },
-  );
 
   testBothViewports('shows a spinner while the formats load', (
     tester,
@@ -199,7 +154,7 @@ void main() {
       tester,
       TranscodeDialog(
         formats: formats,
-        onConvert: (format, quality) {},
+        onConvert: (format) {},
         onCancel: () {},
         onRetry: () {},
       ),

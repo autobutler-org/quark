@@ -22,6 +22,7 @@ FileNode _node(String path, {bool isDir = false}) => FileNode(
 /// flow through the controller (#2277).
 void main() {
   final transcoded = <(String, String?)>[];
+  final listed = <(String, String?)>[];
 
   Future<void> openMenu(
     WidgetTester tester,
@@ -29,14 +30,14 @@ void main() {
     bool inArchive = false,
   }) async {
     final controller = FileBrowserController(
-      listTranscodeFormats: () async => const [
-        TranscodeFormat(format: 'mp4', label: 'MP4'),
-      ],
-      transcodeVideo:
-          (relPath, {serial, required format, required quality}) async {
-            transcoded.add((relPath, serial));
-            return 1;
-          },
+      listTranscodeFormats: (relPath, {serial}) async {
+        listed.add((relPath, serial));
+        return const [TranscodeFormat(format: 'mp4', label: 'MP4')];
+      },
+      transcodeVideo: (relPath, {serial, required format}) async {
+        transcoded.add((relPath, serial));
+        return 1;
+      },
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -63,7 +64,10 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  setUp(transcoded.clear);
+  setUp(() {
+    transcoded.clear();
+    listed.clear();
+  });
 
   testWidgets('picking Convert video queues the file through the flow', (
     tester,
@@ -76,6 +80,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('transcode_convert')));
     await tester.pumpAndSettle();
 
+    expect(listed, [('clips/trip.mov', 'SN1')]);
     expect(transcoded, [('clips/trip.mov', 'SN1')]);
     expect(find.text('Conversion started'), findsOneWidget);
   });

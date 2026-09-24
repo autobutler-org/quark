@@ -1315,14 +1315,13 @@ final List<GalleryEntry> registry = [
     build: (context, log) => TranscodeDialog(
       formats: const [
         TranscodeFormatOption(format: 'mp4', label: 'MP4'),
-        TranscodeFormatOption(format: 'mov', label: 'MOV'),
         TranscodeFormatOption(format: 'mkv', label: 'MKV'),
-        TranscodeFormatOption(format: 'webm', label: 'WebM'),
-        TranscodeFormatOption(format: 'avi', label: 'AVI'),
+        TranscodeFormatOption(format: 'm4v', label: 'M4V'),
+        TranscodeFormatOption(format: '3gp', label: '3GP'),
+        TranscodeFormatOption(format: 'ts', label: 'TS'),
       ],
-      sourceFormat: 'mov',
-      onConvert: (format, quality) =>
-          log('TranscodeDialog.onConvert($format, ${quality.name})'),
+      sourceFormat: 'mp4',
+      onConvert: (format) => log('TranscodeDialog.onConvert($format)'),
       onCancel: () => log('TranscodeDialog.onCancel'),
       onRetry: () => log('TranscodeDialog.onRetry'),
     ),
