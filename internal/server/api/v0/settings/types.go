@@ -29,12 +29,24 @@ type RemoteAccessResponse struct {
 	Error string `json:"error,omitempty"`
 }
 
+// PairDeviceResponse is what a device needs to join the Quark's household
+// and reach the Quark (#2359).
+type PairDeviceResponse struct {
+	// AuthKey is a single-use Headscale pre-auth key in the Quark's household.
+	AuthKey string `json:"authKey"`
+	// ControlURL is the Headscale server the device registers with.
+	ControlURL string `json:"controlUrl"`
+	// QuarkAddress is the Quark's URL on the tailnet.
+	QuarkAddress string `json:"quarkAddress"`
+}
+
 type router struct{}
 
 func (r *router) Routes() []*serverutil.Route {
 	return []*serverutil.Route{
 		getSettingsRoute,
 		getRemoteAccessRoute,
+		pairDeviceRoute,
 	}
 }
 

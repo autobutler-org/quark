@@ -1,7 +1,9 @@
 package remoteutil
 
 import (
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
@@ -72,6 +74,16 @@ func connectionFromStatus(st *ipnstate.Status) StatusResult {
 // Quark from another (#2358, #1880) instead of suffixing a shared "quark".
 func nodeHostname(deviceID string) string {
 	return "quark-" + deviceID[:min(8, len(deviceID))]
+}
+
+// newPairDeviceID is a random ID for one paired device, which the
+// provisioning service logs and rate-limits the key against.
+func newPairDeviceID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate device id: %w", err)
+	}
+	return "pair-" + hex.EncodeToString(b), nil
 }
 
 func controlURL() string {
