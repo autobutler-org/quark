@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// Up one level. There is no separate Back: folder navigation replaces the
-/// route rather than stacking it, so Back could only repeat up (#2314). Web
-/// keeps the browser's own Back, which walks the visited-folder URLs.
+/// Up one level, drawn as a back arrow because that is the arrow users read
+/// as "leave this folder". There is no separate Back: folder navigation
+/// replaces the route rather than stacking it, so Back could only repeat up
+/// (#2314). Web keeps the browser's own Back, which walks the visited-folder
+/// URLs.
 ///
 /// Up stops at [rootPath], the lowest folder the caller can open, so a member
 /// pressing up in their own files is not walked into the `users` folder they
@@ -33,7 +35,7 @@ class FileTopBarNavButtons extends StatelessWidget {
         navEnabled && currentPath.isNotEmpty && currentPath != rootPath;
     return QuarkBarIconButton(
       key: const ValueKey('file_top_bar_up'),
-      icon: QuarkIcons.arrow_upward_rounded,
+      icon: QuarkIcons.arrow_back_rounded,
       onPressed: canGoUp ? onGoUp : null,
       tooltip: 'Up one level',
     );
