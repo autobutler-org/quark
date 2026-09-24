@@ -5570,7 +5570,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Generates and returns a thumbnail (resized image) for the specified file",
+                "description": "Returns a thumbnail for the specified photo or video: resized from the thumbnail its client uploaded when there is one, generated from the file otherwise. size=preview returns the display preview the client uploaded, and 404 when there is none.",
                 "produces": [
                     "image/png",
                     "image/jpeg"
@@ -5597,10 +5597,11 @@ const docTemplate = `{
                         "enum": [
                             "sm",
                             "md",
-                            "lg"
+                            "lg",
+                            "preview"
                         ],
                         "type": "string",
-                        "description": "Thumbnail size tier: sm (96px), md (240px), lg (400px). Defaults to lg.",
+                        "description": "Thumbnail size tier: sm (96px), md (240px), lg (400px), or preview (the stored display preview). Defaults to lg.",
                         "name": "size",
                         "in": "query"
                     }
@@ -5614,6 +5615,83 @@ const docTemplate = `{
                     },
                     "304": {
                         "description": "Not Modified"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores the thumbnail, the display preview, or both, that a client rendered for a photo or video, replacing any stored before. The thumbnail is a JPEG with a long edge of 400; the preview, for HEIC and video, a JPEG with a long edge of about 2048. Both have rotation applied. The sm, md and lg sizes are resized from the thumbnail, and a photo's thumbnail feeds near-duplicate detection. Used by clients after a resumable upload or a trim, and by backfill. Needs write access on the file.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "thumbnails"
+                ],
+                "summary": "Attach client-rendered thumbnails to a file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Path to the photo or video",
+                        "name": "filePath",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Device serial number (for device-specific files)",
+                        "name": "serial",
+                        "in": "query"
+                    },
+                    {
+                        "type": "file",
+                        "description": "Thumbnail JPEG, long edge 400",
+                        "name": "thumbnail",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "Display preview JPEG, long edge about 2048",
+                        "name": "preview",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_thumbnails.putThumbnailResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
                     },
                     "404": {
                         "description": "Not Found",
@@ -8752,6 +8830,18 @@ const docTemplate = `{
                 "reason": {
                     "description": "Reason is why not, when available is false: unsupported_os,\nnot_service, sshd_missing, helper_missing or no_login_shell.",
                     "type": "string"
+                }
+            }
+        },
+        "v0_thumbnails.putThumbnailResponse": {
+            "type": "object",
+            "properties": {
+                "stored": {
+                    "description": "Stored names each kind stored: \"thumbnail\", \"preview\".",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

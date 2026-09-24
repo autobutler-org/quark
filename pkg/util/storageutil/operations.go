@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"mime/multipart"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/derivativeutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 )
 
@@ -260,6 +262,11 @@ func MoveFileImpl(params MoveFileParams, oldDevice *ManagedDevice, newDevice *Ma
 		} else {
 			return nil, fmt.Errorf("failed to move file: %w", err)
 		}
+	}
+
+	// The file has moved; a derivative left behind only costs a thumbnail.
+	if err := derivativeutil.Move(oldFullPath, newFullPath); err != nil {
+		log.Printf("quark: move %q: carry derivatives: %v", params.OldFilePath, err)
 	}
 
 	newDir := filepath.Dir(params.NewFilePath)
@@ -611,6 +618,60 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 	return result, nil
 }
 
+// ResolvePathParams names a file by the path a request uses for it.
+type ResolvePathParams struct {
+	// RelPath is files-relative; a TrashPath resolves into the trash.
+	RelPath string
+	// Serial names the device, empty for the internal one.
+	Serial string
+}
+
+// ResolvePathResult is where the file sits on disk.
+type ResolvePathResult struct {
+	FullPath string
+}
+
+// ResolvePath turns a files-relative path into the OS path it names on its
+// device, refusing one that climbs out of the files directory or the trash.
+// It does not check that anything is there.
+func (s *StorageService) ResolvePath(params ResolvePathParams) (ResolvePathResult, error) {
+	filesDir, err := s.trashFilesDir(params.Serial)
+	if err != nil {
+		return ResolvePathResult{}, err
+	}
+	var full string
+	if IsTrashPath(params.RelPath) {
+		full, err = JoinTrashPath(filesDir, params.RelPath)
+	} else {
+		full, err = safeJoin(filesDir, params.RelPath)
+	}
+	if err != nil {
+		return ResolvePathResult{}, err
+	}
+	return ResolvePathResult{FullPath: full}, nil
+}
+
+// CopyDerivativesParams names a file and the copy just made of it.
+type CopyDerivativesParams struct {
+	Serial      string
+	FromRelPath string
+	ToRelPath   string
+}
+
+// CopyDerivatives gives a copy made outside CopyFile — through the VFS — the
+// client-rendered thumbnails and previews of its original, as CopyFile does.
+func (s *StorageService) CopyDerivatives(params CopyDerivativesParams) error {
+	from, err := s.ResolvePath(ResolvePathParams{RelPath: params.FromRelPath, Serial: params.Serial})
+	if err != nil {
+		return err
+	}
+	to, err := s.ResolvePath(ResolvePathParams{RelPath: params.ToRelPath, Serial: params.Serial})
+	if err != nil {
+		return err
+	}
+	return derivativeutil.Copy(from.FullPath, to.FullPath)
+}
+
 // StatFileParams contains parameters for stat-ing a file or directory
 type StatFileParams struct {
 	FilePath     string
@@ -730,6 +791,9 @@ func CopyFileImpl(params CopyFileParams, device *ManagedDevice, defaultFilesDir 
 
 	if err := copyFileContents(srcFull, destFull); err != nil {
 		return nil, fmt.Errorf("copy failed: %w", err)
+	}
+	if err := derivativeutil.Copy(srcFull, destFull); err != nil {
+		log.Printf("quark: copy %q: copy derivatives: %v", params.RelPath, err)
 	}
 
 	newRelPath, err := filepath.Rel(filesDir, destFull)

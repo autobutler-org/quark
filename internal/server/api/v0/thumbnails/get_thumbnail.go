@@ -23,12 +23,12 @@ import (
 
 // getThumbnail godoc
 // @Summary Get thumbnail for an image
-// @Description Generates and returns a thumbnail (resized image) for the specified file
+// @Description Returns a thumbnail for the specified photo or video: resized from the thumbnail its client uploaded when there is one, generated from the file otherwise. size=preview returns the display preview the client uploaded, and 404 when there is none.
 // @Tags thumbnails
 // @Produce png,jpeg
 // @Param filePath path string true "Path to the image file"
 // @Param serial query string false "Device serial number (for device-specific files)"
-// @Param size query string false "Thumbnail size tier: sm (96px), md (240px), lg (400px). Defaults to lg." Enums(sm, md, lg)
+// @Param size query string false "Thumbnail size tier: sm (96px), md (240px), lg (400px), or preview (the stored display preview). Defaults to lg." Enums(sm, md, lg, preview)
 // @Success 200 {file} file
 // @Failure 304 "Not Modified"
 // @Failure 404 {object} serverutil.Response "Not Found"
@@ -77,6 +77,12 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	}
 	if archive.Found {
 		return getArchiveThumbnail(c, deps, archive, ext, filePath, serial, isVideo)
+	}
+
+	// What the client rendered at upload comes first (#2379); generating one
+	// here is the fallback for files that arrived without it.
+	if resp := getStoredThumbnail(c, deps, relPath, filePath, serial, isVideo); resp != storedThumbnailFallthrough {
+		return resp
 	}
 
 	// VFS path: no-serial, non-RAW, non-video images only.

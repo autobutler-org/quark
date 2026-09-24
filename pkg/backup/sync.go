@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/autobutler-org/quark/pkg/util/derivativeutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -69,6 +70,8 @@ func (w *SyncWorker) handleEvent(ctx context.Context, evt eventbus.Event) {
 		w.deletePath(ctx, evt.Path, evt.DeviceSerial)
 	case eventbus.EventMove:
 		w.movePath(ctx, evt.Path, evt.NewPath)
+	case eventbus.EventDerivativesChanged:
+		w.syncDerivatives(ctx, evt.Path)
 	}
 }
 
@@ -138,6 +141,28 @@ func (w *SyncWorker) syncPath(ctx context.Context, relPath string) {
 	if err := copyFile(ctx, srcPath, dstPath, w.ioSem); err != nil {
 		log.Printf("sync: copy %s: %v", relPath, err)
 		w.queueRetry(eventbus.Event{Kind: eventbus.EventUpload, Path: relPath})
+		return
+	}
+	// After the file, so the copies are newer than it and still count as
+	// fresh.
+	if err := derivativeutil.Copy(srcPath, dstPath); err != nil {
+		log.Printf("sync: copy derivatives of %s: %v", relPath, err)
+	}
+}
+
+// syncDerivatives copies a file's derivatives, attached after the file was
+// synced, to the target.
+func (w *SyncWorker) syncDerivatives(ctx context.Context, relPath string) {
+	targetDir, err := w.resolveTarget(ctx)
+	if err != nil || targetDir == "" {
+		return
+	}
+	srcDir, err := w.resolveInternalDir()
+	if err != nil {
+		return
+	}
+	if err := derivativeutil.Copy(filepath.Join(srcDir, relPath), filepath.Join(targetDir, relPath)); err != nil {
+		log.Printf("sync: copy derivatives of %s: %v", relPath, err)
 	}
 }
 
@@ -147,6 +172,7 @@ func (w *SyncWorker) deletePath(ctx context.Context, relPath string, sourceSeria
 		internalDir, err := w.resolveInternalDir()
 		if err == nil && internalDir != "" {
 			os.RemoveAll(filepath.Join(internalDir, relPath))
+			_ = derivativeutil.Remove(filepath.Join(internalDir, relPath))
 		}
 	}
 
@@ -169,6 +195,7 @@ func (w *SyncWorker) deletePath(ctx context.Context, relPath string, sourceSeria
 			continue
 		}
 		os.RemoveAll(filepath.Join(dev.FilesDir, relPath))
+		_ = derivativeutil.Remove(filepath.Join(dev.FilesDir, relPath))
 	}
 }
 
@@ -185,6 +212,10 @@ func (w *SyncWorker) movePath(ctx context.Context, oldPath, newPath string) {
 	_ = os.MkdirAll(filepath.Dir(newDst), 0755)
 	if err := os.Rename(oldDst, newDst); err != nil {
 		log.Printf("sync: move %s → %s: %v", oldPath, newPath, err)
+		return
+	}
+	if err := derivativeutil.Move(oldDst, newDst); err != nil {
+		log.Printf("sync: move derivatives of %s: %v", oldPath, err)
 	}
 }
 

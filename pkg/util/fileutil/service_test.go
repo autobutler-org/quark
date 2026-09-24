@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/derivativeutil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -204,6 +205,33 @@ func TestZipDirWrapsEntriesInTheFolder(t *testing.T) {
 		t.Fatalf("the zip is unreadable: %v", err)
 	}
 	assertZipNames(t, zr, "My Folder/one.txt", "My Folder/sub/two.txt")
+}
+
+func TestZipDirLeavesOutInternalEntries(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"one.jpg", derivativeutil.DirName + "/one.jpg/thumbnail.jpg"} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := fileutil.ZipDir(&buf, dir, "My Folder"); err != nil {
+		t.Fatalf("ZipDir failed: %v", err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	if err != nil {
+		t.Fatalf("the zip is unreadable: %v", err)
+	}
+	for _, f := range zr.File {
+		if strings.Contains(f.Name, derivativeutil.DirName) {
+			t.Errorf("the zip carries Quark's derivative %q", f.Name)
+		}
+	}
+	assertZipNames(t, zr, "My Folder/one.jpg")
 }
 
 // --- helpers ---

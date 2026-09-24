@@ -223,6 +223,14 @@ func ZipDir(w io.Writer, fullPath string, root string) error {
 		if err != nil {
 			return err
 		}
+		// Quark's own bookkeeping — derivatives, a write in flight — is not
+		// the user's to download.
+		if name != "." && storageutil.IsInternalName(d.Name()) {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
 		info, err := d.Info()
 		if err != nil {
 			return err

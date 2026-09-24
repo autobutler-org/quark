@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/derivativeutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 )
 
@@ -256,6 +258,11 @@ func TrashFilesImpl(params TrashFilesParams, filesDir string) (*TrashFilesResult
 		if err := os.Rename(fullPath, trashDest); err != nil {
 			return result, fmt.Errorf("failed to move %s to trash: %w", filePath, err)
 		}
+		// Derivatives go into the trash with their file so a restore brings
+		// them back; a folder's travel inside it.
+		if err := derivativeutil.Move(fullPath, trashDest); err != nil {
+			log.Printf("quark: trash %q: carry derivatives: %v", filePath, err)
+		}
 
 		// The sidecar is the only record of where the item came from. Without
 		// it the item could never be restored, so put the item back rather
@@ -338,7 +345,7 @@ func ListTrashImpl(filesDir string) ([]TrashItem, error) {
 
 	for _, entry := range entries {
 		name := entry.Name()
-		if isTrashSidecar(name, names) {
+		if isTrashSidecar(name, names) || IsInternalName(name) {
 			continue
 		}
 		fullPath := filepath.Join(trashRoot, name)
@@ -753,6 +760,9 @@ func RestoreTrashImpl(params RestoreTrashParams, filesDir string) (RestoreTrashR
 		if err := os.Rename(m.from, m.to); err != nil {
 			return result, fmt.Errorf("failed to restore %s: %w", m.rel, err)
 		}
+		if err := derivativeutil.Move(m.from, m.to); err != nil {
+			log.Printf("quark: restore %q: carry derivatives: %v", m.rel, err)
+		}
 		if m.whole {
 			_ = os.Remove(trashMetaFile(m.from))
 		}
@@ -834,6 +844,8 @@ func DeleteTrashImpl(params DeleteTrashParams, filesDir string) (DeleteTrashResu
 			}
 		} else if err := os.RemoveAll(ref.target); err != nil {
 			return result, fmt.Errorf("failed to delete %s: %w", ref.rel, err)
+		} else {
+			_ = derivativeutil.Remove(ref.target)
 		}
 		result.Deleted++
 		result.Removed = append(result.Removed, TrashPath(filepath.Base(ref.itemPath), ref.rel))
@@ -847,6 +859,7 @@ func removeTrashItem(itemPath string) error {
 		return fmt.Errorf("failed to delete %s: %w", filepath.Base(itemPath), err)
 	}
 	_ = os.Remove(trashMetaFile(itemPath))
+	_ = derivativeutil.Remove(itemPath)
 	return nil
 }
 

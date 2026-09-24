@@ -3,6 +3,7 @@ package v0_photos
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"path"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
@@ -64,6 +65,16 @@ func copyPhoto(c *gin.Context) *serverutil.Response {
 						return serverutil.NotFound(fmt.Errorf("photo not found: %s", req.RelPath))
 					}
 					return serverutil.InternalServerError(err)
+				}
+				// The copy keeps its original's client-rendered thumbnails, as
+				// StorageService.CopyFile's does; without them it only costs
+				// the thumbnail, so the copy still succeeds.
+				if svc := deps.StorageService(); svc != nil {
+					if err := svc.CopyDerivatives(storageutil.CopyDerivativesParams{
+						FromRelPath: req.RelPath, ToRelPath: newRelPath,
+					}); err != nil {
+						slog.Warn("photos: copy derivatives", "from", req.RelPath, "to", newRelPath, "err", err)
+					}
 				}
 				grantOwner(c, deps, access, req.Serial, newRelPath)
 				return serverutil.Ok().

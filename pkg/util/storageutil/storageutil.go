@@ -13,6 +13,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/autobutler-org/quark/pkg/util/derivativeutil"
+
 	"golang.org/x/sys/unix"
 )
 
@@ -302,13 +304,15 @@ func GetFolderSize(dir string) (int64, error) {
 const WriteTempPrefix = ".vfs-write-"
 
 // IsInternalName reports whether a directory entry is Quark's own bookkeeping
-// rather than user content: the old hidden trash, or a write still in flight.
+// rather than user content: the old hidden trash, a write still in flight, or
+// the directory a folder keeps its files' client-rendered thumbnails and
+// previews in (derivativeutil.DirName).
 // The trash itself sits beside FilesDir now (#2173), but trashed items are
 // still addressed as `.trash/...`, so the name stays reserved, and an old
 // trash is hidden until its first use moves it out. Every other dotfile is the
 // user's — a `.env` they uploaded must stay visible.
 func IsInternalName(name string) bool {
-	return name == trashPathPrefix || strings.HasPrefix(name, WriteTempPrefix)
+	return name == trashPathPrefix || name == derivativeutil.DirName || strings.HasPrefix(name, WriteTempPrefix)
 }
 
 func StatFilesInDir(dir string, deviceName string, devicePath string, deviceSerial string) ([]*DeviceFileInfo, error) {

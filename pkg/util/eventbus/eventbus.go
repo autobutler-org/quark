@@ -15,6 +15,10 @@ const (
 	// a delete, a restore, a permanent delete, emptying it, or the hourly
 	// purge. DeviceSerial names the device; Path is empty.
 	EventTrashChanged EventKind = "trash_changed"
+	// EventDerivativesChanged fires when a file's client-rendered thumbnail
+	// or preview is attached or replaced without the file itself changing.
+	// Path and DeviceSerial name the file.
+	EventDerivativesChanged EventKind = "derivatives_changed"
 
 	EventBackupStarted   EventKind = "backup_started"
 	EventBackupProgress  EventKind = "backup_progress"

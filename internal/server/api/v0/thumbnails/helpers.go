@@ -6,13 +6,16 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/derivativeutil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/thumbnailutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
@@ -102,6 +105,69 @@ func getArchiveThumbnail(
 	}
 
 	return serveCachedThumbnail(c, prepared.CachedPath, cachedModTime, thumbnailutil.ContentTypeForExt(ext))
+}
+
+// storedThumbnailFallthrough is returned by getStoredThumbnail when the file
+// has no stored thumbnail and the caller should generate one.
+var storedThumbnailFallthrough = &serverutil.Response{}
+
+// getStoredThumbnail serves a size tier resized from the thumbnail the
+// client uploaded for the file, or the preview it uploaded when size=preview
+// asks for one. A preview is never generated, so a missing one is a 404; a
+// missing thumbnail falls through to generation.
+func getStoredThumbnail(
+	c *gin.Context,
+	deps deputil.Dependencies,
+	relPath, filePath, serial string,
+	isVideo bool,
+) *serverutil.Response {
+	wantPreview := c.Query("size") == string(thumbnailutil.SizePreview)
+	fallthroughOrNotFound := storedThumbnailFallthrough
+	if wantPreview {
+		fallthroughOrNotFound = serverutil.NotFound(fmt.Errorf("no preview for %s", filePath))
+	}
+
+	resolved, err := deps.StorageService().ResolvePath(storageutil.ResolvePathParams{RelPath: relPath, Serial: serial})
+	if err != nil {
+		return fallthroughOrNotFound
+	}
+	info, err := os.Stat(resolved.FullPath)
+	if err != nil || info.IsDir() {
+		return fallthroughOrNotFound
+	}
+
+	if wantPreview {
+		preview, err := derivativeutil.Lookup(derivativeutil.LookupParams{
+			SourcePath:    resolved.FullPath,
+			Kind:          derivativeutil.KindPreview,
+			SourceModTime: info.ModTime(),
+		})
+		if err != nil {
+			return serverutil.InternalServerError(err)
+		}
+		if !preview.Found {
+			return fallthroughOrNotFound
+		}
+		return serveCachedThumbnail(c, preview.Path, preview.ModTime, "image/jpeg")
+	}
+
+	stored, err := thumbnailutil.FromStore(thumbnailutil.FromStoreParams{
+		Queries:       deps.Database().Queries,
+		Serial:        serial,
+		RelPath:       relPath,
+		FilePath:      filePath,
+		SourcePath:    resolved.FullPath,
+		SourceModTime: info.ModTime(),
+		Size:          thumbnailutil.ParseSize(c.Query("size")),
+		IsVideo:       isVideo,
+	})
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if !stored.Found {
+		return storedThumbnailFallthrough
+	}
+	return serveCachedThumbnail(c, stored.CachedPath, stored.CachedModTime, "image/jpeg")
 }
 
 // vfsThumbnailFallthrough is a sentinel returned by getThumbnailVFS to signal

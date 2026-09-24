@@ -936,6 +936,14 @@ definitions:
           not_service, sshd_missing, helper_missing or no_login_shell.
         type: string
     type: object
+  v0_thumbnails.putThumbnailResponse:
+    properties:
+      stored:
+        description: 'Stored names each kind stored: "thumbnail", "preview".'
+        items:
+          type: string
+        type: array
+    type: object
   v0_trash.deletedResponse:
     properties:
       deleted:
@@ -5155,8 +5163,10 @@ paths:
       - storage
   /thumbnails/{filePath}:
     get:
-      description: Generates and returns a thumbnail (resized image) for the specified
-        file
+      description: 'Returns a thumbnail for the specified photo or video: resized
+        from the thumbnail its client uploaded when there is one, generated from the
+        file otherwise. size=preview returns the display preview the client uploaded,
+        and 404 when there is none.'
       parameters:
       - description: Path to the image file
         in: path
@@ -5167,12 +5177,13 @@ paths:
         in: query
         name: serial
         type: string
-      - description: 'Thumbnail size tier: sm (96px), md (240px), lg (400px). Defaults
-          to lg.'
+      - description: 'Thumbnail size tier: sm (96px), md (240px), lg (400px), or preview
+          (the stored display preview). Defaults to lg.'
         enum:
         - sm
         - md
         - lg
+        - preview
         in: query
         name: size
         type: string
@@ -5197,6 +5208,62 @@ paths:
       security:
       - BearerAuth: []
       summary: Get thumbnail for an image
+      tags:
+      - thumbnails
+    put:
+      consumes:
+      - multipart/form-data
+      description: Stores the thumbnail, the display preview, or both, that a client
+        rendered for a photo or video, replacing any stored before. The thumbnail
+        is a JPEG with a long edge of 400; the preview, for HEIC and video, a JPEG
+        with a long edge of about 2048. Both have rotation applied. The sm, md and
+        lg sizes are resized from the thumbnail, and a photo's thumbnail feeds near-duplicate
+        detection. Used by clients after a resumable upload or a trim, and by backfill.
+        Needs write access on the file.
+      parameters:
+      - description: Path to the photo or video
+        in: path
+        name: filePath
+        required: true
+        type: string
+      - description: Device serial number (for device-specific files)
+        in: query
+        name: serial
+        type: string
+      - description: Thumbnail JPEG, long edge 400
+        in: formData
+        name: thumbnail
+        type: file
+      - description: Display preview JPEG, long edge about 2048
+        in: formData
+        name: preview
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_thumbnails.putThumbnailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Attach client-rendered thumbnails to a file
       tags:
       - thumbnails
   /trash:
