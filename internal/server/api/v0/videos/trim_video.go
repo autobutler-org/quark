@@ -3,6 +3,7 @@ package v0_videos
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -20,7 +21,7 @@ import (
 
 // trimVideo godoc
 // @Summary Trim a video clip
-// @Description Extracts a sub-clip [startMs, endMs] from the source video using stream copy (fast, lossless). The original file is not modified. Needs read access on the video and write access on its folder; the caller owns the new clip.
+// @Description Copies the sub-clip [startMs, endMs] of the source video into a new file beside it without re-encoding (fast, lossless). The start snaps back to the keyframe at or before startMs, and actualStartMs reports where the clip really begins. The clip keeps the source's format where the device writes it and is an MP4 otherwise. The original file is not modified. An MPEG-TS source cannot be trimmed and is a 422. Needs read access on the video and write access on its folder; the caller owns the new clip.
 // @Tags videos
 // @Accept json
 // @Produce json
@@ -29,18 +30,11 @@ import (
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
-// @Failure 501 {object} serverutil.Response "Not Implemented — ffmpeg not available"
+// @Failure 422 {object} serverutil.Response "Unprocessable Entity — the video's container can't be trimmed"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Security BearerAuth
 // @Router /videos/trim [post]
 func trimVideo(c *gin.Context) *serverutil.Response {
-	if !videoutil.Available() {
-		return serverutil.NewResponse().
-			WithStatusCode(http.StatusNotImplemented).
-			WithContentType(serverutil.ContentTypeJSON).
-			WithData(gin.H{"error": "ffmpeg is not installed on this device"})
-	}
-
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
 	if !ok {
 		return serverutil.InternalServerError(nil)
@@ -97,9 +91,13 @@ func trimVideo(c *gin.Context) *serverutil.Response {
 		))
 	}
 
-	// Build output filename: {stem}_trimmed{ext}
+	// Build output filename: {stem}_trimmed{ext}, where ext is the format the
+	// clip is written in.
 	ext := filepath.Ext(filepath.Base(req.RelPath))
 	stem := strings.TrimSuffix(filepath.Base(req.RelPath), ext)
+	if format := "." + string(videoutil.TrimFormat(req.RelPath)); !strings.EqualFold(ext, format) {
+		ext = format
+	}
 	outName := stem + "_trimmed" + ext
 	outFull := storageutil.GetNonConflictingPath(filepath.Join(filepath.Dir(fullPath), outName))
 	outRel, err := filepath.Rel(cleanFilesDir, outFull)
@@ -114,7 +112,11 @@ func trimVideo(c *gin.Context) *serverutil.Response {
 	trimCtx, trimCancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
 	defer trimCancel()
 
-	if err := videoutil.Trim(trimCtx, fullPath, start, end, outFull); err != nil {
+	result, err := videoutil.Trim(trimCtx, videoutil.TrimParams{Source: fullPath, Output: outFull, Start: start, End: end})
+	if errors.Is(err, videoutil.ErrCannotTrim) {
+		return serverutil.NewResponse().WithStatusCode(http.StatusUnprocessableEntity).WithError(err)
+	}
+	if err != nil {
 		return serverutil.InternalServerError(fmt.Errorf("trim video: %w", err))
 	}
 	// GetNonConflictingPath picked a name nothing had, so the clip is always a
@@ -122,7 +124,7 @@ func trimVideo(c *gin.Context) *serverutil.Response {
 	grantOwner(c, deps, access, req.Serial, outRel)
 
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).
-		WithData(trimVideoResponse{RelPath: outRel})
+		WithData(trimVideoResponse{RelPath: outRel, ActualStartMs: result.Start.Milliseconds()})
 }
 
 var trimVideoRoute = serverutil.ApiRoute(

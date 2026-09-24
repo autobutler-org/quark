@@ -9,6 +9,7 @@ ignore ./node_modules
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.0
 	github.com/KononK/resize v0.0.0-20200801203131-21c514740ed6
+	github.com/autobutler-org/sprocket v0.2.0
 	github.com/bep/imagemeta v1.0.1
 	github.com/coder/websocket v1.8.15
 	github.com/gen2brain/heic v0.7.2
@@ -58,6 +59,8 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
 	github.com/gaissmai/bart v0.26.1 // indirect
+	github.com/gen2brain/gav1d v0.2.5 // indirect
+	github.com/gen2brain/h265 v0.2.3 // indirect
 	github.com/gin-contrib/sse v1.1.1 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
@@ -107,6 +110,7 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.61.0 // indirect
+	github.com/rcarmo/go-264 v0.0.0-20260918175710-241fd4164612 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/safchain/ethtool v0.3.0 // indirect
 	github.com/sorairolake/lzip-go v0.3.5 // indirect

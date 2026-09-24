@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
@@ -17,7 +16,7 @@ import (
 
 // transcodeVideo godoc
 // @Summary Queue a video transcode
-// @Description Queues a background job that converts the source video into a new file beside it, in any format GET /videos/transcode/formats lists. Original quality keeps the source resolution, and copies the streams without re-encoding when the format's container accepts them; small caps the height at 480 lines. Converting to the source's own format needs small quality. The output is never upscaled and never overwrites a file. Follow the job with GET /jobs/{id} or the job_* events; an upload event announces the output file. Needs read access on the video and write access on its folder; the job runs as, and its output is owned by, the caller.
+// @Description Queues a background job that copies the source video's streams, without re-encoding them, into a new file beside it in one of the formats GET /videos/transcode/formats lists for it. A format that cannot hold the video's codecs, or that is its own, is a 400, and so is any quality but original. The output never overwrites a file. Follow the job with GET /jobs/{id} or the job_* events; an upload event announces the output file. Needs read access on the video and write access on its folder; the job runs as, and its output is owned by, the caller.
 // @Tags videos
 // @Accept json
 // @Produce json
@@ -26,18 +25,10 @@ import (
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
-// @Failure 501 {object} serverutil.Response "Not Implemented — ffmpeg not available"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Security BearerAuth
 // @Router /videos/transcode [post]
 func transcodeVideo(c *gin.Context) *serverutil.Response {
-	if !videoutil.Available() {
-		return serverutil.NewResponse().
-			WithStatusCode(http.StatusNotImplemented).
-			WithContentType(serverutil.ContentTypeJSON).
-			WithData(gin.H{"error": "ffmpeg is not installed on this device"})
-	}
-
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
 	if !ok {
 		return serverutil.InternalServerError(nil)
@@ -65,7 +56,7 @@ func transcodeVideo(c *gin.Context) *serverutil.Response {
 			RelPath: req.RelPath,
 			Serial:  req.Serial,
 			Format:  videoutil.Format(req.Format),
-			Quality: videoutil.Quality(req.Quality),
+			Quality: req.Quality,
 		},
 		UserID: access.Principal().UserID,
 	})

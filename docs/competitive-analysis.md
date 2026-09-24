@@ -145,7 +145,7 @@ Legend: **Yes** shipped · **Partial** exists but incomplete · **No** absent.
 | Docker / container manager | Yes, all of them | **No** |
 | Virtual machines | Yes on higher tiers | **No** |
 | Media server (DLNA / Plex-class) | Yes | **Partial** — in-app video and audio playback only |
-| Video transcoding | Yes | **Yes** — `videoutil` via ffmpeg (transcode, trim, frame extract) |
+| Video transcoding | Yes | **Partial** — `videoutil` remuxes and trims in pure Go (no re-encode); frames are grabbed in the client |
 | Document editing | Yes — Synology Office | **Yes** — `.qdoc` editor |
 | Spreadsheet editing | Yes | **Yes** — `.qsheet`, plus xlsx conversion |
 | Surveillance / camera NVR | Yes — Surveillance Station is a major DSM draw | **No** |

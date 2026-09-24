@@ -7097,75 +7097,6 @@
                 }
             }
         },
-        "/videos/extract-frame": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Extracts a JPEG frame at the given timestamp and saves it alongside the source video. Needs read access on the video and write access on its folder; the caller owns the new frame.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "videos"
-                ],
-                "summary": "Extract a still frame from a video",
-                "parameters": [
-                    {
-                        "description": "Extract frame request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/v0_videos.extractFrameRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/v0_videos.extractFrameResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
-                        }
-                    },
-                    "501": {
-                        "description": "Not Implemented — ffmpeg not available",
-                        "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
-                        }
-                    }
-                }
-            }
-        },
         "/videos/metadata": {
             "get": {
                 "security": [
@@ -7220,12 +7151,6 @@
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
-                    },
-                    "501": {
-                        "description": "Not Implemented — ffprobe not available",
-                        "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
-                        }
                     }
                 }
             }
@@ -7237,7 +7162,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Queues a background job that converts the source video into a new file beside it, in any format GET /videos/transcode/formats lists. Original quality keeps the source resolution, and copies the streams without re-encoding when the format's container accepts them; small caps the height at 480 lines. Converting to the source's own format needs small quality. The output is never upscaled and never overwrites a file. Follow the job with GET /jobs/{id} or the job_* events; an upload event announces the output file. Needs read access on the video and write access on its folder; the job runs as, and its output is owned by, the caller.",
+                "description": "Queues a background job that copies the source video's streams, without re-encoding them, into a new file beside it in one of the formats GET /videos/transcode/formats lists for it. A format that cannot hold the video's codecs, or that is its own, is a 400, and so is any quality but original. The output never overwrites a file. Follow the job with GET /jobs/{id} or the job_* events; an upload event announces the output file. Needs read access on the video and write access on its folder; the job runs as, and its output is owned by, the caller.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7289,12 +7214,6 @@
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
-                    },
-                    "501": {
-                        "description": "Not Implemented — ffmpeg not available",
-                        "schema": {
-                            "$ref": "#/definitions/serverutil.Response"
-                        }
                     }
                 }
             }
@@ -7306,7 +7225,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Lists the video formats POST /videos/transcode can write on this device: the ones whose video and audio encoders its ffmpeg build has, in display order.",
+                "description": "Lists the video formats POST /videos/transcode writes, in display order. With relPath, only the ones the video there can be converted to: those whose container holds its codecs, leaving out its own format. Without it, every format the device writes, whatever a given video's codecs allow.",
                 "produces": [
                     "application/json"
                 ],
@@ -7314,6 +7233,20 @@
                     "videos"
                 ],
                 "summary": "List transcode formats",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device serial",
+                        "name": "serial",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Relative path to the video the formats are for",
+                        "name": "relPath",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -7321,14 +7254,20 @@
                             "$ref": "#/definitions/v0_videos.transcodeFormatsResponse"
                         }
                     },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented — ffmpeg not available",
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -7343,7 +7282,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Extracts a sub-clip [startMs, endMs] from the source video using stream copy (fast, lossless). The original file is not modified. Needs read access on the video and write access on its folder; the caller owns the new clip.",
+                "description": "Copies the sub-clip [startMs, endMs] of the source video into a new file beside it without re-encoding (fast, lossless). The start snaps back to the keyframe at or before startMs, and actualStartMs reports where the clip really begins. The clip keeps the source's format where the device writes it and is an MP4 otherwise. The original file is not modified. An MPEG-TS source cannot be trimmed and is a 422. Needs read access on the video and write access on its folder; the caller owns the new clip.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7390,14 +7329,14 @@
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "422": {
+                        "description": "Unprocessable Entity — the video's container can't be trimmed",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
-                    "501": {
-                        "description": "Not Implemented — ffmpeg not available",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -9153,40 +9092,18 @@
                 }
             }
         },
-        "v0_videos.extractFrameRequest": {
-            "type": "object",
-            "properties": {
-                "relPath": {
-                    "type": "string"
-                },
-                "serial": {
-                    "type": "string"
-                },
-                "timestampMs": {
-                    "type": "integer"
-                }
-            }
-        },
-        "v0_videos.extractFrameResponse": {
-            "type": "object",
-            "properties": {
-                "relPath": {
-                    "type": "string"
-                }
-            }
-        },
         "v0_videos.transcodeFormatJSON": {
             "type": "object",
             "properties": {
                 "format": {
                     "description": "Format is the value to send as format, the file extension without the dot.",
                     "type": "string",
-                    "example": "mov"
+                    "example": "mkv"
                 },
                 "label": {
                     "description": "Label is its display name.",
                     "type": "string",
-                    "example": "MOV"
+                    "example": "MKV"
                 }
             }
         },
@@ -9207,13 +9124,13 @@
                 "format": {
                     "description": "Format is one of the formats GET /videos/transcode/formats lists.",
                     "type": "string",
-                    "example": "mov"
+                    "example": "mkv"
                 },
                 "quality": {
+                    "description": "Quality is optional. A conversion copies the streams, so original is\nthe only quality; small, which needed a re-encode, is refused.",
                     "type": "string",
                     "enum": [
-                        "original",
-                        "small"
+                        "original"
                     ]
                 },
                 "relPath": {
@@ -9252,6 +9169,10 @@
         "v0_videos.trimVideoResponse": {
             "type": "object",
             "properties": {
+                "actualStartMs": {
+                    "description": "ActualStartMs is where the clip really begins in the source: startMs\nsnapped back to the keyframe at or before it.",
+                    "type": "integer"
+                },
                 "relPath": {
                     "type": "string"
                 }
