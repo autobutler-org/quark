@@ -2,7 +2,6 @@ package provisionutil
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,8 +13,8 @@ func TestProvisionAuthKey_ReturnsKey(t *testing.T) {
 		if r.Method != http.MethodPost || r.URL.Path != "/provision" {
 			t.Errorf("got %s %s; want POST /provision", r.Method, r.URL.Path)
 		}
-		if got := r.Header.Get("X-Provisioning-Secret"); got != "test-secret" {
-			t.Errorf("X-Provisioning-Secret = %q; want test-secret", got)
+		if got := r.Header.Get("X-Provisioning-Secret"); got != "" {
+			t.Errorf("X-Provisioning-Secret = %q; want no secret header (#1879)", got)
 		}
 		var req provisionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.DeviceID != "device-abc" {
@@ -27,7 +26,6 @@ func TestProvisionAuthKey_ReturnsKey(t *testing.T) {
 
 	got, err := ProvisionAuthKey(ProvisionAuthKeyParams{
 		URL:      ts.URL + "/provision",
-		Secret:   "test-secret",
 		DeviceID: "device-abc",
 	})
 	if err != nil {
@@ -57,39 +55,10 @@ func TestProvisionAuthKey_Failures(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ts := httptest.NewServer(tc.handler)
 			defer ts.Close()
-			if _, err := ProvisionAuthKey(ProvisionAuthKeyParams{URL: ts.URL, Secret: "s", DeviceID: "d"}); err == nil {
+			if _, err := ProvisionAuthKey(ProvisionAuthKeyParams{URL: ts.URL, DeviceID: "d"}); err == nil {
 				t.Fatal("ProvisionAuthKey() = nil error; want one")
 			}
 		})
-	}
-}
-
-// TestProvisionAuthKey_NoSecret verifies an unstamped build with no env
-// override fails with ErrNoSecret before touching the network.
-func TestProvisionAuthKey_NoSecret(t *testing.T) {
-	t.Setenv("QUARK_PROVISIONING_SECRET", "")
-	prior := provisioningSecret
-	provisioningSecret = ""
-	defer func() { provisioningSecret = prior }()
-
-	_, err := ProvisionAuthKey(ProvisionAuthKeyParams{URL: "http://127.0.0.1:0/provision"})
-	if !errors.Is(err, ErrNoSecret) {
-		t.Fatalf("err = %v; want ErrNoSecret", err)
-	}
-}
-
-func TestSecretFromEnvOrBuild_EnvOverridesBuild(t *testing.T) {
-	prior := provisioningSecret
-	provisioningSecret = "stamped"
-	defer func() { provisioningSecret = prior }()
-
-	t.Setenv("QUARK_PROVISIONING_SECRET", "")
-	if got := secretFromEnvOrBuild(); got != "stamped" {
-		t.Errorf("with no env, secret = %q; want the stamped one", got)
-	}
-	t.Setenv("QUARK_PROVISIONING_SECRET", "dev")
-	if got := secretFromEnvOrBuild(); got != "dev" {
-		t.Errorf("with env set, secret = %q; want dev", got)
 	}
 }
 

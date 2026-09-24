@@ -227,21 +227,30 @@ func newAdminEngine(t *testing.T) *gin.Engine {
 	return engine
 }
 
-// TestEnableRemoteAccess_NoSecretIsUnavailable verifies enable no longer
-// demands a key (#1876), and that a build with no provisioning secret says so
-// instead of failing opaquely — for a JSON body and for none at all.
-func TestEnableRemoteAccess_NoSecretIsUnavailable(t *testing.T) {
+// TestEnableRemoteAccess_AsksServiceWithoutSecret verifies enable no longer
+// demands a key (#1876) and that any build asks the provisioning service for
+// one with no secret header (#1879) — for a JSON body and for none at all.
+func TestEnableRemoteAccess_AsksServiceWithoutSecret(t *testing.T) {
 	engine := newAdminEngine(t)
-	t.Setenv("QUARK_PROVISIONING_SECRET", "")
+	var asked int
+	provisioner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked++
+		if got := r.Header.Get("X-Provisioning-Secret"); got != "" {
+			t.Errorf("X-Provisioning-Secret = %q; want none", got)
+		}
+		http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+	}))
+	defer provisioner.Close()
+	t.Setenv("QUARK_PROVISIONING_URL", provisioner.URL+"/provision")
 
 	for _, body := range [][]byte{[]byte("{}"), nil} {
 		w := doSettingsReq(engine, http.MethodPost, "/api/v0/settings/remote-access", body)
-		if w.Code != http.StatusServiceUnavailable {
-			t.Fatalf("POST %q returned %d; want 503: %s", body, w.Code, w.Body.String())
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("POST %q returned %d; want 500: %s", body, w.Code, w.Body.String())
 		}
-		if !strings.Contains(w.Body.String(), "not available in this build") {
-			t.Errorf("body = %s; want it to say this build cannot enable remote access", w.Body.String())
-		}
+	}
+	if asked != 2 {
+		t.Errorf("provisioning service asked %d times; want 2", asked)
 	}
 	if settingsutil.GetRemoteAccess() {
 		t.Error("remote access persisted as on after a failed enable")
@@ -258,7 +267,6 @@ func TestEnableRemoteAccess_ProvisioningRefused(t *testing.T) {
 	}))
 	defer provisioner.Close()
 	t.Setenv("QUARK_PROVISIONING_URL", provisioner.URL+"/provision")
-	t.Setenv("QUARK_PROVISIONING_SECRET", "wrong")
 
 	w := doSettingsReq(engine, http.MethodPost, "/api/v0/settings/remote-access", []byte("{}"))
 	if w.Code != http.StatusInternalServerError {

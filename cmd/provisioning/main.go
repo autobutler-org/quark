@@ -1,11 +1,11 @@
 // Command provisioning mints single-use Headscale pre-auth keys for quarks that
-// POST /provision with the shared secret (#1876). It runs on the Headscale VM
+// POST /provision (#1876). The endpoint takes no secret (#1879): the per-IP and
+// per-device rate limits bound it. It runs on the Headscale VM
 // as the headscale user and shells out to the local headscale CLI, which talks
 // to the server over its unix socket, so no Headscale API key is involved.
 //
 // Environment:
 //
-//	PROVISIONING_SECRET            required; matches QUARK_PROVISIONING_SECRET in quark releases
 //	HEADSCALE_USER                 user keys are minted for (default quark)
 //	HEADSCALE_BIN                  headscale CLI (default headscale, looked up on PATH)
 //	PROVISIONING_LISTEN_ADDR       listen address (default :8081)
@@ -15,7 +15,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,7 +36,6 @@ var (
 	headscaleBin string
 	// headscaleUser is the Headscale user every key is minted for.
 	headscaleUser string
-	sharedSecret  string
 	keyExpiry     time.Duration
 )
 
@@ -309,13 +307,6 @@ func handleProvision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Authenticate caller via shared secret (constant-time to prevent timing attacks).
-	provided := r.Header.Get("X-Provisioning-Secret")
-	if subtle.ConstantTimeCompare([]byte(provided), []byte(sharedSecret)) != 1 {
-		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "unauthorized"})
-		return
-	}
-
 	var req provisionRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequestBytes)).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid request body"})
@@ -347,11 +338,6 @@ func main() {
 	headscaleBin = envOr("HEADSCALE_BIN", "headscale")
 	if _, err := exec.LookPath(headscaleBin); err != nil {
 		log.Fatalf("headscale CLI not found at %q; install headscale or set HEADSCALE_BIN to its path", headscaleBin)
-	}
-
-	sharedSecret = os.Getenv("PROVISIONING_SECRET")
-	if sharedSecret == "" {
-		log.Fatal("PROVISIONING_SECRET environment variable is required; it must match the QUARK_PROVISIONING_SECRET quark releases are built with")
 	}
 
 	var err error

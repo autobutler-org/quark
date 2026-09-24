@@ -4601,10 +4601,6 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
-        "503":
-          description: This build has no provisioning secret
-          schema:
-            $ref: '#/definitions/serverutil.Response'
       security:
       - BearerAuth: []
       summary: Enable remote access via Tailscale

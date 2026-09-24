@@ -15,15 +15,6 @@ func provisioningURL() string {
 	return defaultProvisioningURL
 }
 
-// secretFromEnvOrBuild prefers QUARK_PROVISIONING_SECRET, so a dev build can
-// provision without being stamped.
-func secretFromEnvOrBuild() string {
-	if s := os.Getenv("QUARK_PROVISIONING_SECRET"); s != "" {
-		return s
-	}
-	return provisioningSecret
-}
-
 // defaultDeviceID is the sha256 of the hostname and machine-id. It is stable
 // across restarts, so the service's per-device rate limit sees one device.
 // Hosts without a machine-id (macOS, some containers) hash the hostname alone.

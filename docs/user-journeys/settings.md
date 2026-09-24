@@ -185,7 +185,6 @@ true with the wiring in #1815.
   **Connected via Tailscale** with the remote URL. The section refreshes itself every few seconds while it
   connects, so no reload is needed.
 - A non-admin is told they do not have permission.
-- A build with no provisioning secret says remote access is not available in this build, and stays off.
 - If the Quark cannot start remote access, at boot or on enable, or the tailnet rejects its key, the section
   stays on and says it could not start; the reason is in the Quark's log.
 - After a restart the Quark reconnects with its saved enrollment and does not fetch a new key.

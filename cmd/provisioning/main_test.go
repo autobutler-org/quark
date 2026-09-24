@@ -46,17 +46,15 @@ func setup(t *testing.T, users string) {
 	t.Helper()
 	fakeCLI(t, users)
 	headscaleUser = "quark"
-	sharedSecret = "shared"
 	keyExpiry = time.Hour
 	rateMu.Lock()
 	rateStore = make(map[string]*rateLimitEntry)
 	rateMu.Unlock()
 }
 
-func provision(secret, deviceID, remoteAddr, realIP string) *httptest.ResponseRecorder {
+func provision(deviceID, remoteAddr, realIP string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, "/provision", strings.NewReader(`{"device_id":"`+deviceID+`"}`))
 	req.RemoteAddr = remoteAddr
-	req.Header.Set("X-Provisioning-Secret", secret)
 	if realIP != "" {
 		req.Header.Set("X-Real-IP", realIP)
 	}
@@ -65,10 +63,12 @@ func provision(secret, deviceID, remoteAddr, realIP string) *httptest.ResponseRe
 	return w
 }
 
+// TestProvision_MintsKeyForResolvedUserID also covers #1879: the request
+// carries no secret header and still gets a key.
 func TestProvision_MintsKeyForResolvedUserID(t *testing.T) {
 	setup(t, usersJSON)
 
-	w := provision("shared", "device-1", "203.0.113.5:4000", "")
+	w := provision("device-1", "203.0.113.5:4000", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d; want 200: %s", w.Code, w.Body.String())
 	}
@@ -88,7 +88,7 @@ func TestProvision_UnknownUserFails(t *testing.T) {
 			if _, err := createPreAuthKey(context.Background()); err == nil || !strings.Contains(err.Error(), "headscale users create quark") {
 				t.Errorf("createPreAuthKey() = %v; want an error saying how to create the user", err)
 			}
-			if w := provision("shared", "device-1", "203.0.113.5:4000", ""); w.Code != http.StatusInternalServerError {
+			if w := provision("device-1", "203.0.113.5:4000", ""); w.Code != http.StatusInternalServerError {
 				t.Errorf("status = %d; want 500", w.Code)
 			}
 		})
@@ -103,7 +103,7 @@ func TestCreatePreAuthKey_CLIFailure(t *testing.T) {
 	if _, err := createPreAuthKey(context.Background()); err == nil || !strings.Contains(err.Error(), "exit status 1") {
 		t.Errorf("createPreAuthKey() = %v; want the CLI failure", err)
 	}
-	if w := provision("shared", "device-1", "203.0.113.5:4000", ""); w.Code != http.StatusInternalServerError {
+	if w := provision("device-1", "203.0.113.5:4000", ""); w.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d; want 500", w.Code)
 	}
 }
@@ -161,25 +161,15 @@ func TestCappedBuffer(t *testing.T) {
 	}
 }
 
-func TestProvision_RejectsWrongSecret(t *testing.T) {
-	setup(t, usersJSON)
-
-	for _, secret := range []string{"", "wrong"} {
-		if w := provision(secret, "device-1", "203.0.113.5:4000", ""); w.Code != http.StatusUnauthorized {
-			t.Errorf("secret %q: status = %d; want 401", secret, w.Code)
-		}
-	}
-}
-
 func TestProvision_RateLimitsPerDevice(t *testing.T) {
 	setup(t, usersJSON)
 
 	for i := range maxRequestsPerHour {
-		if w := provision("shared", "device-1", "203.0.113.5:4000", ""); w.Code != http.StatusOK {
+		if w := provision("device-1", "203.0.113.5:4000", ""); w.Code != http.StatusOK {
 			t.Fatalf("request %d: status = %d; want 200", i+1, w.Code)
 		}
 	}
-	if w := provision("shared", "device-1", "203.0.113.5:4000", ""); w.Code != http.StatusTooManyRequests {
+	if w := provision("device-1", "203.0.113.5:4000", ""); w.Code != http.StatusTooManyRequests {
 		t.Errorf("request over the limit: status = %d; want 429", w.Code)
 	}
 }
@@ -191,14 +181,14 @@ func TestProvision_RateLimitsPerClientBehindProxy(t *testing.T) {
 	setup(t, usersJSON)
 
 	for i := range maxRequestsPerHour {
-		if w := provision("shared", fmt.Sprintf("device-a%d", i), "127.0.0.1:5000", "198.51.100.1"); w.Code != http.StatusOK {
+		if w := provision(fmt.Sprintf("device-a%d", i), "127.0.0.1:5000", "198.51.100.1"); w.Code != http.StatusOK {
 			t.Fatalf("request %d: status = %d; want 200", i+1, w.Code)
 		}
 	}
-	if w := provision("shared", "device-b", "127.0.0.1:5000", "198.51.100.2"); w.Code != http.StatusOK {
+	if w := provision("device-b", "127.0.0.1:5000", "198.51.100.2"); w.Code != http.StatusOK {
 		t.Errorf("a second client behind the proxy was limited: status = %d; want 200", w.Code)
 	}
-	if w := provision("shared", "device-c", "127.0.0.1:5000", "198.51.100.1"); w.Code != http.StatusTooManyRequests {
+	if w := provision("device-c", "127.0.0.1:5000", "198.51.100.1"); w.Code != http.StatusTooManyRequests {
 		t.Errorf("the first client over its limit: status = %d; want 429", w.Code)
 	}
 }
