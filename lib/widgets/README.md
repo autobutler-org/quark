@@ -49,6 +49,8 @@ lib/widgets/
     show_share_sheet.dart       opens ShareSheet around a ShareController for
                                 one file or folder; confirms owner changes
   video_viewer/
+    convert_video.dart          runs TranscodeDialogHost, queues the job and
+                                shows its snack bar; the viewer and Files share it
     transcode_dialog_host.dart  hosts TranscodeDialog around an injected
                                 formats loader
   content_result_tile.dart      one docs/sheets content search hit; pushes the
