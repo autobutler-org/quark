@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/models/file_node.dart';
+import 'package:quark/models/transcode_format.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/file_browser_actions.dart';
 import 'package:quark/services/storage_service.dart';
@@ -13,6 +14,7 @@ import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
+import 'package:quark/widgets/video_viewer/convert_video.dart';
 
 class FileMenuActionOutcome {
   const FileMenuActionOutcome({
@@ -35,10 +37,21 @@ typedef DeleteFilesFn =
 /// The Files page's calls to the Quark and the platform: listing a folder, picking and uploading files, folders
 /// and photos, creating folders, deleting, and the actions in a file's menu.
 class FileBrowserController {
-  const FileBrowserController({this.deleteFiles = FilesService.deleteFiles});
+  const FileBrowserController({
+    this.deleteFiles = FilesService.deleteFiles,
+    this.listTranscodeFormats = FilesService.listTranscodeFormats,
+    this.transcodeVideo = FilesService.transcodeVideo,
+  });
 
   /// The batch delete call, injectable so a test can see the batches.
   final DeleteFilesFn deleteFiles;
+
+  /// The formats Convert video offers, injectable so a test can fake them.
+  final Future<List<TranscodeFormat>> Function() listTranscodeFormats;
+
+  /// The call Convert video queues its job with, injectable so a test can
+  /// see it.
+  final TranscodeVideoFn transcodeVideo;
 
   Future<List<FileNode>> fetchFiles(
     String currentPath, {
@@ -287,6 +300,16 @@ class FileBrowserController {
           name: trimTrailingSlashes(node.name),
         );
         return null;
+      case FileMenuAction.convertVideo:
+        // The flow reports its own outcome, as it does in the video viewer.
+        await convertVideo(
+          context,
+          relPath: node.apiPath,
+          serial: serialOrNull(node.deviceSerial),
+          loadFormats: listTranscodeFormats,
+          transcode: transcodeVideo,
+        );
+        return null;
       case FileMenuAction.restore:
       case FileMenuAction.deletePermanently:
         // Trash-only actions; the Files page never offers them.
@@ -306,6 +329,7 @@ class FileBrowserController {
         FileMenuAction.navigateToFolder => 'open the folder',
         FileMenuAction.share => 'share the item',
         FileMenuAction.restore => 'restore the item',
+        FileMenuAction.convertVideo => 'convert the video',
       });
 
   String? resolveMoveRenameTargetPath({

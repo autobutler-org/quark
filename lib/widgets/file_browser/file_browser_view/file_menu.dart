@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
+import 'package:quark/utils/file_kind.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.dart';
 
@@ -17,9 +18,9 @@ typedef FileMenuActionDispatch =
 ///
 /// [entries] leaves out whatever does not apply to [item]: nothing that
 /// changes or shares a file inside an archive, Extract only on an archive,
-/// Navigate to folder only in search results, and no Move/Rename or Delete on
-/// the `users` or `groups` folder, a home folder, or a group's folder itself
-/// unless the viewer is an admin. Share is hidden on the `users` and `groups`
+/// Convert video only on a video file, Navigate to folder only in search
+/// results, and no Move/Rename or Delete on the `users` or `groups` folder, a
+/// home folder, or a group's folder itself unless the viewer is an admin. Share is hidden on the `users` and `groups`
 /// folders for everyone, admins included: access is additive down the tree, so
 /// a grant there would expose every home or every group folder at once, and
 /// the Quark refuses it (#2016).
@@ -110,6 +111,11 @@ class FileMenu {
                 )
               : const Text('Extract here'),
         ),
+      if (menuActions.contains(FileMenuAction.convertVideo) &&
+          !inArchive &&
+          !item.isDir &&
+          fileKindForName(item.name) == FileKind.video)
+        entry(FileMenuAction.convertVideo, const Text('Convert video')),
       if (menuActions.contains(FileMenuAction.navigateToFolder) &&
           isSearchMode &&
           onNavigateToFolder != null)

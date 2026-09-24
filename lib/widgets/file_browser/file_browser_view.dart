@@ -28,6 +28,9 @@ enum FileMenuAction {
 
   /// Deletes a trashed item for good.
   deletePermanently,
+
+  /// Converts a video to another format or a smaller size (#2277).
+  convertVideo,
 }
 
 enum SortColumn { name, type, size, device }
@@ -77,6 +80,7 @@ class FileBrowserView extends StatefulWidget {
     FileMenuAction.share,
     FileMenuAction.delete,
     FileMenuAction.extractHere,
+    FileMenuAction.convertVideo,
     FileMenuAction.navigateToFolder,
   };
 
