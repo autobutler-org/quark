@@ -1010,31 +1010,6 @@ class FilesService with AuthenticatedService {
         .toList(growable: false);
   }
 
-  /// Extracts a still frame from a video at [timestampMs] milliseconds.
-  /// Returns the relative path of the saved JPEG file.
-  static Future<String> extractVideoFrame(
-    String relPath, {
-    String? serial,
-    required int timestampMs,
-  }) async {
-    final uri = apiBaseUri.resolve('/api/v0/videos/extract-frame');
-    final body = jsonEncode({
-      'relPath': relPath,
-      'serial': serial?.trim() ?? '',
-      'timestampMs': timestampMs,
-    });
-    final response = await instance.authenticatedPost(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: body,
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to extract frame');
-    }
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return data['relPath'] as String;
-  }
-
   /// Trims [relPath] to the range [startMs, endMs] and saves a new file.
   /// Returns the relative path of the saved clip.
   static Future<String> trimVideo(

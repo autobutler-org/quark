@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/local_media_proxy.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/media_autoplay.dart';
+import 'package:quark/utils/video_frame_capture.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/video_viewer/fullscreen_video_page.dart';
 import 'package:quark/widgets/video_viewer/inline_video_player.dart';
@@ -40,6 +43,8 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
   bool _isUnsupportedFormat = false;
   bool _downloading = false;
   bool _savingFrame = false;
+  // The RepaintBoundary around the video, which Save Frame captures.
+  final _frameKey = GlobalKey();
   bool _trimMode = false;
   bool _exportingTrim = false;
   // Trim handles as fractions [0.0, 1.0] of total duration.
@@ -296,18 +301,23 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
     final wasPlaying = controller.value.isPlaying;
     if (wasPlaying) await controller.pause();
 
-    final positionMs = controller.value.position.inMilliseconds;
+    final position = controller.value.position;
 
     if (!mounted) return;
     setState(() => _savingFrame = true);
     try {
-      final savedPath = await FilesService.extractVideoFrame(
-        relPath,
+      // The frame is grabbed here, from the player, and uploaded like any
+      // other new file beside the video: the Quark decodes no video (#2380).
+      final bytes = await captureVideoFrame(controller, _frameKey);
+      final name = videoFrameFileName(widget.name, position);
+      final landed = await FilesService.uploadFilesFromFormData(
+        parentPath(relPath),
+        [http.MultipartFile.fromBytes('files', bytes, filename: name)],
         serial: serial,
-        timestampMs: positionMs,
+        keepBoth: true,
       );
       if (!mounted) return;
-      final fileName = savedPath.split('/').last;
+      final fileName = (landed.isEmpty ? name : landed.first).split('/').last;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Frame saved as $fileName')));
@@ -425,6 +435,7 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
             : controller != null
             ? InlineVideoPlayer(
                 controller: controller,
+                frameKey: _frameKey,
                 onToggleFullscreen: _openFullscreen,
                 trimMode: _trimMode,
                 trimStart: _trimStart,

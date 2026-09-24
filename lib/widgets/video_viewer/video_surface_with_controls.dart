@@ -11,6 +11,10 @@ class VideoSurfaceWithControls extends StatefulWidget {
   final bool isFullscreen;
   final VoidCallback onToggleFullscreen;
   final Widget? topOverlay;
+
+  /// The key of the `RepaintBoundary` around the video alone, without the
+  /// controls, which Save Frame captures.
+  final GlobalKey? frameKey;
   // Trim state passed down from the video viewer page.
   final bool trimMode;
   final double trimStart;
@@ -24,6 +28,7 @@ class VideoSurfaceWithControls extends StatefulWidget {
     required this.isFullscreen,
     required this.onToggleFullscreen,
     this.topOverlay,
+    this.frameKey,
     this.trimMode = false,
     this.trimStart = 0.0,
     this.trimEnd = 1.0,
@@ -141,7 +146,10 @@ class _VideoSurfaceWithControlsState extends State<VideoSurfaceWithControls> {
           Center(
             child: AspectRatio(
               aspectRatio: ratio,
-              child: VideoPlayer(widget.controller),
+              child: RepaintBoundary(
+                key: widget.frameKey,
+                child: VideoPlayer(widget.controller),
+              ),
             ),
           ),
           Positioned.fill(
