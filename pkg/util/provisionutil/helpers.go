@@ -16,8 +16,8 @@ func provisioningURL() string {
 }
 
 // defaultDeviceID is the sha256 of the hostname and machine-id. It is stable
-// across restarts, so the service's per-device rate limit sees one device.
-// Hosts without a machine-id (macOS, some containers) hash the hostname alone.
+// across restarts, so the service's per-device rate limit sees one device and
+// the tsnet hostname derived from it stays put.
 func defaultDeviceID() string {
 	hostname, _ := os.Hostname()
 	sum := sha256.Sum256([]byte(hostname + ":" + machineID()))

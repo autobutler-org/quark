@@ -66,6 +66,14 @@ func connectionFromStatus(st *ipnstate.Status) StatusResult {
 	}
 }
 
+// nodeHostname is the tsnet hostname for the Quark with deviceID:
+// "quark-" and the first eight hex digits of the ID. It is stable across
+// restarts and distinct per device, so Headscale and MagicDNS can tell one
+// Quark from another (#2358, #1880) instead of suffixing a shared "quark".
+func nodeHostname(deviceID string) string {
+	return "quark-" + deviceID[:min(8, len(deviceID))]
+}
+
 func controlURL() string {
 	u := os.Getenv("QUARK_HEADSCALE_URL")
 	if u == "" {

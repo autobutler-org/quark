@@ -165,11 +165,6 @@ Covers the Settings page (`/settings`) — host management, theme, version updat
 
 ### JN-ST-011: Enable remote access
 
-**Status:** Not available to users. The enable path cannot succeed (#1815), so Settings shows **Coming
-soon** in place of the button and says the Quark is reachable on the home network in the meantime (#2036).
-Everything below is what the journey looks like once `RemoteAccessConfig.enableAvailable` goes back to
-true with the wiring in #1815.
-
 **Preconditions:** User is signed in as an admin and on the Settings page. Remote access is currently disabled.
 
 **Steps:**
@@ -180,7 +175,8 @@ true with the wiring in #1815.
 **Expected result:**
 
 - The Quark fetches its own Tailscale key from the provisioning service; the user never sees or enters a key
-  (#1876).
+  (#1876). The first enable creates the Quark's own household on the tailnet and joins it under a hostname
+  unique to the device; enabling again after a disable rejoins the same household (#2358).
 - Remote access is enabled and the section reads **Connecting…** until the node joins the tailnet, then
   **Connected via Tailscale** with the remote URL. The section refreshes itself every few seconds while it
   connects, so no reload is needed.

@@ -19,10 +19,16 @@ type Settings struct {
 	// tsnet state dir, not a key kept here (#1876): files written before then
 	// still carry a remoteAccessAuthKey, which parsing ignores and the next
 	// Save drops.
-	RemoteAccessEnabled bool   `json:"remoteAccessEnabled"`
-	DevMode             bool   `json:"devMode"`
-	ActiveBranch        string `json:"activeBranch,omitempty"`
-	DeviceID            string `json:"deviceId,omitempty"`
+	RemoteAccessEnabled bool `json:"remoteAccessEnabled"`
+	// RemoteAccessHousehold and RemoteAccessHouseholdToken are the Quark's
+	// Headscale household and the token that authenticates pair requests for
+	// it (#2358). They outlive Disable, so the next Enable rejoins the same
+	// household. The file is written 0600.
+	RemoteAccessHousehold      string `json:"remoteAccessHousehold,omitempty"`
+	RemoteAccessHouseholdToken string `json:"remoteAccessHouseholdToken,omitempty"`
+	DevMode                    bool   `json:"devMode"`
+	ActiveBranch               string `json:"activeBranch,omitempty"`
+	DeviceID                   string `json:"deviceId,omitempty"`
 	// AccessRequestsEnabled is whether people may request an account from the
 	// sign-in page (#1908). Nil means on: requests start on, and a file written
 	// before the setting existed carries no value.
@@ -145,6 +151,34 @@ func SetRemoteAccess(enabled bool) error {
 		s = loaded
 	}
 	s.RemoteAccessEnabled = enabled
+	return Save(s)
+}
+
+// GetHousehold returns the stored household credential, or two empty strings
+// when the Quark has not enrolled.
+func GetHousehold() (household, token string) {
+	s, err := Load()
+	if err != nil {
+		return "", ""
+	}
+	return s.RemoteAccessHousehold, s.RemoteAccessHouseholdToken
+}
+
+// SetHousehold persists the household credential.
+func SetHousehold(household, token string) error {
+	mu.Lock()
+	s := cached
+	mu.Unlock()
+
+	if s == nil {
+		loaded, err := Load()
+		if err != nil {
+			loaded = &Settings{}
+		}
+		s = loaded
+	}
+	s.RemoteAccessHousehold = household
+	s.RemoteAccessHouseholdToken = token
 	return Save(s)
 }
 
