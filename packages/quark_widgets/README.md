@@ -15,7 +15,10 @@ through the theme, never a hardcoded value — the gallery's theme panel edits t
 tokens live, which turns a hardcoded color into something you can see. Every
 widget ships as a set: a file in `lib/src/<group>/`, an export from the barrel,
 `///` docs on the class, a test with a 360x640 and a 1280x800 case, and a
-gallery entry.
+gallery entry. A widget that animates honors reduced motion from both
+`MediaQuery.disableAnimationsOf` and the platform's `reduceMotion` flag,
+dropping decorative motion but keeping a subtle signal where motion means
+something; `QuarkLoader` is the reference.
 
 The full contract is the **Widget package rules** section of
 [`AGENTS.md`](../../AGENTS.md#widget-package-rules-packagesquark_widgets-always-follow-this),

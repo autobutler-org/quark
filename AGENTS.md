@@ -602,6 +602,15 @@ The package is a separate pub package with no dependency on the app, so it canno
   promoted.
 - **Theme through tokens.** Colors, radii, and spacing come from `QuarkTokens` reached through the theme, never a
   hardcoded color in a widget. The gallery's theme panel edits the tokens live, so a hardcoded value is a bug you can see.
+- **Animation honors reduced motion.** Flutter does not do it for you: `AnimationController.repeat()` ignores the
+  reduced-motion flags, stock widgets like `CircularProgressIndicator` never check them, and iOS Reduce Motion does
+  not set `MediaQuery.disableAnimations`. So a widget that animates checks both
+  `MediaQuery.disableAnimationsOf(context)` (Android "Remove animations", the browser's `prefers-reduced-motion`) and
+  `PlatformDispatcher.instance.accessibilityFeatures.reduceMotion` (iOS Reduce Motion), and re-evaluates on
+  `WidgetsBindingObserver.didChangeAccessibilityFeatures`. Under reduced motion, drop decorative motion (spin, slide,
+  bounce, parallax) but keep a subtle signal where the motion carries meaning: a busy indicator still pulses, so it
+  never reads as a hang. The widget's test covers reduced motion on, and its gallery entry shows the reduced-motion
+  variant. `QuarkLoader` is the reference implementation.
 - **Error copy still comes from the app.** The package never composes a user-facing error sentence. It takes
   `String? error` and renders it; the page builds it with `Errors.message`.
 
