@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -165,6 +166,8 @@ type WriteMultipartParams struct {
 	Overwrite bool
 	// KeepBoth lands a part whose name is taken under a free numbered name.
 	KeepBoth bool
+	// Sidecar, when set, is handed every part that is not a file.
+	Sidecar storageutil.SidecarFunc
 }
 
 // WriteMultipartResult lists the files a multipart body wrote, in the order
@@ -172,6 +175,20 @@ type WriteMultipartParams struct {
 // landed before the failure.
 type WriteMultipartResult struct {
 	Written []storageutil.UploadedFile
+}
+
+// Sidecars attaches the thumbnail and preview parts of a multipart upload to
+// the files they belong to (#2379). A client sends each one right after its
+// file, as a part named "thumbnail" or "preview" whose filename is the file's
+// own. Pass its Attach as the writer's Sidecar.
+type Sidecars struct {
+	// Database stores the perceptual hash of a photo's thumbnail. Nil skips
+	// the hash.
+	Database *db.DatabaseSqlc
+	// Storage resolves where an uploaded file landed on disk.
+	Storage *storageutil.StorageService
+	// Serial is the device the upload goes to, empty for the internal one.
+	Serial string
 }
 
 // OffsetMismatchError is the resync signal. The client asked to append at a

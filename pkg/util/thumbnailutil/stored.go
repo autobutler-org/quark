@@ -83,7 +83,7 @@ func StoreDerivative(params StoreDerivativeParams) (StoreDerivativeResult, error
 	if err != nil {
 		return StoreDerivativeResult{}, err
 	}
-	if params.Kind == derivativeutil.KindThumbnail && !params.IsVideo {
+	if params.Kind == derivativeutil.KindThumbnail && !params.IsVideo && params.Queries != nil {
 		width, height := Dimensions(SizeLg)
 		thumb, err := decodeStored(stored.Path, width, height)
 		if err != nil {

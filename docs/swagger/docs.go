@@ -3439,7 +3439,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename.",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) and display preview (JPEG, long edge about 2048) may follow its file as parts named thumbnail and preview whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -3475,6 +3475,18 @@ const docTemplate = `{
                         "name": "file",
                         "in": "formData",
                         "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Thumbnail JPEG for the file of the same filename sent before it",
+                        "name": "thumbnail",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "Display preview JPEG for the file of the same filename sent before it",
+                        "name": "preview",
+                        "in": "formData"
                     }
                 ],
                 "responses": {
@@ -3625,7 +3637,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A session opened by someone else is not found. A 409 carrying X-Upload-Offset is a chunk out of step; one without it is a name already in use.",
+                "description": "Append the chunk named by Content-Range; the last one commits the file, and the caller owns it if it is new. A session opened by someone else is not found. A 409 carrying X-Upload-Offset is a chunk out of step; one without it is a name already in use. A photo or video's client-rendered thumbnail and preview go to PUT /thumbnails/{filePath} once the last chunk answers with where the file landed.",
                 "consumes": [
                     "application/octet-stream"
                 ],
@@ -3725,7 +3737,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename.",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) and display preview (JPEG, long edge about 2048) may follow its file as parts named thumbnail and preview whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -3768,6 +3780,18 @@ const docTemplate = `{
                         "name": "file",
                         "in": "formData",
                         "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Thumbnail JPEG for the file of the same filename sent before it",
+                        "name": "thumbnail",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "Display preview JPEG for the file of the same filename sent before it",
+                        "name": "preview",
+                        "in": "formData"
                     }
                 ],
                 "responses": {

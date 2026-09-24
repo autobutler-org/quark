@@ -13,7 +13,7 @@ import (
 
 // uploadFiles godoc
 // @Summary Upload files to the top-level directory
-// @Description Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename.
+// @Description Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) and display preview (JPEG, long edge about 2048) may follow its file as parts named thumbnail and preview whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped.
 // @Tags files
 // @Accept multipart/form-data
 // @Produce json
@@ -21,6 +21,8 @@ import (
 // @Param overwrite query boolean false "Replace a file of the same name"
 // @Param keepBoth query boolean false "Land under the first free name, e.g. file_(1).txt, when the name is taken"
 // @Param file formData file true "File to upload"
+// @Param thumbnail formData file false "Thumbnail JPEG for the file of the same filename sent before it"
+// @Param preview formData file false "Display preview JPEG for the file of the same filename sent before it"
 // @Success 200 {object} uploadFilesResponse "OK"
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden"
@@ -34,7 +36,7 @@ func uploadFiles(c *gin.Context) *serverutil.Response {
 
 // uploadFiles godoc
 // @Summary Upload files to a nested directory
-// @Description Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename.
+// @Description Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) and display preview (JPEG, long edge about 2048) may follow its file as parts named thumbnail and preview whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped.
 // @Tags files
 // @Accept multipart/form-data
 // @Produce json
@@ -43,6 +45,8 @@ func uploadFiles(c *gin.Context) *serverutil.Response {
 // @Param overwrite query boolean false "Replace a file of the same name"
 // @Param keepBoth query boolean false "Land under the first free name, e.g. file_(1).txt, when the name is taken"
 // @Param file formData file true "File to upload"
+// @Param thumbnail formData file false "Thumbnail JPEG for the file of the same filename sent before it"
+// @Param preview formData file false "Display preview JPEG for the file of the same filename sent before it"
 // @Success 200 {object} uploadFilesResponse "OK"
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 403 {object} serverutil.Response "Forbidden"
@@ -78,6 +82,7 @@ func uploadFilesNested(c *gin.Context, rootDir string) *serverutil.Response {
 		return serverutil.BadRequest(err)
 	}
 	dest := uploadDestination(deps)
+	sidecars := uploadutil.Sidecars{Database: deps.Database(), Storage: deps.StorageService(), Serial: serial}
 
 	// VFS path: only when no serial is provided (VFS handles the local namespace).
 	if fsys := dest.FilesVFS(serial); fsys != nil {
@@ -88,6 +93,7 @@ func uploadFilesNested(c *gin.Context, rootDir string) *serverutil.Response {
 			RootDir:   rootDir,
 			Overwrite: overwrite,
 			KeepBoth:  keepBoth,
+			Sidecar:   sidecars.Attach,
 		})
 		// Files that landed before a failure are the caller's too, and the
 		// clients have to hear about them however the request ended.
@@ -109,6 +115,7 @@ func uploadFilesNested(c *gin.Context, rootDir string) *serverutil.Response {
 		DeviceSerial: serial,
 		Overwrite:    overwrite,
 		KeepBoth:     keepBoth,
+		Sidecar:      sidecars.Attach,
 	})
 	grantOwners(c, deps, access, serial, written.Written)
 	publishUpload(deps, rootDir, written.Written)

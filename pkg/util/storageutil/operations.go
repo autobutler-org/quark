@@ -392,6 +392,8 @@ type UploadFilesStreamedParams struct {
 	// name fails with an error wrapping [fs.ErrExist] and nothing is written:
 	// the caller chooses, the server never renames on its own (#2016).
 	KeepBoth bool
+	// Sidecar, when set, is handed every part that is not a file.
+	Sidecar SidecarFunc
 }
 
 // UploadedFile is one file an upload wrote.
@@ -400,7 +402,15 @@ type UploadedFile struct {
 	Path string
 	// Created is false when the upload replaced a file that was already there.
 	Created bool
+	// SourceName is the file name the client sent, before any rename. A
+	// sidecar part names its file by it.
+	SourceName string
 }
+
+// SidecarFunc receives a part of a multipart upload that is not a file, with
+// the files written so far, while the part can still be read. A client
+// sends a file's thumbnail and preview this way (#2379), right after the file.
+type SidecarFunc func(part *multipart.Part, written []UploadedFile)
 
 // UploadFilesStreamedResult lists the files an upload wrote, in the order they
 // arrived. When the upload fails partway it still lists the files that landed
@@ -610,8 +620,11 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 			if relErr != nil {
 				return result, fmt.Errorf("failed to locate the uploaded file: %w", relErr)
 			}
-			result.Written = append(result.Written, UploadedFile{Path: filepath.ToSlash(rel), Created: !existed})
+			result.Written = append(result.Written, UploadedFile{Path: filepath.ToSlash(rel), Created: !existed, SourceName: fileName})
 		} else {
+			if params.Sidecar != nil {
+				params.Sidecar(part, result.Written)
+			}
 			part.Close()
 		}
 	}

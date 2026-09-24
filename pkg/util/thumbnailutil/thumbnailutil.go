@@ -174,6 +174,7 @@ type FromStoreResult struct {
 // StoreDerivativeParams is one client-rendered derivative to attach to a file.
 type StoreDerivativeParams struct {
 	// Queries stores the perceptual hash computed from a photo's thumbnail.
+	// Nil skips the hash.
 	Queries *db.Queries
 	// Serial and RelPath identify the file for the hash.
 	Serial  string
