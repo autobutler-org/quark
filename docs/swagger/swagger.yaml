@@ -499,6 +499,13 @@ definitions:
         description: Status is pending or disabled.
         type: string
     type: object
+  v0_auth.deleteAccountBody:
+    properties:
+      password:
+        type: string
+    required:
+    - password
+    type: object
   v0_auth.loginResponse:
     properties:
       recoveryPhrase:
@@ -2626,19 +2633,25 @@ paths:
       - albums
   /auth/account:
     delete:
+      consumes:
+      - application/json
       description: 'Deletes the selected aspects and logs the caller out everywhere.
         Pass account=true to delete only the caller''s own account, which is what
         App Store Guideline 5.1.1(v) requires; the other aspects are a factory reset
         of the appliance. All four are opt-in and a request selecting none is rejected,
-        so a truncated call cannot destroy anything. The confirm parameter must equal
-        the authenticated username. Databases are dropped and re-migrated in place,
-        so no restart is required. Repeat calls are idempotent. External device data
-        is reached only when devices=true; a drive that is not attached at reset time
-        keeps its data. Deleting the last account returns the appliance to first-boot
-        setup by design. Aspects are independent: deleting the account or the database
-        does NOT delete stored files, and files left behind are readable by whoever
-        sets the appliance up next — the response reports filesRetained=true whenever
-        that happens, so pass files=true as well to erase the data itself.'
+        so a truncated call cannot destroy anything. The JSON body must carry the
+        caller''s own password, which is checked before anything is deleted; it travels
+        in the body rather than the URL so it never reaches an access or proxy log.
+        Attempts share the per-IP limit of the sign-in endpoints, so this endpoint
+        cannot be used to guess the password. Databases are dropped and re-migrated
+        in place, so no restart is required. Repeat calls are idempotent while the
+        account exists. External device data is reached only when devices=true; a
+        drive that is not attached at reset time keeps its data. Deleting the last
+        account returns the appliance to first-boot setup by design. Aspects are independent:
+        deleting the account or the database does NOT delete stored files, and files
+        left behind are readable by whoever sets the appliance up next — the response
+        reports filesRetained=true whenever that happens, so pass files=true as well
+        to erase the data itself.'
       parameters:
       - description: Delete the caller's own account (users row). Does NOT delete
           stored files unless files=true is also passed; files left behind stay readable
@@ -2660,11 +2673,12 @@ paths:
         in: query
         name: devices
         type: boolean
-      - description: Must equal the authenticated username
-        in: query
-        name: confirm
+      - description: The caller's own password
+        in: body
+        name: body
         required: true
-        type: string
+        schema:
+          $ref: '#/definitions/v0_auth.deleteAccountBody'
       produces:
       - application/json
       responses:
@@ -2691,16 +2705,21 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
         "401":
-          description: Unauthorized
+          description: no session, or the session's account no longer exists
           schema:
             $ref: '#/definitions/serverutil.Response'
         "403":
-          description: database, files or devices requested by a non-admin
+          description: the password is wrong, or database, files or devices were requested
+            by a non-admin
           schema:
             $ref: '#/definitions/serverutil.Response'
         "409":
           description: account=true from the only active admin while other active
             or disabled accounts exist; nothing is deleted
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "429":
+          description: too many attempts from this address; nothing is deleted
           schema:
             $ref: '#/definitions/serverutil.Response'
         "500":

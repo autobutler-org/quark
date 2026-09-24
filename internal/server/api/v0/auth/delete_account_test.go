@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -15,13 +16,17 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/gin-gonic/gin"
 	_ "modernc.org/sqlite"
 )
 
-const deleteAccountUser = "testuser"
+const (
+	deleteAccountUser     = "testuser"
+	deleteAccountPassword = "TestPassword123!"
+)
 
 // newDeleteAccountEngine builds a gin engine wired to a real on-disk database
 // carrying the real migration set, with HOME redirected at a temporary
@@ -29,6 +34,14 @@ const deleteAccountUser = "testuser"
 // than at the developer's actual data directory. It returns the engine, the
 // database handle, and the files directory the handler will delete.
 func newDeleteAccountEngine(t *testing.T) (*gin.Engine, *sql.DB, string) {
+	t.Helper()
+	engine, sqlDB, filesDir, _ := newDeleteAccountEngineWithDeps(t)
+	return engine, sqlDB, filesDir
+}
+
+// newDeleteAccountEngineWithDeps is newDeleteAccountEngine, also returning the
+// dependency graph so a test can reach the shared rate limiter.
+func newDeleteAccountEngineWithDeps(t *testing.T) (*gin.Engine, *sql.DB, string, deputil.Dependencies) {
 	t.Helper()
 
 	// Redirected before GetDataDir is called anywhere below: every platform
@@ -55,7 +68,7 @@ func newDeleteAccountEngine(t *testing.T) (*gin.Engine, *sql.DB, string) {
 
 	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: deleteAccountUser,
-		Password: "TestPassword123!",
+		Password: deleteAccountPassword,
 	}); err != nil {
 		t.Fatalf("authutil.Setup: %v", err)
 	}
@@ -79,11 +92,19 @@ func newDeleteAccountEngine(t *testing.T) (*gin.Engine, *sql.DB, string) {
 	})
 	group := engine.Group("/api/v0")
 	serverutil.RegisterRouterWithGroup(group, v0_auth.NewRouter())
-	return engine, sqlDB, filesDir
+	return engine, sqlDB, filesDir, deps
 }
 
+// deleteAccountRequest sends the caller's correct password.
 func deleteAccountRequest(engine *gin.Engine, query string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodDelete, "/api/v0/auth/account?"+query, nil)
+	return deleteAccountRequestWithBody(engine, query, `{"password":"`+deleteAccountPassword+`"}`)
+}
+
+// deleteAccountRequestWithBody sends body as the JSON request body, so a test
+// can send a wrong password or none.
+func deleteAccountRequestWithBody(engine *gin.Engine, query, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodDelete, "/api/v0/auth/account?"+query, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	engine.ServeHTTP(w, req)
 	return w
@@ -141,10 +162,10 @@ func TestDeleteAccount_NoAspectSelected(t *testing.T) {
 	engine, sqlDB, filesDir := newDeleteAccountEngine(t)
 
 	for _, query := range []string{
-		"confirm=" + deleteAccountUser,
-		"database=false&files=false&confirm=" + deleteAccountUser,
-		"database=false&files=false&devices=false&confirm=" + deleteAccountUser,
-		"account=false&database=false&files=false&devices=false&confirm=" + deleteAccountUser,
+		"",
+		"database=false&files=false",
+		"database=false&files=false&devices=false",
+		"account=false&database=false&files=false&devices=false",
 	} {
 		w := deleteAccountRequest(engine, query)
 		if w.Code != http.StatusBadRequest {
@@ -160,37 +181,85 @@ func TestDeleteAccount_NoAspectSelected(t *testing.T) {
 	}
 }
 
-// TestDeleteAccount_ConfirmationMissing verifies the confirmation guard rejects
-// a request that omits it, even with a valid aspect selected.
-func TestDeleteAccount_ConfirmationMissing(t *testing.T) {
-	engine, sqlDB, filesDir := newDeleteAccountEngine(t)
+// TestDeleteAccount_PasswordRequired verifies a missing, empty or wrong
+// password deletes nothing, for every aspect: holding a session is not on its
+// own consent (#2346). A wrong password is a 403, so the app does not read it
+// as a lost session.
+func TestDeleteAccount_PasswordRequired(t *testing.T) {
+	for _, query := range []string{"account=true", "database=true&files=true", "devices=true"} {
+		for _, tc := range []struct {
+			body string
+			want int
+		}{
+			{"", http.StatusBadRequest},
+			{`{}`, http.StatusBadRequest},
+			{`{"password":""}`, http.StatusBadRequest},
+			{`{"password":"not-the-password"}`, http.StatusForbidden},
+			{`{"password":"OtherPassword123!"}`, http.StatusForbidden},
+		} {
+			t.Run(query+" "+tc.body, func(t *testing.T) {
+				engine, sqlDB, filesDir := newDeleteAccountEngine(t)
+				before := sessionCount(t, sqlDB)
 
-	w := deleteAccountRequest(engine, "database=true&files=true")
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-	}
-	if _, err := os.Stat(filesDir); err != nil {
-		t.Errorf("files directory should be untouched: %v", err)
-	}
-	if userCount(t, sqlDB) != 1 {
-		t.Error("database should be untouched")
+				w := deleteAccountRequestWithBody(engine, query, tc.body)
+				if w.Code != tc.want {
+					t.Fatalf("expected %d, got %d: %s", tc.want, w.Code, w.Body.String())
+				}
+				if tc.want == http.StatusForbidden {
+					if got := decodeBody(t, w)["error"]; got != authutil.ErrIncorrectPassword.Error() {
+						t.Errorf("error = %v, want %q", got, authutil.ErrIncorrectPassword.Error())
+					}
+				}
+				if _, err := os.Stat(filepath.Join(filesDir, "keep.txt")); err != nil {
+					t.Errorf("stored files should be untouched: %v", err)
+				}
+				if userCount(t, sqlDB) != 1 {
+					t.Error("the account must survive a refused request")
+				}
+				if sessionCount(t, sqlDB) != before {
+					t.Error("a refused request signed the caller out")
+				}
+			})
+		}
 	}
 }
 
-// TestDeleteAccount_ConfirmationMismatched verifies a confirmation naming some
-// other user is rejected.
-func TestDeleteAccount_ConfirmationMismatched(t *testing.T) {
-	engine, sqlDB, filesDir := newDeleteAccountEngine(t)
+// TestDeleteAccount_PasswordNeverReadFromQuery verifies a password in the URL
+// counts for nothing: only the body is read, so nobody is tempted to put it
+// where access logs keep it.
+func TestDeleteAccount_PasswordNeverReadFromQuery(t *testing.T) {
+	engine, sqlDB, _ := newDeleteAccountEngine(t)
 
-	w := deleteAccountRequest(engine, "files=true&confirm=other-user")
+	w := deleteAccountRequestWithBody(engine, "account=true&password="+deleteAccountPassword, "")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
-	if _, err := os.Stat(filesDir); err != nil {
-		t.Errorf("files directory should be untouched: %v", err)
+	if userCount(t, sqlDB) != 1 {
+		t.Error("the account must survive a request with no body")
+	}
+}
+
+// TestDeleteAccount_RateLimited verifies attempts spend from the shared sign-in
+// limiter: once an address has used its allowance, even the right password is
+// refused with 429 and nothing is deleted, so the endpoint cannot be used to
+// guess the password faster than login allows.
+func TestDeleteAccount_RateLimited(t *testing.T) {
+	engine, sqlDB, filesDir, deps := newDeleteAccountEngineWithDeps(t)
+
+	// Spend the whole allowance of httptest.NewRequest's address, 192.0.2.1.
+	if !deps.AuthRateLimiter().AllowN("192.0.2.1", ratelimitutil.DefaultBurst) {
+		t.Fatal("could not spend the allowance")
+	}
+
+	w := deleteAccountRequest(engine, "account=true&files=true")
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d: %s", w.Code, w.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(filesDir, "keep.txt")); err != nil {
+		t.Errorf("stored files should be untouched: %v", err)
 	}
 	if userCount(t, sqlDB) != 1 {
-		t.Error("database should be untouched")
+		t.Error("the account must survive a rate-limited request")
 	}
 }
 
@@ -199,7 +268,7 @@ func TestDeleteAccount_ConfirmationMismatched(t *testing.T) {
 func TestDeleteAccount_RejectsNonBoolean(t *testing.T) {
 	engine, _, _ := newDeleteAccountEngine(t)
 
-	w := deleteAccountRequest(engine, "files=not-a-bool&confirm="+deleteAccountUser)
+	w := deleteAccountRequest(engine, "files=not-a-bool")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
@@ -210,7 +279,7 @@ func TestDeleteAccount_RejectsNonBoolean(t *testing.T) {
 func TestDeleteAccount_RejectsNonBooleanDevices(t *testing.T) {
 	engine, _, _ := newDeleteAccountEngine(t)
 
-	w := deleteAccountRequest(engine, "devices=sure&confirm="+deleteAccountUser)
+	w := deleteAccountRequest(engine, "devices=sure")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
@@ -223,7 +292,7 @@ func TestDeleteAccount_RejectsNonBooleanDevices(t *testing.T) {
 func TestDeleteAccount_DevicesOnlyIsAValidSelection(t *testing.T) {
 	engine, sqlDB, filesDir := newDeleteAccountEngine(t)
 
-	w := deleteAccountRequest(engine, "devices=true&confirm="+deleteAccountUser)
+	w := deleteAccountRequest(engine, "devices=true")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -246,7 +315,7 @@ func TestDeleteAccount_DevicesOnlyIsAValidSelection(t *testing.T) {
 func TestDeleteAccount_FilesOnly(t *testing.T) {
 	engine, sqlDB, filesDir := newDeleteAccountEngine(t)
 
-	w := deleteAccountRequest(engine, "files=true&confirm="+deleteAccountUser)
+	w := deleteAccountRequest(engine, "files=true")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -269,7 +338,7 @@ func TestDeleteAccount_FilesOnly(t *testing.T) {
 func TestDeleteAccount_DatabaseOnly(t *testing.T) {
 	engine, sqlDB, filesDir := newDeleteAccountEngine(t)
 
-	w := deleteAccountRequest(engine, "database=true&confirm="+deleteAccountUser)
+	w := deleteAccountRequest(engine, "database=true")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -296,7 +365,7 @@ func TestDeleteAccount_DatabaseOnly(t *testing.T) {
 func TestDeleteAccount_Both(t *testing.T) {
 	engine, sqlDB, filesDir := newDeleteAccountEngine(t)
 
-	w := deleteAccountRequest(engine, "database=true&files=true&confirm="+deleteAccountUser)
+	w := deleteAccountRequest(engine, "database=true&files=true")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -322,11 +391,11 @@ func TestDeleteAccount_Both(t *testing.T) {
 func TestDeleteAccount_RepeatIsIdempotent(t *testing.T) {
 	engine, _, filesDir := newDeleteAccountEngine(t)
 
-	first := deleteAccountRequest(engine, "files=true&confirm="+deleteAccountUser)
+	first := deleteAccountRequest(engine, "files=true")
 	if first.Code != http.StatusOK {
 		t.Fatalf("first call: expected 200, got %d: %s", first.Code, first.Body.String())
 	}
-	second := deleteAccountRequest(engine, "files=true&confirm="+deleteAccountUser)
+	second := deleteAccountRequest(engine, "files=true")
 	if second.Code != http.StatusOK {
 		t.Fatalf("second call: expected 200, got %d: %s", second.Code, second.Body.String())
 	}
@@ -348,7 +417,7 @@ func TestDeleteAccount_RevokesSessions(t *testing.T) {
 		t.Fatal("setup should have created a session to revoke")
 	}
 
-	w := deleteAccountRequest(engine, "files=true&confirm="+deleteAccountUser)
+	w := deleteAccountRequest(engine, "files=true")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -368,7 +437,7 @@ func TestDeleteAccount_RevokesSessions(t *testing.T) {
 func TestDeleteAccount_AccountOnly(t *testing.T) {
 	engine, sqlDB, filesDir := newDeleteAccountEngine(t)
 
-	w := deleteAccountRequest(engine, "account=true&confirm="+deleteAccountUser)
+	w := deleteAccountRequest(engine, "account=true")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -429,7 +498,7 @@ func TestDeleteAccount_AccountLeavesOtherUsersAlone(t *testing.T) {
 		t.Fatalf("expected 2 users before the delete, got %d", userCount(t, sqlDB))
 	}
 
-	w := deleteAccountRequest(engine, "account=true&confirm="+deleteAccountUser)
+	w := deleteAccountRequest(engine, "account=true")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
@@ -446,38 +515,22 @@ func TestDeleteAccount_AccountLeavesOtherUsersAlone(t *testing.T) {
 	}
 }
 
-// TestDeleteAccount_AccountRepeatIsIdempotent verifies a second account delete
-// reports success rather than a 500. The row is already gone, so the requested
-// state already holds.
-func TestDeleteAccount_AccountRepeatIsIdempotent(t *testing.T) {
+// TestDeleteAccount_AccountRepeatAfterDelete verifies a second account delete
+// from a session that outlived the account is a 401 rather than a 500: there
+// is no password left to check, and nothing the session could still act on.
+func TestDeleteAccount_AccountRepeatAfterDelete(t *testing.T) {
 	engine, sqlDB, _ := newDeleteAccountEngine(t)
 
-	query := "account=true&confirm=" + deleteAccountUser
+	query := "account=true"
 	if w := deleteAccountRequest(engine, query); w.Code != http.StatusOK {
 		t.Fatalf("first call: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	w := deleteAccountRequest(engine, query)
-	if w.Code != http.StatusOK {
-		t.Fatalf("second call: expected 200, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("second call: expected 401, got %d: %s", w.Code, w.Body.String())
 	}
 	if userCount(t, sqlDB) != 0 {
 		t.Error("no user rows should remain")
-	}
-}
-
-// TestDeleteAccount_AccountRequiresConfirmation verifies the confirm guard
-// covers account=true as well, and that a mismatch touches nothing.
-func TestDeleteAccount_AccountRequiresConfirmation(t *testing.T) {
-	engine, sqlDB, _ := newDeleteAccountEngine(t)
-
-	for _, query := range []string{"account=true", "account=true&confirm=someone-else"} {
-		w := deleteAccountRequest(engine, query)
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("%q: expected 400, got %d: %s", query, w.Code, w.Body.String())
-		}
-		if userCount(t, sqlDB) != 1 {
-			t.Fatalf("%q: the account must survive a rejected request", query)
-		}
 	}
 }
 
@@ -487,7 +540,7 @@ func TestDeleteAccount_AccountRequiresConfirmation(t *testing.T) {
 func TestDeleteAccount_LastAccountReturnsToSetup(t *testing.T) {
 	engine, sqlDB, _ := newDeleteAccountEngine(t)
 
-	if w := deleteAccountRequest(engine, "account=true&confirm="+deleteAccountUser); w.Code != http.StatusOK {
+	if w := deleteAccountRequest(engine, "account=true"); w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
@@ -536,7 +589,7 @@ func TestDeleteAccount_FilesRetainedWarning(t *testing.T) {
 		t.Run(testCase.query, func(t *testing.T) {
 			engine, _, _ := newDeleteAccountEngine(t)
 
-			w := deleteAccountRequest(engine, testCase.query+"&confirm="+deleteAccountUser)
+			w := deleteAccountRequest(engine, testCase.query)
 			if w.Code != http.StatusOK {
 				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 			}
@@ -552,7 +605,7 @@ func TestDeleteAccount_FilesRetainedWarning(t *testing.T) {
 func TestDeleteAccount_FilesSurviveAnAccountDelete(t *testing.T) {
 	engine, _, filesDir := newDeleteAccountEngine(t)
 
-	w := deleteAccountRequest(engine, "account=true&database=true&confirm="+deleteAccountUser)
+	w := deleteAccountRequest(engine, "account=true&database=true")
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}

@@ -94,11 +94,11 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 		{http.MethodDelete, "/api/v0/admin/groups/999"},
 		{http.MethodPut, "/api/v0/admin/groups/999/members/1"},
 		{http.MethodDelete, "/api/v0/admin/groups/999/members/1"},
-		// confirm names neither account, so the admin stops at a 400 after the
-		// gate and nothing is deleted.
-		{http.MethodDelete, "/api/v0/auth/account?database=true&confirm=nobody"},
-		{http.MethodDelete, "/api/v0/auth/account?files=true&confirm=nobody"},
-		{http.MethodDelete, "/api/v0/auth/account?devices=true&confirm=nobody"},
+		// No password in the body, so the admin stops at a 400 after the gate
+		// and nothing is deleted.
+		{http.MethodDelete, "/api/v0/auth/account?database=true"},
+		{http.MethodDelete, "/api/v0/auth/account?files=true"},
+		{http.MethodDelete, "/api/v0/auth/account?devices=true"},
 		{http.MethodGet, "/api/v0/vault/status"},
 		{http.MethodPost, "/api/v0/vault/setup"},
 		{http.MethodPost, "/api/v0/vault/unlock"},
@@ -149,9 +149,9 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 		{http.MethodGet, "/api/v0/storage/devices/status"},
 		// Anyone who can share needs to know who they can share with.
 		{http.MethodGet, "/api/v0/access/principals"},
-		// Account-only deletion stays self-service; the wrong confirm keeps the
-		// member's account in place.
-		{http.MethodDelete, "/api/v0/auth/account?account=true&confirm=nobody"},
+		// Account-only deletion stays self-service; with no password the
+		// member's account stays in place.
+		{http.MethodDelete, "/api/v0/auth/account?account=true"},
 	}
 	for _, r := range open {
 		if got := do(r.method, r.path, member.SessionToken); got == http.StatusUnauthorized || got == http.StatusForbidden || got == http.StatusNotFound {

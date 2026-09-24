@@ -36,7 +36,7 @@ func TestDeleteAccount_LastAdminRules(t *testing.T) {
 		addOther(t, db.New(sqlDB), authutil.StatusActive)
 		before := sessionCount(t, sqlDB)
 
-		w := deleteAccountRequest(engine, "account=true&confirm="+deleteAccountUser)
+		w := deleteAccountRequest(engine, "account=true")
 		if w.Code != http.StatusConflict {
 			t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
 		}
@@ -55,7 +55,7 @@ func TestDeleteAccount_LastAdminRules(t *testing.T) {
 		engine, sqlDB, _ := newDeleteAccountEngine(t)
 		addOther(t, db.New(sqlDB), authutil.StatusPending)
 
-		w := deleteAccountRequest(engine, "account=true&confirm="+deleteAccountUser)
+		w := deleteAccountRequest(engine, "account=true")
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 		}
