@@ -1413,6 +1413,176 @@ void main() {
       expect(result.succeeded, 1);
     });
   });
+
+  group('client-rendered thumbnails (#2379)', () {
+    final thumbnail = Uint8List.fromList([9, 8]);
+
+    PendingUpload rendered(
+      String name, {
+      int? size,
+      required Future<Uint8List?> Function() render,
+    }) {
+      return PendingUpload(
+        relativeDir: '',
+        name: name,
+        build: () async =>
+            http.MultipartFile.fromBytes('files', _bytes, filename: name),
+        openChunkSource: size == null
+            ? null
+            : () async => _FakeChunkSource(size),
+        renderThumbnail: render,
+      );
+    }
+
+    test('a whole upload carries the thumbnail after its file', () async {
+      final sent = <List<String>>[];
+      final manager = UploadManager.forTesting(
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              sent.add([
+                for (final f in selectedFiles) '${f.field}:${f.filename}',
+              ]);
+            },
+      );
+
+      final done = manager.results.first;
+      manager.enqueue(
+        uploads: [rendered('clip.mov', render: () async => thumbnail)],
+        uploadPath: '',
+      );
+      await done;
+
+      expect(sent, [
+        ['files:clip.mov', 'thumbnail:clip.mov'],
+      ]);
+    });
+
+    test('renders once however many attempts the file takes', () async {
+      var renders = 0;
+      var attempts = 0;
+      final manager = UploadManager.forTesting(
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              if (++attempts == 1) throw Exception('connection reset');
+            },
+      );
+
+      final done = manager.results.first;
+      manager.enqueue(
+        uploads: [
+          rendered(
+            'clip.mov',
+            render: () async {
+              renders++;
+              return thumbnail;
+            },
+          ),
+        ],
+        uploadPath: '',
+      );
+      final result = await done;
+
+      expect(result.failed, 0);
+      expect(attempts, 2);
+      expect(renders, 1);
+    });
+
+    test('a render that fails sends the file alone', () async {
+      final sent = <List<String>>[];
+      final manager = UploadManager.forTesting(
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              sent.add([for (final f in selectedFiles) f.field]);
+            },
+      );
+
+      final done = manager.results.first;
+      manager.enqueue(
+        uploads: [
+          rendered('a.heic', render: () async => throw Exception('no codec')),
+          rendered('b.heic', render: () async => null),
+        ],
+        uploadPath: '',
+      );
+      final result = await done;
+
+      expect(result.failed, 0);
+      expect(sent, [
+        ['files'],
+        ['files'],
+      ]);
+    });
+
+    test('a chunked upload attaches them where the file landed', () async {
+      final server = _FakeUploadServer();
+      final attached = <String>[];
+      final manager = UploadManager.forTesting(
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {},
+        sessionClient: server,
+        sessionStore: InMemoryUploadSessionStore(),
+        chunkSizeBytes: 8,
+        chunkedThresholdBytes: 8,
+        chunkRetryBackoff: Duration.zero,
+        thumbnailSender: ({required path, serial, required thumbnail}) async {
+          attached.add('$serial:$path:${thumbnail.length}');
+        },
+      );
+
+      final done = manager.results.first;
+      manager.enqueue(
+        uploads: [rendered('big.mov', size: 20, render: () async => thumbnail)],
+        uploadPath: '/clips',
+        serial: 'usb',
+      );
+      final result = await done;
+
+      expect(result.failed, 0);
+      expect(attached, ['usb:clips/big.mov:2']);
+    });
+
+    test('a chunked file still counts as sent when attaching fails', () async {
+      final manager = UploadManager.forTesting(
+        sessionClient: _FakeUploadServer(),
+        sessionStore: InMemoryUploadSessionStore(),
+        chunkSizeBytes: 8,
+        chunkedThresholdBytes: 8,
+        chunkRetryBackoff: Duration.zero,
+        thumbnailSender: ({required path, serial, required thumbnail}) async =>
+            throw const ApiException(500, 'upload the thumbnail'),
+      );
+
+      final done = manager.results.first;
+      manager.enqueue(
+        uploads: [rendered('big.mov', size: 20, render: () async => thumbnail)],
+        uploadPath: '',
+      );
+      final result = await done;
+
+      expect(result.failed, 0);
+      expect(result.succeeded, 1);
+    });
+  });
 }
 
 final _bytes = Uint8List.fromList([1, 2, 3]);

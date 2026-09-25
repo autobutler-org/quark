@@ -3,6 +3,7 @@ import 'dart:js_interop';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:quark/services/client_thumbnails_web.dart';
 import 'package:quark/services/upload_chunk_source_web.dart';
 import 'package:quark/utils/ios_photo_library.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
@@ -159,6 +160,8 @@ List<PendingUpload> _uploadsFromInput(web.HTMLInputElement input) {
           file,
           lastModified: DateTime.fromMillisecondsSinceEpoch(file.lastModified),
         ),
+        // Rendered by the browser from the same Blob, when the file goes.
+        renderThumbnail: () => renderBlobThumbnail(file, name),
       ),
     );
   }

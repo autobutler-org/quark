@@ -29,6 +29,7 @@ import 'package:quark/services/health_service.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/services/upload_chunk_source.dart';
+import 'package:quark/services/client_thumbnails.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
@@ -970,6 +971,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
           );
         },
         openChunkSource: openDroppedFileChunkSource,
+        renderThumbnail: renderDroppedFileThumbnail,
       );
 
       if (flattened.uploads.isEmpty) {
