@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:quark/models/chat_keys.dart';
@@ -166,6 +167,60 @@ class ChatCrypto {
       signature: signature,
       publicKey: signPublicKey,
     );
+  }
+
+  /// The bytes a key grant's signature covers (#2417):
+  ///
+  /// `"quark-chat-grant-v1" 0x00 || be64(channelId) || be64(version) ||
+  /// be64(userId) || BLAKE2b-256(sealedKey)`
+  ///
+  /// Binding the recipient and version means a grant can't be replayed to
+  /// someone else or as another version.
+  Uint8List grantMessage({
+    required int channelId,
+    required int version,
+    required int userId,
+    required Uint8List sealedKey,
+  }) => Uint8List.fromList([
+    ...utf8.encode('quark-chat-grant-v1'),
+    0,
+    ..._be64(channelId),
+    ..._be64(version),
+    ..._be64(userId),
+    ...sodium.crypto.genericHash(message: sealedKey, outLen: 32),
+  ]);
+
+  /// The bytes a channel event's signature covers (#2417):
+  ///
+  /// `"quark-chat-event-v1" 0x00 || be64(channelId) || be64(eventId) ||
+  /// be64(actorId) || kind 0x00 || payload`, the payload exactly as the Quark
+  /// stored it.
+  Uint8List eventMessage({
+    required int channelId,
+    required int eventId,
+    required int actorId,
+    required String kind,
+    required String payload,
+  }) => Uint8List.fromList([
+    ...utf8.encode('quark-chat-event-v1'),
+    0,
+    ..._be64(channelId),
+    ..._be64(eventId),
+    ..._be64(actorId),
+    ...utf8.encode(kind),
+    0,
+    ...utf8.encode(payload),
+  ]);
+
+  /// Big-endian 64 bits without `ByteData.setInt64`, which the web lacks. Ids
+  /// are positive and below 2^53.
+  static List<int> _be64(int value) {
+    final high = value ~/ 0x100000000;
+    final low = value % 0x100000000;
+    return [
+      for (final part in [high, low])
+        for (var shift = 24; shift >= 0; shift -= 8) (part >> shift) & 0xff,
+    ];
   }
 
   /// A new random channel key for [encrypt]. The caller disposes it.

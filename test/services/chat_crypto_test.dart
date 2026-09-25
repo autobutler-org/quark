@@ -112,4 +112,67 @@ void main() {
     expect(rebuilt.box.publicKey, identity.box.publicKey);
     expect(rebuilt.sign.publicKey, identity.sign.publicKey);
   });
+
+  test('a signed grant verifies only for its channel, version and '
+      'recipient', () {
+    final granter = crypto.generateIdentity();
+    final recipient = crypto.generateIdentity();
+    final key = crypto.newChannelKey();
+    final sealed = crypto.seal(key.extractBytes(), recipient.box.publicKey);
+    Uint8List message({int channel = 7, int version = 1, int user = 3}) =>
+        crypto.grantMessage(
+          channelId: channel,
+          version: version,
+          userId: user,
+          sealedKey: sealed,
+        );
+    final signature = crypto.sign(message(), granter);
+    final signKey = granter.sign.publicKey;
+
+    expect(crypto.verify(message(), signature, signKey), isTrue);
+    expect(crypto.openSealed(sealed, recipient), key.extractBytes());
+    expect(crypto.verify(message(channel: 8), signature, signKey), isFalse);
+    expect(crypto.verify(message(version: 2), signature, signKey), isFalse);
+    expect(crypto.verify(message(user: 4), signature, signKey), isFalse);
+    final tampered = Uint8List.fromList(sealed)..[0] ^= 1;
+    expect(
+      crypto.verify(
+        crypto.grantMessage(
+          channelId: 7,
+          version: 1,
+          userId: 3,
+          sealedKey: tampered,
+        ),
+        signature,
+        signKey,
+      ),
+      isFalse,
+    );
+    // Signed by someone else, claiming to be the granter.
+    final forger = crypto.generateIdentity();
+    expect(
+      crypto.verify(message(), crypto.sign(message(), forger), signKey),
+      isFalse,
+    );
+  });
+
+  test('ids above 32 bits are encoded big-endian in full', () {
+    final low = crypto.eventMessage(
+      channelId: 1,
+      eventId: 1,
+      actorId: 1,
+      kind: 'k',
+      payload: '{}',
+    );
+    final high = crypto.eventMessage(
+      channelId: 1 + (1 << 32),
+      eventId: 1,
+      actorId: 1,
+      kind: 'k',
+      payload: '{}',
+    );
+    const prefix = 'quark-chat-event-v1'.length + 1;
+    expect(low.sublist(prefix, prefix + 8), [0, 0, 0, 0, 0, 0, 0, 1]);
+    expect(high.sublist(prefix, prefix + 8), [0, 0, 0, 1, 0, 0, 0, 1]);
+  });
 }

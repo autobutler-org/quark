@@ -2,7 +2,7 @@
 
 Chat messages are end-to-end encrypted: only the members of a channel can read them, and the Quark stores
 ciphertext it can't open. This page covers the identity keys that make that possible (#2416) and what they
-protect against. Channel keys and key grants are #2417; messages are #2418.
+protect against, then the channel keys and key grants built on them (#2417). Messages are #2418.
 
 ## Identity keys
 
@@ -70,6 +70,86 @@ while the phrase is on screen, and don't have this problem.
 - `POST /api/v0/auth/recover` takes an optional `chatKeys` with the re-wrapped row and stores it in the password
   reset's transaction.
 
+## Channel keys
+
+Each channel has a symmetric XChaCha20-Poly1305 key with a version number. A member holds a version through a
+**key grant**: the key sealed to their X25519 key (`crypto_box_seal`, 80 bytes) and signed with the Ed25519 key of
+the member who granted it. Clients make keys and grants; the Quark stores them and can open neither.
+
+### What a signature covers
+
+A grant's signature covers these bytes, so it can't be replayed to another account, version or channel:
+
+```text
+"quark-chat-grant-v1" 0x00 || be64(channelId) || be64(version) || be64(recipientUserId) || BLAKE2b-256(sealedKey)
+```
+
+The Quark copies the granter's published signing key into the grant when it's uploaded (`granterSignKey`), and the
+recipient verifies against that. A grant from an account that was later deleted, or that recovered with a new
+identity, still verifies. Trusting that copy is no weaker than trusting `GET /chat/keys/:userId`, since the Quark
+serves both; closing that gap is #2430 (see below). A grant whose signature fails is dropped, and the channel stays
+waiting.
+
+### Distribution
+
+- **Who is pending.** The Quark resolves the channel's members (direct, through a group, or through `everyone`) and
+  lists each one who has published chat keys but lacks a version. New members are pending for **every** version,
+  so they can read the history.
+- **Telling holders.** A watcher on the Quark reruns that check on every `access_changed` (a group gained or lost an
+  account), `account_changed` (an account was created, approved, turned off or deleted) and `chat_channel_changed`.
+  It also runs when an account publishes or replaces its keys. For each channel with pending grants it publishes
+  `chat_key_needed` to the members who hold a version. Any of them that is online seals the key to each pending
+  member, signs, and uploads. The first grant for a member and version wins, and later ones are ignored.
+  `chat_key_granted` then tells the recipients.
+- **Waiting.** Until its grant lands, a member sees "Waiting for a member to share the key". The Quark can't end
+  that wait itself.
+- **The first key.** A channel starts with no version. The first member client to open it, `general` on a new
+  Quark included, creates version 1. Creating a version must name the next number, so two clients racing leave
+  one winner.
+- **A new identity.** When an account uploads a different X25519 key, its grants are deleted, since nothing can
+  open them now. It becomes pending again and members refill them, history included.
+
+### Rotation
+
+The key needs rotating when anyone outside the channel holds the current version: a member removed or who left,
+someone who left a group on the channel, a turned-off account, or a deleted one. A grant to a deleted account is
+kept with no recipient for this purpose. The Quark reports `rotationNeeded` and sends `chat_key_needed`, and the
+next member client online creates the next version and grants it to the remaining members. That member doesn't
+have to hold the old version. Messages from then on use the new key.
+
+### Channel events
+
+Membership changes and new key versions are stored in `chat_channel_events`. Each row has a kind (`member_set`,
+`member_removed`, `key_created`), the actor, and a JSON payload the Quark builds. The actor's client then signs:
+
+```text
+"quark-chat-event-v1" 0x00 || be64(channelId) || be64(eventId) || be64(actorId) || kind 0x00 || payload
+```
+
+The client signs only an event whose payload matches what it just did. An event nobody signed is shown as
+unverified. That covers an admin who adds themselves to a channel without signing, and anything the Quark made up.
+
+### What the Quark sees
+
+- Which versions of which channel's key exist, who created each one, and when.
+- Who holds each version, who granted it to them, and when. The sealed keys and signatures are opaque to it.
+- The membership and key events in plain text.
+
+It can refuse to store a grant, drop one, or serve a stale list. It can't hand a member a key of its own without
+the signature check catching it, unless it also lies about the granter's public key (#2430).
+
+### Routes
+
+All are members only: anyone else gets 404, admins included.
+
+- `GET /api/v0/chat/channels/:id/keys` returns the versions, the current one, the caller's own grants, and
+  `rotationNeeded`.
+- `POST /api/v0/chat/channels/:id/keys` creates the next version with the caller's own grant.
+- `GET /api/v0/chat/channels/:id/keys/pending` returns the grants the caller can fill.
+- `POST /api/v0/chat/channels/:id/keys/grants` uploads grants for versions the caller holds.
+- `GET /api/v0/chat/channels/:id/events` returns the channel's events.
+- `PUT /api/v0/chat/channels/:id/events/:eventId/signature` lets the actor sign an event, once.
+
 ## Threat model
 
 ### What this protects against
@@ -77,7 +157,7 @@ while the phrase is on screen, and don't have this problem.
 - **Someone with the disk or a backup.** Messages and channel keys are ciphertext, and the identity keys are
   wrapped under secrets the disk doesn't hold.
 - **Another admin reading the database.** Being an admin, or adding yourself to a channel, gives you no key to
-  what was said before. Joining shows up to the members as a signed event (#2417).
+  what was said before. Joining shows up to the members as an event, unverified unless the admin's client signed it.
 - **The Quark process reading history at rest.** The server never decrypts anything; it stores and forwards
   bytes.
 
@@ -90,5 +170,5 @@ while the phrase is on screen, and don't have this problem.
 - **Metadata.** The Quark sees who is in which channel, when each message was sent, and how big it is.
 - **A device that's already unlocked.** On phones and desktop the unwrapped seeds sit in the platform keystore
   while signed in, so anyone who can use the signed-in app can read chat.
-- **A removed member's copies.** Removal rotates the channel key for future messages (#2417), but nothing takes
-  back what a member already downloaded.
+- **A removed member's copies.** Removal rotates the channel key for future messages, but nothing takes back what
+  a member already downloaded. The Quark also stops serving them grants and ciphertext.

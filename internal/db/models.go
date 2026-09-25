@@ -20,12 +20,42 @@ type ChatChannel struct {
 	CreatedAt time.Time
 }
 
+type ChatChannelEvent struct {
+	ID            int64
+	ChannelID     int64
+	Kind          string
+	ActorID       sql.NullInt64
+	Payload       string
+	Signature     []byte
+	SignerSignKey []byte
+	CreatedAt     time.Time
+}
+
+type ChatChannelKey struct {
+	ChannelID int64
+	Version   int64
+	CreatedBy sql.NullInt64
+	CreatedAt time.Time
+}
+
 type ChatChannelMember struct {
 	ID        int64
 	ChannelID int64
 	UserID    sql.NullInt64
 	GroupID   sql.NullInt64
 	Level     string
+}
+
+type ChatKeyGrant struct {
+	ID             int64
+	ChannelID      int64
+	Version        int64
+	UserID         sql.NullInt64
+	SealedKey      []byte
+	GrantedBy      sql.NullInt64
+	GranterSignKey []byte
+	Signature      []byte
+	CreatedAt      time.Time
 }
 
 type ChatServer struct {
