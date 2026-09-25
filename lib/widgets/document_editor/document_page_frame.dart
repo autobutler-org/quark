@@ -16,8 +16,18 @@ DefaultStyles _quillStyles(ColorScheme cs) {
   final codeBg = cs.surfaceContainerHighest;
   final outline = cs.outline;
 
-  TextStyle base([double size = 14]) =>
-      TextStyle(color: fg, fontSize: size, height: 1.7);
+  // `leadingDistribution` is spelled out so every block agrees on where the
+  // extra 0.7 of line height goes. A list marker is a plain `Text`, which
+  // inherits `even` from the Material theme's typography, while the line
+  // beside it is a `RichText` that falls back to the engine's `proportional`.
+  // The two split the leading differently, which floated the marker a couple
+  // of pixels above the item text's baseline (#2432).
+  TextStyle base([double size = 14]) => TextStyle(
+    color: fg,
+    fontSize: size,
+    height: 1.7,
+    leadingDistribution: TextLeadingDistribution.proportional,
+  );
 
   return DefaultStyles(
     paragraph: DefaultTextBlockStyle(

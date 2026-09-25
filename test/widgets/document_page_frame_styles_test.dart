@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/document_editor/document_page_frame.dart';
@@ -97,6 +98,46 @@ void main() {
 
     expectMatchesBodyText(tester);
   });
+
+  /// Where [text]'s alphabetic baseline sits on screen.
+  double baselineOf(WidgetTester tester, String text) {
+    final paragraph = tester
+        .renderObjectList<RenderParagraph>(find.byType(RichText))
+        .firstWhere((p) => p.text.toPlainText() == text);
+    // The public getter only answers during the parent's layout.
+    // ignore: invalid_use_of_protected_member
+    final baseline = paragraph.computeDistanceToActualBaseline(
+      TextBaseline.alphabetic,
+    );
+    return paragraph.localToGlobal(Offset(0, baseline)).dy;
+  }
+
+  // flutter_quill draws a list marker as its own `Text` pinned to the top of
+  // the line. The `Text` picked up the theme's `even` leading distribution
+  // while the item's `RichText` used the engine's `proportional` one, so at
+  // the page's 1.7 line height the marker sat above the item text's baseline
+  // (#2432).
+  for (final (list, marker) in [('ordered', '1.'), ('bullet', '•')]) {
+    testWidgets('a $list marker sits on the item text baseline', (
+      tester,
+    ) async {
+      await pumpFrame(
+        tester,
+        Document.fromJson([
+          {'insert': 'item'},
+          {
+            'insert': '\n',
+            'attributes': {'list': list},
+          },
+        ]),
+      );
+
+      expect(
+        baselineOf(tester, marker),
+        moreOrLessEquals(baselineOf(tester, 'item'), epsilon: 0.5),
+      );
+    });
+  }
 
   // WCAG 2 contrast ratio; 4.5 is the AA floor for normal-size text.
   double contrast(Color a, Color b) {
