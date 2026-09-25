@@ -139,6 +139,42 @@ definitions:
       topic:
         type: string
     type: object
+  chatutil.Keys:
+    properties:
+      boxPublicKey:
+        items:
+          type: integer
+        type: array
+      createdAt:
+        type: string
+      kdfParams:
+        description: KdfParams is the client's JSON object recording the Argon2id
+          cost.
+        type: object
+      saltPw:
+        items:
+          type: integer
+        type: array
+      saltRp:
+        items:
+          type: integer
+        type: array
+      signPublicKey:
+        items:
+          type: integer
+        type: array
+      updatedAt:
+        type: string
+      wrappedByPassword:
+        items:
+          type: integer
+        type: array
+      wrappedByPhrase:
+        description: WrappedByPhrase and SaltRp are both present or both absent.
+        items:
+          type: integer
+        type: array
+    type: object
   chatutil.ListChannelsResult:
     properties:
       channels:
@@ -194,6 +230,19 @@ definitions:
         type: integer
       username:
         type: string
+    type: object
+  chatutil.PublicKeys:
+    properties:
+      boxPublicKey:
+        items:
+          type: integer
+        type: array
+      signPublicKey:
+        items:
+          type: integer
+        type: array
+      userId:
+        type: integer
     type: object
   grouputil.Group:
     properties:
@@ -603,6 +652,36 @@ definitions:
         type: string
       token:
         type: string
+    type: object
+  v0_auth.recoverAccountBody:
+    properties:
+      chatKeys:
+        allOf:
+        - $ref: '#/definitions/chatutil.Keys'
+        description: |-
+          ChatKeys is the account's chat identity re-wrapped under NewPassword,
+          stored in the same transaction as the reset (#2416). Absent leaves the
+          stored keys as they are.
+      newPassword:
+        type: string
+      recoveryPhrase:
+        type: string
+      username:
+        type: string
+    required:
+    - newPassword
+    - recoveryPhrase
+    - username
+    type: object
+  v0_auth.recoverChatKeysBody:
+    properties:
+      recoveryPhrase:
+        type: string
+      username:
+        type: string
+    required:
+    - recoveryPhrase
+    - username
     type: object
   v0_auth.requestAccountBody:
     properties:
@@ -2911,14 +2990,18 @@ paths:
     post:
       consumes:
       - application/json
-      description: Resets the named account's password using its recovery phrase
+      description: 'Resets the named account''s password using its recovery phrase.
+        chatKeys, when sent, replaces the account''s chat identity in the same transaction:
+        the client fetched it from /auth/recover/keys, opened it with the phrase and
+        re-wrapped it under the new password (#2416). The body is at most 8 KiB.'
       parameters:
-      - description: '{username, recoveryPhrase, newPassword}'
+      - description: The account, its recovery phrase, the new password and optionally
+          its re-wrapped chat keys
         in: body
         name: body
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/v0_auth.recoverAccountBody'
       produces:
       - application/json
       responses:
@@ -2935,6 +3018,53 @@ paths:
           schema:
             $ref: '#/definitions/v0_auth.accountRefusal'
       summary: Recover account
+      tags:
+      - auth
+  /auth/recover/keys:
+    post:
+      consumes:
+      - application/json
+      description: The first step of recovering an account that has chat keys (#2416).
+        Checks the recovery phrase exactly as /auth/recover does, changes nothing,
+        and returns the account's wrapped chat identity so the client can open it
+        with the phrase and send it back re-wrapped under the new password in /auth/recover.
+        Needs no session and shares the sign-in rate limit. An unknown username reads
+        as a wrong phrase.
+      parameters:
+      - description: The account and its recovery phrase
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_auth.recoverChatKeysBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/chatutil.Keys'
+        "400":
+          description: a wrong phrase or unknown username
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: status is pending or disabled
+          schema:
+            $ref: '#/definitions/v0_auth.accountRefusal'
+        "404":
+          description: the account has no chat keys yet
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Fetch chat keys for account recovery
       tags:
       - auth
   /auth/request-account:
@@ -3441,6 +3571,111 @@ paths:
       security:
       - BearerAuth: []
       summary: Add a chat channel member or change its level
+      tags:
+      - chat
+  /chat/keys/{userId}:
+    get:
+      description: Returns an active account's X25519 box and Ed25519 signing public
+        keys, base64, and never its wrapped private seeds. Any signed-in account may
+        ask. 404 means the account doesn't exist, isn't active, or has no chat keys
+        yet.
+      parameters:
+      - description: Account id
+        in: path
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/chatutil.PublicKeys'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: no such active account, or it has no chat keys yet
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Get an account's public chat keys
+      tags:
+      - chat
+  /chat/keys/me:
+    get:
+      description: Returns the caller's chat public keys and the private seeds wrapped
+        on the client under the login password and, when present, the recovery phrase.
+        Byte fields are base64. The Quark never opens them. 404 means the caller has
+        no chat keys yet and the client should generate them.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/chatutil.Keys'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: the caller has no chat keys yet
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Get the caller's chat identity
+      tags:
+      - chat
+    put:
+      consumes:
+      - application/json
+      description: Stores the caller's chat public keys (32 bytes each) and private
+        seeds wrapped on the client (at most 512 bytes each), with 16-byte Argon2id
+        salts and the client's kdfParams object. wrappedByPhrase and saltRp are both
+        present or both absent. Byte fields are base64 and the body is at most 8 KiB.
+        Replaces any keys the caller had.
+      parameters:
+      - description: The caller's chat identity; createdAt and updatedAt are ignored
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/chatutil.Keys'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/chatutil.Keys'
+        "400":
+          description: keys of the wrong size or shape, or a body over 8 KiB
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Create or replace the caller's chat identity
       tags:
       - chat
   /devices:

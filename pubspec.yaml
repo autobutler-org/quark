@@ -86,6 +86,7 @@ dependencies:
   # and `make test/probe`. Kept as a regular dependency so lib/ can import it;
   # the dart-define + tree-shaking keep it inactive in normal/release builds.
   flutter_probe_agent: ^0.14.0
+  sodium: ^4.1.1+1
 
 # Patched desktop_drop: upstream's web handler calls webkitGetAsEntry()! on every
 # item in a drag, but that returns null for the string items a drag carries

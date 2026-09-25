@@ -74,6 +74,9 @@ var (
 	ErrAccessRequestsOff = errors.New("this Quark isn't taking account requests right now")
 	// ErrPasswordTooShort refuses a password under eight characters.
 	ErrPasswordTooShort = errors.New("password must be at least 8 characters")
+	// ErrInvalidRecoveryPhrase refuses a recovery phrase that isn't the named
+	// account's, or a username that doesn't exist.
+	ErrInvalidRecoveryPhrase = errors.New("invalid recovery phrase")
 	// ErrSelfAction refuses an admin action aimed at the admin's own account.
 	ErrSelfAction = errors.New("use Settings to change your own account")
 	// ErrIncorrectPassword refuses a destructive action whose password is not
@@ -230,6 +233,11 @@ type RecoverParams struct {
 	Username       string
 	RecoveryPhrase string
 	NewPassword    string
+	// AfterReset, when set, runs in the transaction that resets the password,
+	// with that transaction's queries and the account's id. An error rolls the
+	// reset back. Chat uses it to store keys re-wrapped under the new password
+	// (#2416), which authutil knows nothing about.
+	AfterReset func(queries *db.Queries, userID int64) error
 }
 
 // SessionInfo is a safe, token-free representation of an active session
@@ -744,26 +752,34 @@ func Logout(ctx context.Context, queries *db.Queries, token string) error {
 	return queries.DeleteSession(ctx, hashToken(token))
 }
 
-// Recover resets a user's password using their recovery phrase.
-func Recover(ctx context.Context, queries *db.Queries, params RecoverParams) (*LoginResult, error) {
+// CheckRecoveryPhrase returns the id of the account the phrase belongs to.
+// An unknown username gets the same error as a wrong phrase, so a caller
+// can't learn which usernames exist; a pending or disabled account is refused
+// after the phrase, for the same reason Login checks status after the
+// password.
+func CheckRecoveryPhrase(ctx context.Context, queries *db.Queries, username, phrase string) (int64, error) {
+	user, err := queries.GetUserByUsername(ctx, username)
+	if err != nil {
+		return 0, ErrInvalidRecoveryPhrase
+	}
+	if !CheckPassword(NormalizeRecoveryPhrase(phrase), user.RecoveryPhraseHash) {
+		return 0, ErrInvalidRecoveryPhrase
+	}
+	if err := statusError(user.Status); err != nil {
+		return 0, err
+	}
+	return user.ID, nil
+}
+
+// Recover resets a user's password using their recovery phrase. The new
+// password, the ended sessions, the new session and params.AfterReset commit
+// together or not at all.
+func Recover(ctx context.Context, database *db.DatabaseSqlc, params RecoverParams) (*LoginResult, error) {
 	if len(params.NewPassword) < 8 {
 		return nil, ErrPasswordTooShort
 	}
-
-	// An unknown username gets the same error as a wrong phrase, so the
-	// endpoint does not reveal which usernames exist.
-	user, err := queries.GetUserByUsername(ctx, params.Username)
+	userID, err := CheckRecoveryPhrase(ctx, database.Queries, params.Username, params.RecoveryPhrase)
 	if err != nil {
-		return nil, fmt.Errorf("invalid recovery phrase")
-	}
-
-	normalized := NormalizeRecoveryPhrase(params.RecoveryPhrase)
-	if !CheckPassword(normalized, user.RecoveryPhraseHash) {
-		return nil, fmt.Errorf("invalid recovery phrase")
-	}
-	// After the phrase, for the same reason Login checks status after the
-	// password.
-	if err := statusError(user.Status); err != nil {
 		return nil, err
 	}
 
@@ -772,23 +788,29 @@ func Recover(ctx context.Context, queries *db.Queries, params RecoverParams) (*L
 		return nil, err
 	}
 
-	if err := queries.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
-		ID:           user.ID,
-		PasswordHash: newHash,
-	}); err != nil {
-		return nil, fmt.Errorf("failed to update password: %w", err)
-	}
-
-	// Invalidate all existing sessions for this user
-	if err := queries.DeleteUserSessions(ctx, user.ID); err != nil {
-		return nil, fmt.Errorf("failed to invalidate sessions: %w", err)
-	}
-
-	token, err := newSession(ctx, queries, user.ID)
+	var token string
+	err = inTx(ctx, database, func(q *db.Queries) error {
+		if err := q.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+			ID:           userID,
+			PasswordHash: newHash,
+		}); err != nil {
+			return fmt.Errorf("failed to update password: %w", err)
+		}
+		// Invalidate all existing sessions for this user
+		if err := q.DeleteUserSessions(ctx, userID); err != nil {
+			return fmt.Errorf("failed to invalidate sessions: %w", err)
+		}
+		if params.AfterReset != nil {
+			if err := params.AfterReset(q, userID); err != nil {
+				return err
+			}
+		}
+		token, err = newSession(ctx, q, userID)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
-
 	return &LoginResult{SessionToken: token}, nil
 }
 
@@ -1010,6 +1032,9 @@ func DeleteUser(ctx context.Context, params DeleteUserParams) (DeleteUserResult,
 
 		if err := q.DeleteUserSessions(ctx, target.ID); err != nil {
 			return fmt.Errorf("end sessions: %w", err)
+		}
+		if err := q.DeleteUserChatKeys(ctx, target.ID); err != nil {
+			return fmt.Errorf("delete chat keys: %w", err)
 		}
 		if err := q.DeleteUser(ctx, target.ID); err != nil {
 			return fmt.Errorf("delete %q: %w", params.Username, err)

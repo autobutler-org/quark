@@ -20,7 +20,9 @@ package chatutil
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -502,4 +504,158 @@ func ResolveMemberUsers(params ResolveMemberUsersParams) (ResolveMemberUsersResu
 		users = append(users, ResolvedUser{UserID: row.ID, Username: row.Username, Level: accessutil.Level(row.LevelRank)})
 	}
 	return ResolveMemberUsersResult{Users: users}, nil
+}
+
+// Sizes a stored chat identity must have (#2416). The public keys are X25519
+// and Ed25519, and the salts are libsodium's crypto_pwhash_SALTBYTES. A
+// wrapped key is nonce, ciphertext and tag, which the Quark can't open, so it
+// is only bounded.
+const (
+	PublicKeyBytes      = 32
+	SaltBytes           = 16
+	MaxWrappedKeyBytes  = 512
+	MaxKdfParamsBytes   = 512
+	MaxKeysRequestBytes = 8 << 10
+)
+
+var (
+	// ErrKeysNotFound reports an account with no chat identity yet, or asking
+	// for the public keys of an account that doesn't exist or isn't active.
+	ErrKeysNotFound = errors.New("no chat keys for that account")
+	// ErrInvalidKeys reports keys of the wrong size or shape.
+	ErrInvalidKeys = errors.New("chat keys have the wrong size or shape")
+)
+
+// Keys is an account's stored chat identity: its public keys, and its private
+// seeds wrapped on the client under the login password and, optionally, the
+// recovery phrase. The Quark stores the bytes and never opens them. Byte
+// fields travel as base64.
+type Keys struct {
+	BoxPublicKey      []byte `json:"boxPublicKey"`
+	SignPublicKey     []byte `json:"signPublicKey"`
+	WrappedByPassword []byte `json:"wrappedByPassword"`
+	SaltPw            []byte `json:"saltPw"`
+	// WrappedByPhrase and SaltRp are both present or both absent.
+	WrappedByPhrase []byte `json:"wrappedByPhrase,omitempty"`
+	SaltRp          []byte `json:"saltRp,omitempty"`
+	// KdfParams is the client's JSON object recording the Argon2id cost.
+	KdfParams json.RawMessage `json:"kdfParams" swaggertype:"object"`
+	CreatedAt time.Time       `json:"createdAt"`
+	UpdatedAt time.Time       `json:"updatedAt"`
+}
+
+// PublicKeys is the half of an account's chat identity anyone signed in may
+// read.
+type PublicKeys struct {
+	UserID        int64  `json:"userId"`
+	BoxPublicKey  []byte `json:"boxPublicKey"`
+	SignPublicKey []byte `json:"signPublicKey"`
+}
+
+// ValidateKeys checks the sizes and shape of keys a client sent, so a
+// malformed upload is refused before anything is stored.
+func ValidateKeys(keys Keys) error {
+	wrapped := func(b []byte) bool { return len(b) > 0 && len(b) <= MaxWrappedKeyBytes }
+	var params map[string]any
+	switch {
+	case len(keys.BoxPublicKey) != PublicKeyBytes, len(keys.SignPublicKey) != PublicKeyBytes,
+		!wrapped(keys.WrappedByPassword), len(keys.SaltPw) != SaltBytes,
+		(keys.WrappedByPhrase == nil) != (keys.SaltRp == nil),
+		keys.WrappedByPhrase != nil && (!wrapped(keys.WrappedByPhrase) || len(keys.SaltRp) != SaltBytes),
+		len(keys.KdfParams) > MaxKdfParamsBytes, json.Unmarshal(keys.KdfParams, &params) != nil, params == nil:
+		return ErrInvalidKeys
+	}
+	return nil
+}
+
+// GetKeysParams asks for an account's own stored chat identity.
+type GetKeysParams struct {
+	Ctx     context.Context
+	Queries *db.Queries
+	UserID  int64
+}
+
+// GetKeysResult is the account's stored chat identity.
+type GetKeysResult struct {
+	Keys Keys
+}
+
+// GetKeys returns an account's own chat identity, wrapped seeds included, or
+// ErrKeysNotFound. Serve it only to that account.
+func GetKeys(params GetKeysParams) (GetKeysResult, error) {
+	row, err := params.Queries.GetUserChatKeys(params.Ctx, params.UserID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return GetKeysResult{}, ErrKeysNotFound
+	}
+	if err != nil {
+		return GetKeysResult{}, err
+	}
+	return GetKeysResult{Keys: keysFromRow(row)}, nil
+}
+
+// PutKeysParams creates or replaces an account's chat identity. Queries may
+// be a transaction's, so account recovery can store re-wrapped keys in the
+// same transaction that resets the password.
+type PutKeysParams struct {
+	Ctx     context.Context
+	Queries *db.Queries
+	UserID  int64
+	Keys    Keys
+}
+
+// PutKeysResult is the identity as stored.
+type PutKeysResult struct {
+	Keys Keys
+}
+
+// PutKeys validates and stores an account's chat identity, replacing any it
+// had.
+func PutKeys(params PutKeysParams) (PutKeysResult, error) {
+	if err := ValidateKeys(params.Keys); err != nil {
+		return PutKeysResult{}, err
+	}
+	k := params.Keys
+	row, err := params.Queries.UpsertUserChatKeys(params.Ctx, db.UpsertUserChatKeysParams{
+		UserID:            params.UserID,
+		BoxPublicKey:      k.BoxPublicKey,
+		SignPublicKey:     k.SignPublicKey,
+		WrappedByPassword: k.WrappedByPassword,
+		SaltPw:            k.SaltPw,
+		WrappedByPhrase:   k.WrappedByPhrase,
+		SaltRp:            k.SaltRp,
+		KdfParams:         string(k.KdfParams),
+	})
+	if err != nil {
+		return PutKeysResult{}, fmt.Errorf("store chat keys: %w", err)
+	}
+	return PutKeysResult{Keys: keysFromRow(row)}, nil
+}
+
+// GetPublicKeysParams asks for another account's public chat keys.
+type GetPublicKeysParams struct {
+	Ctx     context.Context
+	Queries *db.Queries
+	UserID  int64
+}
+
+// GetPublicKeysResult is the account's public chat keys.
+type GetPublicKeysResult struct {
+	PublicKeys PublicKeys
+}
+
+// GetPublicKeys returns an active account's public chat keys, and never its
+// wrapped seeds, or ErrKeysNotFound.
+func GetPublicKeys(params GetPublicKeysParams) (GetPublicKeysResult, error) {
+	row, err := params.Queries.GetUserChatPublicKeys(params.Ctx, params.UserID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return GetPublicKeysResult{}, ErrKeysNotFound
+	}
+	if err != nil {
+		return GetPublicKeysResult{}, err
+	}
+	return GetPublicKeysResult{PublicKeys: PublicKeys{
+		UserID:        row.UserID,
+		BoxPublicKey:  row.BoxPublicKey,
+		SignPublicKey: row.SignPublicKey,
+	}}, nil
 }

@@ -95,7 +95,7 @@ func TestCreateUser_PhraseOnFirstLoginOnly(t *testing.T) {
 		t.Errorf("FolderPath = %q, want users/bob", result.FolderPath)
 	}
 
-	_, recoverErr := authutil.Recover(ctx, q, authutil.RecoverParams{Username: "bob", RecoveryPhrase: "", NewPassword: "another-password"})
+	_, recoverErr := authutil.Recover(ctx, f.database, authutil.RecoverParams{Username: "bob", RecoveryPhrase: "", NewPassword: "another-password"})
 	if recoverErr == nil || recoverErr.Error() != "invalid recovery phrase" {
 		t.Errorf("recover before first sign-in = %v, want invalid recovery phrase", recoverErr)
 	}
@@ -114,7 +114,7 @@ func TestCreateUser_PhraseOnFirstLoginOnly(t *testing.T) {
 	if second.RecoveryPhrase != "" {
 		t.Error("second login returned a recovery phrase again")
 	}
-	if _, err := authutil.Recover(ctx, q, authutil.RecoverParams{Username: "bob", RecoveryPhrase: first.RecoveryPhrase, NewPassword: "another-password"}); err != nil {
+	if _, err := authutil.Recover(ctx, f.database, authutil.RecoverParams{Username: "bob", RecoveryPhrase: first.RecoveryPhrase, NewPassword: "another-password"}); err != nil {
 		t.Errorf("recover with the first login's phrase: %v", err)
 	}
 

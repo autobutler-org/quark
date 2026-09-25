@@ -164,6 +164,19 @@ type User struct {
 	Status             string
 }
 
+type UserChatKey struct {
+	UserID            int64
+	BoxPublicKey      []byte
+	SignPublicKey     []byte
+	WrappedByPassword []byte
+	SaltPw            []byte
+	WrappedByPhrase   []byte
+	SaltRp            []byte
+	KdfParams         string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
 type VaultConfig struct {
 	ID                int64
 	Salt              []byte

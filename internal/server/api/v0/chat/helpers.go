@@ -26,6 +26,16 @@ func requestContext(c *gin.Context) (deputil.Dependencies, accessutil.Principal,
 	return deps, principal, nil
 }
 
+// callerContext is requestContext for a route that acts on the caller's own
+// account, which needs one.
+func callerContext(c *gin.Context) (deputil.Dependencies, accessutil.Principal, *serverutil.Response) {
+	deps, principal, failed := requestContext(c)
+	if failed == nil && principal.UserID == 0 {
+		failed = serverutil.Unauthorized(errors.New("not authenticated"))
+	}
+	return deps, principal, failed
+}
+
 // channelID reads the :id path parameter. One that isn't a positive integer
 // names no channel.
 func channelID(c *gin.Context) (int64, *serverutil.Response) {
@@ -41,7 +51,7 @@ func channelID(c *gin.Context) (int64, *serverutil.Response) {
 func chatError(err error) *serverutil.Response {
 	switch {
 	case errors.Is(err, chatutil.ErrChannelNotFound), errors.Is(err, chatutil.ErrMemberNotFound),
-		errors.Is(err, accessutil.ErrPrincipalNotFound):
+		errors.Is(err, accessutil.ErrPrincipalNotFound), errors.Is(err, chatutil.ErrKeysNotFound):
 		return serverutil.NotFound(err)
 	case errors.Is(err, chatutil.ErrForbidden):
 		return serverutil.Forbidden(err)
@@ -49,7 +59,8 @@ func chatError(err error) *serverutil.Response {
 		return serverutil.Conflict(err)
 	case errors.Is(err, chatutil.ErrInvalidName), errors.Is(err, chatutil.ErrInvalidTopic),
 		errors.Is(err, chatutil.ErrDefaultChannel), errors.Is(err, chatutil.ErrDefaultEveryone),
-		errors.Is(err, accessutil.ErrGrantTarget), errors.Is(err, accessutil.ErrInvalidLevel):
+		errors.Is(err, accessutil.ErrGrantTarget), errors.Is(err, accessutil.ErrInvalidLevel),
+		errors.Is(err, chatutil.ErrInvalidKeys):
 		return serverutil.BadRequest(err)
 	default:
 		return serverutil.InternalServerError(err)

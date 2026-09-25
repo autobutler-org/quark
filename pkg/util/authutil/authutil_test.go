@@ -283,7 +283,7 @@ func TestRecover_Success(t *testing.T) {
 		Password: "originalpass",
 	})
 
-	result, err := authutil.Recover(context.Background(), queries, authutil.RecoverParams{
+	result, err := authutil.Recover(context.Background(), database, authutil.RecoverParams{
 		Username:       "admin",
 		RecoveryPhrase: setupResult.RecoveryPhrase,
 		NewPassword:    "newpassword123",
@@ -322,13 +322,12 @@ func TestRecover_Success(t *testing.T) {
 
 func TestRecover_WrongPhrase(t *testing.T) {
 	database := newTestDB(t)
-	queries := database.Queries
 	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "mypassword",
 	})
 
-	_, err := authutil.Recover(context.Background(), queries, authutil.RecoverParams{
+	_, err := authutil.Recover(context.Background(), database, authutil.RecoverParams{
 		Username:       "admin",
 		RecoveryPhrase: "wrong-phrase-that-does-not-match-anything",
 		NewPassword:    "newpassword123",
@@ -372,7 +371,7 @@ func TestRecover_NamedAccount(t *testing.T) {
 	const bobPhrase = "apple-bread-cloud-delta-eagle-flame"
 	createUserWithPhrase(t, queries, "bob", "bob-password", bobPhrase)
 
-	if _, err := authutil.Recover(ctx, queries, authutil.RecoverParams{
+	if _, err := authutil.Recover(ctx, database, authutil.RecoverParams{
 		Username:       "bob",
 		RecoveryPhrase: bobPhrase,
 		NewPassword:    "bob-new-password",
@@ -387,7 +386,7 @@ func TestRecover_NamedAccount(t *testing.T) {
 	}
 
 	// The founder's phrase does not recover bob.
-	if _, err := authutil.Recover(ctx, queries, authutil.RecoverParams{
+	if _, err := authutil.Recover(ctx, database, authutil.RecoverParams{
 		Username:       "bob",
 		RecoveryPhrase: founder.RecoveryPhrase,
 		NewPassword:    "hijacked123",
@@ -400,19 +399,18 @@ func TestRecover_NamedAccount(t *testing.T) {
 // revealing which usernames exist.
 func TestRecover_UnknownUserLooksLikeWrongPhrase(t *testing.T) {
 	database := newTestDB(t)
-	queries := database.Queries
 	ctx := context.Background()
 	founder, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, unknownErr := authutil.Recover(ctx, queries, authutil.RecoverParams{
+	_, unknownErr := authutil.Recover(ctx, database, authutil.RecoverParams{
 		Username:       "nobody",
 		RecoveryPhrase: founder.RecoveryPhrase,
 		NewPassword:    "newpassword123",
 	})
-	_, wrongErr := authutil.Recover(ctx, queries, authutil.RecoverParams{
+	_, wrongErr := authutil.Recover(ctx, database, authutil.RecoverParams{
 		Username:       "admin",
 		RecoveryPhrase: "wrong-phrase-that-does-not-match-anything",
 		NewPassword:    "newpassword123",
@@ -472,7 +470,6 @@ func TestValidateBasicAuth_WrongUsername(t *testing.T) {
 
 func TestRecover_CaseInsensitive(t *testing.T) {
 	database := newTestDB(t)
-	queries := database.Queries
 	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
 		Password: "mypassword",
@@ -480,7 +477,7 @@ func TestRecover_CaseInsensitive(t *testing.T) {
 
 	// Recovery phrase should work regardless of case
 	upperPhrase := strings.ToUpper(setupResult.RecoveryPhrase)
-	_, err := authutil.Recover(context.Background(), queries, authutil.RecoverParams{
+	_, err := authutil.Recover(context.Background(), database, authutil.RecoverParams{
 		Username:       "admin",
 		RecoveryPhrase: upperPhrase,
 		NewPassword:    "newpassword123",
