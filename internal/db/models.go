@@ -9,6 +9,31 @@ import (
 	"time"
 )
 
+type ChatChannel struct {
+	ID        int64
+	ServerID  int64
+	Kind      string
+	Name      string
+	Topic     string
+	IsDefault int64
+	CreatedBy sql.NullInt64
+	CreatedAt time.Time
+}
+
+type ChatChannelMember struct {
+	ID        int64
+	ChannelID int64
+	UserID    sql.NullInt64
+	GroupID   sql.NullInt64
+	Level     string
+}
+
+type ChatServer struct {
+	ID        int64
+	Name      string
+	CreatedAt time.Time
+}
+
 type ConnectedDevice struct {
 	ID           int64
 	IpAddress    string

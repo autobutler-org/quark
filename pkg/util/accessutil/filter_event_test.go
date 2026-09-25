@@ -1,6 +1,7 @@
 package accessutil_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
@@ -74,5 +75,46 @@ func TestFilterEvent(t *testing.T) {
 				t.Errorf("FilterEvent = %+v (deliver %v), want %+v (deliver %v)", got.Event, got.Deliver, want, deliver)
 			}
 		})
+	}
+}
+
+// TestFilterEventChatChannelChanged passes chat_channel_changed only to its
+// audience and to admins, and never sends the audience itself.
+func TestFilterEventChatChannelChanged(t *testing.T) {
+	f := newFixture(t)
+	carol := createUser(t, f.database, "carol")
+	member := f.load(t, accessutil.Principal{UserID: f.userID})
+	stranger := f.load(t, accessutil.Principal{UserID: carol})
+	admin := f.load(t, accessutil.Principal{UserID: createUser(t, f.database, "root"), IsAdmin: true})
+	evt := eventbus.Event{
+		Kind: eventbus.EventChatChannelChanged,
+		Data: eventbus.ChatChannelChanged{ChannelID: 7, Audience: []int64{f.userID}},
+	}
+
+	for _, tc := range []struct {
+		name   string
+		access accessutil.Access
+		event  eventbus.Event
+		want   bool
+	}{
+		{name: "member", access: member, event: evt, want: true},
+		{name: "admin", access: admin, event: evt, want: true},
+		{name: "non-member", access: stranger, event: evt},
+		{name: "no data", access: member, event: eventbus.Event{Kind: eventbus.EventChatChannelChanged}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := accessutil.FilterEvent(accessutil.FilterEventParams{Access: tc.access, Event: tc.event})
+			if got.Deliver != tc.want {
+				t.Errorf("Deliver = %v, want %v", got.Deliver, tc.want)
+			}
+		})
+	}
+
+	body, err := json.Marshal(evt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"kind":"chat_channel_changed","data":{"channelId":7}}`; string(body) != want {
+		t.Errorf("event JSON = %s, want %s", body, want)
 	}
 }
