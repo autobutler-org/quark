@@ -94,13 +94,13 @@ func TestGetAuthStatus_ReportsCaller(t *testing.T) {
 		prepare func(*http.Request)
 		want    map[string]any
 	}{
-		{"anonymous", func(*http.Request) {}, map[string]any{"setup": true, "accessRequestsEnabled": true}},
-		{"invalid token", bearer("not-a-session"), map[string]any{"setup": true, "accessRequestsEnabled": true}},
-		{"admin", bearer(founder.SessionToken), map[string]any{"setup": true, "accessRequestsEnabled": true, "username": "admin", "userId": founderID, "isAdmin": true}},
-		{"non-admin", bearer(bob.SessionToken), map[string]any{"setup": true, "accessRequestsEnabled": true, "username": "bob", "userId": bobID, "isAdmin": false, "avatarUpdatedAt": bobAvatar}},
+		{"anonymous", func(*http.Request) {}, map[string]any{"setup": true, "accessRequestsEnabled": true, "chatEnabled": true}},
+		{"invalid token", bearer("not-a-session"), map[string]any{"setup": true, "accessRequestsEnabled": true, "chatEnabled": true}},
+		{"admin", bearer(founder.SessionToken), map[string]any{"setup": true, "accessRequestsEnabled": true, "chatEnabled": true, "username": "admin", "userId": founderID, "isAdmin": true}},
+		{"non-admin", bearer(bob.SessionToken), map[string]any{"setup": true, "accessRequestsEnabled": true, "chatEnabled": true, "username": "bob", "userId": bobID, "isAdmin": false, "avatarUpdatedAt": bobAvatar}},
 		{"session cookie", func(r *http.Request) {
 			r.AddCookie(&http.Cookie{Name: "session", Value: bob.SessionToken})
-		}, map[string]any{"setup": true, "accessRequestsEnabled": true, "username": "bob", "userId": bobID, "isAdmin": false, "avatarUpdatedAt": bobAvatar}},
+		}, map[string]any{"setup": true, "accessRequestsEnabled": true, "chatEnabled": true, "username": "bob", "userId": bobID, "isAdmin": false, "avatarUpdatedAt": bobAvatar}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

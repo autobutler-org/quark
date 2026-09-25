@@ -50,7 +50,6 @@ func setupRouters(engine *gin.Engine, systemCollector *healthutil.Collector, dep
 		v0_access.NewRouter(),
 		v0_auth.NewRouter(),
 		v0_books.NewRouter(),
-		v0_chat.NewRouter(),
 		v0_files.NewRouter(),
 		v0_devices.NewRouter(),
 		v0_events.NewRouter(),
@@ -70,6 +69,10 @@ func setupRouters(engine *gin.Engine, systemCollector *healthutil.Collector, dep
 	for _, r := range apiRouters {
 		serverutil.RegisterRouterWithGroup(group, r)
 	}
+
+	// The chat beta, which an admin can turn off (#2421).
+	chatGroup := group.Group("", middleware.RequireChatEnabled())
+	serverutil.RegisterRouterWithGroup(chatGroup, v0_chat.NewRouter())
 
 	// Admin-only routes — wrapped with RequireAdmin middleware.
 	adminGroup := group.Group("", middleware.RequireAdmin(deps))

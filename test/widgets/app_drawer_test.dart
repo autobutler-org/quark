@@ -30,7 +30,10 @@ void main() {
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
   setUp(() => settings.isAdmin.value = false);
-  tearDown(() => settings.isAdmin.value = false);
+  tearDown(() {
+    settings.isAdmin.value = false;
+    settings.chatEnabled.value = false;
+  });
 
   Widget page(String name, QuarkDrawerSection section) => Scaffold(
     key: name == 'files' ? scaffoldKey : null,
@@ -98,6 +101,22 @@ void main() {
       find.byKey(const ValueKey('drawer_files')),
     );
     expect(files.selected, isTrue);
+  });
+
+  testWidgets('offers Chat, marked beta, only while the beta is on', (
+    tester,
+  ) async {
+    await pumpDrawer(tester);
+    expect(find.byKey(const ValueKey('drawer_chat')), findsNothing);
+
+    settings.chatEnabled.value = true;
+    await tester.pump();
+    expect(find.byKey(const ValueKey('drawer_chat')), findsOneWidget);
+    expect(find.byType(QuarkBetaBadge), findsOneWidget);
+
+    settings.chatEnabled.value = false;
+    await tester.pump();
+    expect(find.byKey(const ValueKey('drawer_chat')), findsNothing);
   });
 
   testWidgets('keeps admin-only pages out of a non-admin drawer', (

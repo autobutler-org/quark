@@ -35,6 +35,10 @@ class AuthStatus {
   /// False before setup, and when the Quark does not say.
   final bool accessRequestsEnabled;
 
+  /// Whether an admin has left the chat beta on (#2421). False before setup,
+  /// and when the Quark does not say, which a Quark without chat never does.
+  final bool chatEnabled;
+
   const AuthStatus({
     required this.setupComplete,
     this.username,
@@ -42,6 +46,7 @@ class AuthStatus {
     this.userId,
     this.avatarUpdatedAt,
     this.accessRequestsEnabled = false,
+    this.chatEnabled = false,
   });
 }
 
@@ -240,12 +245,14 @@ class AuthService {
       userId: (body['userId'] as num?)?.toInt(),
       avatarUpdatedAt: (body['avatarUpdatedAt'] as num?)?.toInt(),
       accessRequestsEnabled: body['accessRequestsEnabled'] as bool? ?? false,
+      chatEnabled: body['chatEnabled'] as bool? ?? false,
     );
   }
 
   /// Fetches the signed-in user's admin flag again into [AppSettings.isAdmin],
-  /// and their id and picture version into [AppSettings.userId] and
-  /// [AppSettings.avatarUpdatedAt].
+  /// their id and picture version into [AppSettings.userId] and
+  /// [AppSettings.avatarUpdatedAt], and whether chat is on into
+  /// [AppSettings.chatEnabled].
   ///
   /// Without a session there is no admin and no account. A failed call keeps the last known
   /// value: it only decides what the app shows, and the Quark still refuses
@@ -256,6 +263,7 @@ class AuthService {
       settings.isAdmin.value = false;
       settings.userId.value = null;
       settings.avatarUpdatedAt.value = null;
+      settings.chatEnabled.value = false;
       return;
     }
     try {
@@ -263,6 +271,7 @@ class AuthService {
       settings.isAdmin.value = status.isAdmin;
       settings.userId.value = status.userId;
       settings.avatarUpdatedAt.value = status.avatarUpdatedAt;
+      settings.chatEnabled.value = status.chatEnabled;
       if (status.username != null) {
         await settings.setUsername(status.username);
       }

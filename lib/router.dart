@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/models/trash_item.dart';
 import 'package:quark/pages/account_and_data_page.dart';
+import 'package:quark/pages/chat_page.dart';
 import 'package:quark/pages/docs_page.dart';
 import 'package:quark/pages/document_editor_page.dart';
 import 'package:quark/pages/file_browser_page.dart';
@@ -47,6 +49,16 @@ class AppRoutes {
   /// The query parameter naming the album the Photos page shows.
   static const photosAlbumParam = 'album';
   static const trash = '/trash';
+
+  /// The chat beta (#2421). This bare path redirects to the default channel,
+  /// [chatChannel] of `general`.
+  static const chat = '/chat';
+
+  /// One chat channel by id, e.g. chatChannel('12') → '/chat/12'. `general`
+  /// names the default channel; an id the account can't open falls back to
+  /// it rather than to an error page.
+  static String chatChannel(String channelId) =>
+      '$chat/${Uri.encodeComponent(channelId)}';
   static const docs = '/docs';
   static const sheets = '/sheets';
   static const vault = '/vault';
@@ -343,6 +355,8 @@ final Listenable routerRefreshListenable = Listenable.merge([
   // An admin demoted while on an admin-only page is moved off it: the flag
   // changing re-runs the gate, which asks the Quark again (#1928).
   AppSettings.instance.isAdmin,
+  // The chat beta turned off moves anyone on /chat to Files (#2421).
+  AppSettings.instance.chatEnabled,
 ]);
 
 /// Every route in the app. It opens on the login page, and [authRedirect] sends a visitor who is signed out, or
@@ -435,6 +449,21 @@ final router = GoRouter(
           ),
         ),
       ],
+    ),
+    GoRoute(
+      path: AppRoutes.chat,
+      redirect: (_, state) => state.uri
+          .replace(
+            path: AppRoutes.chatChannel(ChatController.defaultChannelSlug),
+          )
+          .toString(),
+    ),
+    GoRoute(
+      // One route for every channel, so switching channels hands the new id
+      // to the page already on screen rather than building it again.
+      path: '${AppRoutes.chat}/:channelId',
+      builder: (context, state) =>
+          ChatPage(channelId: state.pathParameters['channelId']!),
     ),
     GoRoute(
       path: AppRoutes.docs,
@@ -585,6 +614,15 @@ const adminRoutes = {AppRoutes.vault, AppRoutes.users};
 bool _isUnderAny(Set<String> routes, String location) =>
     routes.any((route) => location == route || location.startsWith('$route/'));
 
+/// Whether the Quark says the chat beta is on. False when it cannot say.
+Future<bool> _chatIsEnabled() async {
+  try {
+    return (await authStatusProbe()).chatEnabled;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// Whether the Quark says the signed-in caller is an admin. False when it
 /// cannot say.
 Future<bool> _callerIsAdmin() async {
@@ -654,6 +692,14 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
   if (AppSettings.instance.sessionToken != null &&
       _isUnderAny(adminRoutes, location)) {
     return await _callerIsAdmin() ? null : AppRoutes.files;
+  }
+
+  // The chat beta, which an admin can turn off (#2421). Asked of the Quark
+  // like the admin pages above: a link or a reload must not open a page
+  // whose every request would 404.
+  if (AppSettings.instance.sessionToken != null &&
+      _isUnderAny(const {AppRoutes.chat}, location)) {
+    return await _chatIsEnabled() ? null : AppRoutes.files;
   }
 
   // Already authenticated.

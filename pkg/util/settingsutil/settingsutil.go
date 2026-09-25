@@ -33,6 +33,9 @@ type Settings struct {
 	// sign-in page (#1908). Nil means on: requests start on, and a file written
 	// before the setting existed carries no value.
 	AccessRequestsEnabled *bool `json:"accessRequestsEnabled,omitempty"`
+	// ChatEnabled is whether the chat beta is on (#2421). Nil means on, like
+	// AccessRequestsEnabled. Off hides chat; nothing stored is deleted.
+	ChatEnabled *bool `json:"chatEnabled,omitempty"`
 }
 
 var (
@@ -207,6 +210,33 @@ func SetAccessRequestsEnabled(enabled bool) error {
 		s = loaded
 	}
 	s.AccessRequestsEnabled = &enabled
+	return Save(s)
+}
+
+// GetChatEnabled returns whether the chat beta is on. An unset value is on;
+// settings that cannot be read are off, as for GetAccessRequestsEnabled.
+func GetChatEnabled() bool {
+	s, err := Load()
+	if err != nil {
+		return false
+	}
+	return s.ChatEnabled == nil || *s.ChatEnabled
+}
+
+// SetChatEnabled turns the chat beta on or off and persists it.
+func SetChatEnabled(enabled bool) error {
+	mu.Lock()
+	s := cached
+	mu.Unlock()
+
+	if s == nil {
+		loaded, err := Load()
+		if err != nil {
+			loaded = &Settings{}
+		}
+		s = loaded
+	}
+	s.ChatEnabled = &enabled
 	return Save(s)
 }
 

@@ -2397,7 +2397,7 @@ const docTemplate = `{
         },
         "/auth/status": {
             "get": {
-                "description": "Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username, userId and isAdmin flag, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.",
+                "description": "Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account, and chatEnabled: whether the chat beta is on. For a caller with a valid session it also returns that caller's username, userId and isAdmin flag, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.",
                 "produces": [
                     "application/json"
                 ],
@@ -5893,6 +5893,69 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/v0_settings.accessRequestsSetting"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/chat": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sets whether chat is available. Chat is on until an admin turns it off; while off every /chat route answers 404, and nothing stored is deleted. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Turn the chat beta on or off",
+                "parameters": [
+                    {
+                        "description": "Whether chat is on",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.chatSetting"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.chatSetting"
                         }
                     },
                     "400": {
@@ -10697,6 +10760,17 @@ const docTemplate = `{
             }
         },
         "v0_settings.accessRequestsSetting": {
+            "type": "object",
+            "required": [
+                "enabled"
+            ],
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "v0_settings.chatSetting": {
             "type": "object",
             "required": [
                 "enabled"

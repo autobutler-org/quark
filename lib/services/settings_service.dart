@@ -37,4 +37,19 @@ class SettingsService with AuthenticatedService {
       throw ApiException(response.statusCode, 'Failed to update settings');
     }
   }
+
+  /// Turns the chat beta on or off (#2421) and returns the setting the Quark
+  /// saved. Admin-only.
+  static Future<bool> setChatEnabled(bool enabled) async {
+    final response = await instance.authenticatedPut(
+      apiBaseUri.resolve('/api/v0/settings/chat'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'enabled': enabled}),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Failed to set chat');
+    }
+    final body = jsonDecode(response.body);
+    return body is Map ? body['enabled'] as bool? ?? enabled : enabled;
+  }
 }
