@@ -2749,7 +2749,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Stores the caller's 64-byte Ed25519 signature, base64, over an event's canonical bytes, with the caller's published signing key beside it. Only the event's actor may sign it, and only once.",
+                "description": "Stores the caller's 64-byte Ed25519 signature, base64, over an event's canonical bytes, with the caller's published signing key beside it. Only the event's actor may sign it, and only once. The channel's members hear chat_channel_changed, so they can show it as verified.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3279,6 +3279,156 @@
                 }
             }
         },
+        "/chat/channels/{id}/messages": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns messages oldest first. With after, the page starts after that id (after=0 is the beginning), which is how a client catches up on anything the events socket dropped. Otherwise it ends before before, or at the newest message when before is left out. Deleted messages come back as tombstones with deletedAt and no ciphertext. Members only; anyone else gets 404, admins included.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Page a chat channel's encrypted messages",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page backward from this message id",
+                        "name": "before",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page forward from this message id",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "At most this many, 50 by default, capped at 200",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.ListMessagesResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, or the caller isn't a member",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores ciphertext, base64, that the caller's client encrypted under the channel key of keyVersion, and sends the stored row to the channel's members as chat_message_created. The Quark never sees the text. Ciphertext is at most 16 KiB. Needs write; a read member gets 403 and anyone else 404, admins included.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Post an encrypted message to a chat channel",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The encrypted message",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.postMessageBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Message"
+                        }
+                    },
+                    "400": {
+                        "description": "ciphertext too short, or a key version the channel doesn't have",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller can only read the channel",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, or the caller isn't a member",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "413": {
+                        "description": "ciphertext over 16 KiB",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/chat/keys/me": {
             "get": {
                 "security": [
@@ -3416,6 +3566,64 @@
                     },
                     "404": {
                         "description": "no such active account, or it has no chat keys yet",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/messages/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Wipes the message's ciphertext and sets deletedAt, leaving a tombstone so paging stays contiguous, and tells the channel's members with chat_message_deleted. Allowed for the message's author or an owner of its channel; another member gets 403 and anyone outside the channel 404, admins included.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Delete a chat message",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Message id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Message"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller neither wrote it nor owns the channel",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such message, or the caller isn't in its channel",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -9042,6 +9250,17 @@
                 }
             }
         },
+        "chatutil.ListMessagesResult": {
+            "type": "object",
+            "properties": {
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.Message"
+                    }
+                }
+            }
+        },
         "chatutil.ListPendingGrantsResult": {
             "type": "object",
             "properties": {
@@ -9107,6 +9326,40 @@
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "chatutil.Message": {
+            "type": "object",
+            "properties": {
+                "authorId": {
+                    "description": "AuthorID is absent once the author's account is deleted.",
+                    "type": "integer"
+                },
+                "channelId": {
+                    "type": "integer"
+                },
+                "ciphertext": {
+                    "description": "Ciphertext is nonce || XChaCha20-Poly1305 output under the channel key\nof KeyVersion, with the channel id and key version as additional data\n(docs/chat-security.md). Absent once deleted.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "deletedAt": {
+                    "type": "string"
+                },
+                "editedAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "keyVersion": {
+                    "type": "integer"
                 }
             }
         },
@@ -9849,6 +10102,20 @@
                     }
                 },
                 "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v0_chat.postMessageBody": {
+            "type": "object",
+            "properties": {
+                "ciphertext": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "keyVersion": {
                     "type": "integer"
                 }
             }

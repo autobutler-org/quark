@@ -241,23 +241,30 @@ func keysFromRow(row db.UserChatKey) Keys {
 }
 
 // requireMember checks the caller is a member of the channel. Admins get no
-// pass here: grants and events are for members, and anyone else gets
+// pass here: grants, events and messages are for members, and anyone else gets
 // ErrChannelNotFound.
 func requireMember(ctx context.Context, queries *db.Queries, principal accessutil.Principal, channelID int64) error {
+	_, err := memberLevel(ctx, queries, principal, channelID)
+	return err
+}
+
+// memberLevel is the caller's best level on a channel they are a member of,
+// read at least; anyone else, admins included, gets ErrChannelNotFound.
+func memberLevel(ctx context.Context, queries *db.Queries, principal accessutil.Principal, channelID int64) (accessutil.Level, error) {
 	if principal.UserID == 0 {
-		return ErrChannelNotFound
+		return accessutil.None, ErrChannelNotFound
 	}
 	rank, err := queries.GetChatChannelLevelForUser(ctx, db.GetChatChannelLevelForUserParams{
 		ChannelID: channelID,
 		UserID:    sql.NullInt64{Int64: principal.UserID, Valid: true},
 	})
 	if err != nil {
-		return err
+		return accessutil.None, err
 	}
 	if accessutil.Level(rank) < accessutil.Read {
-		return ErrChannelNotFound
+		return accessutil.None, ErrChannelNotFound
 	}
-	return nil
+	return accessutil.Level(rank), nil
 }
 
 // callerSignKey is the caller's published Ed25519 key, or ErrKeysNotFound.
@@ -438,4 +445,41 @@ func eventFromRow(row db.ChatChannelEvent) ChannelEvent {
 		SignerSignKey: row.SignerSignKey,
 		CreatedAt:     row.CreatedAt,
 	}
+}
+
+// messageFromRow maps a chat_messages row.
+func messageFromRow(row db.ChatMessage) Message {
+	message := Message{
+		ID:         row.ID,
+		ChannelID:  row.ChannelID,
+		AuthorID:   row.AuthorID.Int64,
+		KeyVersion: row.KeyVersion,
+		Ciphertext: row.Ciphertext,
+		CreatedAt:  row.CreatedAt,
+	}
+	if row.EditedAt.Valid {
+		message.EditedAt = &row.EditedAt.Time
+	}
+	if row.DeletedAt.Valid {
+		message.DeletedAt = &row.DeletedAt.Time
+	}
+	return message
+}
+
+// publishMessage tells a channel's members about a message: the whole row
+// when it was created, only its id when deleted.
+func publishMessage(ctx context.Context, queries *db.Queries, bus *eventbus.Bus, kind eventbus.EventKind, message Message) error {
+	if bus == nil {
+		return nil
+	}
+	audience, err := memberIDs(ctx, queries, message.ChannelID)
+	if err != nil {
+		return err
+	}
+	data := eventbus.ChatMessageChanged{ChannelID: message.ChannelID, MessageID: message.ID, Audience: audience}
+	if kind == eventbus.EventChatMessageCreated {
+		data.Message = message
+	}
+	bus.Publish(eventbus.Event{Kind: kind, Data: data})
+	return nil
 }

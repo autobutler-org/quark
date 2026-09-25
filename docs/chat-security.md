@@ -2,7 +2,8 @@
 
 Chat messages are end-to-end encrypted: only the members of a channel can read them, and the Quark stores
 ciphertext it can't open. This page covers the identity keys that make that possible (#2416) and what they
-protect against, then the channel keys and key grants built on them (#2417). Messages are #2418.
+protect against, then the channel keys and key grants built on them (#2417), then the messages encrypted under
+those keys (#2418).
 
 ## Identity keys
 
@@ -128,6 +129,8 @@ Membership changes and new key versions are stored in `chat_channel_events`. Eac
 
 The client signs only an event whose payload matches what it just did. An event nobody signed is shown as
 unverified. That covers an admin who adds themselves to a channel without signing, and anything the Quark made up.
+Storing a signature sends the members `chat_channel_changed`, so an event they are showing as unverified turns
+verified without the channel being reopened.
 
 ### What the Quark sees
 
@@ -149,6 +152,56 @@ All are members only: anyone else gets 404, admins included.
 - `POST /api/v0/chat/channels/:id/keys/grants` uploads grants for versions the caller holds.
 - `GET /api/v0/chat/channels/:id/events` returns the channel's events.
 - `PUT /api/v0/chat/channels/:id/events/:eventId/signature` lets the actor sign an event, once.
+
+## Messages
+
+A message is encrypted on the sender's device under the channel's current key version, and only ciphertext
+reaches the Quark (#2418). It is XChaCha20-Poly1305 with a random 24-byte nonce, stored as `nonce || ciphertext`,
+and at most 16 KiB. Larger bodies are refused with 413, and files are shared separately (#2425).
+
+### What the additional data binds
+
+Each message is encrypted with this additional data:
+
+```text
+"quark-chat-msg-v1" 0x00 || be64(channelId) || be64(keyVersion)
+```
+
+The reader rebuilds it from the channel it is reading and the `keyVersion` the Quark reports. So a ciphertext
+the Quark copies into another channel, or relabels with another key version, fails to decrypt, and the app shows
+it as unreadable rather than as a message. The message id and author aren't bound: the Quark assigns the id after
+encryption, and binding the author would make a deleted account's history unreadable once its `authorId` is
+cleared.
+
+The additional data doesn't stop the Quark replaying a ciphertext within the same channel and version, reordering
+messages, or claiming a different author. Any member holding the key could also write a message that looks like
+it came from someone else, since the key is shared. Per-message signatures would close both gaps, and are left
+for later.
+
+### What the Quark sees
+
+- Who posted in which channel, when, under which key version, and how long the ciphertext is.
+- Deletions. A deleted message keeps its row as a tombstone: the ciphertext is wiped and `deleted_at` is set.
+
+### Delivery
+
+- **Live.** `chat_message_created` carries the whole stored row, and `chat_message_deleted` carries the id and
+  channel. Both go to the channel's members over the existing `/api/v0/events` socket, and **only** to them. An
+  admin who isn't a member hears neither, unlike every other event.
+- **Catch-up.** The socket drops events when a client falls behind, and it has no replay. So the app never
+  trusts it alone: when a channel opens, and on every reconnect, it fetches `?after=` the newest id it holds.
+- **Waiting.** A message under a key version this account has no grant for yet is shown as waiting. It opens by
+  itself once a member shares that version.
+- **Plaintext** is held in memory only, and is dropped when the channel is closed or chat locks.
+
+### Routes
+
+All are for members only: anyone else gets 404, admins included.
+
+- `POST /api/v0/chat/channels/:id/messages` takes `{ciphertext, keyVersion}` and needs `write`. A `read` member
+  gets 403.
+- `GET /api/v0/chat/channels/:id/messages?before=<id>&limit=50` pages backward, and `?after=<id>` pages forward.
+- `DELETE /api/v0/chat/messages/:id` is allowed for the author or a channel owner.
 
 ## Threat model
 

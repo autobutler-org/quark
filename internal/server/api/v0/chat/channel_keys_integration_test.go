@@ -58,7 +58,11 @@ func TestChatChannelKeys_Distribution(t *testing.T) {
 	signature := `{"signature":"` + b64('s', chatutil.SignatureBytes) + `"}`
 	signPath := eventPath + "/" + strconv.FormatInt(created.Event.ID, 10) + "/signature"
 	h.expect(t, http.StatusNotFound, http.MethodPut, signPath, "carol", signature, nil)
+	h.heard(channels.Channels[0].ID)
 	h.expect(t, http.StatusOK, http.MethodPut, signPath, "bob", signature, nil)
+	if h.heard(channels.Channels[0].ID) == 0 {
+		t.Error("signing an event wasn't announced to the members")
+	}
 	h.expect(t, http.StatusConflict, http.MethodPut, signPath, "bob", signature, nil)
 	var events chatutil.ListEventsResult
 	h.expect(t, http.StatusOK, http.MethodGet, eventPath, "carol", "", &events)

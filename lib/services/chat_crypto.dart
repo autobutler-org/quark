@@ -16,7 +16,8 @@ import 'package:sodium/sodium_sumo.dart';
 /// - Key grants (#2417): [seal] and [openSealed] for `crypto_box_seal` to a
 ///   member's X25519 key, and [sign] and [verify] for Ed25519.
 /// - Messages (#2418): [newChannelKey], [channelKeyFromBytes], [encrypt] and
-///   [decrypt], XChaCha20-Poly1305 with a random nonce.
+///   [decrypt], XChaCha20-Poly1305 with a random nonce, bound to
+///   [messageAad].
 class ChatCrypto {
   /// Wraps an initialized libsodium.
   ChatCrypto(this.sodium);
@@ -211,6 +212,21 @@ class ChatCrypto {
     0,
     ...utf8.encode(payload),
   ]);
+
+  /// The additional data a message's ciphertext is bound to (#2418):
+  ///
+  /// `"quark-chat-msg-v1" 0x00 || be64(channelId) || be64(keyVersion)`
+  ///
+  /// Pass it to both [encrypt] and [decrypt], so the Quark can't move a
+  /// message to another channel or relabel its key version without it failing
+  /// to open.
+  Uint8List messageAad({required int channelId, required int keyVersion}) =>
+      Uint8List.fromList([
+        ...utf8.encode('quark-chat-msg-v1'),
+        0,
+        ..._be64(channelId),
+        ..._be64(keyVersion),
+      ]);
 
   /// Big-endian 64 bits without `ByteData.setInt64`, which the web lacks. Ids
   /// are positive and below 2^53.
