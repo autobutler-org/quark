@@ -611,6 +611,39 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 	return result, nil
 }
 
+// ResolvePathParams names a file by the path a request uses for it.
+type ResolvePathParams struct {
+	// RelPath is files-relative; a TrashPath resolves into the trash.
+	RelPath string
+	// Serial names the device, empty for the internal one.
+	Serial string
+}
+
+// ResolvePathResult is where the file sits on disk.
+type ResolvePathResult struct {
+	FullPath string
+}
+
+// ResolvePath turns a files-relative path into the OS path it names on its
+// device, refusing one that climbs out of the files directory or the trash.
+// It does not check that anything is there.
+func (s *StorageService) ResolvePath(params ResolvePathParams) (ResolvePathResult, error) {
+	filesDir, err := s.trashFilesDir(params.Serial)
+	if err != nil {
+		return ResolvePathResult{}, err
+	}
+	var full string
+	if IsTrashPath(params.RelPath) {
+		full, err = JoinTrashPath(filesDir, params.RelPath)
+	} else {
+		full, err = safeJoin(filesDir, params.RelPath)
+	}
+	if err != nil {
+		return ResolvePathResult{}, err
+	}
+	return ResolvePathResult{FullPath: full}, nil
+}
+
 // StatFileParams contains parameters for stat-ing a file or directory
 type StatFileParams struct {
 	FilePath     string

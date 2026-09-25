@@ -4,6 +4,12 @@
 // rendering (including the ffmpeg frame grab for video), and the perceptual
 // hash that photo deduplication reads back out of the database.
 //
+// A thumbnail a client rendered and uploaded (#2379) is kept in the same
+// cache and comes first: the size tiers are resized from it, and generating
+// from the file is the fallback. A file the device cannot decode itself
+// (H.264/HEVC video, HEIC) is answered with [NeedsClientRender] so a client
+// can render one and upload it.
+//
 // HTTP concerns — ETag negotiation, status codes, the IO semaphore — stay with
 // the caller; [ETagFromModTime] and [ContentTypeForExt] are here only because
 // they are derived from the cache entry the service produced.
@@ -14,9 +20,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
 // Size represents the supported thumbnail size tiers.
@@ -31,6 +39,25 @@ const (
 // ErrFFmpegUnavailable reports a video thumbnail request on a host without
 // ffmpeg. Callers map it to 404, the same as a missing file.
 var ErrFFmpegUnavailable = errors.New("video thumbnails require ffmpeg (not installed)")
+
+// ErrInvalidThumbnail reports an uploaded thumbnail that is not a JPEG, is
+// larger than [MaxClientThumbnailBytes], or is bigger on a side than a
+// thumbnail needs to be.
+var ErrInvalidThumbnail = errors.New("invalid thumbnail")
+
+// ErrNotMedia reports a thumbnail sent for a file that is neither a photo nor
+// a video.
+var ErrNotMedia = errors.New("only photos and videos have thumbnails")
+
+// ErrNoThumbnail reports a thumbnail upload with no "thumbnail" part in it.
+var ErrNoThumbnail = errors.New(`send the thumbnail as a "thumbnail" part`)
+
+// ErrSourceNotFound reports a thumbnail sent for a file that is not there.
+var ErrSourceNotFound = errors.New("file not found")
+
+// MaxClientThumbnailBytes is the largest thumbnail a client may upload. One
+// with a 400px long edge is a few tens of KB.
+const MaxClientThumbnailBytes int64 = 2 << 20
 
 // ErrUnsupportedSource reports a source the thumbnail pipeline cannot decode —
 // an unknown format, a truncated file. Callers with a second source to try
@@ -119,6 +146,63 @@ type GenerateFromReaderParams struct {
 type GenerateResult struct {
 	CachedModTime time.Time
 }
+
+// StoreClientThumbnailParams is a thumbnail a client rendered for a file: a
+// JPEG, long edge 400, rotation applied.
+type StoreClientThumbnailParams struct {
+	// Queries stores the perceptual hash of a photo's thumbnail. Nil skips it.
+	Queries *db.Queries
+	// Serial and RelPath name the file, as a request spells them.
+	Serial  string
+	RelPath string
+	// Reader is the JPEG, read to EOF or one byte past the size limit.
+	Reader io.Reader
+	// IsVideo skips the perceptual hash, which only photos are compared by.
+	IsVideo bool
+}
+
+// StoreClientThumbnailResult reports the stored thumbnail.
+type StoreClientThumbnailResult struct {
+	CachedPath string
+}
+
+// FromClientThumbnailParams asks for a size tier of a file, resized from the
+// thumbnail a client uploaded for it.
+type FromClientThumbnailParams struct {
+	// Queries reads the user's rotation for the photo.
+	Queries *db.Queries
+	// Serial and RelPath identify the file.
+	Serial  string
+	RelPath string
+	// FilePath is the raw request path, used for the tier's cache key.
+	FilePath string
+	// SourceModTime is the file's modification time. A thumbnail older than
+	// the file is stale and ignored.
+	SourceModTime time.Time
+	Size          Size
+}
+
+// FromClientThumbnailResult is the tier to serve. Found is false when the
+// file has no fresh client thumbnail.
+type FromClientThumbnailResult struct {
+	Found         bool
+	CachedPath    string
+	CachedModTime time.Time
+}
+
+// StoreClientThumbnailsParams attaches the "thumbnail" part of a multipart
+// body to an existing file. Other parts are skipped.
+type StoreClientThumbnailsParams struct {
+	Queries *db.Queries
+	Storage *storageutil.StorageService
+	// Serial and RelPath name the file, as the request did.
+	Serial  string
+	RelPath string
+	Reader  *multipart.Reader
+}
+
+// StoreClientThumbnailsResult reports the stored thumbnail.
+type StoreClientThumbnailsResult struct{}
 
 // ParseSize parses the ?size= query parameter, defaulting to lg.
 func ParseSize(raw string) Size {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/thumbnailutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
@@ -102,6 +104,50 @@ func getArchiveThumbnail(
 	}
 
 	return serveCachedThumbnail(c, prepared.CachedPath, cachedModTime, thumbnailutil.ContentTypeForExt(ext))
+}
+
+// clientThumbnailFallthrough is returned by getClientThumbnail when the file
+// has no fresh client thumbnail and the caller should generate one.
+var clientThumbnailFallthrough = &serverutil.Response{}
+
+// getClientThumbnail serves a size tier resized from the thumbnail a client
+// uploaded for the file, or falls through when there is none.
+func getClientThumbnail(c *gin.Context, deps deputil.Dependencies, relPath, filePath, serial string) *serverutil.Response {
+	resolved, err := deps.StorageService().ResolvePath(storageutil.ResolvePathParams{RelPath: relPath, Serial: serial})
+	if err != nil {
+		return clientThumbnailFallthrough
+	}
+	info, err := os.Stat(resolved.FullPath)
+	if err != nil || info.IsDir() {
+		return clientThumbnailFallthrough
+	}
+	result, err := thumbnailutil.FromClientThumbnail(thumbnailutil.FromClientThumbnailParams{
+		Queries:       deps.Database().Queries,
+		Serial:        serial,
+		RelPath:       relPath,
+		FilePath:      filePath,
+		SourceModTime: info.ModTime(),
+		Size:          thumbnailutil.ParseSize(c.Query("size")),
+	})
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	if !result.Found {
+		return clientThumbnailFallthrough
+	}
+	return serveCachedThumbnail(c, result.CachedPath, result.CachedModTime, "image/jpeg")
+}
+
+// clientRenderNotFound is the 404 for a video or HEIC the device could not
+// render a thumbnail for, marked so a client knows to render one and PUT it.
+func clientRenderNotFound(filePath string, modTime time.Time, cause error) *serverutil.Response {
+	return serverutil.NewResponse().
+		WithStatusCode(http.StatusNotFound).
+		WithData(clientRenderResponse{
+			Error:        fmt.Sprintf("no thumbnail for %s: %v", filePath, cause),
+			ClientRender: true,
+			ModTime:      modTime.UTC(),
+		})
 }
 
 // vfsThumbnailFallthrough is a sentinel returned by getThumbnailVFS to signal
