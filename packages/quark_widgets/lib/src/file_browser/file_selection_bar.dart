@@ -138,9 +138,12 @@ class FileSelectionBar extends StatelessWidget implements PreferredSizeWidget {
                   child: Text(
                     title ?? '$selectedCount selected',
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleSmall?.copyWith(color: tokens.foreground),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: tokens.foreground,
+                      // Equal-width digits, so the label does not shift as
+                      // each tap changes the count.
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ),
                 QuarkBarChip(
