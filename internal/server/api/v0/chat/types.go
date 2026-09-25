@@ -25,6 +25,9 @@ func (r *router) Routes() []*serverutil.Route {
 		uploadGrantsRoute,
 		listChannelEventsRoute,
 		signChannelEventRoute,
+		postMessageRoute,
+		listMessagesRoute,
+		deleteMessageRoute,
 	}
 }
 
@@ -73,4 +76,11 @@ type uploadGrantsBody struct {
 // signEventBody is the caller's signature over an event, base64.
 type signEventBody struct {
 	Signature []byte `json:"signature"`
+}
+
+// postMessageBody is a message the caller's client encrypted. Ciphertext is
+// base64 nonce || XChaCha20-Poly1305 output.
+type postMessageBody struct {
+	Ciphertext []byte `json:"ciphertext"`
+	KeyVersion int64  `json:"keyVersion"`
 }

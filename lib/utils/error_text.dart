@@ -247,6 +247,15 @@ abstract final class Errors {
   static const String chatKeysWrongPhrase =
       "That recovery phrase doesn't unlock your messages.";
 
+  /// Sending a chat message before any member has shared the channel's key
+  /// with this account (#2418).
+  static const String chatWaitingForKey =
+      'Waiting for a member to share the key. Try again once they have.';
+
+  /// A chat message too long to fit the Quark's 16 KiB cap once encrypted.
+  static const String chatMessageTooLong =
+      'That message is too long. Split it into shorter ones.';
+
   /// A sign-in the Quark refused with a 401.
   ///
   /// The same sentence for a wrong password and an unknown username, so the

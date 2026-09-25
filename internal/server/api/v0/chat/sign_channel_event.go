@@ -12,7 +12,7 @@ import (
 
 // signChannelEvent godoc
 // @Summary Sign a chat channel event the caller made
-// @Description Stores the caller's 64-byte Ed25519 signature, base64, over an event's canonical bytes, with the caller's published signing key beside it. Only the event's actor may sign it, and only once.
+// @Description Stores the caller's 64-byte Ed25519 signature, base64, over an event's canonical bytes, with the caller's published signing key beside it. Only the event's actor may sign it, and only once. The channel's members hear chat_channel_changed, so they can show it as verified.
 // @Tags chat
 // @Accept json
 // @Produce json
@@ -46,7 +46,7 @@ func signChannelEvent(c *gin.Context) *serverutil.Response {
 		return serverutil.BadRequest(chatutil.ErrInvalidGrant)
 	}
 	result, err := chatutil.SignEvent(chatutil.SignEventParams{
-		Ctx: c.Request.Context(), Database: deps.Database(), Principal: principal, ChannelID: id, EventID: eventID, Signature: body.Signature,
+		Ctx: c.Request.Context(), Database: deps.Database(), EventBus: deps.EventBus(), Principal: principal, ChannelID: id, EventID: eventID, Signature: body.Signature,
 	})
 	if err != nil {
 		return chatError(err)
