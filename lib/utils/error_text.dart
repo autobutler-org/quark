@@ -27,6 +27,7 @@ abstract final class Errors {
     if (isQuarkUnreachableError(error)) return quarkDisconnectedInline;
     if (error is UnauthorizedException) return sessionExpired;
     if (error is MessageException) return _sentence(error.message);
+    if (error is NoPreviewException) return noPreview;
     if (error is ApiException) return _forStatus(error.statusCode, action);
     return couldNot(action);
   }
@@ -41,6 +42,11 @@ abstract final class Errors {
         ? capitalized
         : '$capitalized.';
   }
+
+  /// A HEIC with neither the preview its client renders (#2379) nor a JPEG
+  /// the Quark could make of it, so the original is the way to see it.
+  static const String noPreview =
+      'This photo has no preview to show here. Download the original to view it.';
 
   /// The fallback: what the app was doing, and that it didn't work.
   static String couldNot(String action) => "Couldn't $action.";
@@ -307,6 +313,27 @@ class MessageException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// A photo the app cannot show: a HEIC with no stored preview (#2379) that the
+/// Quark could not convert either. Carries what a "download the original"
+/// action needs.
+class NoPreviewException implements Exception {
+  const NoPreviewException({
+    required this.path,
+    this.serial,
+    required this.name,
+  });
+
+  /// The photo's files-relative path.
+  final String path;
+  final String? serial;
+
+  /// The photo's file name, to save the original under.
+  final String name;
+
+  @override
+  String toString() => 'NoPreviewException($path)';
 }
 
 /// The Quark answered with a non-success status.

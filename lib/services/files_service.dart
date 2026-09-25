@@ -755,6 +755,23 @@ class FilesService with AuthenticatedService {
     String? serial,
     String? fileName,
   }) async {
+    if (displayPreviewImageExtensions.contains(fileExtension(filePath))) {
+      return _downloadDisplayPreview(filePath, serial: serial);
+    }
+    final response = await _getFileBytes(filePath, serial: serial);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Failed to download file');
+    }
+
+    return response.bodyBytes;
+  }
+
+  /// GETs the file at [filePath], asking the server for a JPEG of an image
+  /// Flutter cannot decode itself.
+  static Future<http.Response> _getFileBytes(
+    String filePath, {
+    String? serial,
+  }) {
     var uri = _buildDownloadUri(filePath, serial: serial);
     if (serverConvertedImageExtensions.contains(fileExtension(filePath))) {
       // Not just a web concern: Flutter's built-in image decoder (Skia, via
@@ -765,12 +782,38 @@ class FilesService with AuthenticatedService {
       params['format'] = 'jpeg';
       uri = uri.replace(queryParameters: params);
     }
-    final response = await instance.authenticatedGet(uri);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(response.statusCode, 'Failed to download file');
-    }
+    return instance.authenticatedGet(uri);
+  }
 
-    return response.bodyBytes;
+  /// A HEIC to show: the display preview its client uploaded (#2379), else
+  /// the Quark's own JPEG of it, which it still makes until #2382 removes
+  /// server-side HEIC decoding. When neither is there, a [NoPreviewException]
+  /// carries what a download of the original needs.
+  static Future<Uint8List> _downloadDisplayPreview(
+    String filePath, {
+    String? serial,
+  }) async {
+    final uri = constructThumbnailUrl(
+      filePath,
+      serial: serial,
+      size: 'preview',
+    );
+    final preview = await instance.authenticatedGet(uri);
+    if (preview.statusCode >= 200 && preview.statusCode < 300) {
+      return preview.bodyBytes;
+    }
+    if (preview.statusCode != 404) {
+      throw ApiException(preview.statusCode, 'Failed to download preview');
+    }
+    final converted = await _getFileBytes(filePath, serial: serial);
+    if (converted.statusCode >= 200 && converted.statusCode < 300) {
+      return converted.bodyBytes;
+    }
+    throw NoPreviewException(
+      path: filePath,
+      serial: serial,
+      name: filePath.split('/').last,
+    );
   }
 
   /// Download thumbnail bytes for the specified filePath using the thumbnails endpoint.

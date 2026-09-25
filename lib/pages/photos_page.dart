@@ -298,8 +298,29 @@ class PhotosPageState extends State<PhotosPage>
         ),
       );
       if (changed == true) await manualRefresh();
+    } on NoPreviewException catch (e) {
+      // A HEIC with no stored preview that the Quark could not convert
+      // either: the original is the way to see it (#2379).
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(Errors.message(e, 'open the photo')),
+          action: SnackBarAction(
+            label: 'Download',
+            onPressed: () => _saveOriginal(e),
+          ),
+        ),
+      );
     } finally {
       _isOpeningPhoto = false;
+    }
+  }
+
+  Future<void> _saveOriginal(NoPreviewException photo) async {
+    try {
+      await _controller.saveOriginal(photo);
+    } catch (e) {
+      if (mounted) _snack(Errors.message(e, 'download the photo'));
     }
   }
 

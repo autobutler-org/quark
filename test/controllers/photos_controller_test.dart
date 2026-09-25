@@ -890,6 +890,26 @@ void main() {
       });
     });
 
+    test('saves the original of a photo with no preview (#2379)', () async {
+      final saved = <String>[];
+      final controller = PhotosController(
+        saveFile: (path, {serial, fileName}) async {
+          saved.add('$serial:$path:$fileName');
+          return null;
+        },
+      );
+
+      await controller.saveOriginal(
+        const NoPreviewException(
+          path: 'a/IMG.heic',
+          serial: 'sd1',
+          name: 'IMG.heic',
+        ),
+      );
+
+      expect(saved, ['sd1:a/IMG.heic:IMG.heic']);
+    });
+
     group('a drop (#2214)', () {
       DropItemFile file(String name) =>
           DropItemFile.fromData(Uint8List.fromList([1]), path: name);

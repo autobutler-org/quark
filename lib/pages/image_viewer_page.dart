@@ -79,6 +79,14 @@ class ImageViewerPage extends StatefulWidget {
   /// "Remove from [Album]" instead of "Add to Album."
   final PhotoAlbum? sourceAlbum;
 
+  /// Downloads the photo when the viewer opens without [bytes]. Defaults to
+  /// [FilesService.downloadFileBytes] on [relPath]; tests pass a fake.
+  final Future<Uint8List?> Function()? loadBytes;
+
+  /// Saves the original of a photo that has no preview to show (#2379).
+  /// Defaults to [FilesService.saveFile]; tests pass a fake.
+  final Future<void> Function(NoPreviewException photo)? saveOriginal;
+
   const ImageViewerPage({
     super.key,
     this.bytes,
@@ -91,6 +99,8 @@ class ImageViewerPage extends StatefulWidget {
     this.relPath,
     this.serial,
     this.sourceAlbum,
+    this.loadBytes,
+    this.saveOriginal,
   });
 
   @override
@@ -104,6 +114,9 @@ class _ImageViewerPageState extends State<ImageViewerPage>
   // Null until the viewer's own download of [ImageViewerPage.relPath] lands.
   Uint8List? _currentBytes;
   String? _loadError;
+  // Set when the photo the viewer opened on has no preview to show, which
+  // puts a "Download original" under the message (#2379).
+  NoPreviewException? _noPreview;
   late String _currentName;
   late String? _currentRelPath;
   late String? _currentSerial;
@@ -179,10 +192,13 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     Uint8List? bytes;
     Object? error;
     try {
-      bytes = await FilesService.downloadFileBytes(
-        _currentRelPath ?? '',
-        serial: _currentSerial,
-      );
+      final load = widget.loadBytes;
+      bytes = load != null
+          ? await load()
+          : await FilesService.downloadFileBytes(
+              _currentRelPath ?? '',
+              serial: _currentSerial,
+            );
     } catch (e) {
       error = e;
     }
@@ -190,7 +206,30 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     setState(() {
       _currentBytes = bytes;
       if (bytes == null) _loadError = Errors.message(error, 'load the photo');
+      if (error is NoPreviewException) _noPreview = error;
     });
+  }
+
+  /// Saves the original of a photo the viewer has nothing to show for: a HEIC
+  /// with no stored preview that the Quark could not convert either (#2379).
+  Future<void> _downloadOriginal(NoPreviewException photo) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final save = widget.saveOriginal;
+      if (save != null) {
+        await save(photo);
+      } else {
+        await FilesService.saveFile(
+          photo.path,
+          serial: photo.serial,
+          fileName: photo.name,
+        );
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(Errors.message(e, 'download the photo'))),
+      );
+    }
   }
 
   @override
@@ -369,7 +408,14 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(Errors.message(error, 'load the photo')),
-        action: gone
+        // A HEIC with no preview will not load on a retry either; its
+        // original is the way to see it (#2379).
+        action: error is NoPreviewException
+            ? SnackBarAction(
+                label: 'Download',
+                onPressed: () => _downloadOriginal(error),
+              )
+            : gone
             ? null
             : SnackBarAction(
                 label: 'Retry',
@@ -758,6 +804,14 @@ class _ImageViewerPageState extends State<ImageViewerPage>
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white70),
                   ),
+                  if (_noPreview case final noPreview?) ...[
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      key: const ValueKey('image_viewer_download_original'),
+                      onPressed: () => _downloadOriginal(noPreview),
+                      child: const Text('Download original'),
+                    ),
+                  ],
                 ],
               ),
             ),

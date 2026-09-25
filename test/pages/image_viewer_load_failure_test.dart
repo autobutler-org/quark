@@ -24,10 +24,15 @@ void main() {
 
   /// Pumps the viewer on image 1 of 3 whose loader always throws [error],
   /// swipes to the next photo, and returns how many loads were attempted.
-  Future<List<int>> pumpAndSwipe(WidgetTester tester, Object error) async {
+  Future<List<int>> pumpAndSwipe(
+    WidgetTester tester,
+    Object error, {
+    Future<void> Function(NoPreviewException)? saveOriginal,
+  }) async {
     final requested = <int>[];
     final page = MaterialApp(
       home: ImageViewerPage(
+        saveOriginal: saveOriginal,
         bytes: bytes,
         name: 'first.jpg',
         initialIndex: 1,
@@ -81,5 +86,55 @@ void main() {
     expect(requested, [2]);
     expect(find.textContaining('no longer there'), findsOneWidget);
     expect(find.widgetWithText(SnackBarAction, 'Retry'), findsNothing);
+  });
+
+  testWidgets('a HEIC without a preview offers the original (#2379)', (
+    tester,
+  ) async {
+    const noPreview = NoPreviewException(
+      path: 'trips/IMG_1.heic',
+      serial: 'sd1',
+      name: 'IMG_1.heic',
+    );
+    final saved = <String>[];
+    await pumpAndSwipe(
+      tester,
+      noPreview,
+      saveOriginal: (e) async => saved.add('${e.serial}:${e.path}'),
+    );
+
+    expect(find.text(Errors.noPreview), findsOneWidget);
+    expect(find.widgetWithText(SnackBarAction, 'Retry'), findsNothing);
+    await tester.tap(find.widgetWithText(SnackBarAction, 'Download'));
+    await tester.pumpAndSettle();
+
+    expect(saved, ['sd1:trips/IMG_1.heic']);
+  });
+
+  testWidgets('a viewer opened on a HEIC without a preview offers the '
+      'original (#2379)', (tester) async {
+    final saved = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ImageViewerPage(
+          name: 'IMG_1.heic',
+          relPath: 'trips/IMG_1.heic',
+          loadBytes: () async => throw const NoPreviewException(
+            path: 'trips/IMG_1.heic',
+            name: 'IMG_1.heic',
+          ),
+          saveOriginal: (e) async => saved.add(e.path),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(Errors.noPreview), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('image_viewer_download_original')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(saved, ['trips/IMG_1.heic']);
   });
 }

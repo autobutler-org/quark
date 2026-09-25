@@ -20,6 +20,7 @@ import 'package:quark/services/media_derivatives.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/album_link.dart' as link;
 import 'package:quark/utils/connection_error.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/photo_grid_config.dart';
 import 'package:quark/utils/quark_widget_items.dart';
@@ -138,6 +139,13 @@ class PhotosController extends ChangeNotifier {
         renderDerivativesFromBytes,
     Future<UploadDerivatives?> Function(DropItemFile file) renderDroppedFile =
         renderDroppedFileDerivatives,
+    Future<String?> Function(
+          String filePath, {
+          String? serial,
+          String? fileName,
+        })
+        saveFile =
+        FilesService.saveFile,
     PhotoBytesCache? bytesCache,
     bool isWeb = kIsWeb,
   }) : _getPhotos = getPhotos,
@@ -159,6 +167,7 @@ class PhotosController extends ChangeNotifier {
        _readDroppedFile = readDroppedFile,
        _renderFromBytes = renderFromBytes,
        _renderDroppedFile = renderDroppedFile,
+       _saveFile = saveFile,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
        _isWeb = isWeb;
 
@@ -239,6 +248,12 @@ class PhotosController extends ChangeNotifier {
   _renderFromBytes;
   final Future<UploadDerivatives?> Function(DropItemFile file)
   _renderDroppedFile;
+  final Future<String?> Function(
+    String filePath, {
+    String? serial,
+    String? fileName,
+  })
+  _saveFile;
   final PhotoBytesCache _bytesCache;
   final bool _isWeb;
 
@@ -1135,6 +1150,13 @@ class PhotosController extends ChangeNotifier {
     }
     if (bytes == null) return null;
     return (bytes, photo.name, relPath, photo.serial);
+  }
+
+  /// Saves the original of a photo there is nothing to show for — a HEIC with
+  /// no stored preview the Quark could not convert either (#2379) — for the
+  /// user to open elsewhere.
+  Future<void> saveOriginal(NoPreviewException photo) async {
+    await _saveFile(photo.path, serial: photo.serial, fileName: photo.name);
   }
 
   /// Loads the photo at [index] for an open viewer, through the photo cache.
