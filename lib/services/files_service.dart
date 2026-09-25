@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/paginated_photos_response.dart';
 import 'package:quark/models/photo_metadata.dart';
+import 'package:quark/models/thumbnail_probe.dart';
 import 'package:quark/models/transcode_format.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
@@ -775,6 +776,52 @@ class FilesService with AuthenticatedService {
       throw ApiException(response.statusCode, 'Failed to download file');
     }
 
+    return response.bodyBytes;
+  }
+
+  /// Asks the Quark for the small thumbnail of [filePath] and reads what the
+  /// answer says about it (#2381): served, missing, or missing with
+  /// `clientRender`, meaning a client may render one and PUT it.
+  static Future<ThumbnailProbe> probeThumbnail(
+    String filePath, {
+    String? serial,
+  }) async {
+    final uri = constructThumbnailUrl(filePath, serial: serial, size: 'sm');
+    final response = await instance.authenticatedGet(uri);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return const ThumbnailProbe(served: true);
+    }
+    if (response.statusCode != 404) {
+      throw ApiException(response.statusCode, 'Failed to check the thumbnail');
+    }
+    final Object? body;
+    try {
+      body = jsonDecode(response.body);
+    } on FormatException {
+      return const ThumbnailProbe(served: false);
+    }
+    if (body is! Map<String, dynamic> || body['clientRender'] != true) {
+      return const ThumbnailProbe(served: false);
+    }
+    return ThumbnailProbe(
+      served: false,
+      clientRender: true,
+      modTime: body['modTime'] as String? ?? '',
+    );
+  }
+
+  /// The original bytes of [filePath], never converted. For files a client
+  /// renders a thumbnail from itself: a HEIC is a few MB.
+  static Future<Uint8List> downloadOriginalBytes(
+    String filePath, {
+    String? serial,
+  }) async {
+    final response = await instance.authenticatedGet(
+      _buildDownloadUri(filePath, serial: serial),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Failed to download file');
+    }
     return response.bodyBytes;
   }
 

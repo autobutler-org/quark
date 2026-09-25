@@ -1125,6 +1125,16 @@ class PhotosController extends ChangeNotifier {
     return _thumbnailUrl(relPath, serial: photo!.serial);
   }
 
+  /// The path and device of the Quark photo [id], or null for a device
+  /// photo, for filling in a thumbnail the Quark lacks (#2381). A sample
+  /// photo's thumbnail is a bundled asset and never asks.
+  ({String path, String serial})? thumbnailSource(String id) {
+    final photo = _byId(id);
+    final relPath = photo?.relPath;
+    if (relPath == null) return null;
+    return (path: relPath, serial: photo!.serial ?? '');
+  }
+
   /// The device asset behind [id], or null for a Quark photo.
   AssetEntity? assetFor(String id) => _byId(id)?.asset;
 

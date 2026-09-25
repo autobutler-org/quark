@@ -44,4 +44,12 @@ void main() {
     expect(wantsClientThumbnail('clip.mp4'), isTrue);
     expect(wantsClientThumbnail('notes.txt'), isFalse);
   });
+
+  test('videos and HEIC are the files only a client renders', () {
+    expect(needsClientRender('clip.MP4'), isTrue);
+    expect(needsClientRender('IMG_1.HEIC'), isTrue);
+    expect(needsClientRender('a.heif'), isTrue);
+    expect(needsClientRender('a.jpg'), isFalse);
+    expect(needsClientRender('scan.dng'), isFalse);
+  });
 }

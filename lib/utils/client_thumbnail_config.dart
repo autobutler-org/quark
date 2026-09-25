@@ -31,6 +31,16 @@ bool wantsClientThumbnail(String name) {
   return kind == FileKind.image || kind == FileKind.video;
 }
 
+/// Whether [name] is a file only a client can make a thumbnail for: a video,
+/// whose H.264 and HEVC frames the Quark does not decode, or a HEIC. The
+/// Quark marks a missing thumbnail for these with `clientRender` (#2381).
+bool needsClientRender(String name) {
+  final ext = fileExtension(name);
+  return ext == '.heic' ||
+      ext == '.heif' ||
+      fileKindForName(name) == FileKind.video;
+}
+
 /// The size of a [width] x [height] image scaled so its long edge is at most
 /// [longEdge], never enlarged, and never below one pixel on a side.
 ({int width, int height}) scaledToLongEdge(
