@@ -4,10 +4,12 @@ import (
 	"errors"
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/avatarutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -48,6 +50,11 @@ func deleteUser(c *gin.Context) *serverutil.Response {
 	})
 	if err != nil {
 		return accountErrorResponse(err)
+	}
+	// After the account: SQLite can hand its id out again, and the next
+	// account must not inherit its picture.
+	if _, err := avatarutil.Remove(avatarutil.RemoveParams{DataDir: storageutil.GetDataDir(), UserID: result.UserID}); err != nil {
+		return serverutil.InternalServerError(err)
 	}
 	if bus := deps.EventBus(); bus != nil {
 		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})

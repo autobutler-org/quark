@@ -421,3 +421,32 @@ Every journey assumes the user is signed in as an admin unless its preconditions
   `everyone` and a folder for each group it already had.
 - A group named before names had to be one folder name — one holding a slash — keeps no folder rather than being
   given one somewhere else in the tree.
+
+---
+
+### JN-USR-021: Set and remove your profile picture
+
+**Preconditions:** User is signed in. A photo is on the device, such as one taken with location turned on.
+
+**Steps:**
+
+1. Navigate to `/settings/account`.
+2. In the **Profile** card, tap **Choose picture** and pick the photo.
+3. Tap **Choose picture** again and pick a different photo.
+4. Tap **Remove**.
+
+**Expected result:**
+
+- Before step 2 the circle shows the user's initials on a color of their own, and there is no **Remove** button.
+- After step 2 the circle shows the photo, cropped square around its center, and **Remove** appears. Every other
+  signed-in app refreshes to the new picture without reloading.
+- After step 3 the new photo replaces the old one everywhere, with no stale copy left in any image cache.
+- After step 4 the initials are back and **Remove** is gone.
+- Picking a file over 10 MB says the picture is too large, and picking a file that isn't an image says the Quark
+  can't read it. The picture already set stays in both cases.
+
+**Notes:**
+
+- The Quark keeps only a 256x256 copy it re-encoded itself, so the photo's EXIF, location included, is not stored.
+- Pictures are not end-to-end encrypted: any signed-in account can see anyone's, as it can see their username.
+- Deleting an account deletes its picture (JN-USR-013), and resetting the Quark deletes them all.
