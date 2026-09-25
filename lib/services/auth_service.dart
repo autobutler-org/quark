@@ -22,6 +22,13 @@ class AuthStatus {
   /// requests from anyone else.
   final bool isAdmin;
 
+  /// The signed-in account's id, or null without a valid session.
+  final int? userId;
+
+  /// The signed-in account's profile picture version in Unix milliseconds,
+  /// or null when it has none.
+  final int? avatarUpdatedAt;
+
   /// Whether the Quark's sign-in page may offer to request an account (#1908).
   /// False before setup, and when the Quark does not say.
   final bool accessRequestsEnabled;
@@ -30,6 +37,8 @@ class AuthStatus {
     required this.setupComplete,
     this.username,
     this.isAdmin = false,
+    this.userId,
+    this.avatarUpdatedAt,
     this.accessRequestsEnabled = false,
   });
 }
@@ -177,24 +186,32 @@ class AuthService {
       setupComplete: body['setup'] as bool? ?? false,
       username: body['username'] as String?,
       isAdmin: body['isAdmin'] as bool? ?? false,
+      userId: (body['userId'] as num?)?.toInt(),
+      avatarUpdatedAt: (body['avatarUpdatedAt'] as num?)?.toInt(),
       accessRequestsEnabled: body['accessRequestsEnabled'] as bool? ?? false,
     );
   }
 
-  /// Fetches the signed-in user's admin flag again into [AppSettings.isAdmin].
+  /// Fetches the signed-in user's admin flag again into [AppSettings.isAdmin],
+  /// and their id and picture version into [AppSettings.userId] and
+  /// [AppSettings.avatarUpdatedAt].
   ///
-  /// Without a session there is no admin. A failed call keeps the last known
+  /// Without a session there is no admin and no account. A failed call keeps the last known
   /// value: it only decides what the app shows, and the Quark still refuses
   /// admin-only requests from a non-admin.
   static Future<void> refreshAccount() async {
     final settings = AppSettings.instance;
     if (settings.sessionToken == null) {
       settings.isAdmin.value = false;
+      settings.userId.value = null;
+      settings.avatarUpdatedAt.value = null;
       return;
     }
     try {
       final status = await checkStatus();
       settings.isAdmin.value = status.isAdmin;
+      settings.userId.value = status.userId;
+      settings.avatarUpdatedAt.value = status.avatarUpdatedAt;
       if (status.username != null) {
         await settings.setUsername(status.username);
       }

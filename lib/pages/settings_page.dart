@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -11,6 +12,7 @@ import 'package:quark/services/files_service.dart';
 import 'package:quark/services/remote_access_service.dart';
 import 'package:quark/services/sbom_service.dart';
 import 'package:quark/services/settings_service.dart';
+import 'package:quark/services/users_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/remote_access_config.dart';
@@ -25,6 +27,7 @@ import 'package:quark/widgets/settings/settings_about_tab.dart';
 import 'package:quark/widgets/settings/settings_account_tab.dart';
 import 'package:quark/widgets/settings/settings_general_tab.dart';
 import 'package:quark/widgets/settings/settings_network_tab.dart';
+import 'package:quark/widgets/settings/settings_profile_card.dart';
 import 'package:quark/widgets/settings/settings_updates_tab.dart';
 
 /// The commit a `make serve/...` or `make watch/frontend` run was built from.
@@ -189,6 +192,10 @@ class _SettingsPageState extends State<SettingsPage> {
   List<ConnectedDevice> _connectedDevices = [];
   bool _isLoadingDevices = false;
   String? _devicesError;
+
+  // Profile picture state
+  bool _avatarBusy = false;
+  String? _avatarError;
 
   /// Whether the last section load failed to reach the Quark at all (#1637).
   ///
@@ -639,6 +646,21 @@ class _SettingsPageState extends State<SettingsPage> {
             label: 'Account',
             child: SettingsAccountTab(
               header: banner,
+              profile: ListenableBuilder(
+                listenable: Listenable.merge([
+                  AppSettings.instance.userId,
+                  AppSettings.instance.avatarUpdatedAt,
+                ]),
+                builder: (context, _) => SettingsProfileCard(
+                  userId: AppSettings.instance.userId.value,
+                  username: AppSettings.instance.username ?? '',
+                  avatarVersion: AppSettings.instance.avatarUpdatedAt.value,
+                  isBusy: _avatarBusy,
+                  error: _avatarError,
+                  onPick: _pickAvatar,
+                  onRemove: _removeAvatar,
+                ),
+              ),
               signedIn: AppSettings.instance.sessionToken != null,
               isAdmin: isAdmin,
               onSignOut: _signOut,
@@ -747,6 +769,49 @@ class _SettingsPageState extends State<SettingsPage> {
         SnackBar(content: Text(Errors.message(e, 'save the setting'))),
       );
     }
+  }
+
+  /// Picks an image and uploads it as the user's profile picture, streaming
+  /// it off the device rather than reading it into memory.
+  Future<void> _pickAvatar() async {
+    final file = await FilePicker.pickFile(type: FileType.image);
+    if (file == null || !mounted) return;
+    await _changeAvatar('change your picture', () async {
+      // A platform that can't say how long the file is gets it read whole;
+      // a multipart upload has to declare its length up front.
+      final length = await file.length();
+      final whole = length == null ? await file.readAsBytes() : null;
+      await UsersService.setAvatar(
+        bytes: whole == null ? file.readAsByteStream() : Stream.value(whole),
+        length: length ?? whole!.length,
+        filename: file.name,
+      );
+    });
+  }
+
+  Future<void> _removeAvatar() =>
+      _changeAvatar('remove your picture', UsersService.removeAvatar);
+
+  /// Runs [change] with the Profile card busy, and shows why it failed.
+  Future<void> _changeAvatar(
+    String action,
+    Future<void> Function() change,
+  ) async {
+    setState(() {
+      _avatarBusy = true;
+      _avatarError = null;
+    });
+    String? error;
+    try {
+      await change();
+    } catch (e) {
+      error = Errors.avatar(e, action);
+    }
+    if (!mounted) return;
+    setState(() {
+      _avatarBusy = false;
+      _avatarError = error;
+    });
   }
 
   Future<void> _signOut() async {

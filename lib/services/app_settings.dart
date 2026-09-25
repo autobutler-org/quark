@@ -118,6 +118,16 @@ class AppSettings {
   /// itself), so it is not persisted: every launch asks again.
   final ValueNotifier<bool> isAdmin = ValueNotifier(false);
 
+  /// The signed-in account's id on the current [activeHost], null without a
+  /// session. Kept current by [AuthService.watchAccount] like [isAdmin], and
+  /// what `UsersService.avatarUrl` is called with for the user's own picture.
+  final ValueNotifier<int?> userId = ValueNotifier(null);
+
+  /// The signed-in account's profile picture version in Unix milliseconds,
+  /// null when it has none. Kept current like [userId]; passed to
+  /// `UsersService.avatarUrl` so a changed picture is a new URL.
+  final ValueNotifier<int?> avatarUpdatedAt = ValueNotifier(null);
+
   /// Whether terms have been accepted **for the current [activeHost]**.
   ///
   /// Derived state — never assign to it directly. It is recomputed by

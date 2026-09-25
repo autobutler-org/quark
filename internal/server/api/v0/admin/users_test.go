@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	v0_admin "github.com/autobutler-org/quark/internal/server/api/v0/admin"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/avatarutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
@@ -219,5 +223,31 @@ func TestPromoteUser_OnlyActive(t *testing.T) {
 	}
 	if n := h.drainEvents(); n != 1 {
 		t.Errorf("promote published %d account_changed events, want 1", n)
+	}
+}
+
+// TestDeleteUser_RemovesProfilePicture verifies an admin's delete takes the
+// account's picture with it, so a recycled id does not inherit it.
+func TestDeleteUser_RemovesProfilePicture(t *testing.T) {
+	h := newAdminHarness(t)
+	h.addUser(t, "bob", authutil.StatusActive, false)
+	bob, err := h.database.Queries.GetUserByUsername(context.Background(), "bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := avatarutil.Dir(storageutil.GetDataDir())
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	picture := filepath.Join(dir, strconv.FormatInt(bob.ID, 10)+".png")
+	if err := os.WriteFile(picture, []byte("picture"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if w := h.do(http.MethodDelete, "/api/v0/admin/users/bob"); w.Code != http.StatusOK {
+		t.Fatalf("DELETE = %d: %s", w.Code, w.Body.String())
+	}
+	if _, err := os.Stat(picture); !os.IsNotExist(err) {
+		t.Errorf("bob's picture is still there (stat err %v)", err)
 	}
 }

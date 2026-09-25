@@ -10,6 +10,9 @@ import 'package:quark/utils/error_text.dart';
 /// The account routes an admin uses, under `/api/v0/admin`, and the
 /// access-requests setting. The Quark answers anyone else with 403.
 ///
+/// Also profile pictures under `/api/v0/users`, which every signed-in user
+/// may call: [avatarUrl], [setAvatar] and [removeAvatar].
+///
 /// A refusal the Quark explains in its own words, such as "no account has
 /// that username", goes through [throwApiError], which passes that text on.
 /// Two statuses get the app's copy instead: 403 reads as a permission failure
@@ -135,6 +138,82 @@ class UsersService with AuthenticatedService {
     return UserAccount.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
+  }
+
+  /// The Quark's limit on a profile picture upload, 10 MiB.
+  static const int maxAvatarBytes = 10 << 20;
+
+  /// Where the profile picture of the account [userId] is served, with the
+  /// session token in the query so `Image.network` can load it.
+  ///
+  /// [version] is the picture's `avatarUpdatedAt` (from `/auth/status`, or
+  /// [setAvatar]'s return), added as `v` so a changed picture is a new URL and
+  /// no image cache serves the old one. A user with no picture is a 404.
+  static Uri avatarUrl(int userId, {int? version}) {
+    final token = AppSettings.instance.sessionToken;
+    return apiBaseUri
+        .resolve('/api/v0/users/$userId/avatar')
+        .replace(
+          queryParameters: {
+            if (version != null) 'v': '$version',
+            if (token != null && token.isNotEmpty) 'token': token,
+          },
+        );
+  }
+
+  /// Uploads [bytes], [length] bytes of an image named [filename], as the
+  /// signed-in user's profile picture, streaming it rather than holding it.
+  /// The Quark crops it square, resizes it to 256x256 and drops its EXIF.
+  /// Returns the new picture's version for [avatarUrl].
+  ///
+  /// Over [maxAvatarBytes] throws [Errors.avatarTooLarge] without sending
+  /// anything. A refusal is an [ApiException] that [Errors.avatar] reads.
+  static Future<int> setAvatar({
+    required Stream<List<int>> bytes,
+    required int length,
+    required String filename,
+  }) async {
+    if (length > maxAvatarBytes) {
+      throw const MessageException(Errors.avatarTooLarge);
+    }
+    final request =
+        http.MultipartRequest(
+            'PUT',
+            apiBaseUri.resolve('/api/v0/users/me/avatar'),
+          )
+          ..headers.addAll(instance.authHeaders)
+          ..files.add(
+            http.MultipartFile('file', bytes, length, filename: filename),
+          );
+    final response = await http.Response.fromStream(
+      await sharedHttpClient.send(request),
+    );
+    instance.checkUnauthorized(response);
+    if (response.statusCode != 200) {
+      throw ApiException(response.statusCode, 'set profile picture');
+    }
+    final body = jsonDecode(response.body);
+    final version = body is Map ? body['avatarUpdatedAt'] : null;
+    if (version is! num) {
+      throw ApiException(
+        response.statusCode,
+        'set profile picture: no version',
+      );
+    }
+    AppSettings.instance.avatarUpdatedAt.value = version.toInt();
+    return version.toInt();
+  }
+
+  /// Removes the signed-in user's profile picture; apps fall back to
+  /// initials. Removing a picture that isn't there succeeds.
+  static Future<void> removeAvatar() async {
+    final response = await instance.authenticatedDelete(
+      apiBaseUri.resolve('/api/v0/users/me/avatar'),
+    );
+    if (response.statusCode != 204 && response.statusCode != 200) {
+      throw ApiException(response.statusCode, 'remove profile picture');
+    }
+    AppSettings.instance.avatarUpdatedAt.value = null;
   }
 
   /// [path] with [username] as its last segment, encoded.
