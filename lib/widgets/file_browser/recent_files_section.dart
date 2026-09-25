@@ -1,7 +1,5 @@
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/files_service.dart';
-import 'package:quark/utils/files_route_path_utils.dart';
-import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/recent_files_section/recent_file_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -9,19 +7,17 @@ import 'package:quark_icons/quark_icons.dart';
 /// A horizontally-scrolling strip showing recently uploaded files.
 /// Displayed at the root of the file browser (not in search mode).
 ///
-/// Tapping a file chip calls [onOpenFile] for viewable types (images/video/audio),
-/// or [onFileMenuAction] with [FileMenuAction.download] for everything else.
+/// Tapping a file chip calls [onOpenFile], the same handler the main file list
+/// uses, so every file kind opens the same way in both places.
 /// Tapping the folder badge triggers [onNavigateToFolder] with the parent directory path.
 class RecentFilesSection extends StatefulWidget {
   const RecentFilesSection({
     required this.onOpenFile,
-    required this.onFileMenuAction,
     required this.onNavigateToFolder,
     super.key,
   });
 
   final void Function(FileNode) onOpenFile;
-  final Future<void> Function(FileNode, FileMenuAction) onFileMenuAction;
   final void Function(String path) onNavigateToFolder;
 
   @override
@@ -42,21 +38,6 @@ class _RecentFilesSectionState extends State<RecentFilesSection> {
     final slash = path.lastIndexOf('/');
     if (slash <= 0) return '';
     return path.substring(0, slash);
-  }
-
-  /// Returns true for any file type that the file browser can route into an editor or
-  /// conversion flow rather than downloading directly.
-  static bool _opensInApp(String name) {
-    final lower = name.toLowerCase();
-    return hasSupportedFilesEditorForPath(lower) || lower.endsWith('.csv');
-  }
-
-  void _openOrDownload(FileNode file) {
-    if (_opensInApp(file.name)) {
-      widget.onOpenFile(file);
-    } else {
-      widget.onFileMenuAction(file, FileMenuAction.download);
-    }
   }
 
   @override
@@ -110,7 +91,7 @@ class _RecentFilesSectionState extends State<RecentFilesSection> {
                     final file = files[index];
                     return RecentFileChip(
                       file: file,
-                      onTap: () => _openOrDownload(file),
+                      onTap: () => widget.onOpenFile(file),
                       onFolderTap: () =>
                           widget.onNavigateToFolder(_parentPath(file)),
                     );
