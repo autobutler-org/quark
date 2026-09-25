@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:quark/services/client_thumbnails.dart';
 import 'package:quark/services/upload_chunk_source_io.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 
@@ -80,6 +81,7 @@ Future<List<PendingUpload>> pickFolderUploadsPlatform() async {
           }
         },
         openChunkSource: () => FileUploadChunkSource.open(entity.path),
+        renderThumbnail: () => renderThumbnailFromPath(name, entity.path),
       ),
     );
   }
@@ -180,6 +182,8 @@ List<PendingUpload> _pendingUploadsFromPicker(List<PlatformFile> result) {
           }
         },
         openChunkSource: () => FileUploadChunkSource.open(path),
+        // Rendered with the platform decoders when the file goes (#2379).
+        renderThumbnail: () => renderThumbnailFromPath(name, path),
       ),
     );
   }

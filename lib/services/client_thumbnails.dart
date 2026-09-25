@@ -8,20 +8,27 @@
 /// whatever the Quark can make of it, as from an older client.
 ///
 /// The web renders with the browser (`createImageBitmap` for photos, a
-/// `<video>` element for video). iOS and Android render nothing yet.
+/// `<video>` element for video). iOS and Android render with the platform
+/// decoders through `video_thumbnail` and `flutter_image_compress`, which only
+/// the native build imports. Desktop renders nothing.
 library;
 
 import 'dart:typed_data';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:http/http.dart' as http;
-import 'package:quark/services/client_thumbnails_stub.dart'
+import 'package:quark/services/client_thumbnails_io.dart'
     if (dart.library.js_interop) 'package:quark/services/client_thumbnails_web.dart'
     as platform;
 
 /// The thumbnail of the file [name] whose bytes are already in memory.
 Future<Uint8List?> renderThumbnailFromBytes(String name, Uint8List bytes) =>
     platform.renderThumbnailFromBytesPlatform(name, bytes);
+
+/// The thumbnail of the file [name] on disk at [path]. The web has no paths
+/// and renders nothing here.
+Future<Uint8List?> renderThumbnailFromPath(String name, String path) =>
+    platform.renderThumbnailFromPathPlatform(name, path);
 
 /// The thumbnail of a file that arrived by drag and drop.
 Future<Uint8List?> renderDroppedFileThumbnail(DropItemFile file) =>
