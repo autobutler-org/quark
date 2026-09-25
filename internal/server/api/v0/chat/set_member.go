@@ -18,7 +18,7 @@ import (
 // @Param id path int true "Channel id"
 // @Param body body setMemberBody true "One account or group, and its permissions"
 // @Success 200 {object} chatutil.ListMembersResult
-// @Failure 400 {object} serverutil.Response "not exactly one account or group, or everyone below read_messages on general"
+// @Failure 400 {object} serverutil.Response "not exactly one account or group, everyone below read_messages on general, or leaving the channel without a manage_channel holder when the caller is not an admin"
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response "the caller lacks manage_members, grants a permission they lack, or demotes someone they may not"
 // @Failure 404 {object} serverutil.Response "no such channel, the caller's set on it is empty and they aren't an admin, or no active account or group has that id"

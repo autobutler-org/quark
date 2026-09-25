@@ -18,7 +18,7 @@ import (
 // @Param id path int true "Channel id"
 // @Param body body removeMemberBody true "One account or group"
 // @Success 200 {object} chatutil.ListMembersResult
-// @Failure 400 {object} serverutil.Response "not exactly one account or group, or everyone on general"
+// @Failure 400 {object} serverutil.Response "not exactly one account or group, everyone on general, or the last holder of manage_channel while other members remain, when the caller is not an admin"
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response "removing someone else without manage_members, or someone the caller may not remove"
 // @Failure 404 {object} serverutil.Response "no such channel, the caller's set on it is empty and they aren't an admin, or the account or group has no row"

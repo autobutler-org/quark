@@ -7,6 +7,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/chat_channel_keys_service.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:sodium/sodium_sumo.dart';
 
 /// Opens, shares and rotates channel keys for the signed-in account (#2417).
@@ -133,6 +134,33 @@ class ChatChannelKeysController extends ChangeNotifier {
       event.id,
       crypto.sign(_eventMessage(crypto, event), identity),
     );
+  }
+
+  /// Signs [event] when it records giving account [userId] or group
+  /// [groupId] [permissions] (removing its row when [permissions] is null),
+  /// which is what this account just asked for. Anything else, or a failure to sign, is
+  /// logged and left unsigned, so every member sees the line as unverified;
+  /// the change itself already happened.
+  Future<void> signMemberChange(
+    ChatChannelEvent? event, {
+    int? userId,
+    int? groupId,
+    Set<ChatPermission>? permissions,
+  }) async {
+    if (event == null) return;
+    if (!event.describesMemberChange(
+      userId: userId,
+      groupId: groupId,
+      permissions: permissions,
+    )) {
+      debugPrint('chat: event ${event.id} does not match the change made');
+      return;
+    }
+    try {
+      await signEvent(event);
+    } catch (e) {
+      debugPrint('chat: could not sign event ${event.id}: $e');
+    }
   }
 
   /// Whether [event] carries a valid signature by its actor. An unsigned or

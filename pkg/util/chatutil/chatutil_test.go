@@ -645,3 +645,76 @@ func TestChangesTellMembersBeforeAndAfter(t *testing.T) {
 	}
 	has(evt, "bob")
 }
+
+func TestLastManagerCannotLeaveOrBeDemotedExceptByAnAdmin(t *testing.T) {
+	f := newFixture(t)
+	channel := f.create(t, "bob", "design")
+	if err := f.set(t, "bob", channel.ID, f.users["carol"], 0, chatutil.PresetMember); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.remove("bob", channel.ID, f.users["bob"], 0); !errors.Is(err, chatutil.ErrLastOwner) {
+		t.Errorf("last manager leaving = %v, want ErrLastOwner", err)
+	}
+	if err := f.set(t, "bob", channel.ID, f.users["bob"], 0, chatutil.PresetModerator); !errors.Is(err, chatutil.ErrLastOwner) {
+		t.Errorf("last manager dropping manage_channel = %v, want ErrLastOwner", err)
+	}
+	if got := f.perms(t, "bob")["design"]; got != chatutil.PermsAll {
+		t.Errorf("after refusals bob holds %v, want everything: the change must roll back", got)
+	}
+
+	// A second holder, even through a group, lets the first one go.
+	crew := f.group(t, "crew", "carol")
+	if err := f.set(t, "bob", channel.ID, 0, crew, chatutil.PresetOwner); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.remove("bob", channel.ID, f.users["bob"], 0); err != nil {
+		t.Errorf("leaving with another holder = %v", err)
+	}
+	if err := f.remove("carol", channel.ID, 0, crew); !errors.Is(err, chatutil.ErrLastOwner) {
+		t.Errorf("removing the group holding the last manager = %v, want ErrLastOwner", err)
+	}
+
+	// An admin may leave a channel with no one to manage it.
+	if err := f.remove("admin", channel.ID, 0, crew); err != nil {
+		t.Errorf("admin removing the last manager = %v", err)
+	}
+	// With no holder left, a member may still leave.
+	if err := f.remove("carol", channel.ID, f.users["carol"], 0); err != nil {
+		t.Errorf("member leaving an unmanaged channel = %v", err)
+	}
+
+	// Alone in a channel, its last manager may leave it empty.
+	solo := f.create(t, "bob", "solo")
+	if err := f.remove("bob", solo.ID, f.users["bob"], 0); err != nil {
+		t.Errorf("the only member leaving = %v", err)
+	}
+}
+
+func TestListingEveryChannelIsForAdmins(t *testing.T) {
+	f := newFixture(t)
+	f.create(t, "bob", "secret")
+	ctx := context.Background()
+
+	if _, err := chatutil.ListChannels(chatutil.ListChannelsParams{Ctx: ctx, Database: f.database, Principal: f.as("bob"), All: true}); !errors.Is(err, chatutil.ErrAdminOnly) {
+		t.Errorf("All for bob = %v, want ErrAdminOnly", err)
+	}
+	if got := f.perms(t, "admin"); len(got) != 1 || got["general"] != chatutil.PresetMember {
+		t.Errorf("admin's own channels = %v, want only general", got)
+	}
+	result, err := chatutil.ListChannels(chatutil.ListChannelsParams{Ctx: ctx, Database: f.database, Principal: f.as("admin"), All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	var perms []chatutil.Perms
+	for _, c := range result.Channels {
+		names, perms = append(names, c.Name), append(perms, c.Permissions)
+	}
+	if !slices.Equal(names, []string{"general", "secret"}) || !slices.Equal(perms, []chatutil.Perms{chatutil.PresetMember, 0}) {
+		t.Errorf("All for admin = %v %v, want general then secret with an empty set", names, perms)
+	}
+	if !result.Channels[1].IsPrivate {
+		t.Errorf("secret = %+v, want private", result.Channels[1])
+	}
+}

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:quark/controllers/chat_channel_keys_controller.dart';
+import 'package:quark/controllers/chat_channel_share_target.dart';
 import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/controllers/chat_messages_controller.dart';
 import 'package:quark/models/chat_channel.dart';
@@ -17,6 +18,18 @@ typedef ListChatChannelsFn = Future<List<ChatChannel>> Function();
 
 /// Lists one channel's members.
 typedef ListChatMembersFn = Future<List<ChatMember>> Function(int channelId);
+
+/// Creates a channel with a name and a topic.
+typedef CreateChatChannelFn =
+    Future<ChatChannel> Function(String name, String topic);
+
+/// Renames a channel and sets its topic.
+typedef UpdateChatChannelFn =
+    Future<ChatChannel> Function(
+      int channelId, {
+      required String name,
+      required String topic,
+    });
 
 /// A message sent from this client that the Quark has not stored yet: shown
 /// at once, and kept with its [error] when sending failed so it can be
@@ -81,6 +94,11 @@ class ChatPendingSend {
 ///   account only manages: it gets members but no timeline, and no wait for a
 ///   key that isn't coming. The set is a hint for the UI; a send the Quark
 ///   refuses fails like any other.
+/// - [createChannel], [updateChannel], [deleteChannel] and [leaveChannel]
+///   manage channels (#2422). Each reports through [isSaving] and
+///   [saveError], for the dialog that asked. An admin also lists the
+///   channels they are not in, as [otherChannelItems]; opening one shows its
+///   members and settings but never its messages.
 ///
 /// Every collaborator has a real default; tests pass fakes.
 class ChatController extends ChangeNotifier {
@@ -89,6 +107,15 @@ class ChatController extends ChangeNotifier {
   ChatController({
     ListChatChannelsFn listChannels = ChatChannelsService.listChannels,
     ListChatMembersFn listMembers = ChatChannelsService.listMembers,
+    ListChatChannelsFn listAllChannels = ChatChannelsService.listAllChannels,
+    CreateChatChannelFn createChannel = ChatChannelsService.createChannel,
+    UpdateChatChannelFn updateChannel = ChatChannelsService.updateChannel,
+    Future<void> Function(int channelId) deleteChannel =
+        ChatChannelsService.deleteChannel,
+    RemoveChatMemberFn removeMember = ChatChannelsService.removeMember,
+    Future<bool> Function(int channelId)? ensureKeys,
+    SignMemberChangeFn? signMemberChange,
+    bool Function()? isAdmin,
     ChatMessagesController Function(int channelId)? messagesFor,
     bool Function()? isUnlocked,
     Future<void> Function(String password)? unlock,
@@ -99,6 +126,17 @@ class ChatController extends ChangeNotifier {
     DateTime Function()? now,
   }) : _listChannels = listChannels,
        _listMembers = listMembers,
+       _listAllChannels = listAllChannels,
+       _createChannel = createChannel,
+       _updateChannel = updateChannel,
+       _deleteChannel = deleteChannel,
+       _removeMember = removeMember,
+       _ensureKeys =
+           ensureKeys ?? ChatChannelKeysController.instance.ensureKeys,
+       _signMemberChange =
+           signMemberChange ??
+           ChatChannelKeysController.instance.signMemberChange,
+       _isAdmin = isAdmin ?? (() => AppSettings.instance.isAdmin.value),
        _messagesFor =
            messagesFor ??
            ((channelId) => ChatMessagesController(channelId: channelId)),
@@ -121,6 +159,12 @@ class ChatController extends ChangeNotifier {
     _events = (events ?? EventsService.instance.events).listen(_onEvent);
   }
 
+  /// The most characters the Quark takes in a channel's name.
+  static const maxNameLength = 64;
+
+  /// The most characters the Quark takes in a channel's topic.
+  static const maxTopicLength = 512;
+
   /// The URL segment that means the default channel, as `/chat` redirects to.
   static const defaultChannelSlug = 'general';
 
@@ -132,6 +176,14 @@ class ChatController extends ChangeNotifier {
 
   final ListChatChannelsFn _listChannels;
   final ListChatMembersFn _listMembers;
+  final ListChatChannelsFn _listAllChannels;
+  final CreateChatChannelFn _createChannel;
+  final UpdateChatChannelFn _updateChannel;
+  final Future<void> Function(int channelId) _deleteChannel;
+  final RemoveChatMemberFn _removeMember;
+  final Future<bool> Function(int channelId) _ensureKeys;
+  final SignMemberChangeFn _signMemberChange;
+  final bool Function() _isAdmin;
   final ChatMessagesController Function(int channelId) _messagesFor;
   final bool Function() _isUnlocked;
   final Future<void> Function(String password) _unlock;
@@ -159,6 +211,8 @@ class ChatController extends ChangeNotifier {
   bool _wasUnlocked = false;
   bool _isUnlocking = false;
   Object? _unlockError;
+  bool _isSaving = false;
+  Object? _saveError;
   bool _disposed = false;
 
   /// The channels, `general` first.
@@ -212,6 +266,47 @@ class ChatController extends ChangeNotifier {
 
   /// Why the last [unlock] failed, for `Errors.message`.
   Object? get unlockError => _unlockError;
+
+  /// Whether a channel is being created, changed, deleted or left.
+  bool get isSaving => _isSaving;
+
+  /// Why the last of those failed, for `Errors.chatChannel`; cleared when the
+  /// next one starts.
+  Object? get saveError => _saveError;
+
+  /// Whether the signed-in account is an admin, who may manage any channel.
+  bool get isAdmin => _isAdmin();
+
+  /// What this account may do as a manager of the open channel: every
+  /// permission for an admin, who may manage any channel, and otherwise its
+  /// own set. The member list and the share sheet offer changes from it.
+  Set<ChatPermission> get managingPermissions =>
+      isAdmin ? ChatPermission.values.toSet() : selectedPermissions;
+
+  /// Whether the open channel's name, topic and deletion are offered: to a
+  /// holder of `manage_channel`, and to admins.
+  bool get canManageSelected =>
+      _selected != null &&
+      managingPermissions.contains(ChatPermission.manageChannel);
+
+  /// Whether the open channel's members can be changed: by a holder of
+  /// `manage_members`, and by admins.
+  bool get canManageMembers =>
+      _selected != null &&
+      managingPermissions.contains(ChatPermission.manageMembers);
+
+  /// Whether the open channel can be left: by a member with a row of their
+  /// own, except in `general`. Leaving removes that row, so someone in only
+  /// through a group has nothing to remove.
+  bool get canLeaveSelected {
+    final channel = _selected;
+    final me = _currentUserId();
+    return channel != null &&
+        channel.isMember &&
+        !channel.isDefault &&
+        me != null &&
+        _members.any((m) => m.userId == me);
+  }
 
   /// Whether the open channel's messages are loading, first page or older.
   bool get isLoadingMessages =>
@@ -271,10 +366,25 @@ class ChatController extends ChangeNotifier {
     ];
   }
 
-  /// The channels for `QuarkChannelList`.
+  /// The channels this account is in, for `QuarkChannelList`, each with
+  /// what it may do there.
   List<ChatChannelItem> get channelItems => [
     for (final c in _channels)
-      ChatChannelItem(id: '${c.id}', name: c.name, isPrivate: c.isPrivate),
+      if (c.isMember)
+        ChatChannelItem(
+          id: '${c.id}',
+          name: c.name,
+          isPrivate: c.isPrivate,
+          permissions: c.permissions,
+        ),
+  ];
+
+  /// For an admin, the channels they are not in, for `QuarkChannelList`'s
+  /// other channels.
+  List<ChatChannelItem> get otherChannelItems => [
+    for (final c in _channels)
+      if (!c.isMember)
+        ChatChannelItem(id: '${c.id}', name: c.name, isPrivate: c.isPrivate),
   ];
 
   /// The members for `QuarkMemberList`: accounts by their id, groups as
@@ -428,6 +538,108 @@ class ChatController extends ChangeNotifier {
     }
   }
 
+  /// Creates channel [name] with [topic], owned by this account, sets up its
+  /// first key, and lists it. The new channel, or null with [saveError] set.
+  /// The page then goes to it.
+  Future<ChatChannel?> createChannel(String name, String topic) =>
+      _save(() async {
+        final channel = await _createChannel(name, topic);
+        try {
+          await _ensureKeys(channel.id);
+        } catch (e) {
+          // The channel stands; the next member to open it makes version 1.
+          debugPrint('chat: no first key for channel ${channel.id}: $e');
+        }
+        await _loadChannels();
+        return channel;
+      });
+
+  /// Renames the open channel to [name] and sets its [topic]. Whether it
+  /// worked; otherwise [saveError] says why.
+  Future<bool> updateChannel(String name, String topic) async {
+    final channel = _selected;
+    if (channel == null) return false;
+    final updated = await _save(() async {
+      await _updateChannel(channel.id, name: name, topic: topic);
+      await _loadChannels();
+      return true;
+    });
+    return updated ?? false;
+  }
+
+  /// Deletes the open channel with its messages and keys. The default channel
+  /// opens in its place. Whether it worked.
+  Future<bool> deleteChannel() async {
+    final channel = _selected;
+    if (channel == null) return false;
+    final deleted = await _save(() async {
+      await _deleteChannel(channel.id);
+      await _loadChannels();
+      return true;
+    });
+    return deleted ?? false;
+  }
+
+  /// Removes member [memberId], an id from [memberItems], from the open
+  /// channel and signs the event; removing someone who read it makes the
+  /// Quark ask the members who stay to rotate its key. Null on success,
+  /// otherwise the failure, for `Errors.message`.
+  Future<Object?> removeMember(String memberId) async {
+    final channel = _selected;
+    if (channel == null) return null;
+    final groupId = memberId.startsWith('group_')
+        ? int.tryParse(memberId.substring('group_'.length))
+        : null;
+    final userId = groupId == null ? int.tryParse(memberId) : null;
+    if (groupId == null && userId == null) return null;
+    try {
+      final change = await _removeMember(
+        channel.id,
+        userId: userId,
+        groupId: groupId,
+      );
+      await _signMemberChange(change.event, userId: userId, groupId: groupId);
+      await Future.wait([_loadChannels(), _loadMembers()]);
+      return null;
+    } catch (e) {
+      return e;
+    }
+  }
+
+  /// Whether removing member [memberId] takes `read_messages` from its row,
+  /// so the page warns about the key rotating first.
+  bool memberReads(String memberId) {
+    for (final item in memberItems) {
+      if (item.id == memberId) {
+        return item.permissions?.contains(ChatPermission.readMessages) ?? false;
+      }
+    }
+    return false;
+  }
+
+  /// Takes this account out of the open channel, which makes the Quark ask
+  /// the members who stay to rotate its key. The event is signed from
+  /// outside. The default channel opens in its place. Whether it worked.
+  Future<bool> leaveChannel() async {
+    final channel = _selected;
+    final me = _currentUserId();
+    if (channel == null || me == null) return false;
+    final left = await _save(() async {
+      final change = await _removeMember(channel.id, userId: me);
+      await _signMemberChange(change.event, userId: me);
+      await _loadChannels();
+      return true;
+    });
+    return left ?? false;
+  }
+
+  /// Forgets [saveError], as a dialog opening afresh does.
+  void clearSaveError() {
+    if (_saveError == null) return;
+    _saveError = null;
+    _notify();
+  }
+
   /// Flips the channel drawer of the collapsed layout.
   void toggleChannelList() {
     _isChannelListOpen = !_isChannelListOpen;
@@ -535,11 +747,29 @@ class ChatController extends ChangeNotifier {
     super.dispose();
   }
 
+  /// Runs one channel change, one at a time, through [isSaving] and
+  /// [saveError]. Its result, or null when it failed or another was running.
+  Future<T?> _save<T>(Future<T> Function() change) async {
+    if (_isSaving) return null;
+    _isSaving = true;
+    _saveError = null;
+    _notify();
+    try {
+      return await change();
+    } catch (e) {
+      _saveError = e;
+      return null;
+    } finally {
+      _isSaving = false;
+      _notify();
+    }
+  }
+
   Future<void> _loadChannels() async {
     _isLoadingChannels = true;
     _notify();
     try {
-      final channels = await _listChannels();
+      final channels = await (_isAdmin() ? _listAllChannels : _listChannels)();
       if (_disposed) return;
       _channels = channels;
       _channelsError = null;

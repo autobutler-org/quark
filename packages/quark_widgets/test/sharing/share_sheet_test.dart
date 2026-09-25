@@ -348,4 +348,100 @@ void main() {
       );
     });
   }
+
+  group('sharing permission sets (#2422)', () {
+    const member = {
+      ChatPermission.readMessages,
+      ChatPermission.sendMessages,
+      ChatPermission.addReactions,
+    };
+    final channelGrants = [
+      const GrantItem(principal: everyone, permissions: member),
+      const GrantItem(
+        principal: bob,
+        permissions: {ChatPermission.manageMembers},
+      ),
+      GrantItem(principal: ada, permissions: ChatPermission.values.toSet()),
+    ];
+
+    Widget channelSheet({
+      Set<ChatPermission>? held,
+      Set<String> lockedKeys = const {},
+      List<String>? events,
+    }) => ShareSheet(
+      itemName: '#design',
+      grants: channelGrants,
+      principals: principals,
+      canManage: true,
+      lockedKeys: lockedKeys,
+      heldPermissions: held ?? ChatPermission.values.toSet(),
+      onAddPermissions: (p, set) =>
+          events?.add('add ${p.keySuffix} ${set.map((e) => e.id).join(',')}'),
+      onSetPermissions: (p, set) =>
+          events?.add('set ${p.keySuffix} ${set.map((e) => e.id).join(',')}'),
+      onRevoke: (p) => events?.add('revoke ${p.keySuffix}'),
+    );
+
+    testBothViewports('rows show their preset or Custom, with a picker', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(tester, channelSheet(), size: size);
+
+      expect(find.text('Members'), findsOneWidget);
+      expect(find.text('Member · Every account'), findsOneWidget);
+      expect(key('share_perms_user_2_preset_custom'), findsOneWidget);
+      expect(key('share_level_user_2'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testBothViewports('a preset change sets, clearing the last box revokes', (
+      tester,
+      size,
+    ) async {
+      final events = <String>[];
+      await pumpAt(tester, channelSheet(events: events), size: size);
+
+      await tapKey(tester, 'share_perms_group_1_preset_viewer');
+      await tapKey(tester, 'share_perms_user_2_manage_members');
+
+      expect(events, ['set group_1 read_messages', 'revoke user_2']);
+    });
+
+    testBothViewports('the form adds a Member unless told otherwise', (
+      tester,
+      size,
+    ) async {
+      final events = <String>[];
+      await pumpAt(tester, channelSheet(events: events), size: size);
+
+      await tester.enterText(key('principal_search'), 'Family');
+      await tester.pumpAndSettle();
+      await tapKey(tester, 'principal_option_group_2');
+      await tapKey(tester, 'share_add_submit');
+      await tapKey(tester, 'share_add_perms_preset_moderator');
+      await tapKey(tester, 'share_add_submit');
+
+      expect(events, [
+        'add group_2 read_messages,send_messages,add_reactions',
+        'add group_2 read_messages,send_messages,add_reactions,'
+            'delete_messages,manage_members',
+      ]);
+    });
+
+    testBothViewports('a locked row gets no picker and no remove', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        channelSheet(lockedKeys: const {'user_1'}),
+        size: size,
+      );
+
+      expect(key('share_perms_user_1_preset_custom'), findsNothing);
+      expect(revokeOf(tester, 'user_1'), isNull);
+      expect(revokeOf(tester, 'user_2'), isNotNull);
+    });
+  });
 }

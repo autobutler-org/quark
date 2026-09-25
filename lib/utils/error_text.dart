@@ -252,6 +252,19 @@ abstract final class Errors {
   static const String chatWaitingForKey =
       'Waiting for a member to share the key. Try again once they have.';
 
+  /// A chat channel name another channel already has, ignoring case — what
+  /// the Quark's 409 means for creating or renaming a channel (#2422).
+  static const String chatChannelNameTaken =
+      'A channel with that name already exists. Pick another name.';
+
+  /// A failed channel create or rename. A 409 gets [chatChannelNameTaken];
+  /// the generic sentence would send the user to retry a name that will clash
+  /// again. [action] is as in [message].
+  static String chatChannel(Object? error, String action) =>
+      error is ApiException && error.statusCode == 409
+      ? chatChannelNameTaken
+      : message(error, action);
+
   /// A chat message too long to fit the Quark's 16 KiB cap once encrypted.
   static const String chatMessageTooLong =
       'That message is too long. Split it into shorter ones.';

@@ -2,14 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../core/quark_loader.dart';
 import '../models/access_level.dart';
+import '../models/chat_permission.dart';
 import '../models/grant_item.dart';
 import '../models/principal_item.dart';
 import '../theme/quark_tokens.dart';
 import 'share_sheet/add_grant_form.dart';
+import 'share_sheet/add_permission_grant_form.dart';
 import 'share_sheet/grant_row.dart';
+import 'share_sheet/permission_grant_row.dart';
 
-/// Who has access to one file or folder, controls to change it, and a form
-/// to share it with another account or group.
+/// Who has access to one file or folder, or who is in a chat channel,
+/// controls to change it, and a form to share it with another account or
+/// group.
+///
+/// A file or folder shares at a level ([AccessLevel]). A chat channel shares
+/// a set of permissions instead (#2415): pass [heldPermissions], what the
+/// signed-in account holds, and the sheet reads [GrantItem.permissions], puts
+/// a `QuarkChatPermissionPicker` under each row and in the form, and reports
+/// through [onAddPermissions] and [onSetPermissions]. The pickers disable
+/// what the account doesn't hold, and clearing a row's last box removes it
+/// through [onRevoke] rather than saving an empty set.
 ///
 /// Every value is the caller's: [grants] and [principals] in, [onAdd],
 /// [onSetLevel] and [onRevoke] out, and the caller replaces [grants] once a
@@ -40,7 +52,8 @@ import 'share_sheet/grant_row.dart';
 /// `share_inherited_<kind>_<id>` on each inherited row,
 /// `share_add_level_<level>` on the form's level choices, `share_add_submit`
 /// on its share button, and the principal picker's `principal_search` and
-/// `principal_option_<kind>_<id>`.
+/// `principal_option_<kind>_<id>`. Sharing permission sets, each row's picker
+/// keys start `share_perms_<kind>_<id>` and the form's `share_add_perms`.
 ///
 /// ```dart
 /// showModalBottomSheet<void>(
@@ -76,6 +89,9 @@ class ShareSheet extends StatelessWidget {
     this.onAdd,
     this.onSetLevel,
     this.onRevoke,
+    this.heldPermissions,
+    this.onAddPermissions,
+    this.onSetPermissions,
     super.key,
   });
 
@@ -122,6 +138,21 @@ class ShareSheet extends StatelessWidget {
   /// Called with whose access to remove. Null disables the remove buttons.
   final ValueChanged<PrincipalItem>? onRevoke;
 
+  /// For a chat channel, what the signed-in account holds and so may grant;
+  /// every permission for an admin. Non-null shares permission sets instead
+  /// of levels.
+  final Set<ChatPermission>? heldPermissions;
+
+  /// For a chat channel, called with who to add and their set. Null leaves
+  /// the form out.
+  final void Function(PrincipalItem principal, Set<ChatPermission> permissions)?
+  onAddPermissions;
+
+  /// For a chat channel, called with whose set to replace and the new one.
+  /// Null leaves the row pickers out.
+  final void Function(PrincipalItem principal, Set<ChatPermission> permissions)?
+  onSetPermissions;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -130,6 +161,10 @@ class ShareSheet extends StatelessWidget {
     final onAdd = this.onAdd;
     final onSetLevel = this.onSetLevel;
     final onRevoke = this.onRevoke;
+    final heldPermissions = this.heldPermissions;
+    final onAddPermissions = this.onAddPermissions;
+    final onSetPermissions = this.onSetPermissions;
+    final sharesSets = heldPermissions != null;
     final direct = [
       for (final grant in grants)
         if (!grant.isInherited) grant,
@@ -172,7 +207,15 @@ class ShareSheet extends StatelessWidget {
                   child: const Center(child: QuarkLoader()),
                 )
               else if (hasAccess) ...[
-                if (canManage && onAdd != null) ...[
+                if (sharesSets && canManage && onAddPermissions != null) ...[
+                  AddPermissionGrantForm(
+                    principals: principals,
+                    heldPermissions: heldPermissions,
+                    busyKeys: busyKeys,
+                    onAdd: onAddPermissions,
+                  ),
+                  SizedBox(height: tokens.spacingMd),
+                ] else if (!sharesSets && canManage && onAdd != null) ...[
                   AddGrantForm(
                     principals: principals,
                     canGrantOwner: canGrantOwner,
@@ -181,7 +224,7 @@ class ShareSheet extends StatelessWidget {
                   ),
                   SizedBox(height: tokens.spacingMd),
                 ],
-                Text('Who has access', style: heading),
+                Text(sharesSets ? 'Members' : 'Who has access', style: heading),
                 SizedBox(height: tokens.spacingXs),
                 if (direct.isEmpty)
                   Padding(
@@ -193,21 +236,40 @@ class ShareSheet extends StatelessWidget {
                   )
                 else
                   for (final grant in direct)
-                    GrantRow(
-                      grant: grant,
-                      isBusy: busyKeys.contains(grant.principal.keySuffix),
-                      canGrantOwner: canGrantOwner,
-                      canChange:
-                          canManage &&
-                          !lockedKeys.contains(grant.principal.keySuffix) &&
-                          (grant.level != AccessLevel.owner || canGrantOwner),
-                      onSetLevel: onSetLevel == null
-                          ? null
-                          : (level) => onSetLevel(grant.principal, level),
-                      onRevoke: onRevoke == null
-                          ? null
-                          : () => onRevoke(grant.principal),
-                    ),
+                    if (sharesSets)
+                      PermissionGrantRow(
+                        grant: grant,
+                        heldPermissions: heldPermissions,
+                        isBusy: busyKeys.contains(grant.principal.keySuffix),
+                        canChange:
+                            canManage &&
+                            !lockedKeys.contains(grant.principal.keySuffix),
+                        onSetPermissions: onSetPermissions == null
+                            ? null
+                            : (permissions) => onSetPermissions(
+                                grant.principal,
+                                permissions,
+                              ),
+                        onRevoke: onRevoke == null
+                            ? null
+                            : () => onRevoke(grant.principal),
+                      )
+                    else
+                      GrantRow(
+                        grant: grant,
+                        isBusy: busyKeys.contains(grant.principal.keySuffix),
+                        canGrantOwner: canGrantOwner,
+                        canChange:
+                            canManage &&
+                            !lockedKeys.contains(grant.principal.keySuffix) &&
+                            (grant.level != AccessLevel.owner || canGrantOwner),
+                        onSetLevel: onSetLevel == null
+                            ? null
+                            : (level) => onSetLevel(grant.principal, level),
+                        onRevoke: onRevoke == null
+                            ? null
+                            : () => onRevoke(grant.principal),
+                      ),
                 if (inherited.isNotEmpty) ...[
                   SizedBox(height: tokens.spacingMd),
                   Text('Inherited access', style: heading),

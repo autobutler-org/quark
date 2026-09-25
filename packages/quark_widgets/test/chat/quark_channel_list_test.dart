@@ -167,4 +167,81 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testBothViewports('lists other channels under their own heading', (
+    tester,
+    size,
+  ) async {
+    final selected = <String>[];
+    await pumpAt(
+      tester,
+      QuarkChannelList(
+        serverName: 'Home',
+        channels: channels,
+        otherChannels: const [
+          ChatChannelItem(id: 'secret', name: 'secret', isPrivate: true),
+        ],
+        selectedChannelId: 'secret',
+        onSelect: selected.add,
+      ),
+      size: size,
+    );
+
+    expect(
+      find.byKey(const ValueKey('channel_list_other_header')),
+      findsOneWidget,
+    );
+    expect(find.text('Other channels'), findsOneWidget);
+    final tile = find.byKey(const ValueKey('channel_tile_secret'));
+    expect(tester.widget<ListTile>(tile).selected, isTrue);
+    await tester.tap(tile);
+    expect(selected, ['secret']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows no other heading without other channels', (tester) async {
+    await pumpAt(
+      tester,
+      const QuarkChannelList(serverName: 'Home', channels: channels),
+    );
+
+    expect(
+      find.byKey(const ValueKey('channel_list_other_header')),
+      findsNothing,
+    );
+  });
+
+  testBothViewports('names what the account may do in each channel', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      const QuarkChannelList(
+        serverName: 'Home',
+        channels: [
+          ChatChannelItem(
+            id: '1',
+            name: 'general',
+            permissions: {
+              ChatPermission.readMessages,
+              ChatPermission.sendMessages,
+              ChatPermission.addReactions,
+            },
+          ),
+          ChatChannelItem(
+            id: '2',
+            name: 'ops',
+            permissions: {ChatPermission.manageMembers},
+          ),
+          ChatChannelItem(id: '3', name: 'plain'),
+        ],
+      ),
+      size: size,
+    );
+
+    expect(find.text('Member'), findsOneWidget);
+    expect(find.text('Custom'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

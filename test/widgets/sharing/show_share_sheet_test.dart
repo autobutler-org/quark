@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quark/controllers/chat_channel_share_target.dart';
+import 'package:quark/models/chat_channel.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -221,5 +223,286 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('principal_search')), findsNothing);
+  });
+
+  group('for a chat channel (#2422)', () {
+    const member = {
+      ChatPermission.readMessages,
+      ChatPermission.sendMessages,
+      ChatPermission.addReactions,
+    };
+    const everyoneRow = ChatMember(
+      groupId: 1,
+      name: 'everyone',
+      permissions: member,
+      builtin: true,
+    );
+    final owner = ChatPermission.values.toSet();
+    late List<String> calls;
+    late List<ChatMember> members;
+
+    String ids(Set<ChatPermission>? permissions) => permissions == null
+        ? 'none'
+        : [
+            for (final p in ChatPermission.values)
+              if (permissions.contains(p)) p.id,
+          ].join(',');
+
+    Future<void> openChannel(
+      WidgetTester tester,
+      ChatChannel channel, {
+      Size size = const Size(1280, 800),
+    }) async {
+      calls = [];
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final target = ChatChannelShareTarget(
+        channel: channel,
+        selfUserId: 7,
+        listMembers: (_) async => members,
+        setMember: (id, {userId, groupId, required permissions}) async {
+          calls.add('set $id user=$userId ${ids(permissions)}');
+          members = [
+            for (final m in members)
+              if (m.userId != userId || userId == null) m,
+            ChatMember(userId: userId, name: 'bob', permissions: permissions),
+          ];
+          return (members: members, event: null);
+        },
+        removeMember: (id, {userId, groupId}) async {
+          calls.add('remove $id user=$userId group=$groupId');
+          members = [
+            for (final m in members)
+              if (m.groupId != groupId || m.userId != userId) m,
+          ];
+          return (members: members, event: null);
+        },
+        signMemberChange: (event, {userId, groupId, permissions}) async =>
+            calls.add('sign user=$userId group=$groupId ${ids(permissions)}'),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showShareSheetFor(
+                  context,
+                  target: target,
+                  name: '#${channel.name}',
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    for (final (label, size) in [
+      ('narrow', const Size(360, 640)),
+      ('wide', const Size(1280, 800)),
+    ]) {
+      testWidgets('adds a Moderator and removes a group ($label)', (
+        tester,
+      ) async {
+        members = const [everyoneRow];
+        await openChannel(
+          tester,
+          ChatChannel(id: 2, name: 'design', permissions: owner),
+          size: size,
+        );
+        expect(find.text('Share #design'), findsOneWidget);
+        expect(requests.where((r) => r.url.path == '/api/v0/access'), isEmpty);
+
+        await tester.enterText(
+          find.byKey(const ValueKey('principal_search')),
+          'bob',
+        );
+        await tester.pumpAndSettle();
+        await tapKey(tester, 'principal_option_user_2');
+        await tapKey(tester, 'share_add_perms_preset_moderator');
+        await tapKey(tester, 'share_add_submit');
+        expect(
+          find.byKey(const ValueKey('share_grant_user_2')),
+          findsOneWidget,
+        );
+
+        // everyone reads, so removing it warns that the key rotates.
+        await tapKey(tester, 'share_revoke_group_1');
+        expect(find.textContaining("key will change"), findsOneWidget);
+        await tapKey(tester, 'rotate_key_confirm');
+        expect(calls, [
+          'set 2 user=2 read_messages,send_messages,add_reactions,'
+              'delete_messages,manage_members',
+          'sign user=2 group=null read_messages,send_messages,add_reactions,'
+              'delete_messages,manage_members',
+          'remove 2 user=null group=1',
+          'sign user=null group=1 none',
+        ]);
+        expect(find.byKey(const ValueKey('share_grant_group_1')), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('a custom set shows as Custom', (tester) async {
+      members = const [
+        ChatMember(
+          userId: 2,
+          name: 'bob',
+          permissions: {ChatPermission.manageMembers},
+        ),
+      ];
+      await openChannel(
+        tester,
+        ChatChannel(id: 2, name: 'design', permissions: owner),
+      );
+
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('share_grant_user_2')),
+          matching: find.text('Custom'),
+        ),
+        findsWidgets,
+      );
+    });
+
+    testWidgets('dropping read_messages warns first', (tester) async {
+      members = const [ChatMember(userId: 2, name: 'bob', permissions: member)];
+      await openChannel(
+        tester,
+        ChatChannel(id: 2, name: 'design', permissions: owner),
+      );
+
+      await tapKey(tester, 'share_perms_user_2_preset_custom');
+      await tapKey(tester, 'share_perms_user_2_read_messages');
+      // bob keeps nothing but would lose the key: clearing the last box
+      // offers removal, with the rotation warning.
+      expect(find.textContaining("key will change"), findsOneWidget);
+      await tapKey(tester, 'rotate_key_cancel');
+      expect(calls, isEmpty);
+
+      // Adding a bit takes nothing away.
+      await tapKey(tester, 'share_perms_user_2_manage_members');
+      expect(find.textContaining("key will change"), findsNothing);
+      expect(
+        calls.first,
+        'set 2 user=2 read_messages,send_messages,'
+        'add_reactions,manage_members',
+      );
+
+      // Keeping manage_members without read_messages warns first.
+      await tapKey(tester, 'share_perms_user_2_read_messages');
+      expect(find.textContaining("key will change"), findsOneWidget);
+      await tapKey(tester, 'rotate_key_confirm');
+      expect(calls[2], 'set 2 user=2 manage_members');
+    });
+
+    testWidgets('a manage-only set changes without a key warning', (
+      tester,
+    ) async {
+      // A manage-only set holds no key; another manage-only set takes
+      // nothing away and asks nothing.
+      members = const [
+        ChatMember(
+          userId: 2,
+          name: 'bob',
+          permissions: {ChatPermission.manageMembers},
+        ),
+      ];
+      await openChannel(
+        tester,
+        ChatChannel(id: 2, name: 'design', permissions: owner),
+      );
+      await tapKey(tester, 'share_perms_user_2_manage_channel');
+      expect(find.textContaining("key will change"), findsNothing);
+      expect(calls, [
+        'set 2 user=2 manage_channel,manage_members',
+        'sign user=2 group=null manage_channel,manage_members',
+      ]);
+    });
+
+    testWidgets('clearing every box removes the member', (tester) async {
+      members = const [
+        ChatMember(
+          userId: 2,
+          name: 'bob',
+          permissions: {ChatPermission.manageMembers},
+        ),
+      ];
+      await openChannel(
+        tester,
+        ChatChannel(id: 2, name: 'design', permissions: owner),
+      );
+
+      await tapKey(tester, 'share_perms_user_2_manage_members');
+      expect(calls, [
+        'remove 2 user=2 group=null',
+        'sign user=2 group=null none',
+      ]);
+    });
+
+    testWidgets('permissions the caller lacks are disabled', (tester) async {
+      members = const [everyoneRow];
+      await openChannel(
+        tester,
+        const ChatChannel(
+          id: 2,
+          name: 'design',
+          permissions: {
+            ChatPermission.readMessages,
+            ChatPermission.sendMessages,
+            ChatPermission.addReactions,
+            ChatPermission.deleteMessages,
+            ChatPermission.manageMembers,
+          },
+        ),
+      );
+
+      await tapKey(tester, 'share_add_perms_preset_custom');
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('share_add_perms_manage_channel')),
+            )
+            .onChanged,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<ChoiceChip>(
+              find.byKey(const ValueKey('share_add_perms_preset_owner')),
+            )
+            .onSelected,
+        isNull,
+      );
+    });
+
+    testWidgets("keeps general's everyone row", (tester) async {
+      members = const [everyoneRow];
+      await openChannel(
+        tester,
+        ChatChannel(
+          id: 1,
+          name: 'general',
+          isDefault: true,
+          permissions: owner,
+        ),
+      );
+
+      expect(find.byKey(const ValueKey('share_grant_group_1')), findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('share_revoke_group_1')),
+            )
+            .onPressed,
+        isNull,
+        reason: 'shown, but it cannot be removed',
+      );
+    });
   });
 }

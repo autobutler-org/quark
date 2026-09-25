@@ -1,3 +1,5 @@
+import 'package:quark_widgets/quark_widgets.dart';
+
 /// Who has access to one file or folder, and whether the signed-in account
 /// may change that, as `/api/v0/access` answers (#1911).
 class PathAccess {
@@ -47,6 +49,7 @@ class PathGrant {
     this.builtin = false,
     required this.level,
     required this.from,
+    this.permissions,
   });
 
   /// The account's id, or null for a group.
@@ -66,6 +69,10 @@ class PathGrant {
 
   /// The path the access is set on: the path itself, or a folder it is in.
   final String from;
+
+  /// For a chat channel's member (#2422), the row's set of permissions, in
+  /// place of [level]; null for a path.
+  final Set<ChatPermission>? permissions;
 
   factory PathGrant.fromJson(Map<String, dynamic> json) => PathGrant(
     userId: (json['userId'] as num?)?.toInt(),
