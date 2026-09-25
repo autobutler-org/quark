@@ -4,6 +4,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 import 'widgets/album_sidebar_demo.dart';
 import 'widgets/album_tree_demo.dart';
+import 'widgets/chat_demo_data.dart';
+import 'widgets/chat_layout_demo.dart';
 import 'widgets/framed_viewport.dart';
 import 'widgets/password_strength_demo.dart';
 import 'widgets/split_view_demo.dart';
@@ -205,6 +207,57 @@ final List<GalleryEntry> registry = [
           Positioned(top: 0, left: 0, right: 0, child: ScrollUpHint()),
         ],
       ),
+    ),
+  ),
+
+  GalleryEntry(
+    name: 'QuarkAvatar',
+    group: 'Core',
+    build: (context, log) => Wrap(
+      spacing: 16,
+      runSpacing: 16,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        // Initials on a color derived from the primary token.
+        for (final (id, name) in const [
+          ('ada', 'Ada Lovelace'),
+          ('bob', 'Bob Byron'),
+          ('cy', 'cy'),
+        ])
+          QuarkAvatar(id: id, name: name, size: 40),
+        // A picture from the builder; the gallery has no network, so a
+        // placeholder stands in for the app's cached image.
+        QuarkAvatar(
+          id: 'dee',
+          name: 'Dee',
+          size: 40,
+          imageBuilder: (context, size) => ColoredBox(
+            color: QuarkTokens.of(context).success,
+            child: Icon(
+              QuarkIcons.image_outlined,
+              size: size * 0.6,
+              color: QuarkTokens.of(context).primaryForeground,
+            ),
+          ),
+        ),
+        const QuarkAvatar(id: 'eve', name: 'Eve', size: 64),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkBetaBadge',
+    group: 'Core',
+    build: (context, log) => const Wrap(
+      spacing: 16,
+      runSpacing: 16,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [Text('Chat'), SizedBox(width: 8), QuarkBetaBadge()],
+        ),
+        QuarkBetaBadge(label: 'Preview'),
+      ],
     ),
   ),
 
@@ -1016,6 +1069,115 @@ final List<GalleryEntry> registry = [
         albums: _galleryAlbumList,
         memberAlbumIds: const {4},
         onToggle: (a) => log('AddToAlbumSheet.onToggle(${a.name})'),
+      ),
+    ),
+  ),
+
+  // ── Chat ──────────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'QuarkChatLayout',
+    group: 'Chat',
+    build: (context, log) => ChatLayoutDemo(log: log),
+  ),
+  GalleryEntry(
+    name: 'QuarkChannelList',
+    group: 'Chat',
+    build: (context, log) => Wrap(
+      spacing: 24,
+      runSpacing: 24,
+      children: [
+        SizedBox(
+          width: 280,
+          height: 240,
+          child: QuarkChannelList(
+            serverName: 'Lovelace home',
+            channels: galleryChatChannels,
+            selectedChannelId: 'family',
+            onSelect: (id) => log('QuarkChannelList.onSelect($id)'),
+          ),
+        ),
+        const SizedBox(
+          width: 280,
+          height: 240,
+          child: QuarkChannelList(
+            serverName: 'Loading',
+            channels: [],
+            isLoading: true,
+          ),
+        ),
+        const SizedBox(
+          width: 280,
+          height: 240,
+          child: QuarkChannelList(
+            serverName: 'Failed',
+            channels: [],
+            error: "Couldn't load the channels.",
+          ),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkMessageList',
+    group: 'Chat',
+    build: (context, log) => Wrap(
+      spacing: 24,
+      runSpacing: 24,
+      children: [
+        SizedBox(
+          width: 480,
+          height: 520,
+          child: QuarkMessageList(
+            messages: galleryChatMessages,
+            hasMore: true,
+            onLoadOlder: () => log('QuarkMessageList.onLoadOlder'),
+          ),
+        ),
+        SizedBox(
+          width: 320,
+          height: 240,
+          child: QuarkMessageList(
+            messages: galleryChatMessages,
+            error: "Couldn't load older messages.",
+            onLoadOlder: () => log('QuarkMessageList.onLoadOlder'),
+          ),
+        ),
+        const SizedBox(
+          width: 320,
+          height: 240,
+          child: QuarkMessageList(messages: []),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkMessageComposer',
+    group: 'Chat',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        QuarkMessageComposer(
+          hintText: 'Message #general',
+          onSend: (text) => log('QuarkMessageComposer.onSend($text)'),
+        ),
+        const SizedBox(height: 16),
+        QuarkMessageComposer(
+          disabledReason: 'You can read this channel but not write in it',
+          onSend: (text) => log('QuarkMessageComposer.onSend($text)'),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkMemberList',
+    group: 'Chat',
+    build: (context, log) => SizedBox(
+      width: 280,
+      height: 360,
+      child: QuarkMemberList(
+        members: galleryChatMembers,
+        expandedIds: const {'family'},
+        onToggleExpanded: (id) => log('QuarkMemberList.onToggleExpanded($id)'),
       ),
     ),
   ),
