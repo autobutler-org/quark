@@ -24,7 +24,8 @@ class MobileThumbnailCodecs {
     required this.compressBytes,
   });
 
-  /// A JPEG of the video at [path] at [at], fit within a [longEdge] square.
+  /// A JPEG of the video at [path] (a file path or an http(s) URL) at [at],
+  /// fit within a [longEdge] square.
   final Future<Uint8List?> Function(
     String path, {
     required int longEdge,
@@ -32,7 +33,8 @@ class MobileThumbnailCodecs {
   })
   videoFrame;
 
-  /// The length of the video at [path], or null when it cannot be read.
+  /// The length of the video at [path] (a file path or an http(s) URL), or
+  /// null when it cannot be read.
   final Future<Duration?> Function(String path) videoDuration;
 
   /// The pixel size of the image file at [path], read from its header, or
@@ -92,6 +94,26 @@ Future<Uint8List?> renderMobileThumbnail({
       render = _renderImage(use, path: path, bytes: bytes);
     }
     return await render.timeout(timeout);
+  } catch (e) {
+    debugPrint('[mobile_thumbnail_renderer.dart] No thumbnail for $name: $e');
+    return null;
+  }
+}
+
+/// Renders the thumbnail of the video [name] streamed from [url] (#2381).
+/// The platform reads only what the frame needs, through range requests.
+Future<Uint8List?> renderMobileVideoThumbnailFromUrl({
+  required String name,
+  required Uri url,
+  MobileThumbnailCodecs? codecs,
+  Duration timeout = ClientThumbnailConfig.renderTimeout,
+}) async {
+  if (fileKindForName(name) != FileKind.video) return null;
+  try {
+    return await _renderVideo(
+      codecs ?? MobileThumbnailCodecs.platform,
+      url.toString(),
+    ).timeout(timeout);
   } catch (e) {
     debugPrint('[mobile_thumbnail_renderer.dart] No thumbnail for $name: $e');
     return null;
@@ -201,7 +223,9 @@ Future<Uint8List?> _videoFrame(
 }
 
 Future<Duration?> _videoDuration(String path) async {
-  final controller = VideoPlayerController.file(File(path));
+  final controller = path.startsWith('http')
+      ? VideoPlayerController.networkUrl(Uri.parse(path))
+      : VideoPlayerController.file(File(path));
   try {
     await controller.initialize();
     final duration = controller.value.duration;

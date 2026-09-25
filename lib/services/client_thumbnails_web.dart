@@ -34,6 +34,21 @@ Future<Uint8List?> renderThumbnailFromBytesPlatform(
   return renderBlobThumbnail(web.Blob([bytes.toJS].toJS), name);
 }
 
+Future<Uint8List?> renderVideoThumbnailFromUrlPlatform(
+  String name,
+  Uri url,
+) async {
+  if (fileKindForName(name) != FileKind.video) return null;
+  try {
+    return await _renderVideoFrom(
+      url.toString(),
+    ).timeout(ClientThumbnailConfig.renderTimeout);
+  } catch (e) {
+    debugPrint('[client_thumbnails_web.dart] No thumbnail for $name: $e');
+    return null;
+  }
+}
+
 /// The web has no file paths.
 Future<Uint8List?> renderThumbnailFromPathPlatform(
   String name,
@@ -66,12 +81,21 @@ Future<Uint8List> _renderImage(web.Blob blob) async {
 
 Future<Uint8List?> _renderVideo(web.Blob blob) async {
   final url = web.URL.createObjectURL(blob);
+  try {
+    return await _renderVideoFrom(url);
+  } finally {
+    web.URL.revokeObjectURL(url);
+  }
+}
+
+/// Renders the frame of the video at [src], an object URL or a streamed one.
+Future<Uint8List?> _renderVideoFrom(String src) async {
   final video = web.HTMLVideoElement()
     ..muted = true
     ..preload = 'auto'
     ..playsInline = true;
   try {
-    video.src = url;
+    video.src = src;
     await _next(video, 'loadedmetadata');
     final seconds = video.duration;
     final duration = seconds.isFinite
@@ -88,10 +112,9 @@ Future<Uint8List?> _renderVideo(web.Blob blob) async {
     }
     return await _encodeJpeg(video, width, height);
   } finally {
-    // Drop the element's hold on the Blob before the URL goes.
+    // Drop the element's hold on the source, and any stream it had open.
     video.removeAttribute('src');
     video.load();
-    web.URL.revokeObjectURL(url);
   }
 }
 

@@ -216,4 +216,47 @@ void main() {
     expect(thumbnail, isNull);
     fake.hang!.complete();
   });
+
+  group('a video streamed from the Quark (#2381)', () {
+    test('is framed by the same rule, from its URL', () async {
+      final fake = _FakeCodecs()..duration = const Duration(seconds: 5);
+
+      final thumbnail = await renderMobileVideoThumbnailFromUrl(
+        name: 'clip.mp4',
+        url: Uri.parse('http://127.0.0.1:9/abc'),
+        codecs: fake.build(),
+      );
+
+      expect(fake.calls, [
+        'duration http://127.0.0.1:9/abc',
+        'frame http://127.0.0.1:9/abc 400 500',
+      ]);
+      expect(_label(thumbnail), 'frame400');
+    });
+
+    test('anything but a video renders nothing', () async {
+      final fake = _FakeCodecs();
+      expect(
+        await renderMobileVideoThumbnailFromUrl(
+          name: 'a.heic',
+          url: Uri.parse('http://127.0.0.1:9/abc'),
+          codecs: fake.build(),
+        ),
+        isNull,
+      );
+      expect(fake.calls, isEmpty);
+    });
+
+    test('a failure is nothing rendered', () async {
+      final fake = _FakeCodecs()..failVideo = true;
+      expect(
+        await renderMobileVideoThumbnailFromUrl(
+          name: 'clip.mp4',
+          url: Uri.parse('http://127.0.0.1:9/abc'),
+          codecs: fake.build(),
+        ),
+        isNull,
+      );
+    });
+  });
 }
