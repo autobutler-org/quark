@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/models/file_node.dart';
-import 'package:quark/models/transcode_format.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/file_browser_actions.dart';
 import 'package:quark/services/storage_service.dart';
@@ -46,8 +45,9 @@ class FileBrowserController {
   /// The batch delete call, injectable so a test can see the batches.
   final DeleteFilesFn deleteFiles;
 
-  /// The formats Convert video offers, injectable so a test can fake them.
-  final Future<List<TranscodeFormat>> Function() listTranscodeFormats;
+  /// The formats Convert video offers for a video, injectable so a test can
+  /// fake them.
+  final LoadTranscodeFormatsFn listTranscodeFormats;
 
   /// The call Convert video queues its job with, injectable so a test can
   /// see it.

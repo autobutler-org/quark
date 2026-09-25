@@ -1037,22 +1037,22 @@ class FilesService with AuthenticatedService {
     return data['relPath'] as String;
   }
 
-  /// Queues a conversion of [relPath] into [format] (one of
-  /// [listTranscodeFormats]) at [quality] (`original` or `small`) and returns
-  /// the job's id, which `JobsService` can look up. A 501 means the Quark has
-  /// no ffmpeg.
+  /// Queues a conversion of [relPath] into [format], one of the formats
+  /// [listTranscodeFormats] lists for it, and returns the job's id, which
+  /// `JobsService` can look up. The streams are copied, never re-encoded.
   static Future<int> transcodeVideo(
     String relPath, {
     String? serial,
     required String format,
-    required String quality,
   }) async {
     final uri = apiBaseUri.resolve('/api/v0/videos/transcode');
     final body = jsonEncode({
       'relPath': relPath,
       'serial': serial?.trim() ?? '',
       'format': format,
-      'quality': quality,
+      // The one quality there is. A Quark from before conversions became
+      // stream copies only (#2380) still requires the field.
+      'quality': 'original',
     });
     final response = await instance.authenticatedPost(
       uri,
@@ -1066,10 +1066,17 @@ class FilesService with AuthenticatedService {
     return (data['jobId'] as num).toInt();
   }
 
-  /// The formats this Quark's ffmpeg can convert a video to, in the order to
-  /// offer them. A 501 means the Quark has no ffmpeg.
-  static Future<List<TranscodeFormat>> listTranscodeFormats() async {
-    final uri = apiBaseUri.resolve('/api/v0/videos/transcode/formats');
+  /// The formats the video at [relPath] can be converted to, in the order to
+  /// offer them: those whose container holds its codecs, leaving out its own.
+  static Future<List<TranscodeFormat>> listTranscodeFormats(
+    String relPath, {
+    String? serial,
+  }) async {
+    final uri = apiBaseUri
+        .resolve('/api/v0/videos/transcode/formats')
+        .replace(
+          queryParameters: {'relPath': relPath, 'serial': serial?.trim() ?? ''},
+        );
     final response = await instance.authenticatedGet(uri);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(

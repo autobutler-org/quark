@@ -129,20 +129,12 @@ abstract final class Errors {
       ? restoreConflict
       : message(error, action);
 
-  /// Converting a video runs ffmpeg on the Quark, which answers 501 when it
-  /// isn't installed. Nothing the user retries will change that.
-  static const String ffmpegMissing =
-      "Converting videos needs ffmpeg, which isn't installed on your Quark.";
-
   /// A conversion or retry refused with a 403. The output lands beside the
   /// video, so the account has to be able to save files in its folder.
   static const String cantSaveInFolder = "You can't save files in that folder.";
 
-  /// A conversion that could not be started. A 501 gets [ffmpegMissing]
-  /// rather than the generic "doesn't support that yet", and a 403
-  /// [cantSaveInFolder].
+  /// A conversion that could not be started. A 403 gets [cantSaveInFolder].
   static String transcode(Object? error) => switch (error) {
-    ApiException(statusCode: 501) => ffmpegMissing,
     ApiException(statusCode: 403) => cantSaveInFolder,
     _ => message(error, 'convert the video'),
   };

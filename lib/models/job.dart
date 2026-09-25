@@ -49,8 +49,9 @@ class Job {
   final String kind;
 
   /// The concurrency lane within [kind] the job runs in. For
-  /// [JobKinds.videoTranscode] it is `copy` for a quick stream copy and
-  /// `encode` for a re-encode. Empty for a kind with one lane.
+  /// [JobKinds.videoTranscode] it is `copy` for a quick stream copy, the only
+  /// conversion a Quark runs now; older ones also ran `encode` re-encodes.
+  /// Empty for a kind with one lane.
   final String lane;
 
   /// A short description of the task, written by the Quark in English:
