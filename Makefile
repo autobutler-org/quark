@@ -1211,7 +1211,11 @@ check/lint/go: internal/server/public/stub.txt check/structure/go ## Check Go co
 		echo "golangci-lint is not installed. Run 'make setup/golangci-lint' first."
 		exit 1
 	fi
-	golangci-lint run ./...
+	# Lint the module's own packages, not whatever a build left under build/.
+	# `flutter build ios` checks Swift packages out to build/ios/SourcePackages,
+	# and one of them ships a SWIG package there; ./... would load it, and
+	# loading runs swig, which fails before .golangci.yml's path exclusions apply.
+	golangci-lint run $$(go list -f '{{.Dir}}' ./... | grep -v '^$(CURDIR)/build/')
 
 .PHONY: check/structure/go
 check/structure/go: ## Check Go package layout conventions (AGENTS.md)
