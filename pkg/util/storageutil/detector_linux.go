@@ -32,6 +32,19 @@ func (d *detector) DetectRoots() ([]Device, error) {
 	return detectDevices(false)
 }
 
+// bytesFromStatfs reports total, used, and available bytes for one filesystem.
+//
+// Used is (blocks - free) * blockSize, matching health and gopsutil, not df's
+// available column. Available stays Bavail * blockSize, the space a write can
+// actually use. Root-reserved blocks sit in neither figure, so they are not
+// shown as used twice, and used + available is not total.
+func bytesFromStatfs(blocks, free, available, blockSize uint64) (total, used, avail uint64) {
+	total = blocks * blockSize
+	used = (blocks - free) * blockSize
+	avail = available * blockSize
+	return total, used, avail
+}
+
 func detectDevices(categorize bool) ([]Device, error) {
 	devices := []Device{}
 
@@ -77,10 +90,12 @@ func detectDevices(categorize bool) ([]Device, error) {
 			if !exists {
 				continue
 			}
-			blockSize := uint64(stat.Bsize)
-			sizeBytes := stat.Blocks * blockSize
-			usedBytes := (stat.Blocks - stat.Bavail) * blockSize
-			availableBytes := stat.Bavail * blockSize
+			sizeBytes, usedBytes, availableBytes := bytesFromStatfs(
+				stat.Blocks,
+				stat.Bfree,
+				stat.Bavail,
+				uint64(stat.Bsize),
+			)
 
 			device := Device{
 				Name:           name,
@@ -144,12 +159,15 @@ func detectRootDevice(categorize bool) (*Device, error) {
 		return nil, fmt.Errorf("failed to stat root filesystem: %w", err)
 	}
 
-	blockSize := uint64(stat.Bsize)
-	totalBytes := stat.Blocks * blockSize
-	availableBytes := stat.Bavail * blockSize
-	usedBytes := totalBytes - availableBytes
+	totalBytes, usedBytes, availableBytes := bytesFromStatfs(
+		stat.Blocks,
+		stat.Bfree,
+		stat.Bavail,
+		uint64(stat.Bsize),
+	)
 
-	// Express used/available as percentage to match original df output intent
+	// Not stored on Device. This ratio is used/total. df's Use% divides by
+	// used plus available instead, which is a different number.
 	var pct string
 	if totalBytes > 0 {
 		pct = strconv.Itoa(int(usedBytes*100/totalBytes)) + "%"
