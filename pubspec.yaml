@@ -81,6 +81,19 @@ dependencies:
   quark_widgets:
     path: packages/quark_widgets
 
+  # Thumbnails rendered with the platform decoders on iOS and Android (#2379):
+  # video frames through AVAssetImageGenerator and MediaMetadataRetriever,
+  # photos and HEIC re-encoded to JPEG. Imported only by
+  # lib/services/mobile_thumbnail_renderer.dart, behind the client_thumbnails
+  # conditional import, so web builds never load them.
+  # flutter_image_compress_common is the Android/iOS implementation of
+  # flutter_image_compress, depended on directly: the app-facing package also
+  # endorses a web implementation, which Flutter registers in every web build
+  # whether or not the app imports it.
+  video_thumbnail: ^0.5.6
+  flutter_image_compress_common: ^1.1.1
+  flutter_image_compress_platform_interface: ^1.1.0
+
   # Flutter Probe on-device agent (Android/iOS e2e). Started only when the app
   # is built with --dart-define=PROBE_AGENT=true; see lib/probe_bootstrap*.dart
   # and `make test/probe`. Kept as a regular dependency so lib/ can import it;
