@@ -72,6 +72,9 @@ class PhotoSelectionBar extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: tokens.secondaryForeground,
+                  // Equal-width digits, so the label does not shift as each
+                  // tap changes the count.
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             ),
