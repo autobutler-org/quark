@@ -1325,6 +1325,13 @@ definitions:
     required:
     - enabled
     type: object
+  v0_settings.chatSetting:
+    properties:
+      enabled:
+        type: boolean
+    required:
+    - enabled
+    type: object
   v0_ssh.addSSHKeyBody:
     properties:
       key:
@@ -3464,9 +3471,9 @@ paths:
     get:
       description: 'Returns whether initial setup has been completed and, once it
         has, accessRequestsEnabled: whether the sign-in page may offer to request
-        an account. For a caller with a valid session it also returns that caller''s
-        username, userId and isAdmin flag, and avatarUpdatedAt (Unix milliseconds)
-        when they have a profile picture.'
+        an account, and chatEnabled: whether the chat beta is on. For a caller with
+        a valid session it also returns that caller''s username, userId and isAdmin
+        flag, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.'
       produces:
       - application/json
       responses:
@@ -5889,6 +5896,48 @@ paths:
       security:
       - BearerAuth: []
       summary: Turn account requests on or off
+      tags:
+      - settings
+  /settings/chat:
+    put:
+      consumes:
+      - application/json
+      description: Sets whether chat is available. Chat is on until an admin turns
+        it off; while off every /chat route answers 404, and nothing stored is deleted.
+        Admin-only.
+      parameters:
+      - description: Whether chat is on
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_settings.chatSetting'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_settings.chatSetting'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Turn the chat beta on or off
       tags:
       - settings
   /settings/remote-access:

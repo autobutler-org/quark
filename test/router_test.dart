@@ -3,11 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/models/trash_item.dart';
+import 'package:quark/pages/chat_page.dart';
 import 'package:quark/pages/login_page.dart';
 import 'package:quark/pages/recover_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
+
+import 'support/fake_chat.dart';
 
 void main() {
   group('AppRoutes.encodeFilePath', () {
@@ -874,6 +877,129 @@ void main() {
 
       expect(at(r), '/settings/account/data');
       expect(find.text('drill-down'), findsOneWidget);
+    });
+  });
+
+  // #2421: chat lives at /chat/:channelId, and an admin can switch it off.
+  group('chat routes', () {
+    final settings = AppSettings.instance;
+    const secureStorage = MethodChannel(
+      'plugins.it_nomads.com/flutter_secure_storage',
+    );
+
+    Future<void> reset() async {
+      while (settings.hosts.isNotEmpty) {
+        await settings.removeHost(settings.hosts.length - 1);
+      }
+      await settings.setSessionToken(null);
+      authStatusProbe = AuthService.checkStatus;
+    }
+
+    setUpAll(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(secureStorage, (_) async => null);
+    });
+
+    tearDownAll(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(secureStorage, null);
+    });
+
+    tearDown(reset);
+
+    String at(GoRouter r) =>
+        r.routerDelegate.currentConfiguration.uri.toString();
+
+    /// The app's /chat redirect and gate, with a stand-in for the page.
+    Future<GoRouter> pumpGated(WidgetTester tester, String location) async {
+      final r = GoRouter(
+        initialLocation: location,
+        redirect: authRedirect,
+        routes: [
+          ...router.configuration.routes.whereType<GoRoute>().where(
+            (route) => route.path == AppRoutes.chat,
+          ),
+          GoRoute(
+            path: '${AppRoutes.chat}/:channelId',
+            builder: (_, state) =>
+                Text('chat ${state.pathParameters['channelId']}'),
+          ),
+          GoRoute(
+            path: AppRoutes.files,
+            builder: (_, _) => const Text('files'),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+      return r;
+    }
+
+    Future<void> signIn({required bool chatEnabled}) async {
+      await reset();
+      await settings.addHost(
+        HostEntry(name: 'Home', hostAddress: 'http://chat.local'),
+      );
+      await settings.acceptTerms();
+      await settings.setSessionToken('token');
+      authStatusProbe = () async =>
+          AuthStatus(setupComplete: true, chatEnabled: chatEnabled);
+    }
+
+    test('the app declares /chat and one route for every channel', () {
+      final paths = router.configuration.routes.whereType<GoRoute>().map(
+        (r) => r.path,
+      );
+      expect(paths, containsAll([AppRoutes.chat, '/chat/:channelId']));
+      expect(AppRoutes.chatChannel('12'), '/chat/12');
+    });
+
+    testWidgets('/chat opens general', (tester) async {
+      await signIn(chatEnabled: true);
+      final r = await pumpGated(tester, AppRoutes.chat);
+
+      expect(at(r), '/chat/general');
+      expect(find.text('chat general'), findsOneWidget);
+    });
+
+    testWidgets('a channel link is kept when chat is on', (tester) async {
+      await signIn(chatEnabled: true);
+      final r = await pumpGated(tester, '/chat/12');
+
+      expect(at(r), '/chat/12');
+    });
+
+    testWidgets('chat turned off sends /chat to Files', (tester) async {
+      await signIn(chatEnabled: false);
+      for (final location in [AppRoutes.chat, '/chat/12']) {
+        final r = await pumpGated(tester, location);
+        expect(at(r), AppRoutes.files, reason: location);
+      }
+    });
+
+    testWidgets('an unknown channel falls back to general, not an error', (
+      tester,
+    ) async {
+      final chat = FakeChat();
+      final r = GoRouter(
+        initialLocation: '/chat/999',
+        routes: [
+          GoRoute(
+            path: '${AppRoutes.chat}/:channelId',
+            builder: (_, state) => ChatPage(
+              channelId: state.pathParameters['channelId']!,
+              controller: chat.controller,
+            ),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+
+      expect(at(r), '/chat/1');
+      expect(find.text('# general'), findsOneWidget);
     });
   });
 }

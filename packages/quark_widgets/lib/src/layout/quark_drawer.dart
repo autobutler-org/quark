@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_beta_badge.dart';
 import '../models/host_item.dart';
+import '../theme/quark_tokens.dart';
 import 'quark_drawer/quark_drawer_header.dart';
 
 /// The top-level destinations in [QuarkDrawer], one per main page.
@@ -22,6 +24,9 @@ enum QuarkDrawerSection {
 
   /// The spreadsheet list.
   sheets,
+
+  /// Chat, a beta: its row carries a [QuarkBetaBadge].
+  chat,
 
   /// The Quark itself: its health, its drives and its jobs.
   system,
@@ -54,6 +59,9 @@ enum QuarkDrawerSection {
 /// (#2230). Adding and editing Quarks stays in Settings, a row below. With
 /// one it is a plain label.
 ///
+/// A section still in beta, Chat for now, carries a [QuarkBetaBadge] beside
+/// its label.
+///
 /// Key prefixes: `drawer_<section>` on each row, for example `drawer_photos`
 /// and `drawer_users`; `drawer_host` on the header when it names a Quark;
 /// `drawer_host_header` on the button that opens the switcher, and
@@ -84,6 +92,7 @@ class QuarkDrawer extends StatelessWidget {
     this.onTapTrash,
     this.onTapDocs,
     this.onTapSheets,
+    this.onTapChat,
     this.onTapSystem,
     this.onTapVault,
     this.onTapUsers,
@@ -121,6 +130,10 @@ class QuarkDrawer extends StatelessWidget {
 
   /// Called when the Sheets row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapSheets;
+
+  /// Called when the Chat row is tapped. Null hides the row, as when an admin
+  /// has turned the chat beta off.
+  final FutureOr<void> Function()? onTapChat;
 
   /// Called when the System row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapSystem;
@@ -168,6 +181,7 @@ class QuarkDrawer extends StatelessWidget {
         'Sheets',
         onTapSheets,
       ),
+      (QuarkDrawerSection.chat, QuarkIcons.forum_outlined, 'Chat', onTapChat),
       (QuarkDrawerSection.system, QuarkIcons.memory, 'System', onTapSystem),
       (QuarkDrawerSection.vault, QuarkIcons.lock_outline, 'Vault', onTapVault),
       (
@@ -202,7 +216,15 @@ class QuarkDrawer extends StatelessWidget {
               ListTile(
                 key: ValueKey('drawer_${section.name}'),
                 leading: Icon(icon),
-                title: Text(label),
+                title: section == QuarkDrawerSection.chat
+                    ? Row(
+                        children: [
+                          Flexible(child: Text(label)),
+                          SizedBox(width: QuarkTokens.of(context).spacingSm),
+                          const QuarkBetaBadge(),
+                        ],
+                      )
+                    : Text(label),
                 selected: activeSection == section,
                 onTap: onTap,
               ),

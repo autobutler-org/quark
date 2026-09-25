@@ -5,7 +5,8 @@
 // members' grants, /chat/channels/:id/events its signed membership and key events, and /chat/channels/:id/messages
 // its encrypted messages, which /chat/messages/:id deletes. No route is admin-only;
 // admins may manage any channel but, like everyone else, list only the channels they are members of, and keys,
-// events and messages are for members alone. A channel the caller may not see is a 404.
+// events and messages are for members alone. A channel the caller may not see is a 404, and every route is a 404 while an
+// admin has the chat beta turned off (PUT /settings/chat).
 package v0_chat
 
 import "github.com/autobutler-org/quark/pkg/util/serverutil"
