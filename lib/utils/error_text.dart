@@ -237,6 +237,16 @@ abstract final class Errors {
   static const String incorrectPassword =
       "That password isn't right. Nothing was deleted.";
 
+  /// Unlocking chat with a password that doesn't open the account's chat
+  /// keys (#2416). Nothing is sent to the Quark to check it; the keys simply
+  /// don't decrypt.
+  static const String chatKeysWrongPassword =
+      "That password doesn't unlock your messages.";
+
+  /// Recovering an account whose chat keys the recovery phrase doesn't open.
+  static const String chatKeysWrongPhrase =
+      "That recovery phrase doesn't unlock your messages.";
+
   /// A sign-in the Quark refused with a 401.
   ///
   /// The same sentence for a wrong password and an unknown username, so the

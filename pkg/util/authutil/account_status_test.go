@@ -115,7 +115,7 @@ func TestRecover_RefusesPending(t *testing.T) {
 	ctx := context.Background()
 	mkStatusUser(t, q, "waiting", authutil.StatusPending)
 
-	_, err := authutil.Recover(ctx, q, authutil.RecoverParams{Username: "waiting", RecoveryPhrase: statusTestPhrase, NewPassword: "a-new-password"})
+	_, err := authutil.Recover(ctx, database, authutil.RecoverParams{Username: "waiting", RecoveryPhrase: statusTestPhrase, NewPassword: "a-new-password"})
 	if !errors.Is(err, authutil.ErrAccountPending) {
 		t.Fatalf("recover pending = %v, want ErrAccountPending", err)
 	}

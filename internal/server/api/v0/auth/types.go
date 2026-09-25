@@ -1,6 +1,7 @@
 package v0_auth
 
 import (
+	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 )
 
@@ -14,6 +15,7 @@ func (r *router) Routes() []*serverutil.Route {
 		loginUserRoute,
 		logoutUserRoute,
 		recoverAccountRoute,
+		recoverChatKeysRoute,
 		requestAccountRoute,
 		deleteAccountRoute,
 		// Session management
@@ -54,4 +56,21 @@ type accountRefusal struct {
 // logs keep (#2346).
 type deleteAccountBody struct {
 	Password string `json:"password" binding:"required"`
+}
+
+// recoverAccountBody is what POST /auth/recover reads.
+type recoverAccountBody struct {
+	Username       string `json:"username" binding:"required"`
+	RecoveryPhrase string `json:"recoveryPhrase" binding:"required"`
+	NewPassword    string `json:"newPassword" binding:"required"`
+	// ChatKeys is the account's chat identity re-wrapped under NewPassword,
+	// stored in the same transaction as the reset (#2416). Absent leaves the
+	// stored keys as they are.
+	ChatKeys *chatutil.Keys `json:"chatKeys,omitempty"`
+}
+
+// recoverChatKeysBody is what POST /auth/recover/keys reads.
+type recoverChatKeysBody struct {
+	Username       string `json:"username" binding:"required"`
+	RecoveryPhrase string `json:"recoveryPhrase" binding:"required"`
 }

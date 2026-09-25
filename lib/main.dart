@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -27,6 +28,8 @@ Future<void> main() async {
   // Finish announcements and the jobs list outlive every page.
   JobsController.instance.start();
   AuthService.watchAccount();
+  // Not awaited: a cached chat identity is not worth holding the first frame.
+  ChatKeysController.instance.start();
   deferFirstFrameUntilRouted(binding, router.routerDelegate);
   runApp(const QuarkApp());
 }
