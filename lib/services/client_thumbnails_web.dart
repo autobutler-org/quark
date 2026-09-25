@@ -34,6 +34,12 @@ Future<Uint8List?> renderThumbnailFromBytesPlatform(
   return renderBlobThumbnail(web.Blob([bytes.toJS].toJS), name);
 }
 
+/// The web has no file paths.
+Future<Uint8List?> renderThumbnailFromPathPlatform(
+  String name,
+  String path,
+) async => null;
+
 Future<Uint8List?> renderDroppedFileThumbnailPlatform(DropItemFile file) async {
   if (!wantsClientThumbnail(file.name) || file.path.isEmpty) {
     return null;

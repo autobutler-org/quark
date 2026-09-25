@@ -136,6 +136,8 @@ class PhotosController extends ChangeNotifier {
         renderThumbnailFromBytes,
     Future<Uint8List?> Function(DropItemFile file) renderDroppedFile =
         renderDroppedFileThumbnail,
+    Future<Uint8List?> Function(String name, String path) renderFromPath =
+        renderThumbnailFromPath,
     PhotoBytesCache? bytesCache,
     bool isWeb = kIsWeb,
   }) : _getPhotos = getPhotos,
@@ -157,6 +159,7 @@ class PhotosController extends ChangeNotifier {
        _readDroppedFile = readDroppedFile,
        _renderFromBytes = renderFromBytes,
        _renderDroppedFile = renderDroppedFile,
+       _renderFromPath = renderFromPath,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
        _isWeb = isWeb;
 
@@ -236,6 +239,7 @@ class PhotosController extends ChangeNotifier {
   final Future<Uint8List?> Function(String name, Uint8List bytes)
   _renderFromBytes;
   final Future<Uint8List?> Function(DropItemFile file) _renderDroppedFile;
+  final Future<Uint8List?> Function(String name, String path) _renderFromPath;
   final PhotoBytesCache _bytesCache;
   final bool _isWeb;
 
@@ -972,14 +976,21 @@ class PhotosController extends ChangeNotifier {
     try {
       final multipart = <http.MultipartFile>[];
       for (final file in files) {
-        if (!_isWeb && (file.path ?? '').isNotEmpty) {
+        final path = file.path;
+        if (!_isWeb && path != null && path.isNotEmpty) {
           multipart.add(
             await http.MultipartFile.fromPath(
               'files',
-              file.path!,
+              path,
               filename: file.name,
             ),
           );
+          final thumbnail = await _renderQuietly(
+            () => _renderFromPath(file.name, path),
+          );
+          if (thumbnail != null) {
+            multipart.add(thumbnailPart(file.name, thumbnail));
+          }
           continue;
         }
         final bytes = await file.readAsBytes();
