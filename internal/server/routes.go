@@ -22,6 +22,7 @@ import (
 	v0_storage "github.com/autobutler-org/quark/internal/server/api/v0/storage"
 	v0_thumbnails "github.com/autobutler-org/quark/internal/server/api/v0/thumbnails"
 	v0_trash "github.com/autobutler-org/quark/internal/server/api/v0/trash"
+	v0_users "github.com/autobutler-org/quark/internal/server/api/v0/users"
 	v0_vault "github.com/autobutler-org/quark/internal/server/api/v0/vault"
 	v0_version "github.com/autobutler-org/quark/internal/server/api/v0/version"
 	v0_videos "github.com/autobutler-org/quark/internal/server/api/v0/videos"
@@ -60,6 +61,7 @@ func setupRouters(engine *gin.Engine, systemCollector *healthutil.Collector, dep
 		v0_storage.NewRouter(),
 		v0_thumbnails.NewRouter(),
 		v0_trash.NewRouter(),
+		v0_users.NewRouter(),
 		v0_version.NewRouter(),
 		v0_videos.NewRouter(),
 	}

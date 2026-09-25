@@ -230,4 +230,103 @@ void main() {
     expect(await UsersService.accessRequestsEnabled(), isTrue);
     expect(requests.single.url.path, '/api/v0/auth/status');
   });
+
+  group('profile pictures', () {
+    test('avatarUrl carries the version and nothing else when signed out', () {
+      final url = UsersService.avatarUrl(4, version: 1790000000000);
+      expect(url.path, '/api/v0/users/4/avatar');
+      expect(url.queryParameters['v'], '1790000000000');
+      expect(
+        UsersService.avatarUrl(4).queryParameters.containsKey('v'),
+        isFalse,
+      );
+    });
+
+    test('setAvatar streams a multipart PUT and returns the version', () async {
+      final sent = <http.BaseRequest>[];
+      resetSharedHttpClient();
+      sharedHttpClientFactory = () =>
+          MockClient.streaming((request, body) async {
+            sent.add(request);
+            await body.drain<void>();
+            return http.StreamedResponse(
+              Stream.value(utf8.encode('{"avatarUpdatedAt":1790000000000}')),
+              200,
+            );
+          });
+
+      final version = await UsersService.setAvatar(
+        bytes: Stream.value([1, 2, 3]),
+        length: 3,
+        filename: 'me.jpg',
+      );
+
+      expect(version, 1790000000000);
+      expect(sent.single.method, 'PUT');
+      expect(sent.single.url.path, '/api/v0/users/me/avatar');
+      expect(
+        sent.single.headers['content-type'],
+        startsWith('multipart/form-data'),
+      );
+    });
+
+    test('a refused upload reads as the picture copy', () async {
+      answer(413, {'error': 'the picture is larger than 10 MiB'});
+      Object? error;
+      try {
+        await UsersService.setAvatar(
+          bytes: Stream.value([1]),
+          length: 1,
+          filename: 'big.jpg',
+        );
+      } catch (e) {
+        error = e;
+      }
+      expect(
+        Errors.avatar(error, 'change your picture'),
+        Errors.avatarTooLarge,
+      );
+
+      answer(400, {'error': 'the upload is not a supported image'});
+      try {
+        await UsersService.setAvatar(
+          bytes: Stream.value([1]),
+          length: 1,
+          filename: 'notes.pdf',
+        );
+      } catch (e) {
+        error = e;
+      }
+      expect(
+        Errors.avatar(error, 'change your picture'),
+        Errors.avatarNotImage,
+      );
+    });
+
+    test('an oversize file is refused before anything is sent', () async {
+      answer(200, {'avatarUpdatedAt': 1});
+      await expectLater(
+        UsersService.setAvatar(
+          bytes: const Stream.empty(),
+          length: UsersService.maxAvatarBytes + 1,
+          filename: 'huge.jpg',
+        ),
+        throwsA(isA<MessageException>()),
+      );
+      expect(requests, isEmpty);
+    });
+
+    test('removeAvatar sends a DELETE', () async {
+      resetSharedHttpClient();
+      sharedHttpClientFactory = () => MockClient((request) async {
+        requests.add(request);
+        return http.Response('', 204);
+      });
+
+      await UsersService.removeAvatar();
+
+      expect(requests.single.method, 'DELETE');
+      expect(requests.single.url.path, '/api/v0/users/me/avatar');
+    });
+  });
 }

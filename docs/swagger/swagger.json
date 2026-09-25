@@ -2326,7 +2326,7 @@
         },
         "/auth/status": {
             "get": {
-                "description": "Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username and isAdmin flag.",
+                "description": "Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username, userId and isAdmin flag, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.",
                 "produces": [
                     "application/json"
                 ],
@@ -5921,6 +5921,158 @@
                 }
             }
         },
+        "/users/me/avatar": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the caller's profile picture with the image in the multipart field \"file\" (JPEG, PNG, WebP, HEIC, GIF, BMP or TIFF, at most 10 MiB). The Quark center-crops and resizes it to 256x256 and keeps only the re-encoded file, so EXIF and location data are dropped. Publishes account_changed.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Set your profile picture",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "The image",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_users.SetAvatarResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Not an image",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "413": {
+                        "description": "Larger than 10 MiB",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes the caller's profile picture; clients fall back to initials. Removing a picture that is not there succeeds. Publishes account_changed when one was removed.",
+                "tags": [
+                    "users"
+                ],
+                "summary": "Remove your profile picture",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{id}/avatar": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Serves a user's 256x256 profile picture to any signed-in user, with an ETag derived from its version; a matching If-None-Match gets 304. Clients add the picture's avatarUpdatedAt as the v query parameter, so a changed picture is a new URL. A user with no picture is a 404.",
+                "produces": [
+                    "image/jpeg",
+                    "image/png"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Get a user's profile picture",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "User id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Cache-buster, the picture's avatarUpdatedAt; ignored by the Quark",
+                        "name": "v",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "304": {
+                        "description": "Not Modified"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/vault/change-password": {
             "put": {
                 "security": [
@@ -8817,6 +8969,15 @@
                 },
                 "serial": {
                     "type": "string"
+                }
+            }
+        },
+        "v0_users.SetAvatarResponse": {
+            "type": "object",
+            "properties": {
+                "avatarUpdatedAt": {
+                    "description": "AvatarUpdatedAt is the new picture's version in Unix milliseconds,\nthe value clients append to the avatar URL as ?v=.",
+                    "type": "integer"
                 }
             }
         },

@@ -277,6 +277,24 @@ abstract final class Errors {
       "That account can't join a group. Only accounts that can sign in can be "
       'added.';
 
+  /// A profile picture over the Quark's 10 MiB limit, which it refuses with
+  /// a 413. The app checks the size first, so most never leave the device.
+  static const String avatarTooLarge =
+      'That picture is larger than 10 MB. Pick a smaller one.';
+
+  /// A profile picture the Quark couldn't read as an image, a 400.
+  static const String avatarNotImage =
+      "That file isn't a picture your Quark can read. Try a JPEG, PNG, WebP "
+      'or HEIC.';
+
+  /// A failed profile picture change. A 413 gets [avatarTooLarge] and a 400
+  /// [avatarNotImage]; the rest is as in [message].
+  static String avatar(Object? error, String action) => switch (error) {
+    ApiException(statusCode: 413) => avatarTooLarge,
+    ApiException(statusCode: 400) => avatarNotImage,
+    _ => message(error, action),
+  };
+
   /// The Quark answered, and what it said maps to copy worth the difference.
   /// Anything unmapped falls back to [couldNot] — a vague-but-true sentence
   /// beats a guess about a status the backend may not even return.

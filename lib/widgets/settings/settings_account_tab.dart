@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
-/// The Account tab of Settings (#2350): sign out, with an Account and data
+/// The Account tab of Settings (#2350): the [profile] card (#2419), sign
+/// out, with an Account and data
 /// row at the bottom that leads to Delete account and, for an admin, Reset
 /// this Quark (#2346).
 ///
@@ -20,6 +21,7 @@ class SettingsAccountTab extends StatelessWidget {
     required this.onSignOut,
     required this.onOpenAccountAndData,
     this.header,
+    this.profile,
     super.key,
   });
 
@@ -40,6 +42,9 @@ class SettingsAccountTab extends StatelessWidget {
   /// page's disconnected banner; null shows nothing.
   final Widget? header;
 
+  /// The Profile card, shown first while signed in; null shows nothing.
+  final Widget? profile;
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -49,6 +54,7 @@ class SettingsAccountTab extends StatelessWidget {
         if (!signedIn)
           const Text('Not signed in')
         else ...[
+          if (profile != null) ...[profile!, const SizedBox(height: 16)],
           Card(
             child: ListTile(
               leading: const Icon(QuarkIcons.logout),

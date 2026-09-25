@@ -53,6 +53,9 @@ lib/widgets/
     storage_tab.dart            refreshes itself through its service or
     jobs_tab.dart               JobsController, and reports whether it is
                                 refreshing to the page's app bar
+  users/
+    user_avatar.dart            UserAvatar, a QuarkAvatar showing an account's
+                                picture from UsersService.avatarUrl
   video_viewer/
     convert_video.dart          runs TranscodeDialogHost, queues the job and
                                 shows its snack bar; the viewer and Files share it

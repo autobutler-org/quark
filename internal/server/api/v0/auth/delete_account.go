@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/avatarutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
@@ -139,6 +140,16 @@ func deleteAccount(c *gin.Context) *serverutil.Response {
 	})
 	if errors.Is(err, authutil.ErrLastAdmin) {
 		return serverutil.Conflict(err)
+	}
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+	// Account ids can be handed out again, so a picture must not outlive its
+	// account, and none outlives a reset database.
+	if result.DatabaseDeleted {
+		err = avatarutil.RemoveAll(avatarutil.RemoveAllParams{DataDir: storageutil.GetDataDir()})
+	} else if result.AccountDeleted {
+		_, err = avatarutil.Remove(avatarutil.RemoveParams{DataDir: storageutil.GetDataDir(), UserID: user.ID})
 	}
 	if err != nil {
 		return serverutil.InternalServerError(err)

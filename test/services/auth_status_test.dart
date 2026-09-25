@@ -120,6 +120,26 @@ void main() {
     expect(client.requests, isEmpty);
   });
 
+  test('a refresh records the account id and picture version', () async {
+    await settings.setSessionToken('token');
+    serve(
+      '{"setup":true,"username":"ada","isAdmin":false,"userId":4,'
+      '"avatarUpdatedAt":1790000000000}',
+    );
+    await AuthService.refreshAccount();
+    expect(settings.userId.value, 4);
+    expect(settings.avatarUpdatedAt.value, 1790000000000);
+
+    // The picture was removed elsewhere: the status leaves the field out.
+    serve('{"setup":true,"username":"ada","isAdmin":false,"userId":4}');
+    await AuthService.refreshAccount();
+    expect(settings.avatarUpdatedAt.value, isNull);
+
+    await settings.setSessionToken(null);
+    await AuthService.refreshAccount();
+    expect(settings.userId.value, isNull);
+  });
+
   test('an anonymous status call sends no credentials', () async {
     final client = serve('{"setup":true}');
 

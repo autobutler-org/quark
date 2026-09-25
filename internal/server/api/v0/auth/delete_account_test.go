@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	v0_auth "github.com/autobutler-org/quark/internal/server/api/v0/auth"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/avatarutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
@@ -614,5 +616,55 @@ func TestDeleteAccount_FilesSurviveAnAccountDelete(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(filesDir, "keep.txt")); err != nil {
 		t.Errorf("the previous owner's file should still be on disk: %v", err)
+	}
+}
+
+// seedAvatar writes a stored picture for userID straight into the data
+// directory and returns its path.
+func seedAvatar(t *testing.T, userID int64) string {
+	t.Helper()
+	dir := avatarutil.Dir(storageutil.GetDataDir())
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, fmt.Sprintf("%d.jpg", userID))
+	if err := os.WriteFile(path, []byte("picture"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// TestDeleteAccount_RemovesProfilePicture verifies the caller's picture goes
+// with their account, and only theirs: SQLite hands a deleted id out again.
+func TestDeleteAccount_RemovesProfilePicture(t *testing.T) {
+	engine, sqlDB, _ := newDeleteAccountEngine(t)
+	var id int64
+	if err := sqlDB.QueryRow(`SELECT id FROM users WHERE username = ?`, deleteAccountUser).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	own, other := seedAvatar(t, id), seedAvatar(t, id+100)
+
+	if w := deleteAccountRequest(engine, "account=true"); w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if _, err := os.Stat(own); !os.IsNotExist(err) {
+		t.Errorf("the deleted account's picture is still there (stat err %v)", err)
+	}
+	if _, err := os.Stat(other); err != nil {
+		t.Errorf("another account's picture went too: %v", err)
+	}
+}
+
+// TestDeleteAccount_DatabaseResetRemovesEveryPicture verifies a reset leaves
+// no picture for a recycled account id to inherit.
+func TestDeleteAccount_DatabaseResetRemovesEveryPicture(t *testing.T) {
+	engine, _, _ := newDeleteAccountEngine(t)
+	other := seedAvatar(t, 99)
+
+	if w := deleteAccountRequest(engine, "database=true"); w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if _, err := os.Stat(other); !os.IsNotExist(err) {
+		t.Errorf("a picture outlived the reset (stat err %v)", err)
 	}
 }
