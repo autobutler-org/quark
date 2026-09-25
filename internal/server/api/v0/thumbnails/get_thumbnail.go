@@ -23,7 +23,7 @@ import (
 
 // getThumbnail godoc
 // @Summary Get thumbnail for an image
-// @Description Generates and returns a thumbnail (resized image) for the specified file
+// @Description Returns a thumbnail for the specified photo or video: resized from the thumbnail a client uploaded for it when there is a fresh one, generated from the file otherwise. When the device cannot render a video or HEIC itself, the 404 body carries "clientRender": true, telling a client that may write the file to render a thumbnail (JPEG, long edge 400) and PUT it to this path.
 // @Tags thumbnails
 // @Produce png,jpeg
 // @Param filePath path string true "Path to the image file"
@@ -31,7 +31,7 @@ import (
 // @Param size query string false "Thumbnail size tier: sm (96px), md (240px), lg (400px). Defaults to lg." Enums(sm, md, lg)
 // @Success 200 {file} file
 // @Failure 304 "Not Modified"
-// @Failure 404 {object} serverutil.Response "Not Found"
+// @Failure 404 {object} clientRenderResponse "Not Found. clientRender is true when a client should render the thumbnail and PUT it"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Security BearerAuth
 // @Router /thumbnails/{filePath} [get]
@@ -77,6 +77,12 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	}
 	if archive.Found {
 		return getArchiveThumbnail(c, deps, archive, ext, filePath, serial, isVideo)
+	}
+
+	// A thumbnail a client rendered comes first (#2379); generating one here
+	// is the fallback.
+	if resp := getClientThumbnail(c, deps, relPath, filePath, serial); resp != clientThumbnailFallthrough {
+		return resp
 	}
 
 	// VFS path: no-serial, non-RAW, non-video images only.
@@ -161,6 +167,11 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 			RotationQuarters: prepared.RotationQuarters,
 			CachedPath:       prepared.CachedPath,
 		})
+		// A video or HEIC the device could not render is one a client can:
+		// say so, so it renders one and PUTs it (#2379).
+		if genErr != nil && thumbnailutil.NeedsClientRender(relPath) {
+			return clientRenderNotFound(filePath, srcInfo.ModTime(), genErr)
+		}
 		if errors.Is(genErr, thumbnailutil.ErrFFmpegUnavailable) {
 			return serverutil.NotFound(genErr)
 		}

@@ -936,6 +936,21 @@ definitions:
           not_service, sshd_missing, helper_missing or no_login_shell.
         type: string
     type: object
+  v0_thumbnails.clientRenderResponse:
+    properties:
+      clientRender:
+        description: |-
+          ClientRender tells a client that may write the file to render its
+          thumbnail (JPEG, long edge 400) and PUT it to /thumbnails/{filePath}.
+        type: boolean
+      error:
+        type: string
+      modTime:
+        description: |-
+          ModTime is the file's modification time, so a client can remember a
+          render that failed for this version of the file and not retry it.
+        type: string
+    type: object
   v0_trash.deletedResponse:
     properties:
       deleted:
@@ -5155,8 +5170,11 @@ paths:
       - storage
   /thumbnails/{filePath}:
     get:
-      description: Generates and returns a thumbnail (resized image) for the specified
-        file
+      description: 'Returns a thumbnail for the specified photo or video: resized
+        from the thumbnail a client uploaded for it when there is a fresh one, generated
+        from the file otherwise. When the device cannot render a video or HEIC itself,
+        the 404 body carries "clientRender": true, telling a client that may write
+        the file to render a thumbnail (JPEG, long edge 400) and PUT it to this path.'
       parameters:
       - description: Path to the image file
         in: path
@@ -5187,6 +5205,55 @@ paths:
         "304":
           description: Not Modified
         "404":
+          description: Not Found. clientRender is true when a client should render
+            the thumbnail and PUT it
+          schema:
+            $ref: '#/definitions/v0_thumbnails.clientRenderResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Get thumbnail for an image
+      tags:
+      - thumbnails
+    put:
+      consumes:
+      - multipart/form-data
+      description: 'Stores the thumbnail a client rendered for a photo or video, replacing
+        any stored before: a JPEG with a long edge of 400 and rotation applied, in
+        a part named "thumbnail". The sm, md and lg sizes are resized from it, and
+        a photo''s thumbnail feeds near-duplicate detection. It lives in the thumbnail
+        cache, so a move, rename or cache clear drops it and a client renders it again
+        on view. Needs write access on the file.'
+      parameters:
+      - description: Path to the photo or video
+        in: path
+        name: filePath
+        required: true
+        type: string
+      - description: Device serial number (for device-specific files)
+        in: query
+        name: serial
+        type: string
+      - description: Thumbnail JPEG, long edge 400
+        in: formData
+        name: thumbnail
+        required: true
+        type: file
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
           description: Not Found
           schema:
             $ref: '#/definitions/serverutil.Response'
@@ -5196,7 +5263,7 @@ paths:
             $ref: '#/definitions/serverutil.Response'
       security:
       - BearerAuth: []
-      summary: Get thumbnail for an image
+      summary: Upload a client-rendered thumbnail for a file
       tags:
       - thumbnails
   /trash:
