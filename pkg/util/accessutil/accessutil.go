@@ -16,6 +16,7 @@ import (
 	"errors"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -525,6 +526,9 @@ type FilterEventResult struct {
 //     group (#1910), may have changed anything and always passes.
 //   - A job_* event carries no path and passes when CanSeeJob shows its job,
 //     with the job's error left out (#1979).
+//   - chat_channel_changed carries no path and passes when the subscriber is
+//     in its audience: a member of the channel before or after the change.
+//     Admins, who may manage any channel, hear it through the first rule.
 //   - Anything else passes when its path is readable.
 func FilterEvent(params FilterEventParams) FilterEventResult {
 	evt := params.Event
@@ -575,6 +579,9 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 		}
 		evt.Data = access.RedactJob(job)
 		return FilterEventResult{Event: evt, Deliver: true}
+	case eventbus.EventChatChannelChanged:
+		changed, ok := evt.Data.(eventbus.ChatChannelChanged)
+		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
 	default:
 		return FilterEventResult{Event: evt, Deliver: readable(evt.Path)}
 	}

@@ -43,7 +43,22 @@ const (
 	// deleted with it (#1905). Path and DeviceSerial name where the rows are
 	// now, or where they were deleted from.
 	EventAccessChanged EventKind = "access_changed"
+
+	// EventChatChannelChanged fires when a chat channel is created, renamed,
+	// deleted, or its members change (#2415). Data is a ChatChannelChanged;
+	// Path is empty.
+	EventChatChannelChanged EventKind = "chat_channel_changed"
 )
+
+// ChatChannelChanged is the data of a chat_channel_changed event. It lives here
+// rather than in chatutil so accessutil can filter on it without importing the
+// package that imports accessutil.
+type ChatChannelChanged struct {
+	ChannelID int64 `json:"channelId"`
+	// Audience is every account that was a member before the change or is one
+	// after it, the only non-admins who hear the event. It is never sent.
+	Audience []int64 `json:"-"`
+}
 
 type Event struct {
 	Kind         EventKind   `json:"kind"`

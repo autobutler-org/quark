@@ -2385,6 +2385,442 @@ const docTemplate = `{
                 }
             }
         },
+        "/chat/channels": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the channels the caller is a member of, directly, through a group, or through everyone, general first and then by name, each with the caller's best level: read, write or owner. Admins get only their own channels too.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "List the caller's chat channels",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.ListChannelsResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a private channel and makes the caller its owner. Any signed-in account may. The name is trimmed, has 1 to 64 characters and no line breaks or tabs, and is unique ignoring case; the topic has at most 512 characters. Publishes chat_channel_changed.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Create a chat channel",
+                "parameters": [
+                    {
+                        "description": "The name and an optional topic",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.createChannelBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Channel"
+                        }
+                    },
+                    "400": {
+                        "description": "an invalid name or topic",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "another channel has that name",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/channels/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a channel and its members. Only an owner of the channel or an admin may, and general can't be deleted. Publishes chat_channel_changed to everyone who was a member.",
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Delete a chat channel",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "the channel is general",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller is a member but not an owner",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, or the caller isn't a member or an admin",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes a channel's name, topic or both; a field left out is unchanged. Only an owner of the channel or an admin may. The name rules are create's. level in the answer is empty for an admin who isn't a member. Publishes chat_channel_changed.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Rename a chat channel or change its topic",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The new name, topic or both",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.updateChannelBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Channel"
+                        }
+                    },
+                    "400": {
+                        "description": "an invalid name or topic",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller is a member but not an owner",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, or the caller isn't a member or an admin",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "another channel has that name",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/channels/{id}/members": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a channel's rows, groups first and then accounts, each by name. A group carries the active accounts in it, everyone's being every active account. Each account carries avatarUpdatedAt (Unix milliseconds) when it has a profile picture, the v parameter for /users/{id}/avatar. Any member of the channel or an admin may list them.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "List a chat channel's members",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.ListMembersResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, or the caller isn't a member or an admin",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Gives one active account or existing group read, write or owner on a channel, replacing the level it had, and returns the channel's members as they now stand. Only an owner of the channel or an admin may. Publishes chat_channel_changed to everyone who was or now is a member.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Add a chat channel member or change its level",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "One account or group, and the level",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.setMemberBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.ListMembersResult"
+                        }
+                    },
+                    "400": {
+                        "description": "not exactly one account or group, or a level other than read, write or owner",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller is a member but not an owner",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, the caller isn't a member or an admin, or no active account or group has that id",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes one account's or group's row from a channel and returns the channel's members as they now stand. An owner of the channel or an admin may remove any row, and any member may remove their own account's row, which is leaving. everyone can't be removed from general. Publishes chat_channel_changed to everyone who was or now is a member.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Remove a chat channel member",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "One account or group",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.removeMemberBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.ListMembersResult"
+                        }
+                    },
+                    "400": {
+                        "description": "not exactly one account or group, or everyone on general",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller is a member but not an owner, removing someone else",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, the caller isn't a member or an admin, or the account or group has no row",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/devices": {
             "get": {
                 "security": [
@@ -7709,6 +8145,119 @@ const docTemplate = `{
                 }
             }
         },
+        "chatutil.Channel": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "createdBy": {
+                    "description": "CreatedBy is the account that created the channel; absent for general\nand for a channel whose creator was deleted.",
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "isDefault": {
+                    "description": "IsDefault marks general.",
+                    "type": "boolean"
+                },
+                "isPrivate": {
+                    "description": "IsPrivate is whether everyone has no row on the channel.",
+                    "type": "boolean"
+                },
+                "kind": {
+                    "description": "Kind is channel; dm is reserved for direct messages (#2423).",
+                    "type": "string"
+                },
+                "level": {
+                    "description": "Level is the caller's best level: read, write or owner. It is empty for\nan admin managing a channel they are not a member of.",
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "serverId": {
+                    "type": "integer"
+                },
+                "topic": {
+                    "type": "string"
+                }
+            }
+        },
+        "chatutil.ListChannelsResult": {
+            "type": "object",
+            "properties": {
+                "channels": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.Channel"
+                    }
+                }
+            }
+        },
+        "chatutil.ListMembersResult": {
+            "type": "object",
+            "properties": {
+                "members": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.Member"
+                    }
+                }
+            }
+        },
+        "chatutil.Member": {
+            "type": "object",
+            "properties": {
+                "avatarUpdatedAt": {
+                    "description": "AvatarUpdatedAt is an account's profile picture version in Unix\nmilliseconds, absent when it has none.",
+                    "type": "integer"
+                },
+                "builtin": {
+                    "description": "Builtin marks the everyone group.",
+                    "type": "boolean"
+                },
+                "groupId": {
+                    "description": "GroupID is set for a group.",
+                    "type": "integer"
+                },
+                "level": {
+                    "description": "Level is read, write or owner.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is the account's username or the group's name.",
+                    "type": "string"
+                },
+                "userId": {
+                    "description": "UserID is set for an account.",
+                    "type": "integer"
+                },
+                "users": {
+                    "description": "Users are the active accounts in a group, everyone's being every active\naccount. Absent for an account or an empty group.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.MemberUser"
+                    }
+                }
+            }
+        },
+        "chatutil.MemberUser": {
+            "type": "object",
+            "properties": {
+                "avatarUpdatedAt": {
+                    "description": "AvatarUpdatedAt is the profile picture version in Unix milliseconds,\nabsent when it has none.",
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "grouputil.Group": {
             "type": "object",
             "properties": {
@@ -8327,6 +8876,54 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_chat.createChannelBody": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "topic": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_chat.removeMemberBody": {
+            "type": "object",
+            "properties": {
+                "groupId": {
+                    "type": "integer"
+                },
+                "userId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v0_chat.setMemberBody": {
+            "type": "object",
+            "properties": {
+                "groupId": {
+                    "type": "integer"
+                },
+                "level": {
+                    "description": "Level is read, write or owner.",
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v0_chat.updateChannelBody": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "topic": {
                     "type": "string"
                 }
             }
