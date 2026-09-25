@@ -21,6 +21,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
@@ -96,6 +97,12 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	// Start the FTS5 content indexer — indexes uploaded text files and
 	// removes entries for deleted/moved files.
 	go startContentIndexer(deps)
+
+	// Tell chat key holders when a group or account change leaves a member
+	// waiting for a channel key (#2417).
+	go chatutil.WatchKeyNeeds(chatutil.WatchKeyNeedsParams{
+		Ctx: context.Background(), Database: deps.Database(), EventBus: deps.EventBus(),
+	})
 
 	// Index files that were already on disk. The event-driven indexer above
 	// only sees writes that happen while it is running, so without this pass

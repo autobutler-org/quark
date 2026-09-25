@@ -1,6 +1,9 @@
 package v0_chat
 
-import "github.com/autobutler-org/quark/pkg/util/serverutil"
+import (
+	"github.com/autobutler-org/quark/pkg/util/chatutil"
+	"github.com/autobutler-org/quark/pkg/util/serverutil"
+)
 
 type router struct{}
 
@@ -16,6 +19,12 @@ func (r *router) Routes() []*serverutil.Route {
 		getMyKeysRoute,
 		putMyKeysRoute,
 		getUserKeysRoute,
+		getChannelKeysRoute,
+		createKeyVersionRoute,
+		listPendingGrantsRoute,
+		uploadGrantsRoute,
+		listChannelEventsRoute,
+		signChannelEventRoute,
 	}
 }
 
@@ -46,4 +55,22 @@ type setMemberBody struct {
 type removeMemberBody struct {
 	UserID  int64 `json:"userId,omitempty"`
 	GroupID int64 `json:"groupId,omitempty"`
+}
+
+// createKeyVersionBody is the next key version and the caller's grant of it.
+// Byte fields are base64.
+type createKeyVersionBody struct {
+	Version   int64  `json:"version"`
+	SealedKey []byte `json:"sealedKey"`
+	Signature []byte `json:"signature"`
+}
+
+// uploadGrantsBody is grants the caller sealed and signed.
+type uploadGrantsBody struct {
+	Grants []chatutil.GrantUpload `json:"grants"`
+}
+
+// signEventBody is the caller's signature over an event, base64.
+type signEventBody struct {
+	Signature []byte `json:"signature"`
 }
