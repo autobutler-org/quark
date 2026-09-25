@@ -167,4 +167,47 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testBothViewports('lists other channels under their own heading', (
+    tester,
+    size,
+  ) async {
+    final selected = <String>[];
+    await pumpAt(
+      tester,
+      QuarkChannelList(
+        serverName: 'Home',
+        channels: channels,
+        otherChannels: const [
+          ChatChannelItem(id: 'secret', name: 'secret', isPrivate: true),
+        ],
+        selectedChannelId: 'secret',
+        onSelect: selected.add,
+      ),
+      size: size,
+    );
+
+    expect(
+      find.byKey(const ValueKey('channel_list_other_header')),
+      findsOneWidget,
+    );
+    expect(find.text('Other channels'), findsOneWidget);
+    final tile = find.byKey(const ValueKey('channel_tile_secret'));
+    expect(tester.widget<ListTile>(tile).selected, isTrue);
+    await tester.tap(tile);
+    expect(selected, ['secret']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows no other heading without other channels', (tester) async {
+    await pumpAt(
+      tester,
+      const QuarkChannelList(serverName: 'Home', channels: channels),
+    );
+
+    expect(
+      find.byKey(const ValueKey('channel_list_other_header')),
+      findsNothing,
+    );
+  });
 }

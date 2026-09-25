@@ -18,7 +18,7 @@ import (
 // @Param id path int true "Channel id"
 // @Param body body setMemberBody true "One account or group, and the level"
 // @Success 200 {object} chatutil.ListMembersResult
-// @Failure 400 {object} serverutil.Response "not exactly one account or group, or a level other than read, write or owner"
+// @Failure 400 {object} serverutil.Response "not exactly one account or group, or a level other than read, write or owner, or demoting the last owner when the caller is not an admin"
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response "the caller is a member but not an owner"
 // @Failure 404 {object} serverutil.Response "no such channel, the caller isn't a member or an admin, or no active account or group has that id"

@@ -1,58 +1,29 @@
 import 'package:flutter/foundation.dart';
+import 'package:quark/controllers/share_target.dart';
 import 'package:quark/models/path_grant.dart';
 import 'package:quark/services/sharing_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-typedef LoadAccessFn =
-    Future<PathAccess> Function({
-      required String deviceSerial,
-      required String relPath,
-    });
 typedef LoadPrincipalsFn = Future<SharePrincipals> Function();
-typedef GrantAccessFn =
-    Future<PathAccess> Function({
-      required String deviceSerial,
-      required String relPath,
-      int? userId,
-      int? groupId,
-      required String level,
-    });
-typedef RevokeAccessFn =
-    Future<PathAccess> Function({
-      required String deviceSerial,
-      required String relPath,
-      int? userId,
-      int? groupId,
-    });
 
-/// State behind the share sheet for one file or folder (#1911): who has
-/// access, who it can be shared with, and changing either.
+/// State behind the share sheet (#1911): who has access to its [target], a
+/// file or folder or a chat channel (#2422), who it can be shared with, and
+/// changing either.
 ///
-/// Service calls arrive as function parameters defaulting to
-/// [SharingService], so a test passes fakes without a mocking library. The
-/// Quark answers every change with the whole access list, which replaces the
-/// state. Failures come back raw; the host turns them into copy with
-/// `Errors`.
+/// The [target] makes the calls; who can be shared with comes from
+/// [SharingService] unless a test passes a fake. Every change is answered
+/// with the whole access list, which replaces the state. Failures come back
+/// raw; the host turns them into copy with `Errors`.
 class ShareController extends ChangeNotifier {
   ShareController({
-    required this.deviceSerial,
-    required this.relPath,
+    required this.target,
     this.selfUsername,
     this.isAdmin = false,
-    LoadAccessFn loadAccess = SharingService.load,
     LoadPrincipalsFn loadPrincipals = SharingService.principals,
-    GrantAccessFn grantAccess = SharingService.grant,
-    RevokeAccessFn revokeAccess = SharingService.revoke,
-  }) : _loadAccess = loadAccess,
-       _loadPrincipals = loadPrincipals,
-       _grantAccess = grantAccess,
-       _revokeAccess = revokeAccess;
+  }) : _loadPrincipals = loadPrincipals;
 
-  /// The device the item is on.
-  final String deviceSerial;
-
-  /// The item's path on that device.
-  final String relPath;
+  /// What is being shared.
+  final ShareTarget target;
 
   /// The signed-in account, whose own ownership it can't change unless it is
   /// an admin.
@@ -61,10 +32,7 @@ class ShareController extends ChangeNotifier {
   /// Whether the signed-in account is an admin.
   final bool isAdmin;
 
-  final LoadAccessFn _loadAccess;
   final LoadPrincipalsFn _loadPrincipals;
-  final GrantAccessFn _grantAccess;
-  final RevokeAccessFn _revokeAccess;
 
   PathAccess? _access;
   SharePrincipals _principals = const SharePrincipals();
@@ -134,18 +102,20 @@ class ShareController extends ChangeNotifier {
     ].where((principal) => !locked.contains(principal.keySuffix)).toList();
   }
 
-  /// Rows the signed-in account can't change: its own ownership set on the
-  /// item, unless it is an admin. The Quark refuses that change, so no one
-  /// locks themselves out by accident.
+  /// Rows the signed-in account can't change: those the [target] fixes, and
+  /// its own ownership set on the item unless it is an admin. The Quark
+  /// refuses that change, so no one locks themselves out by accident.
   Set<String> get lockedKeys {
     final access = _access;
-    if (isAdmin || access == null) return const {};
+    if (access == null) return const {};
     return {
       for (final grant in access.grants)
-        if (grant.userId != null &&
-            grant.name == selfUsername &&
-            grant.from == access.relPath &&
-            grant.level == AccessLevel.owner.name)
+        if (target.isLocked(grant) ||
+            (!isAdmin &&
+                grant.userId != null &&
+                grant.name == selfUsername &&
+                grant.from == access.relPath &&
+                grant.level == AccessLevel.owner.name))
           principalFor(grant).keySuffix,
     };
   }
@@ -212,7 +182,7 @@ class ShareController extends ChangeNotifier {
     _notify();
     try {
       final results = await Future.wait<Object>([
-        _loadAccess(deviceSerial: deviceSerial, relPath: relPath),
+        target.load(),
         _loadPrincipals(),
       ]);
       if (!_isCurrent(generation)) return;
@@ -234,9 +204,7 @@ class ShareController extends ChangeNotifier {
   /// has. Null on success, otherwise the failure.
   Future<Object?> share(PrincipalItem principal, AccessLevel level) => _change(
     principal,
-    () => _grantAccess(
-      deviceSerial: deviceSerial,
-      relPath: relPath,
+    () => target.grant(
       userId: _userId(principal),
       groupId: _groupId(principal),
       level: level.name,
@@ -247,12 +215,8 @@ class ShareController extends ChangeNotifier {
   /// otherwise the failure.
   Future<Object?> revoke(PrincipalItem principal) => _change(
     principal,
-    () => _revokeAccess(
-      deviceSerial: deviceSerial,
-      relPath: relPath,
-      userId: _userId(principal),
-      groupId: _groupId(principal),
-    ),
+    () =>
+        target.revoke(userId: _userId(principal), groupId: _groupId(principal)),
   );
 
   static int? _userId(PrincipalItem principal) =>

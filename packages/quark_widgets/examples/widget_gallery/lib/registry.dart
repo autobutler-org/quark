@@ -1097,6 +1097,18 @@ final List<GalleryEntry> registry = [
             onSelect: (id) => log('QuarkChannelList.onSelect($id)'),
           ),
         ),
+        SizedBox(
+          width: 280,
+          height: 320,
+          child: QuarkChannelList(
+            serverName: 'As an admin',
+            channels: galleryChatChannels,
+            otherChannels: const [
+              ChatChannelItem(id: 'payroll', name: 'payroll', isPrivate: true),
+            ],
+            onSelect: (id) => log('QuarkChannelList.onSelect($id)'),
+          ),
+        ),
         const SizedBox(
           width: 280,
           height: 240,
@@ -1116,6 +1128,28 @@ final List<GalleryEntry> registry = [
           ),
         ),
       ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkChannelDialog',
+    group: 'Chat',
+    build: (context, log) => QuarkChannelDialog(
+      title: 'New channel',
+      submitLabel: 'Create',
+      nameMaxLength: 64,
+      topicMaxLength: 512,
+      onSubmit: (name, topic) =>
+          log('QuarkChannelDialog.onSubmit($name, $topic)'),
+      onCancel: () => log('QuarkChannelDialog.onCancel'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkDeleteChannelDialog',
+    group: 'Chat',
+    build: (context, log) => QuarkDeleteChannelDialog(
+      channelName: 'family',
+      onConfirm: () => log('QuarkDeleteChannelDialog.onConfirm'),
+      onCancel: () => log('QuarkDeleteChannelDialog.onCancel'),
     ),
   ),
   GalleryEntry(

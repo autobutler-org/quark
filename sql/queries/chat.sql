@@ -61,6 +61,36 @@ ORDER BY
     chat_channels.name COLLATE NOCASE,
     chat_channels.id;
 
+-- ListAllChatChannels is every channel on the Quark, for an admin looking
+-- for the ones they are not in (#2422), ordered as ListChatChannelsForUser.
+-- name: ListAllChatChannels :many
+SELECT
+    chat_channels.id,
+    chat_channels.server_id,
+    chat_channels.kind,
+    chat_channels.name,
+    chat_channels.topic,
+    chat_channels.is_default,
+    chat_channels.created_by,
+    chat_channels.created_at,
+    CAST(NOT EXISTS (
+        SELECT
+            1
+        FROM
+            chat_channel_members AS everyone_rows
+            JOIN groups ON groups.id = everyone_rows.group_id
+        WHERE
+            everyone_rows.channel_id = chat_channels.id
+            AND groups.name = 'everyone'
+            AND groups.builtin = 1
+    ) AS INTEGER) AS is_private
+FROM
+    chat_channels
+ORDER BY
+    chat_channels.is_default DESC,
+    chat_channels.name COLLATE NOCASE,
+    chat_channels.id;
+
 -- GetChatChannelLevelForUser is an account's best level on one channel, 0
 -- when it is not a member.
 -- name: GetChatChannelLevelForUser :one

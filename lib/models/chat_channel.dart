@@ -1,5 +1,6 @@
 /// A chat channel the signed-in account belongs to, as
-/// `GET /api/v0/chat/channels` lists it (#2415).
+/// `GET /api/v0/chat/channels` lists it (#2415). With `?all=1` an admin also
+/// gets the channels they are not in, which carry no [level] (#2422).
 class ChatChannel {
   /// Builds a channel explicitly; tests use it.
   const ChatChannel({
@@ -26,9 +27,15 @@ class ChatChannel {
   /// Whether only its members can see it.
   final bool isPrivate;
 
-  /// The caller's level on it, `read`, `write` or `owner`; null when the Quark
-  /// does not say.
+  /// The caller's level on it, `read`, `write` or `owner`; null for a channel
+  /// an admin can manage but is not in.
   final String? level;
+
+  /// Whether the caller belongs to it, so can read it.
+  bool get isMember => level != null && level!.isNotEmpty;
+
+  /// Whether the caller owns it, so can rename, share and delete it.
+  bool get isOwner => level == 'owner';
 
   /// Whether the caller may post: any level but `read`.
   bool get canWrite => level != 'read';
@@ -53,6 +60,7 @@ class ChatMember {
     required this.level,
     this.userId,
     this.groupId,
+    this.builtin = false,
     this.avatarUpdatedAt,
     this.users = const [],
   });
@@ -65,6 +73,9 @@ class ChatMember {
 
   /// The username or group name.
   final String name;
+
+  /// Whether this is the Quark's own `everyone` group.
+  final bool builtin;
 
   /// `read`, `write` or `owner`.
   final String level;
@@ -80,6 +91,7 @@ class ChatMember {
     userId: (json['userId'] as num?)?.toInt(),
     groupId: (json['groupId'] as num?)?.toInt(),
     name: json['name'] as String? ?? '',
+    builtin: json['builtin'] as bool? ?? false,
     level: json['level'] as String? ?? 'read',
     avatarUpdatedAt: (json['avatarUpdatedAt'] as num?)?.toInt(),
     users: [
