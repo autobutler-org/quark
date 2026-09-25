@@ -8,7 +8,10 @@ import 'package:quark/services/app_settings.dart';
 ///
 /// Stateful only to hold the in-flight state: accepting terms resolves the
 /// next route, which asks the Quark whether it has been set up, and that is a
-/// network round-trip the user should see happening.
+/// network round-trip the user should see happening. While it runs, the
+/// button stays filled in its primary color and shows a spinner beside
+/// "Continuing…", and it ignores taps so a second one cannot start another
+/// accept.
 class AgreeButton extends StatefulWidget {
   const AgreeButton({super.key});
 
@@ -32,13 +35,27 @@ class _AgreeButtonState extends State<AgreeButton> {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton(
-      onPressed: _accepting ? null : _accept,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: _accepting
-            ? const QuarkLoader(size: 20)
-            : const Text('I Agree', style: TextStyle(fontSize: 16)),
+    // Keep [onPressed] set so the button does not switch to the disabled gray.
+    // [AbsorbPointer] is what makes the second tap a no-op: an empty callback
+    // would still look tappable and a screen reader could still activate it.
+    return AbsorbPointer(
+      absorbing: _accepting,
+      child: FilledButton(
+        onPressed: _accept,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: _accepting
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: QuarkTokens.of(context).spacingSm,
+                  children: const [
+                    QuarkLoader(size: 20),
+                    Text('Continuing…', style: TextStyle(fontSize: 16)),
+                  ],
+                )
+              : const Text('I Agree', style: TextStyle(fontSize: 16)),
+        ),
       ),
     );
   }
