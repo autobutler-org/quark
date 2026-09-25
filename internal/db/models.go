@@ -58,6 +58,17 @@ type ChatKeyGrant struct {
 	CreatedAt      time.Time
 }
 
+type ChatMessage struct {
+	ID         int64
+	ChannelID  int64
+	AuthorID   sql.NullInt64
+	KeyVersion int64
+	Ciphertext []byte
+	CreatedAt  time.Time
+	EditedAt   sql.NullTime
+	DeletedAt  sql.NullTime
+}
+
 type ChatServer struct {
 	ID        int64
 	Name      string

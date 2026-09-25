@@ -309,18 +309,26 @@ func keysFromRow(row db.UserChatKey) Keys {
 }
 
 // requireMember checks the caller is in the conversation: holds
-// read_messages on the channel. Admins get no pass here: grants and events are
-// for members, and anyone else, a delegated manager included, gets
-// ErrChannelNotFound.
+// read_messages on the channel. Admins get no pass here: grants, events and
+// messages are for members, and anyone else, a delegated manager included,
+// gets ErrChannelNotFound.
 func requireMember(ctx context.Context, queries *db.Queries, principal accessutil.Principal, channelID int64) error {
+	_, err := memberPerms(ctx, queries, principal, channelID)
+	return err
+}
+
+// memberPerms is the caller's effective set on a channel they read, which
+// holds read_messages; anyone else, delegated managers and admins included,
+// gets ErrChannelNotFound.
+func memberPerms(ctx context.Context, queries *db.Queries, principal accessutil.Principal, channelID int64) (Perms, error) {
 	perms, err := resolvePerms(ctx, queries, channelID, principal.UserID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if !perms.Has(PermReadMessages) {
-		return ErrChannelNotFound
+		return 0, ErrChannelNotFound
 	}
-	return nil
+	return perms, nil
 }
 
 // callerSignKey is the caller's published Ed25519 key, or ErrKeysNotFound.
@@ -506,4 +514,48 @@ func eventFromRow(row db.ChatChannelEvent) ChannelEvent {
 		SignerSignKey: row.SignerSignKey,
 		CreatedAt:     row.CreatedAt,
 	}
+}
+
+// messageFromRow maps a chat_messages row.
+func messageFromRow(row db.ChatMessage) Message {
+	message := Message{
+		ID:         row.ID,
+		ChannelID:  row.ChannelID,
+		AuthorID:   row.AuthorID.Int64,
+		KeyVersion: row.KeyVersion,
+		Ciphertext: row.Ciphertext,
+		CreatedAt:  row.CreatedAt,
+	}
+	if row.EditedAt.Valid {
+		message.EditedAt = &row.EditedAt.Time
+	}
+	if row.DeletedAt.Valid {
+		message.DeletedAt = &row.DeletedAt.Time
+	}
+	return message
+}
+
+// publishMessage tells a channel's readers about a message: the whole row
+// when it was created, only its id when deleted.
+func publishMessage(ctx context.Context, queries *db.Queries, bus *eventbus.Bus, kind eventbus.EventKind, message Message) error {
+	if bus == nil {
+		return nil
+	}
+	users, err := memberUsers(ctx, queries, message.ChannelID)
+	if err != nil {
+		return err
+	}
+	// Ciphertext is for readers only, never a delegated manager (#2418).
+	audience := []int64{}
+	for _, user := range users {
+		if user.Perms.Has(PermReadMessages) {
+			audience = append(audience, user.UserID)
+		}
+	}
+	data := eventbus.ChatMessageChanged{ChannelID: message.ChannelID, MessageID: message.ID, Audience: audience}
+	if kind == eventbus.EventChatMessageCreated {
+		data.Message = message
+	}
+	bus.Publish(eventbus.Event{Kind: kind, Data: data})
+	return nil
 }

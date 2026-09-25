@@ -118,3 +118,51 @@ func TestFilterEventChatChannelChanged(t *testing.T) {
 		t.Errorf("event JSON = %s, want %s", body, want)
 	}
 }
+
+// TestFilterEventChatMessages passes chat_message_created and
+// chat_message_deleted only to the channel's members. An admin who isn't one
+// hears neither, unlike every other event (#2418).
+func TestFilterEventChatMessages(t *testing.T) {
+	f := newFixture(t)
+	stranger := f.load(t, accessutil.Principal{UserID: createUser(t, f.database, "carol")})
+	adminID := createUser(t, f.database, "root")
+	admin := f.load(t, accessutil.Principal{UserID: adminID, IsAdmin: true})
+	member := f.load(t, accessutil.Principal{UserID: f.userID})
+	system := f.load(t, accessutil.System)
+
+	for _, kind := range []eventbus.EventKind{eventbus.EventChatMessageCreated, eventbus.EventChatMessageDeleted} {
+		toMember := eventbus.Event{Kind: kind, Data: eventbus.ChatMessageChanged{ChannelID: 7, MessageID: 3, Audience: []int64{f.userID}}}
+		toAdmin := eventbus.Event{Kind: kind, Data: eventbus.ChatMessageChanged{ChannelID: 7, MessageID: 3, Audience: []int64{adminID}}}
+		for _, tc := range []struct {
+			name   string
+			access accessutil.Access
+			event  eventbus.Event
+			want   bool
+		}{
+			{name: "member", access: member, event: toMember, want: true},
+			{name: "non-member admin", access: admin, event: toMember},
+			{name: "system", access: system, event: toMember},
+			{name: "member admin", access: admin, event: toAdmin, want: true},
+			{name: "non-member", access: stranger, event: toMember},
+			{name: "no data", access: member, event: eventbus.Event{Kind: kind}},
+		} {
+			t.Run(string(kind)+"/"+tc.name, func(t *testing.T) {
+				got := accessutil.FilterEvent(accessutil.FilterEventParams{Access: tc.access, Event: tc.event})
+				if got.Deliver != tc.want {
+					t.Errorf("Deliver = %v, want %v", got.Deliver, tc.want)
+				}
+			})
+		}
+	}
+
+	body, err := json.Marshal(eventbus.Event{
+		Kind: eventbus.EventChatMessageDeleted,
+		Data: eventbus.ChatMessageChanged{ChannelID: 7, MessageID: 3, Audience: []int64{f.userID}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"kind":"chat_message_deleted","data":{"channelId":7,"messageId":3}}`; string(body) != want {
+		t.Errorf("event JSON = %s, want %s", body, want)
+	}
+}
