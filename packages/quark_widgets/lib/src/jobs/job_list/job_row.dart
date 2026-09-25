@@ -76,7 +76,12 @@ class JobRow extends StatelessWidget {
           ),
           Text(
             details,
-            style: theme.textTheme.bodySmall?.copyWith(color: statusColor),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: statusColor,
+              // The percentage and the elapsed clock tick while a job runs;
+              // equal-width digits keep the line from jittering each second.
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
           if (item.status == JobItemStatus.running)
             Padding(

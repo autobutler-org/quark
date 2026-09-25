@@ -87,8 +87,14 @@ class PhotoGridTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final onMenu = this.onMenu;
+    // Pure black or white at low alpha, never a themed neutral: a tinted
+    // hairline picks up the page behind it and reads as dirt on the photo.
+    final outline = theme.brightness == Brightness.dark
+        ? Colors.white.withValues(alpha: 0.1)
+        : Colors.black.withValues(alpha: 0.1);
 
     return MouseRegion(
       cursor: selectionMode ? MouseCursor.defer : SystemMouseCursors.click,
@@ -107,6 +113,13 @@ class PhotoGridTile extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             thumbnailBuilder(context, item),
+            // An inset hairline, so a white photo on a light page, or a dark
+            // one on a dark page, still has an edge.
+            IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(border: Border.all(color: outline)),
+              ),
+            ),
             if (item.hasLiveVideo)
               const Positioned(top: 4, left: 4, child: LiveBadge()),
             if (item.isFavorite && !selectionMode)
@@ -122,8 +135,8 @@ class PhotoGridTile extends StatelessWidget {
               ),
             if (onMenu != null)
               Positioned(
-                top: 2,
-                right: 2,
+                top: 0,
+                right: 0,
                 // A Builder for the button's own box, which the menu opens
                 // under.
                 child: Builder(
@@ -132,15 +145,24 @@ class PhotoGridTile extends StatelessWidget {
                     tooltip: 'More',
                     iconSize: 18,
                     padding: EdgeInsets.zero,
+                    // A 40-pixel target around a 28-pixel disc: the disc is
+                    // as small as a photo's corner can spare, but a finger
+                    // needs more than that to land on it.
                     constraints: const BoxConstraints.tightFor(
-                      width: 28,
-                      height: 28,
+                      width: 40,
+                      height: 40,
                     ),
-                    style: IconButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      backgroundColor: Colors.black38,
+                    style: IconButton.styleFrom(foregroundColor: Colors.white),
+                    icon: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black38,
+                        shape: BoxShape.circle,
+                      ),
+                      child: SizedBox.square(
+                        dimension: 28,
+                        child: Icon(QuarkIcons.more_vert),
+                      ),
                     ),
-                    icon: const Icon(QuarkIcons.more_vert),
                     onPressed: () {
                       final box = context.findRenderObject()! as RenderBox;
                       onMenu(

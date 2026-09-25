@@ -80,6 +80,19 @@ void main() {
     expect(events, ['menu', 'menu', 'menu']);
   });
 
+  testBothViewports('gives the menu button a 40-pixel target', (
+    tester,
+    size,
+  ) async {
+    await pumpTile(tester, size: size, withMenu: true);
+
+    final target = tester.getSize(
+      find.byKey(const ValueKey('photo_tile_menu_p1')),
+    );
+    expect(target.width, greaterThanOrEqualTo(40));
+    expect(target.height, greaterThanOrEqualTo(40));
+  });
+
   testBothViewports('reports a double tap when one is offered', (
     tester,
     size,

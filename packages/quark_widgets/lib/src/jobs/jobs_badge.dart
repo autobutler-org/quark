@@ -30,7 +30,10 @@ class JobsBadge extends StatelessWidget {
     if (runningCount <= 0) return const SizedBox.shrink();
     final tokens = QuarkTokens.of(context);
     return Badge(
-      label: Text('$runningCount'),
+      label: Text(
+        '$runningCount',
+        style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
+      ),
       backgroundColor: tokens.primary,
       textColor: tokens.primaryForeground,
       child: QuarkBarIconButton(
