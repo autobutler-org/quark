@@ -96,7 +96,7 @@ sequenceDiagram
 stateDiagram-v2
     [*] --> pending: POST /videos/transcode
     pending --> running: lane has capacity
-    running --> completed: ffmpeg finished, output written
+    running --> completed: remux finished, output written
     running --> failed: error or server shutdown
     pending --> canceled: DELETE /jobs/:id
     running --> canceled: DELETE /jobs/:id

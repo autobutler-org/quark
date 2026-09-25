@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -123,16 +123,39 @@ func (h harness) job(t *testing.T, id int64) jobutil.Job {
 	return res.Job
 }
 
-// writeClip generates a one-second H.264 test pattern clip, with no audio,
-// with real ffmpeg.
+// The clips are videoutil's test fixtures, copied from sprocket's corpus:
+// three seconds of H.264 and AAC at 128x72, keyframes every half second, and
+// an MPEG-TS copy of the same streams.
+const (
+	gopFixture = "../../../../../pkg/util/videoutil/testdata/h264-gop12.mp4"
+	tsFixture  = "../../../../../pkg/util/videoutil/testdata/h264-aac.ts"
+)
+
+// copyFixture copies the fixture at src to dst, making dst's folder.
+func copyFixture(t *testing.T, src, dst string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, in); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// writeClip puts the H.264 and AAC fixture at rel.
 func (h harness) writeClip(t *testing.T, rel string) {
 	t.Helper()
-	cmd := exec.Command("ffmpeg", "-loglevel", "error",
-		"-f", "lavfi", "-i", "testsrc=size=64x48:rate=10:duration=1",
-		"-c:v", "libx264", "-pix_fmt", "yuv420p", "-y", filepath.Join(h.filesDir, rel))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("generate clip: %v\n%s", err, out)
-	}
+	copyFixture(t, gopFixture, filepath.Join(h.filesDir, rel))
 }
 
 func transcodeBody(relPath, format, quality string) string {
@@ -154,21 +177,8 @@ func acceptedJobID(t *testing.T, w *httptest.ResponseRecorder) int64 {
 	return body.JobID
 }
 
-func requireFFmpeg(t *testing.T) {
-	t.Helper()
-	if !videoutil.Available() {
-		t.Skip("ffmpeg not available")
-	}
-}
-
 func TestTranscodeVideoRejectsBadRequests(t *testing.T) {
 	h := newHarness(t)
-	if !videoutil.Available() {
-		if w := h.post(transcodeBody("clip.mp4", "mov", "small")); w.Code != http.StatusNotImplemented {
-			t.Fatalf("without ffmpeg POST returned %d, want 501", w.Code)
-		}
-		return
-	}
 	h.writeClip(t, "clip.mp4")
 	if err := os.WriteFile(filepath.Join(h.filesDir, "notes.txt"), []byte("not a video"), 0o644); err != nil {
 		t.Fatal(err)
@@ -180,28 +190,16 @@ func TestTranscodeVideoRejectsBadRequests(t *testing.T) {
 		want int
 	}{
 		{"malformed body", `{`, http.StatusBadRequest},
-		{"missing relPath", transcodeBody("", "mov", "original"), http.StatusBadRequest},
+		{"missing relPath", transcodeBody("", "mkv", "original"), http.StatusBadRequest},
 		{"an old preset name instead of a format", transcodeBody("clip.mp4", "compatible", "original"), http.StatusBadRequest},
-		{"unknown quality", transcodeBody("clip.mp4", "mov", "best"), http.StatusBadRequest},
-		{"the source's own format at original quality", transcodeBody("clip.mp4", "mp4", "original"), http.StatusBadRequest},
-		{"path traversal", transcodeBody("../../../../etc/passwd", "mov", "original"), http.StatusBadRequest},
-		{"the files dir itself", transcodeBody(".", "mov", "original"), http.StatusBadRequest},
-		{"missing source", transcodeBody("gone.mp4", "mov", "original"), http.StatusNotFound},
-		{"source that is not a video", transcodeBody("notes.txt", "mov", "original"), http.StatusNotFound},
-	}
-	available, err := videoutil.AvailableFormats()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, f := range videoutil.Formats() {
-		if !slices.Contains(available, f) {
-			cases = append(cases, struct {
-				name string
-				body string
-				want int
-			}{"a format this ffmpeg cannot write", transcodeBody("clip.mp4", string(f), "original"), http.StatusBadRequest})
-			break
-		}
+		{"small quality, which needed a re-encode", transcodeBody("clip.mp4", "mkv", "small"), http.StatusBadRequest},
+		{"the source's own format", transcodeBody("clip.mp4", "mp4", "original"), http.StatusBadRequest},
+		{"a format sprocket does not write", transcodeBody("clip.mp4", "avi", "original"), http.StatusBadRequest},
+		{"a format that cannot hold the codecs", transcodeBody("clip.mp4", "webm", "original"), http.StatusBadRequest},
+		{"path traversal", transcodeBody("../../../../etc/passwd", "mkv", "original"), http.StatusBadRequest},
+		{"the files dir itself", transcodeBody(".", "mkv", "original"), http.StatusBadRequest},
+		{"missing source", transcodeBody("gone.mp4", "mkv", "original"), http.StatusNotFound},
+		{"source that is not a video", transcodeBody("notes.txt", "mkv", "original"), http.StatusNotFound},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -219,38 +217,23 @@ func TestTranscodeVideoRejectsBadRequests(t *testing.T) {
 	}
 }
 
-func TestTranscodeVideoQueuesAJobInTheRightLane(t *testing.T) {
-	requireFFmpeg(t)
+func TestTranscodeVideoQueuesARemux(t *testing.T) {
 	h := newHarness(t)
 	h.writeClip(t, "clip.mp4")
 
 	cases := []struct {
-		name     string
-		body     string
-		wantName string
-		wantLane string
-		want     transcodeutil.Params
+		name string
+		body string
+		want transcodeutil.Params
 	}{
-		{
-			name:     "H.264 into MOV at original quality copies",
-			body:     transcodeBody("clip.mp4", "mov", "original"),
-			wantName: "Convert clip.mp4 to MOV",
-			wantLane: transcodeutil.LaneCopy,
-			want:     transcodeutil.Params{RelPath: "clip.mp4", Serial: testSerial, Format: "mov", Quality: videoutil.QualityOriginal},
-		},
-		{
-			name:     "small always re-encodes, even into its own format",
-			body:     transcodeBody("clip.mp4", "mp4", "small"),
-			wantName: "Convert clip.mp4 to MP4 (small)",
-			wantLane: transcodeutil.LaneEncode,
-			want:     transcodeutil.Params{RelPath: "clip.mp4", Serial: testSerial, Format: "mp4", Quality: videoutil.QualitySmall},
-		},
+		{"original quality", transcodeBody("clip.mp4", "mkv", "original"), transcodeutil.Params{RelPath: "clip.mp4", Serial: testSerial, Format: "mkv", Quality: "original"}},
+		{"no quality", fmt.Sprintf(`{"relPath":"clip.mp4","serial":%q,"format":"mkv"}`, testSerial), transcodeutil.Params{RelPath: "clip.mp4", Serial: testSerial, Format: "mkv"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			job := h.job(t, acceptedJobID(t, h.post(c.body)))
-			if job.Kind != transcodeutil.Kind || job.Name != c.wantName || job.Lane != c.wantLane || job.Status != jobutil.StatusPending {
-				t.Errorf("queued job = %+v, want %q in lane %s", job, c.wantName, c.wantLane)
+			if job.Kind != transcodeutil.Kind || job.Name != "Convert clip.mp4 to MKV" || job.Lane != transcodeutil.LaneCopy || job.Status != jobutil.StatusPending {
+				t.Errorf("queued job = %+v, want a pending remux into MKV in the copy lane", job)
 			}
 			var params transcodeutil.Params
 			if err := json.Unmarshal(job.Params, &params); err != nil || params != c.want {
@@ -261,78 +244,171 @@ func TestTranscodeVideoQueuesAJobInTheRightLane(t *testing.T) {
 }
 
 func TestTranscodeRunsToCompletion(t *testing.T) {
-	requireFFmpeg(t)
 	h := newHarness(t)
 	h.runWorker(t)
-	h.writeClip(t, "clip.mov")
+	h.writeClip(t, "clip.mp4")
 
-	id := acceptedJobID(t, h.post(transcodeBody("clip.mov", "mkv", "original")))
+	// Events are drained from the start: a remux of a small file reports
+	// progress on nearly every write, and those events would fill the
+	// subscription's buffer and crowd out the upload event that open file
+	// browsers refresh on.
+	uploads := make(chan eventbus.Event, 1)
+	go func() {
+		for e := range h.events {
+			if e.Kind == eventbus.EventUpload {
+				uploads <- e
+				return
+			}
+		}
+	}()
 
-	deadline := time.Now().Add(30 * time.Second)
-	for job := h.job(t, id); job.Status != jobutil.StatusCompleted; job = h.job(t, id) {
-		if job.Status == jobutil.StatusFailed || job.Status == jobutil.StatusCanceled {
-			t.Fatalf("job ended %s: %s", job.Status, job.Error)
+	id := acceptedJobID(t, h.post(transcodeBody("clip.mp4", "mkv", "original")))
+
+	select {
+	case e := <-uploads:
+		if e.Path != "clip.mkv" || e.DeviceSerial != testSerial {
+			t.Errorf("upload event = %+v", e)
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("job did not complete: %+v", job)
-		}
-		time.Sleep(20 * time.Millisecond)
+	case <-time.After(30 * time.Second):
+		t.Fatalf("no upload event for the output file: %+v", h.job(t, id))
 	}
-
+	// The upload event goes out just before the job is recorded as done.
+	deadline := time.Now().Add(5 * time.Second)
+	for job := h.job(t, id); job.Status != jobutil.StatusCompleted; job = h.job(t, id) {
+		if job.Status == jobutil.StatusFailed || time.Now().After(deadline) {
+			t.Fatalf("job = %+v, want completed", job)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if _, err := videoutil.Probe(context.Background(), filepath.Join(h.filesDir, "clip.mkv")); err != nil {
 		t.Errorf("output is not a readable video: %v", err)
 	}
+}
 
-	// Open file browsers refresh on the upload event for the output file.
-	timeout := time.After(5 * time.Second)
-	for {
-		select {
-		case e := <-h.events:
-			if e.Kind == eventbus.EventUpload {
-				if e.Path != "clip.mkv" || e.DeviceSerial != testSerial {
-					t.Errorf("upload event = %+v", e)
-				}
-				return
-			}
-		case <-timeout:
-			t.Fatal("no upload event for the output file")
-		}
-	}
+// get sends a GET and returns the recorder.
+func (h harness) get(path string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	h.engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+	return w
 }
 
 func TestListTranscodeFormats(t *testing.T) {
 	h := newHarness(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v0/videos/transcode/formats", nil)
+	h.writeClip(t, "clip.mp4")
+	copyFixture(t, tsFixture, filepath.Join(h.filesDir, "clip.ts"))
+
+	cases := []struct {
+		name  string
+		query string
+		want  []string
+	}{
+		{"every format the device writes", "", []string{"mp4", "mov", "mkv", "webm", "m4v", "3gp", "3g2", "ts"}},
+		{"what an H.264 and AAC mp4 fits", "?relPath=clip.mp4&serial=" + testSerial, []string{"mov", "mkv", "m4v", "3gp", "3g2", "ts"}},
+		{"what a transport stream remuxes into", "?relPath=clip.ts&serial=" + testSerial, []string{"mp4", "mov", "m4v", "3gp", "3g2"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := h.get("/api/v0/videos/transcode/formats" + c.query)
+			if w.Code != http.StatusOK {
+				t.Fatalf("GET returned %d, want 200: %s", w.Code, w.Body.String())
+			}
+			var body struct {
+				Formats []struct {
+					Format string `json:"format"`
+					Label  string `json:"label"`
+				} `json:"formats"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatalf("GET body %s is not a formats list: %v", w.Body.String(), err)
+			}
+			got := make([]string, 0, len(body.Formats))
+			for _, f := range body.Formats {
+				got = append(got, f.Format)
+				if f.Label != videoutil.Format(f.Format).Label() {
+					t.Errorf("%s is labeled %q, want %q", f.Format, f.Label, videoutil.Format(f.Format).Label())
+				}
+			}
+			if !slices.Equal(got, c.want) {
+				t.Fatalf("GET listed %v, want %v", got, c.want)
+			}
+		})
+	}
+	for _, rel := range []string{"gone.mp4", "../../../../etc/passwd"} {
+		if w := h.get("/api/v0/videos/transcode/formats?relPath=" + rel + "&serial=" + testSerial); w.Code != http.StatusNotFound && w.Code != http.StatusBadRequest {
+			t.Errorf("formats for %s returned %d, want 404 or 400", rel, w.Code)
+		}
+	}
+}
+
+func (h harness) trim(body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/api/v0/videos/trim", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	h.engine.ServeHTTP(w, req)
-	if !videoutil.Available() {
-		if w.Code != http.StatusNotImplemented {
-			t.Fatalf("without ffmpeg GET returned %d, want 501", w.Code)
-		}
-		return
+	return w
+}
+
+func TestTrimVideo(t *testing.T) {
+	h := newHarness(t)
+	h.writeClip(t, "clip.mp4")
+	h.writeClip(t, "phone.MOV")
+	copyFixture(t, tsFixture, filepath.Join(h.filesDir, "clip.ts"))
+
+	cases := []struct {
+		name      string
+		source    string
+		wantPath  string
+		wantStart int64
+	}{
+		{"snaps back to a keyframe and says so", "clip.mp4", "clip_trimmed.mp4", 1000},
+		{"a MOV stays a MOV", "phone.MOV", "phone_trimmed.MOV", 1000},
 	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := h.trim(fmt.Sprintf(`{"relPath":%q,"serial":%q,"startMs":1200,"endMs":2200}`, c.source, testSerial))
+			if w.Code != http.StatusOK {
+				t.Fatalf("trim returned %d, want 200: %s", w.Code, w.Body.String())
+			}
+			var body struct {
+				RelPath       string `json:"relPath"`
+				ActualStartMs int64  `json:"actualStartMs"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if body.RelPath != c.wantPath || body.ActualStartMs != c.wantStart {
+				t.Fatalf("trim = %+v, want %s starting at %dms", body, c.wantPath, c.wantStart)
+			}
+			if _, err := videoutil.Probe(context.Background(), filepath.Join(h.filesDir, body.RelPath)); err != nil {
+				t.Errorf("the clip is not a readable video: %v", err)
+			}
+		})
+	}
+
+	t.Run("a transport stream is a 422 and leaves nothing behind", func(t *testing.T) {
+		w := h.trim(fmt.Sprintf(`{"relPath":"clip.ts","serial":%q,"startMs":0,"endMs":1000}`, testSerial))
+		if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "MPEG-TS") {
+			t.Fatalf("trim returned %d %s, want a 422 naming MPEG-TS", w.Code, w.Body.String())
+		}
+		if _, err := os.Stat(filepath.Join(h.filesDir, "clip_trimmed.ts")); !os.IsNotExist(err) {
+			t.Errorf("a refused trim left a file: %v", err)
+		}
+	})
+}
+
+func TestGetMetadata(t *testing.T) {
+	h := newHarness(t)
+	h.writeClip(t, "clip.mp4")
+	w := h.get("/api/v0/videos/metadata?relPath=clip.mp4&serial=" + testSerial)
 	if w.Code != http.StatusOK {
 		t.Fatalf("GET returned %d, want 200: %s", w.Code, w.Body.String())
 	}
-	var body struct {
-		Formats []struct {
-			Format string `json:"format"`
-			Label  string `json:"label"`
-		} `json:"formats"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || body.Formats == nil {
-		t.Fatalf("GET body %s is not a formats list: %v", w.Body.String(), err)
-	}
-	available, err := videoutil.AvailableFormats()
-	if err != nil {
+	var body v0_videos.VideoMetadataJSON
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if len(body.Formats) != len(available) {
-		t.Fatalf("GET listed %d formats, want the %d this ffmpeg writes: %s", len(body.Formats), len(available), w.Body.String())
-	}
-	for i, f := range available {
-		if body.Formats[i].Format != string(f) || body.Formats[i].Label != f.Label() {
-			t.Errorf("format %d = %+v, want %s labeled %s", i, body.Formats[i], f, f.Label())
-		}
+	if body.Duration != 3 || body.Width != 128 || body.Height != 72 || body.VideoCodec != "h264" ||
+		body.AudioCodec != "aac" || body.Framerate != 24 || body.Rotation != 0 || body.Bitrate <= 0 {
+		t.Fatalf("metadata = %+v, want 3s of 128x72 h264 and aac at 24 fps", body)
 	}
 }
