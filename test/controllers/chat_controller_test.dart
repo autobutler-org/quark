@@ -271,4 +271,163 @@ void main() {
     expect(chat.controller.expandedGroupIds, {'group_4'});
     chat.controller.dispose();
   });
+
+  group('channel management (#2422)', () {
+    test('creating lists the channel and makes its first key', () async {
+      final chat = FakeChat();
+      chat.controller.select('general');
+      await chat.controller.refresh();
+
+      final created = await chat.controller.createChannel('design', 'Mockups');
+
+      expect(created?.name, 'design');
+      expect(chat.calls, ['create design "Mockups"', 'ensure keys 12']);
+      expect(chat.controller.channels.map((c) => c.name), contains('design'));
+      expect(chat.controller.isSaving, isFalse);
+      expect(chat.controller.saveError, isNull);
+      chat.controller.dispose();
+    });
+
+    test('a taken name reads as such', () async {
+      final chat = FakeChat()..failWith = const ApiException(409);
+      await chat.controller.refresh();
+
+      expect(await chat.controller.createChannel('random', ''), isNull);
+      expect(
+        Errors.chatChannel(chat.controller.saveError, 'create the channel'),
+        Errors.chatChannelNameTaken,
+      );
+      expect(chat.calls, ['create random ""'], reason: 'no key without one');
+
+      chat.controller.clearSaveError();
+      expect(chat.controller.saveError, isNull);
+      chat.controller.dispose();
+    });
+
+    test('renaming changes the open channel', () async {
+      final chat = FakeChat();
+      chat.controller.select('2');
+      await chat.controller.refresh();
+
+      expect(await chat.controller.updateChannel('ideas', 'Anything'), isTrue);
+      expect(chat.calls, ['update 2 ideas "Anything"']);
+      expect(chat.controller.selectedChannel?.name, 'ideas');
+      expect(chat.controller.selectedChannel?.topic, 'Anything');
+      chat.controller.dispose();
+    });
+
+    test('deleting falls back to general', () async {
+      final chat = FakeChat();
+      chat.controller.select('2');
+      await chat.controller.refresh();
+
+      expect(await chat.controller.deleteChannel(), isTrue);
+      expect(chat.calls, ['delete 2']);
+      expect(chat.controller.selectedChannel?.id, 1);
+      expect(chat.opened[2]!.disposed, isTrue);
+      chat.controller.dispose();
+    });
+
+    test('leaving removes your row, signs it, and falls back', () async {
+      final chat = FakeChat();
+      chat.controller.select('2');
+      await chat.controller.refresh();
+      expect(chat.controller.canLeaveSelected, isTrue);
+
+      expect(await chat.controller.leaveChannel(), isTrue);
+      // The removal is what makes the Quark ask the members who stay to
+      // rotate the key; the leaver signs the event from outside.
+      expect(chat.calls, [
+        'remove 2 user=7 group=null',
+        'sign 42 user=7 level=null',
+      ]);
+      expect(chat.controller.selectedChannel?.id, 1);
+      chat.controller.dispose();
+    });
+
+    test('a refused leave keeps the channel and its reason', () async {
+      final chat = FakeChat()
+        ..failWith = const MessageException(
+          'this would leave the channel without an owner',
+        );
+      chat.controller.select('2');
+      await chat.controller.refresh();
+
+      expect(await chat.controller.leaveChannel(), isFalse);
+      expect(
+        Errors.message(chat.controller.saveError, 'leave the channel'),
+        'This would leave the channel without an owner.',
+      );
+      expect(chat.controller.selectedChannel?.id, 2);
+      chat.controller.dispose();
+    });
+
+    test('general and group-only membership have no leave', () async {
+      final chat = FakeChat(
+        members: const [
+          ChatMember(
+            groupId: 1,
+            name: 'everyone',
+            level: 'write',
+            builtin: true,
+          ),
+        ],
+      );
+      chat.controller.select('general');
+      await chat.controller.refresh();
+      expect(chat.controller.canLeaveSelected, isFalse);
+
+      chat.controller.select('2');
+      await chat.controller.refresh();
+      expect(
+        chat.controller.canLeaveSelected,
+        isFalse,
+        reason: 'no row of your own to remove',
+      );
+      chat.controller.dispose();
+    });
+
+    test('owners and admins manage; writers do not', () async {
+      final chat = FakeChat();
+      chat.controller.select('general');
+      await chat.controller.refresh();
+      expect(chat.controller.canManageSelected, isFalse);
+
+      chat.controller.select('2');
+      expect(chat.controller.canManageSelected, isTrue);
+
+      final admin = FakeChat(isAdmin: true);
+      admin.controller.select('general');
+      await admin.controller.refresh();
+      expect(admin.controller.canManageSelected, isTrue);
+      chat.controller.dispose();
+      admin.controller.dispose();
+    });
+
+    test(
+      'an admin sees other channels apart, without their messages',
+      () async {
+        final chat = FakeChat(
+          isAdmin: true,
+          otherChannels: const [
+            ChatChannel(id: 9, name: 'payroll', isPrivate: true),
+          ],
+        );
+        chat.controller.select('9');
+        await chat.controller.refresh();
+
+        expect(chat.calls, ['list all']);
+        expect(chat.controller.channelItems.map((c) => c.id), ['1', '2']);
+        expect(chat.controller.otherChannelItems.map((c) => c.id), ['9']);
+        expect(chat.controller.selectedChannel?.id, 9);
+        expect(chat.opened[9], isNull, reason: 'never opened for reading');
+        expect(chat.controller.messageItems, isEmpty);
+        expect(chat.controller.canWrite, isFalse);
+        expect(chat.controller.composerDisabledReason, contains('admin'));
+        expect(chat.controller.canManageSelected, isTrue);
+        expect(chat.controller.canLeaveSelected, isFalse);
+        chat.controller.dispose();
+      },
+    );
+  });
 }

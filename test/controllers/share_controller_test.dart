@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/share_controller.dart';
+import 'package:quark/controllers/share_target.dart';
 import 'package:quark/models/path_grant.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -81,31 +82,34 @@ void main() {
     Future<PathAccess> Function()? load,
     Future<PathAccess> Function()? change,
   }) => ShareController(
-    deviceSerial: 'ssd1',
-    // Not the Quark's spelling, which is what grants are compared with.
-    relPath: 'Photos/Family/',
+    target: PathShareTarget(
+      deviceSerial: 'ssd1',
+      // Not the Quark's spelling, which is what grants are compared with.
+      relPath: 'Photos/Family/',
+      loadAccess: ({required deviceSerial, required relPath}) {
+        calls.add('load $deviceSerial $relPath');
+        return load?.call() ?? Future.value(access(grants));
+      },
+      grantAccess:
+          ({
+            required deviceSerial,
+            required relPath,
+            userId,
+            groupId,
+            required level,
+          }) {
+            calls.add('grant user=$userId group=$groupId $level');
+            return change?.call() ?? Future.value(access(const [adaOwner]));
+          },
+      revokeAccess:
+          ({required deviceSerial, required relPath, userId, groupId}) {
+            calls.add('revoke user=$userId group=$groupId');
+            return change?.call() ?? Future.value(access(const [adaOwner]));
+          },
+    ),
     selfUsername: selfUsername,
     isAdmin: isAdmin,
-    loadAccess: ({required deviceSerial, required relPath}) {
-      calls.add('load $deviceSerial $relPath');
-      return load?.call() ?? Future.value(access(grants));
-    },
     loadPrincipals: () async => principals,
-    grantAccess:
-        ({
-          required deviceSerial,
-          required relPath,
-          userId,
-          groupId,
-          required level,
-        }) {
-          calls.add('grant user=$userId group=$groupId $level');
-          return change?.call() ?? Future.value(access(const [adaOwner]));
-        },
-    revokeAccess: ({required deviceSerial, required relPath, userId, groupId}) {
-      calls.add('revoke user=$userId group=$groupId');
-      return change?.call() ?? Future.value(access(const [adaOwner]));
-    },
   );
 
   test('loads the access, and who the item can be shared with', () async {

@@ -5,16 +5,20 @@ import '../core/empty_state_widget.dart';
 import '../core/quark_loader.dart';
 import '../models/chat_channel_item.dart';
 import '../theme/quark_tokens.dart';
+import 'quark_channel_list/chat_channel_tile.dart';
 
 /// A chat server's channels under the server's name, the open one
-/// highlighted and the private ones marked with a lock.
+/// highlighted and the private ones marked with a lock. [otherChannels], the
+/// ones an admin manages without being in them, follow under their own
+/// heading.
 ///
 /// Which channel is open is the caller's: [selectedChannelId] in, [onSelect]
 /// out. Loading, the error and the empty list are the caller's to decide too,
 /// and each renders on its own under the server name. The list fills its
 /// parent and scrolls on its own, so it sits in a pane or a drawer.
 ///
-/// Key prefixes: `channel_list_header` on the server name and
+/// Key prefixes: `channel_list_header` on the server name,
+/// `channel_list_other_header` on the other channels' heading, and
 /// `channel_tile_<id>` on each channel.
 ///
 /// ```dart
@@ -32,6 +36,7 @@ class QuarkChannelList extends StatelessWidget {
   const QuarkChannelList({
     required this.serverName,
     required this.channels,
+    this.otherChannels = const [],
     this.selectedChannelId,
     this.isLoading = false,
     this.error,
@@ -44,6 +49,10 @@ class QuarkChannelList extends StatelessWidget {
 
   /// The channels, in the order they are shown.
   final List<ChatChannelItem> channels;
+
+  /// Channels listed apart, under "Other channels": for an admin, the ones
+  /// they can manage but are not in. Empty shows no heading.
+  final List<ChatChannelItem> otherChannels;
 
   /// The id of the open channel, highlighted. Null highlights nothing.
   final String? selectedChannelId;
@@ -98,38 +107,36 @@ class QuarkChannelList extends StatelessWidget {
             icon: QuarkIcons.forum_outlined,
             headline: 'No channels yet',
           )
-        else
+        else ...[
           for (final channel in channels)
-            ListTile(
-              key: ValueKey('channel_tile_${channel.id}'),
-              dense: true,
-              selected: channel.id == selectedChannelId,
-              selectedColor: tokens.primary,
-              selectedTileColor: tokens.primary.withValues(alpha: 0.12),
-              iconColor: tokens.secondaryForeground,
-              textColor: tokens.foreground,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(tokens.radiusMd),
-              ),
-              leading: const Icon(QuarkIcons.tag, size: 18),
-              minLeadingWidth: 0,
-              title: Text(
-                channel.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: channel.isPrivate
-                  ? Tooltip(
-                      message: 'Private channel',
-                      child: Icon(
-                        QuarkIcons.lock_outline,
-                        size: 16,
-                        color: tokens.mutedForeground,
-                      ),
-                    )
-                  : null,
-              onTap: onSelect == null ? null : () => onSelect(channel.id),
+            ChatChannelTile(
+              channel: channel,
+              isSelected: channel.id == selectedChannelId,
+              onSelect: onSelect,
             ),
+          if (otherChannels.isNotEmpty)
+            Padding(
+              key: const ValueKey('channel_list_other_header'),
+              padding: EdgeInsets.fromLTRB(
+                tokens.spacingSm,
+                tokens.spacingMd,
+                tokens.spacingSm,
+                tokens.spacingXs,
+              ),
+              child: Text(
+                'Other channels',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: tokens.mutedForeground,
+                ),
+              ),
+            ),
+          for (final channel in otherChannels)
+            ChatChannelTile(
+              channel: channel,
+              isSelected: channel.id == selectedChannelId,
+              onSelect: onSelect,
+            ),
+        ],
       ],
     );
   }

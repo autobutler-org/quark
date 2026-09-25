@@ -2,27 +2,39 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/share_controller.dart';
+import 'package:quark/controllers/share_target.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Opens the share sheet for the file or folder at [relPath] on the device
 /// [deviceSerial], titled with its [name] (#1911).
-///
-/// A [ShareController] lives as long as the sheet is open. A refusal shows in
-/// the sheet, where a snack bar would be hidden under it. Removing an owner,
-/// or giving an owner a lower level, asks first: with no other owner left,
-/// only admins can change who has access.
 Future<void> showShareSheet(
   BuildContext context, {
   required String deviceSerial,
   required String relPath,
   required String name,
+}) => showShareSheetFor(
+  context,
+  target: PathShareTarget(deviceSerial: deviceSerial, relPath: relPath),
+  name: name,
+);
+
+/// Opens the share sheet for [target], a path or a chat channel (#2422),
+/// titled with its [name].
+///
+/// A [ShareController] lives as long as the sheet is open. A refusal shows in
+/// the sheet, where a snack bar would be hidden under it. Removing an owner,
+/// or giving an owner a lower level, asks first: with no other owner left,
+/// only admins can change who has access.
+Future<void> showShareSheetFor(
+  BuildContext context, {
+  required ShareTarget target,
+  required String name,
 }) async {
   final settings = AppSettings.instance;
   final controller = ShareController(
-    deviceSerial: deviceSerial,
-    relPath: relPath,
+    target: target,
     selfUsername: settings.username,
     isAdmin: settings.isAdmin.value,
   );

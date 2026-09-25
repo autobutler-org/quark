@@ -2449,7 +2449,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the channels the caller is a member of, directly, through a group, or through everyone, general first and then by name, each with the caller's best level: read, write or owner. Admins get only their own channels too.",
+                "description": "Returns the channels the caller is a member of, directly, through a group, or through everyone, general first and then by name, each with the caller's best level: read, write or owner. Admins get only their own channels too, unless they pass all=1: then the channels they are not in follow, in the same order, with no level.",
                 "produces": [
                     "application/json"
                 ],
@@ -2457,6 +2457,14 @@
                     "chat"
                 ],
                 "summary": "List the caller's chat channels",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "1 adds the channels an admin is not in; refused for anyone else",
+                        "name": "all",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -2466,6 +2474,12 @@
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "all=1 from an account that isn't an admin",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2749,7 +2763,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Stores the caller's 64-byte Ed25519 signature, base64, over an event's canonical bytes, with the caller's published signing key beside it. Only the event's actor may sign it, and only once. The channel's members hear chat_channel_changed, so they can show it as verified.",
+                "description": "Stores the caller's 64-byte Ed25519 signature, base64, over an event's canonical bytes, with the caller's published signing key beside it. Only the event's actor may sign it, and only once, whether or not they are still a member. The channel's members hear chat_channel_changed, so they can show it as verified.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2805,7 +2819,7 @@
                         }
                     },
                     "404": {
-                        "description": "no such channel or event, the caller isn't a member, or isn't the event's actor",
+                        "description": "no such channel or event, or the caller isn't the event's actor",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -3173,7 +3187,7 @@
                         }
                     },
                     "400": {
-                        "description": "not exactly one account or group, or a level other than read, write or owner",
+                        "description": "not exactly one account or group, or a level other than read, write or owner, or demoting the last owner when the caller is not an admin",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -3247,7 +3261,7 @@
                         }
                     },
                     "400": {
-                        "description": "not exactly one account or group, or everyone on general",
+                        "description": "not exactly one account or group, everyone on general, or the last owner when the caller is not an admin",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

@@ -135,6 +135,33 @@ class ChatChannelKeysController extends ChangeNotifier {
     );
   }
 
+  /// Signs [event] when it records giving account [userId] or group
+  /// [groupId] [level] (removing its row when [level] is null), which is what
+  /// this account just asked for. Anything else, or a failure to sign, is
+  /// logged and left unsigned, so every member sees the line as unverified;
+  /// the change itself already happened.
+  Future<void> signMemberChange(
+    ChatChannelEvent? event, {
+    int? userId,
+    int? groupId,
+    String? level,
+  }) async {
+    if (event == null) return;
+    if (!event.describesMemberChange(
+      userId: userId,
+      groupId: groupId,
+      level: level,
+    )) {
+      debugPrint('chat: event ${event.id} does not match the change made');
+      return;
+    }
+    try {
+      await signEvent(event);
+    } catch (e) {
+      debugPrint('chat: could not sign event ${event.id}: $e');
+    }
+  }
+
   /// Whether [event] carries a valid signature by its actor. An unsigned or
   /// failing one is shown as unverified.
   bool verifyEvent(ChatChannelEvent event) {

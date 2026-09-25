@@ -56,7 +56,7 @@ func chatError(err error) *serverutil.Response {
 		return serverutil.NotFound(err)
 	case errors.Is(err, chatutil.ErrEventNotFound), errors.Is(err, chatutil.ErrMessageNotFound):
 		return serverutil.NotFound(err)
-	case errors.Is(err, chatutil.ErrForbidden), errors.Is(err, chatutil.ErrNotHolder),
+	case errors.Is(err, chatutil.ErrForbidden), errors.Is(err, chatutil.ErrNotHolder), errors.Is(err, chatutil.ErrAdminOnly),
 		errors.Is(err, chatutil.ErrReadOnly), errors.Is(err, chatutil.ErrNotMessageAuthor):
 		return serverutil.Forbidden(err)
 	case errors.Is(err, chatutil.ErrMessageTooLarge):
@@ -64,7 +64,7 @@ func chatError(err error) *serverutil.Response {
 	case errors.Is(err, chatutil.ErrNameTaken), errors.Is(err, chatutil.ErrVersionConflict), errors.Is(err, chatutil.ErrEventSigned):
 		return serverutil.Conflict(err)
 	case errors.Is(err, chatutil.ErrInvalidName), errors.Is(err, chatutil.ErrInvalidTopic),
-		errors.Is(err, chatutil.ErrDefaultChannel), errors.Is(err, chatutil.ErrDefaultEveryone),
+		errors.Is(err, chatutil.ErrDefaultChannel), errors.Is(err, chatutil.ErrDefaultEveryone), errors.Is(err, chatutil.ErrLastOwner),
 		errors.Is(err, accessutil.ErrGrantTarget), errors.Is(err, accessutil.ErrInvalidLevel),
 		errors.Is(err, chatutil.ErrInvalidKeys), errors.Is(err, chatutil.ErrInvalidGrant),
 		errors.Is(err, chatutil.ErrInvalidMessage):

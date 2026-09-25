@@ -416,4 +416,19 @@ func TestEventsAreRecordedAndSignedOnce(t *testing.T) {
 	if err != nil || len(after.Events) != 1 || after.Events[0].Kind != chatutil.EventKeyCreated {
 		t.Errorf("events after %d = %+v, %v", event.ID, after.Events, err)
 	}
+
+	// carol leaves, then signs her leaving from outside the channel.
+	left, err := chatutil.RemoveMember(chatutil.RemoveMemberParams{
+		Ctx: context.Background(), Database: f.database, Principal: f.as("carol"),
+		ChannelID: channel.ID, UserID: f.users["carol"],
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sign("carol", left.Event.ID); err != nil {
+		t.Errorf("carol signing her own leaving after it: %v", err)
+	}
+	if _, err := sign("dave", left.Event.ID); err == nil {
+		t.Error("dave, never a member, signed carol's event")
+	}
 }

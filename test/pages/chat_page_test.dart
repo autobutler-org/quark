@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/models/chat_channel.dart';
 import 'package:quark/pages/chat_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/fake_chat.dart';
 
@@ -160,6 +162,155 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  Future<void> tapKey(WidgetTester tester, String key) async {
+    await tester.tap(find.byKey(ValueKey(key)));
+    await tester.pumpAndSettle();
+  }
+
+  for (final (label, size) in [('narrow', narrow), ('wide', wide)]) {
+    testWidgets('creates a channel and goes to it ($label)', (tester) async {
+      final (r, fake) = await pumpChat(tester, size);
+
+      await tapKey(tester, 'chat_new_channel');
+      await tester.enterText(
+        find.byKey(const ValueKey('channel_dialog_name')),
+        'design',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('channel_dialog_topic')),
+        'Mockups',
+      );
+      await tester.pump();
+      await tapKey(tester, 'channel_dialog_submit');
+
+      expect(fake.calls, ['create design "Mockups"', 'ensure keys 12']);
+      expect(find.byType(QuarkChannelDialog), findsNothing);
+      expect(at(r), '/chat/12');
+      expect(find.text('# design'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a taken name keeps the dialog open ($label)', (tester) async {
+      final (r, fake) = await pumpChat(tester, size);
+      fake.failWith = const ApiException(409);
+
+      await tapKey(tester, 'chat_new_channel');
+      await tester.enterText(
+        find.byKey(const ValueKey('channel_dialog_name')),
+        'random',
+      );
+      await tester.pump();
+      await tapKey(tester, 'channel_dialog_submit');
+
+      expect(find.text(Errors.chatChannelNameTaken), findsOneWidget);
+      expect(find.byType(QuarkChannelDialog), findsOneWidget);
+      expect(at(r), '/chat/1');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an owner renames, then deletes, a channel ($label)', (
+      tester,
+    ) async {
+      final (r, fake) = await pumpChat(tester, size, location: '/chat/2');
+
+      await tapKey(tester, 'chat_channel_settings');
+      await tapKey(tester, 'chat_channel_edit');
+      await tester.enterText(
+        find.byKey(const ValueKey('channel_dialog_name')),
+        'ideas',
+      );
+      await tester.pump();
+      await tapKey(tester, 'channel_dialog_submit');
+      expect(find.text('# ideas'), findsOneWidget);
+
+      await tapKey(tester, 'chat_channel_settings');
+      await tapKey(tester, 'chat_channel_delete');
+      await tester.enterText(
+        find.byKey(const ValueKey('delete_channel_field')),
+        'ideas',
+      );
+      await tester.pump();
+      await tapKey(tester, 'delete_channel_confirm');
+
+      expect(fake.calls, ['update 2 ideas ""', 'delete 2']);
+      expect(at(r), '/chat/1');
+      expect(find.text('# general'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a member leaves a channel ($label)', (tester) async {
+      final (r, fake) = await pumpChat(tester, size, location: '/chat/2');
+
+      await tapKey(tester, 'chat_channel_settings');
+      await tapKey(tester, 'chat_channel_leave');
+      expect(find.text('Leave #random?'), findsOneWidget);
+      await tapKey(tester, 'leave_channel_confirm');
+
+      expect(fake.calls, [
+        'remove 2 user=7 group=null',
+        'sign 42 user=7 level=null',
+      ]);
+      expect(at(r), '/chat/1');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a refused leave says why ($label)', (tester) async {
+      final (r, fake) = await pumpChat(tester, size, location: '/chat/2');
+      fake.failWith = const MessageException(
+        'this would leave the channel without an owner',
+      );
+
+      await tapKey(tester, 'chat_channel_settings');
+      await tapKey(tester, 'chat_channel_leave');
+      await tapKey(tester, 'leave_channel_confirm');
+
+      expect(
+        find.text('This would leave the channel without an owner.'),
+        findsOneWidget,
+      );
+      expect(at(r), '/chat/2');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('general offers a writer no settings ($label)', (tester) async {
+      await pumpChat(tester, size);
+
+      expect(find.text('# general'), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat_channel_settings')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('an admin opens a channel they are not in without its messages', (
+    tester,
+  ) async {
+    final (r, fake) = await pumpChat(
+      tester,
+      wide,
+      location: '/chat/9',
+      chat: FakeChat(
+        isAdmin: true,
+        otherChannels: const [
+          ChatChannel(id: 9, name: 'payroll', isPrivate: true),
+        ],
+      ),
+    );
+
+    expect(at(r), '/chat/9');
+    expect(find.text('Other channels'), findsOneWidget);
+    expect(find.text('# payroll'), findsOneWidget);
+    expect(fake.opened[9], isNull);
+    expect(
+      find.byKey(const ValueKey('message_composer_disabled')),
+      findsOneWidget,
+    );
+
+    await tapKey(tester, 'chat_channel_settings');
+    expect(find.byKey(const ValueKey('chat_channel_members')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_channel_delete')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat_channel_leave')), findsNothing);
+  });
 
   testWidgets('picking a channel goes to its URL and closes the drawer', (
     tester,

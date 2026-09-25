@@ -417,3 +417,69 @@ func TestChangesTellMembersBeforeAndAfter(t *testing.T) {
 		has(changed, "bob")
 	}
 }
+
+func TestLastOwnerCannotLeaveOrBeDemotedExceptByAnAdmin(t *testing.T) {
+	f := newFixture(t)
+	channel := f.create(t, "bob", "design")
+	if err := f.set(t, "bob", channel.ID, f.users["carol"], 0, accessutil.Write); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.remove("bob", channel.ID, f.users["bob"], 0); !errors.Is(err, chatutil.ErrLastOwner) {
+		t.Errorf("last owner leaving = %v, want ErrLastOwner", err)
+	}
+	if err := f.set(t, "bob", channel.ID, f.users["bob"], 0, accessutil.Write); !errors.Is(err, chatutil.ErrLastOwner) {
+		t.Errorf("last owner demoting themselves = %v, want ErrLastOwner", err)
+	}
+	if got := f.levels(t, "bob")["design"]; got != "owner" {
+		t.Errorf("after refusals bob is %q, want owner: the change must roll back", got)
+	}
+
+	// A second owner, even through a group, lets the first one go.
+	crew := f.group(t, "crew", "carol")
+	if err := f.set(t, "bob", channel.ID, 0, crew, accessutil.Owner); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.remove("bob", channel.ID, f.users["bob"], 0); err != nil {
+		t.Errorf("leaving with another owner = %v", err)
+	}
+	if err := f.remove("carol", channel.ID, 0, crew); !errors.Is(err, chatutil.ErrLastOwner) {
+		t.Errorf("removing the group holding the last owner = %v, want ErrLastOwner", err)
+	}
+
+	// An admin may leave a channel ownerless.
+	if err := f.remove("admin", channel.ID, 0, crew); err != nil {
+		t.Errorf("admin removing the last owner = %v", err)
+	}
+	// With no owner left, a writer may still leave.
+	if err := f.remove("carol", channel.ID, f.users["carol"], 0); err != nil {
+		t.Errorf("writer leaving an ownerless channel = %v", err)
+	}
+}
+
+func TestListingEveryChannelIsForAdmins(t *testing.T) {
+	f := newFixture(t)
+	f.create(t, "bob", "secret")
+	ctx := context.Background()
+
+	if _, err := chatutil.ListChannels(chatutil.ListChannelsParams{Ctx: ctx, Database: f.database, Principal: f.as("bob"), All: true}); !errors.Is(err, chatutil.ErrAdminOnly) {
+		t.Errorf("All for bob = %v, want ErrAdminOnly", err)
+	}
+	if got := f.levels(t, "admin"); len(got) != 1 || got["general"] != "write" {
+		t.Errorf("admin's own channels = %v, want only general", got)
+	}
+	result, err := chatutil.ListChannels(chatutil.ListChannelsParams{Ctx: ctx, Database: f.database, Principal: f.as("admin"), All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names, levels []string
+	for _, c := range result.Channels {
+		names, levels = append(names, c.Name), append(levels, c.Level)
+	}
+	if !slices.Equal(names, []string{"general", "secret"}) || !slices.Equal(levels, []string{"write", ""}) {
+		t.Errorf("All for admin = %v %v, want general then secret with no level", names, levels)
+	}
+	if !result.Channels[1].IsPrivate {
+		t.Errorf("secret = %+v, want private", result.Channels[1])
+	}
+}

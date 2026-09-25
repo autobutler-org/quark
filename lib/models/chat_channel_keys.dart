@@ -226,6 +226,22 @@ class ChatChannelEvent {
   /// [payload], decoded.
   Map<String, dynamic> get data => jsonDecode(payload) as Map<String, dynamic>;
 
+  /// Whether this records giving account [userId] or group [groupId]
+  /// [level], or removing its row when [level] is null: what a client checks
+  /// before signing the event a member change returned.
+  bool describesMemberChange({int? userId, int? groupId, String? level}) {
+    if (kind != (level == null ? memberRemoved : memberSet)) return false;
+    final Map<String, dynamic> d;
+    try {
+      d = data;
+    } on Object {
+      return false;
+    }
+    return (d['userId'] as num?)?.toInt() == userId &&
+        (d['groupId'] as num?)?.toInt() == groupId &&
+        d['level'] == level;
+  }
+
   /// Reads one event.
   factory ChatChannelEvent.fromJson(Map<String, dynamic> json) {
     Uint8List? bytes(String key) {

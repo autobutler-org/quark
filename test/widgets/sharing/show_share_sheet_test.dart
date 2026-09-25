@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quark/controllers/chat_channel_share_target.dart';
+import 'package:quark/models/chat_channel.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -221,5 +223,131 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('principal_search')), findsNothing);
+  });
+
+  group('for a chat channel (#2422)', () {
+    const everyoneRow = ChatMember(
+      groupId: 1,
+      name: 'everyone',
+      level: 'write',
+      builtin: true,
+    );
+    late List<String> calls;
+    late List<ChatMember> members;
+
+    Future<void> openChannel(
+      WidgetTester tester,
+      ChatChannel channel, {
+      Size size = const Size(1280, 800),
+    }) async {
+      calls = [];
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final target = ChatChannelShareTarget(
+        channel: channel,
+        listMembers: (_) async => members,
+        setMember: (id, {userId, groupId, required level}) async {
+          calls.add('set $id user=$userId $level');
+          members = [
+            ...members,
+            ChatMember(userId: userId, name: 'bob', level: level),
+          ];
+          return (members: members, event: null);
+        },
+        removeMember: (id, {userId, groupId}) async {
+          calls.add('remove $id group=$groupId');
+          members = [
+            for (final m in members)
+              if (m.groupId != groupId) m,
+          ];
+          return (members: members, event: null);
+        },
+        signMemberChange: (event, {userId, groupId, level}) async =>
+            calls.add('sign user=$userId group=$groupId level=$level'),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showShareSheetFor(
+                  context,
+                  target: target,
+                  name: '#${channel.name}',
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    for (final (label, size) in [
+      ('narrow', const Size(360, 640)),
+      ('wide', const Size(1280, 800)),
+    ]) {
+      testWidgets('adds a member and removes a group ($label)', (tester) async {
+        members = const [everyoneRow];
+        await openChannel(
+          tester,
+          const ChatChannel(id: 2, name: 'design', level: 'owner'),
+          size: size,
+        );
+        expect(find.text('Share #design'), findsOneWidget);
+        expect(requests.where((r) => r.url.path == '/api/v0/access'), isEmpty);
+
+        await tester.enterText(
+          find.byKey(const ValueKey('principal_search')),
+          'bob',
+        );
+        await tester.pumpAndSettle();
+        await tapKey(tester, 'principal_option_user_2');
+        await tapKey(tester, 'share_add_level_read');
+        await tapKey(tester, 'share_add_submit');
+        expect(
+          find.byKey(const ValueKey('share_grant_user_2')),
+          findsOneWidget,
+        );
+
+        await tapKey(tester, 'share_revoke_group_1');
+        expect(calls, [
+          'set 2 user=2 read',
+          'sign user=2 group=null level=read',
+          'remove 2 group=1',
+          'sign user=null group=1 level=null',
+        ]);
+        expect(find.byKey(const ValueKey('share_grant_group_1')), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets("keeps general's everyone row", (tester) async {
+      members = const [everyoneRow];
+      await openChannel(
+        tester,
+        const ChatChannel(
+          id: 1,
+          name: 'general',
+          isDefault: true,
+          level: 'owner',
+        ),
+      );
+
+      expect(find.byKey(const ValueKey('share_grant_group_1')), findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('share_revoke_group_1')),
+            )
+            .onPressed,
+        isNull,
+        reason: 'shown, but it cannot be removed',
+      );
+    });
   });
 }

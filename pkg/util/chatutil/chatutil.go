@@ -7,11 +7,13 @@
 // seeded with a write row for everyone, can't be deleted, and can't lose that
 // row.
 //
-// Admins do not bypass membership: a channel they are not in never appears in
-// their list, because its content is end-to-end encrypted and they could not
-// read it anyway. They may still manage any channel: rename or delete it, and
-// list or change its members. read sees a channel, write also posts, and owner
-// also manages it. Any active account may create a channel and owns it.
+// Admins do not bypass membership: a channel they are not in stays out of their
+// list unless they ask for every channel, and then it comes without a level,
+// because its content is end-to-end encrypted and they could not read it
+// anyway. They may still manage any channel: rename or delete it, and list or
+// change its members. read sees a channel, write also posts, and owner also
+// manages it. Any active account may create a channel and owns it. Only an
+// admin may take away a channel's last owner (ErrLastOwner).
 //
 // Every change publishes chat_channel_changed to the channel's members, before
 // and after the change; accessutil.FilterEvent keeps it from everyone else.
@@ -80,6 +82,13 @@ var (
 	// ErrMemberNotFound reports removing an account or group that has no row
 	// on the channel.
 	ErrMemberNotFound = errors.New("that account or group isn't a member of this channel")
+	// ErrLastOwner reports a member who isn't an admin removing, demoting or
+	// leaving as the channel's last owner, which would leave no one but admins
+	// able to manage it.
+	ErrLastOwner = errors.New("this would leave the channel without an owner; make someone else an owner first")
+	// ErrAdminOnly reports a member who isn't an admin asking for every
+	// channel.
+	ErrAdminOnly = errors.New("only an admin can list every channel")
 )
 
 // Channel is one channel as the caller sees it.
@@ -145,6 +154,9 @@ type ListChannelsParams struct {
 	Ctx       context.Context
 	Database  *db.DatabaseSqlc
 	Principal accessutil.Principal
+	// All adds, for an admin, the channels they are not a member of
+	// (ErrAdminOnly for anyone else).
+	All bool
 }
 
 // ListChannelsResult is the caller's channels, general first, then by name.
@@ -154,10 +166,15 @@ type ListChannelsResult struct {
 
 // ListChannels lists the channels the caller is a member of, directly, through
 // a group, or through everyone, with the caller's best level on each. Admins
-// get only their own channels too.
+// get only their own channels too, unless they ask for All: then the channels
+// they are not in follow, in the same order, with no level, so they can manage
+// them without reading them.
 func ListChannels(params ListChannelsParams) (ListChannelsResult, error) {
 	if params.Database == nil {
 		return ListChannelsResult{}, accessutil.ErrNoDatabase
+	}
+	if params.All && !params.Principal.IsAdmin {
+		return ListChannelsResult{}, ErrAdminOnly
 	}
 	rows, err := params.Database.Queries.ListChatChannelsForUser(params.Ctx,
 		sql.NullInt64{Int64: params.Principal.UserID, Valid: true})
@@ -175,6 +192,29 @@ func ListChannels(params ListChannelsParams) (ListChannelsResult, error) {
 			IsDefault: row.IsDefault != 0,
 			IsPrivate: row.IsPrivate != 0,
 			Level:     accessutil.Level(row.LevelRank).String(),
+			CreatedBy: row.CreatedBy.Int64,
+			CreatedAt: row.CreatedAt,
+		})
+	}
+	if !params.All {
+		return ListChannelsResult{Channels: channels}, nil
+	}
+	all, err := params.Database.Queries.ListAllChatChannels(params.Ctx)
+	if err != nil {
+		return ListChannelsResult{}, err
+	}
+	for _, row := range all {
+		if slices.ContainsFunc(channels, func(c Channel) bool { return c.ID == row.ID }) {
+			continue
+		}
+		channels = append(channels, Channel{
+			ID:        row.ID,
+			ServerID:  row.ServerID,
+			Kind:      row.Kind,
+			Name:      row.Name,
+			Topic:     row.Topic,
+			IsDefault: row.IsDefault != 0,
+			IsPrivate: row.IsPrivate != 0,
 			CreatedBy: row.CreatedBy.Int64,
 			CreatedAt: row.CreatedAt,
 		})
@@ -408,19 +448,20 @@ func SetMember(params SetMemberParams) (ListMembersResult, error) {
 	if err != nil {
 		return ListMembersResult{}, err
 	}
-	if params.UserID != 0 {
-		err = queries.SetChatChannelUserMember(params.Ctx, db.SetChatChannelUserMemberParams{
-			ChannelID: params.ChannelID,
-			UserID:    sql.NullInt64{Int64: params.UserID, Valid: true},
-			Level:     params.Level.String(),
-		})
-	} else {
-		err = queries.SetChatChannelGroupMember(params.Ctx, db.SetChatChannelGroupMemberParams{
+	err = keepingAnOwner(params.Ctx, params.Database, params.Principal, params.ChannelID, func(q *db.Queries) error {
+		if params.UserID != 0 {
+			return q.SetChatChannelUserMember(params.Ctx, db.SetChatChannelUserMemberParams{
+				ChannelID: params.ChannelID,
+				UserID:    sql.NullInt64{Int64: params.UserID, Valid: true},
+				Level:     params.Level.String(),
+			})
+		}
+		return q.SetChatChannelGroupMember(params.Ctx, db.SetChatChannelGroupMemberParams{
 			ChannelID: params.ChannelID,
 			GroupID:   sql.NullInt64{Int64: params.GroupID, Valid: true},
 			Level:     params.Level.String(),
 		})
-	}
+	})
 	if err != nil {
 		return ListMembersResult{}, err
 	}
@@ -488,23 +529,27 @@ func RemoveMember(params RemoveMemberParams) (ListMembersResult, error) {
 	if err != nil {
 		return ListMembersResult{}, err
 	}
-	var deleted int64
-	if params.UserID != 0 {
-		deleted, err = queries.DeleteChatChannelUserMember(params.Ctx, db.DeleteChatChannelUserMemberParams{
-			ChannelID: params.ChannelID,
-			UserID:    sql.NullInt64{Int64: params.UserID, Valid: true},
-		})
-	} else {
-		deleted, err = queries.DeleteChatChannelGroupMember(params.Ctx, db.DeleteChatChannelGroupMemberParams{
-			ChannelID: params.ChannelID,
-			GroupID:   sql.NullInt64{Int64: params.GroupID, Valid: true},
-		})
-	}
+	err = keepingAnOwner(params.Ctx, params.Database, params.Principal, params.ChannelID, func(q *db.Queries) error {
+		var deleted int64
+		var err error
+		if params.UserID != 0 {
+			deleted, err = q.DeleteChatChannelUserMember(params.Ctx, db.DeleteChatChannelUserMemberParams{
+				ChannelID: params.ChannelID,
+				UserID:    sql.NullInt64{Int64: params.UserID, Valid: true},
+			})
+		} else {
+			deleted, err = q.DeleteChatChannelGroupMember(params.Ctx, db.DeleteChatChannelGroupMemberParams{
+				ChannelID: params.ChannelID,
+				GroupID:   sql.NullInt64{Int64: params.GroupID, Valid: true},
+			})
+		}
+		if err == nil && deleted == 0 {
+			err = ErrMemberNotFound
+		}
+		return err
+	})
 	if err != nil {
 		return ListMembersResult{}, err
-	}
-	if deleted == 0 {
-		return ListMembersResult{}, ErrMemberNotFound
 	}
 	return afterMembershipChange(params.Ctx, queries, params.EventBus, params.ChannelID, before, params.DataDir,
 		EventMemberRemoved, params.Principal.UserID, payload)
@@ -1115,7 +1160,10 @@ type SignEventResult struct {
 // SignEvent stores the caller's signature on an event the caller made, once,
 // with the caller's published signing key beside it, and tells the members with
 // chat_channel_changed. An event that isn't the caller's is ErrEventNotFound,
-// and one already signed ErrEventSigned.
+// and one already signed ErrEventSigned. The actor needn't be a member any
+// more: leaving, or an admin managing a channel they are not in, makes an event
+// its actor can only sign from outside (#2422). Anyone else learns nothing,
+// since only the actor's own events answer anything but ErrEventNotFound.
 func SignEvent(params SignEventParams) (SignEventResult, error) {
 	if len(params.Signature) != SignatureBytes {
 		return SignEventResult{}, ErrInvalidGrant
@@ -1124,8 +1172,8 @@ func SignEvent(params SignEventParams) (SignEventResult, error) {
 		return SignEventResult{}, accessutil.ErrNoDatabase
 	}
 	queries := params.Database.Queries
-	if err := requireMember(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
-		return SignEventResult{}, err
+	if params.Principal.UserID == 0 {
+		return SignEventResult{}, ErrEventNotFound
 	}
 	signKey, err := callerSignKey(params.Ctx, queries, params.Principal)
 	if err != nil {
