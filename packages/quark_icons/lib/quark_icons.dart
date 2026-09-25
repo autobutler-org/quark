@@ -322,4 +322,10 @@ class QuarkIcons {
   static const IconData light_mode_rounded = Icons.light_mode_rounded;
   static const IconData dark_mode_rounded = Icons.dark_mode_rounded;
   static const IconData bug_report_outlined = Icons.bug_report_outlined;
+
+  // ── Chat ─────────────────────────────────────────────────────────────────────────
+  static const IconData tag = Icons.tag;
+  static const IconData send_rounded = Icons.send_rounded;
+  static const IconData forum_outlined = Icons.forum_outlined;
+  static const IconData menu = Icons.menu;
 }
