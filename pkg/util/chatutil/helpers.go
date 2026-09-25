@@ -3,6 +3,7 @@ package chatutil
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"unicode"
@@ -215,4 +216,19 @@ func inTx(ctx context.Context, database *db.DatabaseSqlc, fn func(*db.Queries) e
 		return err
 	}
 	return tx.Commit()
+}
+
+// keysFromRow maps a user_chat_keys row to the Keys the API serves.
+func keysFromRow(row db.UserChatKey) Keys {
+	return Keys{
+		BoxPublicKey:      row.BoxPublicKey,
+		SignPublicKey:     row.SignPublicKey,
+		WrappedByPassword: row.WrappedByPassword,
+		SaltPw:            row.SaltPw,
+		WrappedByPhrase:   row.WrappedByPhrase,
+		SaltRp:            row.SaltRp,
+		KdfParams:         json.RawMessage(row.KdfParams),
+		CreatedAt:         row.CreatedAt,
+		UpdatedAt:         row.UpdatedAt,
+	}
 }

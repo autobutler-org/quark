@@ -247,6 +247,13 @@
         }
       }
     </style>
+    <!--
+      libsodium for chat's end-to-end encryption (#2416), the sumo build
+      because Argon2id is sumo-only in sodium.js. Async, so it never holds up
+      the first frame; SodiumSumoInit waits for it whenever it lands.
+      `make upgrade/sodium-js` refreshes the file.
+    -->
+    <script src="sodium.js" async></script>
   </head>
   <body>
     <!--

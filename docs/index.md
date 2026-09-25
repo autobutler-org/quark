@@ -20,6 +20,7 @@ Looking for setup instructions? Start with the [README](../README.md).
 ## Features
 
 - [Authentication](./auth.md) — local auth setup, login, recovery
+- [Chat Security](./chat-security.md) — end-to-end encrypted chat: identity keys and the threat model
 - [Mobile Setup](./mobile-setup.md) — running the app on a physical Android or iOS device
 
 ## Reference

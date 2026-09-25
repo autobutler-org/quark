@@ -27,6 +27,7 @@ var authRateLimitedPaths = map[string]bool{
 	"/api/v0/auth/login":           true,
 	"/api/v0/auth/setup":           true,
 	"/api/v0/auth/recover":         true,
+	"/api/v0/auth/recover/keys":    true,
 	"/api/v0/auth/request-account": true,
 	"/api/v0/storage/devices/role": true,
 }
@@ -109,6 +110,7 @@ var authExemptPaths = map[string]bool{
 	"/api/v0/auth/setup":           true,
 	"/api/v0/auth/login":           true,
 	"/api/v0/auth/recover":         true,
+	"/api/v0/auth/recover/keys":    true,
 	"/api/v0/auth/request-account": true,
 	"/api/v0/auth/status":          true,
 }

@@ -2034,7 +2034,7 @@
         },
         "/auth/recover": {
             "post": {
-                "description": "Resets the named account's password using its recovery phrase",
+                "description": "Resets the named account's password using its recovery phrase. chatKeys, when sent, replaces the account's chat identity in the same transaction: the client fetched it from /auth/recover/keys, opened it with the phrase and re-wrapped it under the new password (#2416). The body is at most 8 KiB.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2047,12 +2047,12 @@
                 "summary": "Recover account",
                 "parameters": [
                     {
-                        "description": "{username, recoveryPhrase, newPassword}",
+                        "description": "The account, its recovery phrase, the new password and optionally its re-wrapped chat keys",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/v0_auth.recoverAccountBody"
                         }
                     }
                 ],
@@ -2073,6 +2073,70 @@
                         "description": "status is pending or disabled",
                         "schema": {
                             "$ref": "#/definitions/v0_auth.accountRefusal"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/recover/keys": {
+            "post": {
+                "description": "The first step of recovering an account that has chat keys (#2416). Checks the recovery phrase exactly as /auth/recover does, changes nothing, and returns the account's wrapped chat identity so the client can open it with the phrase and send it back re-wrapped under the new password in /auth/recover. Needs no session and shares the sign-in rate limit. An unknown username reads as a wrong phrase.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Fetch chat keys for account recovery",
+                "parameters": [
+                    {
+                        "description": "The account and its recovery phrase",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_auth.recoverChatKeysBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Keys"
+                        }
+                    },
+                    "400": {
+                        "description": "a wrong phrase or unknown username",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "status is pending or disabled",
+                        "schema": {
+                            "$ref": "#/definitions/v0_auth.accountRefusal"
+                        }
+                    },
+                    "404": {
+                        "description": "the account has no chat keys yet",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
                         }
                     }
                 }
@@ -2801,6 +2865,156 @@
                     },
                     "404": {
                         "description": "no such channel, the caller isn't a member or an admin, or the account or group has no row",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/keys/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the caller's chat public keys and the private seeds wrapped on the client under the login password and, when present, the recovery phrase. Byte fields are base64. The Quark never opens them. 404 means the caller has no chat keys yet and the client should generate them.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Get the caller's chat identity",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Keys"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "the caller has no chat keys yet",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores the caller's chat public keys (32 bytes each) and private seeds wrapped on the client (at most 512 bytes each), with 16-byte Argon2id salts and the client's kdfParams object. wrappedByPhrase and saltRp are both present or both absent. Byte fields are base64 and the body is at most 8 KiB. Replaces any keys the caller had.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Create or replace the caller's chat identity",
+                "parameters": [
+                    {
+                        "description": "The caller's chat identity; createdAt and updatedAt are ignored",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Keys"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Keys"
+                        }
+                    },
+                    "400": {
+                        "description": "keys of the wrong size or shape, or a body over 8 KiB",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/keys/{userId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns an active account's X25519 box and Ed25519 signing public keys, base64, and never its wrapped private seeds. Any signed-in account may ask. 404 means the account doesn't exist, isn't active, or has no chat keys yet.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Get an account's public chat keys",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Account id",
+                        "name": "userId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.PublicKeys"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such active account, or it has no chat keys yet",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -8178,6 +8392,58 @@
                 }
             }
         },
+        "chatutil.Keys": {
+            "type": "object",
+            "properties": {
+                "boxPublicKey": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "kdfParams": {
+                    "description": "KdfParams is the client's JSON object recording the Argon2id cost.",
+                    "type": "object"
+                },
+                "saltPw": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "saltRp": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "signPublicKey": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "wrappedByPassword": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "wrappedByPhrase": {
+                    "description": "WrappedByPhrase and SaltRp are both present or both absent.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "chatutil.ListChannelsResult": {
             "type": "object",
             "properties": {
@@ -8248,6 +8514,26 @@
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "chatutil.PublicKeys": {
+            "type": "object",
+            "properties": {
+                "boxPublicKey": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "signPublicKey": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "userId": {
+                    "type": "integer"
                 }
             }
         },
@@ -8826,6 +9112,48 @@
                     "type": "string"
                 },
                 "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_auth.recoverAccountBody": {
+            "type": "object",
+            "required": [
+                "newPassword",
+                "recoveryPhrase",
+                "username"
+            ],
+            "properties": {
+                "chatKeys": {
+                    "description": "ChatKeys is the account's chat identity re-wrapped under NewPassword,\nstored in the same transaction as the reset (#2416). Absent leaves the\nstored keys as they are.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/chatutil.Keys"
+                        }
+                    ]
+                },
+                "newPassword": {
+                    "type": "string"
+                },
+                "recoveryPhrase": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_auth.recoverChatKeysBody": {
+            "type": "object",
+            "required": [
+                "recoveryPhrase",
+                "username"
+            ],
+            "properties": {
+                "recoveryPhrase": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }

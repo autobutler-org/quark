@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:quark/controllers/chat_keys_controller.dart';
+import 'package:quark/models/chat_keys.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/events_service.dart';
@@ -120,6 +122,55 @@ http.Client Function(String hostAddress) hostProbeHttpClientFactory =
 /// standing a server up.
 Future<bool> Function(String hostAddress) hostReachabilityProbe =
     AuthService.isReachable;
+
+/// What a sign-in does with chat keys once it has the password (#2416):
+/// unwrap them, or make them when the account has none. Overridable in tests.
+///
+/// [recoveryPhrase] is set at a first sign-in, and [sessionToken] is the new
+/// session, which the app may not have stored yet.
+Future<void> Function({
+  required String password,
+  String? recoveryPhrase,
+  required String sessionToken,
+})
+chatKeysOnSignIn =
+    ({required password, recoveryPhrase, required sessionToken}) =>
+        ChatKeysController.instance.signedIn(
+          password: password,
+          recoveryPhrase: recoveryPhrase,
+          sessionToken: sessionToken,
+        );
+
+/// Opens the account's chat keys with the recovery phrase and re-wraps them
+/// under the new password, for [AuthService.recover] to send (#2416).
+/// Overridable in tests.
+Future<WrappedChatKeys> Function({
+  required String username,
+  required String recoveryPhrase,
+  required String newPassword,
+})
+chatKeysForRecovery = ChatKeysController.instance.keysForRecovery;
+
+/// Runs [chatKeysOnSignIn] without holding up the sign-in. Chat is not what
+/// the user signed in for, and chat unlocks later from its own prompt when
+/// this fails.
+void _unlockChatKeys({
+  required String password,
+  String? recoveryPhrase,
+  required String sessionToken,
+}) {
+  unawaited(
+    Future(
+      () => chatKeysOnSignIn(
+        password: password,
+        recoveryPhrase: recoveryPhrase,
+        sessionToken: sessionToken,
+      ),
+    ).catchError((Object e) {
+      debugPrint('[auth_service.dart] chat keys not unlocked: $e');
+    }),
+  );
+}
 
 /// Communicates with the quark auth API.
 class AuthService {
@@ -261,6 +312,11 @@ class AuthService {
     final phrase = body['recoveryPhrase'] as String;
     await AppSettings.instance.setSessionToken(token);
     await AppSettings.instance.setUsername(username);
+    _unlockChatKeys(
+      password: password,
+      recoveryPhrase: phrase,
+      sessionToken: token,
+    );
     return SetupResult(sessionToken: token, recoveryPhrase: phrase);
   }
 
@@ -293,6 +349,11 @@ class AuthService {
       username: username,
       recoveryPhrase: body['recoveryPhrase'] as String?,
     );
+    _unlockChatKeys(
+      password: password,
+      recoveryPhrase: result.recoveryPhrase,
+      sessionToken: result.sessionToken,
+    );
     // The first sign-in of an account an admin created carries its recovery
     // phrase, which is never returned again (#1873). Storing the token now
     // would let the router swap the login page for /files before the phrase
@@ -312,11 +373,21 @@ class AuthService {
 
   /// Resets [username]'s password using that account's recovery phrase and
   /// returns a new session.
+  ///
+  /// The account's chat keys are opened with the phrase first and sent back
+  /// re-wrapped under [newPassword] in the same request, so recovering keeps
+  /// chat history (#2416). A phrase that opens nothing fails here, before the
+  /// password changes.
   static Future<LoginResult> recover({
     required String username,
     required String recoveryPhrase,
     required String newPassword,
   }) async {
+    final chatKeys = await chatKeysForRecovery(
+      username: username,
+      recoveryPhrase: recoveryPhrase,
+      newPassword: newPassword,
+    );
     final uri = _baseUri.resolve('/api/v0/auth/recover');
     final response = await authHttpClientFactory()
         .post(
@@ -326,6 +397,7 @@ class AuthService {
             'username': username,
             'recoveryPhrase': recoveryPhrase,
             'newPassword': newPassword,
+            'chatKeys': chatKeys.toJson(),
           }),
         )
         .timeout(kAuthRequestTimeout);
@@ -341,7 +413,44 @@ class AuthService {
     final token = body['token'] as String;
     await AppSettings.instance.setSessionToken(token);
     await AppSettings.instance.setUsername(username);
+    // ponytail: unwraps again under the new password (one more Argon2id run)
+    // rather than threading the identity out of chatKeysForRecovery.
+    _unlockChatKeys(password: newPassword, sessionToken: token);
     return LoginResult(sessionToken: token, username: username);
+  }
+
+  /// [username]'s wrapped chat identity, for recovery, which has no session
+  /// (#2416). The Quark checks [recoveryPhrase] first, as `/auth/recover`
+  /// does, and changes nothing. Null when the account has no chat keys.
+  ///
+  /// A wrong phrase throws the Quark's own text; a pending or disabled
+  /// account is refused as a sign-in is.
+  static Future<WrappedChatKeys?> fetchRecoveryChatKeys({
+    required String username,
+    required String recoveryPhrase,
+  }) async {
+    final uri = _baseUri.resolve('/api/v0/auth/recover/keys');
+    final response = await authHttpClientFactory()
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'username': username,
+            'recoveryPhrase': recoveryPhrase,
+          }),
+        )
+        .timeout(kAuthRequestTimeout);
+    if (response.statusCode == 404) return null;
+    if (response.statusCode == 403) {
+      _throwAccountRefusal(response.body, 'Recovery failed');
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final body = _tryDecodeError(response.body);
+      throwApiError(response.statusCode, body, 'Recovery failed');
+    }
+    return WrappedChatKeys.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   /// Asks this Quark for an account (#1908) and returns the new account's

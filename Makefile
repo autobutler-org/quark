@@ -1134,8 +1134,17 @@ upgrade: upgrade/flutter upgrade/go ## Upgrade dependencies
 .PHONY: upgrade/flutter
 upgrade/flutter: ## Upgrade Flutter dependencies
 	flutter pub upgrade
+	$(MAKE) upgrade/sodium-js
 	$(MAKE) tidy/flutter
 	$(MAKE) generate/frontend
+
+# web/sodium.js is libsodium for the web build, the sumo variant because chat's
+# Argon2id is sumo-only there (#2416). It has to match the resolved `sodium`
+# package, so it moves whenever that does. web/index.html loads it by hand:
+# the tool's own edit reformats the whole file.
+.PHONY: upgrade/sodium-js
+upgrade/sodium-js: ## Download the sodium.js matching the sodium package into web/
+	dart run sodium:update_web --sumo --no-edit-index
 
 .PHONY: upgrade/go
 upgrade/go: generate/backend ## Upgrade dependencies (go)

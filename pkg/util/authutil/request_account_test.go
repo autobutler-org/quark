@@ -90,7 +90,7 @@ func TestRequestAccount_PendingUntilApproved(t *testing.T) {
 	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", Password: "bob-password"}); err != nil {
 		t.Errorf("login after approval: %v", err)
 	}
-	if _, err := authutil.Recover(ctx, q, authutil.RecoverParams{Username: "bob", RecoveryPhrase: result.RecoveryPhrase, NewPassword: "new-bob-password"}); err != nil {
+	if _, err := authutil.Recover(ctx, database, authutil.RecoverParams{Username: "bob", RecoveryPhrase: result.RecoveryPhrase, NewPassword: "new-bob-password"}); err != nil {
 		t.Errorf("recover with the request's phrase: %v", err)
 	}
 	if _, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{
