@@ -15,7 +15,7 @@ import (
 
 // getAuthStatus godoc
 // @Summary Check auth setup status
-// @Description Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username, userId and isAdmin flag, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.
+// @Description Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account, and chatEnabled: whether the chat beta is on. For a caller with a valid session it also returns that caller's username, userId and isAdmin flag, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.
 // @Tags auth
 // @Produce json
 // @Success 200 {object} object
@@ -42,6 +42,7 @@ func getAuthStatus(c *gin.Context) *serverutil.Response {
 	body := gin.H{"setup": status.Setup}
 	if status.Setup {
 		body["accessRequestsEnabled"] = settingsutil.GetAccessRequestsEnabled()
+		body["chatEnabled"] = settingsutil.GetChatEnabled()
 	}
 	if status.Authenticated {
 		body["username"] = status.Username

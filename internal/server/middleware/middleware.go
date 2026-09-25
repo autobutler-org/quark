@@ -1,5 +1,6 @@
 // Package middleware is the gin middleware every request passes through — dependency injection, connected-device
-// tracking, and session auth with its short list of exempt paths — plus RequireAdmin for the admin group.
+// tracking, and session auth with its short list of exempt paths — plus RequireAdmin for the admin group and
+// RequireChatEnabled for the chat routes.
 package middleware
 
 import (
@@ -17,6 +18,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -344,6 +346,19 @@ func RequireAdmin(deps deputil.Dependencies) gin.HandlerFunc {
 		isAdmin, err := authutil.IsAdmin(c.Request.Context(), db.Queries, username)
 		if err != nil || !isAdmin {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin access required"})
+			return
+		}
+		c.Next()
+	}
+}
+
+// RequireChatEnabled answers 404 for every route behind it while an admin has
+// the chat beta turned off (#2421), as if chat were not there. Nothing stored
+// is touched, so turning it back on picks up where it left off.
+func RequireChatEnabled() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !settingsutil.GetChatEnabled() {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "chat is turned off"})
 			return
 		}
 		c.Next()

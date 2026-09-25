@@ -128,6 +128,11 @@ class AppSettings {
   /// `UsersService.avatarUrl` so a changed picture is a new URL.
   final ValueNotifier<int?> avatarUpdatedAt = ValueNotifier(null);
 
+  /// Whether the chat beta is on for the current [activeHost] (#2421), which
+  /// decides whether the drawer offers Chat. Kept current like [isAdmin]; the
+  /// router asks the Quark itself before opening the page.
+  final ValueNotifier<bool> chatEnabled = ValueNotifier(false);
+
   /// Whether terms have been accepted **for the current [activeHost]**.
   ///
   /// Derived state — never assign to it directly. It is recomputed by

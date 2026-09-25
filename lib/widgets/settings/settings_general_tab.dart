@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The General tab of Settings (#2350): backend hosts, theme, the
-/// auto-refresh interval and demo mode, plus a link to the drives.
+/// auto-refresh interval and demo mode, the chat beta switch for admins
+/// (#2421), plus a link to the drives.
 ///
 /// First because it holds the backend hosts, which every "manage hosts" link
 /// in the app lands on. The page owns the values; this tab renders them and
@@ -18,6 +20,9 @@ class SettingsGeneralTab extends StatelessWidget {
     required this.demoMode,
     required this.onDemoModeChanged,
     required this.onHostsChanged,
+    this.chatEnabled = false,
+    this.isSavingChat = false,
+    this.onChatEnabledChanged,
     this.onOpenStorage,
     this.header,
     super.key,
@@ -43,6 +48,17 @@ class SettingsGeneralTab extends StatelessWidget {
 
   /// Called after a host is added, removed or switched.
   final VoidCallback onHostsChanged;
+
+  /// Whether the chat beta is on for everyone on this Quark.
+  final bool chatEnabled;
+
+  /// Whether a change to [chatEnabled] is being saved. Holds the switch
+  /// still.
+  final bool isSavingChat;
+
+  /// Called with the chat setting an admin picked. Null hides the switch, as
+  /// for anyone who isn't an admin.
+  final ValueChanged<bool>? onChatEnabledChanged;
 
   /// Opens the drives page. Null hides the link, as when no Quark is set.
   final VoidCallback? onOpenStorage;
@@ -119,6 +135,27 @@ class SettingsGeneralTab extends StatelessWidget {
             onChanged: onDemoModeChanged,
           ),
         ),
+        if (onChatEnabledChanged != null) ...[
+          const SizedBox(height: 16),
+          Card(
+            child: SwitchListTile(
+              key: const ValueKey('settings_chat_enabled'),
+              title: const Row(
+                children: [
+                  Flexible(child: Text('Chat')),
+                  SizedBox(width: 8),
+                  QuarkBetaBadge(),
+                ],
+              ),
+              subtitle: const Text(
+                'Lets everyone on this Quark chat. Turning it off hides chat; '
+                'no messages are deleted.',
+              ),
+              value: chatEnabled,
+              onChanged: isSavingChat ? null : onChatEnabledChanged,
+            ),
+          ),
+        ],
         // Drives are viewed, mounted and renamed on their own page; Settings
         // kept a second copy of that list until #2350.
         if (onOpenStorage != null) ...[

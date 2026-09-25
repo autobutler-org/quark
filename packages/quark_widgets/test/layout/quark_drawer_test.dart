@@ -23,6 +23,7 @@ void main() {
     onTapTrash: callbacks[QuarkDrawerSection.trash],
     onTapDocs: callbacks[QuarkDrawerSection.docs],
     onTapSheets: callbacks[QuarkDrawerSection.sheets],
+    onTapChat: callbacks[QuarkDrawerSection.chat],
     onTapSystem: callbacks[QuarkDrawerSection.system],
     onTapVault: callbacks[QuarkDrawerSection.vault],
     onTapUsers: callbacks[QuarkDrawerSection.users],
@@ -56,6 +57,7 @@ void main() {
       'Trash',
       'Docs',
       'Sheets',
+      'Chat',
       'System',
       'Vault',
       'Users',
@@ -312,6 +314,40 @@ void main() {
     expect(menu.right, closeTo(icon.right, 1));
     expect(menu.top, greaterThanOrEqualTo(icon.bottom));
     expect(find.byTooltip('Switch Quark'), findsNothing);
+  });
+
+  testBothViewports('marks Chat as a beta and hides it when not offered', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      drawerWith(QuarkDrawerSection.files, everyCallback([])),
+      size: size,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('drawer_chat')),
+      50,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('drawer_chat')),
+        matching: find.byType(QuarkBetaBadge),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(QuarkBetaBadge), findsOneWidget);
+
+    await pumpAt(
+      tester,
+      drawerWith(
+        QuarkDrawerSection.files,
+        everyCallback([])..remove(QuarkDrawerSection.chat),
+      ),
+      size: size,
+    );
+    expect(find.byKey(const ValueKey('drawer_chat')), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }
 

@@ -13,6 +13,12 @@ on its page's decoupling issue (see #1600), after which it moves too.
 
 ```text
 lib/widgets/
+  chat/
+    chat_unlock_prompt.dart     the password prompt in place of chat while it
+                                is locked (web after a reload)
+    chat_failed_send_bar.dart   Retry and Discard for a message that didn't
+                                send; the package list has no failed row
+    chat_channel_header.dart    the open channel's name and topic
   file_browser/
     file_browser_view.dart      lists files, calls FilesService
     file_top_bar.dart           Files' QuarkAppBar: holds the inline search
