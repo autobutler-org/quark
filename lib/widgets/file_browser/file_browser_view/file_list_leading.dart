@@ -8,6 +8,11 @@ import 'package:shimmer/shimmer.dart';
 
 /// Every row reserves the same leading slot so titles line up whether the
 /// row ends up showing a thumbnail or a file-type icon.
+///
+/// The thumbnail, and the icon when the file has none, are keyed by
+/// [FileNode.apiPath]. A list reuses the element in a slot; without that key
+/// the slot keeps painting the previous file's image until the new URL
+/// settles.
 class FileListLeading extends StatelessWidget {
   const FileListLeading({required this.item, super.key});
 
@@ -20,13 +25,15 @@ class FileListLeading extends StatelessWidget {
     final icon = Center(
       child: QuarkFileIcon(name: item.name, isDir: item.isDir),
     );
+    final thumbKey = ValueKey(item.apiPath);
 
     return SizedBox(
       width: size,
       height: size,
       child: !hasServerThumbnail(item)
-          ? icon
+          ? KeyedSubtree(key: thumbKey, child: icon)
           : CachedNetworkImage(
+              key: thumbKey,
               imageUrl: FilesService.constructThumbnailUrl(
                 item.apiPath,
                 serial: item.deviceSerial,

@@ -10,6 +10,11 @@ import 'package:shimmer/shimmer.dart';
 /// hands it whatever the tile has left over) so every tile lines up without
 /// risking an overflow, with the thumbnail replacing the icon only once it
 /// decodes.
+///
+/// The thumbnail, and the icon when the file has none, are keyed by
+/// [FileNode.apiPath]. The grid reuses a tile's element when the file in
+/// that slot changes; the key makes the image a new element instead of
+/// briefly showing the previous file.
 class FileGridPreview extends StatelessWidget {
   const FileGridPreview({required this.item, super.key});
 
@@ -20,12 +25,14 @@ class FileGridPreview extends StatelessWidget {
     final icon = Center(
       child: QuarkFileIcon(name: item.name, isDir: item.isDir, size: 48),
     );
+    final thumbKey = ValueKey(item.apiPath);
 
     return SizedBox(
       width: double.infinity,
       child: !hasServerThumbnail(item)
-          ? icon
+          ? KeyedSubtree(key: thumbKey, child: icon)
           : CachedNetworkImage(
+              key: thumbKey,
               imageUrl: FilesService.constructThumbnailUrl(
                 item.apiPath,
                 serial: item.deviceSerial,
