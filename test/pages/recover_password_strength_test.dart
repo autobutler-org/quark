@@ -45,4 +45,18 @@ void main() {
 
     expect(find.text('Weak'), findsNothing);
   });
+
+  testWidgets('the length helper stays single while typing', (tester) async {
+    await pumpRecover(tester);
+
+    await tester.enterText(passwordField(), 'short');
+    await tester.pump();
+    expect(find.textContaining('At least 8 characters'), findsOneWidget);
+
+    await tester.enterText(passwordField(), 'abcdefghijkl1!');
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('At least 8 characters'), findsOneWidget);
+    expect(find.textContaining('At least 8 characters'), findsOneWidget);
+    expect(find.text('Very strong'), findsOneWidget);
+  });
 }
