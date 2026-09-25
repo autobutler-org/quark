@@ -15,6 +15,7 @@ import 'package:quark/services/demo_photos_service.dart';
 import 'package:quark/services/dropped_file_reader.dart';
 import 'package:quark/services/favorites_service.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/services/client_thumbnails.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/album_link.dart' as link;
 import 'package:quark/utils/connection_error.dart';
@@ -131,6 +132,10 @@ class PhotosController extends ChangeNotifier {
         FilesService.uploadFilesFromFormData,
     Future<Uint8List?> Function(DropItemFile file) readDroppedFile =
         readDroppedFileBytes,
+    Future<Uint8List?> Function(String name, Uint8List bytes) renderFromBytes =
+        renderThumbnailFromBytes,
+    Future<Uint8List?> Function(DropItemFile file) renderDroppedFile =
+        renderDroppedFileThumbnail,
     PhotoBytesCache? bytesCache,
     bool isWeb = kIsWeb,
   }) : _getPhotos = getPhotos,
@@ -150,6 +155,8 @@ class PhotosController extends ChangeNotifier {
        _listDevices = listDevices,
        _uploadFiles = uploadFiles,
        _readDroppedFile = readDroppedFile,
+       _renderFromBytes = renderFromBytes,
+       _renderDroppedFile = renderDroppedFile,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
        _isWeb = isWeb;
 
@@ -226,6 +233,9 @@ class PhotosController extends ChangeNotifier {
   })
   _uploadFiles;
   final Future<Uint8List?> Function(DropItemFile file) _readDroppedFile;
+  final Future<Uint8List?> Function(String name, Uint8List bytes)
+  _renderFromBytes;
+  final Future<Uint8List?> Function(DropItemFile file) _renderDroppedFile;
   final PhotoBytesCache _bytesCache;
   final bool _isWeb;
 
@@ -960,21 +970,30 @@ class PhotosController extends ChangeNotifier {
     _isUploading = true;
     notifyListeners();
     try {
-      final multipart = <http.MultipartFile>[
-        for (final file in files)
-          if (!_isWeb && (file.path ?? '').isNotEmpty)
+      final multipart = <http.MultipartFile>[];
+      for (final file in files) {
+        if (!_isWeb && (file.path ?? '').isNotEmpty) {
+          multipart.add(
             await http.MultipartFile.fromPath(
               'files',
               file.path!,
               filename: file.name,
-            )
-          else
-            http.MultipartFile.fromBytes(
-              'files',
-              await file.readAsBytes(),
-              filename: file.name,
             ),
-      ];
+          );
+          continue;
+        }
+        final bytes = await file.readAsBytes();
+        multipart.add(
+          http.MultipartFile.fromBytes('files', bytes, filename: file.name),
+        );
+        // The thumbnail follows its file: the Quark pairs them by name (#2379).
+        final thumbnail = await _renderQuietly(
+          () => _renderFromBytes(file.name, bytes),
+        );
+        if (thumbnail != null) {
+          multipart.add(thumbnailPart(file.name, thumbnail));
+        }
+      }
       final paths = await _uploadToLibrary(multipart, serial: serial);
       if (albumId == null) return null;
       var added = 0;
@@ -1018,6 +1037,7 @@ class PhotosController extends ChangeNotifier {
         if (bytes == null || bytes.isEmpty) return null;
         return http.MultipartFile.fromBytes('files', bytes, filename: name);
       },
+      renderThumbnail: _renderDroppedFile,
     );
     final photos = [
       for (final upload in flattened.uploads)
@@ -1043,13 +1063,31 @@ class PhotosController extends ChangeNotifier {
       for (final photo in photos) {
         final file = await photo.build();
         if (file == null) continue;
-        await _uploadToLibrary([file], serial: serial);
+        final render = photo.renderThumbnail;
+        final thumbnail = render == null ? null : await _renderQuietly(render);
+        await _uploadToLibrary([
+          file,
+          if (thumbnail != null) thumbnailPart(photo.name, thumbnail),
+        ], serial: serial);
         uploaded++;
       }
       return uploaded;
     } finally {
       _isUploading = false;
       notifyListeners();
+    }
+  }
+
+  /// Runs [render], treating a failure as nothing rendered: the photo still
+  /// uploads without a client-rendered thumbnail.
+  Future<Uint8List?> _renderQuietly(
+    Future<Uint8List?> Function() render,
+  ) async {
+    try {
+      return await render();
+    } catch (e) {
+      debugPrint('[photos_controller.dart] No thumbnail: $e');
+      return null;
     }
   }
 
