@@ -299,6 +299,7 @@
     "linecap",
     "linejoin",
     "linenum",
+    "loadedmetadata",
     "loadtest",
     "loglevel",
     "lsusb",

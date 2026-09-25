@@ -4,8 +4,10 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/models/upload_conflict.dart';
+import 'package:quark/models/upload_derivatives.dart';
 import 'package:quark/models/upload_session.dart';
 import 'package:quark/services/file_browser_actions.dart';
+import 'package:quark/services/files_service.dart';
 import 'package:quark/services/resumable_upload_service.dart';
 import 'package:quark/services/upload_chunk_source.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
@@ -107,6 +109,15 @@ typedef UploadSender =
       UploadConflictChoice? conflict,
     });
 
+/// Attaches client-rendered derivatives to a file that has already landed at
+/// [path]. Swapped out in tests; in the app it is [FilesService.putDerivatives].
+typedef DerivativesSender =
+    Future<void> Function({
+      required String path,
+      String? serial,
+      required UploadDerivatives derivatives,
+    });
+
 /// Asks the user what to do about [fileName], whose name the Quark says is
 /// taken. The answer decides whether the file is sent again, and how.
 ///
@@ -159,7 +170,9 @@ class UploadManager extends ChangeNotifier {
     int chunkedThresholdBytes = UploadConfig.chunkedUploadThresholdBytes,
     int maxChunkAttempts = UploadConfig.maxChunkAttempts,
     Duration chunkRetryBackoff = UploadConfig.chunkRetryBackoff,
+    DerivativesSender? derivativesSender,
   }) : _sender = sender,
+       _derivativesSender = derivativesSender,
        _sessionClient = sessionClient,
        _sessionStore = sessionStore,
        _concurrency = concurrency,
@@ -172,6 +185,7 @@ class UploadManager extends ChangeNotifier {
        _chunkRetryBackoff = chunkRetryBackoff;
 
   UploadSender? _sender;
+  DerivativesSender? _derivativesSender;
   ResumableUploadClient? _sessionClient;
   UploadSessionStore? _sessionStore;
 
@@ -409,17 +423,59 @@ class UploadManager extends ChangeNotifier {
   /// Sends one file, by whichever route its size calls for.
   Future<void> _attempt(_QueuedUpload queued) async {
     final source = await _openChunkSource(queued.upload);
+    final derivatives = await _renderDerivatives(queued.upload);
     if (source == null) {
-      return _uploadWhole(queued);
+      return _uploadWhole(queued, derivatives);
     }
 
     try {
       if (source.size < _chunkedThresholdBytes) {
-        return await _uploadWhole(queued);
+        return await _uploadWhole(queued, derivatives);
       }
-      return await _uploadChunked(queued, source);
+      return await _uploadChunked(queued, source, derivatives);
     } finally {
       source.release();
+    }
+  }
+
+  /// The thumbnail and preview [upload] carries (#2379), or null. Never a
+  /// failure: a file the platform cannot render still uploads, and the Quark
+  /// makes what thumbnail it can, as for an older client.
+  Future<UploadDerivatives?> _renderDerivatives(PendingUpload upload) async {
+    final render = upload.renderDerivatives;
+    if (render == null) {
+      return null;
+    }
+    try {
+      return await render();
+    } catch (e) {
+      debugPrint('[upload_manager.dart] No derivatives for ${upload.name}: $e');
+      return null;
+    }
+  }
+
+  /// Attaches [derivatives] to the chunked file that landed at [path]. Best
+  /// effort: the file is in place, and a failure here only costs it the
+  /// client-rendered thumbnail.
+  Future<void> _attachDerivatives(
+    String? path,
+    String? serial,
+    UploadDerivatives? derivatives,
+  ) async {
+    if (path == null || path.isEmpty || derivatives == null) {
+      return;
+    }
+    final send = _derivativesSender ?? FilesService.putDerivatives;
+    try {
+      await send(
+        path: path,
+        serial: serial,
+        derivatives: derivatives,
+      ).timeout(_attemptTimeout);
+    } catch (e) {
+      debugPrint(
+        '[upload_manager.dart] Could not attach derivatives to $path: $e',
+      );
     }
   }
 
@@ -444,7 +500,10 @@ class UploadManager extends ChangeNotifier {
   /// Sends one file, retrying a few times. A failure is counted, never
   /// rethrown — one unreadable file must not take the rest of the folder with
   /// it.
-  Future<void> _uploadWhole(_QueuedUpload queued) async {
+  Future<void> _uploadWhole(
+    _QueuedUpload queued, [
+    UploadDerivatives? derivatives,
+  ]) async {
     Object? lastError;
 
     for (var attempt = 1; attempt <= _maxAttempts; attempt++) {
@@ -462,7 +521,11 @@ class UploadManager extends ChangeNotifier {
         }
         await _send(
           currentPath: queued.targetPath,
-          selectedFiles: [file],
+          // Each sidecar follows its file: the Quark pairs them by name.
+          selectedFiles: [
+            file,
+            ...?derivatives?.sidecarParts(queued.upload.name),
+          ],
           serial: queued.serial,
           conflict: queued.conflict,
         ).timeout(
@@ -510,6 +573,7 @@ class UploadManager extends ChangeNotifier {
   Future<void> _uploadChunked(
     _QueuedUpload queued,
     UploadChunkSource source,
+    UploadDerivatives? derivatives,
   ) async {
     final total = source.size;
     final name = queued.upload.name;
@@ -531,7 +595,7 @@ class UploadManager extends ChangeNotifier {
     // forever.
     for (var attempt = 1; attempt <= _maxAttempts; attempt++) {
       try {
-        final finished = await _runUploadSession(
+        final committed = await _runUploadSession(
           queued: queued,
           source: source,
           total: total,
@@ -539,8 +603,11 @@ class UploadManager extends ChangeNotifier {
           fileKey: fileKey,
           progressKey: progressKey,
         );
-        if (finished) {
+        if (committed != null) {
           _store.remove(fileKey);
+          // The session ended at the commit, so the derivatives go to the
+          // file where the last chunk said it landed.
+          await _attachDerivatives(committed.path, queued.serial, derivatives);
           _chunked.remove(progressKey);
           _consecutiveFailures = 0;
           _completed++;
@@ -612,11 +679,11 @@ class UploadManager extends ChangeNotifier {
 
   /// Runs one session to the end of the file.
   ///
-  /// Returns true when the server said the file was committed, false when the
-  /// session disappeared mid-file and the caller should open another. Anything
-  /// else throws. Holding every byte is not the same as committed: see the
+  /// Returns the final chunk's answer when the server said the file was
+  /// committed, null when the session disappeared mid-file and the caller
+  /// should open another. Anything else throws. Holding every byte is not the same as committed: see the
   /// replay below.
-  Future<bool> _runUploadSession({
+  Future<ChunkAccepted?> _runUploadSession({
     required _QueuedUpload queued,
     required UploadChunkSource source,
     required int total,
@@ -681,7 +748,7 @@ class UploadManager extends ChangeNotifier {
           _store.write(record);
           _reportChunkProgress(progressKey, name, offset, total);
           if (complete) {
-            return true;
+            return outcome;
           }
           if (offset >= total) {
             throw Exception('server holds all of $name but did not commit it');
@@ -705,7 +772,7 @@ class UploadManager extends ChangeNotifier {
           _store.write(record);
           _reportChunkProgress(progressKey, name, offset, total);
         case ChunkSessionGone():
-          return false;
+          return null;
         case ChunkRejected():
           throw Exception('$outcome');
       }

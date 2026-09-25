@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/models/upload_conflict.dart';
+import 'package:quark/models/upload_derivatives.dart';
 import 'package:quark/models/upload_session.dart';
 import 'package:quark/services/resumable_upload_service.dart';
 import 'package:quark/services/upload_chunk_source.dart';
@@ -1410,6 +1411,185 @@ void main() {
       final result = await done;
 
       expect(server.createdConflicts, [null, UploadConflictChoice.keepBoth]);
+      expect(result.succeeded, 1);
+    });
+  });
+
+  group('client-rendered derivatives (#2379)', () {
+    final derivatives = UploadDerivatives(
+      thumbnail: Uint8List.fromList([9]),
+      preview: Uint8List.fromList([8, 7]),
+    );
+
+    PendingUpload rendered(
+      String name, {
+      int? size,
+      required Future<UploadDerivatives?> Function() render,
+    }) {
+      return PendingUpload(
+        relativeDir: '',
+        name: name,
+        build: () async =>
+            http.MultipartFile.fromBytes('files', _bytes, filename: name),
+        openChunkSource: size == null
+            ? null
+            : () async => _FakeChunkSource(size),
+        renderDerivatives: render,
+      );
+    }
+
+    test('a whole upload carries each sidecar after its file', () async {
+      final sent = <List<String>>[];
+      final manager = UploadManager.forTesting(
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              sent.add([
+                for (final f in selectedFiles) '${f.field}:${f.filename}',
+              ]);
+            },
+      );
+
+      final done = manager.results.first;
+      manager.enqueue(
+        uploads: [rendered('clip.mov', render: () async => derivatives)],
+        uploadPath: '',
+      );
+      await done;
+
+      expect(sent, [
+        ['files:clip.mov', 'thumbnail:clip.mov', 'preview:clip.mov'],
+      ]);
+    });
+
+    test('renders once however many attempts the file takes', () async {
+      var renders = 0;
+      var attempts = 0;
+      final manager = UploadManager.forTesting(
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              if (++attempts == 1) throw Exception('connection reset');
+            },
+      );
+
+      final done = manager.results.first;
+      manager.enqueue(
+        uploads: [
+          rendered(
+            'clip.mov',
+            render: () async {
+              renders++;
+              return derivatives;
+            },
+          ),
+        ],
+        uploadPath: '',
+      );
+      final result = await done;
+
+      expect(result.failed, 0);
+      expect(attempts, 2);
+      expect(renders, 1);
+    });
+
+    test('a render that fails sends the file alone', () async {
+      final sent = <List<String>>[];
+      final manager = UploadManager.forTesting(
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {
+              sent.add([for (final f in selectedFiles) f.field]);
+            },
+      );
+
+      final done = manager.results.first;
+      manager.enqueue(
+        uploads: [
+          rendered('a.heic', render: () async => throw Exception('no codec')),
+          rendered('b.heic', render: () async => null),
+        ],
+        uploadPath: '',
+      );
+      final result = await done;
+
+      expect(result.failed, 0);
+      expect(sent, [
+        ['files'],
+        ['files'],
+      ]);
+    });
+
+    test('a chunked upload attaches them where the file landed', () async {
+      final server = _FakeUploadServer();
+      final attached = <String>[];
+      final manager = UploadManager.forTesting(
+        sender:
+            ({
+              required currentPath,
+              required selectedFiles,
+              serial,
+              conflict,
+            }) async {},
+        sessionClient: server,
+        sessionStore: InMemoryUploadSessionStore(),
+        chunkSizeBytes: 8,
+        chunkedThresholdBytes: 8,
+        chunkRetryBackoff: Duration.zero,
+        derivativesSender:
+            ({required path, serial, required derivatives}) async {
+              attached.add('$serial:$path:${derivatives.preview?.length}');
+            },
+      );
+
+      final done = manager.results.first;
+      manager.enqueue(
+        uploads: [
+          rendered('big.mov', size: 20, render: () async => derivatives),
+        ],
+        uploadPath: '/clips',
+        serial: 'usb',
+      );
+      final result = await done;
+
+      expect(result.failed, 0);
+      expect(attached, ['usb:clips/big.mov:2']);
+    });
+
+    test('a chunked file still counts as sent when attaching fails', () async {
+      final manager = UploadManager.forTesting(
+        sessionClient: _FakeUploadServer(),
+        sessionStore: InMemoryUploadSessionStore(),
+        chunkSizeBytes: 8,
+        chunkedThresholdBytes: 8,
+        chunkRetryBackoff: Duration.zero,
+        derivativesSender:
+            ({required path, serial, required derivatives}) async =>
+                throw const ApiException(500, 'attach derivatives'),
+      );
+
+      final done = manager.results.first;
+      manager.enqueue(
+        uploads: [
+          rendered('big.mov', size: 20, render: () async => derivatives),
+        ],
+        uploadPath: '',
+      );
+      final result = await done;
+
+      expect(result.failed, 0);
       expect(result.succeeded, 1);
     });
   });

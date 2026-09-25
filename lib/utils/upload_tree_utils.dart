@@ -1,5 +1,6 @@
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:http/http.dart' as http;
+import 'package:quark/models/upload_derivatives.dart';
 import 'package:quark/services/upload_chunk_source.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 
@@ -33,6 +34,7 @@ class PendingUpload {
     required this.name,
     required this.build,
     this.openChunkSource,
+    this.renderDerivatives,
   });
 
   /// Directory relative to the upload root, `''` for the root itself.
@@ -51,6 +53,11 @@ class PendingUpload {
   /// existing caller working: a file with no chunk source simply takes the
   /// single-request path however large it is.
   final Future<UploadChunkSource?> Function()? openChunkSource;
+
+  /// Renders the thumbnail and preview this file uploads with (#2379), or
+  /// null where the platform renders none. Called once per file, when it is
+  /// about to be sent.
+  final Future<UploadDerivatives?> Function()? renderDerivatives;
 }
 
 /// The outcome of walking a dropped folder.
@@ -145,6 +152,7 @@ DropFlattenResult flattenDroppedItems(
   required Future<http.MultipartFile?> Function(DropItemFile file, String name)
   buildUpload,
   Future<UploadChunkSource?> Function(DropItemFile file)? openChunkSource,
+  Future<UploadDerivatives?> Function(DropItemFile file)? renderDerivatives,
 }) {
   final uploads = <PendingUpload>[];
   var truncated = false;
@@ -186,6 +194,9 @@ DropFlattenResult flattenDroppedItems(
           openChunkSource: openChunkSource == null
               ? null
               : () => openChunkSource(item),
+          renderDerivatives: renderDerivatives == null
+              ? null
+              : () => renderDerivatives(item),
         ),
       );
     }

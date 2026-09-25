@@ -9,12 +9,14 @@ import 'package:quark/controllers/photo_bytes_cache.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/paginated_photos_response.dart' as wire;
 import 'package:quark/models/photo_album.dart';
+import 'package:quark/models/upload_derivatives.dart';
 import 'package:quark/services/album_service.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/demo_photos_service.dart';
 import 'package:quark/services/dropped_file_reader.dart';
 import 'package:quark/services/favorites_service.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/services/media_derivatives.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/album_link.dart' as link;
 import 'package:quark/utils/connection_error.dart';
@@ -131,6 +133,11 @@ class PhotosController extends ChangeNotifier {
         FilesService.uploadFilesFromFormData,
     Future<Uint8List?> Function(DropItemFile file) readDroppedFile =
         readDroppedFileBytes,
+    Future<UploadDerivatives?> Function(String name, Uint8List bytes)
+        renderFromBytes =
+        renderDerivativesFromBytes,
+    Future<UploadDerivatives?> Function(DropItemFile file) renderDroppedFile =
+        renderDroppedFileDerivatives,
     PhotoBytesCache? bytesCache,
     bool isWeb = kIsWeb,
   }) : _getPhotos = getPhotos,
@@ -150,6 +157,8 @@ class PhotosController extends ChangeNotifier {
        _listDevices = listDevices,
        _uploadFiles = uploadFiles,
        _readDroppedFile = readDroppedFile,
+       _renderFromBytes = renderFromBytes,
+       _renderDroppedFile = renderDroppedFile,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
        _isWeb = isWeb;
 
@@ -226,6 +235,10 @@ class PhotosController extends ChangeNotifier {
   })
   _uploadFiles;
   final Future<Uint8List?> Function(DropItemFile file) _readDroppedFile;
+  final Future<UploadDerivatives?> Function(String name, Uint8List bytes)
+  _renderFromBytes;
+  final Future<UploadDerivatives?> Function(DropItemFile file)
+  _renderDroppedFile;
   final PhotoBytesCache _bytesCache;
   final bool _isWeb;
 
@@ -960,21 +973,28 @@ class PhotosController extends ChangeNotifier {
     _isUploading = true;
     notifyListeners();
     try {
-      final multipart = <http.MultipartFile>[
-        for (final file in files)
-          if (!_isWeb && (file.path ?? '').isNotEmpty)
+      final multipart = <http.MultipartFile>[];
+      for (final file in files) {
+        if (!_isWeb && (file.path ?? '').isNotEmpty) {
+          multipart.add(
             await http.MultipartFile.fromPath(
               'files',
               file.path!,
               filename: file.name,
-            )
-          else
-            http.MultipartFile.fromBytes(
-              'files',
-              await file.readAsBytes(),
-              filename: file.name,
             ),
-      ];
+          );
+          continue;
+        }
+        final bytes = await file.readAsBytes();
+        multipart.add(
+          http.MultipartFile.fromBytes('files', bytes, filename: file.name),
+        );
+        // Each sidecar follows its file: the Quark pairs them by name (#2379).
+        final derivatives = await _renderQuietly(
+          () => _renderFromBytes(file.name, bytes),
+        );
+        multipart.addAll(derivatives?.sidecarParts(file.name) ?? const []);
+      }
       final paths = await _uploadToLibrary(multipart, serial: serial);
       if (albumId == null) return null;
       var added = 0;
@@ -1018,6 +1038,7 @@ class PhotosController extends ChangeNotifier {
         if (bytes == null || bytes.isEmpty) return null;
         return http.MultipartFile.fromBytes('files', bytes, filename: name);
       },
+      renderDerivatives: _renderDroppedFile,
     );
     final photos = [
       for (final upload in flattened.uploads)
@@ -1043,13 +1064,33 @@ class PhotosController extends ChangeNotifier {
       for (final photo in photos) {
         final file = await photo.build();
         if (file == null) continue;
-        await _uploadToLibrary([file], serial: serial);
+        final render = photo.renderDerivatives;
+        final derivatives = render == null
+            ? null
+            : await _renderQuietly(render);
+        await _uploadToLibrary([
+          file,
+          ...?derivatives?.sidecarParts(photo.name),
+        ], serial: serial);
         uploaded++;
       }
       return uploaded;
     } finally {
       _isUploading = false;
       notifyListeners();
+    }
+  }
+
+  /// Runs [render], treating a failure as nothing rendered: the photo still
+  /// uploads without a client-rendered thumbnail.
+  Future<UploadDerivatives?> _renderQuietly(
+    Future<UploadDerivatives?> Function() render,
+  ) async {
+    try {
+      return await render();
+    } catch (e) {
+      debugPrint('[photos_controller.dart] No derivatives: $e');
+      return null;
     }
   }
 

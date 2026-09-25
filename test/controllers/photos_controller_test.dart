@@ -10,6 +10,7 @@ import 'package:quark/controllers/photo_bytes_cache.dart';
 import 'package:quark/controllers/photos_controller.dart';
 import 'package:quark/models/paginated_photos_response.dart' as wire;
 import 'package:quark/models/photo_album.dart';
+import 'package:quark/models/upload_derivatives.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -840,6 +841,53 @@ void main() {
       ], albumId: 1);
 
       expect((outcome!.added, outcome.failed), (0, 1));
+    });
+
+    group('client-rendered derivatives (#2379)', () {
+      final derivatives = UploadDerivatives(thumbnail: Uint8List.fromList([9]));
+
+      Future<List<String>> Function(
+        String,
+        List<http.MultipartFile>, {
+        String? serial,
+        bool overwrite,
+        bool keepBoth,
+      })
+      recorder(List<String> parts) =>
+          (path, files, {serial, overwrite = false, keepBoth = false}) async {
+            parts.addAll([for (final f in files) '${f.field}:${f.filename}']);
+            return const <String>[];
+          };
+
+      test('a picked photo carries its thumbnail after it', () async {
+        final parts = <String>[];
+        final controller = PhotosController(
+          isWeb: true,
+          uploadFiles: recorder(parts),
+          renderFromBytes: (name, bytes) async =>
+              name == 'a.heic' ? derivatives : null,
+        );
+
+        await controller.uploadPhotos([_picked('a.heic'), _picked('b.png')]);
+
+        expect(parts, ['files:a.heic', 'thumbnail:a.heic', 'files:b.png']);
+      });
+
+      test('a dropped photo carries its thumbnail after it', () async {
+        final parts = <String>[];
+        final controller = PhotosController(
+          readDroppedFile: (file) async => Uint8List.fromList([1]),
+          uploadFiles: recorder(parts),
+          renderDroppedFile: (file) async => derivatives,
+        );
+        final (:photos, notPhotos: _) = controller.sortDroppedFiles([
+          DropItemFile.fromData(Uint8List.fromList([1]), path: 'a.jpg'),
+        ]);
+
+        await controller.uploadDroppedPhotos(photos);
+
+        expect(parts, ['files:a.jpg', 'thumbnail:a.jpg']);
+      });
     });
 
     group('a drop (#2214)', () {

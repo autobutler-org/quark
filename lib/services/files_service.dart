@@ -8,6 +8,7 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/models/paginated_photos_response.dart';
 import 'package:quark/models/photo_metadata.dart';
 import 'package:quark/models/transcode_format.dart';
+import 'package:quark/models/upload_derivatives.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -578,6 +579,36 @@ class FilesService with AuthenticatedService {
     final decoded = body.isEmpty ? null : jsonDecode(body);
     final paths = decoded is Map<String, dynamic> ? decoded['paths'] : null;
     return paths is List ? paths.whereType<String>().toList() : const [];
+  }
+
+  /// Attaches a photo or video's client-rendered thumbnail and preview to the
+  /// file at [path] (#2379): `PUT /api/v0/thumbnails/{path}`. Used after a
+  /// resumable upload, whose session ends when the file lands.
+  static Future<void> putDerivatives({
+    required String path,
+    String? serial,
+    required UploadDerivatives derivatives,
+  }) async {
+    final normalized = path.trim().replaceFirst(RegExp(r'^/+'), '');
+    final encodedPath = normalized
+        .split('/')
+        .map(Uri.encodeComponent)
+        .join('/');
+    final serialValue = serial?.trim() ?? '';
+    final uri = apiBaseUri
+        .resolve('/api/v0/thumbnails/$encodedPath')
+        .replace(
+          queryParameters: serialValue.isEmpty ? null : {'serial': serialValue},
+        );
+
+    final request = http.MultipartRequest('PUT', uri)
+      ..files.addAll(derivatives.sidecarParts(normalized.split('/').last))
+      ..headers.addAll(_authHeaders);
+    final response = await request.send();
+    await response.stream.drain<void>();
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Failed to attach thumbnails');
+    }
   }
 
   static Future<String?> saveFile(
