@@ -15,14 +15,25 @@
 //
 // Every change publishes chat_channel_changed to the channel's members, before
 // and after the change; accessutil.FilterEvent keeps it from everyone else.
+//
+// Channel keys (#2417) are made and shared by clients, never the Quark. A
+// channel has key versions; a member holds a version through a grant, the key
+// sealed to their X25519 key and signed by whoever granted it. The Quark works
+// out who is missing a grant (members with published keys lacking a version)
+// and whether the key needs rotating (someone outside the channel holds the
+// current version), and tells the members who can act with chat_key_needed.
+// Membership and key changes are also recorded as channel events, which the
+// actor's client signs.
 package chatutil
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -330,6 +341,9 @@ type ListMembersParams struct {
 // name.
 type ListMembersResult struct {
 	Members []Member `json:"members"`
+	// Event is the member_set or member_removed event SetMember and
+	// RemoveMember recorded, for the caller to sign; absent from ListMembers.
+	Event *ChannelEvent `json:"event,omitempty"`
 }
 
 // ListMembers lists a channel's rows, each group with the active accounts in
@@ -402,7 +416,12 @@ func SetMember(params SetMemberParams) (ListMembersResult, error) {
 	if err != nil {
 		return ListMembersResult{}, err
 	}
-	return afterMembershipChange(params.Ctx, queries, params.EventBus, params.ChannelID, before, params.DataDir)
+	payload, err := memberPayload(params.Ctx, queries, params.UserID, params.GroupID, params.Level.String())
+	if err != nil {
+		return ListMembersResult{}, err
+	}
+	return afterMembershipChange(params.Ctx, queries, params.EventBus, params.ChannelID, before, params.DataDir,
+		EventMemberSet, params.Principal.UserID, payload)
 }
 
 // RemoveMemberParams removes one account's or group's row from a channel.
@@ -454,6 +473,13 @@ func RemoveMember(params RemoveMemberParams) (ListMembersResult, error) {
 	if err != nil {
 		return ListMembersResult{}, err
 	}
+	payload, err := memberPayload(params.Ctx, queries, params.UserID, params.GroupID, "")
+	if errors.Is(err, sql.ErrNoRows) {
+		return ListMembersResult{}, ErrMemberNotFound
+	}
+	if err != nil {
+		return ListMembersResult{}, err
+	}
 	var deleted int64
 	if params.UserID != 0 {
 		deleted, err = queries.DeleteChatChannelUserMember(params.Ctx, db.DeleteChatChannelUserMemberParams{
@@ -472,7 +498,8 @@ func RemoveMember(params RemoveMemberParams) (ListMembersResult, error) {
 	if deleted == 0 {
 		return ListMembersResult{}, ErrMemberNotFound
 	}
-	return afterMembershipChange(params.Ctx, queries, params.EventBus, params.ChannelID, before, params.DataDir)
+	return afterMembershipChange(params.Ctx, queries, params.EventBus, params.ChannelID, before, params.DataDir,
+		EventMemberRemoved, params.Principal.UserID, payload)
 }
 
 // ResolveMemberUsersParams names the channel whose members to resolve.
@@ -609,12 +636,25 @@ type PutKeysResult struct {
 }
 
 // PutKeys validates and stores an account's chat identity, replacing any it
-// had.
+// had. A new X25519 key drops the account's key grants, which were sealed to
+// the old one; call NotifyKeyNeeded afterward so members refill them.
 func PutKeys(params PutKeysParams) (PutKeysResult, error) {
 	if err := ValidateKeys(params.Keys); err != nil {
 		return PutKeysResult{}, err
 	}
 	k := params.Keys
+	// Grants sealed to an old X25519 key can't be opened any more, so they go
+	// and the account becomes pending again: members refill them, history
+	// included.
+	existing, err := params.Queries.GetUserChatKeys(params.Ctx, params.UserID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return PutKeysResult{}, err
+	}
+	if err == nil && !bytes.Equal(existing.BoxPublicKey, k.BoxPublicKey) {
+		if err := params.Queries.DeleteUserChatKeyGrants(params.Ctx, sql.NullInt64{Int64: params.UserID, Valid: true}); err != nil {
+			return PutKeysResult{}, fmt.Errorf("drop chat key grants: %w", err)
+		}
+	}
 	row, err := params.Queries.UpsertUserChatKeys(params.Ctx, db.UpsertUserChatKeysParams{
 		UserID:            params.UserID,
 		BoxPublicKey:      k.BoxPublicKey,
@@ -658,4 +698,518 @@ func GetPublicKeys(params GetPublicKeysParams) (GetPublicKeysResult, error) {
 		BoxPublicKey:  row.BoxPublicKey,
 		SignPublicKey: row.SignPublicKey,
 	}}, nil
+}
+
+// Sizes a key grant must have (#2417). A sealed channel key is the 32-byte
+// XChaCha20-Poly1305 key plus the 48 bytes crypto_box_seal adds; a signature is
+// Ed25519's 64 bytes.
+const (
+	SealedKeyBytes = 80
+	SignatureBytes = 64
+	// MaxGrantsPerUpload bounds one UploadGrants call.
+	MaxGrantsPerUpload = 256
+	// MaxEventsPage is the most events ListEvents returns at once.
+	MaxEventsPage = 200
+	// MaxGrantsRequestBytes caps a grant upload's body.
+	MaxGrantsRequestBytes = 128 << 10
+)
+
+// Event kinds a channel's system events carry.
+const (
+	EventMemberSet     = "member_set"
+	EventMemberRemoved = "member_removed"
+	EventKeyCreated    = "key_created"
+)
+
+var (
+	// ErrNotHolder reports granting a key version the caller holds no grant
+	// for.
+	ErrNotHolder = errors.New("you don't hold that version of the channel key")
+	// ErrVersionConflict reports creating a key version that isn't the next
+	// one, usually because another member created it first.
+	ErrVersionConflict = errors.New("another member already created that key version")
+	// ErrInvalidGrant reports a grant of the wrong size, or for an account
+	// that isn't a member with published chat keys.
+	ErrInvalidGrant = errors.New("that key grant is malformed or names someone who can't receive it")
+	// ErrEventNotFound reports an event that doesn't exist on the channel or
+	// wasn't the caller's to sign.
+	ErrEventNotFound = errors.New("no event with that id for you to sign")
+	// ErrEventSigned reports signing an event that already has a signature.
+	ErrEventSigned = errors.New("that event is already signed")
+)
+
+// KeyVersion is one version of a channel's key. The key itself never reaches
+// the Quark.
+type KeyVersion struct {
+	Version int64 `json:"version"`
+	// CreatedBy is absent when the account that created it was deleted.
+	CreatedBy int64     `json:"createdBy,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// KeyGrant is one version of a channel key sealed to one member. Byte fields
+// travel as base64.
+type KeyGrant struct {
+	Version int64 `json:"version"`
+	UserID  int64 `json:"userId"`
+	// SealedKey is crypto_box_seal of the channel key to the member's X25519
+	// key.
+	SealedKey []byte `json:"sealedKey"`
+	// GrantedBy is absent when the granter's account was deleted.
+	GrantedBy int64 `json:"grantedBy,omitempty"`
+	// GranterSignKey is the granter's published Ed25519 key when the grant was
+	// uploaded, which Signature verifies against.
+	GranterSignKey []byte `json:"granterSignKey"`
+	// Signature is the granter's Ed25519 signature over the grant's canonical
+	// bytes (docs/chat-security.md).
+	Signature []byte    `json:"signature"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// GrantUpload is one grant a client sealed and signed.
+type GrantUpload struct {
+	Version   int64  `json:"version"`
+	UserID    int64  `json:"userId"`
+	SealedKey []byte `json:"sealedKey"`
+	Signature []byte `json:"signature"`
+}
+
+// PendingGrant is a member missing a version of the key, and the X25519 key to
+// seal it to.
+type PendingGrant struct {
+	Version      int64  `json:"version"`
+	UserID       int64  `json:"userId"`
+	BoxPublicKey []byte `json:"boxPublicKey"`
+}
+
+// ChannelEvent is a membership or key change, shown as a system line. The
+// Quark writes Payload, a JSON object; the actor's client signs it afterward
+// (SignEvent), and an event without a signature is shown as unverified.
+type ChannelEvent struct {
+	ID        int64 `json:"id"`
+	ChannelID int64 `json:"channelId"`
+	// Kind is member_set, member_removed or key_created.
+	Kind string `json:"kind"`
+	// ActorID is who made the change; absent once that account is deleted.
+	ActorID int64 `json:"actorId,omitempty"`
+	// Payload is the JSON the signature covers, byte for byte: for a member
+	// change {"userId"|"groupId", "name", "level"}, for a key {"version"}.
+	Payload string `json:"payload"`
+	// Signature and SignerSignKey are both absent until the actor signs.
+	Signature     []byte    `json:"signature,omitempty"`
+	SignerSignKey []byte    `json:"signerSignKey,omitempty"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+// GetChannelKeysParams asks for a channel's key versions and the caller's own
+// grants.
+type GetChannelKeysParams struct {
+	Ctx       context.Context
+	Database  *db.DatabaseSqlc
+	Principal accessutil.Principal
+	ChannelID int64
+}
+
+// GetChannelKeysResult is what a member needs to open a channel.
+type GetChannelKeysResult struct {
+	// CurrentVersion is the newest version, 0 before any exists: the first
+	// member client to open the channel then creates version 1.
+	CurrentVersion int64        `json:"currentVersion"`
+	Versions       []KeyVersion `json:"versions"`
+	// Grants are the caller's own, one per version it has been given.
+	Grants []KeyGrant `json:"grants"`
+	// RotationNeeded is set when someone holding the current version is no
+	// longer a member; the next member client online creates the next one.
+	RotationNeeded bool `json:"rotationNeeded"`
+}
+
+// GetChannelKeys returns a channel's key versions and the caller's grants,
+// for members only: anyone else, admins included, gets ErrChannelNotFound.
+func GetChannelKeys(params GetChannelKeysParams) (GetChannelKeysResult, error) {
+	if params.Database == nil {
+		return GetChannelKeysResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	if err := requireMember(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
+		return GetChannelKeysResult{}, err
+	}
+	state, err := loadKeyState(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return GetChannelKeysResult{}, err
+	}
+	rows, err := queries.ListChatKeyGrantsForUser(params.Ctx, db.ListChatKeyGrantsForUserParams{
+		ChannelID: params.ChannelID, UserID: sql.NullInt64{Int64: params.Principal.UserID, Valid: true},
+	})
+	if err != nil {
+		return GetChannelKeysResult{}, err
+	}
+	grants := make([]KeyGrant, 0, len(rows))
+	for _, row := range rows {
+		grants = append(grants, grantFromRow(row))
+	}
+	return GetChannelKeysResult{
+		CurrentVersion: state.current,
+		Versions:       state.versions,
+		Grants:         grants,
+		RotationNeeded: state.rotationNeeded(),
+	}, nil
+}
+
+// ListPendingGrantsParams asks what grants the caller could fill.
+type ListPendingGrantsParams struct {
+	Ctx       context.Context
+	Database  *db.DatabaseSqlc
+	Principal accessutil.Principal
+	ChannelID int64
+}
+
+// ListPendingGrantsResult is the grants the caller can fill, by version then
+// account.
+type ListPendingGrantsResult struct {
+	Pending        []PendingGrant `json:"pending"`
+	CurrentVersion int64          `json:"currentVersion"`
+	RotationNeeded bool           `json:"rotationNeeded"`
+}
+
+// ListPendingGrants lists the members, directly, through a group or through
+// everyone, who have published chat keys but lack a version of the channel key
+// the caller holds. Members only; access errors are GetChannelKeys'.
+func ListPendingGrants(params ListPendingGrantsParams) (ListPendingGrantsResult, error) {
+	if params.Database == nil {
+		return ListPendingGrantsResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	if err := requireMember(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
+		return ListPendingGrantsResult{}, err
+	}
+	state, err := loadKeyState(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return ListPendingGrantsResult{}, err
+	}
+	pending := []PendingGrant{}
+	for _, p := range state.pending() {
+		if state.holders[p.Version][params.Principal.UserID] {
+			pending = append(pending, p)
+		}
+	}
+	return ListPendingGrantsResult{Pending: pending, CurrentVersion: state.current, RotationNeeded: state.rotationNeeded()}, nil
+}
+
+// UploadGrantsParams stores grants the caller sealed and signed.
+type UploadGrantsParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_key_granted. Nil skips it.
+	EventBus  *eventbus.Bus
+	Principal accessutil.Principal
+	ChannelID int64
+	Grants    []GrantUpload
+}
+
+// UploadGrantsResult is the stored grant for each upload: the caller's, or
+// the one that got there first.
+type UploadGrantsResult struct {
+	Grants []KeyGrant `json:"grants"`
+}
+
+// UploadGrants stores grants from a member who holds each version, to members
+// with published chat keys. The first grant for a member and version wins and
+// later ones are ignored. The caller's published signing key is recorded with
+// each grant. Publishes chat_key_granted to the recipients.
+func UploadGrants(params UploadGrantsParams) (UploadGrantsResult, error) {
+	if len(params.Grants) == 0 || len(params.Grants) > MaxGrantsPerUpload {
+		return UploadGrantsResult{}, ErrInvalidGrant
+	}
+	if params.Database == nil {
+		return UploadGrantsResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	if err := requireMember(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
+		return UploadGrantsResult{}, err
+	}
+	signKey, err := callerSignKey(params.Ctx, queries, params.Principal)
+	if err != nil {
+		return UploadGrantsResult{}, err
+	}
+	state, err := loadKeyState(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		return UploadGrantsResult{}, err
+	}
+	for _, g := range params.Grants {
+		if !state.holders[g.Version][params.Principal.UserID] {
+			return UploadGrantsResult{}, ErrNotHolder
+		}
+		if !validGrant(g.SealedKey, g.Signature) || state.boxKeys[g.UserID] == nil {
+			return UploadGrantsResult{}, ErrInvalidGrant
+		}
+	}
+	stored := make([]KeyGrant, 0, len(params.Grants))
+	recipients := make([]int64, 0, len(params.Grants))
+	for _, g := range params.Grants {
+		row, err := insertGrant(params.Ctx, queries, params.ChannelID, g, params.Principal.UserID, signKey)
+		if err != nil {
+			return UploadGrantsResult{}, err
+		}
+		stored = append(stored, grantFromRow(row))
+		recipients = append(recipients, g.UserID)
+	}
+	publishTo(params.EventBus, eventbus.EventChatKeyGranted, params.ChannelID, recipients)
+	return UploadGrantsResult{Grants: stored}, nil
+}
+
+// CreateKeyVersionParams creates the next version of a channel's key, with the
+// caller's own grant of it.
+type CreateKeyVersionParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_key_needed, since the other members now lack the
+	// new version. Nil skips it.
+	EventBus  *eventbus.Bus
+	Principal accessutil.Principal
+	ChannelID int64
+	// Version must be one more than the newest, or 1 for a channel with none.
+	Version   int64
+	SealedKey []byte
+	Signature []byte
+}
+
+// CreateKeyVersionResult is the new version, the caller's grant and the
+// key_created event for the caller to sign.
+type CreateKeyVersionResult struct {
+	Version KeyVersion   `json:"version"`
+	Grant   KeyGrant     `json:"grant"`
+	Event   ChannelEvent `json:"event"`
+}
+
+// CreateKeyVersion lets any member start a channel's key, or rotate it,
+// storing the caller's grant of the new key with it; the caller then fills
+// the other members' grants through UploadGrants. A version that isn't the
+// next one is ErrVersionConflict, so two clients racing to rotate leave one
+// winner. Access errors are GetChannelKeys'.
+func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, error) {
+	if !validGrant(params.SealedKey, params.Signature) {
+		return CreateKeyVersionResult{}, ErrInvalidGrant
+	}
+	if params.Database == nil {
+		return CreateKeyVersionResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	if err := requireMember(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
+		return CreateKeyVersionResult{}, err
+	}
+	signKey, err := callerSignKey(params.Ctx, queries, params.Principal)
+	if err != nil {
+		return CreateKeyVersionResult{}, err
+	}
+	var result CreateKeyVersionResult
+	err = inTx(params.Ctx, params.Database, func(q *db.Queries) error {
+		versions, err := q.ListChatChannelKeys(params.Ctx, params.ChannelID)
+		if err != nil {
+			return err
+		}
+		if params.Version != int64(len(versions))+1 {
+			return ErrVersionConflict
+		}
+		actor := sql.NullInt64{Int64: params.Principal.UserID, Valid: true}
+		key, err := q.CreateChatChannelKey(params.Ctx, db.CreateChatChannelKeyParams{
+			ChannelID: params.ChannelID, Version: params.Version, CreatedBy: actor,
+		})
+		if err != nil {
+			return err
+		}
+		grant, err := insertGrant(params.Ctx, q, params.ChannelID, GrantUpload{
+			Version: params.Version, UserID: params.Principal.UserID, SealedKey: params.SealedKey, Signature: params.Signature,
+		}, params.Principal.UserID, signKey)
+		if err != nil {
+			return err
+		}
+		event, err := recordEvent(params.Ctx, q, params.ChannelID, EventKeyCreated, params.Principal.UserID, keyEventPayload{Version: params.Version})
+		if err != nil {
+			return err
+		}
+		result = CreateKeyVersionResult{Version: versionFromRow(key), Grant: grantFromRow(grant), Event: event}
+		return nil
+	})
+	if sqlutil.IsUniqueConstraintErr(err) {
+		return CreateKeyVersionResult{}, ErrVersionConflict
+	}
+	if err != nil {
+		return CreateKeyVersionResult{}, err
+	}
+	if _, err := notifyChannel(params.Ctx, queries, params.EventBus, params.ChannelID); err != nil {
+		return CreateKeyVersionResult{}, err
+	}
+	return result, nil
+}
+
+// ListEventsParams pages a channel's system events.
+type ListEventsParams struct {
+	Ctx       context.Context
+	Database  *db.DatabaseSqlc
+	Principal accessutil.Principal
+	ChannelID int64
+	// After is the last event id already seen; 0 starts at the beginning.
+	After int64
+	// Limit is capped at MaxEventsPage; 0 means MaxEventsPage.
+	Limit int64
+}
+
+// ListEventsResult is a page of events, oldest first.
+type ListEventsResult struct {
+	Events []ChannelEvent `json:"events"`
+}
+
+// ListEvents pages a channel's membership and key events for a member.
+// Access errors are GetChannelKeys'.
+func ListEvents(params ListEventsParams) (ListEventsResult, error) {
+	if params.Database == nil {
+		return ListEventsResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	if err := requireMember(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
+		return ListEventsResult{}, err
+	}
+	limit := params.Limit
+	if limit <= 0 || limit > MaxEventsPage {
+		limit = MaxEventsPage
+	}
+	rows, err := queries.ListChatChannelEvents(params.Ctx, db.ListChatChannelEventsParams{
+		ChannelID: params.ChannelID, ID: params.After, Limit: limit,
+	})
+	if err != nil {
+		return ListEventsResult{}, err
+	}
+	events := make([]ChannelEvent, 0, len(rows))
+	for _, row := range rows {
+		events = append(events, eventFromRow(row))
+	}
+	return ListEventsResult{Events: events}, nil
+}
+
+// SignEventParams attaches the actor's signature to an event.
+type SignEventParams struct {
+	Ctx       context.Context
+	Database  *db.DatabaseSqlc
+	Principal accessutil.Principal
+	ChannelID int64
+	EventID   int64
+	Signature []byte
+}
+
+// SignEventResult is the event as now stored.
+type SignEventResult struct {
+	Event ChannelEvent
+}
+
+// SignEvent stores the caller's signature on an event the caller made, once,
+// with the caller's published signing key beside it. An event that isn't the
+// caller's is ErrEventNotFound, and one already signed ErrEventSigned.
+func SignEvent(params SignEventParams) (SignEventResult, error) {
+	if len(params.Signature) != SignatureBytes {
+		return SignEventResult{}, ErrInvalidGrant
+	}
+	if params.Database == nil {
+		return SignEventResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	if err := requireMember(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
+		return SignEventResult{}, err
+	}
+	signKey, err := callerSignKey(params.Ctx, queries, params.Principal)
+	if err != nil {
+		return SignEventResult{}, err
+	}
+	signed, err := queries.SignChatChannelEvent(params.Ctx, db.SignChatChannelEventParams{
+		Signature: params.Signature, SignerSignKey: signKey, ID: params.EventID, ChannelID: params.ChannelID,
+		ActorID: sql.NullInt64{Int64: params.Principal.UserID, Valid: true},
+	})
+	if err != nil {
+		return SignEventResult{}, err
+	}
+	row, err := queries.GetChatChannelEvent(params.Ctx, db.GetChatChannelEventParams{ID: params.EventID, ChannelID: params.ChannelID})
+	switch {
+	case errors.Is(err, sql.ErrNoRows) || (err == nil && row.ActorID.Int64 != params.Principal.UserID):
+		return SignEventResult{}, ErrEventNotFound
+	case err != nil:
+		return SignEventResult{}, err
+	case signed == 0:
+		return SignEventResult{}, ErrEventSigned
+	}
+	return SignEventResult{Event: eventFromRow(row)}, nil
+}
+
+// NotifyKeyNeededParams asks the Quark to look for grants that need filling.
+type NotifyKeyNeededParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	EventBus *eventbus.Bus
+}
+
+// NotifyKeyNeededResult names the channels chat_key_needed went out for.
+type NotifyKeyNeededResult struct {
+	ChannelIDs []int64
+}
+
+// NotifyKeyNeeded publishes chat_key_needed, for every channel where a member
+// with published chat keys lacks a version or the key needs rotating, to the
+// members who hold a version and so can fill it. Clients also check when they
+// open a channel, so a missed event only delays a grant.
+func NotifyKeyNeeded(params NotifyKeyNeededParams) (NotifyKeyNeededResult, error) {
+	if params.Database == nil {
+		return NotifyKeyNeededResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	ids, err := queries.ListChatChannelIDs(params.Ctx)
+	if err != nil {
+		return NotifyKeyNeededResult{}, err
+	}
+	notified := []int64{}
+	for _, id := range ids {
+		sent, err := notifyChannel(params.Ctx, queries, params.EventBus, id)
+		if err != nil {
+			return NotifyKeyNeededResult{}, err
+		}
+		if sent {
+			notified = append(notified, id)
+		}
+	}
+	return NotifyKeyNeededResult{ChannelIDs: notified}, nil
+}
+
+// WatchKeyNeedsParams runs the Quark's key-need watcher.
+type WatchKeyNeedsParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	EventBus *eventbus.Bus
+}
+
+// WatchKeyNeeds runs NotifyKeyNeeded whenever membership may have changed
+// underneath a channel: access_changed (a group gained or lost an account),
+// account_changed (an account was created, approved, turned off or deleted),
+// and chat_channel_changed. It returns when Ctx is done; run it in its own
+// goroutine for the life of the server.
+func WatchKeyNeeds(params WatchKeyNeedsParams) {
+	if params.EventBus == nil || params.Database == nil {
+		return
+	}
+	events, unsubscribe := params.EventBus.Subscribe("chat-key-needs")
+	defer unsubscribe()
+	for {
+		select {
+		case <-params.Ctx.Done():
+			return
+		case evt, ok := <-events:
+			if !ok {
+				return
+			}
+			switch evt.Kind {
+			case eventbus.EventAccessChanged, eventbus.EventAccountChanged, eventbus.EventChatChannelChanged:
+				// ponytail: every membership event scans every channel again. Fine
+				// for a household; debounce if bursts ever show up.
+				if _, err := NotifyKeyNeeded(NotifyKeyNeededParams(params)); err != nil {
+					log.Printf("[chatutil] key needs: %v", err)
+				}
+			}
+		}
+	}
 }

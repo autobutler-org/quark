@@ -48,9 +48,19 @@ const (
 	// deleted, or its members change (#2415). Data is a ChatChannelChanged;
 	// Path is empty.
 	EventChatChannelChanged EventKind = "chat_channel_changed"
+
+	// EventChatKeyNeeded fires when a channel has members waiting for a key
+	// grant, or its key needs rotating (#2417). Data is a ChatChannelChanged
+	// whose Audience is the members who hold a version and can fill it.
+	EventChatKeyNeeded EventKind = "chat_key_needed"
+
+	// EventChatKeyGranted fires when grants were stored for members (#2417).
+	// Data is a ChatChannelChanged whose Audience is the recipients.
+	EventChatKeyGranted EventKind = "chat_key_granted"
 )
 
-// ChatChannelChanged is the data of a chat_channel_changed event. It lives here
+// ChatChannelChanged is the data of a chat_channel_changed, chat_key_needed or
+// chat_key_granted event. It lives here
 // rather than in chatutil so accessutil can filter on it without importing the
 // package that imports accessutil.
 type ChatChannelChanged struct {

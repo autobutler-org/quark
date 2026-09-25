@@ -130,15 +130,22 @@ func memberIDs(ctx context.Context, queries *db.Queries, channelID int64) ([]int
 	return ids, nil
 }
 
-// afterMembershipChange tells everyone who was or now is a member, and returns
-// the members as they now stand.
-func afterMembershipChange(ctx context.Context, queries *db.Queries, bus *eventbus.Bus, channelID int64, before []int64, dataDir string) (ListMembersResult, error) {
+// afterMembershipChange records the change as a channel event, tells everyone
+// who was or now is a member, and returns the members as they now stand.
+func afterMembershipChange(ctx context.Context, queries *db.Queries, bus *eventbus.Bus, channelID int64, before []int64, dataDir string,
+	kind string, actor int64, payload memberEventPayload) (ListMembersResult, error) {
 	after, err := memberIDs(ctx, queries, channelID)
 	if err != nil {
 		return ListMembersResult{}, err
 	}
+	event, err := recordEvent(ctx, queries, channelID, kind, actor, payload)
+	if err != nil {
+		return ListMembersResult{}, err
+	}
 	publish(bus, channelID, append(before, after...))
-	return listMembers(ctx, queries, channelID, dataDir)
+	result, err := listMembers(ctx, queries, channelID, dataDir)
+	result.Event = &event
+	return result, err
 }
 
 // publish sends chat_channel_changed to an audience. Duplicates are harmless.
@@ -230,5 +237,205 @@ func keysFromRow(row db.UserChatKey) Keys {
 		KdfParams:         json.RawMessage(row.KdfParams),
 		CreatedAt:         row.CreatedAt,
 		UpdatedAt:         row.UpdatedAt,
+	}
+}
+
+// requireMember checks the caller is a member of the channel. Admins get no
+// pass here: grants and events are for members, and anyone else gets
+// ErrChannelNotFound.
+func requireMember(ctx context.Context, queries *db.Queries, principal accessutil.Principal, channelID int64) error {
+	if principal.UserID == 0 {
+		return ErrChannelNotFound
+	}
+	rank, err := queries.GetChatChannelLevelForUser(ctx, db.GetChatChannelLevelForUserParams{
+		ChannelID: channelID,
+		UserID:    sql.NullInt64{Int64: principal.UserID, Valid: true},
+	})
+	if err != nil {
+		return err
+	}
+	if accessutil.Level(rank) < accessutil.Read {
+		return ErrChannelNotFound
+	}
+	return nil
+}
+
+// callerSignKey is the caller's published Ed25519 key, or ErrKeysNotFound.
+func callerSignKey(ctx context.Context, queries *db.Queries, principal accessutil.Principal) ([]byte, error) {
+	row, err := queries.GetUserChatPublicKeys(ctx, principal.UserID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrKeysNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return row.SignPublicKey, nil
+}
+
+// validGrant checks a sealed key and signature have the sizes they must.
+func validGrant(sealedKey, signature []byte) bool {
+	return len(sealedKey) == SealedKeyBytes && len(signature) == SignatureBytes
+}
+
+// loadKeyState reads a channel's versions, members and grants.
+func loadKeyState(ctx context.Context, queries *db.Queries, channelID int64) (keyState, error) {
+	keys, err := queries.ListChatChannelKeys(ctx, channelID)
+	if err != nil {
+		return keyState{}, err
+	}
+	memberRows, err := queries.ListChatChannelMemberUsers(ctx, channelID)
+	if err != nil {
+		return keyState{}, err
+	}
+	published, err := queries.ListActiveUserChatPublicKeys(ctx)
+	if err != nil {
+		return keyState{}, err
+	}
+	recipients, err := queries.ListChatKeyGrantRecipients(ctx, channelID)
+	if err != nil {
+		return keyState{}, err
+	}
+	state := keyState{
+		versions: make([]KeyVersion, 0, len(keys)),
+		members:  map[int64]bool{},
+		boxKeys:  map[int64][]byte{},
+		holders:  map[int64]map[int64]bool{},
+	}
+	for _, key := range keys {
+		state.versions = append(state.versions, versionFromRow(key))
+		state.current = max(state.current, key.Version)
+		state.holders[key.Version] = map[int64]bool{}
+	}
+	for _, row := range memberRows {
+		state.members[row.ID] = true
+	}
+	for _, row := range published {
+		if state.members[row.UserID] {
+			state.boxKeys[row.UserID] = row.BoxPublicKey
+		}
+	}
+	for _, row := range recipients {
+		if row.Version == state.current && (!row.UserID.Valid || !state.members[row.UserID.Int64]) {
+			state.strangers = true
+		}
+		if row.UserID.Valid && state.members[row.UserID.Int64] {
+			state.holders[row.Version][row.UserID.Int64] = true
+		}
+	}
+	return state, nil
+}
+
+// notifyChannel publishes chat_key_needed for one channel when it has pending
+// grants or needs rotating, and reports whether it did.
+func notifyChannel(ctx context.Context, queries *db.Queries, bus *eventbus.Bus, channelID int64) (bool, error) {
+	state, err := loadKeyState(ctx, queries, channelID)
+	if err != nil {
+		return false, err
+	}
+	if !state.rotationNeeded() && len(state.pending()) == 0 {
+		return false, nil
+	}
+	holders := state.keyHolders()
+	if len(holders) == 0 {
+		return false, nil
+	}
+	publishTo(bus, eventbus.EventChatKeyNeeded, channelID, holders)
+	return true, nil
+}
+
+// insertGrant stores a grant unless the recipient already has that version,
+// and returns whichever is stored.
+func insertGrant(ctx context.Context, queries *db.Queries, channelID int64, g GrantUpload, granter int64, signKey []byte) (db.ChatKeyGrant, error) {
+	recipient := sql.NullInt64{Int64: g.UserID, Valid: true}
+	err := queries.InsertChatKeyGrant(ctx, db.InsertChatKeyGrantParams{
+		ChannelID:      channelID,
+		Version:        g.Version,
+		UserID:         recipient,
+		SealedKey:      g.SealedKey,
+		GrantedBy:      sql.NullInt64{Int64: granter, Valid: true},
+		GranterSignKey: signKey,
+		Signature:      g.Signature,
+	})
+	if err != nil {
+		return db.ChatKeyGrant{}, err
+	}
+	return queries.GetChatKeyGrant(ctx, db.GetChatKeyGrantParams{ChannelID: channelID, Version: g.Version, UserID: recipient})
+}
+
+// recordEvent writes a system event with a JSON payload, for the actor to
+// sign.
+func recordEvent(ctx context.Context, queries *db.Queries, channelID int64, kind string, actor int64, payload any) (ChannelEvent, error) {
+	text, err := json.Marshal(payload)
+	if err != nil {
+		return ChannelEvent{}, err
+	}
+	row, err := queries.CreateChatChannelEvent(ctx, db.CreateChatChannelEventParams{
+		ChannelID: channelID,
+		Kind:      kind,
+		ActorID:   sql.NullInt64{Int64: actor, Valid: actor != 0},
+		Payload:   string(text),
+	})
+	if err != nil {
+		return ChannelEvent{}, err
+	}
+	return eventFromRow(row), nil
+}
+
+// memberPayload describes the account or group a member event is about.
+func memberPayload(ctx context.Context, queries *db.Queries, userID, groupID int64, level string) (memberEventPayload, error) {
+	payload := memberEventPayload{UserID: userID, GroupID: groupID, Level: level}
+	if userID != 0 {
+		user, err := queries.GetUserByID(ctx, userID)
+		if err != nil {
+			return payload, err
+		}
+		payload.Name = user.Username
+		return payload, nil
+	}
+	group, err := queries.GetGroup(ctx, groupID)
+	if err != nil {
+		return payload, err
+	}
+	payload.Name = group.Name
+	return payload, nil
+}
+
+// publishTo sends a chat event carrying a channel id to an audience.
+func publishTo(bus *eventbus.Bus, kind eventbus.EventKind, channelID int64, audience []int64) {
+	if bus == nil || len(audience) == 0 {
+		return
+	}
+	bus.Publish(eventbus.Event{Kind: kind, Data: eventbus.ChatChannelChanged{ChannelID: channelID, Audience: audience}})
+}
+
+// versionFromRow maps a chat_channel_keys row.
+func versionFromRow(row db.ChatChannelKey) KeyVersion {
+	return KeyVersion{Version: row.Version, CreatedBy: row.CreatedBy.Int64, CreatedAt: row.CreatedAt}
+}
+
+// grantFromRow maps a chat_key_grants row.
+func grantFromRow(row db.ChatKeyGrant) KeyGrant {
+	return KeyGrant{
+		Version:        row.Version,
+		UserID:         row.UserID.Int64,
+		SealedKey:      row.SealedKey,
+		GrantedBy:      row.GrantedBy.Int64,
+		GranterSignKey: row.GranterSignKey,
+		Signature:      row.Signature,
+		CreatedAt:      row.CreatedAt,
+	}
+}
+
+// eventFromRow maps a chat_channel_events row.
+func eventFromRow(row db.ChatChannelEvent) ChannelEvent {
+	return ChannelEvent{
+		ID:            row.ID,
+		ChannelID:     row.ChannelID,
+		Kind:          row.Kind,
+		ActorID:       row.ActorID.Int64,
+		Payload:       row.Payload,
+		Signature:     row.Signature,
+		SignerSignKey: row.SignerSignKey,
+		CreatedAt:     row.CreatedAt,
 	}
 }

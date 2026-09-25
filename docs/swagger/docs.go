@@ -2685,6 +2685,407 @@ const docTemplate = `{
                 }
             }
         },
+        "/chat/channels/{id}/events": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Pages the channel's membership and key events oldest first: member_set, member_removed and key_created. Each has the JSON payload its signature covers; signature and signerSignKey are absent until the actor's client signs it, and an unsigned event is shown as unverified. Members only; anyone else gets 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "List a chat channel's system events",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "The last event id already seen",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "At most this many, capped at 200",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.ListEventsResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, or the caller isn't a member",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/channels/{id}/events/{eventId}/signature": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores the caller's 64-byte Ed25519 signature, base64, over an event's canonical bytes, with the caller's published signing key beside it. Only the event's actor may sign it, and only once.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Sign a chat channel event the caller made",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Event id",
+                        "name": "eventId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The signature",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.signEventBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.ChannelEvent"
+                        }
+                    },
+                    "400": {
+                        "description": "a signature of the wrong size",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel or event, the caller isn't a member, or isn't the event's actor",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the event is already signed",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/channels/{id}/keys": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the channel's key versions, the newest (0 before any exists, when the first member to open the channel creates version 1), the caller's own key grants, and whether the key needs rotating because someone outside the channel holds the current version. Members only: anyone else, admins included, gets 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Get a chat channel's key versions and the caller's grants",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.GetChannelKeysResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, or the caller isn't a member",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Starts a channel's key (version 1) or rotates it, storing the caller's own grant of the new key: sealedKey is the 80-byte crypto_box_seal of the key to the caller's X25519 key and signature the caller's 64-byte Ed25519 signature over the grant, both base64. The caller then fills the other members' grants. Any member with published chat keys may do it. Returns the key_created event for the caller to sign. Publishes chat_key_needed to key holders when members lack the new version.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Create the next version of a chat channel's key",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The version and the caller's grant of it",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.createKeyVersionBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.CreateKeyVersionResult"
+                        }
+                    },
+                    "400": {
+                        "description": "a sealed key or signature of the wrong size",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, the caller isn't a member, or has no chat keys",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "version isn't the next one; another member created it first",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/channels/{id}/keys/grants": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores up to 256 grants, each a version of the channel key the caller holds, sealed (80 bytes) to a member with published chat keys and signed (64 bytes) by the caller, base64. The first grant for a member and version wins: a later one is ignored and the stored one returned. Publishes chat_key_granted to the recipients.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Upload key grants for other members",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The grants",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.uploadGrantsBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.UploadGrantsResult"
+                        }
+                    },
+                    "400": {
+                        "description": "a malformed grant, or one for someone who isn't a member with chat keys",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller holds no grant for that version",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, the caller isn't a member, or has no chat keys",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/channels/{id}/keys/pending": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lists the members, direct or through a group or everyone, who have published chat keys but lack a version of the channel's key that the caller holds, each with the X25519 key to seal it to. Also says whether the key needs rotating. Members only; anyone else gets 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "List the key grants the caller can fill",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.ListPendingGrantsResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, or the caller isn't a member",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/chat/channels/{id}/members": {
             "get": {
                 "security": [
@@ -2933,7 +3334,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Stores the caller's chat public keys (32 bytes each) and private seeds wrapped on the client (at most 512 bytes each), with 16-byte Argon2id salts and the client's kdfParams object. wrappedByPhrase and saltRp are both present or both absent. Byte fields are base64 and the body is at most 8 KiB. Replaces any keys the caller had.",
+                "description": "Stores the caller's chat public keys (32 bytes each) and private seeds wrapped on the client (at most 512 bytes each), with 16-byte Argon2id salts and the client's kdfParams object. wrappedByPhrase and saltRp are both present or both absent. Byte fields are base64 and the body is at most 8 KiB. Replaces any keys the caller had; a new box key drops the caller's channel key grants, which were sealed to the old one, and asks members to refill them with chat_key_needed.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8399,6 +8800,162 @@ const docTemplate = `{
                 }
             }
         },
+        "chatutil.ChannelEvent": {
+            "type": "object",
+            "properties": {
+                "actorId": {
+                    "description": "ActorID is who made the change; absent once that account is deleted.",
+                    "type": "integer"
+                },
+                "channelId": {
+                    "type": "integer"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "kind": {
+                    "description": "Kind is member_set, member_removed or key_created.",
+                    "type": "string"
+                },
+                "payload": {
+                    "description": "Payload is the JSON the signature covers, byte for byte: for a member\nchange {\"userId\"|\"groupId\", \"name\", \"level\"}, for a key {\"version\"}.",
+                    "type": "string"
+                },
+                "signature": {
+                    "description": "Signature and SignerSignKey are both absent until the actor signs.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "signerSignKey": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "chatutil.CreateKeyVersionResult": {
+            "type": "object",
+            "properties": {
+                "event": {
+                    "$ref": "#/definitions/chatutil.ChannelEvent"
+                },
+                "grant": {
+                    "$ref": "#/definitions/chatutil.KeyGrant"
+                },
+                "version": {
+                    "$ref": "#/definitions/chatutil.KeyVersion"
+                }
+            }
+        },
+        "chatutil.GetChannelKeysResult": {
+            "type": "object",
+            "properties": {
+                "currentVersion": {
+                    "description": "CurrentVersion is the newest version, 0 before any exists: the first\nmember client to open the channel then creates version 1.",
+                    "type": "integer"
+                },
+                "grants": {
+                    "description": "Grants are the caller's own, one per version it has been given.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.KeyGrant"
+                    }
+                },
+                "rotationNeeded": {
+                    "description": "RotationNeeded is set when someone holding the current version is no\nlonger a member; the next member client online creates the next one.",
+                    "type": "boolean"
+                },
+                "versions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.KeyVersion"
+                    }
+                }
+            }
+        },
+        "chatutil.GrantUpload": {
+            "type": "object",
+            "properties": {
+                "sealedKey": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "signature": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "userId": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "chatutil.KeyGrant": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "grantedBy": {
+                    "description": "GrantedBy is absent when the granter's account was deleted.",
+                    "type": "integer"
+                },
+                "granterSignKey": {
+                    "description": "GranterSignKey is the granter's published Ed25519 key when the grant was\nuploaded, which Signature verifies against.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "sealedKey": {
+                    "description": "SealedKey is crypto_box_seal of the channel key to the member's X25519\nkey.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "signature": {
+                    "description": "Signature is the granter's Ed25519 signature over the grant's canonical\nbytes (docs/chat-security.md).",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "userId": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "chatutil.KeyVersion": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "createdBy": {
+                    "description": "CreatedBy is absent when the account that created it was deleted.",
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
         "chatutil.Keys": {
             "type": "object",
             "properties": {
@@ -8462,14 +9019,50 @@ const docTemplate = `{
                 }
             }
         },
+        "chatutil.ListEventsResult": {
+            "type": "object",
+            "properties": {
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.ChannelEvent"
+                    }
+                }
+            }
+        },
         "chatutil.ListMembersResult": {
             "type": "object",
             "properties": {
+                "event": {
+                    "description": "Event is the member_set or member_removed event SetMember and\nRemoveMember recorded, for the caller to sign; absent from ListMembers.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/chatutil.ChannelEvent"
+                        }
+                    ]
+                },
                 "members": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/chatutil.Member"
                     }
+                }
+            }
+        },
+        "chatutil.ListPendingGrantsResult": {
+            "type": "object",
+            "properties": {
+                "currentVersion": {
+                    "type": "integer"
+                },
+                "pending": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.PendingGrant"
+                    }
+                },
+                "rotationNeeded": {
+                    "type": "boolean"
                 }
             }
         },
@@ -8524,6 +9117,23 @@ const docTemplate = `{
                 }
             }
         },
+        "chatutil.PendingGrant": {
+            "type": "object",
+            "properties": {
+                "boxPublicKey": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "userId": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
         "chatutil.PublicKeys": {
             "type": "object",
             "properties": {
@@ -8541,6 +9151,17 @@ const docTemplate = `{
                 },
                 "userId": {
                     "type": "integer"
+                }
+            }
+        },
+        "chatutil.UploadGrantsResult": {
+            "type": "object",
+            "properties": {
+                "grants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.KeyGrant"
+                    }
                 }
             }
         },
@@ -9219,6 +9840,26 @@ const docTemplate = `{
                 }
             }
         },
+        "v0_chat.createKeyVersionBody": {
+            "type": "object",
+            "properties": {
+                "sealedKey": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "signature": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
         "v0_chat.removeMemberBody": {
             "type": "object",
             "properties": {
@@ -9245,6 +9886,17 @@ const docTemplate = `{
                 }
             }
         },
+        "v0_chat.signEventBody": {
+            "type": "object",
+            "properties": {
+                "signature": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "v0_chat.updateChannelBody": {
             "type": "object",
             "properties": {
@@ -9253,6 +9905,17 @@ const docTemplate = `{
                 },
                 "topic": {
                     "type": "string"
+                }
+            }
+        },
+        "v0_chat.uploadGrantsBody": {
+            "type": "object",
+            "properties": {
+                "grants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.GrantUpload"
+                    }
                 }
             }
         },

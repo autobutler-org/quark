@@ -579,7 +579,7 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 		}
 		evt.Data = access.RedactJob(job)
 		return FilterEventResult{Event: evt, Deliver: true}
-	case eventbus.EventChatChannelChanged:
+	case eventbus.EventChatChannelChanged, eventbus.EventChatKeyNeeded, eventbus.EventChatKeyGranted:
 		changed, ok := evt.Data.(eventbus.ChatChannelChanged)
 		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
 	default:
