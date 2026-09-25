@@ -6,10 +6,9 @@ import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.d
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shimmer/shimmer.dart';
 
-/// Preview slot for a grid tile. Sized by the caller (an [Expanded] that
-/// hands it whatever the tile has left over) so every tile lines up without
-/// risking an overflow, with the thumbnail replacing the icon only once it
-/// decodes.
+/// Preview slot for a grid tile. The caller gives it a square slot, and the
+/// thumbnail fills that square with [BoxFit.cover], replacing the icon only
+/// once it decodes.
 ///
 /// The thumbnail, and the icon when the file has none, are keyed by
 /// [FileNode.apiPath]. The grid reuses a tile's element when the file in
