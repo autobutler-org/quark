@@ -101,6 +101,11 @@ prose. cspell does read Markdown, though.
   `gh api -X POST repos/autobutler-org/quark/issues/<epic>/sub_issues -F sub_issue_id=<id>` — `<id>` is the child's
   database id from `gh api repos/autobutler-org/quark/issues/<N> --jq .id`, not its number — and confirm with
   `gh api repos/autobutler-org/quark/issues/<N>/parent`.
+- **Working an issue means owning it.** Before starting on a ticket, assign it to the user running you:
+  `gh issue edit <N> --add-assignee @me`.
+- **Reviewing a PR fills in its issue's owner.** If an issue the PR closes has no assignee, assign the PR's
+  author: `gh issue edit <N> --add-assignee "$(gh pr view <PR> --json author --jq .author.login)"`. Leave an
+  existing assignee alone.
 - **Never fork or vendor an upstream dependency without approval.** Propose the lighter options first — a
   workaround in our code, a pinned version, an upstream issue or PR — and let the maintainer choose.
 - **Ask before a large change.** A fix that needs a new abstraction layer, a new dependency, or edits across

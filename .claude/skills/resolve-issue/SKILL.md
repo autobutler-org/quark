@@ -9,6 +9,7 @@ Work one issue, `$ARGUMENTS`, end to end. Every rule in `AGENTS.md` applies; thi
 
 1. **Read it.** `gh issue view <N> --comments`. Restate the acceptance criteria in a sentence or two. Check
    `gh pr list --search "<N>"` so you are not duplicating an open PR.
+   Then assign it to whoever is running you: `gh issue edit <N> --add-assignee @me`.
 2. **Branch.** `fix/<N>-short-description` or `feat/<N>-short-description` off an up-to-date `main`.
 3. **Diagnose before editing.** State the causal chain from user action to symptom and name the line
    responsible. For a bug, write the failing test or scripted repro first and show it failing. Confirm the
