@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
+import 'package:quark/widgets/file_browser/file_browser_view/file_grid_preview.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 void main() {
@@ -231,5 +232,65 @@ void main() {
       expect(find.text('No files yet'), findsNothing);
       expect(find.textContaining('No matches'), findsOneWidget);
     });
+  });
+
+  /// #2347: a fixed tile aspect ratio left the preview a wide short slot, and
+  /// [BoxFit.cover] showed only a strip of the square thumbnail.
+  group('grid thumbnails', () {
+    const folder = FileNode(
+      name: 'Photos',
+      size: 0,
+      isDir: true,
+      deviceName: 'Internal',
+      devicePath: '',
+      deviceSerial: '',
+      dirPath: 'Photos',
+    );
+    const image = FileNode(
+      name: 'vacation.png',
+      size: 2048,
+      isDir: false,
+      deviceName: 'Internal',
+      devicePath: '',
+      deviceSerial: '',
+      dirPath: 'vacation.png',
+    );
+
+    for (final size in const [Size(360, 640), Size(1280, 800)]) {
+      final label = '${size.width.toInt()}x${size.height.toInt()}';
+      testWidgets('are square at $label, with no overflow', (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: FileBrowserView(
+                filesFuture: Future.value(const [folder, image]),
+                currentPath: '/Documents',
+                onFileMenuAction: (_, _) async {},
+                onOpenDirectory: (_) {},
+                isGridView: true,
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(tester.takeException(), isNull);
+        final previews = tester.renderObjectList<RenderBox>(
+          find.byType(FileGridPreview),
+        );
+        expect(previews, hasLength(2));
+        for (final preview in previews) {
+          expect(
+            (preview.size.width - preview.size.height).abs(),
+            lessThanOrEqualTo(1),
+            reason: 'preview is ${preview.size.width} x ${preview.size.height}',
+          );
+        }
+      });
+    }
   });
 }

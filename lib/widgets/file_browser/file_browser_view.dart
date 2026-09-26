@@ -351,12 +351,30 @@ class _FileBrowserViewState extends State<FileBrowserView> {
           const horizontalPadding = 16.0;
           const crossAxisSpacing = 8.0;
           const minTileWidth = 180.0;
+          const cardPadding = 8.0;
+          const slotGap = 8.0;
+          const nameSlotHeight = 24.0;
+          // PopupMenuButton's tap target is 48 on mobile. A shorter row
+          // overflows the tile.
+          const menuRowHeight = 48.0;
           final usableWidth = screenWidth - horizontalPadding;
           final calculatedCount =
               ((usableWidth + crossAxisSpacing) /
                       (minTileWidth + crossAxisSpacing))
                   .floor();
           final crossAxisCount = calculatedCount < 1 ? 1 : calculatedCount;
+          // The preview is a square of the tile width minus the 8px padding
+          // on each side. The card's margin is uniform, so it shortens the
+          // width and the height by the same amount and must not be
+          // subtracted again. A fixed aspect ratio left this slot wide and
+          // short, and BoxFit.cover cropped the thumbnail to a strip (#2347).
+          final tileWidth =
+              (usableWidth - crossAxisSpacing * (crossAxisCount - 1)) /
+              crossAxisCount;
+          final previewExtent = tileWidth - cardPadding * 2;
+          const footerExtent =
+              slotGap + nameSlotHeight + slotGap + menuRowHeight;
+          final mainAxisExtent = cardPadding * 2 + previewExtent + footerExtent;
 
           return Column(
             children: [
@@ -372,7 +390,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                   itemCount: files.length,
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: crossAxisCount,
-                    childAspectRatio: 1.1,
+                    mainAxisExtent: mainAxisExtent,
                     crossAxisSpacing: crossAxisSpacing,
                     mainAxisSpacing: 8,
                   ),
@@ -425,43 +443,49 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                             child: Stack(
                               children: [
                                 Padding(
-                                  padding: const EdgeInsets.all(8),
+                                  padding: const EdgeInsets.all(cardPadding),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Expanded(
+                                      AspectRatio(
+                                        aspectRatio: 1,
                                         child: FileGridPreview(item: item),
                                       ),
-                                      const SizedBox(height: 8),
-                                      Flexible(
+                                      const SizedBox(height: slotGap),
+                                      SizedBox(
+                                        height: nameSlotHeight,
                                         child: Text(
                                           item.name,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          if (widget.showFileSizeAndMenu)
-                                            Flexible(
-                                              child: Text(
-                                                formatFileSize(
-                                                  item.size,
-                                                  item.isDir,
-                                                  compressedSize:
-                                                      item.compressedSize,
+                                      const SizedBox(height: slotGap),
+                                      SizedBox(
+                                        height: menuRowHeight,
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            if (widget.showFileSizeAndMenu)
+                                              Flexible(
+                                                child: Text(
+                                                  formatFileSize(
+                                                    item.size,
+                                                    item.isDir,
+                                                    compressedSize:
+                                                        item.compressedSize,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                            ),
-                                          if (widget.showFileSizeAndMenu)
-                                            FileMenuButton(menu: menu),
-                                        ],
+                                            if (widget.showFileSizeAndMenu)
+                                              FileMenuButton(menu: menu),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
