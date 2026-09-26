@@ -36,6 +36,10 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
   bool _refreshInFlight = false;
   DateTime? _lastRefreshStarted;
 
+  /// A [manualRefresh] was turned away by the guards and still has to run.
+  bool _refreshOwed = false;
+  Timer? _owedRefreshTimer;
+
   // ── Overrides ──────────────────────────────────────────────────────────────
 
   /// How often to auto-refresh. Reads from [AppSettings.refreshIntervalSeconds]
@@ -78,6 +82,7 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _owedRefreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -95,8 +100,12 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  /// Call from a manual refresh button. Same guard as the timer.
-  Future<void> manualRefresh() => _triggerRefresh();
+  /// Call from a manual refresh button, or after a mutation. Same guard as
+  /// the timer, except that a call the guard turns away is not dropped: one
+  /// more refresh runs once the one in flight settles and the debounce lapses,
+  /// however many calls were turned away in the meantime. A refresh already in
+  /// flight may have fetched before the mutation landed (#2445).
+  Future<void> manualRefresh() => _triggerRefresh(owe: true);
 
   // ── Internals ──────────────────────────────────────────────────────────────
 
@@ -107,7 +116,7 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
     _refreshTimer = Timer.periodic(interval, (_) => _triggerRefresh());
   }
 
-  Future<void> _triggerRefresh({bool initial = false}) async {
+  Future<void> _triggerRefresh({bool initial = false, bool owe = false}) async {
     final now = DateTime.now();
     final startedAt = _lastRefreshStarted;
 
@@ -119,6 +128,7 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
       // stale one is left to finish or not; whichever resolves last simply
       // clears the flag.
       if (startedAt == null || now.difference(startedAt) < refreshTimeout) {
+        if (owe) _refreshOwed = true;
         return;
       }
       debugPrint(
@@ -131,10 +141,21 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
       // Debounce: suppress calls that arrive within 1s of a refresh that has
       // already started (e.g. lifecycle resume + timer firing simultaneously).
       // This prevents the duplicate /storage/devices/status calls seen in #1022.
+      // An owed call waits out the rest of the window instead.
+      if (owe) {
+        _owedRefreshTimer ??= Timer(
+          const Duration(seconds: 1) - now.difference(startedAt),
+          () {
+            _owedRefreshTimer = null;
+            if (mounted) _triggerRefresh(owe: true);
+          },
+        );
+      }
       return;
     }
 
     _refreshInFlight = true;
+    _refreshOwed = false;
     _lastRefreshStarted = now;
     if (mounted) {
       setState(() => isRefreshing = true);
@@ -153,6 +174,7 @@ mixin AutoRefreshMixin<T extends StatefulWidget>
           if (initial) isInitialLoad = false;
         });
         didChangeRefreshing();
+        if (_refreshOwed) unawaited(_triggerRefresh(owe: true));
       }
     }
   }
