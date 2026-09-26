@@ -10,15 +10,28 @@ import 'package:quark_icons/quark_icons.dart';
 /// Tapping a file chip calls [onOpenFile], the same handler the main file list
 /// uses, so every file kind opens the same way in both places.
 /// Tapping the folder badge triggers [onNavigateToFolder] with the parent directory path.
+///
+/// Changing [refreshToken] fetches the list again in place: the last list
+/// stays on screen until the new one arrives, so a refresh never collapses the
+/// strip (#2446).
 class RecentFilesSection extends StatefulWidget {
   const RecentFilesSection({
     required this.onOpenFile,
     required this.onNavigateToFolder,
+    this.refreshToken = 0,
+    this.getRecentFiles = FilesService.getRecentFiles,
     super.key,
   });
 
   final void Function(FileNode) onOpenFile;
   final void Function(String path) onNavigateToFolder;
+
+  /// Bump to refetch the list without remounting the strip.
+  final int refreshToken;
+
+  /// Fetches the recent files; injectable for tests.
+  final Future<List<FileNode>> Function({int limit, List<String>? serials})
+  getRecentFiles;
 
   @override
   State<RecentFilesSection> createState() => _RecentFilesSectionState();
@@ -30,7 +43,17 @@ class _RecentFilesSectionState extends State<RecentFilesSection> {
   @override
   void initState() {
     super.initState();
-    _future = FilesService.getRecentFiles(limit: 20);
+    _future = widget.getRecentFiles(limit: 20);
+  }
+
+  @override
+  void didUpdateWidget(RecentFilesSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshToken != oldWidget.refreshToken) {
+      // FutureBuilder keeps the previous snapshot's data while the new future
+      // is pending, so the old chips stay up until the refetch lands.
+      _future = widget.getRecentFiles(limit: 20);
+    }
   }
 
   String _parentPath(FileNode node) {

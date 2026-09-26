@@ -123,7 +123,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   bool _isUploading = false;
   int _uploadTotal = 0;
   int _uploadCompleted = 0;
-  int _recentFilesSectionKey = 0;
+  int _recentFilesRefreshToken = 0;
   bool _isCreatingFolder = false;
   bool _isWebDragging = false;
   bool _isHoveringFolderDropTarget = false;
@@ -505,8 +505,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     await _loadDevices();
     if (!mounted) return;
     setState(() {
-      // The strip only loads in initState, so a new key is the reload (#2080).
-      _recentFilesSectionKey++;
+      // Refetch the strip in place so it doesn't blink (#2080, #2446).
+      _recentFilesRefreshToken++;
       _reloadFiles();
     });
     // `_reloadFiles` may issue nothing while a deep link is still resolving.
@@ -2416,7 +2416,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
               !_noHostSelected &&
               MediaQuery.sizeOf(context).width >= 600)
             RecentFilesSection(
-              key: ValueKey(_recentFilesSectionKey),
+              refreshToken: _recentFilesRefreshToken,
               onOpenFile: _handleOpenNode,
               onNavigateToFolder: _setPath,
             ),
