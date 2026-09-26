@@ -19,7 +19,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 environment:
   sdk: ^3.11.0
-  flutter: 3.47.2
+  flutter: 3.47.5
 
 # Dart pub workspace: one shared pubspec.lock and one resolution for the app,
 # every package under packages/, and every example app. Members declare
