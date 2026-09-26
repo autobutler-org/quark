@@ -73,7 +73,7 @@ dependencies:
   package_info_plus: ^10.2.1
   flutter_svg: ^2.3.0
   # mDNS browsing for `_quark._tcp` on iOS and Android (#2312).
-  bonsoir: ^5.1.11
+  bonsoir: ^7.0.0
   data_table:
     path: packages/data_table
   quark_icons:
