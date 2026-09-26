@@ -74,22 +74,12 @@ class _CreateUserDialogState extends State<CreateUserDialog> {
   final _confirmController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    // Redraws the strength bar as the password is typed.
-    _passwordController.addListener(_onPasswordChanged);
-  }
-
-  @override
   void dispose() {
-    _passwordController.removeListener(_onPasswordChanged);
     _usernameController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
   }
-
-  void _onPasswordChanged() => setState(() {});
 
   String? _validateUsername(String? value) {
     final v = value ?? '';
@@ -169,7 +159,11 @@ class _CreateUserDialogState extends State<CreateUserDialog> {
                   validator: _validatePassword,
                 ),
                 SizedBox(height: tokens.spacingSm),
-                PasswordStrengthBar(password: _passwordController.text),
+                ListenableBuilder(
+                  listenable: _passwordController,
+                  builder: (context, _) =>
+                      PasswordStrengthBar(password: _passwordController.text),
+                ),
                 SizedBox(height: tokens.spacingSm),
                 TextFormField(
                   key: const ValueKey('create_user_confirm'),

@@ -69,10 +69,17 @@ class SetupForm extends StatefulWidget {
 }
 
 class _SetupFormState extends State<SetupForm> {
+  final _confirmFieldKey = GlobalKey<FormFieldState<String>>();
+
   void _onPasswordChanged() {
-    // Re-validate so the confirm field updates its error state in real-time
-    // when the password field changes after the confirm field has been touched.
-    setState(() {});
+    // The confirm field's mismatch error has to follow the password, but a
+    // setState here rebuilds the password field and restarts its helper/error
+    // fade (#2021). validate() before the field has been used would show an
+    // error the user has not earned (#2008).
+    final confirm = _confirmFieldKey.currentState;
+    if (confirm != null && confirm.hasInteractedByUser) {
+      confirm.validate();
+    }
   }
 
   @override
@@ -190,10 +197,15 @@ class _SetupFormState extends State<SetupForm> {
             },
           ),
           const SizedBox(height: 8),
-          PasswordStrengthBar(password: widget.passwordController.text),
+          ListenableBuilder(
+            listenable: widget.passwordController,
+            builder: (context, _) =>
+                PasswordStrengthBar(password: widget.passwordController.text),
+          ),
           const SizedBox(height: 8),
 
           TextFormField(
+            key: _confirmFieldKey,
             controller: widget.confirmController,
             focusNode: widget.confirmFocus,
             obscureText: widget.obscureConfirm,

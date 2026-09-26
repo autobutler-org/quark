@@ -36,18 +36,7 @@ class _RecoverPageState extends State<RecoverPage> {
   String? _error;
 
   @override
-  void initState() {
-    super.initState();
-    // Redraws the strength meter as the password is typed, the way the setup
-    // form does it.
-    _passwordController.addListener(_onPasswordChanged);
-  }
-
-  void _onPasswordChanged() => setState(() {});
-
-  @override
   void dispose() {
-    _passwordController.removeListener(_onPasswordChanged);
     _usernameController.dispose();
     _phraseController.dispose();
     _passwordController.dispose();
@@ -222,8 +211,15 @@ class _RecoverPageState extends State<RecoverPage> {
                     // The same meter the setup form shows. Choosing a password
                     // here is the same decision it is there, and it was the
                     // one place in the app that asked for one without saying
-                    // how strong it was (#2031).
-                    PasswordStrengthBar(password: _passwordController.text),
+                    // how strong it was (#2031). Listening here, rather than
+                    // setState on the page, keeps the field from rebuilding
+                    // on each character (#2021).
+                    ListenableBuilder(
+                      listenable: _passwordController,
+                      builder: (context, _) => PasswordStrengthBar(
+                        password: _passwordController.text,
+                      ),
+                    ),
                     const SizedBox(height: 8),
 
                     TextFormField(

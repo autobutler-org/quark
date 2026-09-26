@@ -139,6 +139,24 @@ void main() {
     expect(events, isEmpty);
   });
 
+  testWidgets('the length helper stays single while the password is typed', (
+    tester,
+  ) async {
+    await pumpDialog(tester);
+
+    final password = find.byKey(const ValueKey('create_user_password'));
+    await tester.enterText(password, 'short');
+    await tester.pump();
+    expect(find.textContaining('At least 8 characters'), findsOneWidget);
+
+    await tester.enterText(password, 'abcdefghijkl1!');
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('At least 8 characters'), findsOneWidget);
+    expect(find.textContaining('At least 8 characters'), findsOneWidget);
+    expect(find.byType(PasswordStrengthBar), findsOneWidget);
+    expect(find.text('Very strong'), findsOneWidget);
+  });
+
   testBothViewports('shows the refusal the caller handed it', (
     tester,
     size,
