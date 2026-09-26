@@ -189,7 +189,7 @@ be mixed with sequential numbering: upload `202608252313` once and every later b
 exceed it forever.
 
 The query needs App Store Connect credentials, so builds that never upload should pass
-`IOS_BUILD_NUMBER` explicitly. `ci-ios` does exactly that.
+`IOS_BUILD_NUMBER` explicitly. `build-ios` does exactly that.
 
 This is iOS-only. Android's `versionCode` is an int32 capped at 2100000000, and Flutter
 derives it by stripping non-digits from the build number. Without a `+N` in pubspec,
@@ -261,7 +261,7 @@ All iOS and iPadOS apps must be built with the iOS 26 SDK or later.
 
 The runner's Xcode is too old. `macos-15` images ship Xcode 16.x; `macos-26` ships
 Xcode 26. Both iOS jobs run on `macos-26` for that reason, and they must stay in step: if
-`ci-ios` builds against an older SDK than `release-ios`, CI goes green on an artifact the
+`build-ios` builds against an older SDK than `release-ios`, CI goes green on an artifact the
 release path cannot upload.
 
 ### `MinimumOSVersion too low (90068)`

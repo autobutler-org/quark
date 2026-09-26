@@ -1,4 +1,4 @@
-name: CI - Backend
+name: Test
 on:
   # Also on push to main so the badges have a run attributed to the branch. Without it
   # every run belongs to a pull request's head ref and a ?branch=main badge reads
@@ -13,7 +13,7 @@ defaults:
   run:
     shell: bash
 jobs:
-  ci-backend:
+  test-backend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -26,26 +26,6 @@ jobs:
         uses: ./.github/actions/setup-sqlc
       - name: Setup swag
         uses: ./.github/actions/setup-swag
-      - name: Build
-        run: |
-          make build/backend
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          path: build/quark
-          if-no-files-found: error
-      - name: Check backend cross-compile [darwin/arm64]
-        env:
-          GOOS: darwin
-          GOARCH: arm64
-        run: |
-          make build/backend
-      - name: Check backend cross-compile [linux/arm64]
-        env:
-          GOOS: linux
-          GOARCH: arm64
-        run: |
-          make build/backend
       - name: Run unit tests
         env:
           PRINT_COVERAGE: true
@@ -78,3 +58,20 @@ jobs:
           name: api-chaos-results
           path: test-results/chaos/
           if-no-files-found: warn
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Setup Flutter
+        uses: ./.github/actions/setup-flutter
+      # test/unit/frontend depends on generate/frontend, whose quark-icons step runs
+      # `npx fantasticon`.
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+      - name: Tidy
+        run: |
+          make tidy/flutter
+      - name: Run unit tests
+        run: |
+          make test/unit/frontend

@@ -2,12 +2,10 @@
 
 Your own private cloud, running in your house. Photos, files, documents — all on hardware you own, off servers you don't trust.
 
-[![CI - Android](https://github.com/autobutler-org/quark/actions/workflows/ci-android.yml/badge.svg?branch=main)](https://github.com/autobutler-org/quark/actions/workflows/ci-android.yml)
-[![CI - Backend](https://github.com/autobutler-org/quark/actions/workflows/ci-backend.yml/badge.svg?branch=main)](https://github.com/autobutler-org/quark/actions/workflows/ci-backend.yml)
-[![CI - iOS](https://github.com/autobutler-org/quark/actions/workflows/ci-ios.yml/badge.svg?branch=main)](https://github.com/autobutler-org/quark/actions/workflows/ci-ios.yml)
-[![CI - Web](https://github.com/autobutler-org/quark/actions/workflows/ci-web.yml/badge.svg?branch=main)](https://github.com/autobutler-org/quark/actions/workflows/ci-web.yml)
+[![Build](https://github.com/autobutler-org/quark/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/autobutler-org/quark/actions/workflows/build.yml)
 [![Code Quality](https://github.com/autobutler-org/quark/actions/workflows/check.yml/badge.svg)](https://github.com/autobutler-org/quark/actions/workflows/check.yml)
 [![CodeQL](https://github.com/autobutler-org/quark/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/autobutler-org/quark/actions/workflows/codeql.yml)
+[![Test](https://github.com/autobutler-org/quark/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/autobutler-org/quark/actions/workflows/test.yml)
 [![License: MIT-0](https://img.shields.io/badge/License-MIT--0-yellow.svg)](LICENSE)
 
 ---
