@@ -76,11 +76,21 @@ class StorageDevice {
   String get usedDisplay =>
       '${formatBytes(usedBytes)} / ${formatBytes(totalBytes)}';
 
+  /// Formats [bytes] with the same 1024-based units Health and the Files
+  /// footer use (B, KB, MB, GB, TB). An exact byte count has no decimal;
+  /// every larger unit shows one. Decimal GB made the same disk look larger
+  /// on Devices (#2011).
   static String formatBytes(int bytes) {
-    if (bytes >= 1e12) return '${(bytes / 1e12).toStringAsFixed(1)} TB';
-    if (bytes >= 1e9) return '${(bytes / 1e9).toStringAsFixed(1)} GB';
-    if (bytes >= 1e6) return '${(bytes / 1e6).toStringAsFixed(1)} MB';
-    return '$bytes B';
+    if (bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var value = bytes.toDouble();
+    var i = 0;
+    while (value >= 1024 && i < units.length - 1) {
+      value /= 1024;
+      i++;
+    }
+    final digits = i == 0 ? 0 : 1;
+    return '${value.toStringAsFixed(digits)} ${units[i]}';
   }
 }
 

@@ -119,15 +119,15 @@ void main() {
 
   group('StorageDevice.formatBytes', () {
     test('formats TB', () {
-      expect(StorageDevice.formatBytes(2000000000000), '2.0 TB');
+      expect(StorageDevice.formatBytes(2000000000000), '1.8 TB');
     });
 
     test('formats GB', () {
-      expect(StorageDevice.formatBytes(1500000000), '1.5 GB');
+      expect(StorageDevice.formatBytes(1500000000), '1.4 GB');
     });
 
     test('formats MB', () {
-      expect(StorageDevice.formatBytes(5000000), '5.0 MB');
+      expect(StorageDevice.formatBytes(5000000), '4.8 MB');
     });
 
     test('formats small values as bytes', () {
@@ -153,7 +153,7 @@ void main() {
         isEnabled: true,
       );
 
-      expect(device.usedDisplay, '500.0 MB / 1.0 GB');
+      expect(device.usedDisplay, '476.8 MB / 953.7 MB');
     });
   });
 }

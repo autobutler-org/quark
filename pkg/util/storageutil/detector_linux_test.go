@@ -69,6 +69,24 @@ func TestParseProcMountsRoot_ReturnsFirstRootMount(t *testing.T) {
 	}
 }
 
+// Reserved blocks are neither used nor writable. Counting them as used made
+// Devices disagree with Health on the same disk (#2011).
+func TestBytesFromStatfs_ReservedBlocksAreNotUsed(t *testing.T) {
+	total, used, available := bytesFromStatfs(1000, 400, 300, 4096)
+	if total != 4096000 {
+		t.Errorf("total: got %d, want 4096000", total)
+	}
+	if used != 2457600 {
+		t.Errorf("used: got %d, want 2457600", used)
+	}
+	if available != 1228800 {
+		t.Errorf("available: got %d, want 1228800", available)
+	}
+	if used+available == total {
+		t.Errorf("used (%d) + available (%d) = total (%d); reserved blocks must sit in neither", used, available, total)
+	}
+}
+
 func TestParseProcMountsRoot_Empty(t *testing.T) {
 	devicePath, fsType, err := parseProcMountsRoot(strings.NewReader(""))
 	if err != nil {

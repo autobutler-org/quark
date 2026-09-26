@@ -136,8 +136,10 @@ class HealthBody extends StatelessWidget {
           value: status.diskPercent,
           unit: '%',
           criticalThreshold: healthDiskCriticalPercent,
+          // Same whole-disk scope the Files footer states (#2024). Without it
+          // this line and Devices read as two different disks (#2011).
           detail:
-              '${_formatBytes(status.diskUsedBytes)} used of ${_formatBytes(status.diskTotalBytes)}',
+              '${_formatBytes(status.diskUsedBytes)} used of ${_formatBytes(status.diskTotalBytes)} · whole disk, including system software',
         ),
         if (status.temperatureCelsius > 0) ...[
           const SizedBox(height: 8),
