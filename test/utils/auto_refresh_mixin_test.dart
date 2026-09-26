@@ -60,12 +60,67 @@ void main() {
 
     expect(state.starts, 2);
   });
+
+  // #2445: an upload finishing while a periodic refresh is in flight called
+  // manualRefresh, which the in-flight guard dropped. The listing that was in
+  // flight predated the upload, so the new file never showed.
+  testWidgets('a manual refresh blocked by one in flight runs after it', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: _RefreshProbe()));
+    final state = tester.state<_RefreshProbeState>(find.byType(_RefreshProbe));
+    expect(state.starts, 1);
+
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1200)),
+    );
+    // A batch of blocked calls owes one refresh, not one each.
+    state.manualRefresh();
+    state.manualRefresh();
+    state.manualRefresh();
+    expect(state.starts, 1, reason: 'still in flight');
+
+    await tester.runAsync(() async {
+      state.releaseAll();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    expect(state.starts, 2, reason: 'the owed refresh ran once');
+
+    state.releaseAll();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a manual refresh inside the debounce runs when it lapses', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: _RefreshProbe(completeImmediately: true)),
+    );
+    final state = tester.state<_RefreshProbeState>(find.byType(_RefreshProbe));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    expect(state.starts, 1);
+
+    // The first refresh has finished, but started under a second ago. Called
+    // under runAsync so the timer that waits out the debounce is a real one.
+    await tester.runAsync(() async {
+      state.manualRefresh();
+      expect(state.starts, 1, reason: 'debounced');
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+    });
+    expect(state.starts, 2, reason: 'ran once the debounce lapsed');
+  });
 }
 
 class _RefreshProbe extends StatefulWidget {
-  const _RefreshProbe({this.throwOnRefresh = false});
+  const _RefreshProbe({
+    this.throwOnRefresh = false,
+    this.completeImmediately = false,
+  });
 
   final bool throwOnRefresh;
+  final bool completeImmediately;
 
   @override
   State<_RefreshProbe> createState() => _RefreshProbeState();
@@ -88,6 +143,9 @@ class _RefreshProbeState extends State<_RefreshProbe>
     starts++;
     if (widget.throwOnRefresh) {
       return Future<void>.error(Exception('listing failed'));
+    }
+    if (widget.completeImmediately) {
+      return Future<void>.value();
     }
     final completer = Completer<void>();
     _pending.add(completer);
