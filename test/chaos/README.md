@@ -74,7 +74,7 @@ and how to start a backend, so a server that never came up cannot pass as a run
 of skipped tests.
 
 `make test/chaos/local` is the CI entry point (the `api-chaos` job in
-`.github/workflows/ci-backend.yml`).
+`.github/workflows/test.yml`).
 
 ## Auth sequencing / rate limits
 

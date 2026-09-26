@@ -1,4 +1,4 @@
-name: CI - iOS
+name: Build
 on:
   # Also on push to main so the badges have a run attributed to the branch. Without it
   # every run belongs to a pull request's head ref and a ?branch=main badge reads
@@ -13,7 +13,85 @@ defaults:
   run:
     shell: bash
 jobs:
-  ci-ios:
+  build-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Setup go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Setup sqlc
+        uses: ./.github/actions/setup-sqlc
+      - name: Setup swag
+        uses: ./.github/actions/setup-swag
+      - name: Build
+        run: |
+          make build/backend
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          path: build/quark
+          if-no-files-found: error
+      - name: Check backend cross-compile [darwin/arm64]
+        env:
+          GOOS: darwin
+          GOARCH: arm64
+        run: |
+          make build/backend
+      - name: Check backend cross-compile [linux/arm64]
+        env:
+          GOOS: linux
+          GOARCH: arm64
+        run: |
+          make build/backend
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Setup Flutter
+        uses: ./.github/actions/setup-flutter
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+      - name: Tidy
+        run: |
+          make tidy/flutter
+      - name: Build [web]
+        run: |
+          make build/frontend/web
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          # build/frontend/android takes the app version from the most recent tag, and
+          # the default checkout is shallow with no tags. Without these the version
+          # silently falls back to Flutter's 1.0.0 default.
+          fetch-tags: true
+          fetch-depth: 0
+      - name: Setup Flutter
+        uses: ./.github/actions/setup-flutter
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+      - name: Restore Gradle caches
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle.kts', 'pubspec.lock') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+      - name: Tidy
+        run: |
+          make tidy/flutter
+      - name: Build [android]
+        run: |
+          make build/frontend/android
+  build-ios:
     # macOS runners bill at a multiple of Linux minutes, so this job is deliberately
     # narrow: build the App Store IPA and let check/frontend/ios/ipa verify it is a real
     # release build. No upload -- nothing here consumes an App Store build number.
@@ -50,7 +128,7 @@ jobs:
       # job-level `if` above cannot see that: dependabot's branches live in this
       # repository, so head.repo matches. Decide here instead, and build unsigned when
       # there is nothing to sign with -- a bump that breaks the iOS build still fails,
-      # and ci-ios stops reporting a red X nobody can clear.
+      # and build-ios stops reporting a red X nobody can clear.
       - name: Check for signing secrets
         id: signing
         env:
