@@ -65,50 +65,53 @@ class FileStorageFooter extends StatelessWidget {
           message: kStorageFooterExplanation,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              children: [
-                Icon(
-                  QuarkIcons.storage_rounded,
-                  size: 14,
-                  color: colorScheme.onSurface.withValues(alpha: 0.4),
-                ),
-                const SizedBox(width: 8),
-                // Flexible with an ellipsis: the label now carries the scope as
-                // well as the figures, and the bar beside it still has to fit
-                // on a phone.
-                Flexible(
-                  child: Text(
-                    status == null
-                        ? kStorageFooterScope
-                        : '$kStorageFooterScope  ·  '
-                              '${_formatBytes(status.diskUsedBytes)}'
-                              ' / ${_formatBytes(status.diskTotalBytes)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+            child: LayoutBuilder(
+              builder: (context, constraints) => Row(
+                children: [
+                  Icon(
+                    QuarkIcons.storage_rounded,
+                    size: 14,
+                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                  const SizedBox(width: 8),
+                  // Sized to its text, capped at half the row so a phone
+                  // still cuts it short with an ellipsis (#1599). Not
+                  // Flexible: beside the Expanded bar that split the free
+                  // width in half, and the label left the unused part of its
+                  // half empty after the percentage (#2447). The bar is the
+                  // only flex child.
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: constraints.maxWidth / 2,
+                    ),
+                    child: Text(
+                      status == null
+                          ? kStorageFooterScope
+                          : '$kStorageFooterScope  ·  '
+                                '${_formatBytes(status.diskUsedBytes)}'
+                                ' / ${_formatBytes(status.diskTotalBytes)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurface.withValues(alpha: 0.4),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 320),
-                    child: QuarkStorageBar(usedFraction: diskPercent),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (diskPercent > 0)
-                  Text(
-                    '${(diskPercent * 100).toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: barColor,
-                      fontWeight: FontWeight.w500,
+                  const SizedBox(width: 12),
+                  Expanded(child: QuarkStorageBar(usedFraction: diskPercent)),
+                  const SizedBox(width: 8),
+                  if (diskPercent > 0)
+                    Text(
+                      '${(diskPercent * 100).toStringAsFixed(0)}%',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: barColor,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -181,4 +181,56 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  // #2447: a Flexible label beside an Expanded bar split the free width in
+  // half; the label used a sliver of its half and the rest sat empty after
+  // the percentage. The bar has to take all of it, on a phone as well.
+  for (final size in const [Size(1280, 800), Size(360, 640)]) {
+    testWidgets('spans the row at ${size.width.toInt()} wide', (tester) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                const Spacer(),
+                FileStorageFooter(
+                  status: HealthStatus(
+                    healthy: true,
+                    alerts: const [],
+                    cpuPercent: 0,
+                    cpuCorePercents: const [],
+                    memPercent: 0,
+                    memUsedBytes: 0,
+                    memTotalBytes: 0,
+                    diskPercent: 50,
+                    diskUsedBytes: 62 << 30,
+                    diskTotalBytes: 125 << 30,
+                    temperatureCelsius: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getRect(find.text('50%')).right,
+        size.width - 16,
+        reason: 'the percentage sits against the right padding',
+      );
+      final label = tester.getRect(find.textContaining(kStorageFooterScope));
+      final bar = tester.getRect(find.byType(QuarkStorageBar));
+      expect(
+        bar.left - label.right,
+        12,
+        reason: 'the bar starts right after the label',
+      );
+    });
+  }
 }
