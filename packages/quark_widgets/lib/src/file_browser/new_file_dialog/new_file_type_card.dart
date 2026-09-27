@@ -31,6 +31,11 @@ class NewFileTypeCard extends StatelessWidget {
     final slug = type.extension.isEmpty
         ? 'generic'
         : type.extension.substring(1);
+    // The selected border is a pixel thicker, and a border insets the content,
+    // so the padding gives that pixel back rather than nudging the icon and
+    // label every time the selection moves.
+    final borderWidth = isSelected ? 2.0 : 1.0;
+    final inset = borderWidth - 1;
 
     return GestureDetector(
       key: ValueKey('new_file_type_$slug'),
@@ -39,8 +44,8 @@ class NewFileTypeCard extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         width: 88,
         padding: EdgeInsets.symmetric(
-          vertical: tokens.spacingSm + tokens.spacingXs,
-          horizontal: tokens.spacingSm,
+          vertical: tokens.spacingSm + tokens.spacingXs - inset,
+          horizontal: tokens.spacingSm - inset,
         ),
         decoration: BoxDecoration(
           color: isSelected
@@ -48,7 +53,7 @@ class NewFileTypeCard extends StatelessWidget {
               : colorScheme.surfaceContainerHighest,
           border: Border.all(
             color: isSelected ? colorScheme.primary : colorScheme.outline,
-            width: isSelected ? 2 : 1,
+            width: borderWidth,
           ),
           borderRadius: BorderRadius.circular(tokens.radiusMd),
         ),
