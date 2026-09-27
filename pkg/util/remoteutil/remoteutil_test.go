@@ -170,7 +170,8 @@ func TestNewProxy_SetsForwardedFor(t *testing.T) {
 // TestConnectionFromStatus verifies that only BackendState "Running" counts as
 // connected (#1815): tsnet.Server.Start returns before the node authenticates,
 // and a node waiting on login can already hold an IP. "NeedsLogin" is reported
-// as a rejected or expired key rather than as connecting forever (#1876).
+// as a rejected or expired key only once control sends an auth URL (#1876,
+// #2466).
 func TestConnectionFromStatus(t *testing.T) {
 	ip := []netip.Addr{netip.MustParseAddr("100.64.0.7")}
 	cases := []struct {
@@ -181,7 +182,8 @@ func TestConnectionFromStatus(t *testing.T) {
 		{"nil status", nil, StatusResult{}},
 		{"no state yet", &ipnstate.Status{BackendState: "NoState"}, StatusResult{}},
 		{"starting", &ipnstate.Status{BackendState: "Starting", TailscaleIPs: ip}, StatusResult{}},
-		{"needs login", &ipnstate.Status{BackendState: "NeedsLogin", TailscaleIPs: ip}, StatusResult{Error: errKeyRejected}},
+		{"needs login, awaiting network map", &ipnstate.Status{BackendState: "NeedsLogin", TailscaleIPs: ip}, StatusResult{}},
+		{"needs interactive login", &ipnstate.Status{BackendState: "NeedsLogin", AuthURL: "https://control/register/x", TailscaleIPs: ip}, StatusResult{Error: errKeyRejected}},
 		{"running without an IP yet", &ipnstate.Status{BackendState: "Running"}, StatusResult{Connected: true}},
 		{"running", &ipnstate.Status{BackendState: "Running", TailscaleIPs: ip}, StatusResult{Connected: true, RemoteURL: "http://100.64.0.7:80"}},
 	}

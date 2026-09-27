@@ -307,9 +307,10 @@ func newProxy(target *url.URL, localTLS bool) *httputil.ReverseProxy {
 // "Starting", "NeedsLogin" and the rest are not connected, whatever IP the
 // node may already hold.
 //
-// "NeedsLogin" is also a failure: tailscale's LocalBackend enters it only when
-// login cannot continue without a human (#1876). For a node given a pre-auth
-// key, that means control rejected the key or it expired.
+// "NeedsLogin" with an auth URL is a failure: login cannot continue without a
+// human (#1876), which for a node given a pre-auth key means control rejected
+// the key or it expired. Without an auth URL it is the brief wait before a
+// fresh key's first network map, and counts as connecting.
 func connectionFromStatus(st *ipnstate.Status) StatusResult {
 	if st == nil {
 		return StatusResult{}
@@ -321,7 +322,12 @@ func connectionFromStatus(st *ipnstate.Status) StatusResult {
 		}
 		return StatusResult{Connected: true, RemoteURL: fmt.Sprintf("http://%s:80", st.TailscaleIPs[0])}
 	case ipn.NeedsLogin.String():
-		return StatusResult{Error: errKeyRejected}
+		// A fresh pre-auth key also sits in NeedsLogin until its first network
+		// map; only an auth URL means control wants a human.
+		if needsInteractiveLogin(st) {
+			return StatusResult{Error: errKeyRejected}
+		}
+		return StatusResult{}
 	default:
 		return StatusResult{}
 	}
