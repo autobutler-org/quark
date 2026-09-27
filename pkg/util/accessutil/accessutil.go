@@ -512,8 +512,8 @@ type FilterEventResult struct {
 // FilterEvent decides whether a subscriber hears an event, and in what form.
 // It reads only the snapshots it is given, never the database.
 //
-//   - chat_message_created and chat_message_deleted pass only to their
-//     audience, the channel's readers: holders of read_messages, never a
+//   - chat_message_created, chat_message_deleted and chat_reaction_changed
+//     pass only to their audience, the channel's readers: holders of read_messages, never a
 //     delegated manager. Admins get no pass: a message is for the people in
 //     the conversation.
 //   - Otherwise an admin hears every event unchanged.
@@ -543,6 +543,10 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 	// pass below.
 	if evt.Kind == eventbus.EventChatMessageCreated || evt.Kind == eventbus.EventChatMessageDeleted {
 		changed, ok := evt.Data.(eventbus.ChatMessageChanged)
+		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
+	}
+	if evt.Kind == eventbus.EventChatReactionChanged {
+		changed, ok := evt.Data.(eventbus.ChatReactionChanged)
 		return FilterEventResult{Event: evt, Deliver: ok && slices.Contains(changed.Audience, access.principal.UserID)}
 	}
 	if access.principal.IsAdmin {

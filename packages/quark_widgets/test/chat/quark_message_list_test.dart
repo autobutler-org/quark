@@ -477,4 +477,123 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  group('reactions (#2426)', () {
+    final reacted = [
+      ChatMessageItem(
+        id: 'r2',
+        authorId: 'bob',
+        authorName: 'Bob',
+        sentAt: day2,
+        kind: ChatMessageKind.deleted,
+        reactions: const [ChatReactionItem(emoji: '🎉', count: 1)],
+      ),
+      ChatMessageItem(
+        id: 'r1',
+        authorId: 'ada',
+        authorName: 'Ada',
+        sentAt: day1,
+        body: 'lunch?',
+        reactions: const [
+          ChatReactionItem(emoji: '👍', count: 3, reactedByMe: true),
+          ChatReactionItem(emoji: '😂', count: 1),
+        ],
+      ),
+    ];
+
+    testBothViewports('shows each emoji with its count', (tester, size) async {
+      await pumpAt(tester, QuarkMessageList(messages: reacted), size: size);
+
+      expect(inMessage('r1', find.text('👍 3')), findsOneWidget);
+      expect(inMessage('r1', find.text('😂 1')), findsOneWidget);
+      expect(
+        tester.getSemantics(
+          find.byKey(const ValueKey('message_reaction_r1_👍')),
+        ),
+        matchesSemantics(
+          label: '👍 3, including you',
+          isSelected: true,
+          hasSelectedState: true,
+        ),
+      );
+      // A deleted message draws none, and no picker without onReact.
+      expect(inMessage('r2', find.text('🎉 1')), findsNothing);
+      expect(find.byKey(const ValueKey('message_react_r1')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testBothViewports('tapping a chip or picking an emoji fires onReact', (
+      tester,
+      size,
+    ) async {
+      final events = <String>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: reacted,
+          permissions: ChatPermissionPreset.member.permissions,
+          onReact: (id, emoji) => events.add('$id $emoji'),
+        ),
+        size: size,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('message_reaction_r1_👍')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('message_react_r1')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('message_react_r1_🎉')));
+      await tester.pump();
+
+      expect(events, ['r1 👍', 'r1 🎉']);
+      expect(find.byKey(const ValueKey('message_react_r2')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testBothViewports('a viewer without add_reactions only sees them', (
+      tester,
+      size,
+    ) async {
+      final events = <String>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: reacted,
+          permissions: ChatPermissionPreset.viewer.permissions,
+          onReact: (id, emoji) => events.add('$id $emoji'),
+        ),
+        size: size,
+      );
+
+      expect(find.byKey(const ValueKey('message_react_r1')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('message_reaction_r1_👍')));
+      await tester.pump();
+      expect(events, isEmpty);
+    });
+
+    testBothViewports('the picker opens without animating', (
+      tester,
+      size,
+    ) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(reduceMotion: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      await pumpAt(
+        tester,
+        QuarkMessageList(messages: reacted, onReact: (_, _) {}),
+        size: size,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('message_react_r1')));
+      await tester.pump();
+
+      // Fully open on the first frame: the rect doesn't move once the ink
+      // ripple and everything else settle.
+      final item = find.byKey(const ValueKey('message_react_r1_👍'));
+      final first = tester.getRect(item);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(item), first);
+    });
+  });
 }

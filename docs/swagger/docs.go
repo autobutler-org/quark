@@ -3664,6 +3664,146 @@ const docTemplate = `{
                 }
             }
         },
+        "/chat/messages/{id}/reactions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores a reaction, base64 ciphertext the caller's client encrypted under the channel key of keyVersion, and sends the stored row to the channel's readers as chat_reaction_changed. The Quark never sees the emoji. Ciphertext is at most 256 bytes, and an account may hold at most 20 reactions on one message. Needs add_reactions; a reader without it gets 403, and anyone without read_messages 404, delegated managers and admins included.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "React to a chat message",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Message id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The encrypted reaction",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_chat.reactionBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Reaction"
+                        }
+                    },
+                    "400": {
+                        "description": "ciphertext too short or too long, or a key version the channel doesn't have",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the caller reads the channel but lacks add_reactions",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such message, or the caller lacks read_messages in its channel",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the message was deleted, or the caller already holds 20 reactions on it",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/reactions/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes the reaction and tells the channel's readers with a chat_reaction_changed that carries no reaction. Removing your own needs add_reactions, and removing someone else's manage_reactions; either way the caller must hold read_messages now, and anyone without it gets 404, delegated managers and admins included.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Remove a reaction from a chat message",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Reaction id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.Reaction"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "your own without add_reactions, or someone else's without manage_reactions",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such reaction, or the caller lacks read_messages in its channel",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/devices": {
             "get": {
                 "security": [
@@ -9090,7 +9230,8 @@ const docTemplate = `{
                             "add_reactions",
                             "delete_messages",
                             "manage_channel",
-                            "manage_members"
+                            "manage_members",
+                            "manage_reactions"
                         ]
                     }
                 },
@@ -9409,7 +9550,8 @@ const docTemplate = `{
                             "add_reactions",
                             "delete_messages",
                             "manage_channel",
-                            "manage_members"
+                            "manage_members",
+                            "manage_reactions"
                         ]
                     }
                 },
@@ -9472,6 +9614,13 @@ const docTemplate = `{
                 },
                 "keyVersion": {
                     "type": "integer"
+                },
+                "reactions": {
+                    "description": "Reactions are the message's reactions, oldest first, in a\nListMessages page. A deleted message has none: they go with its\nciphertext.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chatutil.Reaction"
+                    }
                 }
             }
         },
@@ -9506,6 +9655,34 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
+                },
+                "userId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "chatutil.Reaction": {
+            "type": "object",
+            "properties": {
+                "ciphertext": {
+                    "description": "Ciphertext is nonce || XChaCha20-Poly1305 output under the channel key\nof KeyVersion, with the channel, key version, message and reacting\naccount as additional data (docs/chat-security.md).",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "keyVersion": {
+                    "description": "KeyVersion is the channel key the reaction was encrypted under, which\nneedn't be its message's.",
+                    "type": "integer"
+                },
+                "messageId": {
+                    "type": "integer"
                 },
                 "userId": {
                     "type": "integer"
@@ -10232,6 +10409,20 @@ const docTemplate = `{
                 }
             }
         },
+        "v0_chat.reactionBody": {
+            "type": "object",
+            "properties": {
+                "ciphertext": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "keyVersion": {
+                    "type": "integer"
+                }
+            }
+        },
         "v0_chat.removeMemberBody": {
             "type": "object",
             "properties": {
@@ -10260,7 +10451,8 @@ const docTemplate = `{
                             "add_reactions",
                             "delete_messages",
                             "manage_channel",
-                            "manage_members"
+                            "manage_members",
+                            "manage_reactions"
                         ]
                     }
                 },

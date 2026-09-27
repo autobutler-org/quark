@@ -3,6 +3,8 @@ import 'package:quark_icons/quark_icons.dart';
 
 import '../../models/chat_message_item.dart';
 import '../../theme/quark_tokens.dart';
+import 'chat_message_row/chat_reaction_bar.dart';
+import 'chat_message_row/chat_reaction_picker.dart';
 
 /// One message a person sent, with the author's avatar, name and time above
 /// it when it starts a group, or indented under the group's header when it
@@ -10,11 +12,14 @@ import '../../theme/quark_tokens.dart';
 ///
 /// Draws the body of a text message, the "waiting for key" placeholder, or a
 /// deleted message's tombstone, according to [ChatMessageItem.kind]. System
-/// lines are a `ChatSystemLine` instead.
+/// lines are a `ChatSystemLine` instead. A text message's reactions sit under
+/// its body as a `ChatReactionBar`, and [onReact] adds a `ChatReactionPicker`
+/// beside the delete button.
 ///
 /// A part of `QuarkMessageList`, tested through it.
 ///
-/// Key prefix: `message_delete_<id>` on the delete button.
+/// Key prefixes: `message_delete_<id>` on the delete button, and those of
+/// `ChatReactionBar` and `ChatReactionPicker`.
 class ChatMessageRow extends StatelessWidget {
   /// Creates the row for [message].
   const ChatMessageRow({
@@ -22,6 +27,7 @@ class ChatMessageRow extends StatelessWidget {
     required this.avatar,
     this.avatarSize = 32,
     this.onDelete,
+    this.onReact,
     super.key,
   });
 
@@ -39,6 +45,10 @@ class ChatMessageRow extends StatelessWidget {
   /// Deletes the message. Null leaves the button out.
   final VoidCallback? onDelete;
 
+  /// Adds or takes back a reaction, with its emoji, from the picker or a
+  /// reaction chip. Null leaves the picker out and the chips inert.
+  final ValueChanged<String>? onReact;
+
   /// The time drawn beside the author's name, as `HH:mm`.
   static String timeOf(DateTime at) =>
       '${at.hour.toString().padLeft(2, '0')}:'
@@ -49,6 +59,8 @@ class ChatMessageRow extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
     final avatar = this.avatar;
     final onDelete = this.onDelete;
+    final onReact = this.onReact;
+    final reacts = message.kind == ChatMessageKind.text;
     final muted = TextStyle(
       color: tokens.mutedForeground,
       fontStyle: FontStyle.italic,
@@ -132,6 +144,12 @@ class ChatMessageRow extends StatelessWidget {
                     ],
                   ),
                 body,
+                if (reacts && message.reactions.isNotEmpty)
+                  ChatReactionBar(
+                    messageId: message.id,
+                    reactions: message.reactions,
+                    onToggle: onReact,
+                  ),
                 if (message.isUnverified)
                   Row(
                     children: [
@@ -152,6 +170,8 @@ class ChatMessageRow extends StatelessWidget {
               ],
             ),
           ),
+          if (reacts && onReact != null)
+            ChatReactionPicker(messageId: message.id, onPick: onReact),
           if (onDelete != null)
             IconButton(
               key: ValueKey('message_delete_${message.id}'),

@@ -4,12 +4,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/chat_channel_keys_controller.dart';
+import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/controllers/chat_messages_controller.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:sodium/sodium_sumo.dart';
 
 const _channel = 7;
@@ -51,39 +53,109 @@ class _FakeKeys extends ChatChannelKeysController {
 class _FakeQuark {
   final List<ChatMessage> messages = [];
   final List<ChatChannelEvent> events = [];
+  final Map<int, List<ChatReaction>> reactions = {};
   final live = StreamController<FileEvent>.broadcast();
   final reconnects = StreamController<void>.broadcast();
   bool drop = false;
   int _nextId = 1;
 
-  ChatMessagesController client(_FakeKeys keys, ChatCrypto crypto) =>
-      ChatMessagesController(
-        channelId: _channel,
-        keys: keys,
-        crypto: () => crypto,
-        fetchMessages: (channelId, {before, after, limit}) async {
-          final n = limit ?? 50;
-          final inChannel = messages.where((m) => m.channelId == channelId);
-          if (after != null) {
-            return inChannel.where((m) => m.id > after).take(n).toList();
-          }
-          final older = inChannel
-              .where((m) => before == null || m.id < before)
-              .toList();
-          return older.sublist(older.length > n ? older.length - n : 0);
-        },
-        postMessage: (channelId, keyVersion, ciphertext) async =>
-            post(channelId, keyVersion, ciphertext),
-        deleteMessage: (id) async {
-          final i = messages.indexWhere((m) => m.id == id);
-          messages[i] = messages[i].tombstone(_epoch);
-          return messages[i];
-        },
-        fetchEvents: (channelId, {after = 0}) async =>
-            events.where((e) => e.id > after).toList(),
-        events: live.stream,
-        reconnects: reconnects.stream,
-      );
+  ChatMessagesController client(
+    _FakeKeys keys,
+    ChatCrypto crypto, {
+    int userId = 2,
+  }) => ChatMessagesController(
+    channelId: _channel,
+    keys: keys,
+    crypto: () => crypto,
+    fetchMessages: (channelId, {before, after, limit}) async {
+      final n = limit ?? 50;
+      final inChannel = messages.where((m) => m.channelId == channelId);
+      ChatMessage withReactions(ChatMessage m) =>
+          m.withReactions(reactions[m.id] ?? const []);
+      if (after != null) {
+        return inChannel
+            .where((m) => m.id > after)
+            .take(n)
+            .map(withReactions)
+            .toList();
+      }
+      final older = inChannel
+          .where((m) => before == null || m.id < before)
+          .map(withReactions)
+          .toList();
+      return older.sublist(older.length > n ? older.length - n : 0);
+    },
+    postMessage: (channelId, keyVersion, ciphertext) async =>
+        post(channelId, keyVersion, ciphertext),
+    deleteMessage: (id) async {
+      final i = messages.indexWhere((m) => m.id == id);
+      messages[i] = messages[i].tombstone(_epoch);
+      reactions.remove(id);
+      return messages[i];
+    },
+    addReaction: (messageId, keyVersion, ciphertext) async =>
+        react(messageId, userId, keyVersion, ciphertext),
+    deleteReaction: (id) async => removeReaction(id),
+    currentUserId: () => userId,
+    fetchEvents: (channelId, {after = 0}) async =>
+        events.where((e) => e.id > after).toList(),
+    events: live.stream,
+    reconnects: reconnects.stream,
+  );
+
+  ChatReaction react(
+    int messageId,
+    int userId,
+    int keyVersion,
+    Uint8List ciphertext,
+  ) {
+    final reaction = ChatReaction(
+      id: _nextId++,
+      messageId: messageId,
+      userId: userId,
+      keyVersion: keyVersion,
+      ciphertext: ciphertext,
+      createdAt: _epoch,
+    );
+    (reactions[messageId] ??= []).add(reaction);
+    _reactionChanged(reaction.messageId, reaction.id, {
+      'id': reaction.id,
+      'messageId': messageId,
+      'userId': userId,
+      'keyVersion': keyVersion,
+      'ciphertext': base64Encode(ciphertext),
+      'createdAt': _epoch.toIso8601String(),
+    });
+    return reaction;
+  }
+
+  void removeReaction(int id) {
+    for (final MapEntry(key: messageId, value: list) in reactions.entries) {
+      if (list.any((r) => r.id == id)) {
+        list.removeWhere((r) => r.id == id);
+        _reactionChanged(messageId, id, null);
+        return;
+      }
+    }
+  }
+
+  void _reactionChanged(int messageId, int id, Map<String, Object>? row) {
+    if (drop) return;
+    live.add(
+      FileEvent(
+        kind: 'chat_reaction_changed',
+        path: '',
+        data: jsonDecode(
+          jsonEncode({
+            'channelId': _channel,
+            'messageId': messageId,
+            'reactionId': id,
+            'reaction': ?row,
+          }),
+        ),
+      ),
+    );
+  }
 
   ChatMessage post(int channelId, int keyVersion, Uint8List ciphertext) {
     final id = _nextId++;
@@ -298,5 +370,117 @@ void main() {
     );
     await pumpEventQueue();
     expect((reader.entries[2] as ChatTimelineSystem).isVerified, isTrue);
+  });
+
+  group('reactions (#2426)', () {
+    List<ChatReactionItem> reactionsOf(ChatMessagesController c, int me) =>
+        ChatController.reactionItems(
+          (c.entries.whereType<ChatTimelineMessage>().first).reactions,
+          me,
+        );
+
+    test(
+      'toggle adds and takes back, and live events keep others current',
+      () async {
+        final key = crypto.newChannelKey();
+        final alice = quark.client(_FakeKeys()..grant(1, key), crypto);
+        final bob = quark.client(
+          _FakeKeys()..grant(1, crypto.channelKeyFromBytes(key.extractBytes())),
+          crypto,
+          userId: 3,
+        );
+        await alice.open();
+        await bob.open();
+        await alice.send('lunch?');
+        await pumpEventQueue();
+        final messageId = quark.messages.single.id;
+
+        await bob.toggleReaction(messageId, '👍');
+        await alice.toggleReaction(messageId, '👍');
+        await alice.toggleReaction(messageId, '🎉');
+        await pumpEventQueue();
+
+        // Ciphertext is padded to one length and never holds the emoji.
+        final stored = quark.reactions[messageId]!;
+        expect(stored.map((r) => r.ciphertext.length).toSet(), {24 + 64 + 16});
+        expect(
+          utf8.decode(stored.first.ciphertext, allowMalformed: true),
+          isNot(contains('👍')),
+        );
+        expect(reactionsOf(bob, 3), const [
+          ChatReactionItem(emoji: '👍', count: 2, reactedByMe: true),
+          ChatReactionItem(emoji: '🎉', count: 1),
+        ]);
+
+        await bob.toggleReaction(messageId, '👍');
+        await pumpEventQueue();
+        expect(reactionsOf(alice, 2), const [
+          ChatReactionItem(emoji: '👍', count: 1, reactedByMe: true),
+          ChatReactionItem(emoji: '🎉', count: 1, reactedByMe: true),
+        ]);
+        expect(quark.reactions[messageId]!.map((r) => r.userId), [2, 2]);
+      },
+    );
+
+    test('a reconnect catches up on dropped reactions and deletions', () async {
+      final key = crypto.newChannelKey();
+      final alice = quark.client(_FakeKeys()..grant(1, key), crypto);
+      final bob = quark.client(
+        _FakeKeys()..grant(1, crypto.channelKeyFromBytes(key.extractBytes())),
+        crypto,
+        userId: 3,
+      );
+      await alice.open();
+      await alice.send('one');
+      await alice.send('two');
+      await bob.open();
+      final [first, second] = [for (final m in quark.messages) m.id];
+
+      quark.drop = true;
+      await alice.toggleReaction(first, '❤️');
+      await alice.toggleReaction(second, '😂');
+      await alice.delete(second);
+      await pumpEventQueue();
+      expect(reactionsOf(bob, 3), isEmpty);
+
+      quark.reconnects.add(null);
+      await pumpEventQueue();
+      expect(reactionsOf(bob, 3), const [
+        ChatReactionItem(emoji: '❤️', count: 1),
+      ]);
+      final tombstone = bob.entries.whereType<ChatTimelineMessage>().last;
+      expect(tombstone.state, ChatMessageState.deleted);
+      expect(tombstone.reactions, isEmpty);
+    });
+
+    test('a reaction moved to another message does not open', () async {
+      final key = crypto.newChannelKey();
+      final alice = quark.client(_FakeKeys()..grant(1, key), crypto);
+      await alice.open();
+      await alice.send('one');
+      await alice.send('two');
+      final [first, second] = [for (final m in quark.messages) m.id];
+      await alice.toggleReaction(first, '👍');
+      final moved = quark.reactions.remove(first)!.single;
+      quark.reactions[second] = [
+        ChatReaction(
+          id: moved.id,
+          messageId: second,
+          userId: moved.userId,
+          keyVersion: moved.keyVersion,
+          ciphertext: moved.ciphertext,
+          createdAt: moved.createdAt,
+        ),
+      ];
+
+      final reader = quark.client(
+        _FakeKeys()..grant(1, crypto.channelKeyFromBytes(key.extractBytes())),
+        crypto,
+      );
+      await reader.open();
+      final last = reader.entries.whereType<ChatTimelineMessage>().last;
+      expect(last.reactions.single.emoji, isNull);
+      expect(ChatController.reactionItems(last.reactions, 2), isEmpty);
+    });
   });
 }

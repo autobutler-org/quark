@@ -34,6 +34,14 @@ enum ChatPermission {
     "Delete other people's messages",
   ),
 
+  /// Remove other people's reactions (#2426). Everyone who may react may
+  /// remove their own.
+  manageReactions(
+    'manage_reactions',
+    'Manage reactions',
+    "Remove other people's reactions",
+  ),
+
   /// Rename the channel, change its topic, and delete it.
   manageChannel(
     'manage_channel',
@@ -62,7 +70,10 @@ enum ChatPermission {
   /// The permissions this one needs. A set holding this one without them is
   /// incoherent.
   Set<ChatPermission> get requires => switch (this) {
-    sendMessages || addReactions || deleteMessages => const {readMessages},
+    sendMessages ||
+    addReactions ||
+    deleteMessages ||
+    manageReactions => const {readMessages},
     readMessages || manageChannel || manageMembers => const {},
   };
 
@@ -92,8 +103,8 @@ enum ChatPermission {
 
   /// [permissions] without [removed] and without everything that needs it,
   /// so clearing `read_messages` also clears `send_messages`,
-  /// `add_reactions` and `delete_messages`, and leaves the management
-  /// permissions, which need nothing.
+  /// `add_reactions`, `delete_messages` and `manage_reactions`, and leaves
+  /// the management permissions, which need nothing.
   static Set<ChatPermission> withoutDependents(
     Set<ChatPermission> permissions,
     ChatPermission removed,

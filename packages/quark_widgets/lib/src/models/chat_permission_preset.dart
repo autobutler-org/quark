@@ -19,12 +19,14 @@ enum ChatPermissionPreset {
     ChatPermission.addReactions,
   }),
 
-  /// A member who also deletes other people's messages and manages members.
+  /// A member who also deletes other people's messages and reactions and
+  /// manages members.
   moderator('Moderator', {
     ChatPermission.readMessages,
     ChatPermission.sendMessages,
     ChatPermission.addReactions,
     ChatPermission.deleteMessages,
+    ChatPermission.manageReactions,
     ChatPermission.manageMembers,
   }),
 
@@ -34,6 +36,7 @@ enum ChatPermissionPreset {
     ChatPermission.sendMessages,
     ChatPermission.addReactions,
     ChatPermission.deleteMessages,
+    ChatPermission.manageReactions,
     ChatPermission.manageChannel,
     ChatPermission.manageMembers,
   });

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'chat_reaction_item.dart';
+
 /// What a [ChatMessageItem] is, which decides how a message list draws it.
 enum ChatMessageKind {
   /// Something a person wrote, with its decrypted [ChatMessageItem.body].
@@ -34,6 +36,7 @@ class ChatMessageItem {
     this.body = '',
     this.kind = ChatMessageKind.text,
     this.isUnverified = false,
+    this.reactions = const [],
   });
 
   /// The message's id on the Quark, and what keys and callbacks carry.
@@ -59,6 +62,10 @@ class ChatMessageItem {
   /// membership change nobody vouched for. Drawn in the warning color.
   final bool isUnverified;
 
+  /// The message's reactions, one per emoji, in the order to draw them.
+  /// Only a [ChatMessageKind.text] message draws them.
+  final List<ChatReactionItem> reactions;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -69,9 +76,18 @@ class ChatMessageItem {
           other.sentAt == sentAt &&
           other.body == body &&
           other.kind == kind &&
-          other.isUnverified == isUnverified;
+          other.isUnverified == isUnverified &&
+          listEquals(other.reactions, reactions);
 
   @override
-  int get hashCode =>
-      Object.hash(id, authorId, authorName, sentAt, body, kind, isUnverified);
+  int get hashCode => Object.hash(
+    id,
+    authorId,
+    authorName,
+    sentAt,
+    body,
+    kind,
+    isUnverified,
+    Object.hashAll(reactions),
+  );
 }

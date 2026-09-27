@@ -3,7 +3,7 @@
 Chat messages are end-to-end encrypted: only the members of a channel can read them, and the Quark stores
 ciphertext it can't open. This page covers the identity keys that make that possible (#2416) and what they
 protect against, then the channel keys and key grants built on them (#2417), then the messages encrypted under
-those keys (#2418).
+those keys (#2418) and the reactions on them (#2426).
 
 ## Identity keys
 
@@ -208,6 +208,51 @@ All need `read_messages`: anyone else gets 404, delegated managers and admins in
 - `DELETE /api/v0/chat/messages/:id` is allowed for the author or a holder of `delete_messages`, while they hold
   `read_messages`.
 
+## Reactions
+
+A reaction is encrypted like a message (#2426): XChaCha20-Poly1305 under the channel's current key, a random
+nonce, `nonce || ciphertext` on the Quark. So the Quark knows *that* someone reacted, not with what. That is also
+why the Quark can't restrict which emoji are allowed, now or later: the app's short list is the only curation.
+
+The plaintext is the emoji in UTF-8, zero-padded to 64 bytes, so every reaction's ciphertext is the same 104
+bytes and its length doesn't give the emoji away. The additional data binds it to where it was made:
+
+```text
+"quark-chat-reaction-v1" 0x00 || be64(channelId) || be64(keyVersion) || be64(messageId) || be64(userId)
+```
+
+So the Quark can't move a reaction to another message or channel, or pin it on another account, without it
+failing to open. A reaction is deleted with the account that made it, so its user id is never cleared and can
+be bound, unlike a message's author. Like a message, it doesn't stop the Quark dropping or replaying one.
+
+### What the Quark sees
+
+- **Who reacted to which message, and when.** Each reaction is its own row, so the Quark also sees how many
+  reactions an account put on a message, and when one was taken back.
+- Not which emoji, and not whether two reactions carry the same one.
+
+### Rules
+
+- Adding one needs `add_reactions`, and so does taking back your own. Removing someone else's needs
+  `manage_reactions`, which the Moderator and Owner presets carry; like the other message permissions, both need
+  `read_messages`, and anyone without it gets 404.
+- An account may hold at most 20 reactions on one message, since the Quark can't tell a repeat from a new
+  emoji. The app sends each emoji once and taps it again to take it back.
+- Deleting a message deletes its reactions in the same statement that tombstones it, and a deleted message takes
+  no new ones.
+
+### Delivery
+
+`chat_reaction_changed` carries the stored row when a reaction is added and only its id when it is removed. It
+goes to the channel's readers alone, like the message events. There is no separate catch-up route: a page of
+messages carries each message's reactions, and on every reconnect the app reads its loaded messages again from
+the oldest, which also picks up deletions the socket dropped.
+
+### Routes
+
+- `POST /api/v0/chat/messages/:id/reactions` takes `{ciphertext, keyVersion}`.
+- `DELETE /api/v0/chat/reactions/:id` removes one.
+
 ## Threat model
 
 ### What this protects against
@@ -225,7 +270,8 @@ All need `read_messages`: anyone else gets 404, delegated managers and admins in
   what derives the wrapping key. A compromised server could record it at sign-in, fetch the wrap, and open the
   identity. It could also hand out a public key of its own in place of a member's. Closing this gap means
   the login stops sending the password itself; that's #2430. Until then, chat is a beta, and this is the reason.
-- **Metadata.** The Quark sees who is in which channel, when each message was sent, and how big it is.
+- **Metadata.** The Quark sees who is in which channel, when each message was sent, and how big it is, and
+  who reacted to which message and when.
 - **A device that's already unlocked.** On phones and desktop the unwrapped seeds sit in the platform keystore
   while signed in, so anyone who can use the signed-in app can read chat.
 - **A removed member's copies.** Removal rotates the channel key for future messages, but nothing takes back what

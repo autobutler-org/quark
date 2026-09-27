@@ -337,9 +337,9 @@ void main() {
         await tapKey(tester, 'rotate_key_confirm');
         expect(calls, [
           'set 2 user=2 read_messages,send_messages,add_reactions,'
-              'delete_messages,manage_members',
+              'delete_messages,manage_reactions,manage_members',
           'sign user=2 group=null read_messages,send_messages,add_reactions,'
-              'delete_messages,manage_members',
+              'delete_messages,manage_reactions,manage_members',
           'remove 2 user=null group=1',
           'sign user=null group=1 none',
         ]);

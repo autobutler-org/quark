@@ -18,6 +18,8 @@ import 'package:sodium/sodium_sumo.dart';
 /// - Messages (#2418): [newChannelKey], [channelKeyFromBytes], [encrypt] and
 ///   [decrypt], XChaCha20-Poly1305 with a random nonce, bound to
 ///   [messageAad].
+/// - Reactions (#2426): the same [encrypt] and [decrypt] over [padReaction],
+///   bound to [reactionAad].
 class ChatCrypto {
   /// Wraps an initialized libsodium.
   ChatCrypto(this.sodium);
@@ -227,6 +229,50 @@ class ChatCrypto {
         ..._be64(channelId),
         ..._be64(keyVersion),
       ]);
+
+  /// The additional data a reaction's ciphertext is bound to (#2426):
+  ///
+  /// `"quark-chat-reaction-v1" 0x00 || be64(channelId) || be64(keyVersion) ||
+  /// be64(messageId) || be64(userId)`
+  ///
+  /// So the Quark can't move a reaction to another message or pin it on
+  /// another account. Reactions go with the account that made them, so the
+  /// user id is never cleared the way a deleted author's is.
+  Uint8List reactionAad({
+    required int channelId,
+    required int keyVersion,
+    required int messageId,
+    required int userId,
+  }) => Uint8List.fromList([
+    ...utf8.encode('quark-chat-reaction-v1'),
+    0,
+    ..._be64(channelId),
+    ..._be64(keyVersion),
+    ..._be64(messageId),
+    ..._be64(userId),
+  ]);
+
+  /// How long every reaction's plaintext is, so the ciphertext's length
+  /// doesn't tell the Quark which emoji it is.
+  static const reactionPlaintextBytes = 64;
+
+  /// [emoji] in UTF-8, zero-padded to [reactionPlaintextBytes]. Throws a
+  /// [FormatException] for one that doesn't fit, or is empty.
+  static Uint8List padReaction(String emoji) {
+    final bytes = utf8.encode(emoji);
+    if (bytes.isEmpty || bytes.length > reactionPlaintextBytes) {
+      throw const FormatException('a reaction must be 1 to 64 bytes');
+    }
+    return Uint8List(reactionPlaintextBytes)..setAll(0, bytes);
+  }
+
+  /// The emoji [padReaction] padded, with the zeros dropped.
+  static String stripReaction(Uint8List padded) {
+    final end = padded.indexOf(0);
+    return utf8.decode(
+      end < 0 ? padded : Uint8List.sublistView(padded, 0, end),
+    );
+  }
 
   /// Big-endian 64 bits without `ByteData.setInt64`, which the web lacks. Ids
   /// are positive and below 2^53.

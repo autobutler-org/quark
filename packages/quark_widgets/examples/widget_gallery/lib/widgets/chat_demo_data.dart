@@ -43,7 +43,7 @@ const String galleryChatUserId = 'bob';
 
 /// The fake messages the chat entries share, newest first: two days, a run
 /// from one author, a system line, an unverified one, a message waiting for
-/// its key, and a deleted one.
+/// its key, a deleted one, and one with reactions.
 final List<ChatMessageItem> galleryChatMessages = [
   ChatMessageItem(
     id: 'm8',
@@ -89,6 +89,10 @@ final List<ChatMessageItem> galleryChatMessages = [
     authorName: 'Ada Lovelace',
     sentAt: DateTime(2026, 9, 23, 20, 2),
     body: 'I will bring the snacks.',
+    reactions: const [
+      ChatReactionItem(emoji: '🎉', count: 2, reactedByMe: true),
+      ChatReactionItem(emoji: '👍', count: 1),
+    ],
   ),
   ChatMessageItem(
     id: 'm2',

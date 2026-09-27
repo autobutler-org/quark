@@ -133,7 +133,7 @@ func TestPermsParseAndString(t *testing.T) {
 		}
 	}
 	all := chatutil.PermsAll.String()
-	if want := "read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members"; all != want {
+	if want := "read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions"; all != want {
 		t.Errorf("PermsAll.String() = %q, want %q", all, want)
 	}
 	if got := chatutil.Perms(0).Names(); got == nil || len(got) != 0 {
@@ -166,6 +166,7 @@ func TestPermsValidate(t *testing.T) {
 		{chatutil.PermSendMessages, "send_messages needs read_messages"},
 		{chatutil.PermAddReactions, "add_reactions needs read_messages"},
 		{chatutil.PermDeleteMessages | chatutil.PermManageMembers, "delete_messages needs read_messages"},
+		{chatutil.PermManageReactions, "manage_reactions needs read_messages"},
 		{1 << 40, "unknown permission bits"},
 	} {
 		err := tc.perms.Validate()
@@ -191,6 +192,7 @@ func TestPermsValidate(t *testing.T) {
 func TestPresets(t *testing.T) {
 	read, send, react := chatutil.PermReadMessages, chatutil.PermSendMessages, chatutil.PermAddReactions
 	del, channel, members := chatutil.PermDeleteMessages, chatutil.PermManageChannel, chatutil.PermManageMembers
+	reactions := chatutil.PermManageReactions
 	for _, tc := range []struct {
 		name string
 		got  chatutil.Perms
@@ -198,8 +200,8 @@ func TestPresets(t *testing.T) {
 	}{
 		{"viewer", chatutil.PresetViewer, read},
 		{"member", chatutil.PresetMember, read | send | react},
-		{"moderator", chatutil.PresetModerator, read | send | react | del | members},
-		{"owner", chatutil.PresetOwner, read | send | react | del | channel | members},
+		{"moderator", chatutil.PresetModerator, read | send | react | del | reactions | members},
+		{"owner", chatutil.PresetOwner, read | send | react | del | reactions | channel | members},
 		{"all", chatutil.PermsAll, chatutil.PresetOwner},
 	} {
 		if tc.got != tc.want {
@@ -576,7 +578,7 @@ func TestListMembersExpandsGroupsWithAvatars(t *testing.T) {
 		}
 	}
 	body, err := json.Marshal(result.Members[1])
-	if err != nil || !strings.Contains(string(body), `"permissions":["read_messages","send_messages","add_reactions","delete_messages","manage_channel","manage_members"]`) {
+	if err != nil || !strings.Contains(string(body), `"permissions":["read_messages","send_messages","add_reactions","delete_messages","manage_channel","manage_members","manage_reactions"]`) {
 		t.Errorf("a member as JSON = %s, %v", body, err)
 	}
 }
