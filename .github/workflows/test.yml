@@ -18,10 +18,30 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+      # Go's test cache keys on the mtime of files a test opens (docs/swagger/swagger.json,
+      # say), and checkout stamps every file with the current time. Derive each tracked
+      # file's mtime from its blob hash instead: same content, same mtime, every run.
+      - name: Set file times from content
+        run: |
+          git ls-files -s -z | perl -0ne '($h, $p) = /^\S+ (\S+) \S+\t(.*)\0$/s; $t = hex(substr($h, 0, 7)); utime $t, $t, $p'
       - name: Setup go
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          # setup-go keys its cache on go.sum alone and skips saving on a hit, so the
+          # test cache would stay frozen at the last dependency bump.
+          cache: false
+      # A per-run key saves what each run tested; restore-keys picks up the newest.
+      - name: Restore Go caches
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-test-${{ runner.os }}-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            go-test-${{ runner.os }}-${{ hashFiles('go.sum') }}-
+            go-test-${{ runner.os }}-
       - name: Setup sqlc
         uses: ./.github/actions/setup-sqlc
       - name: Setup swag
