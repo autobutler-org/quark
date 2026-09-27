@@ -188,10 +188,11 @@ func Status() StatusResult {
 	return result
 }
 
-// Disable turns remote access off for good: it logs the node out of the
-// tailnet, stops it, and deletes its state dir, so HasPersistedState is false
-// afterwards and the next enable needs a fresh key. Stop is the shutdown path
-// and keeps the enrollment; this is the user saying "off".
+// Disable turns remote access off: it logs the node out of the tailnet and
+// stops it. The state dir stays, because it holds the machine key: Enable
+// presents that key again with a fresh pre-auth key, and Headscale
+// re-registers the same node with the same tailnet IPs (#2469). Stop is the
+// shutdown path and keeps the node logged in; this is the user saying "off".
 func Disable() error {
 	mu.Lock()
 	s := srv
@@ -200,7 +201,7 @@ func Disable() error {
 		if lc, err := s.LocalClient(); err == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			// Best effort: an unreachable control server must not keep the node
-			// on. Deleting the state below disowns it locally either way.
+			// on. The node is stopped below either way.
 			if err := lc.Logout(ctx); err != nil {
 				log.Printf("[remote] logout failed: %v", err)
 			}
@@ -211,14 +212,13 @@ func Disable() error {
 	mu.Lock()
 	lastErr = nil
 	mu.Unlock()
-	if err := os.RemoveAll(stateDir()); err != nil {
-		return fmt.Errorf("failed to remove tsnet state dir: %w", err)
-	}
 	return nil
 }
 
-// HasPersistedState returns true if tsnet has previously stored credentials
-// on disk and can reconnect without a new auth key.
+// HasPersistedState returns true if tsnet has written state to disk. That
+// state holds the machine key and, unless Disable logged the node out, the
+// node key that lets it reconnect without a new auth key. EnsureStarted reads
+// it as "no key needed"; Enable does not, since Disable leaves it behind.
 func HasPersistedState() bool {
 	dir := stateDir()
 	entries, err := os.ReadDir(dir)
@@ -249,36 +249,27 @@ func StartProxy(localPort int, localTLS bool) error {
 	return startProxyLocked(localPort, localTLS)
 }
 
-// EnsureStarted starts the tsnet node and its proxy. provisionFn is called
-// only when there is no persisted tsnet state: the state is the node's
-// credential, so a restart reuses it and only a first enable, or one after
-// Disable, needs a fresh Headscale pre-auth key. The proxy is started against
-// localPort after tsnet starts successfully; localTLS must match how the
-// server is serving that port. Every failure is recorded for Status.
+// EnsureStarted is the boot path: it starts the tsnet node and its proxy,
+// reusing persisted tsnet state. provisionFn is called only when there is no
+// state, since a node that was on when the Quark stopped is still logged in.
+// The proxy is started against localPort after tsnet starts successfully;
+// localTLS must match how the server is serving that port. Every failure is
+// recorded for Status.
 //
 // It returns once the node has started, before it has logged in, and watches
 // the login in the background. If control rejects the persisted state and
 // asks for an interactive login, the node re-enrolls once with a fresh key; if
 // it still needs a login, it is stopped and Status reports why (#2466).
 func EnsureStarted(localPort int, localTLS bool, provisionFn func() (string, error)) error {
-	if IsRunning() {
-		return nil
-	}
+	return ensureStarted(false, localPort, localTLS, provisionFn)
+}
 
-	authKey := ""
-	fromState := HasPersistedState()
-	if !fromState {
-		log.Printf("[remote] no persisted tsnet state, provisioning a key")
-		key, err := provisionKey(provisionFn)
-		if err != nil {
-			return err
-		}
-		authKey = key
-	}
-
-	if err := startWithProxy(authKey, localPort, localTLS); err != nil {
-		return err
-	}
-	go superviseLogin(fromState, localPort, localTLS, provisionFn)
-	return nil
+// Enable is the user turning remote access on. It is EnsureStarted, except
+// that it always presents a fresh key from provisionFn: it follows a Disable,
+// which logged the node out but kept its machine key, or a failure. With the
+// same machine key and a fresh pre-auth key, Headscale re-registers the
+// existing node and keeps its tailnet IPs (#2469). A node still logged in
+// ignores the key and reconnects from its state.
+func Enable(localPort int, localTLS bool, provisionFn func() (string, error)) error {
+	return ensureStarted(true, localPort, localTLS, provisionFn)
 }

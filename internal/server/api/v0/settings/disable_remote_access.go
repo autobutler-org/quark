@@ -9,7 +9,7 @@ import (
 
 // disableRemoteAccess godoc
 // @Summary Disable remote access
-// @Description Logs the Tailscale tsnet node out, stops it, and deletes its state, so re-enabling provisions a fresh key. Admin only.
+// @Description Logs the Tailscale tsnet node out and stops it. Its state, with the machine key, is kept, so re-enabling rejoins as the same node with the same IP. Admin only.
 // @Tags settings
 // @Produce json
 // @Success 200 {object} RemoteAccessResponse

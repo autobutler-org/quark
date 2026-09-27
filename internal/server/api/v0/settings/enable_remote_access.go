@@ -18,7 +18,7 @@ var errRemoteAccessStart = errors.New("remote access could not start, the Quark'
 
 // enableRemoteAccess godoc
 // @Summary Enable remote access via Tailscale
-// @Description Starts a Tailscale tsnet node and proxies traffic to the local server. A Quark with no tailnet enrollment fetches a pre-auth key from the provisioning service; authKey overrides that key. The node joins the tailnet asynchronously; poll GET for connected. Admin only.
+// @Description Starts a Tailscale tsnet node and proxies traffic to the local server. Every enable presents a fresh pre-auth key from the provisioning service, which authKey overrides. The node keeps its machine key across disable, so it rejoins the tailnet as the same node with the same IP. The node joins the tailnet asynchronously; poll GET for connected. Admin only.
 // @Tags settings
 // @Accept json
 // @Produce json
@@ -38,7 +38,7 @@ func enableRemoteAccess(c *gin.Context) *serverutil.Response {
 	if req.AuthKey != "" {
 		provision = func() (string, error) { return req.AuthKey, nil }
 	}
-	if err := remoteutil.EnsureStarted(
+	if err := remoteutil.Enable(
 		serverutil.ServingPort(),
 		serverutil.ServingTLS(),
 		provision,

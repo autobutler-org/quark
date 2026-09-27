@@ -4563,8 +4563,9 @@ paths:
       - settings
   /settings/remote-access:
     delete:
-      description: Logs the Tailscale tsnet node out, stops it, and deletes its state,
-        so re-enabling provisions a fresh key. Admin only.
+      description: Logs the Tailscale tsnet node out and stops it. Its state, with
+        the machine key, is kept, so re-enabling rejoins as the same node with the
+        same IP. Admin only.
       produces:
       - application/json
       responses:
@@ -4605,9 +4606,10 @@ paths:
       consumes:
       - application/json
       description: Starts a Tailscale tsnet node and proxies traffic to the local
-        server. A Quark with no tailnet enrollment fetches a pre-auth key from the
-        provisioning service; authKey overrides that key. The node joins the tailnet
-        asynchronously; poll GET for connected. Admin only.
+        server. Every enable presents a fresh pre-auth key from the provisioning service,
+        which authKey overrides. The node keeps its machine key across disable, so
+        it rejoins the tailnet as the same node with the same IP. The node joins the
+        tailnet asynchronously; poll GET for connected. Admin only.
       parameters:
       - description: Optional pre-auth key override
         in: body

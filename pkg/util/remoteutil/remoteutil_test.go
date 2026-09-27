@@ -285,8 +285,9 @@ func TestEnsureStarted_RecordsProvisionFailure(t *testing.T) {
 }
 
 // TestStatus_ReportsProxyFailureUntilDisable verifies that a failed start is
-// recorded for GET to report, and that Disable clears it along with the tsnet
-// state dir, so HasPersistedState is false afterwards (#1815).
+// recorded for GET to report, and that Disable clears it (#1815) but keeps the
+// tsnet state dir, which holds the machine key the next Enable presents
+// (#2469).
 func TestStatus_ReportsProxyFailureUntilDisable(t *testing.T) {
 	if runtime.GOOS == "linux" {
 		if _, err := os.Stat("/var/lib/quark"); err == nil {
@@ -321,8 +322,43 @@ func TestStatus_ReportsProxyFailureUntilDisable(t *testing.T) {
 	if got := Status(); got.Error != "" {
 		t.Errorf("Status().Error after Disable = %q; want empty", got.Error)
 	}
-	if HasPersistedState() {
-		t.Error("HasPersistedState() = true after Disable; want the state dir removed")
+	if !HasPersistedState() {
+		t.Error("HasPersistedState() = false after Disable; want the state dir, and its machine key, kept")
+	}
+}
+
+// TestEnable_ProvisionsDespitePersistedState verifies Enable asks for a fresh
+// key even though tsnet state is on disk (#2469). Disable leaves that state
+// behind, logged out, so it is no credential; EnsureStarted, the boot path,
+// would reuse it instead. The provisioner fails, so no node starts.
+func TestEnable_ProvisionsDespitePersistedState(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		if _, err := os.Stat("/var/lib/quark"); err == nil {
+			t.Skip("stateDir() is the real service dir on this machine")
+		}
+	}
+	t.Setenv("HOME", t.TempDir())
+	dir := stateDir()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte("{}"), 0600); err != nil {
+		t.Fatalf("write state file: %v", err)
+	}
+
+	asked := 0
+	err := Enable(0, false, func() (string, error) {
+		asked++
+		return "", errors.New("no secret")
+	})
+	if asked != 1 || err == nil || !strings.Contains(err.Error(), "no secret") {
+		t.Errorf("Enable() = %v after %d key requests; want one request and its error", err, asked)
+	}
+	if IsRunning() {
+		t.Error("IsRunning() = true after a failed provision")
+	}
+	if err := Disable(); err != nil {
+		t.Fatalf("Disable() = %v", err)
 	}
 }
 
