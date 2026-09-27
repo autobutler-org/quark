@@ -13,7 +13,33 @@ defaults:
   run:
     shell: bash
 jobs:
+  # Works out which areas a pull request touches, from .github/path-filters.yml. Each
+  # job below skips itself with a job-level `if:` rather than the workflow using
+  # `on: paths:`: a job skipped by `if:` reports success, but a workflow skipped by
+  # paths never reports its checks, and a required one like build-ios waits forever.
+  # Pushes to main and manual runs build everything, so the badges stay accurate.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      web: ${{ steps.filter.outputs.web }}
+      android: ${{ steps.filter.outputs.android }}
+      ios: ${{ steps.filter.outputs.ios }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Filter paths
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4
+        with:
+          filters: .github/path-filters.yml
   build-backend:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -47,6 +73,8 @@ jobs:
         run: |
           make build/backend
   build-web:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -62,6 +90,8 @@ jobs:
         run: |
           make build/frontend/web
   build-android:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -101,7 +131,11 @@ jobs:
     # is the most expensive thing in this repository to start, and a fork's head is code
     # nobody here has reviewed yet. Runs that do start but have no signing material --
     # dependabot's -- fall back to an unsigned build in the steps below.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: changes
+    if: >-
+      github.event_name != 'pull_request'
+      || (needs.changes.outputs.ios == 'true'
+        && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
