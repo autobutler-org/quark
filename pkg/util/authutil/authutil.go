@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -237,9 +238,15 @@ type SessionInfo struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
-// HashPassword hashes a plaintext password using bcrypt.
+// HashPassword hashes a plaintext password using bcrypt. Test binaries hash
+// at bcrypt.MinCost, since cost 12 (~250ms a hash) made the auth suites take
+// most of a minute each (#2456).
 func HashPassword(password string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	cost := bcryptCost
+	if testing.Testing() {
+		cost = bcrypt.MinCost
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), cost)
 	if err != nil {
 		return "", fmt.Errorf("failed to hash password: %w", err)
 	}
