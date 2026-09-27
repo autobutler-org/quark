@@ -1,0 +1,50 @@
+# What each job in build.yml and test.yml reads, for dorny/paths-filter. On a pull
+# request a job runs only when its set matched; pushes to main run everything. A path
+# missing here means a pull request that breaks that job merges green, so when a job
+# starts reading something new, add it.
+ci: &ci
+  - Makefile
+  - .github/path-filters.yml
+  - .github/actions/**
+  - .github/workflows/build.yml
+  - .github/workflows/test.yml
+backend:
+  - *ci
+  - "**/*.go"
+  - go.mod
+  - go.sum
+  - sqlc.yaml
+  - sql/**
+  # Migrations and the embedded web directory are read by //go:embed.
+  - internal/**
+  - scripts/apply-coverage-ignore.bash
+  - scripts/coverage-excluded-packages.txt
+flutter: &flutter
+  - *ci
+  - lib/**
+  - packages/**
+  - assets/**
+  - pubspec.yaml
+  - pubspec.lock
+  - analysis_options.yaml
+  # generate/frontend/quark-icons runs `npx fantasticon`.
+  - package.json
+  - package-lock.json
+  - scripts/generate_flutter_sbom.dart
+web:
+  - *flutter
+  - web/**
+  # build/frontend/web copies its output here for the backend to embed.
+  - internal/server/public/**
+android:
+  - *flutter
+  - android/**
+ios:
+  - *flutter
+  - ios/**
+  - scripts/ios-ci-signing.bash
+frontend:
+  - *flutter
+  - test/**
+  # test/web_index_html_test.dart reads web/index.html.
+  - web/**
