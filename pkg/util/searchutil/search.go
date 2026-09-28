@@ -10,13 +10,17 @@ import (
 )
 
 // Search runs a full-text query against the FTS5 index and returns up to
-// limit results ordered by relevance rank. If limit <= 0, DefaultLimit is used.
+// limit results ordered by relevance rank. If limit <= 0, DefaultLimit is used,
+// and a limit above MaxLimit is clamped to it.
 // The query string is passed directly to FTS5's MATCH operator — callers
 // should sanitize it for user-facing inputs (e.g. quote terms to avoid FTS5
 // syntax errors).
 func Search(ctx context.Context, db *sql.DB, query string, limit int) ([]SearchResult, error) {
 	if limit <= 0 {
 		limit = DefaultLimit
+	}
+	if limit > MaxLimit {
+		limit = MaxLimit
 	}
 	return searchPage(ctx, db, query, limit, 0)
 }
@@ -27,7 +31,8 @@ type SearchReadableParams struct {
 	DB  *sql.DB
 	// Query is passed to Search.
 	Query string
-	// Limit caps the results, DefaultLimit when zero or less.
+	// Limit caps the results, DefaultLimit when zero or less and at most
+	// MaxLimit.
 	Limit int
 	// Access drops the matches the caller cannot read. A snippet is file
 	// content, so an unreadable match must not come back at all.
@@ -47,6 +52,9 @@ func SearchReadable(params SearchReadableParams) (SearchReadableResult, error) {
 	if limit <= 0 {
 		limit = DefaultLimit
 	}
+	if limit > MaxLimit {
+		limit = MaxLimit
+	}
 	if params.Access.Principal().IsAdmin {
 		results, err := searchPage(params.Ctx, params.DB, params.Query, limit, 0)
 		return SearchReadableResult{Results: results}, err
@@ -57,7 +65,7 @@ func SearchReadable(params SearchReadableParams) (SearchReadableResult, error) {
 	// matches costs several queries. Upgrade to an EXISTS join on path_access
 	// if it measures slow.
 	batch := 2 * limit
-	kept := make([]SearchResult, 0, limit)
+	kept := []SearchResult{}
 	for offset := 0; ; offset += batch {
 		page, err := searchPage(params.Ctx, params.DB, params.Query, batch, offset)
 		if err != nil {
