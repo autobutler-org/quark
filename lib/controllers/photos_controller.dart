@@ -9,6 +9,7 @@ import 'package:quark/controllers/photo_bytes_cache.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/paginated_photos_response.dart' as wire;
 import 'package:quark/models/photo_album.dart';
+import 'package:quark/models/photo_sort.dart';
 import 'package:quark/services/album_service.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/demo_photos_service.dart';
@@ -76,6 +77,8 @@ class PhotosController extends ChangeNotifier {
           int offset,
           int limit,
           String? serial,
+          PhotoSortField sort,
+          PhotoSortOrder order,
         })
         getPhotos =
         FilesService.getPhotos,
@@ -117,7 +120,12 @@ class PhotosController extends ChangeNotifier {
         })
         removePhotoFromAlbum =
         AlbumService.removePhotoFromAlbum,
-    Future<List<PhotoAlbumItem>> Function(int albumId) listAlbumItems =
+    Future<List<PhotoAlbumItem>> Function(
+          int albumId, {
+          PhotoSortField sort,
+          PhotoSortOrder order,
+        })
+        listAlbumItems =
         AlbumService.listAlbumItems,
     Future<List<StorageDevice>> Function() listDevices =
         StorageService.listDevices,
@@ -181,7 +189,13 @@ class PhotosController extends ChangeNotifier {
     deleteAlbum: DemoPhotosService.deleteAlbum,
     addPhotoToAlbum: DemoPhotosService.addPhotoToAlbum,
     removePhotoFromAlbum: DemoPhotosService.removePhotoFromAlbum,
-    listAlbumItems: (id) async => DemoPhotosService.listAlbumItems(id),
+    listAlbumItems:
+        (
+          id, {
+          sort = PhotoSortField.added,
+          order = PhotoSortOrder.desc,
+        }) async =>
+            DemoPhotosService.listAlbumItems(id, sort: sort, order: order),
   );
 
   /// How many Quark photos one page fetches.
@@ -194,6 +208,8 @@ class PhotosController extends ChangeNotifier {
     int offset,
     int limit,
     String? serial,
+    PhotoSortField sort,
+    PhotoSortOrder order,
   })
   _getPhotos;
   final Future<List<AssetEntity>> Function() _loadDeviceAssets;
@@ -225,7 +241,12 @@ class PhotosController extends ChangeNotifier {
     required String relPath,
   })
   _removePhotoFromAlbum;
-  final Future<List<PhotoAlbumItem>> Function(int albumId) _listAlbumItems;
+  final Future<List<PhotoAlbumItem>> Function(
+    int albumId, {
+    PhotoSortField sort,
+    PhotoSortOrder order,
+  })
+  _listAlbumItems;
   final Future<List<StorageDevice>> Function() _listDevices;
   final Future<List<String>> Function(
     String uploadPath,
@@ -265,6 +286,11 @@ class PhotosController extends ChangeNotifier {
   bool _categoriesExpanded = false;
   int _columns = PhotoGridConfig.defaultColumns;
   bool _isUploading = false;
+
+  /// How the grid orders photos, loaded from the persisted setting so it
+  /// survives navigation and restart (#2509).
+  PhotoSortField _sortField = AppSettings.instance.photoSortField.value;
+  PhotoSortOrder _sortOrder = AppSettings.instance.photoSortOrder.value;
 
   // ── Selection ──────────────────────────────────────────────────────────────
 
@@ -357,6 +383,12 @@ class PhotosController extends ChangeNotifier {
 
   /// The grid density the user chose, before it is clamped to the width.
   int get columns => _columns;
+
+  /// The field the grid orders photos by.
+  PhotoSortField get sortField => _sortField;
+
+  /// The direction [sortField] orders in.
+  PhotoSortOrder get sortOrder => _sortOrder;
 
   /// Whether another page of Quark photos exists and the grid shows them.
   bool get hasMore =>
@@ -491,7 +523,7 @@ class PhotosController extends ChangeNotifier {
     if (generation != _generation || _disposed) return;
 
     _noHostSelected = noHost;
-    _mobile = mobilePhotos;
+    _mobile = _sortDevicePhotos(mobilePhotos);
     if (favoriteKeys != null) {
       _favoriteKeys
         ..clear()
@@ -525,7 +557,12 @@ class PhotosController extends ChangeNotifier {
     _isLoadingMore = true;
     notifyListeners();
     try {
-      final response = await _getPhotos(offset: _quark.length, limit: pageSize);
+      final response = await _getPhotos(
+        offset: _quark.length,
+        limit: pageSize,
+        sort: _sortField,
+        order: _sortOrder,
+      );
       if (generation != _generation || _disposed) return;
       _quark = [..._quark, ...response.photos.map(_Photo.fromWire)];
       _quarkTotal = response.total;
@@ -539,7 +576,12 @@ class PhotosController extends ChangeNotifier {
 
   Future<_QuarkPage> _firstQuarkPage() async {
     try {
-      final response = await _getPhotos(offset: 0, limit: pageSize);
+      final response = await _getPhotos(
+        offset: 0,
+        limit: pageSize,
+        sort: _sortField,
+        order: _sortOrder,
+      );
       return (
         photos: response.photos.map(_Photo.fromWire).toList(growable: false),
         total: response.total,
@@ -563,6 +605,28 @@ class PhotosController extends ChangeNotifier {
       debugPrint('[photos_controller.dart] Error loading device photos: $e');
       return const [];
     }
+  }
+
+  /// Applies [_sortField]/[_sortOrder] to device photos, which never go
+  /// through the sorted Quark endpoints (#2509).
+  ///
+  /// A device photo carries no real filename ([_Photo.fromAsset] uses the
+  /// asset id as a placeholder), so [PhotoSortField.name] has nothing
+  /// meaningful to sort by and leaves the device's own order in place; only
+  /// [PhotoSortField.added] (the asset's creation time) is applied here.
+  List<_Photo> _sortDevicePhotos(List<_Photo> photos) {
+    if (_sortField != PhotoSortField.added) return photos;
+    final ascending = _sortOrder == PhotoSortOrder.asc;
+    final sorted = [...photos];
+    sorted.sort((a, b) {
+      final at =
+          a.asset?.createDateTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bt =
+          b.asset?.createDateTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final cmp = at.compareTo(bt);
+      return ascending ? cmp : -cmp;
+    });
+    return sorted;
   }
 
   /// The device's own photos, from its "All" album. Empty anywhere but
@@ -636,6 +700,17 @@ class PhotosController extends ChangeNotifier {
   void setColumns(int columns) {
     _columns = columns;
     notifyListeners();
+  }
+
+  /// Sets the sort field and order together and reloads every visible list in
+  /// the new order (#2509).
+  Future<void> setSort(PhotoSortField field, PhotoSortOrder order) async {
+    if (field == _sortField && order == _sortOrder) return;
+    _sortField = field;
+    _sortOrder = order;
+    await AppSettings.instance.setPhotoSort(field, order);
+    notifyListeners();
+    await refresh();
   }
 
   // ── Favorites ──────────────────────────────────────────────────────────────
@@ -902,7 +977,11 @@ class PhotosController extends ChangeNotifier {
     if (id == null) return;
     final request = ++_albumRequest;
     try {
-      final items = await _listAlbumItems(id);
+      final items = await _listAlbumItems(
+        id,
+        sort: _sortField,
+        order: _sortOrder,
+      );
       if (request != _albumRequest || _disposed) return;
       _albumItems = items.map(_Photo.fromAlbumItem).toList(growable: false);
       _albumError = null;

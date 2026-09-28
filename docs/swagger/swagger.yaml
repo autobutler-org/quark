@@ -3019,6 +3019,14 @@ paths:
         name: id
         required: true
         type: integer
+      - description: 'Sort field: added (date added) or name (default added)'
+        in: query
+        name: sort
+        type: string
+      - description: 'Sort order: asc or desc (default desc)'
+        in: query
+        name: order
+        type: string
       produces:
       - application/json
       responses:
@@ -5854,6 +5862,14 @@ paths:
       - description: Device serial to filter by
         in: query
         name: serial
+        type: string
+      - description: 'Sort field: added (date added) or name (default added)'
+        in: query
+        name: sort
+        type: string
+      - description: 'Sort order: asc or desc (default desc)'
+        in: query
+        name: order
         type: string
       produces:
       - application/json

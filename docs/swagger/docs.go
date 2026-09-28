@@ -1526,6 +1526,18 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort field: added (date added) or name (default added)",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort order: asc or desc (default desc)",
+                        "name": "order",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -5600,6 +5612,18 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Device serial to filter by",
                         "name": "serial",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort field: added (date added) or name (default added)",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort order: asc or desc (default desc)",
+                        "name": "order",
                         "in": "query"
                     }
                 ],

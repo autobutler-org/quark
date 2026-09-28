@@ -8,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/models/feature_flag.dart';
+import 'package:quark/models/photo_sort.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Matches an explicit URI scheme prefix (`https://`, `http://`, `ws://`, ...).
@@ -123,6 +124,15 @@ class AppSettings {
 
   final ValueNotifier<bool> demoMode = ValueNotifier(false);
 
+  /// How the photo grid orders its items, and the direction — All photos,
+  /// every category tab, and every album view (#2509).
+  final ValueNotifier<PhotoSortField> photoSortField = ValueNotifier(
+    PhotoSortField.added,
+  );
+  final ValueNotifier<PhotoSortOrder> photoSortOrder = ValueNotifier(
+    PhotoSortOrder.desc,
+  );
+
   List<HostEntry> _hosts = [];
   int _activeIndex = -1;
 
@@ -201,6 +211,8 @@ class AppSettings {
   static const _sessionTokenKey = 'session_token';
   static const _acceptedTermsHostsKey = 'acceptedTermsHosts';
   static const _demoModeKey = 'demoMode';
+  static const _photoSortFieldKey = 'photoSortField';
+  static const _photoSortOrderKey = 'photoSortOrder';
 
   /// Holds a JSON object of host key -> username. Absent for a session that
   /// predates it.
@@ -220,6 +232,17 @@ class AppSettings {
         ? ThemeMode.dark
         : ThemeMode.system;
     demoMode.value = _prefs!.getBool(_demoModeKey) ?? false;
+
+    final sortFieldRaw = _prefs!.getString(_photoSortFieldKey);
+    photoSortField.value = PhotoSortField.values.firstWhere(
+      (f) => f.apiValue == sortFieldRaw,
+      orElse: () => PhotoSortField.added,
+    );
+    final sortOrderRaw = _prefs!.getString(_photoSortOrderKey);
+    photoSortOrder.value = PhotoSortOrder.values.firstWhere(
+      (o) => o.apiValue == sortOrderRaw,
+      orElse: () => PhotoSortOrder.desc,
+    );
 
     final hostsJson = _prefs!.getString('hosts') ?? '[]';
     try {
@@ -552,6 +575,14 @@ class AppSettings {
   Future<void> setDemoMode(bool enabled) async {
     demoMode.value = enabled;
     await _prefs?.setBool(_demoModeKey, enabled);
+  }
+
+  /// Sets the photo grid's sort field and order and persists both (#2509).
+  Future<void> setPhotoSort(PhotoSortField field, PhotoSortOrder order) async {
+    photoSortField.value = field;
+    photoSortOrder.value = order;
+    await _prefs?.setString(_photoSortFieldKey, field.apiValue);
+    await _prefs?.setString(_photoSortOrderKey, order.apiValue);
   }
 
   /// Records acceptance of the Terms and Conditions for the current

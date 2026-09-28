@@ -26,6 +26,7 @@ import 'package:quark/widgets/photos/album_item_menu.dart';
 import 'package:quark/widgets/photos/album_name_dialog.dart';
 import 'package:quark/widgets/photos/album_picker_sheet.dart';
 import 'package:quark/widgets/photos/delete_album_dialog.dart';
+import 'package:quark/widgets/photos/photo_sort_button.dart';
 import 'package:quark/widgets/photos/photo_thumbnail.dart';
 import 'package:quark/widgets/photos/photos_empty_state.dart';
 import 'package:quark/widgets/photos/remove_from_album_dialog.dart';
@@ -636,6 +637,11 @@ class PhotosPageState extends State<PhotosPage>
                     label: 'Add photos',
                     onPressed: () => _addPhotosTo(album.toAlbumItem()),
                   ),
+                PhotoSortButton(
+                  sortField: c.sortField,
+                  sortOrder: c.sortOrder,
+                  onChanged: c.setSort,
+                ),
                 const AppThemeToggle(),
               ],
               onRefresh: manualRefresh,

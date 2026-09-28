@@ -64,6 +64,36 @@ func TestParseDuplicateThreshold(t *testing.T) {
 	}
 }
 
+// --- ParseSort / ParseOrder ---
+
+func TestParseSort(t *testing.T) {
+	cases := []struct{ raw, want string }{
+		{"", "added"},
+		{"added", "added"},
+		{"name", "name"},
+		{"garbage", "added"},
+	}
+	for _, tc := range cases {
+		if got := photoutil.ParseSort(tc.raw); got != tc.want {
+			t.Errorf("ParseSort(%q) = %q, want %q", tc.raw, got, tc.want)
+		}
+	}
+}
+
+func TestParseOrder(t *testing.T) {
+	cases := []struct{ raw, want string }{
+		{"", "desc"},
+		{"desc", "desc"},
+		{"asc", "asc"},
+		{"garbage", "desc"},
+	}
+	for _, tc := range cases {
+		if got := photoutil.ParseOrder(tc.raw); got != tc.want {
+			t.Errorf("ParseOrder(%q) = %q, want %q", tc.raw, got, tc.want)
+		}
+	}
+}
+
 // --- ListPhotos (VFS path) ---
 
 func newPhotoMemVFS(t *testing.T, paths ...string) *vfs.MemVFS {
@@ -112,6 +142,46 @@ func TestListPhotos_VFS_Paginates(t *testing.T) {
 	if page.Total != 3 || len(page.Photos) != 1 || page.Offset != 1 || page.Limit != 1 {
 		t.Errorf("got total=%d photos=%d offset=%d limit=%d, want 3/1/1/1",
 			page.Total, len(page.Photos), page.Offset, page.Limit)
+	}
+}
+
+func TestListPhotos_VFS_SortByNameAscending(t *testing.T) {
+	mem := newPhotoMemVFS(t, "charlie.jpg", "alpha.jpg", "bravo.jpg")
+
+	page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
+		Ctx: context.Background(), FS: mem, Access: systemAccess(t),
+		Sort: "name", Order: "asc", Offset: 0, Limit: 50,
+	})
+	if err != nil {
+		t.Fatalf("ListPhotos: %v", err)
+	}
+	got := []string{page.Photos[0].FileName, page.Photos[1].FileName, page.Photos[2].FileName}
+	want := []string{"alpha.jpg", "bravo.jpg", "charlie.jpg"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("got order %v, want %v", got, want)
+			break
+		}
+	}
+}
+
+func TestListPhotos_VFS_SortByNameDescending(t *testing.T) {
+	mem := newPhotoMemVFS(t, "alpha.jpg", "charlie.jpg", "bravo.jpg")
+
+	page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
+		Ctx: context.Background(), FS: mem, Access: systemAccess(t),
+		Sort: "name", Order: "desc", Offset: 0, Limit: 50,
+	})
+	if err != nil {
+		t.Fatalf("ListPhotos: %v", err)
+	}
+	got := []string{page.Photos[0].FileName, page.Photos[1].FileName, page.Photos[2].FileName}
+	want := []string{"charlie.jpg", "bravo.jpg", "alpha.jpg"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("got order %v, want %v", got, want)
+			break
+		}
 	}
 }
 

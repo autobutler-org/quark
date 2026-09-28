@@ -339,6 +339,59 @@ func TestImageToThumbnail_NonExistentFile(t *testing.T) {
 	}
 }
 
+func TestSortPhotos_ByAddedDefaultsNewestFirst(t *testing.T) {
+	photos := []PhotoSummary{
+		{FileName: "old.jpg", MTime: 100},
+		{FileName: "new.jpg", MTime: 300},
+		{FileName: "mid.jpg", MTime: 200},
+	}
+	sortPhotos(photos, "", "")
+	want := []string{"new.jpg", "mid.jpg", "old.jpg"}
+	for i, name := range want {
+		if photos[i].FileName != name {
+			t.Fatalf("got order %v, want %v", photoNames(photos), want)
+		}
+	}
+}
+
+func TestSortPhotos_ByAddedAscending(t *testing.T) {
+	photos := []PhotoSummary{
+		{FileName: "new.jpg", MTime: 300},
+		{FileName: "old.jpg", MTime: 100},
+		{FileName: "mid.jpg", MTime: 200},
+	}
+	sortPhotos(photos, SortAdded, OrderAsc)
+	want := []string{"old.jpg", "mid.jpg", "new.jpg"}
+	for i, name := range want {
+		if photos[i].FileName != name {
+			t.Fatalf("got order %v, want %v", photoNames(photos), want)
+		}
+	}
+}
+
+func TestSortPhotos_ByNameCaseInsensitive(t *testing.T) {
+	photos := []PhotoSummary{
+		{FileName: "Charlie.jpg"},
+		{FileName: "alpha.jpg"},
+		{FileName: "Bravo.jpg"},
+	}
+	sortPhotos(photos, SortName, OrderAsc)
+	want := []string{"alpha.jpg", "Bravo.jpg", "Charlie.jpg"}
+	for i, name := range want {
+		if photos[i].FileName != name {
+			t.Fatalf("got order %v, want %v", photoNames(photos), want)
+		}
+	}
+}
+
+func photoNames(photos []PhotoSummary) []string {
+	names := make([]string, len(photos))
+	for i, p := range photos {
+		names[i] = p.FileName
+	}
+	return names
+}
+
 func TestImageToThumbnail_InvalidImage(t *testing.T) {
 	tmpDir := t.TempDir()
 	invalidFile := filepath.Join(tmpDir, "invalid.jpg")

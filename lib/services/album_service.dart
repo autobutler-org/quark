@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:quark/models/photo_album.dart';
+import 'package:quark/models/photo_sort.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -87,9 +88,15 @@ class AlbumService with AuthenticatedService {
     }
   }
 
-  static Future<List<PhotoAlbumItem>> listAlbumItems(int albumId) async {
+  static Future<List<PhotoAlbumItem>> listAlbumItems(
+    int albumId, {
+    PhotoSortField sort = PhotoSortField.added,
+    PhotoSortOrder order = PhotoSortOrder.desc,
+  }) async {
     final response = await instance.authenticatedGet(
-      _apiUri('/albums/$albumId/items'),
+      _apiUri('/albums/$albumId/items').replace(
+        queryParameters: {'sort': sort.apiValue, 'order': order.apiValue},
+      ),
     );
     if (response.statusCode != 200) {
       throw ApiException(response.statusCode, 'Failed to load album items');
