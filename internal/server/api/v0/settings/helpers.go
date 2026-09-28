@@ -17,7 +17,7 @@ func remoteAccessResponse(enabled bool) RemoteAccessResponse {
 	}
 }
 
-// provisionAuthKey is remoteutil.EnsureStarted's provisionFn: a fresh key from
+// provisionAuthKey is remoteutil.Enable's provisionFn: a fresh key from
 // the provisioning service, in the Quark's own household.
 func provisionAuthKey() (string, error) {
 	result, err := provisionutil.Enroll()

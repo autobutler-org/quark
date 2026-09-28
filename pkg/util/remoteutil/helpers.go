@@ -142,6 +142,33 @@ func restartIfUnchanged(gen uint64, key string, keyErr error, localPort int, loc
 	return true, nil
 }
 
+// ensureStarted is EnsureStarted's and Enable's body. With freshKey false,
+// persisted state stands in for a key; with it true, a key is always
+// provisioned, and superviseLogin never deletes the state dir, because that
+// state holds the machine key Headscale knows the node by (#2469).
+func ensureStarted(freshKey bool, localPort int, localTLS bool, provisionFn func() (string, error)) error {
+	if IsRunning() {
+		return nil
+	}
+
+	authKey := ""
+	fromState := !freshKey && HasPersistedState()
+	if !fromState {
+		log.Printf("[remote] provisioning a key (fresh key requested: %v)", freshKey)
+		key, err := provisionKey(provisionFn)
+		if err != nil {
+			return err
+		}
+		authKey = key
+	}
+
+	if err := startWithProxy(authKey, localPort, localTLS); err != nil {
+		return err
+	}
+	go superviseLogin(fromState, localPort, localTLS, provisionFn)
+	return nil
+}
+
 // provisionKey calls provisionFn, recording a failure for Status.
 func provisionKey(provisionFn func() (string, error)) (string, error) {
 	key, err := provisionFn()
