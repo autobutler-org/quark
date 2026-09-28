@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"tailscale.com/ipn/ipnstate"
 )
 
@@ -169,7 +170,8 @@ func TestNewProxy_SetsForwardedFor(t *testing.T) {
 // TestConnectionFromStatus verifies that only BackendState "Running" counts as
 // connected (#1815): tsnet.Server.Start returns before the node authenticates,
 // and a node waiting on login can already hold an IP. "NeedsLogin" is reported
-// as a rejected or expired key rather than as connecting forever (#1876).
+// as a rejected or expired key only once control sends an auth URL (#1876,
+// #2466).
 func TestConnectionFromStatus(t *testing.T) {
 	ip := []netip.Addr{netip.MustParseAddr("100.64.0.7")}
 	cases := []struct {
@@ -180,7 +182,8 @@ func TestConnectionFromStatus(t *testing.T) {
 		{"nil status", nil, StatusResult{}},
 		{"no state yet", &ipnstate.Status{BackendState: "NoState"}, StatusResult{}},
 		{"starting", &ipnstate.Status{BackendState: "Starting", TailscaleIPs: ip}, StatusResult{}},
-		{"needs login", &ipnstate.Status{BackendState: "NeedsLogin", TailscaleIPs: ip}, StatusResult{Error: errKeyRejected}},
+		{"needs login, awaiting network map", &ipnstate.Status{BackendState: "NeedsLogin", TailscaleIPs: ip}, StatusResult{}},
+		{"needs interactive login", &ipnstate.Status{BackendState: "NeedsLogin", AuthURL: "https://control/register/x", TailscaleIPs: ip}, StatusResult{Error: errKeyRejected}},
 		{"running without an IP yet", &ipnstate.Status{BackendState: "Running"}, StatusResult{Connected: true}},
 		{"running", &ipnstate.Status{BackendState: "Running", TailscaleIPs: ip}, StatusResult{Connected: true, RemoteURL: "http://100.64.0.7:80"}},
 	}
@@ -191,6 +194,72 @@ func TestConnectionFromStatus(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestNeedsInteractiveLogin verifies superviseLogin gives up on a node only
+// when control has handed it a login URL (#2466). A node presenting a fresh
+// pre-auth key sits in NeedsLogin with no URL until its first network map, and
+// must be left alone.
+func TestNeedsInteractiveLogin(t *testing.T) {
+	cases := []struct {
+		name string
+		st   *ipnstate.Status
+		want bool
+	}{
+		{"nil status", nil, false},
+		{"no state yet", &ipnstate.Status{BackendState: "NoState"}, false},
+		{"fresh key, awaiting network map", &ipnstate.Status{BackendState: "NeedsLogin"}, false},
+		{"control asks for a login", &ipnstate.Status{BackendState: "NeedsLogin", AuthURL: "https://control/register/x"}, true},
+		{"starting", &ipnstate.Status{BackendState: "Starting"}, false},
+		{"running", &ipnstate.Status{BackendState: "Running"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := needsInteractiveLogin(tc.st); got != tc.want {
+				t.Errorf("needsInteractiveLogin() = %v; want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRestartIfUnchanged verifies the re-enroll step in superviseLogin never
+// restarts a node that was stopped, or turned off, while its fresh key was
+// being provisioned (#2466). None of these cases reach tsnet.
+func TestRestartIfUnchanged(t *testing.T) {
+	settingsutil.ResetForTesting(filepath.Join(t.TempDir(), "settings.json"))
+	t.Cleanup(func() { settingsutil.ResetForTesting("") })
+	stopCount := func() uint64 {
+		mu.Lock()
+		defer mu.Unlock()
+		return stops
+	}
+
+	if err := settingsutil.SetRemoteAccess(true); err != nil {
+		t.Fatalf("SetRemoteAccess(true) = %v", err)
+	}
+	gen := stopCount()
+	Stop() // a Disable lands during provisioning
+	if acted, err := restartIfUnchanged(gen, "tskey-test", nil, 0, false); acted || err != nil || IsRunning() {
+		t.Errorf("after a stop: restartIfUnchanged() = %v, %v, running %v; want no restart", acted, err, IsRunning())
+	}
+
+	if err := settingsutil.SetRemoteAccess(false); err != nil {
+		t.Fatalf("SetRemoteAccess(false) = %v", err)
+	}
+	if acted, err := restartIfUnchanged(stopCount(), "tskey-test", nil, 0, false); acted || err != nil || IsRunning() {
+		t.Errorf("with remote access off: restartIfUnchanged() = %v, %v, running %v; want no restart", acted, err, IsRunning())
+	}
+
+	if err := settingsutil.SetRemoteAccess(true); err != nil {
+		t.Fatalf("SetRemoteAccess(true) = %v", err)
+	}
+	acted, err := restartIfUnchanged(stopCount(), "", errors.New("no secret"), 0, false)
+	if !acted || err == nil || !strings.Contains(Status().Error, "no secret") {
+		t.Errorf("provision failure: restartIfUnchanged() = %v, %v, Status %+v; want the error recorded", acted, err, Status())
+	}
+	mu.Lock()
+	lastErr = nil
+	mu.Unlock()
 }
 
 // TestEnsureStarted_RecordsProvisionFailure verifies a failed key request is

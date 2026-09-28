@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
-	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -36,6 +34,9 @@ var (
 	// ponytail: package state like the rest of this file; it belongs on
 	// deputil.Dependencies (#1674) once remote access is reworked there.
 	lastErr error
+	// stops counts stops of the node, so superviseLogin can tell whether a
+	// Disable or Stop landed while it was provisioning a fresh key.
+	stops uint64
 	// testStatus, when set, is what Status reports; see SetStatusForTesting.
 	testStatus *StatusResult
 )
@@ -134,45 +135,13 @@ type StatusResult struct {
 func Start(authKey string) error {
 	mu.Lock()
 	defer mu.Unlock()
-	if running {
-		return nil
-	}
-	dir := stateDir()
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		lastErr = fmt.Errorf("failed to create tsnet state dir: %w", err)
-		return lastErr
-	}
-	srv = &tsnet.Server{
-		Hostname:   nodeHostname(provisionutil.DeviceID()),
-		AuthKey:    authKey,
-		Dir:        dir,
-		ControlURL: controlURL(),
-		Logf: func(format string, args ...any) {
-			log.Printf("[tsnet] "+format, args...)
-		},
-	}
-	if err := srv.Start(); err != nil {
-		srv = nil
-		lastErr = fmt.Errorf("failed to start tsnet: %w", err)
-		return lastErr
-	}
-	running = true
-	lastErr = nil
-	return nil
+	return startLocked(authKey)
 }
 
 func Stop() {
 	mu.Lock()
 	defer mu.Unlock()
-	if proxyLn != nil {
-		proxyLn.Close()
-		proxyLn = nil
-	}
-	if srv != nil {
-		srv.Close()
-		srv = nil
-	}
-	running = false
+	stopLocked()
 }
 
 func IsRunning() bool {
@@ -277,34 +246,7 @@ func HasPersistedState() bool {
 func StartProxy(localPort int, localTLS bool) error {
 	mu.Lock()
 	defer mu.Unlock()
-	if proxyLn != nil {
-		return nil // already started
-	}
-	if srv == nil {
-		lastErr = fmt.Errorf("tsnet not started")
-		return lastErr
-	}
-	ln, err := srv.Listen("tcp", ":80")
-	if err != nil {
-		lastErr = fmt.Errorf("tsnet listen failed: %w", err)
-		return lastErr
-	}
-	proxyLn = ln
-	scheme := "http"
-	if localTLS {
-		scheme = "https"
-	}
-	target := &url.URL{
-		Scheme: scheme,
-		Host:   fmt.Sprintf("localhost:%d", localPort),
-	}
-	rp := newProxy(target, localTLS)
-	go func() {
-		if err := http.Serve(ln, rp); err != nil {
-			log.Printf("[tsnet] proxy stopped: %v", err)
-		}
-	}()
-	return nil
+	return startProxyLocked(localPort, localTLS)
 }
 
 // EnsureStarted starts the tsnet node and its proxy. provisionFn is called
@@ -313,33 +255,30 @@ func StartProxy(localPort int, localTLS bool) error {
 // Disable, needs a fresh Headscale pre-auth key. The proxy is started against
 // localPort after tsnet starts successfully; localTLS must match how the
 // server is serving that port. Every failure is recorded for Status.
+//
+// It returns once the node has started, before it has logged in, and watches
+// the login in the background. If control rejects the persisted state and
+// asks for an interactive login, the node re-enrolls once with a fresh key; if
+// it still needs a login, it is stopped and Status reports why (#2466).
 func EnsureStarted(localPort int, localTLS bool, provisionFn func() (string, error)) error {
 	if IsRunning() {
 		return nil
 	}
 
 	authKey := ""
-	if !HasPersistedState() {
+	fromState := HasPersistedState()
+	if !fromState {
 		log.Printf("[remote] no persisted tsnet state, provisioning a key")
-		key, err := provisionFn()
+		key, err := provisionKey(provisionFn)
 		if err != nil {
-			err = fmt.Errorf("provision: %w", err)
-			mu.Lock()
-			lastErr = err
-			mu.Unlock()
 			return err
 		}
 		authKey = key
 	}
 
-	if err := Start(authKey); err != nil {
-		return fmt.Errorf("start tsnet: %w", err)
+	if err := startWithProxy(authKey, localPort, localTLS); err != nil {
+		return err
 	}
-
-	if err := StartProxy(localPort, localTLS); err != nil {
-		Stop()
-		return fmt.Errorf("start proxy: %w", err)
-	}
-
+	go superviseLogin(fromState, localPort, localTLS, provisionFn)
 	return nil
 }
