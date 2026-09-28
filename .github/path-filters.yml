@@ -29,6 +29,8 @@ flutter: &flutter
   - analysis_options.yaml
   # generate/frontend/quark-icons runs `npx fantasticon`.
   - package.json
+  # setup-node takes its Node version from here.
+  - .nvmrc
   - package-lock.json
   - scripts/generate_flutter_sbom.dart
 web:
