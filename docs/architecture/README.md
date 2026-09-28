@@ -10,6 +10,7 @@ repository root; everything here expands on it. Diagrams are Mermaid, so GitHub 
 | [Request flows](request-flows.md)     | auth, streaming upload, live events, background jobs           |
 | [Data](data.md)                       | SQLite databases, schema, VFS, the vault                       |
 | [Frontend](frontend.md)               | Flutter app layers, routing, the widget package                |
+| [Styling](styling.md)                 | design tokens, the theme, and what keeps pages visually consistent |
 | [Build and tooling](tooling.md)       | code generation, checks, how the knowledge base stays true     |
 
 These pages describe structure, which changes slowly. For what Quark does feature by feature, the inventory is

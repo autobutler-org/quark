@@ -283,6 +283,7 @@
     "Lanczos",
     "lavfi",
     "ldflags",
+    "lerp",
     "libapp",
     "libc",
     "libexec",

@@ -34,6 +34,10 @@ datalinks/                    symlinks to system directories, an in-repo view of
 ### Where to read next
 
 - [`docs/dev-onboarding.md`](docs/dev-onboarding.md) — running it locally, the two backend modes, `AS_ROOT=1`.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`docs/architecture/`](docs/architecture/README.md) — how Quark is
+  built: backend layers, request flows, data, the Flutter frontend, and
+  [frontend styling](docs/architecture/styling.md) — the design tokens and theme that keep pages visually
+  consistent, and what enforces it.
 - [`docs/user-journeys/`](docs/user-journeys/README.md) — ten files of stable `JN-XXX` journeys. This is the
   feature inventory; check it before claiming Quark does something.
 - [`lib/widgets/README.md`](lib/widgets/README.md) — which app widgets are still service-coupled, and why.
