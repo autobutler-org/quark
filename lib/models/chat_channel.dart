@@ -1,7 +1,9 @@
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// A chat channel the signed-in account can see, as
-/// `GET /api/v0/chat/channels` lists it (#2415).
+/// `GET /api/v0/chat/channels` lists it (#2415). With `?all=1` an admin also
+/// gets the channels they are not in, which carry an empty [permissions] set
+/// (#2422).
 class ChatChannel {
   /// Builds a channel explicitly; tests use it.
   const ChatChannel({
@@ -11,6 +13,7 @@ class ChatChannel {
     this.isDefault = false,
     this.isPrivate = false,
     this.permissions = const {},
+    this.createdBy,
   });
 
   /// The channel's id, the `/chat/:channelId` in its URL.
@@ -30,8 +33,16 @@ class ChatChannel {
 
   /// What the caller may do here: the union of every row that reaches them,
   /// as the Quark worked it out. A hint for the UI only; the Quark enforces
-  /// it.
+  /// it. Empty for a channel an admin can manage but is not in.
   final Set<ChatPermission> permissions;
+
+  /// The account that created the channel, whose row only an admin can
+  /// remove or lower; null for `general` and once that account is deleted.
+  final int? createdBy;
+
+  /// Whether the caller has any row here. A channel an admin lists without
+  /// being in it has none.
+  bool get isMember => permissions.isNotEmpty;
 
   /// Whether the caller is in the conversation: reads it and holds its key.
   /// A channel listed without it is one the caller only manages.
@@ -49,6 +60,7 @@ class ChatChannel {
     isDefault: json['isDefault'] as bool? ?? false,
     isPrivate: json['isPrivate'] as bool? ?? false,
     permissions: chatPermissionsFromJson(json['permissions']),
+    createdBy: (json['createdBy'] as num?)?.toInt(),
   );
 }
 
@@ -68,6 +80,7 @@ class ChatMember {
     required this.permissions,
     this.userId,
     this.groupId,
+    this.builtin = false,
     this.avatarUpdatedAt,
     this.users = const [],
   });
@@ -80,6 +93,9 @@ class ChatMember {
 
   /// The username or group name.
   final String name;
+
+  /// Whether this is the Quark's own `everyone` group.
+  final bool builtin;
 
   /// What this row lets its account or group do.
   final Set<ChatPermission> permissions;
@@ -95,6 +111,7 @@ class ChatMember {
     userId: (json['userId'] as num?)?.toInt(),
     groupId: (json['groupId'] as num?)?.toInt(),
     name: json['name'] as String? ?? '',
+    builtin: json['builtin'] as bool? ?? false,
     permissions: chatPermissionsFromJson(json['permissions']),
     avatarUpdatedAt: (json['avatarUpdatedAt'] as num?)?.toInt(),
     users: [

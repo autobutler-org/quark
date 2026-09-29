@@ -12,7 +12,7 @@ import (
 
 // signChannelEvent godoc
 // @Summary Sign a chat channel event the caller made
-// @Description Stores the caller's 64-byte Ed25519 signature, base64, over an event's canonical bytes, with the caller's published signing key beside it. Only the event's actor may sign it, and only once. The channel's members hear chat_channel_changed, so they can show it as verified.
+// @Description Stores the caller's 64-byte Ed25519 signature, base64, over an event's canonical bytes, with the caller's published signing key beside it. Only the event's actor may sign it, and only once, whether or not they are still a member. The channel's members hear chat_channel_changed, so they can show it as verified.
 // @Tags chat
 // @Accept json
 // @Produce json
@@ -22,7 +22,7 @@ import (
 // @Success 200 {object} chatutil.ChannelEvent
 // @Failure 400 {object} serverutil.Response "a signature of the wrong size"
 // @Failure 401 {object} serverutil.Response
-// @Failure 404 {object} serverutil.Response "no such channel or event, the caller isn't a member, or isn't the event's actor"
+// @Failure 404 {object} serverutil.Response "no such channel or event, or the caller isn't the event's actor"
 // @Failure 409 {object} serverutil.Response "the event is already signed"
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth

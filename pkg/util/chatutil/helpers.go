@@ -293,6 +293,44 @@ func inTx(ctx context.Context, database *db.DatabaseSqlc, fn func(*db.Queries) e
 	return tx.Commit()
 }
 
+// keepingAnOwner runs change in one transaction and rolls it back with
+// ErrLastOwner when it takes away the channel's last holder of manage_channel
+// while other members remain (#2422). Admins may do that, since they can
+// manage such a channel, and a channel that had no holder before the change
+// is left to them too.
+func keepingAnOwner(ctx context.Context, database *db.DatabaseSqlc, principal accessutil.Principal, channelID int64, change func(*db.Queries) error) error {
+	return inTx(ctx, database, func(q *db.Queries) error {
+		if principal.IsAdmin {
+			return change(q)
+		}
+		before, _, err := ownerCount(ctx, q, channelID)
+		if err != nil {
+			return err
+		}
+		if err := change(q); err != nil {
+			return err
+		}
+		after, members, err := ownerCount(ctx, q, channelID)
+		if err == nil && before > 0 && after == 0 && members > 0 {
+			return ErrLastOwner
+		}
+		return err
+	})
+}
+
+// ownerCount is how many active accounts hold manage_channel on a channel,
+// directly or through a group, out of how many members it has.
+func ownerCount(ctx context.Context, queries *db.Queries, channelID int64) (int, int, error) {
+	users, err := memberUsers(ctx, queries, channelID)
+	count := 0
+	for _, user := range users {
+		if user.Perms.Has(PermManageChannel) {
+			count++
+		}
+	}
+	return count, len(users), err
+}
+
 // keysFromRow maps a user_chat_keys row to the Keys the API serves.
 func keysFromRow(row db.UserChatKey) Keys {
 	return Keys{

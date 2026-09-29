@@ -293,3 +293,38 @@ func TestChat_DelegatedManager(t *testing.T) {
 		}
 	}
 }
+
+// TestChat_AdminListsEveryChannel has an admin find a channel they are not in
+// with all=1, which anyone else is refused.
+func TestChat_AdminListsEveryChannel(t *testing.T) {
+	h := newHarness(t)
+	h.expect(t, http.StatusCreated, http.MethodPost, "/chat/channels", "bob", `{"name":"secret"}`, nil)
+
+	h.expect(t, http.StatusForbidden, http.MethodGet, "/chat/channels?all=1", "bob", "", nil)
+	var result chatutil.ListChannelsResult
+	h.expect(t, http.StatusOK, http.MethodGet, "/chat/channels?all=1", "admin", "", &result)
+	if len(result.Channels) != 2 || result.Channels[1].Name != "secret" || result.Channels[1].Permissions != 0 {
+		t.Errorf("all=1 as admin = %+v, want general then secret with an empty set", result.Channels)
+	}
+	if names := h.channelNames(t, "admin"); len(names) != 1 {
+		t.Errorf("without all=1 the admin sees %v, want only general", names)
+	}
+}
+
+// TestChat_LastOwnerCantLeave refuses the last holder of manage_channel
+// leaving a channel that still has members with 400.
+func TestChat_LastOwnerCantLeave(t *testing.T) {
+	h := newHarness(t)
+	var channel chatutil.Channel
+	h.expect(t, http.StatusCreated, http.MethodPost, "/chat/channels", "bob", `{"name":"design"}`, &channel)
+	path := "/chat/channels/" + strconv.FormatInt(channel.ID, 10) + "/members"
+	bob := `{"userId":` + strconv.FormatInt(h.users["bob"], 10) + `}`
+
+	h.expect(t, http.StatusOK, http.MethodPut, path, "bob", userBody(h.users["carol"], viewer...), nil)
+	code, body := h.do(t, http.MethodDelete, path, "bob", bob)
+	if code != http.StatusBadRequest || !strings.Contains(body, "manage_channel") {
+		t.Errorf("last manager leaving = %d %s, want 400 naming manage_channel", code, body)
+	}
+	h.expect(t, http.StatusOK, http.MethodPut, path, "bob", userBody(h.users["carol"], owner...), nil)
+	h.expect(t, http.StatusOK, http.MethodDelete, path, "bob", bob, nil)
+}

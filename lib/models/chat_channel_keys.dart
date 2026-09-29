@@ -1,5 +1,8 @@
 import 'dart:convert';
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
+import 'package:quark/models/chat_channel.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// A channel's key versions and the signed-in account's grants of them, from
 /// `GET /api/v0/chat/channels/:id/keys` (#2417).
@@ -226,6 +229,31 @@ class ChatChannelEvent {
 
   /// [payload], decoded.
   Map<String, dynamic> get data => jsonDecode(payload) as Map<String, dynamic>;
+
+  /// Whether this records giving account [userId] or group [groupId]
+  /// [permissions], or removing its row when [permissions] is null: what a
+  /// client checks before signing the event a member change returned.
+  bool describesMemberChange({
+    int? userId,
+    int? groupId,
+    Set<ChatPermission>? permissions,
+  }) {
+    if (kind != (permissions == null ? memberRemoved : memberSet)) {
+      return false;
+    }
+    final Map<String, dynamic> d;
+    try {
+      d = data;
+    } on Object {
+      return false;
+    }
+    final recorded = d['permissions'];
+    return (d['userId'] as num?)?.toInt() == userId &&
+        (d['groupId'] as num?)?.toInt() == groupId &&
+        (permissions == null
+            ? recorded == null
+            : setEquals(chatPermissionsFromJson(recorded), permissions));
+  }
 
   /// Reads one event.
   factory ChatChannelEvent.fromJson(Map<String, dynamic> json) {

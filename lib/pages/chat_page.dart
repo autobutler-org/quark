@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/controllers/chat_channel_share_target.dart';
 import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -10,6 +11,7 @@ import 'package:quark/widgets/chat/chat_failed_send_bar.dart';
 import 'package:quark/widgets/chat/chat_unlock_prompt.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/widgets/users/user_avatar.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -24,6 +26,15 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// While chat is locked, on web after a reload, the page asks for the
 /// password before it shows anything else.
+///
+/// "New channel" creates a channel and goes to it. The channel header's
+/// settings (#2422) edit the name and topic and delete, for holders of
+/// `manage_channel` and admins, and open the members in the share sheet, for
+/// holders of `manage_members` and admins, who also get add and remove in
+/// the member list. Any member with a row of their own may leave, except in
+/// `general`. An admin's channels they are not in are listed apart and open
+/// without their messages. The author of a message, or a holder of
+/// `delete_messages`, deletes it after confirming.
 class ChatPage extends StatefulWidget {
   /// Creates the page on channel [channelId].
   const ChatPage({required this.channelId, this.controller, super.key});
@@ -54,7 +65,11 @@ class _ChatPageState extends State<ChatPage>
   void didUpdateWidget(covariant ChatPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.channelId != oldWidget.channelId) {
-      _controller.select(widget.channelId);
+      // After the frame: selecting notifies, and a listener outside this
+      // page, such as a closing dialog, can't be marked dirty mid-build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _controller.select(widget.channelId);
+      });
     }
   }
 
@@ -108,6 +123,157 @@ class _ChatPageState extends State<ChatPage>
     context.go(AppRoutes.chatChannel(id));
   }
 
+  String? _saveError(String action) {
+    final error = _controller.saveError;
+    return error == null ? null : Errors.chatChannel(error, action);
+  }
+
+  Future<void> _createChannel() async {
+    _controller.clearSaveError();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => ListenableBuilder(
+        listenable: _controller,
+        builder: (dialogContext, _) => QuarkChannelDialog(
+          title: 'New channel',
+          submitLabel: 'Create',
+          nameMaxLength: ChatController.maxNameLength,
+          topicMaxLength: ChatController.maxTopicLength,
+          isSubmitting: _controller.isSaving,
+          error: _saveError('create the channel'),
+          onSubmit: (name, topic) async {
+            final channel = await _controller.createChannel(name, topic);
+            if (channel == null || !dialogContext.mounted) return;
+            Navigator.of(dialogContext).pop();
+            if (mounted) context.go(AppRoutes.chatChannel('${channel.id}'));
+          },
+          onCancel: () => Navigator.of(dialogContext).pop(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editChannel() async {
+    final channel = _controller.selectedChannel;
+    if (channel == null) return;
+    _controller.clearSaveError();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => ListenableBuilder(
+        listenable: _controller,
+        builder: (dialogContext, _) => QuarkChannelDialog(
+          title: 'Edit #${channel.name}',
+          submitLabel: 'Save',
+          initialName: channel.name,
+          initialTopic: channel.topic,
+          nameMaxLength: ChatController.maxNameLength,
+          topicMaxLength: ChatController.maxTopicLength,
+          isSubmitting: _controller.isSaving,
+          error: _saveError('save the channel'),
+          onSubmit: (name, topic) async {
+            final saved = await _controller.updateChannel(name, topic);
+            if (saved && dialogContext.mounted) {
+              Navigator.of(dialogContext).pop();
+            }
+          },
+          onCancel: () => Navigator.of(dialogContext).pop(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openMembers() async {
+    final channel = _controller.selectedChannel;
+    if (channel == null) return;
+    await showShareSheetFor(
+      context,
+      target: ChatChannelShareTarget(
+        channel: channel,
+        isAdmin: _controller.isAdmin,
+        selfUserId: int.tryParse(_controller.currentUserKey ?? ''),
+      ),
+      name: '#${channel.name}',
+    );
+  }
+
+  Future<void> _removeMember(String id) async {
+    final member = _controller.memberItems.where((m) => m.id == id).firstOrNull;
+    if (member == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => ConfirmDeleteDialog(
+        title: 'Remove ${member.name}?',
+        body: _controller.memberReads(id)
+            ? "The channel's key will change, so ${member.name} can't read "
+                  'anything posted from now on. They keep whatever they '
+                  'already downloaded.'
+            : '${member.name} will no longer be able to manage this channel.',
+        keyPrefix: 'remove_member',
+        confirmLabel: 'Remove',
+        onConfirm: () => Navigator.of(dialogContext).pop(true),
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+      ),
+    );
+    if (confirmed != true) return;
+    final error = await _controller.removeMember(id);
+    if (error == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(Errors.message(error, 'remove them'))),
+    );
+  }
+
+  Future<void> _deleteChannel() async {
+    final channel = _controller.selectedChannel;
+    if (channel == null) return;
+    _controller.clearSaveError();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => ListenableBuilder(
+        listenable: _controller,
+        builder: (dialogContext, _) => QuarkDeleteChannelDialog(
+          channelName: channel.name,
+          isSubmitting: _controller.isSaving,
+          error: _saveError('delete the channel'),
+          onConfirm: () async {
+            final deleted = await _controller.deleteChannel();
+            if (deleted && dialogContext.mounted) {
+              Navigator.of(dialogContext).pop();
+            }
+          },
+          onCancel: () => Navigator.of(dialogContext).pop(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _leaveChannel() async {
+    final channel = _controller.selectedChannel;
+    if (channel == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => ConfirmDeleteDialog(
+        title: 'Leave #${channel.name}?',
+        body:
+            "You'll stop seeing its messages. To come back, someone who "
+            'manages its members has to add you again.',
+        keyPrefix: 'leave_channel',
+        confirmLabel: 'Leave',
+        onConfirm: () => Navigator.of(dialogContext).pop(true),
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+      ),
+    );
+    if (confirmed != true || await _controller.leaveChannel() || !mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          Errors.message(_controller.saveError, 'leave the channel'),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -127,7 +293,15 @@ class _ChatPageState extends State<ChatPage>
         return QuarkPageScaffold(
           title: 'Chat',
           icon: QuarkIcons.forum_outlined,
-          actions: const [AppThemeToggle()],
+          actions: [
+            QuarkBarChip(
+              key: const ValueKey('chat_new_channel'),
+              icon: QuarkIcons.add,
+              label: 'New channel',
+              onPressed: c.isLocked ? null : _createChannel,
+            ),
+            const AppThemeToggle(),
+          ],
           onRefresh: manualRefresh,
           isRefreshing: isRefreshing,
           drawer: const AppDrawer(activeSection: QuarkDrawerSection.chat),
@@ -145,10 +319,17 @@ class _ChatPageState extends State<ChatPage>
                       : ChatChannelHeader(
                           name: channel.name,
                           topic: channel.topic,
+                          onEdit: c.canManageSelected ? _editChannel : null,
+                          onMembers: c.canManageMembers ? _openMembers : null,
+                          onDelete: c.canManageSelected && !channel.isDefault
+                              ? _deleteChannel
+                              : null,
+                          onLeave: c.canLeaveSelected ? _leaveChannel : null,
                         ),
                   channelList: QuarkChannelList(
                     serverName: serverName,
                     channels: c.channelItems,
+                    otherChannels: c.otherChannelItems,
                     selectedChannelId: channel == null ? null : '${channel.id}',
                     isLoading: c.isLoadingChannels && c.channels.isEmpty,
                     error: c.channelsError == null
@@ -216,7 +397,9 @@ class _ChatPageState extends State<ChatPage>
                   ),
                   memberList: QuarkMemberList(
                     members: c.memberItems,
-                    permissions: c.selectedPermissions,
+                    permissions: c.managingPermissions,
+                    onAddMembers: _openMembers,
+                    onRemove: _removeMember,
                     expandedIds: c.expandedGroupIds,
                     onToggleExpanded: c.toggleGroup,
                     isLoading: c.isLoadingMembers && c.members.isEmpty,

@@ -1097,6 +1097,18 @@ final List<GalleryEntry> registry = [
             onSelect: (id) => log('QuarkChannelList.onSelect($id)'),
           ),
         ),
+        SizedBox(
+          width: 280,
+          height: 320,
+          child: QuarkChannelList(
+            serverName: 'As an admin',
+            channels: galleryChatChannels,
+            otherChannels: const [
+              ChatChannelItem(id: 'payroll', name: 'payroll', isPrivate: true),
+            ],
+            onSelect: (id) => log('QuarkChannelList.onSelect($id)'),
+          ),
+        ),
         const SizedBox(
           width: 280,
           height: 240,
@@ -1116,6 +1128,28 @@ final List<GalleryEntry> registry = [
           ),
         ),
       ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkChannelDialog',
+    group: 'Chat',
+    build: (context, log) => QuarkChannelDialog(
+      title: 'New channel',
+      submitLabel: 'Create',
+      nameMaxLength: 64,
+      topicMaxLength: 512,
+      onSubmit: (name, topic) =>
+          log('QuarkChannelDialog.onSubmit($name, $topic)'),
+      onCancel: () => log('QuarkChannelDialog.onCancel'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkDeleteChannelDialog',
+    group: 'Chat',
+    build: (context, log) => QuarkDeleteChannelDialog(
+      channelName: 'family',
+      onConfirm: () => log('QuarkDeleteChannelDialog.onConfirm'),
+      onCancel: () => log('QuarkDeleteChannelDialog.onCancel'),
     ),
   ),
   GalleryEntry(
@@ -1446,65 +1480,118 @@ final List<GalleryEntry> registry = [
   GalleryEntry(
     name: 'ShareSheet',
     group: 'Sharing',
-    build: (context, log) => ShareSheet(
-      itemName: 'Recipes',
-      grants: const [
-        GrantItem(
-          principal: PrincipalItem(
-            kind: PrincipalKind.group,
-            id: 1,
-            name: 'everyone',
-            isBuiltin: true,
+    build: (context, log) => Wrap(
+      spacing: 24,
+      runSpacing: 24,
+      children: [
+        SizedBox(
+          width: 420,
+          height: 560,
+          child: ShareSheet(
+            itemName: 'Recipes',
+            grants: const [
+              GrantItem(
+                principal: PrincipalItem(
+                  kind: PrincipalKind.group,
+                  id: 1,
+                  name: 'everyone',
+                  isBuiltin: true,
+                ),
+                level: AccessLevel.read,
+              ),
+              GrantItem(
+                principal: PrincipalItem(
+                  kind: PrincipalKind.user,
+                  id: 1,
+                  name: 'ada',
+                ),
+                level: AccessLevel.owner,
+              ),
+              GrantItem(
+                principal: PrincipalItem(
+                  kind: PrincipalKind.user,
+                  id: 2,
+                  name: 'bob',
+                ),
+                level: AccessLevel.write,
+              ),
+              GrantItem(
+                principal: PrincipalItem(
+                  kind: PrincipalKind.group,
+                  id: 2,
+                  name: 'Family',
+                ),
+                level: AccessLevel.write,
+                inheritedFrom: 'Shared',
+              ),
+            ],
+            principals: const [
+              PrincipalItem(
+                kind: PrincipalKind.group,
+                id: 1,
+                name: 'everyone',
+                isBuiltin: true,
+              ),
+              PrincipalItem(kind: PrincipalKind.group, id: 2, name: 'Family'),
+              PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
+              PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
+              PrincipalItem(kind: PrincipalKind.user, id: 3, name: 'cy'),
+            ],
+            canManage: true,
+            canGrantOwner: true,
+            lockedKeys: const {'user_1'},
+            onAdd: (principal, level) =>
+                log('ShareSheet.onAdd(${principal.keySuffix}, ${level.name})'),
+            onSetLevel: (principal, level) => log(
+              'ShareSheet.onSetLevel(${principal.keySuffix}, ${level.name})',
+            ),
+            onRevoke: (principal) =>
+                log('ShareSheet.onRevoke(${principal.keySuffix})'),
           ),
-          level: AccessLevel.read,
         ),
-        GrantItem(
-          principal: PrincipalItem(
-            kind: PrincipalKind.user,
-            id: 1,
-            name: 'ada',
+        SizedBox(
+          width: 420,
+          height: 560,
+          child: ShareSheet(
+            itemName: '#design',
+            grants: [
+              GrantItem(
+                principal: const PrincipalItem(
+                  kind: PrincipalKind.group,
+                  id: 1,
+                  name: 'everyone',
+                  isBuiltin: true,
+                ),
+                permissions: ChatPermissionPreset.member.permissions,
+              ),
+              const GrantItem(
+                principal: PrincipalItem(
+                  kind: PrincipalKind.user,
+                  id: 2,
+                  name: 'bob',
+                ),
+                permissions: {ChatPermission.manageMembers},
+              ),
+            ],
+            principals: const [
+              PrincipalItem(kind: PrincipalKind.group, id: 2, name: 'Family'),
+              PrincipalItem(kind: PrincipalKind.user, id: 3, name: 'cy'),
+            ],
+            canManage: true,
+            heldPermissions: ChatPermissionPreset.moderator.permissions,
+            onAddPermissions: (principal, set) => log(
+              'ShareSheet.onAddPermissions(${principal.keySuffix}, '
+              '${ChatPermissionPreset.labelOf(set)})',
+            ),
+            onSetPermissions: (principal, set) => log(
+              'ShareSheet.onSetPermissions(${principal.keySuffix}, '
+              '${ChatPermissionPreset.labelOf(set)})',
+            ),
+            onRevoke: (principal) =>
+                log('ShareSheet.onRevoke(${principal.keySuffix})'),
           ),
-          level: AccessLevel.owner,
-        ),
-        GrantItem(
-          principal: PrincipalItem(
-            kind: PrincipalKind.user,
-            id: 2,
-            name: 'bob',
-          ),
-          level: AccessLevel.write,
-        ),
-        GrantItem(
-          principal: PrincipalItem(
-            kind: PrincipalKind.group,
-            id: 2,
-            name: 'Family',
-          ),
-          level: AccessLevel.write,
-          inheritedFrom: 'Shared',
         ),
       ],
-      principals: const [
-        PrincipalItem(
-          kind: PrincipalKind.group,
-          id: 1,
-          name: 'everyone',
-          isBuiltin: true,
-        ),
-        PrincipalItem(kind: PrincipalKind.group, id: 2, name: 'Family'),
-        PrincipalItem(kind: PrincipalKind.user, id: 1, name: 'ada'),
-        PrincipalItem(kind: PrincipalKind.user, id: 2, name: 'bob'),
-        PrincipalItem(kind: PrincipalKind.user, id: 3, name: 'cy'),
-      ],
-      canManage: true,
-      canGrantOwner: true,
-      lockedKeys: const {'user_1'},
-      onAdd: (principal, level) =>
-          log('ShareSheet.onAdd(${principal.keySuffix}, ${level.name})'),
-      onSetLevel: (principal, level) =>
-          log('ShareSheet.onSetLevel(${principal.keySuffix}, ${level.name})'),
-      onRevoke: (principal) =>
-          log('ShareSheet.onRevoke(${principal.keySuffix})'),
     ),
   ),
 

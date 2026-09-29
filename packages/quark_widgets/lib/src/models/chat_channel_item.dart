@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'chat_permission.dart';
+
 /// One chat channel as the chat widgets need it: its id, its name, and
 /// whether it is shared with only some people.
 ///
@@ -12,6 +14,7 @@ class ChatChannelItem {
     required this.id,
     required this.name,
     this.isPrivate = false,
+    this.permissions,
   });
 
   /// The channel's id on the Quark, and what callbacks carry.
@@ -24,14 +27,24 @@ class ChatChannelItem {
   /// everyone on the Quark. Private channels show a lock.
   final bool isPrivate;
 
+  /// What the signed-in account may do in the channel, shown under its name
+  /// as a preset or Custom. Null shows nothing.
+  final Set<ChatPermission>? permissions;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ChatChannelItem &&
           other.id == id &&
           other.name == name &&
-          other.isPrivate == isPrivate;
+          other.isPrivate == isPrivate &&
+          setEquals(other.permissions, permissions);
 
   @override
-  int get hashCode => Object.hash(id, name, isPrivate);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    isPrivate,
+    Object.hashAllUnordered(permissions ?? const <ChatPermission>{}),
+  );
 }
