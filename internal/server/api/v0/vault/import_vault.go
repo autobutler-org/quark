@@ -17,7 +17,7 @@ import (
 // @Accept mpfd
 // @Produce json
 // @Param file formData file true "Export file"
-// @Param format formData string false "Source format; sniffed from the bytes when absent"
+// @Param format formData string false "Source format: auto, json, bitwarden, proton, google or csv; sniffed from the bytes when absent"
 // @Success 200 {object} vaultutil.ImportResult
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 423 {object} serverutil.Response "Vault is locked"

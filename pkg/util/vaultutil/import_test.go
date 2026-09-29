@@ -170,3 +170,73 @@ func TestHostFromURL(t *testing.T) {
 		}
 	}
 }
+
+const protonPassExport = `type,name,url,email,username,password,note,totp,createTime,modifyTime,vault
+login,GitHub,"https://github.com/login, https://gist.github.com",alice@example.com,alice,gh-pass,work account,JBSWY3DPEHPK3PXP,1700000000,1700000000,Work
+login,Bank,https://bank.example,bob@example.com,,bank-pass,,,1700000000,1700000000,Personal
+note,Wi-Fi code,,,,,door code 1234,,1700000000,1700000000,Personal
+alias,Newsletter alias,,news@alias.example,,,,,1700000000,1700000000,Personal
+creditCard,Visa,,,,,,,1700000000,1700000000,Personal
+login,Empty,https://empty.example,,,,,,1700000000,1700000000,Personal
+`
+
+const googlePasswordsExport = `name,url,username,password,note
+github.com,https://github.com/login,alice,gh-pass,
+,https://accounts.example.com/,carol,pw,old laptop
+`
+
+func TestDetectFormat_RecognizesProtonPassAndGoogle(t *testing.T) {
+	tests := []struct{ name, data, want string }{
+		{"proton pass", protonPassExport, FormatProtonPass},
+		{"google", googlePasswordsExport, FormatGoogle},
+		{"google without note", "name,url,username,password\nx,https://x.example,u,p\n", FormatGoogle},
+		{"generic", "title,website,login,pass,extra,more\nx,https://x.example,u,p,,\n", FormatCSV},
+	}
+	for _, tt := range tests {
+		if got := DetectFormat([]byte(tt.data)); got != tt.want {
+			t.Errorf("%s: DetectFormat = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestParseProtonPassCSV_KeepsLoginsAndCountsTheRest(t *testing.T) {
+	entries, errs, ignored := ParseProtonPassCSV([]byte(protonPassExport))
+
+	if ignored != 3 {
+		t.Errorf("ignored = %d, want 3 (note, alias, card)", ignored)
+	}
+	if len(errs) != 1 {
+		t.Errorf("errors = %v, want one for the empty login", errs)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("got %d entries, want 2", len(entries))
+	}
+
+	github := entries[0]
+	if github.URL != "https://github.com/login" {
+		t.Errorf("URL = %q, want the first of the list", github.URL)
+	}
+	if github.Username != "alice" || github.TOTPSecret != "JBSWY3DPEHPK3PXP" || github.Folder != "Work" || github.Notes != "work account" {
+		t.Errorf("github entry = %+v", github)
+	}
+
+	if bank := entries[1]; bank.Username != "bob@example.com" {
+		t.Errorf("bank username = %q, want the email when username is empty", bank.Username)
+	}
+}
+
+func TestParseGenericCSV_ReadsGooglePasswordManagerExport(t *testing.T) {
+	entries, errs := ParseGenericCSV([]byte(googlePasswordsExport))
+	if len(errs) != 0 {
+		t.Fatalf("errors = %v", errs)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("got %d entries, want 2", len(entries))
+	}
+	if entries[0].Name != "github.com" || entries[0].Username != "alice" || entries[0].Password != "gh-pass" {
+		t.Errorf("first entry = %+v", entries[0])
+	}
+	if entries[1].Name != "accounts.example.com" || entries[1].Notes != "old laptop" {
+		t.Errorf("second entry = %+v, want the host as its name and the note kept", entries[1])
+	}
+}

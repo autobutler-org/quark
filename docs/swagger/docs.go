@@ -6616,7 +6616,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Source format; sniffed from the bytes when absent",
+                        "description": "Source format: auto, json, bitwarden, proton, google or csv; sniffed from the bytes when absent",
                         "name": "format",
                         "in": "formData"
                     }
@@ -9402,6 +9402,9 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "ignored": {
+                    "type": "integer"
                 },
                 "imported": {
                     "type": "integer"
