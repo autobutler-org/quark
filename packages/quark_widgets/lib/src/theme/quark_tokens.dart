@@ -1,5 +1,6 @@
 import 'dart:ui' show lerpDouble;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
 /// The design tokens every Quark widget draws from: colors, corner radii, and
@@ -49,6 +50,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     required this.spacingMd,
     required this.spacingLg,
     required this.spacingXl,
+    required this.eventColors,
   });
 
   /// The page behind every surface, used as the scaffold background.
@@ -124,6 +126,11 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// The widest gap in the spacing scale, for page-level margins.
   final double spacingXl;
 
+  /// The colors a person can give a calendar event, in the order the picker
+  /// offers them. The first is [primary], every event's default. An event
+  /// stores its index, so reordering these recolors saved events.
+  final List<Color> eventColors;
+
   /// The dark token set, and Quark's default appearance.
   static const QuarkTokens dark = QuarkTokens(
     background: Color(0xFF070D19),
@@ -149,6 +156,14 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     spacingMd: 16,
     spacingLg: 24,
     spacingXl: 32,
+    eventColors: [
+      Color(0xFF0EA5E9), // sky
+      Color(0xFF10B981), // green
+      Color(0xFFF59E0B), // amber
+      Color(0xFF8B5CF6), // violet
+      Color(0xFFF43F5E), // rose
+      Color(0xFF94A3B8), // slate
+    ],
   );
 
   /// The light token set.
@@ -176,6 +191,14 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     spacingMd: 16,
     spacingLg: 24,
     spacingXl: 32,
+    eventColors: [
+      Color(0xFF0EA5E9), // sky
+      Color(0xFF059669), // green
+      Color(0xFFD97706), // amber
+      Color(0xFF7C3AED), // violet
+      Color(0xFFE11D48), // rose
+      Color(0xFF64748B), // slate
+    ],
   );
 
   /// The tokens attached to the nearest [Theme], falling back to [dark] when a
@@ -209,6 +232,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     double? spacingMd,
     double? spacingLg,
     double? spacingXl,
+    List<Color>? eventColors,
   }) {
     return QuarkTokens(
       background: background ?? this.background,
@@ -234,6 +258,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
       spacingMd: spacingMd ?? this.spacingMd,
       spacingLg: spacingLg ?? this.spacingLg,
       spacingXl: spacingXl ?? this.spacingXl,
+      eventColors: eventColors ?? this.eventColors,
     );
   }
 
@@ -272,6 +297,14 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
       spacingMd: lerpDouble(spacingMd, other.spacingMd, t)!,
       spacingLg: lerpDouble(spacingLg, other.spacingLg, t)!,
       spacingXl: lerpDouble(spacingXl, other.spacingXl, t)!,
+      // Pairs up by index; a set longer than the other keeps its extras as
+      // they are rather than fading them to nothing.
+      eventColors: [
+        for (var i = 0; i < eventColors.length; i++)
+          i < other.eventColors.length
+              ? Color.lerp(eventColors[i], other.eventColors[i], t)!
+              : eventColors[i],
+      ],
     );
   }
 
@@ -301,7 +334,8 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
         other.spacingSm == spacingSm &&
         other.spacingMd == spacingMd &&
         other.spacingLg == spacingLg &&
-        other.spacingXl == spacingXl;
+        other.spacingXl == spacingXl &&
+        listEquals(other.eventColors, eventColors);
   }
 
   @override
@@ -329,5 +363,6 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     spacingMd,
     spacingLg,
     spacingXl,
+    Object.hashAll(eventColors),
   ]);
 }

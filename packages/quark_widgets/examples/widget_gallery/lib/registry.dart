@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import 'calendar_demo_data.dart';
 import 'widgets/album_sidebar_demo.dart';
 import 'widgets/album_tree_demo.dart';
 import 'widgets/chat_demo_data.dart';
@@ -1926,6 +1927,104 @@ final List<GalleryEntry> registry = [
       onConvert: (format) => log('TranscodeDialog.onConvert($format)'),
       onCancel: () => log('TranscodeDialog.onCancel'),
       onRetry: () => log('TranscodeDialog.onRetry'),
+    ),
+  ),
+
+  // ── Calendar ──────────────────────────────────────────────────────────────
+  GalleryEntry(
+    name: 'CalendarEventChip',
+    group: 'Calendar',
+    build: (context, log) => Wrap(
+      spacing: 24,
+      runSpacing: 16,
+      children: [
+        for (final dense in const [false, true])
+          SizedBox(
+            width: dense ? 64 : 200,
+            child: Column(
+              spacing: 2,
+              children: [
+                for (final item in galleryEvents.where(
+                  (e) => CalendarDates.isSameDay(e.start, galleryToday),
+                ))
+                  CalendarEventChip(
+                    item: item,
+                    dense: dense,
+                    onTap: () => log('CalendarEventChip tapped: ${item.title}'),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'CalendarMonthGrid',
+    group: 'Calendar',
+    build: (context, log) => Wrap(
+      spacing: 24,
+      runSpacing: 24,
+      children: [
+        for (final width in const [900.0, 390.0])
+          FramedViewport(
+            width: width,
+            height: 620,
+            child: CalendarMonthGrid(
+              month: galleryToday,
+              today: galleryToday,
+              selectedDay: galleryToday,
+              events: galleryEvents,
+              onDayTap: (day) => log('onDayTap ${CalendarDates.key(day)}'),
+              onDayLongPress: (day) =>
+                  log('onDayLongPress ${CalendarDates.key(day)}'),
+              onAddTap: (day) => log('onAddTap ${CalendarDates.key(day)}'),
+              onEventTap: (item) => log('onEventTap ${item.key}'),
+            ),
+          ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'CalendarPeriodHeader',
+    group: 'Calendar',
+    build: (context, log) => SizedBox(
+      width: 420,
+      child: CalendarPeriodHeader(
+        title: 'Sep 27 – Oct 3, 2026',
+        previousTooltip: 'Previous week',
+        nextTooltip: 'Next week',
+        onPrevious: () => log('onPrevious'),
+        onNext: () => log('onNext'),
+      ),
+    ),
+  ),
+  GalleryEntry(
+    name: 'CalendarTimeGrid',
+    group: 'Calendar',
+    build: (context, log) => Wrap(
+      spacing: 24,
+      runSpacing: 24,
+      children: [
+        for (final (width, week) in const [
+          (900.0, true),
+          (390.0, true),
+          (390.0, false),
+        ])
+          FramedViewport(
+            width: width,
+            height: 620,
+            child: CalendarTimeGrid(
+              days: week ? CalendarDates.weekOf(galleryToday) : [galleryToday],
+              today: galleryToday,
+              now: galleryNow,
+              initialHour: 8,
+              events: galleryEvents,
+              onSlotTap: (start) => log('onSlotTap $start'),
+              onEventTap: (item) => log('onEventTap ${item.key}'),
+              onDayTap: (day) => log('onDayTap ${CalendarDates.key(day)}'),
+            ),
+          ),
+      ],
     ),
   ),
 ];
