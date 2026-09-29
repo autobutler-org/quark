@@ -580,6 +580,42 @@ class FilesService with AuthenticatedService {
     return paths is List ? paths.whereType<String>().toList() : const [];
   }
 
+  /// Uploads a photo or video's client-rendered [thumbnail] for the file at
+  /// [path] (#2379): `PUT /api/v0/thumbnails/{path}`. Used after a resumable
+  /// upload, whose session ends when the file lands.
+  static Future<void> putThumbnail({
+    required String path,
+    String? serial,
+    required Uint8List thumbnail,
+  }) async {
+    final normalized = path.trim().replaceFirst(RegExp(r'^/+'), '');
+    final encodedPath = normalized
+        .split('/')
+        .map(Uri.encodeComponent)
+        .join('/');
+    final serialValue = serial?.trim() ?? '';
+    final uri = apiBaseUri
+        .resolve('/api/v0/thumbnails/$encodedPath')
+        .replace(
+          queryParameters: serialValue.isEmpty ? null : {'serial': serialValue},
+        );
+
+    final request = http.MultipartRequest('PUT', uri)
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'thumbnail',
+          thumbnail,
+          filename: normalized.split('/').last,
+        ),
+      )
+      ..headers.addAll(_authHeaders);
+    final response = await request.send();
+    await response.stream.drain<void>();
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Failed to upload the thumbnail');
+    }
+  }
+
   static Future<String?> saveFile(
     String filePath, {
     String? serial,
