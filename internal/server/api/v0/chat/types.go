@@ -13,6 +13,9 @@ func (r *router) Routes() []*serverutil.Route {
 		listMembersRoute,
 		setMemberRoute,
 		removeMemberRoute,
+		getMyKeysRoute,
+		putMyKeysRoute,
+		getUserKeysRoute,
 	}
 }
 
