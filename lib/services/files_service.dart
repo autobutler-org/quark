@@ -9,6 +9,7 @@ import 'package:quark/models/paginated_photos_response.dart';
 import 'package:quark/models/photo_metadata.dart';
 import 'package:quark/models/thumbnail_probe.dart';
 import 'package:quark/models/transcode_format.dart';
+import 'package:quark/models/trim_result.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -1094,8 +1095,8 @@ class FilesService with AuthenticatedService {
   }
 
   /// Trims [relPath] to the range [startMs, endMs] and saves a new file.
-  /// Returns the relative path of the saved clip.
-  static Future<String> trimVideo(
+  /// Returns where the clip was saved and where it really starts.
+  static Future<TrimResult> trimVideo(
     String relPath, {
     String? serial,
     required int startMs,
@@ -1116,8 +1117,9 @@ class FilesService with AuthenticatedService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, 'Failed to trim video');
     }
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return data['relPath'] as String;
+    return TrimResult.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   /// Queues a conversion of [relPath] into [format], one of the formats

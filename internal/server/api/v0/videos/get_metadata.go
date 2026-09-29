@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,18 +45,10 @@ type VideoMetadataJSON struct {
 // @Success 200 {object} VideoMetadataJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 404 {object} serverutil.Response "Not Found"
-// @Failure 501 {object} serverutil.Response "Not Implemented — ffprobe not available"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Security BearerAuth
 // @Router /videos/metadata [get]
 func getMetadata(c *gin.Context) *serverutil.Response {
-	if !videoutil.Available() {
-		return serverutil.NewResponse().
-			WithStatusCode(http.StatusNotImplemented).
-			WithContentType(serverutil.ContentTypeJSON).
-			WithData(gin.H{"error": "ffprobe is not installed on this device"})
-	}
-
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
 	if !ok {
 		return serverutil.InternalServerError(nil)
@@ -100,7 +91,6 @@ func getMetadata(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(err)
 	}
 
-	// Probe via ffprobe.
 	info, err := videoutil.Probe(c.Request.Context(), fullPath)
 	if err != nil {
 		return serverutil.InternalServerError(fmt.Errorf("probe video: %w", err))

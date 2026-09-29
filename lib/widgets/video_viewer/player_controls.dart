@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/utils/playback_time.dart';
 import 'package:quark/widgets/video_viewer/trim_bar.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:video_player/video_player.dart';
@@ -47,17 +48,6 @@ class PlayerControls extends StatelessWidget {
       return;
     }
     await controller.seekTo(target);
-  }
-
-  String _formatTime(Duration duration) {
-    final clamped = duration < Duration.zero ? Duration.zero : duration;
-    final hours = clamped.inHours;
-    final minutes = clamped.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = clamped.inSeconds.remainder(60).toString().padLeft(2, '0');
-    if (hours > 0) {
-      return '$hours:$minutes:$seconds';
-    }
-    return '${clamped.inMinutes}:$seconds';
   }
 
   @override
@@ -149,7 +139,7 @@ class PlayerControls extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${_formatTime(position)} / ${_formatTime(duration)}',
+                      '${formatPlaybackTime(position)} / ${formatPlaybackTime(duration)}',
                       style: const TextStyle(color: Colors.white),
                     ),
                     IconButton(

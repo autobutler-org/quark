@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -22,7 +20,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/transcodeutil"
-	"github.com/autobutler-org/quark/pkg/util/videoutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -47,9 +44,6 @@ type videoHarness struct {
 
 func newVideoHarness(t *testing.T) videoHarness {
 	t.Helper()
-	if !videoutil.Available() {
-		t.Skip("ffmpeg and ffprobe are not installed")
-	}
 	t.Setenv("HOME", t.TempDir())
 	filesDir, err := storageutil.GetFilesDir()
 	if err != nil {
@@ -92,15 +86,7 @@ func newVideoHarness(t *testing.T) videoHarness {
 
 func (h videoHarness) writeVideo(t *testing.T, rel string) {
 	t.Helper()
-	full := filepath.Join(h.filesDir, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	out, err := exec.Command("ffmpeg", "-f", "lavfi", "-i", "testsrc=duration=1:size=32x32:rate=5",
-		"-c:v", "mpeg4", "-y", full).CombinedOutput()
-	if err != nil {
-		t.Fatalf("create %s: %v\n%s", rel, err, out)
-	}
+	copyFixture(t, gopFixture, filepath.Join(h.filesDir, filepath.FromSlash(rel)))
 }
 
 func (h videoHarness) grant(t *testing.T, rel string, level accessutil.Level) {
@@ -131,14 +117,15 @@ func (h videoHarness) do(t *testing.T, method, path, body string) (int, string) 
 	return w.Code, out.RelPath
 }
 
-// expect checks the status of metadata, extract-frame and trim on one video.
-func (h videoHarness) expect(t *testing.T, rel string, metadata, edit int) {
+// expect checks the status of metadata and the formats it converts to, which
+// need read, and of trim, which needs write too, on one video.
+func (h videoHarness) expect(t *testing.T, rel string, read, edit int) {
 	t.Helper()
-	if code, _ := h.do(t, http.MethodGet, "/api/v0/videos/metadata?relPath="+rel, ""); code != metadata {
-		t.Errorf("metadata %s = %d, want %d", rel, code, metadata)
+	if code, _ := h.do(t, http.MethodGet, "/api/v0/videos/metadata?relPath="+rel, ""); code != read {
+		t.Errorf("metadata %s = %d, want %d", rel, code, read)
 	}
-	if code, _ := h.do(t, http.MethodPost, "/api/v0/videos/extract-frame", `{"relPath":"`+rel+`"}`); code != edit {
-		t.Errorf("extract-frame %s = %d, want %d", rel, code, edit)
+	if code, _ := h.do(t, http.MethodGet, "/api/v0/videos/transcode/formats?relPath="+rel, ""); code != read {
+		t.Errorf("transcode formats %s = %d, want %d", rel, code, read)
 	}
 	if code, _ := h.do(t, http.MethodPost, "/api/v0/videos/trim", `{"relPath":"`+rel+`","startMs":0,"endMs":500}`); code != edit {
 		t.Errorf("trim %s = %d, want %d", rel, code, edit)
@@ -178,10 +165,6 @@ func TestVideoAccess_NonAdmin(t *testing.T) {
 	h.expect(t, "private/clip.mp4", http.StatusNotFound, http.StatusNotFound)
 
 	h.grant(t, "shared", accessutil.Write)
-	code, frame := h.do(t, http.MethodPost, "/api/v0/videos/extract-frame", `{"relPath":"shared/clip.mp4"}`)
-	if code != http.StatusOK || h.level(t, frame) != "owner" {
-		t.Errorf("extract-frame = %d, owner row on %q = %q, want 200 and owner", code, frame, h.level(t, frame))
-	}
 	code, clip := h.do(t, http.MethodPost, "/api/v0/videos/trim", `{"relPath":"shared/clip.mp4","startMs":0,"endMs":500}`)
 	if code != http.StatusOK || h.level(t, clip) != "owner" {
 		t.Errorf("trim = %d, owner row on %q = %q, want 200 and owner", code, clip, h.level(t, clip))
@@ -197,7 +180,7 @@ func TestTranscodeAccess_NonAdmin(t *testing.T) {
 	h := newVideoHarness(t)
 	*h.principal = accessutil.Principal{UserID: h.userID}
 	transcode := func(rel string) int {
-		code, _ := h.do(t, http.MethodPost, "/api/v0/videos/transcode", `{"relPath":"`+rel+`","format":"mov","quality":"original"}`)
+		code, _ := h.do(t, http.MethodPost, "/api/v0/videos/transcode", `{"relPath":"`+rel+`","format":"mkv","quality":"original"}`)
 		return code
 	}
 
