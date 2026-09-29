@@ -8,6 +8,7 @@ import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/utils/vault_import_summary.dart';
 import 'package:quark/utils/web_download_stub.dart'
     if (dart.library.html) 'package:quark/utils/web_download_web.dart'
     as web_download;
@@ -318,7 +319,12 @@ class _VaultPageState extends State<VaultPage>
       context, // ignore: use_build_context_synchronously
       builder: (ctx) => QuarkWidget.alertDialog(
         title: const Text('Import format'),
-        content: Text('Importing "${file.name}". Choose the format:'),
+        content: Text(
+          'Importing "${file.name}". Choose the format:\n\n'
+          'Proton Pass: Settings › Export › CSV.\n'
+          'Google Password Manager: chrome://password-manager/settings › '
+          'Export passwords.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'auto'),
@@ -327,6 +333,14 @@ class _VaultPageState extends State<VaultPage>
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'bitwarden'),
             child: const Text('Bitwarden CSV'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'proton'),
+            child: const Text('Proton Pass CSV'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'google'),
+            child: const Text('Google Passwords CSV'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -345,20 +359,9 @@ class _VaultPageState extends State<VaultPage>
       );
       _loadEntries();
       if (!mounted) return;
-      final imported = resp['imported'] ?? 0;
-      final skipped = resp['skipped'] ?? 0;
-      final errors = (resp['errors'] as List?)?.length ?? 0;
       ScaffoldMessenger.of(
         context, // ignore: use_build_context_synchronously
-      ).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Imported $imported entries'
-            '${skipped > 0 ? ', $skipped skipped (duplicates)' : ''}'
-            '${errors > 0 ? ', $errors errors' : ''}',
-          ),
-        ),
-      );
+      ).showSnackBar(SnackBar(content: Text(vaultImportSummary(resp))));
     } on VaultLockedException {
       _loadStatus();
     } catch (e) {

@@ -300,19 +300,25 @@ admin.
 
 ### JN-VT-017: Import vault entries
 
-**Preconditions:** Vault is unlocked. A valid import file (JSON or CSV) is available.
+**Preconditions:** Vault is unlocked. An export file is available: a Quark JSON export, a Bitwarden CSV, a Proton
+Pass CSV (Settings › Export › CSV), a Google Password Manager CSV (`chrome://password-manager/settings` › Export
+passwords), or another manager's CSV.
 
 **Steps:**
 
 1. Open the vault overflow menu.
 2. Select **Import**.
 3. Choose the import file.
-4. Confirm.
+4. Pick **Auto-detect**, or the format the file came from.
 
 **Expected result:**
 
 - Imported entries appear in the vault list.
-- Existing entries are not overwritten (or merge behavior is documented).
+- Entries that already exist (same name and site) are skipped, not duplicated or overwritten.
+- From Proton Pass, a login saved with only an email keeps the email as its username, and its one-time-code secret
+  and Proton vault (as a folder) come along. Notes, aliases and cards are left out and counted in the summary, not
+  reported as errors.
+- The snack bar reads, for example, "Imported 2 entries, 1 skipped (duplicates), 3 non-login items left out".
 
 ---
 
