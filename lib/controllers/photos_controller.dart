@@ -23,6 +23,7 @@ import 'package:quark/utils/album_order.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/photo_grid_config.dart';
+import 'package:quark/utils/photo_month_sections.dart';
 import 'package:quark/utils/quark_widget_items.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -337,6 +338,13 @@ class PhotosController extends ChangeNotifier {
         isFavorite: _favoriteKeys.contains(photo.id),
       ),
   ];
+
+  /// The month runs [photos] is split into under the date sort, or null under
+  /// a name sort, where a month header would split nothing meaningful (#979).
+  List<PhotoGridSection>? get photoSections {
+    if (_sortField != PhotoSortField.added) return null;
+    return photoMonthSections([for (final photo in _visible()) photo.date]);
+  }
 
   /// How many photos the grid shows.
   int get photoCount => _visible().length;
@@ -1296,6 +1304,7 @@ class _Photo {
     this.serial,
     this.asset,
     this.hasLiveVideo = false,
+    this.date,
   });
 
   /// A Quark-stored photo from the paginated photos endpoint.
@@ -1315,6 +1324,9 @@ class _Photo {
       relPath: node.apiPath,
       serial: node.deviceSerial,
       hasLiveVideo: photo.hasLiveVideo,
+      date: photo.mtime > 0
+          ? DateTime.fromMillisecondsSinceEpoch(photo.mtime * 1000)
+          : null,
     );
   }
 
@@ -1325,11 +1337,17 @@ class _Photo {
     name: item.relPath.split('/').last,
     relPath: item.relPath,
     serial: item.deviceSerial,
+    date: item.addedAt,
   );
 
   /// A photo on this device.
-  factory _Photo.fromAsset(AssetEntity asset) =>
-      _Photo(id: 'asset:${asset.id}', name: asset.id, asset: asset);
+  factory _Photo.fromAsset(AssetEntity asset) => _Photo(
+    id: 'asset:${asset.id}',
+    name: asset.id,
+    asset: asset,
+    // createDateTime reads a missing timestamp as 1970.
+    date: asset.createDateSecond == null ? null : asset.createDateTime,
+  );
 
   /// Unique across both sources, and stable across reloads.
   final String id;
@@ -1342,6 +1360,11 @@ class _Photo {
   /// The device asset, or null for a Quark photo.
   final AssetEntity? asset;
   final bool hasLiveVideo;
+
+  /// When the photo was added, as the date sort sees it: the file's modified
+  /// time on the Quark, the time it joined an album, or a device photo's
+  /// creation time. Null when the Quark sent none.
+  final DateTime? date;
 
   bool get isRemote => relPath != null;
 }

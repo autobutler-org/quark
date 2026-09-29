@@ -17,14 +17,15 @@ import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-wire.PhotoItem _wirePhoto(int i, {String serial = 'sd1'}) => wire.PhotoItem(
-  relPath: 'camera/$i.jpg',
-  fileName: '$i.jpg',
-  size: 1,
-  mtime: 0,
-  serial: serial,
-  hasLiveVideo: i == 0,
-);
+wire.PhotoItem _wirePhoto(int i, {String serial = 'sd1', int mtime = 0}) =>
+    wire.PhotoItem(
+      relPath: 'camera/$i.jpg',
+      fileName: '$i.jpg',
+      size: 1,
+      mtime: mtime,
+      serial: serial,
+      hasLiveVideo: i == 0,
+    );
 
 PhotoAlbum _album(int id, String name, {String? smartType, int count = 0}) =>
     PhotoAlbum(
@@ -109,6 +110,9 @@ class _FakeQuark {
   };
   Object? albumItemsError;
 
+  /// The modified time, in seconds, the Quark reports for photo i.
+  int Function(int i) mtimeOf = (_) => 0;
+
   /// The sort/order the last getPhotos and listAlbumItems calls were asked
   /// for, so a test can check the controller passes them through (#2509).
   PhotoSortField? lastPhotosSort;
@@ -143,7 +147,10 @@ class _FakeQuark {
           if (error != null) throw error;
           final end = (offset + limit).clamp(0, total);
           return wire.PaginatedPhotosResponse(
-            photos: [for (var i = offset; i < end; i++) _wirePhoto(i)],
+            photos: [
+              for (var i = offset; i < end; i++)
+                _wirePhoto(i, mtime: mtimeOf(i)),
+            ],
             total: total,
             offset: offset,
             limit: limit,
@@ -355,6 +362,71 @@ void main() {
 
       expect(controller.photos, hasLength(50));
       expect(controller.isLoadingMore, isFalse);
+    });
+  });
+
+  group('month sections (#979)', () {
+    int secondsAt(DateTime date) => date.millisecondsSinceEpoch ~/ 1000;
+
+    test('splits Quark photos into month runs under the date sort', () async {
+      final quark = _FakeQuark(total: 3)
+        ..mtimeOf = (i) => secondsAt(
+          i < 2 ? DateTime(2025, 3, 10 - i) : DateTime(2025, 2, 20),
+        );
+      final controller = quark.controller();
+
+      await controller.refresh();
+
+      expect(controller.photoSections, [
+        isA<PhotoGridSection>()
+            .having((s) => s.label, 'label', 'March 2025')
+            .having((s) => s.count, 'count', 2),
+        isA<PhotoGridSection>()
+            .having((s) => s.label, 'label', 'February 2025')
+            .having((s) => s.count, 'count', 1),
+      ]);
+    });
+
+    test('the sections always cover every photo the grid shows', () async {
+      final quark = _FakeQuark(total: 60)
+        ..mtimeOf = (i) => secondsAt(DateTime(2025, 1 + i % 3));
+      final controller = quark.controller();
+
+      await controller.refresh();
+      controller.selectCategory(PhotoCategory.all);
+
+      final counted = controller.photoSections!.fold<int>(
+        0,
+        (sum, s) => sum + s.count,
+      );
+      expect(counted, controller.photos.length);
+    });
+
+    test('a photo with no date lands under Unknown date', () async {
+      final controller = _FakeQuark(total: 1).controller();
+
+      await controller.refresh();
+
+      expect(controller.photoSections!.single.label, 'Unknown date');
+    });
+
+    test('an album groups by when each photo joined it', () async {
+      final controller = _FakeQuark().controller();
+      await controller.loadAlbums();
+
+      await controller.showAlbum(1);
+
+      expect(controller.photoSections!.single.label, 'January 2024');
+    });
+
+    test('the name sort draws no headers', () async {
+      final quark = _FakeQuark()..mtimeOf = (i) => secondsAt(DateTime(2025, 3));
+      final controller = quark.controller();
+      await controller.refresh();
+
+      await controller.setSort(PhotoSortField.name, PhotoSortOrder.asc);
+
+      expect(controller.photoSections, isNull);
     });
   });
 
