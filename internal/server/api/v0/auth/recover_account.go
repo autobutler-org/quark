@@ -1,6 +1,7 @@
 package v0_auth
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -62,6 +63,16 @@ func recoverAccount(c *gin.Context) *serverutil.Response {
 		return serverutil.BadRequest(err)
 	}
 
+	if req.ChatKeys != nil {
+		// A new identity means nothing can open the account's old key grants, so
+		// members are asked to refill them. Best-effort: clients also check
+		// when they open a channel.
+		if _, err := chatutil.NotifyKeyNeeded(chatutil.NotifyKeyNeededParams{
+			Ctx: c.Request.Context(), Database: (*deps).Database(), EventBus: (*deps).EventBus(),
+		}); err != nil {
+			log.Printf("[auth] chat key needs after recovery: %v", err)
+		}
+	}
 	setSessionCookie(c, result.SessionToken)
 	return serverutil.Ok().WithData(gin.H{"token": result.SessionToken})
 }
