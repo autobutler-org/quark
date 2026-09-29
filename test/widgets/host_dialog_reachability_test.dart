@@ -29,7 +29,7 @@ void main() {
 
   tearDown(() => hostReachabilityProbe = AuthService.isReachable);
 
-  Future<void> openDialog(WidgetTester tester) async {
+  Future<void> openDialog(WidgetTester tester, {HostEntry? initial}) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -37,7 +37,8 @@ void main() {
             onPressed: () async {
               final entry = await showDialog<HostEntry>(
                 context: context,
-                builder: (_) => const HostDialog(isEdit: false),
+                builder: (_) =>
+                    HostDialog(isEdit: initial != null, initial: initial),
               );
               if (entry != null) saved.add(entry);
             },
@@ -50,12 +51,16 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> fillIn(WidgetTester tester, String address) async {
+  Future<void> fillIn(
+    WidgetTester tester,
+    String address, {
+    String name = 'Cabin',
+  }) async {
     final fields = find.descendant(
       of: find.byType(HostDialog),
       matching: find.byType(TextField),
     );
-    await tester.enterText(fields.first, 'Cabin');
+    await tester.enterText(fields.first, name);
     await tester.enterText(fields.last, address);
     await tester.pumpAndSettle();
   }
@@ -140,5 +145,33 @@ void main() {
 
     expect(probed, ['http://localhost:8099', 'http://cabin.local']);
     expect(saved.single.hostAddress, 'http://cabin.local');
+  });
+
+  group('editing a Quark with a learned remote address (#1880)', () {
+    final initial = HostEntry(
+      name: 'Cabin',
+      hostAddress: 'http://cabin.local',
+      remoteAddress: 'http://cabin.tailnet.ts.net',
+    );
+
+    testWidgets('a rename keeps it', (tester) async {
+      await openDialog(tester, initial: initial);
+      await fillIn(tester, 'http://cabin.local', name: 'Lake house');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(saved.single.name, 'Lake house');
+      expect(saved.single.remoteAddress, 'http://cabin.tailnet.ts.net');
+    });
+
+    testWidgets('an address change drops it', (tester) async {
+      await openDialog(tester, initial: initial);
+      await fillIn(tester, 'http://lake.local');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(saved.single.hostAddress, 'http://lake.local');
+      expect(saved.single.remoteAddress, isNull);
+    });
   });
 }

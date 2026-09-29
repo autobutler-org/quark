@@ -81,7 +81,16 @@ class _HostDialogState extends State<HostDialog> {
     final address = _normalizedAddress;
     if (name.isEmpty || address.isEmpty || _checking) return;
 
-    final entry = HostEntry(name: name, hostAddress: address);
+    // A rename keeps the learned remote address; a new address may be a
+    // different Quark, so it starts without one and learns its own (#1880).
+    final initial = widget.initial;
+    final entry = HostEntry(
+      name: name,
+      hostAddress: address,
+      remoteAddress: address == initial?.hostAddress
+          ? initial?.remoteAddress
+          : null,
+    );
     if (_offersSaveAnyway) {
       Navigator.of(context).pop(entry);
       return;
