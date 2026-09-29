@@ -349,3 +349,21 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 - The choice is remembered across navigation and app restart, defaulting to **Newest first** the first time.
 - A device photo has no filename to sort by, so a Mobile-tab name sort leaves those photos in the device's own
   order; a date sort still applies to them.
+
+---
+
+### JN-PH-019: Change the album sort order
+
+**Preconditions:** The album sidebar lists at least one user album (JN-PH-010).
+
+**Steps:**
+
+1. Tap the sort button beside **New album** in the sidebar's **Albums** header.
+2. Choose **A–Z**, **Z–A**, **Newest**, or **Oldest**.
+
+**Expected result:**
+
+- The user's albums reorder at once, sub-albums included, without reloading. Newest and Oldest go by when the
+  album was created; names ignore case.
+- The system albums (Favorites and the inbox) stay at the top in every order.
+- The choice is remembered across navigation and app restart, defaulting to **A–Z** the first time.

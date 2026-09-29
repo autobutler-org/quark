@@ -7,15 +7,20 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The one place the two album types meet, so a renamed field lands here and
 /// nowhere else.
 extension PhotoAlbumToItem on PhotoAlbum {
-  /// The package's view of this album.
-  AlbumItem toAlbumItem() => AlbumItem(
+  /// The package's view of this album. With [childOrder], every level of
+  /// sub-albums is sorted by it.
+  AlbumItem toAlbumItem({Comparator<PhotoAlbum>? childOrder}) => AlbumItem(
     id: id,
     name: name,
     parentId: parentId,
     itemCount: itemCount,
     isSystem: isSystemAlbum,
     isFavorites: isFavorites,
-    children: [for (final child in children) child.toAlbumItem()],
+    children: [
+      for (final child
+          in childOrder == null ? children : ([...children]..sort(childOrder)))
+        child.toAlbumItem(childOrder: childOrder),
+    ],
   );
 }
 

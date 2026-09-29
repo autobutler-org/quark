@@ -720,6 +720,8 @@ class PhotosPageState extends State<PhotosPage>
                             onToggleExpanded: c.toggleAlbumExpanded,
                             onCreateAlbum: _createAlbum,
                             onAlbumMenu: _showAlbumActions,
+                            sort: c.albumSort,
+                            onSortChanged: c.setAlbumSort,
                           ),
                         ),
                         slivers: [

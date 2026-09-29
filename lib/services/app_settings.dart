@@ -9,6 +9,7 @@ import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/models/feature_flag.dart';
 import 'package:quark/models/photo_sort.dart';
+import 'package:quark_widgets/quark_widgets.dart' show AlbumSort;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Matches an explicit URI scheme prefix (`https://`, `http://`, `ws://`, ...).
@@ -133,6 +134,9 @@ class AppSettings {
     PhotoSortOrder.desc,
   );
 
+  /// How the Photos sidebar orders the user's albums (#2510).
+  final ValueNotifier<AlbumSort> albumSort = ValueNotifier(AlbumSort.nameAsc);
+
   List<HostEntry> _hosts = [];
   int _activeIndex = -1;
 
@@ -213,6 +217,7 @@ class AppSettings {
   static const _demoModeKey = 'demoMode';
   static const _photoSortFieldKey = 'photoSortField';
   static const _photoSortOrderKey = 'photoSortOrder';
+  static const _albumSortKey = 'albumSort';
 
   /// Holds a JSON object of host key -> username. Absent for a session that
   /// predates it.
@@ -242,6 +247,12 @@ class AppSettings {
     photoSortOrder.value = PhotoSortOrder.values.firstWhere(
       (o) => o.apiValue == sortOrderRaw,
       orElse: () => PhotoSortOrder.desc,
+    );
+
+    final albumSortRaw = _prefs!.getString(_albumSortKey);
+    albumSort.value = AlbumSort.values.firstWhere(
+      (s) => s.id == albumSortRaw,
+      orElse: () => AlbumSort.nameAsc,
     );
 
     final hostsJson = _prefs!.getString('hosts') ?? '[]';
@@ -583,6 +594,12 @@ class AppSettings {
     photoSortOrder.value = order;
     await _prefs?.setString(_photoSortFieldKey, field.apiValue);
     await _prefs?.setString(_photoSortOrderKey, order.apiValue);
+  }
+
+  /// Sets the order of the Photos sidebar's albums and persists it (#2510).
+  Future<void> setAlbumSort(AlbumSort sort) async {
+    albumSort.value = sort;
+    await _prefs?.setString(_albumSortKey, sort.id);
   }
 
   /// Records acceptance of the Terms and Conditions for the current
