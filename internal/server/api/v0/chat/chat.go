@@ -2,7 +2,7 @@
 // channels, listing and changing a channel's members, and each account's chat keys, where /chat/keys/me holds the
 // caller's wrapped identity and /chat/keys/:userId serves any account's public keys. /chat/channels/:id/keys serves
 // a channel's key versions and the caller's key grants, with /keys/pending and /keys/grants for filling other
-// members' grants, /chat/channels/:id/events its signed membership and key events, and /chat/channels/:id/messages
+// members' grants and DELETE /keys/grants/:version for rejecting the caller's own, /chat/channels/:id/events its signed membership and key events, and /chat/channels/:id/messages
 // its encrypted messages, which /chat/messages/:id deletes. /chat/messages/:id/reactions adds an encrypted reaction
 // to a message and /chat/reactions/:id removes one. No route is admin-only;
 // admins may manage any channel but, like everyone else, list only the channels they are members of, and keys,

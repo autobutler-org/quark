@@ -2940,7 +2940,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "a sealed key or signature of the wrong size",
+                        "description": "a sealed key or signature of the wrong size, or a signature that doesn't verify against the caller's chat keys",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2979,7 +2979,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Stores up to 256 grants, each a version of the channel key the caller holds, sealed (80 bytes) to a member with published chat keys and signed (64 bytes) by the caller, base64. The first grant for a member and version wins: a later one is ignored and the stored one returned. Publishes chat_key_granted to the recipients.",
+                "description": "Stores up to 256 grants, each a version of the channel key the caller holds, sealed (80 bytes) to a member with published chat keys and signed (64 bytes) by the caller, base64. The Quark verifies each signature against the caller's published signing key before storing anything. The first grant for a member and version wins: a later one is ignored and the stored one returned. Publishes chat_key_granted to the recipients.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3016,7 +3016,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "a malformed grant, or one for someone who isn't a member with chat keys",
+                        "description": "a malformed grant, a signature that doesn't verify, or one for someone who isn't a member with chat keys",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -3035,6 +3035,65 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "no such channel, the caller isn't a member, or has no chat keys",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/channels/{id}/keys/grants/{version}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes the caller's own grant of one version of the channel key, for a grant the caller's app couldn't open or verify. Grants are first-write-wins, so this is how a recipient clears a useless one. The caller is pending again, and the key holders hear chat_key_needed so one of them refills it. Only the recipient can delete a grant.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Reject your own key grant",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Key version",
+                        "name": "version",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chatutil.RejectGrantResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "no such channel, the caller isn't a member, or holds no grant of that version",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -9685,6 +9744,14 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "userId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "chatutil.RejectGrantResult": {
+            "type": "object",
+            "properties": {
+                "version": {
                     "type": "integer"
                 }
             }

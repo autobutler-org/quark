@@ -91,6 +91,16 @@ identity, still verifies. Trusting that copy is no weaker than trusting `GET /ch
 serves both; closing that gap is #2430 (see below). A grant whose signature fails is dropped, and the channel stays
 waiting.
 
+The Quark checks the signature too, against the uploader's published signing key and over the same bytes, before it
+stores a grant or creates a version, and refuses a bad one with 400 (#2486). That keeps garbage out of the table
+and off the event bus. It is defense in depth, not the trust boundary: the recipient's own check is what stops a
+Quark that lies about keys.
+
+A grant is first-write-wins, so a member holding the key could get in first with a grant that is signed but sealed
+to nothing useful. When the app can't verify or open a grant addressed to it, it deletes it with
+`DELETE /chat/channels/:id/keys/grants/:version`, which only the recipient can do for their own grant. The account
+is pending again, and the holders hear `chat_key_needed` and refill it. The bad grant's `grantedBy` names who sent it.
+
 ### Distribution
 
 - **Who is pending.** The Quark resolves the channel's members (direct, through a group, or through `everyone`),
@@ -154,6 +164,7 @@ All need `read_messages`: anyone else gets 404, delegated managers and admins in
 - `POST /api/v0/chat/channels/:id/keys` creates the next version with the caller's own grant.
 - `GET /api/v0/chat/channels/:id/keys/pending` returns the grants the caller can fill.
 - `POST /api/v0/chat/channels/:id/keys/grants` uploads grants for versions the caller holds.
+- `DELETE /api/v0/chat/channels/:id/keys/grants/:version` deletes the caller's own grant of a version.
 - `GET /api/v0/chat/channels/:id/events` returns the channel's events.
 - `PUT /api/v0/chat/channels/:id/events/:eventId/signature` lets the actor sign an event, once.
 

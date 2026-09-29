@@ -18,7 +18,8 @@ import 'package:sodium/sodium_sumo.dart';
 /// client's half:
 ///
 /// - [ensureKeys] fetches this account's grants, rejects any whose signature
-///   fails, and keeps the opened keys in memory by version. When the channel
+///   fails or that won't open (handing it back to the Quark, so a member
+///   refills it), and keeps the opened keys in memory by version. When the channel
 ///   has no key yet (a new channel, or `general` on a new Quark) or needs
 ///   rotating because someone left, it creates the next version; and when it
 ///   holds a version other members lack, it seals and signs grants for them.
@@ -51,6 +52,7 @@ class ChatChannelKeysController extends ChangeNotifier {
     uploadGrants,
     Future<void> Function(int channelId, int eventId, Uint8List signature)?
     signEvent,
+    Future<void> Function(int channelId, int version)? rejectGrant,
   }) : _identity = identity ?? (() => ChatKeysController.instance.identity),
        _crypto = crypto ?? (() => ChatKeysController.instance.crypto),
        _userId = userId ?? (() => AppSettings.instance.userId.value),
@@ -58,7 +60,8 @@ class ChatChannelKeysController extends ChangeNotifier {
        _createVersion = createVersion ?? ChatChannelKeysService.createVersion,
        _fetchPending = fetchPending ?? ChatChannelKeysService.fetchPending,
        _uploadGrants = uploadGrants ?? ChatChannelKeysService.uploadGrants,
-       _signEvent = signEvent ?? ChatChannelKeysService.signEvent;
+       _signEvent = signEvent ?? ChatChannelKeysService.signEvent,
+       _rejectGrant = rejectGrant ?? ChatChannelKeysService.rejectGrant;
 
   /// The app's controller.
   static final ChatChannelKeysController instance = ChatChannelKeysController();
@@ -82,6 +85,7 @@ class ChatChannelKeysController extends ChangeNotifier {
   _uploadGrants;
   final Future<void> Function(int channelId, int eventId, Uint8List signature)
   _signEvent;
+  final Future<void> Function(int channelId, int version) _rejectGrant;
 
   final Map<int, Map<int, SecureKey>> _keys = {};
   final Map<int, int> _current = {};
@@ -197,7 +201,10 @@ class ChatChannelKeysController extends ChangeNotifier {
   Future<bool> _ensure(int channelId) async {
     final (identity, crypto, me) = _unlocked();
     var state = await _fetchKeys(channelId);
-    _open(channelId, state.grants, identity, crypto, me);
+    await _reject(
+      channelId,
+      _open(channelId, state.grants, identity, crypto, me),
+    );
     var current = state.currentVersion;
     if (current == 0 || state.rotationNeeded) {
       if (await _create(channelId, current + 1, identity, crypto, me)) {
@@ -205,7 +212,10 @@ class ChatChannelKeysController extends ChangeNotifier {
       } else {
         // Another member got there first; their grant comes to us.
         state = await _fetchKeys(channelId);
-        _open(channelId, state.grants, identity, crypto, me);
+        await _reject(
+          channelId,
+          _open(channelId, state.grants, identity, crypto, me),
+        );
         current = state.currentVersion;
       }
     }
@@ -223,9 +233,9 @@ class ChatChannelKeysController extends ChangeNotifier {
     return waiting;
   }
 
-  /// Verifies and opens this account's grants, skipping any already open or
-  /// failing.
-  void _open(
+  /// Verifies and opens this account's grants, skipping any already open, and
+  /// returns the versions whose grant failed to verify or open.
+  List<int> _open(
     int channelId,
     List<ChatKeyGrant> grants,
     ChatIdentity identity,
@@ -233,6 +243,7 @@ class ChatChannelKeysController extends ChangeNotifier {
     int me,
   ) {
     final versions = _keys.putIfAbsent(channelId, () => {});
+    final failed = <int>[];
     for (final grant in grants) {
       if (versions.containsKey(grant.version)) continue;
       final message = crypto.grantMessage(
@@ -247,6 +258,7 @@ class ChatChannelKeysController extends ChangeNotifier {
           '[chat_channel_keys_controller.dart] rejected grant of version '
           '${grant.version} in channel $channelId: bad signature',
         );
+        if (grant.userId == me) failed.add(grant.version);
         continue;
       }
       try {
@@ -257,6 +269,24 @@ class ChatChannelKeysController extends ChangeNotifier {
         debugPrint(
           '[chat_channel_keys_controller.dart] grant of version '
           '${grant.version} in channel $channelId won\'t open: $e',
+        );
+        failed.add(grant.version);
+      }
+    }
+    return failed;
+  }
+
+  /// Hands back each grant in [versions] so another member refills it: grants
+  /// are first-write-wins, so a useless one would otherwise stay forever
+  /// (#2486). Best effort; the channel just keeps waiting if it fails.
+  Future<void> _reject(int channelId, List<int> versions) async {
+    for (final version in versions) {
+      try {
+        await _rejectGrant(channelId, version);
+      } on Object catch (e) {
+        debugPrint(
+          '[chat_channel_keys_controller.dart] couldn\'t reject grant of '
+          'version $version in channel $channelId: $e',
         );
       }
     }

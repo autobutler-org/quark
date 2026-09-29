@@ -18,7 +18,7 @@ import (
 // @Param id path int true "Channel id"
 // @Param body body createKeyVersionBody true "The version and the caller's grant of it"
 // @Success 200 {object} chatutil.CreateKeyVersionResult
-// @Failure 400 {object} serverutil.Response "a sealed key or signature of the wrong size"
+// @Failure 400 {object} serverutil.Response "a sealed key or signature of the wrong size, or a signature that doesn't verify against the caller's chat keys"
 // @Failure 401 {object} serverutil.Response
 // @Failure 404 {object} serverutil.Response "no such channel, the caller isn't a member, or has no chat keys"
 // @Failure 409 {object} serverutil.Response "version isn't the next one (another member created it first), or the key doesn't need rotating"
