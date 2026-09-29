@@ -44,7 +44,7 @@ Future<List<String>> _menuFor(
   return tester
       .widgetList<Text>(
         find.descendant(
-          of: find.byType(PopupMenuItem<FileMenuAction>),
+          of: find.byType(PopupMenuItem<int>),
           matching: find.byType(Text),
         ),
       )

@@ -60,7 +60,7 @@ class FileMenu {
   /// [dispatchContext] is handed to [onDispatchMenuAction] and has to outlive
   /// the menu, so it is the button's or the row's context rather than the one
   /// an entry is built with.
-  List<PopupMenuEntry<FileMenuAction>> entries(BuildContext dispatchContext) {
+  List<QuarkMenuEntry> entries(BuildContext dispatchContext) {
     final extracting = extractingPaths.contains(item.apiPath);
     final serial = item.deviceSerial;
     final path = item.apiPath;
@@ -73,84 +73,73 @@ class FileMenu {
                 isHomeRoot(serial, path) ||
                 isGroupRoot(serial, path)));
 
-    PopupMenuItem<FileMenuAction> entry(
+    QuarkMenuEntry entry(
       FileMenuAction action,
-      Widget child, {
-      bool enabled = true,
-    }) => PopupMenuItem<FileMenuAction>(
-      value: action,
-      enabled: enabled,
-      onTap: () => onDispatchMenuAction(dispatchContext, item, action),
-      child: child,
+      String label, {
+      bool destructive = false,
+    }) => QuarkMenuEntry(
+      key: ValueKey('file_menu_${action.name}'),
+      label: label,
+      destructive: destructive,
+      onSelected: () => onDispatchMenuAction(dispatchContext, item, action),
     );
 
+    final onNavigateToFolder = this.onNavigateToFolder;
     return [
       if (menuActions.contains(FileMenuAction.download))
-        entry(FileMenuAction.download, const Text('Download')),
+        entry(FileMenuAction.download, 'Download'),
       if (menuActions.contains(FileMenuAction.moveRename) && canChange)
-        entry(FileMenuAction.moveRename, const Text('Move/Rename')),
+        entry(FileMenuAction.moveRename, 'Move/Rename'),
       if (menuActions.contains(FileMenuAction.share) &&
           !inArchive &&
           !isStructuralDir)
-        entry(FileMenuAction.share, const Text('Share…')),
+        entry(FileMenuAction.share, 'Share…'),
       if (menuActions.contains(FileMenuAction.delete) && canChange)
-        entry(FileMenuAction.delete, const Text('Delete')),
+        entry(FileMenuAction.delete, 'Delete', destructive: true),
       if (menuActions.contains(FileMenuAction.extractHere) &&
           !inArchive &&
           isArchiveNode(item))
-        entry(
-          FileMenuAction.extractHere,
-          enabled: !extracting,
-          extracting
-              ? const Row(
-                  children: [
-                    QuarkLoader(size: 16),
-                    SizedBox(width: 8),
-                    Text('Extracting...'),
-                  ],
-                )
-              : const Text('Extract here'),
-        ),
+        extracting
+            ? const QuarkMenuEntry(
+                key: ValueKey('file_menu_extractHere'),
+                label: 'Extracting...',
+                busy: true,
+                onSelected: null,
+              )
+            : entry(FileMenuAction.extractHere, 'Extract here'),
       if (menuActions.contains(FileMenuAction.convertVideo) &&
           !inArchive &&
           !item.isDir &&
           fileKindForName(item.name) == FileKind.video)
-        entry(FileMenuAction.convertVideo, const Text('Convert video')),
+        entry(FileMenuAction.convertVideo, 'Convert video'),
       if (menuActions.contains(FileMenuAction.navigateToFolder) &&
           isSearchMode &&
           onNavigateToFolder != null)
-        PopupMenuItem<FileMenuAction>(
-          value: FileMenuAction.navigateToFolder,
-          onTap: () => onNavigateToFolder!(item),
-          child: const Text('Navigate to folder'),
+        QuarkMenuEntry(
+          key: const ValueKey('file_menu_navigateToFolder'),
+          label: 'Navigate to folder',
+          onSelected: () => onNavigateToFolder(item),
         ),
       if (menuActions.contains(FileMenuAction.restore))
-        entry(FileMenuAction.restore, const Text('Restore')),
+        entry(FileMenuAction.restore, 'Restore'),
       if (menuActions.contains(FileMenuAction.deletePermanently))
         entry(
           FileMenuAction.deletePermanently,
-          const Text('Delete permanently'),
+          'Delete permanently',
+          destructive: true,
         ),
     ];
   }
 
   /// Opens the menu where the finger or pointer is, [globalPosition].
   ///
-  /// Does nothing when no entry applies to [item] — an empty menu is a box
-  /// with nothing to pick out of it. [context] is what the entries dispatch
-  /// against, so it must still be mounted once the menu has closed.
-  Future<void> showAt(BuildContext context, Offset globalPosition) async {
-    final items = entries(context);
-    if (items.isEmpty) return;
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    await showMenu<FileMenuAction>(
-      context: context,
-      position: RelativeRect.fromRect(
-        globalPosition & Size.zero,
-        Offset.zero & overlay.size,
-      ),
-      items: items,
-    );
-  }
+  /// Does nothing when no entry applies to [item]. [context] is what the
+  /// entries dispatch against, so it must still be mounted once the menu has
+  /// closed.
+  Future<void> showAt(BuildContext context, Offset globalPosition) =>
+      showQuarkMenu(
+        context,
+        position: globalPosition,
+        entries: entries(context),
+      );
 }

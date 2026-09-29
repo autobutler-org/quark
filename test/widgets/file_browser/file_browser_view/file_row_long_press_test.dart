@@ -22,7 +22,7 @@ const _press = Offset(60, 20);
 List<String> _entries(WidgetTester tester) => tester
     .widgetList<Text>(
       find.descendant(
-        of: find.byType(PopupMenuItem<FileMenuAction>),
+        of: find.byType(PopupMenuItem<int>),
         matching: find.byType(Text),
       ),
     )
@@ -77,9 +77,7 @@ void main() {
     await tester.longPressAt(_press);
     await tester.pumpAndSettle();
 
-    final menuX = tester
-        .getTopLeft(find.byType(PopupMenuItem<FileMenuAction>).first)
-        .dx;
+    final menuX = tester.getTopLeft(find.byType(PopupMenuItem<int>).first).dx;
     expect(buttonX, greaterThan(600), reason: 'the button sits on the right');
     expect(menuX, closeTo(_press.dx, 40));
   });
@@ -104,7 +102,7 @@ void main() {
     await tester.longPressAt(_press);
     await tester.pumpAndSettle();
 
-    expect(find.byType(PopupMenuItem<FileMenuAction>), findsNothing);
+    expect(find.byType(PopupMenuItem<int>), findsNothing);
   });
 
   testWidgets('inside an archive the menu still offers Download', (

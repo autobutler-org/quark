@@ -123,7 +123,7 @@ void main() {
 
       expect(find.text('From /Docs · 3 days left'), findsOneWidget);
 
-      await tester.tap(find.byType(PopupMenuButton<FileMenuAction>));
+      await tester.tap(find.byType(QuarkMenuButton));
       await tester.pumpAndSettle();
 
       expect(find.text('Restore'), findsOneWidget);
@@ -161,7 +161,7 @@ void main() {
     testWidgets('the Files page keeps its menu', (tester) async {
       await pumpWithActions(tester, onOpenDirectory: (_) {});
 
-      await tester.tap(find.byType(PopupMenuButton<FileMenuAction>));
+      await tester.tap(find.byType(QuarkMenuButton));
       await tester.pumpAndSettle();
 
       for (final label in ['Download', 'Move/Rename', 'Share…', 'Delete']) {
@@ -176,14 +176,14 @@ void main() {
     ) async {
       final dispatched = await pumpWithActions(tester, onOpenDirectory: (_) {});
 
-      await tester.tap(find.byType(PopupMenuButton<FileMenuAction>));
+      await tester.tap(find.byType(QuarkMenuButton));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Share…'));
       await tester.pumpAndSettle();
       expect(dispatched, [FileMenuAction.share]);
 
       await pumpWithActions(tester, onOpenDirectory: (_) {}, inArchive: true);
-      await tester.tap(find.byType(PopupMenuButton<FileMenuAction>));
+      await tester.tap(find.byType(QuarkMenuButton));
       await tester.pumpAndSettle();
       expect(find.text('Share…'), findsNothing);
       expect(find.text('Download'), findsOneWidget);

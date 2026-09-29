@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../../core/quark_loader.dart';
+import '../../core/quark_menu_button.dart';
 import '../../models/user_account_item.dart';
+import '../../models/quark_menu_entry.dart';
 import '../../theme/quark_tokens.dart';
 
 /// One account in a [UserList]: its name, what it is, and a menu of the
@@ -99,22 +101,16 @@ class UserRow extends StatelessWidget {
           ? const QuarkLoader(size: 24)
           : actions.isEmpty
           ? null
-          : PopupMenuButton<VoidCallback>(
+          : QuarkMenuButton(
               key: ValueKey('user_menu_$name'),
               tooltip: 'Actions for $name',
-              icon: const Icon(QuarkIcons.more_vert),
-              onSelected: (action) => action(),
-              itemBuilder: (context) => [
+              entries: [
                 for (final (id, label, action) in actions)
-                  PopupMenuItem(
+                  QuarkMenuEntry(
                     key: ValueKey('user_action_${id}_$name'),
-                    value: action,
-                    child: Text(
-                      label,
-                      style: id == 'delete'
-                          ? TextStyle(color: tokens.error)
-                          : null,
-                    ),
+                    label: label,
+                    destructive: id == 'delete',
+                    onSelected: action,
                   ),
               ],
             ),

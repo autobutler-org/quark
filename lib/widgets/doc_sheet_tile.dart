@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 /// One doc or sheet in the Docs and Sheets lists, whether it matched by name
@@ -114,16 +115,13 @@ class DocSheetTile extends StatelessWidget {
             ),
       trailing: onRename == null
           ? null
-          : PopupMenuButton<VoidCallback>(
+          : QuarkMenuButton(
               key: ValueKey('doc_sheet_menu_$relPath'),
-              tooltip: 'More',
-              icon: const Icon(Icons.more_vert),
-              onSelected: (action) => action(),
-              itemBuilder: (_) => [
-                PopupMenuItem(
+              entries: [
+                QuarkMenuEntry(
                   key: ValueKey('doc_sheet_rename_$relPath'),
-                  value: onRename,
-                  child: const Text('Rename'),
+                  label: 'Rename',
+                  onSelected: onRename,
                 ),
               ],
             ),

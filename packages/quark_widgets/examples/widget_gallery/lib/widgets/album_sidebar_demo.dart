@@ -53,7 +53,7 @@ class _AlbumSidebarDemoState extends State<AlbumSidebarDemo> {
         });
       },
       onCreateAlbum: () => widget.log('AlbumSidebar.onCreateAlbum'),
-      onAlbumMenu: (a) => widget.log('AlbumSidebar.onAlbumMenu(${a.name})'),
+      onAlbumMenu: (a, _) => widget.log('AlbumSidebar.onAlbumMenu(${a.name})'),
       sort: _sort,
       onSortChanged: (s) {
         widget.log('AlbumSidebar.onSortChanged(${s.id})');

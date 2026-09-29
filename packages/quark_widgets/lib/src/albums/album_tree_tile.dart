@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/show_quark_menu.dart';
 import '../models/album_item.dart';
 import '../theme/quark_tokens.dart';
 
@@ -65,10 +66,11 @@ class AlbumTreeTile extends StatelessWidget {
   final ValueChanged<int> onToggleExpanded;
 
   /// Called with the album whose menu button (`album_menu_<id>`) was tapped,
-  /// or whose row was long-pressed or right-clicked, for a context menu. Null
-  /// renders no button and leaves both gestures unhandled, which is what
-  /// system albums want.
-  final ValueChanged<AlbumItem>? onMenu;
+  /// or whose row was long-pressed or right-clicked, and the global position
+  /// to open its menu at: the press, or under the button. Null renders no
+  /// button and leaves both gestures unhandled, which is what system albums
+  /// want.
+  final void Function(AlbumItem album, Offset globalPosition)? onMenu;
 
   /// How deep this row sits in the tree, which sets its indent. Callers pass
   /// zero for a root; the tile increments it for its own children.
@@ -88,96 +90,108 @@ class AlbumTreeTile extends StatelessWidget {
     final indent = depth * tokens.spacingMd;
     final radius = BorderRadius.circular(tokens.radiusMd);
     final onMenu = this.onMenu;
-    final openMenu = onMenu == null ? null : () => onMenu(album);
+    final openMenu = onMenu == null
+        ? null
+        : (Offset position) => onMenu(album, position);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        InkWell(
-          key: ValueKey('album_tile_${album.id}'),
-          onTap: () => onSelected(album),
-          onLongPress: openMenu,
-          onSecondaryTap: openMenu,
-          borderRadius: radius,
-          child: Container(
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? colorScheme.primary.withValues(alpha: 0.12)
-                  : Colors.transparent,
-              borderRadius: radius,
-            ),
-            padding: EdgeInsets.only(
-              left: tokens.spacingSm + indent,
-              right: tokens.spacingSm,
-              top: tokens.spacingXs + tokens.spacingXs / 2,
-              bottom: tokens.spacingXs + tokens.spacingXs / 2,
-            ),
-            child: Row(
-              children: [
-                if (hasChildren)
-                  GestureDetector(
-                    key: ValueKey('album_expand_${album.id}'),
-                    onTap: () => onToggleExpanded(album.id),
-                    child: Icon(
-                      isExpanded
-                          ? QuarkIcons.expand_more_rounded
-                          : QuarkIcons.chevron_right_rounded,
-                      size: 16,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  )
-                else
-                  const SizedBox(width: 16),
-                SizedBox(width: tokens.spacingXs),
-                Icon(
-                  systemIcon ?? QuarkIcons.photo_album_outlined,
-                  size: 16,
-                  color: isSelected
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
-                ),
-                SizedBox(width: tokens.spacingSm),
-                Expanded(
-                  child: Text(
-                    album.name,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                      color: isSelected
-                          ? colorScheme.primary
-                          : colorScheme.onSurface,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+        GestureDetector(
+          onLongPressStart: openMenu == null
+              ? null
+              : (details) => openMenu(details.globalPosition),
+          child: InkWell(
+            key: ValueKey('album_tile_${album.id}'),
+            onTap: () => onSelected(album),
+            onSecondaryTapUp: openMenu == null
+                ? null
+                : (details) => openMenu(details.globalPosition),
+            borderRadius: radius,
+            child: Container(
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? colorScheme.primary.withValues(alpha: 0.12)
+                    : Colors.transparent,
+                borderRadius: radius,
+              ),
+              padding: EdgeInsets.only(
+                left: tokens.spacingSm + indent,
+                right: tokens.spacingSm,
+                top: tokens.spacingXs + tokens.spacingXs / 2,
+                bottom: tokens.spacingXs + tokens.spacingXs / 2,
+              ),
+              child: Row(
+                children: [
+                  if (hasChildren)
+                    GestureDetector(
+                      key: ValueKey('album_expand_${album.id}'),
+                      onTap: () => onToggleExpanded(album.id),
+                      child: Icon(
+                        isExpanded
+                            ? QuarkIcons.expand_more_rounded
+                            : QuarkIcons.chevron_right_rounded,
+                        size: 16,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 16),
+                  SizedBox(width: tokens.spacingXs),
+                  Icon(
+                    systemIcon ?? QuarkIcons.photo_album_outlined,
+                    size: 16,
+                    color: isSelected
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
                   ),
-                ),
-                if (album.itemCount > 0)
-                  Text(
-                    '${album.itemCount}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+                  SizedBox(width: tokens.spacingSm),
+                  Expanded(
+                    child: Text(
+                      album.name,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: isSelected
+                            ? colorScheme.primary
+                            : colorScheme.onSurface,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                if (openMenu != null)
-                  IconButton(
-                    key: ValueKey('album_menu_${album.id}'),
-                    tooltip: 'Actions for ${album.name}',
-                    icon: const Icon(QuarkIcons.more_vert),
-                    iconSize: 16,
-                    // The row is 13px text; a default 48px button would
-                    // double its height.
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 24,
-                      height: 24,
+                  if (album.itemCount > 0)
+                    Text(
+                      '${album.itemCount}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: colorScheme.onSurface.withValues(alpha: 0.4),
+                      ),
                     ),
-                    color: colorScheme.onSurfaceVariant,
-                    onPressed: openMenu,
-                  ),
-              ],
+                  if (openMenu != null)
+                    // A Builder for the button's own box, which the menu opens
+                    // under.
+                    Builder(
+                      builder: (context) => IconButton(
+                        key: ValueKey('album_menu_${album.id}'),
+                        tooltip: 'Actions for ${album.name}',
+                        icon: const Icon(QuarkIcons.more_vert),
+                        iconSize: 16,
+                        // The row is 13px text; a default 48px button would
+                        // double its height.
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 24,
+                          height: 24,
+                        ),
+                        color: colorScheme.onSurfaceVariant,
+                        onPressed: () => openMenu(quarkMenuAnchor(context)),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

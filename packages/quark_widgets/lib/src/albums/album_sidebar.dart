@@ -86,9 +86,9 @@ class AlbumSidebar extends StatelessWidget {
   final VoidCallback onCreateAlbum;
 
   /// Called with a user album whose menu button was tapped, or whose row was
-  /// long-pressed or right-clicked, for a context menu. Null renders no menu
-  /// buttons. Never called for a system album.
-  final ValueChanged<AlbumItem>? onAlbumMenu;
+  /// long-pressed or right-clicked, and the global position to open its menu
+  /// at. Null renders no menu buttons. Never called for a system album.
+  final void Function(AlbumItem album, Offset globalPosition)? onAlbumMenu;
 
   /// Called when the "All photos" row (key `album_sidebar_all_photos`) is
   /// tapped. Null leaves the row out entirely.
