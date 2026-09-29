@@ -389,3 +389,23 @@ by date (JN-PH-018).
   **Unknown date**.
 - Under a name sort there are no headers.
 - The **All** tab lists Quark photos before device photos, so a month can appear once for each.
+
+---
+
+### JN-PH-021: Act on a library photo from its menu
+
+**Preconditions:** Quark photos are visible under All photos (JN-PH-001), outside any album, and Demo mode is off.
+
+**Steps:**
+
+1. Tap a photo's menu button, or right-click the photo.
+2. Choose **Add to album**, **Favorite** (or **Unfavorite**), **Download**, **Share…**, **Make a copy**, or
+   **Delete**.
+
+**Expected result:**
+
+- The menu opens at the pointer, or under the button, and the action runs as it does from the image viewer's
+  More options. **Make a copy** and **Delete** reload the grid; **Delete** asks first and moves the photo to the
+  trash.
+- A long press on the photo still starts selecting, as before. A device photo has no menu, since there is nothing on
+  the Quark to act on.

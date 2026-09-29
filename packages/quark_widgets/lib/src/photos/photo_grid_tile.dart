@@ -23,7 +23,9 @@ import 'live_badge.dart';
 /// Give it [onMenu] and the tile has a menu: a `more_vert` button in the top
 /// right corner, and a right-click or a long press that open the same menu
 /// where the pointer is. A long press then calls [onMenu] instead of
-/// [onLongPress]. On the web the browser shows its own menu on a right-click
+/// [onLongPress], unless [longPressOpensMenu] is off, which keeps the long
+/// press for [onLongPress] (selection, say) while the button and the
+/// right-click still open the menu. On the web the browser shows its own menu on a right-click
 /// too, unless the caller has turned it off with `BrowserContextMenu`.
 ///
 /// Key prefixes: `photo_tile_<id>` on the tile, `photo_tile_check_<id>` on
@@ -52,6 +54,7 @@ class PhotoGridTile extends StatelessWidget {
     this.selectionMode = false,
     this.onDoubleTap,
     this.onMenu,
+    this.longPressOpensMenu = true,
     super.key,
   });
 
@@ -85,11 +88,16 @@ class PhotoGridTile extends StatelessWidget {
   /// long-pressed. Null leaves the tile without a menu.
   final ValueChanged<Offset>? onMenu;
 
+  /// Whether a long press opens the menu rather than calling [onLongPress].
+  /// Ignored without [onMenu].
+  final bool longPressOpensMenu;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final onMenu = this.onMenu;
+    final longPressMenu = onMenu != null && longPressOpensMenu;
     // Pure black or white at low alpha, never a themed neutral: a tinted
     // hairline picks up the page behind it and reads as dirt on the photo.
     final outline = theme.brightness == Brightness.dark
@@ -101,10 +109,10 @@ class PhotoGridTile extends StatelessWidget {
       child: GestureDetector(
         key: ValueKey('photo_tile_${item.id}'),
         onTap: onTap,
-        onLongPress: onMenu == null ? onLongPress : null,
-        onLongPressStart: onMenu == null
-            ? null
-            : (details) => onMenu(details.globalPosition),
+        onLongPress: longPressMenu ? null : onLongPress,
+        onLongPressStart: longPressMenu
+            ? (details) => onMenu(details.globalPosition)
+            : null,
         onSecondaryTapUp: onMenu == null
             ? null
             : (details) => onMenu(details.globalPosition),

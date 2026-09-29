@@ -29,9 +29,11 @@ import 'photo_grid_tile.dart';
 /// remote photos outside selection mode only, since those are the only ones
 /// that can be favorited; everywhere else a single tap fires immediately.
 ///
-/// [onMenu] gives every tile a menu outside selection mode — a button, a
-/// right-click and a long press, which then no longer calls [onLongPress].
-/// See [PhotoGridTile.onMenu].
+/// [onMenu] gives every remote photo a menu outside selection mode — a
+/// button, a right-click and, unless [longPressOpensMenu] is off, a long
+/// press, which then no longer calls [onLongPress]. A device photo has
+/// nothing on the server to act on, so it gets none. See
+/// [PhotoGridTile.onMenu].
 ///
 /// [sections] splits [photos] into consecutive runs, each under a
 /// [PhotoGridSectionHeader] that pins to the top of the viewport while its
@@ -76,6 +78,7 @@ class PhotoGrid extends StatelessWidget {
     this.onDoubleTap,
     this.onMenu,
     this.sections,
+    this.longPressOpensMenu = true,
     this.selectedIds = const {},
     this.selectionMode = false,
     this.isLoading = false,
@@ -109,8 +112,13 @@ class PhotoGrid extends StatelessWidget {
   final ValueChanged<int>? onDoubleTap;
 
   /// Called with a tile's index and the global position to open its menu at.
-  /// Offered outside [selectionMode] only. Null gives the tiles no menu.
+  /// Offered on remote photos outside [selectionMode] only. Null gives the
+  /// tiles no menu.
   final void Function(int index, Offset globalPosition)? onMenu;
+
+  /// Whether a long press opens a tile's menu rather than calling
+  /// [onLongPress]. See [PhotoGridTile.longPressOpensMenu].
+  final bool longPressOpensMenu;
 
   /// Splits [photos], in order, into runs with a pinned header each. Their
   /// counts must add up to the length of [photos]. Null or empty draws one
@@ -184,9 +192,10 @@ class PhotoGrid extends StatelessWidget {
         onDoubleTap: onDoubleTap != null && photo.isRemote && !selectionMode
             ? () => onDoubleTap(index)
             : null,
-        onMenu: onMenu != null && !selectionMode
+        onMenu: onMenu != null && photo.isRemote && !selectionMode
             ? (position) => onMenu(index, position)
             : null,
+        longPressOpensMenu: longPressOpensMenu,
       );
     }
 

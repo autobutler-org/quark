@@ -16,6 +16,7 @@ void main() {
     List<String>? events,
     bool withDoubleTap = false,
     bool withMenu = false,
+    bool longPressOpensMenu = true,
   }) {
     void record(String e) => events?.add(e);
     return pumpAt(
@@ -33,6 +34,7 @@ void main() {
             onLongPress: () => record('long'),
             onDoubleTap: withDoubleTap ? () => record('double') : null,
             onMenu: withMenu ? (_) => record('menu') : null,
+            longPressOpensMenu: longPressOpensMenu,
           ),
         ),
       ),
@@ -78,6 +80,30 @@ void main() {
 
     // The long press opened the menu rather than reporting onLongPress.
     expect(events, ['menu', 'menu', 'menu']);
+  });
+
+  testBothViewports('can keep the long press for selection (#2276)', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpTile(
+      tester,
+      size: size,
+      events: events,
+      withMenu: true,
+      longPressOpensMenu: false,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('photo_tile_menu_p1')));
+    await tester.tap(
+      find.byKey(const ValueKey('photo_tile_p1')),
+      buttons: kSecondaryButton,
+    );
+    await tester.longPress(find.byKey(const ValueKey('photo_tile_p1')));
+    await tester.pump();
+
+    expect(events, ['menu', 'menu', 'long']);
   });
 
   testBothViewports('gives the menu button a 40-pixel target', (

@@ -245,6 +245,17 @@ class _FakeQuark {
           calls.add('upload(${files.length}, $serial, keepBoth: $keepBoth)');
           return landedPaths;
         },
+    saveFile: (filePath, {serial, fileName}) async {
+      calls.add('save($filePath, $serial, $fileName)');
+      return null;
+    },
+    copyPhoto: (relPath, {serial}) async {
+      calls.add('copy($relPath, $serial)');
+      return 'camera/1 (copy).jpg';
+    },
+    deleteFile: (rootDir, fileName, {deviceSerial}) async {
+      calls.add('delete($rootDir, $fileName, $deviceSerial)');
+    },
     bytesCache: PhotoBytesCache.instance,
   );
 }
@@ -362,6 +373,53 @@ void main() {
 
       expect(controller.photos, hasLength(50));
       expect(controller.isLoadingMore, isFalse);
+    });
+  });
+
+  group('one Quark photo (#2276)', () {
+    Future<(_FakeQuark, PhotosController)> loaded() async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      quark.calls.clear();
+      return (quark, controller);
+    }
+
+    test('downloads it by path, serial and name', () async {
+      final (quark, controller) = await loaded();
+
+      await controller.downloadPhoto('sd1:camera/1.jpg');
+
+      expect(quark.calls, ['save(camera/1.jpg, sd1, 1.jpg)']);
+    });
+
+    test('copies it, reloads, and names the copy', () async {
+      final (quark, controller) = await loaded();
+
+      final name = await controller.copyPhoto('sd1:camera/1.jpg');
+
+      expect(name, '1 (copy).jpg');
+      expect(quark.calls.first, 'copy(camera/1.jpg, sd1)');
+      expect(quark.calls, contains('getPhotos(0)'));
+    });
+
+    test('deletes it from its folder and reloads', () async {
+      final (quark, controller) = await loaded();
+
+      await controller.deletePhoto('sd1:camera/1.jpg');
+
+      expect(quark.calls.first, 'delete(camera, 1.jpg, sd1)');
+      expect(quark.calls, contains('getPhotos(0)'));
+    });
+
+    test('leaves a device photo alone', () async {
+      final (quark, controller) = await loaded();
+
+      await controller.downloadPhoto('asset:dev1');
+      expect(await controller.copyPhoto('asset:dev1'), isNull);
+      await controller.deletePhoto('asset:dev1');
+
+      expect(quark.calls, isEmpty);
     });
   });
 
