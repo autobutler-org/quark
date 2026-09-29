@@ -144,6 +144,9 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   ThemeMode _theme = ThemeMode.system;
 
+  /// Whether a change to the chat beta switch is being saved.
+  bool _isSavingChat = false;
+
   /// How this app's own version reads, per [appVersionLabel] (#1606).
   ///
   /// Distinct from [_installedVersion], which is the Quark server's — a bug
@@ -223,6 +226,7 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     // Admin-only actions appear and disappear as the Quark reports the role.
     AppSettings.instance.isAdmin.addListener(_onAdminChanged);
+    AppSettings.instance.chatEnabled.addListener(_onAdminChanged);
     _load();
   }
 
@@ -331,6 +335,24 @@ class _SettingsPageState extends State<SettingsPage> {
       _syncRemoteAccessPoll();
     } catch (e) {
       debugPrint('[settings_page.dart] Remote access poll failed: $e');
+    }
+  }
+
+  /// Turns the chat beta on or off for everyone on this Quark (#2421).
+  Future<void> _setChatEnabled(bool enabled) async {
+    if (_isSavingChat) return;
+    setState(() => _isSavingChat = true);
+    try {
+      AppSettings.instance.chatEnabled.value =
+          await SettingsService.setChatEnabled(enabled);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(Errors.message(e, 'change the chat setting'))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingChat = false);
     }
   }
 
@@ -637,6 +659,9 @@ class _SettingsPageState extends State<SettingsPage> {
               demoMode: _demoMode,
               onDemoModeChanged: _setDemoMode,
               onHostsChanged: _load,
+              chatEnabled: AppSettings.instance.chatEnabled.value,
+              isSavingChat: _isSavingChat,
+              onChatEnabledChanged: isAdmin && hasHost ? _setChatEnabled : null,
               onOpenStorage: hasHost
                   ? () => context.go(AppRoutes.systemTab(SystemTab.storage))
                   : null,
@@ -841,6 +866,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void dispose() {
     AppSettings.instance.isAdmin.removeListener(_onAdminChanged);
+    AppSettings.instance.chatEnabled.removeListener(_onAdminChanged);
     _remoteAccessPoll?.cancel();
     super.dispose();
   }

@@ -19,6 +19,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// more: the router checks with the Quark before it opens one of those pages,
 /// and the Quark refuses their requests from anyone else.
 ///
+/// Chat is offered while an admin has the beta on, following
+/// [AppSettings.chatEnabled]; the router asks the Quark again before it opens
+/// the page.
+///
 /// The header names the active Quark (#2033) and, with more than one saved,
 /// switches between them (#2230). Switching goes through login: the router's
 /// gate forwards a Quark you are signed in to on to Files, and one you are
@@ -51,6 +55,7 @@ class AppDrawer extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge([
         settings.isAdmin,
+        settings.chatEnabled,
         settings.activeHostNotifier,
       ]),
       builder: (context, _) => QuarkDrawer(
@@ -69,6 +74,9 @@ class AppDrawer extends StatelessWidget {
         onTapTrash: goTo(QuarkDrawerSection.trash, AppRoutes.trash),
         onTapDocs: goTo(QuarkDrawerSection.docs, AppRoutes.docs),
         onTapSheets: goTo(QuarkDrawerSection.sheets, AppRoutes.sheets),
+        onTapChat: settings.chatEnabled.value
+            ? goTo(QuarkDrawerSection.chat, AppRoutes.chat)
+            : null,
         onTapSystem: goTo(QuarkDrawerSection.system, AppRoutes.system),
         onTapVault: settings.isAdmin.value
             ? goTo(QuarkDrawerSection.vault, AppRoutes.vault)

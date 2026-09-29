@@ -60,11 +60,18 @@ func (r *adminRouter) Routes() []*serverutil.Route {
 		enableRemoteAccessRoute,
 		disableRemoteAccessRoute,
 		updateAccessRequestsRoute,
+		updateChatRoute,
 	}
 }
 
 // accessRequestsSetting is whether the sign-in page takes account requests.
 // A pointer, so a body that leaves it out is refused rather than read as off.
 type accessRequestsSetting struct {
+	Enabled *bool `json:"enabled" binding:"required"`
+}
+
+// chatSetting is whether the chat beta is on. A pointer, so a body that
+// leaves it out is refused rather than read as off.
+type chatSetting struct {
 	Enabled *bool `json:"enabled" binding:"required"`
 }

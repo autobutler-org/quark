@@ -128,6 +128,27 @@ void main() {
     expect(find.byKey(const ValueKey('settings_reset_quark')), findsNothing);
   });
 
+  testWidgets('offers admins the chat beta switch, and no one else', (
+    tester,
+  ) async {
+    settings.chatEnabled.value = true;
+    addTearDown(() => settings.chatEnabled.value = false);
+    await pumpAt(tester, SettingsTab.general, const Size(1280, 800));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('settings_chat_enabled')),
+      200,
+      scrollable: tabList(),
+    );
+    final toggle = tester.widget<SwitchListTile>(
+      find.byKey(const ValueKey('settings_chat_enabled')),
+    );
+    expect(toggle.value, isTrue);
+
+    settings.isAdmin.value = false;
+    await tester.pump();
+    expect(find.byKey(const ValueKey('settings_chat_enabled')), findsNothing);
+  });
+
   testWidgets('links to the drives instead of listing them', (tester) async {
     await pumpAt(tester, SettingsTab.general, const Size(1280, 800));
     await tester.scrollUntilVisible(
