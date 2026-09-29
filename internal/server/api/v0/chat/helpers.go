@@ -37,6 +37,15 @@ func callerContext(c *gin.Context) (deputil.Dependencies, accessutil.Principal, 
 	return deps, principal, failed
 }
 
+// rateLimited is a 429 once the caller has spent its budget for route on
+// the chat limiter, and nil otherwise (#2485). Each route has its own bucket.
+func rateLimited(deps deputil.Dependencies, principal accessutil.Principal, route string) *serverutil.Response {
+	if deps.ChatRateLimiter().Allow(strconv.FormatInt(principal.UserID, 10) + " " + route) {
+		return nil
+	}
+	return serverutil.NewResponse().WithStatusCode(http.StatusTooManyRequests).WithError(errTooManyRequests)
+}
+
 // channelID reads the :id path parameter. One that isn't a positive integer
 // names no channel.
 func channelID(c *gin.Context) (int64, *serverutil.Response) {

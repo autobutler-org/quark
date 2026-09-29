@@ -30,6 +30,7 @@ type harness struct {
 	users    map[string]int64
 	everyone int64
 	events   <-chan eventbus.Event
+	deps     deputil.Dependencies
 }
 
 func newHarness(t *testing.T) harness {
@@ -63,7 +64,7 @@ func newHarness(t *testing.T) harness {
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_chat.NewRouter())
 	srv := httptest.NewServer(engine)
 	t.Cleanup(srv.Close)
-	return harness{srv: srv, users: users, everyone: everyone, events: events}
+	return harness{srv: srv, users: users, everyone: everyone, events: events, deps: deps}
 }
 
 func (h harness) do(t *testing.T, method, path, as, body string) (int, string) {

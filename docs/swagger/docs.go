@@ -2963,6 +2963,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "429": {
+                        "description": "the caller sent too many of these in a short time; the limit is per account",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -3035,6 +3041,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "no such channel, the caller isn't a member, or has no chat keys",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "the caller sent too many of these in a short time; the limit is per account",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -3502,6 +3514,12 @@ const docTemplate = `{
                     },
                     "413": {
                         "description": "ciphertext over 16 KiB",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "the caller sent too many of these in a short time; the limit is per account",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

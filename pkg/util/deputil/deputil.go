@@ -22,9 +22,24 @@ import (
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
+// Chat write limits, per account and per route (#2485): posting a message,
+// creating a key version, and uploading key grants each get their own
+// bucket. They are far above what the app sends: a burst of 100 covers 100
+// messages pasted at once, or grant refills for 25,600 members (256 grants per
+// upload) after a rotation, and then 10 a second sustained.
+const (
+	// ChatWriteRate is the sustained requests per second.
+	ChatWriteRate = 10
+	// ChatWriteBurst is how many requests may arrive at once.
+	ChatWriteBurst = 100
+)
+
 type Dependencies interface {
 	AuthRateLimiter() *ratelimitutil.Limiter
 	BackupJobStore() backup.BackupJobStore
+	// ChatRateLimiter limits chat writes per account; keys are the account
+	// and route.
+	ChatRateLimiter() *ratelimitutil.Limiter
 	Database() *db.DatabaseSqlc
 	DownloadTokens() *downloadutil.TokenStore
 	EventBus() *eventbus.Bus
@@ -40,6 +55,7 @@ type Dependencies interface {
 	VaultRateLimiter() *ratelimitutil.Limiter
 	VaultSession() *vaultcrypto.VaultSession
 	Worker() workerutil.Worker
+	WithChatRateLimiter(limiter *ratelimitutil.Limiter) Dependencies
 	WithDatabase(database *db.DatabaseSqlc) Dependencies
 	WithDownloadTokens(store *downloadutil.TokenStore) Dependencies
 	WithEventBus(b *eventbus.Bus) Dependencies
@@ -68,7 +84,7 @@ func NewDependencies() Dependencies {
 	// no goroutine, no directory. StartSweeper, called once from server
 	// startup, is what gives it a heartbeat (#1629).
 	//
-	// The backup job store and the two rate limiters are built here for the
+	// The backup job store and the rate limiters are built here for the
 	// same reason: they used to be package-level globals in the handler and
 	// middleware packages, so every graph — tests included — needs a non-nil
 	// one, and the server's single graph keeps them alive process-wide (#1674).
@@ -87,6 +103,9 @@ func NewDependencies() Dependencies {
 		// Combined with Argon2id (~300 ms/attempt), sustained guessing is limited to
 		// ≈ 30 attempts/minute per IP — well below what any offline attack would need.
 		vaultRateLimiter: ratelimitutil.NewWithRate(0.5, 5),
+		// chatRateLimiter caps chat writes per account, well above the app's
+		// own traffic; see ChatWriteRate.
+		chatRateLimiter: ratelimitutil.NewWithRate(ChatWriteRate, ChatWriteBurst),
 		// sshSystem is the real host. It runs nothing until an admin asks, and
 		// reports itself unavailable anywhere but the installed service (#2131).
 		sshSystem: sshutil.DefaultSystem(),

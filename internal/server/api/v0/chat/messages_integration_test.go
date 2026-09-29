@@ -8,6 +8,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 )
 
 // messageBody is a post of n bytes of fill under keyVersion.
@@ -191,4 +192,31 @@ func TestChatMessages_BurstCatchUp(t *testing.T) {
 			t.Errorf("message %d missing after catch-up", id)
 		}
 	}
+}
+
+// TestChatWrites_RateLimited gives bob a two-request budget per route and
+// checks the third write is a 429, that each route has its own bucket, and
+// that carol's budget isn't bob's (#2485).
+func TestChatWrites_RateLimited(t *testing.T) {
+	h := newHarness(t)
+	roomID, path := roomWithKey(t, h)
+	h.deps.WithChatRateLimiter(ratelimitutil.NewWithRate(0, 2))
+	h.expect(t, http.StatusOK, http.MethodPut, "/chat/keys/me", "carol", keysBody('c', false), nil)
+	h.expect(t, http.StatusOK, http.MethodPut, path+"/members", "bob", userBody(h.users["carol"], "read_messages", "send_messages"), nil)
+
+	for range 2 {
+		h.expect(t, http.StatusCreated, http.MethodPost, path+"/messages", "bob", messageBody('m', 64, 1), nil)
+	}
+	h.expect(t, http.StatusTooManyRequests, http.MethodPost, path+"/messages", "bob", messageBody('m', 64, 1), nil)
+	h.expect(t, http.StatusCreated, http.MethodPost, path+"/messages", "carol", messageBody('m', 64, 1), nil)
+
+	grants := `{"grants":[` + grantBody('b', roomID, 1, h.users["carol"], 'x') + `]}`
+	h.expect(t, http.StatusOK, http.MethodPost, path+"/keys/grants", "bob", grants, nil)
+	h.expect(t, http.StatusOK, http.MethodPost, path+"/keys/grants", "bob", grants, nil)
+	h.expect(t, http.StatusTooManyRequests, http.MethodPost, path+"/keys/grants", "bob", grants, nil)
+
+	create := createKeyBody('b', roomID, 2, h.users["bob"])
+	h.expect(t, http.StatusConflict, http.MethodPost, path+"/keys", "bob", create, nil)
+	h.expect(t, http.StatusConflict, http.MethodPost, path+"/keys", "bob", create, nil)
+	h.expect(t, http.StatusTooManyRequests, http.MethodPost, path+"/keys", "bob", create, nil)
 }

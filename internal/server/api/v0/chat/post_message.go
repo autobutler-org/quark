@@ -24,6 +24,7 @@ import (
 // @Failure 403 {object} serverutil.Response "the caller reads the channel but lacks send_messages"
 // @Failure 404 {object} serverutil.Response "no such channel, or the caller lacks read_messages"
 // @Failure 413 {object} serverutil.Response "ciphertext over 16 KiB"
+// @Failure 429 {object} serverutil.Response "the caller sent too many of these in a short time; the limit is per account"
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /chat/channels/{id}/messages [post]
@@ -31,6 +32,9 @@ func postMessage(c *gin.Context) *serverutil.Response {
 	deps, principal, failed := callerContext(c)
 	if failed != nil {
 		return failed
+	}
+	if limited := rateLimited(deps, principal, "messages"); limited != nil {
+		return limited
 	}
 	id, failed := channelID(c)
 	if failed != nil {

@@ -48,6 +48,11 @@ void main() {
         Errors.message(const ApiException(401), 'save the document'),
         Errors.sessionExpired,
       );
+      // Chat writes are rate limited per account (#2485).
+      expect(
+        Errors.message(const ApiException(429), 'send the message'),
+        'Too many requests. Wait a moment and try again.',
+      );
     });
 
     test('a 401 from the shared client says the session is gone', () {
