@@ -8,6 +8,7 @@ import 'package:quark/models/chat_keys.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark/services/feature_flags_service.dart';
 import 'package:quark/utils/error_text.dart';
 
 /// Result of a successful [AuthService.checkStatus] call.
@@ -35,10 +36,6 @@ class AuthStatus {
   /// False before setup, and when the Quark does not say.
   final bool accessRequestsEnabled;
 
-  /// Whether an admin has left the chat beta on (#2421). False before setup,
-  /// and when the Quark does not say, which a Quark without chat never does.
-  final bool chatEnabled;
-
   const AuthStatus({
     required this.setupComplete,
     this.username,
@@ -46,7 +43,6 @@ class AuthStatus {
     this.userId,
     this.avatarUpdatedAt,
     this.accessRequestsEnabled = false,
-    this.chatEnabled = false,
   });
 }
 
@@ -245,14 +241,13 @@ class AuthService {
       userId: (body['userId'] as num?)?.toInt(),
       avatarUpdatedAt: (body['avatarUpdatedAt'] as num?)?.toInt(),
       accessRequestsEnabled: body['accessRequestsEnabled'] as bool? ?? false,
-      chatEnabled: body['chatEnabled'] as bool? ?? false,
     );
   }
 
   /// Fetches the signed-in user's admin flag again into [AppSettings.isAdmin],
   /// their id and picture version into [AppSettings.userId] and
-  /// [AppSettings.avatarUpdatedAt], and whether chat is on into
-  /// [AppSettings.chatEnabled].
+  /// [AppSettings.avatarUpdatedAt], and the beta feature flags into
+  /// [AppSettings.featureFlags].
   ///
   /// Without a session there is no admin and no account. A failed call keeps the last known
   /// value: it only decides what the app shows, and the Quark still refuses
@@ -263,15 +258,15 @@ class AuthService {
       settings.isAdmin.value = false;
       settings.userId.value = null;
       settings.avatarUpdatedAt.value = null;
-      settings.chatEnabled.value = false;
+      settings.featureFlags.value = const [];
       return;
     }
+    unawaited(FeatureFlagsService.refresh());
     try {
       final status = await checkStatus();
       settings.isAdmin.value = status.isAdmin;
       settings.userId.value = status.userId;
       settings.avatarUpdatedAt.value = status.avatarUpdatedAt;
-      settings.chatEnabled.value = status.chatEnabled;
       if (status.username != null) {
         await settings.setUsername(status.username);
       }
@@ -291,6 +286,8 @@ class AuthService {
     AppSettings.instance.sessionTokenNotifier.addListener(refreshAccount);
     EventsService.instance.events.listen((event) {
       if (event.kind == 'account_changed') refreshAccount();
+      // An admin flipped a beta on or off; members follow it live (#2542).
+      if (event.kind == 'feature_flag_changed') FeatureFlagsService.refresh();
     });
     EventsService.instance.connections.listen((_) => refreshAccount());
     EventsService.instance.start();

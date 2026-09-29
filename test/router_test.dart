@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/models/feature_flag.dart';
 import 'package:quark/models/trash_item.dart';
 import 'package:quark/pages/chat_page.dart';
 import 'package:quark/pages/login_page.dart';
@@ -9,6 +10,7 @@ import 'package:quark/pages/recover_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
+import 'package:quark/services/feature_flags_service.dart';
 
 import 'support/fake_chat.dart';
 
@@ -760,13 +762,14 @@ void main() {
       expect(paths.indexOf(AppRoutes.accountAndData), isNot(-1));
     });
 
-    test('are General, Account, Network, Updates and About, in order', () {
+    test('are General, Account, Network, Updates, About and Features', () {
       expect(SettingsTab.values.map(AppRoutes.settingsTab), [
         '/settings/general',
         '/settings/account',
         '/settings/network',
         '/settings/updates',
         '/settings/about',
+        '/settings/features',
       ]);
     });
 
@@ -893,6 +896,8 @@ void main() {
       }
       await settings.setSessionToken(null);
       authStatusProbe = AuthService.checkStatus;
+      featureFlagsProbe = FeatureFlagsService.list;
+      settings.featureFlags.value = const [];
     }
 
     setUpAll(() {
@@ -915,7 +920,13 @@ void main() {
       final r = GoRouter(
         initialLocation: location,
         redirect: authRedirect,
+        refreshListenable: routerRefreshListenable,
         routes: [
+          GoRoute(
+            path: '${AppRoutes.settings}/:tab',
+            builder: (_, state) =>
+                Text('settings ${state.pathParameters['tab']}'),
+          ),
           ...router.configuration.routes.whereType<GoRoute>().where(
             (route) => route.path == AppRoutes.chat,
           ),
@@ -943,8 +954,17 @@ void main() {
       );
       await settings.acceptTerms();
       await settings.setSessionToken('token');
-      authStatusProbe = () async =>
-          AuthStatus(setupComplete: true, chatEnabled: chatEnabled);
+      authStatusProbe = () async => const AuthStatus(setupComplete: true);
+      final flags = [
+        FeatureFlag(
+          key: FeatureFlag.chat,
+          label: 'Chat',
+          description: '',
+          enabled: chatEnabled,
+        ),
+      ];
+      featureFlagsProbe = () async => flags;
+      settings.featureFlags.value = flags;
     }
 
     test('the app declares /chat and one route for every channel', () {
@@ -976,6 +996,34 @@ void main() {
         final r = await pumpGated(tester, location);
         expect(at(r), AppRoutes.files, reason: location);
       }
+    });
+
+    testWidgets('chat turned off under a signed-in member leaves /chat', (
+      tester,
+    ) async {
+      await signIn(chatEnabled: true);
+      final r = await pumpGated(tester, '/chat/12');
+      expect(at(r), '/chat/12');
+
+      // What the feature_flag_changed event does once the Quark says off.
+      featureFlagsProbe = () async => const [];
+      settings.featureFlags.value = const [];
+      await tester.pumpAndSettle();
+
+      expect(at(r), AppRoutes.files);
+    });
+
+    testWidgets('the Features tab of Settings is for admins only (#2542)', (
+      tester,
+    ) async {
+      await signIn(chatEnabled: true);
+      var r = await pumpGated(tester, '/settings/features');
+      expect(at(r), AppRoutes.files);
+
+      authStatusProbe = () async =>
+          const AuthStatus(setupComplete: true, isAdmin: true);
+      r = await pumpGated(tester, '/settings/features');
+      expect(at(r), '/settings/features');
     });
 
     testWidgets('an unknown channel falls back to general, not an error', (

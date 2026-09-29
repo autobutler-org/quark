@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:quark/controllers/feature_flags_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
@@ -25,6 +26,7 @@ import 'package:quark/widgets/settings/connected_devices_card.dart';
 import 'package:quark/widgets/settings/remote_access_card.dart';
 import 'package:quark/widgets/settings/settings_about_tab.dart';
 import 'package:quark/widgets/settings/settings_account_tab.dart';
+import 'package:quark/widgets/settings/settings_features_tab.dart';
 import 'package:quark/widgets/settings/settings_general_tab.dart';
 import 'package:quark/widgets/settings/settings_network_tab.dart';
 import 'package:quark/widgets/settings/settings_profile_card.dart';
@@ -118,8 +120,10 @@ String shortGitSha(String commit) => (commit.isEmpty || commit == 'NOCOMMIT')
 /// Account (sign out, then deleting the account and resetting the Quark),
 /// Network (remote access, connected devices, SSH), Updates (the Quark's
 /// version, updates, repair) and About (the app's version, help and terms,
-/// the software bill of materials). SSH access, updating, automatic updates,
-/// repair and reset are admin-only.
+/// the software bill of materials), and Features (a switch per beta feature
+/// flag, #2542). SSH access, updating, automatic updates, repair, reset and
+/// the Features tab are admin-only, and Features shows only while the Quark
+/// has betas.
 ///
 /// The router passes the [tab] to show and [onTabSelected] to move to
 /// another. The page loads every tab's data up front, so one unreachable
@@ -128,8 +132,13 @@ class SettingsPage extends StatefulWidget {
   const SettingsPage({
     this.tab = SettingsTab.general,
     this.onTabSelected,
+    this.featureFlags,
     super.key,
   });
+
+  /// Drives the Features tab. Null builds one over the real service; a test
+  /// passes one with a fake.
+  final FeatureFlagsController? featureFlags;
 
   /// The tab to show.
   final SettingsTab tab;
@@ -144,8 +153,8 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   ThemeMode _theme = ThemeMode.system;
 
-  /// Whether a change to the chat beta switch is being saved.
-  bool _isSavingChat = false;
+  late final FeatureFlagsController _features =
+      widget.featureFlags ?? FeatureFlagsController();
 
   /// How this app's own version reads, per [appVersionLabel] (#1606).
   ///
@@ -226,7 +235,7 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     // Admin-only actions appear and disappear as the Quark reports the role.
     AppSettings.instance.isAdmin.addListener(_onAdminChanged);
-    AppSettings.instance.chatEnabled.addListener(_onAdminChanged);
+    _features.addListener(_onAdminChanged);
     _load();
   }
 
@@ -338,21 +347,12 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  /// Turns the chat beta on or off for everyone on this Quark (#2421).
-  Future<void> _setChatEnabled(bool enabled) async {
-    if (_isSavingChat) return;
-    setState(() => _isSavingChat = true);
-    try {
-      AppSettings.instance.chatEnabled.value =
-          await SettingsService.setChatEnabled(enabled);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.message(e, 'change the chat setting'))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSavingChat = false);
+  /// Turns a beta feature on or off for everyone on this Quark (#2542).
+  Future<void> _setFeature(String key, bool enabled) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final error = await _features.setFlag(key, enabled);
+    if (error != null && mounted) {
+      messenger.showSnackBar(SnackBar(content: Text(error)));
     }
   }
 
@@ -629,6 +629,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final hasHost = AppSettings.instance.activeHost != null;
     final isAdmin = AppSettings.instance.isAdmin.value;
+    final showFeatures = isAdmin && hasHost && _features.flags.isNotEmpty;
     // Heads every tab, since it explains every "Not connected" row and the
     // address it points at is on General (#1637). It scrolls with the tab's
     // content: pinned above the tabs, it left a phone almost no room.
@@ -643,7 +644,11 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.settings),
       body: QuarkTabView(
-        selectedIndex: widget.tab.index,
+        // Features is the last tab, so while it is hidden a link to it shows
+        // General and every other index still lines up.
+        selectedIndex: showFeatures || widget.tab != SettingsTab.features
+            ? widget.tab.index
+            : 0,
         onTabSelected: widget.onTabSelected == null
             ? null
             : (index) => widget.onTabSelected!(SettingsTab.values[index]),
@@ -659,9 +664,6 @@ class _SettingsPageState extends State<SettingsPage> {
               demoMode: _demoMode,
               onDemoModeChanged: _setDemoMode,
               onHostsChanged: _load,
-              chatEnabled: AppSettings.instance.chatEnabled.value,
-              isSavingChat: _isSavingChat,
-              onChatEnabledChanged: isAdmin && hasHost ? _setChatEnabled : null,
               onOpenStorage: hasHost
                   ? () => context.go(AppRoutes.systemTab(SystemTab.storage))
                   : null,
@@ -759,6 +761,16 @@ class _SettingsPageState extends State<SettingsPage> {
               goSbom: _goSbom,
             ),
           ),
+          if (showFeatures)
+            QuarkTab(
+              label: 'Features',
+              child: SettingsFeaturesTab(
+                header: banner,
+                flags: _features.flags,
+                isSaving: _features.isSaving,
+                onChanged: _setFeature,
+              ),
+            ),
         ],
       ),
     );
@@ -866,7 +878,8 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void dispose() {
     AppSettings.instance.isAdmin.removeListener(_onAdminChanged);
-    AppSettings.instance.chatEnabled.removeListener(_onAdminChanged);
+    _features.removeListener(_onAdminChanged);
+    if (widget.featureFlags == null) _features.dispose();
     _remoteAccessPoll?.cancel();
     super.dispose();
   }

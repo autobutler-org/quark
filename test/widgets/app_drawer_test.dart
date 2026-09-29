@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/models/feature_flag.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
@@ -28,11 +29,23 @@ void main() {
         .setMockMethodCallHandler(secureStorage, null);
   });
   final scaffoldKey = GlobalKey<ScaffoldState>();
+  const chatOn = FeatureFlag(
+    key: FeatureFlag.chat,
+    label: 'Chat',
+    description: '',
+    enabled: true,
+  );
+  const chatOff = FeatureFlag(
+    key: FeatureFlag.chat,
+    label: 'Chat',
+    description: '',
+    enabled: false,
+  );
 
   setUp(() => settings.isAdmin.value = false);
   tearDown(() {
     settings.isAdmin.value = false;
-    settings.chatEnabled.value = false;
+    settings.featureFlags.value = const [];
   });
 
   Widget page(String name, QuarkDrawerSection section) => Scaffold(
@@ -109,12 +122,12 @@ void main() {
     await pumpDrawer(tester);
     expect(find.byKey(const ValueKey('drawer_chat')), findsNothing);
 
-    settings.chatEnabled.value = true;
+    settings.featureFlags.value = const [chatOn];
     await tester.pump();
     expect(find.byKey(const ValueKey('drawer_chat')), findsOneWidget);
     expect(find.byType(QuarkBetaBadge), findsOneWidget);
 
-    settings.chatEnabled.value = false;
+    settings.featureFlags.value = const [chatOff];
     await tester.pump();
     expect(find.byKey(const ValueKey('drawer_chat')), findsNothing);
   });

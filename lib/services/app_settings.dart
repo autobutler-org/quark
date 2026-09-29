@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
+import 'package:quark/models/feature_flag.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Matches an explicit URI scheme prefix (`https://`, `http://`, `ws://`, ...).
@@ -164,10 +165,16 @@ class AppSettings {
   /// `UsersService.avatarUrl` so a changed picture is a new URL.
   final ValueNotifier<int?> avatarUpdatedAt = ValueNotifier(null);
 
-  /// Whether the chat beta is on for the current [activeHost] (#2421), which
-  /// decides whether the drawer offers Chat. Kept current like [isAdmin]; the
-  /// router asks the Quark itself before opening the page.
-  final ValueNotifier<bool> chatEnabled = ValueNotifier(false);
+  /// The current [activeHost]'s beta feature flags (#2542), which decide
+  /// whether the drawer offers a beta such as Chat. Kept current by
+  /// `FeatureFlagsService.refresh` whenever [isAdmin] is, and when an admin
+  /// flips one; the router asks the Quark itself before opening a beta's page.
+  final ValueNotifier<List<FeatureFlag>> featureFlags = ValueNotifier(const []);
+
+  /// Whether the flag [key] is on in [featureFlags]. A flag the Quark does not
+  /// list is off.
+  bool isFeatureEnabled(String key) =>
+      featureFlags.value.any((flag) => flag.key == key && flag.enabled);
 
   /// Whether terms have been accepted **for the current [activeHost]**.
   ///

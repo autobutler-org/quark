@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/models/feature_flag.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/host_display.dart';
@@ -20,7 +21,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// and the Quark refuses their requests from anyone else.
 ///
 /// Chat is offered while an admin has the beta on, following
-/// [AppSettings.chatEnabled]; the router asks the Quark again before it opens
+/// [AppSettings.featureFlags]; the router asks the Quark again before it opens
 /// the page.
 ///
 /// The header names the active Quark (#2033) and, with more than one saved,
@@ -55,7 +56,7 @@ class AppDrawer extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge([
         settings.isAdmin,
-        settings.chatEnabled,
+        settings.featureFlags,
         settings.activeHostNotifier,
       ]),
       builder: (context, _) => QuarkDrawer(
@@ -74,7 +75,7 @@ class AppDrawer extends StatelessWidget {
         onTapTrash: goTo(QuarkDrawerSection.trash, AppRoutes.trash),
         onTapDocs: goTo(QuarkDrawerSection.docs, AppRoutes.docs),
         onTapSheets: goTo(QuarkDrawerSection.sheets, AppRoutes.sheets),
-        onTapChat: settings.chatEnabled.value
+        onTapChat: settings.isFeatureEnabled(FeatureFlag.chat)
             ? goTo(QuarkDrawerSection.chat, AppRoutes.chat)
             : null,
         onTapSystem: goTo(QuarkDrawerSection.system, AppRoutes.system),
