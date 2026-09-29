@@ -2097,11 +2097,11 @@ func TestUploadFilesStreamed_ReportsWhatItWrote(t *testing.T) {
 	}
 
 	renamed := upload(false)
-	if want := (UploadedFile{Path: "docs/file_(1).txt", Created: true}); len(renamed.Written) != 1 || renamed.Written[0] != want {
+	if want := (UploadedFile{Path: "docs/file_(1).txt", Created: true, SourceName: "file.txt"}); len(renamed.Written) != 1 || renamed.Written[0] != want {
 		t.Errorf("rename upload wrote %+v, want [%+v]", renamed.Written, want)
 	}
 	replaced := upload(true)
-	if want := (UploadedFile{Path: "docs/file.txt", Created: false}); len(replaced.Written) != 1 || replaced.Written[0] != want {
+	if want := (UploadedFile{Path: "docs/file.txt", Created: false, SourceName: "file.txt"}); len(replaced.Written) != 1 || replaced.Written[0] != want {
 		t.Errorf("overwrite upload wrote %+v, want [%+v]", replaced.Written, want)
 	}
 }

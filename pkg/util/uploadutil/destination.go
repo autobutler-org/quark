@@ -65,6 +65,9 @@ func WriteMultipartVFS(params WriteMultipartParams) (WriteMultipartResult, error
 
 		fileName := part.FileName()
 		if part.FormName() != "files" || fileName == "" {
+			if params.Sidecar != nil {
+				params.Sidecar(part, result.Written)
+			}
 			part.Close()
 			continue
 		}
@@ -80,7 +83,9 @@ func WriteMultipartVFS(params WriteMultipartParams) (WriteMultipartResult, error
 		if err != nil {
 			return result, err
 		}
-		result.Written = append(result.Written, storageutil.UploadedFile{Path: destPath, Created: created})
+		result.Written = append(result.Written, storageutil.UploadedFile{
+			Path: destPath, Created: created, SourceName: filepath.Base(fileName),
+		})
 	}
 
 	return result, nil
