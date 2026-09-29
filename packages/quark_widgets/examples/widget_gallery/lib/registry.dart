@@ -1323,6 +1323,31 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'FeatureFlagTile',
+    group: 'Settings',
+    build: (context, log) => Column(
+      children: [
+        FeatureFlagTile(
+          flagKey: 'chat',
+          label: 'Chat',
+          description:
+              'Messages between people on this Quark. Off hides the '
+              'feature; stored data is kept.',
+          enabled: true,
+          onChanged: (on) => log('FeatureFlagTile.onChanged(chat, $on)'),
+        ),
+        FeatureFlagTile(
+          flagKey: 'notes',
+          label: 'Notes',
+          description: 'Saving a change: the switch holds still.',
+          enabled: false,
+          isBusy: true,
+          onChanged: (on) => log('FeatureFlagTile.onChanged(notes, $on)'),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'SshAccessPanel',
     group: 'Settings',
     build: (context, log) => Column(
