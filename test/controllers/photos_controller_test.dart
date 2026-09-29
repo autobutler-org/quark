@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:desktop_drop/desktop_drop.dart';
@@ -64,6 +65,14 @@ final class _Picked extends PlatformFile {
 }
 
 PlatformFile _picked(String name) => _Picked(name);
+
+/// A pick the native picker hands over as a path on disk.
+final class _PickedAt extends _Picked {
+  _PickedAt(super.name, this.path);
+
+  @override
+  final String path;
+}
 
 StorageDevice _device(String serial, {bool enabled = true}) => StorageDevice(
   name: serial,
@@ -870,6 +879,28 @@ void main() {
         await controller.uploadPhotos([_picked('a.heic'), _picked('b.png')]);
 
         expect(parts, ['files:a.heic', 'thumbnail:a.heic', 'files:b.png']);
+      });
+
+      test('a photo picked by path on a phone carries its thumbnail', () async {
+        final parts = <String>[];
+        final rendered = <String>[];
+        final controller = PhotosController(
+          isWeb: false,
+          uploadFiles: recorder(parts),
+          renderFromPath: (name, path) async {
+            rendered.add(path);
+            return thumbnail;
+          },
+        );
+
+        final dir = Directory.systemTemp.createTempSync('picked');
+        addTearDown(() => dir.deleteSync(recursive: true));
+        final file = File('${dir.path}/a.heic')..writeAsBytesSync([1, 2]);
+
+        await controller.uploadPhotos([_PickedAt('a.heic', file.path)]);
+
+        expect(parts, ['files:a.heic', 'thumbnail:a.heic']);
+        expect(rendered, hasLength(1));
       });
 
       test('a dropped photo carries its thumbnail after it', () async {
