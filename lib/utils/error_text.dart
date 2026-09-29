@@ -84,6 +84,10 @@ abstract final class Errors {
   /// An album name with a `/` in it, which the Quark refuses with a 400.
   static const String albumNameHasSlash = "Album names can't contain a slash.";
 
+  /// A calendar event whose end is not after its start (#1144).
+  static const String calendarEndBeforeStart =
+      'The event has to end after it starts.';
+
   /// A file or folder name that is nothing but spaces, or nothing at all.
   static const String nameBlank = "The name can't be blank.";
 
