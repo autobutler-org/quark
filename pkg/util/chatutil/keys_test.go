@@ -3,6 +3,7 @@ package chatutil_test
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -12,13 +13,19 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 )
 
+// signer is the Ed25519 key behind sampleKeys(fill), from a seed of fill
+// bytes, so a fixture can sign grants the Quark verifies.
+func signer(fill byte) ed25519.PrivateKey {
+	return ed25519.NewKeyFromSeed(bytes.Repeat([]byte{fill}, ed25519.SeedSize))
+}
+
 // sampleKeys is a well-formed identity whose bytes are filled with fill, so
-// two accounts' keys are told apart.
+// two accounts' keys are told apart; its signing key is signer(fill)'s.
 func sampleKeys(fill byte) chatutil.Keys {
 	b := func(n int) []byte { return bytes.Repeat([]byte{fill}, n) }
 	return chatutil.Keys{
 		BoxPublicKey:      b(chatutil.PublicKeyBytes),
-		SignPublicKey:     b(chatutil.PublicKeyBytes),
+		SignPublicKey:     signer(fill).Public().(ed25519.PublicKey),
 		WrappedByPassword: b(104),
 		SaltPw:            b(chatutil.SaltBytes),
 		WrappedByPhrase:   b(104),

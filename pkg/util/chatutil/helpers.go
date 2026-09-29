@@ -3,6 +3,7 @@ package chatutil
 import (
 	"cmp"
 	"context"
+	"crypto/ed25519"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -386,6 +387,16 @@ func callerSignKey(ctx context.Context, queries *db.Queries, principal accessuti
 // validGrant checks a sealed key and signature have the sizes they must.
 func validGrant(sealedKey, signature []byte) bool {
 	return len(sealedKey) == SealedKeyBytes && len(signature) == SignatureBytes
+}
+
+// grantSigned checks a grant's signature against the granter's published
+// signing key, over GrantMessage (#2486). The recipient still verifies; this
+// keeps garbage out of the table and off the event bus.
+func grantSigned(signKey []byte, channelID int64, g GrantUpload) bool {
+	if len(signKey) != ed25519.PublicKeySize || len(g.Signature) != ed25519.SignatureSize {
+		return false
+	}
+	return ed25519.Verify(signKey, GrantMessage(channelID, g.Version, g.UserID, g.SealedKey), g.Signature)
 }
 
 // loadKeyState reads a channel's versions, members and grants.

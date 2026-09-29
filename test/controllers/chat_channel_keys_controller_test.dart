@@ -24,6 +24,9 @@ class _FakeQuark {
   final Map<(int, int), ChatKeyGrant> grants = {};
   final List<ChatChannelEvent> events = [];
 
+  /// Grants handed back, as (version, account).
+  final List<(int, int)> rejected = [];
+
   Uint8List signKeyOf(int user) => members[user]!.sign.publicKey;
 
   ChatChannelKeysController client(int me) => ChatChannelKeysController(
@@ -105,6 +108,12 @@ class _FakeQuark {
         signature: signature,
         signerSignKey: signKeyOf(me),
       );
+    },
+    rejectGrant: (channelId, version) async {
+      // This fake holds one channel's grants; another channel has none.
+      if (channelId != _channel) return;
+      rejected.add((version, me));
+      grants.remove((version, me));
     },
   );
 }
@@ -195,6 +204,8 @@ void main() {
 
     expect(await bob.ensureKeys(_channel), isTrue);
     expect(bob.keyFor(_channel, 1), isNull);
+    expect(quark.rejected, [(1, 2)], reason: 'bob hands the forgery back');
+    expect(quark.grants[(1, 2)], isNull);
 
     // alice's real grant, replayed as if for another channel, fails too.
     final replayed = quark.client(2);
@@ -203,6 +214,44 @@ void main() {
 
     expect(await replayed.ensureKeys(_channel), isFalse);
     sameKey(alice, replayed, 1);
+  });
+
+  test('a signed grant that won\'t open is handed back and refilled', () async {
+    publish(1);
+    publish(2);
+    publish(3);
+    final alice = quark.client(1);
+    await alice.ensureKeys(_channel);
+    // carol, a member, squats bob's grant first: signed by her, but sealed
+    // to nobody's key.
+    final garbage = crypto.seal(
+      crypto.newChannelKey().extractBytes(),
+      crypto.generateIdentity().box.publicKey,
+    );
+    quark.grants[(1, 2)] = ChatKeyGrant(
+      version: 1,
+      userId: 2,
+      sealedKey: garbage,
+      grantedBy: 3,
+      granterSignKey: quark.signKeyOf(3),
+      signature: crypto.sign(
+        crypto.grantMessage(
+          channelId: _channel,
+          version: 1,
+          userId: 2,
+          sealedKey: garbage,
+        ),
+        quark.members[3]!,
+      ),
+    );
+    final bob = quark.client(2);
+
+    expect(await bob.ensureKeys(_channel), isTrue);
+    expect(quark.rejected, [(1, 2)]);
+    // Now pending again, so alice's next pass fills a grant that opens.
+    await alice.ensureKeys(_channel);
+    expect(await bob.ensureKeys(_channel), isFalse);
+    sameKey(alice, bob, 1);
   });
 
   test('rotation creates the next version for the remaining members', () async {

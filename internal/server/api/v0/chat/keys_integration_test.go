@@ -1,6 +1,7 @@
 package v0_chat_test
 
 import (
+	"crypto/ed25519"
 	"encoding/base64"
 	"net/http"
 	"strconv"
@@ -8,12 +9,14 @@ import (
 	"testing"
 )
 
-// keysBody is a well-formed PUT /chat/keys/me body whose bytes are all fill.
+// keysBody is a well-formed PUT /chat/keys/me body whose bytes are all fill,
+// but for the signing key, which is signer(fill)'s.
 func keysBody(fill byte, withPhrase bool) string {
 	b := func(n int) string {
 		return base64.StdEncoding.EncodeToString([]byte(strings.Repeat(string(rune(fill)), n)))
 	}
-	body := `{"boxPublicKey":"` + b(32) + `","signPublicKey":"` + b(32) +
+	sign := base64.StdEncoding.EncodeToString(signer(fill).Public().(ed25519.PublicKey))
+	body := `{"boxPublicKey":"` + b(32) + `","signPublicKey":"` + sign +
 		`","wrappedByPassword":"` + b(104) + `","saltPw":"` + b(16) + `"`
 	if withPhrase {
 		body += `,"wrappedByPhrase":"` + b(104) + `","saltRp":"` + b(16) + `"`

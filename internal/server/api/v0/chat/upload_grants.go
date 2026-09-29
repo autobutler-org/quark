@@ -11,14 +11,14 @@ import (
 
 // uploadGrants godoc
 // @Summary Upload key grants for other members
-// @Description Stores up to 256 grants, each a version of the channel key the caller holds, sealed (80 bytes) to a member with published chat keys and signed (64 bytes) by the caller, base64. The first grant for a member and version wins: a later one is ignored and the stored one returned. Publishes chat_key_granted to the recipients.
+// @Description Stores up to 256 grants, each a version of the channel key the caller holds, sealed (80 bytes) to a member with published chat keys and signed (64 bytes) by the caller, base64. The Quark verifies each signature against the caller's published signing key before storing anything. The first grant for a member and version wins: a later one is ignored and the stored one returned. Publishes chat_key_granted to the recipients.
 // @Tags chat
 // @Accept json
 // @Produce json
 // @Param id path int true "Channel id"
 // @Param body body uploadGrantsBody true "The grants"
 // @Success 200 {object} chatutil.UploadGrantsResult
-// @Failure 400 {object} serverutil.Response "a malformed grant, or one for someone who isn't a member with chat keys"
+// @Failure 400 {object} serverutil.Response "a malformed grant, a signature that doesn't verify, or one for someone who isn't a member with chat keys"
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response "the caller holds no grant for that version"
 // @Failure 404 {object} serverutil.Response "no such channel, the caller isn't a member, or has no chat keys"

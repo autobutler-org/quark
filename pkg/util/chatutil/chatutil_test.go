@@ -25,13 +25,16 @@ type fixture struct {
 	database *db.DatabaseSqlc
 	bus      *eventbus.Bus
 	users    map[string]int64
+	// fills is each account's sampleKeys fill, set by publishKeys, which
+	// names the key its grants are signed with.
+	fills    map[string]byte
 	everyone int64
 }
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 	database := dbtest.NewDB(t)
-	f := fixture{database: database, bus: eventbus.New(), users: map[string]int64{}}
+	f := fixture{database: database, bus: eventbus.New(), users: map[string]int64{}, fills: map[string]byte{}}
 	for _, name := range []string{"admin", "bob", "carol", "dave"} {
 		user, err := database.Queries.CreateUser(context.Background(), db.CreateUserParams{Username: name, PasswordHash: "h", RecoveryPhraseHash: "r"})
 		if err != nil {

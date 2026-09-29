@@ -9,7 +9,8 @@ import 'package:quark/utils/error_text.dart';
 
 /// The channel key and event routes under `/api/v0/chat/channels/:id` (#2417):
 /// key versions and this account's grants, the grants it can fill, uploading
-/// them, creating a version, and the channel's signed system events.
+/// them, rejecting its own, creating a version, and the channel's signed system
+/// events.
 ///
 /// Everything here is sealed keys, signatures and public keys;
 /// `ChatChannelKeysController` does the crypto.
@@ -73,6 +74,15 @@ class ChatChannelKeysService with AuthenticatedService {
       }),
     );
     _check(response, 'upload grants of channel $channelId');
+  }
+
+  /// Deletes this account's own grant of [version], one it couldn't open or
+  /// verify, so another member refills it (#2486).
+  static Future<void> rejectGrant(int channelId, int version) async {
+    final response = await instance.authenticatedDelete(
+      _uri(channelId, '/keys/grants/$version'),
+    );
+    _check(response, 'reject grant $version of channel $channelId');
   }
 
   /// The channel's events after [after], oldest first, at most 200.

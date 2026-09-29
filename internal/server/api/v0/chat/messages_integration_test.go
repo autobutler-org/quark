@@ -23,8 +23,7 @@ func roomWithKey(t *testing.T, h harness) (int64, string) {
 	var room chatutil.Channel
 	h.expect(t, http.StatusCreated, http.MethodPost, "/chat/channels", "bob", `{"name":"room"}`, &room)
 	path := "/chat/channels/" + strconv.FormatInt(room.ID, 10)
-	create := `{"version":1,"sealedKey":"` + b64('b', chatutil.SealedKeyBytes) + `","signature":"` + b64('b', chatutil.SignatureBytes) + `"}`
-	h.expect(t, http.StatusOK, http.MethodPost, path+"/keys", "bob", create, nil)
+	h.expect(t, http.StatusOK, http.MethodPost, path+"/keys", "bob", createKeyBody('b', room.ID, 1, h.users["bob"]), nil)
 	return room.ID, path
 }
 

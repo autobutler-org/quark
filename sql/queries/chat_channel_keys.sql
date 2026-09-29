@@ -31,6 +31,11 @@ INSERT INTO chat_key_grants (
 -- name: GetChatKeyGrant :one
 SELECT * FROM chat_key_grants WHERE channel_id = ? AND version = ? AND user_id = ?;
 
+-- DeleteChatKeyGrant drops one account's grant of one version, for when the
+-- recipient can't open or verify it (#2486).
+-- name: DeleteChatKeyGrant :execrows
+DELETE FROM chat_key_grants WHERE channel_id = ? AND version = ? AND user_id = ?;
+
 -- DeleteUserChatKeyGrants drops every grant sealed to an account, for when its
 -- X25519 key changes and they can no longer be opened.
 -- name: DeleteUserChatKeyGrants :exec

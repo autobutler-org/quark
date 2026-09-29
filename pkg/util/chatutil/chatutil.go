@@ -56,6 +56,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,6 +70,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/sqlutil"
+	"golang.org/x/crypto/blake2b"
 )
 
 // MaxNameLength and MaxTopicLength cap a channel's name and topic, in
@@ -1021,6 +1023,11 @@ var (
 	// ErrInvalidGrant reports a grant of the wrong size, or for an account
 	// that isn't a member with published chat keys.
 	ErrInvalidGrant = errors.New("that key grant is malformed or names someone who can't receive it")
+	// ErrGrantSignature reports a grant whose signature doesn't verify
+	// against the caller's published signing key.
+	ErrGrantSignature = errors.New("that key grant's signature doesn't match your chat keys")
+	// ErrGrantNotFound reports rejecting a grant the caller doesn't have.
+	ErrGrantNotFound = errors.New("you have no grant of that key version")
 	// ErrEventNotFound reports an event that doesn't exist on the channel or
 	// wasn't the caller's to sign.
 	ErrEventNotFound = errors.New("no event with that id for you to sign")
@@ -1062,6 +1069,21 @@ type GrantUpload struct {
 	UserID    int64  `json:"userId"`
 	SealedKey []byte `json:"sealedKey"`
 	Signature []byte `json:"signature"`
+}
+
+// GrantMessage is the bytes a grant's signature covers (#2417):
+//
+//	"quark-chat-grant-v1" 0x00 || be64(channelId) || be64(version) ||
+//	be64(recipientUserId) || BLAKE2b-256(sealedKey)
+//
+// It must match the app's ChatCrypto.grantMessage byte for byte.
+func GrantMessage(channelID, version, userID int64, sealedKey []byte) []byte {
+	msg := append([]byte("quark-chat-grant-v1"), 0)
+	for _, n := range []int64{channelID, version, userID} {
+		msg = binary.BigEndian.AppendUint64(msg, uint64(n))
+	}
+	sum := blake2b.Sum256(sealedKey)
+	return append(msg, sum[:]...)
 }
 
 // PendingGrant is a member missing a version of the key, and the X25519 key to
@@ -1233,6 +1255,9 @@ func UploadGrants(params UploadGrantsParams) (UploadGrantsResult, error) {
 		if !validGrant(g.SealedKey, g.Signature) || state.boxKeys[g.UserID] == nil {
 			return UploadGrantsResult{}, ErrInvalidGrant
 		}
+		if !grantSigned(signKey, params.ChannelID, g) {
+			return UploadGrantsResult{}, ErrGrantSignature
+		}
 	}
 	stored := make([]KeyGrant, 0, len(params.Grants))
 	recipients := make([]int64, 0, len(params.Grants))
@@ -1246,6 +1271,53 @@ func UploadGrants(params UploadGrantsParams) (UploadGrantsResult, error) {
 	}
 	publishTo(params.EventBus, eventbus.EventChatKeyGranted, params.ChannelID, recipients)
 	return UploadGrantsResult{Grants: stored}, nil
+}
+
+// RejectGrantParams drops the caller's own grant of one key version.
+type RejectGrantParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_key_needed, so a holder refills the grant. Nil
+	// skips it.
+	EventBus  *eventbus.Bus
+	Principal accessutil.Principal
+	ChannelID int64
+	Version   int64
+}
+
+// RejectGrantResult is the version the caller is pending for again.
+type RejectGrantResult struct {
+	Version int64 `json:"version"`
+}
+
+// RejectGrant lets a recipient drop a grant addressed to them that they can't
+// open or verify (#2486). Grants are first-write-wins, so without this a
+// member could squat a victim's grant with a signed but useless sealed key.
+// The caller is pending again, and the holders hear chat_key_needed. A grant
+// the caller doesn't have is ErrGrantNotFound; access errors are
+// GetChannelKeys'.
+func RejectGrant(params RejectGrantParams) (RejectGrantResult, error) {
+	if params.Database == nil {
+		return RejectGrantResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	if err := requireMember(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
+		return RejectGrantResult{}, err
+	}
+	n, err := queries.DeleteChatKeyGrant(params.Ctx, db.DeleteChatKeyGrantParams{
+		ChannelID: params.ChannelID, Version: params.Version,
+		UserID: sql.NullInt64{Int64: params.Principal.UserID, Valid: true},
+	})
+	if err != nil {
+		return RejectGrantResult{}, err
+	}
+	if n == 0 {
+		return RejectGrantResult{}, ErrGrantNotFound
+	}
+	if _, err := notifyChannel(params.Ctx, queries, params.EventBus, params.ChannelID); err != nil {
+		return RejectGrantResult{}, err
+	}
+	return RejectGrantResult{Version: params.Version}, nil
 }
 
 // CreateKeyVersionParams creates the next version of a channel's key, with the
@@ -1293,6 +1365,10 @@ func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, er
 	if err != nil {
 		return CreateKeyVersionResult{}, err
 	}
+	own := GrantUpload{Version: params.Version, UserID: params.Principal.UserID, SealedKey: params.SealedKey, Signature: params.Signature}
+	if !grantSigned(signKey, params.ChannelID, own) {
+		return CreateKeyVersionResult{}, ErrGrantSignature
+	}
 	var result CreateKeyVersionResult
 	err = inTx(params.Ctx, params.Database, func(q *db.Queries) error {
 		state, err := loadKeyState(params.Ctx, q, params.ChannelID)
@@ -1314,9 +1390,7 @@ func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, er
 		if err != nil {
 			return err
 		}
-		grant, err := insertGrant(params.Ctx, q, params.ChannelID, GrantUpload{
-			Version: params.Version, UserID: params.Principal.UserID, SealedKey: params.SealedKey, Signature: params.Signature,
-		}, params.Principal.UserID, signKey)
+		grant, err := insertGrant(params.Ctx, q, params.ChannelID, own, params.Principal.UserID, signKey)
 		if err != nil {
 			return err
 		}

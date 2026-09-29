@@ -64,6 +64,26 @@ func (q *Queries) CreateChatChannelKey(ctx context.Context, arg CreateChatChanne
 	return i, err
 }
 
+const deleteChatKeyGrant = `-- name: DeleteChatKeyGrant :execrows
+DELETE FROM chat_key_grants WHERE channel_id = ? AND version = ? AND user_id = ?
+`
+
+type DeleteChatKeyGrantParams struct {
+	ChannelID int64
+	Version   int64
+	UserID    sql.NullInt64
+}
+
+// DeleteChatKeyGrant drops one account's grant of one version, for when the
+// recipient can't open or verify it (#2486).
+func (q *Queries) DeleteChatKeyGrant(ctx context.Context, arg DeleteChatKeyGrantParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteChatKeyGrant, arg.ChannelID, arg.Version, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteUserChatKeyGrants = `-- name: DeleteUserChatKeyGrants :exec
 DELETE FROM chat_key_grants WHERE user_id = ?
 `

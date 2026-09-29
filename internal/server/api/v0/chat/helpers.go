@@ -55,7 +55,7 @@ func chatError(err error) *serverutil.Response {
 		errors.Is(err, accessutil.ErrPrincipalNotFound), errors.Is(err, chatutil.ErrKeysNotFound):
 		return serverutil.NotFound(err)
 	case errors.Is(err, chatutil.ErrEventNotFound), errors.Is(err, chatutil.ErrMessageNotFound),
-		errors.Is(err, chatutil.ErrReactionNotFound):
+		errors.Is(err, chatutil.ErrReactionNotFound), errors.Is(err, chatutil.ErrGrantNotFound):
 		return serverutil.NotFound(err)
 	case errors.Is(err, chatutil.ErrForbidden), errors.Is(err, chatutil.ErrNotHeld),
 		errors.Is(err, chatutil.ErrNotSubset), errors.Is(err, chatutil.ErrCreatorRow),
@@ -74,7 +74,7 @@ func chatError(err error) *serverutil.Response {
 	case errors.Is(err, chatutil.ErrInvalidName), errors.Is(err, chatutil.ErrInvalidTopic),
 		errors.Is(err, chatutil.ErrDefaultChannel), errors.Is(err, chatutil.ErrDefaultEveryone), errors.Is(err, chatutil.ErrLastOwner),
 		errors.Is(err, accessutil.ErrGrantTarget),
-		errors.Is(err, chatutil.ErrInvalidKeys), errors.Is(err, chatutil.ErrInvalidGrant),
+		errors.Is(err, chatutil.ErrInvalidKeys), errors.Is(err, chatutil.ErrInvalidGrant), errors.Is(err, chatutil.ErrGrantSignature),
 		errors.Is(err, chatutil.ErrInvalidMessage), errors.Is(err, chatutil.ErrInvalidReaction):
 		return serverutil.BadRequest(err)
 	default:

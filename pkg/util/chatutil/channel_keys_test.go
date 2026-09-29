@@ -3,6 +3,8 @@ package chatutil_test
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"encoding/hex"
 	"errors"
 	"slices"
 	"strconv"
@@ -25,26 +27,35 @@ func (f fixture) publishKeys(t *testing.T, names ...string) {
 		}); err != nil {
 			t.Fatal(err)
 		}
+		f.fills[name] = byte(i + 1)
 	}
 }
 
-// sealed is a stand-in sealed key or signature: the Quark checks only sizes.
+// sealed is a stand-in sealed key or signature of the right size.
 func sealed(fill byte, n int) []byte { return bytes.Repeat([]byte{fill}, n) }
 
+// signedGrant is a stand-in sealed key for recipient `to`, signed the way the
+// app signs one, with as's published key.
+func (f fixture) signedGrant(as string, channelID, version int64, to string, fill byte) chatutil.GrantUpload {
+	key := sealed(fill, chatutil.SealedKeyBytes)
+	return chatutil.GrantUpload{
+		Version: version, UserID: f.users[to], SealedKey: key,
+		Signature: ed25519.Sign(signer(f.fills[as]), chatutil.GrantMessage(channelID, version, f.users[to], key)),
+	}
+}
+
 func (f fixture) createVersion(as string, channelID, version int64) (chatutil.CreateKeyVersionResult, error) {
+	own := f.signedGrant(as, channelID, version, as, 9)
 	return chatutil.CreateKeyVersion(chatutil.CreateKeyVersionParams{
 		Ctx: context.Background(), Database: f.database, EventBus: f.bus, Principal: f.as(as), ChannelID: channelID,
-		Version: version, SealedKey: sealed(9, chatutil.SealedKeyBytes), Signature: sealed(9, chatutil.SignatureBytes),
+		Version: version, SealedKey: own.SealedKey, Signature: own.Signature,
 	})
 }
 
 func (f fixture) grant(as string, channelID, version int64, to string, fill byte) (chatutil.UploadGrantsResult, error) {
 	return chatutil.UploadGrants(chatutil.UploadGrantsParams{
 		Ctx: context.Background(), Database: f.database, EventBus: f.bus, Principal: f.as(as), ChannelID: channelID,
-		Grants: []chatutil.GrantUpload{{
-			Version: version, UserID: f.users[to],
-			SealedKey: sealed(fill, chatutil.SealedKeyBytes), Signature: sealed(fill, chatutil.SignatureBytes),
-		}},
+		Grants: []chatutil.GrantUpload{f.signedGrant(as, channelID, version, to, fill)},
 	})
 }
 
@@ -516,5 +527,141 @@ func TestEventsAreRecordedAndSignedOnce(t *testing.T) {
 	}
 	if _, err := sign("dave", left.Event.ID); err == nil {
 		t.Error("dave, never a member, signed carol's event")
+	}
+}
+
+// TestGrantMessageVector pins the grant transcript and its signature to a
+// fixed vector: seed 32 bytes of 0x42, channel 7, version 2, recipient 42 and
+// a sealed key of 80 bytes of 0xab. The message was cross-checked against
+// an independent Python BLAKE2b and struct packing; the signature is Go's Ed25519
+// over it, which is deterministic from the seed, as libsodium's is.
+func TestGrantMessageVector(t *testing.T) {
+	const (
+		wantPublic  = "2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12"
+		wantMessage = "717561726b2d636861742d6772616e742d7631000000000000000007000000000000000200000000000000" +
+			"2afc447c9d8c582d5538c677983efb708ea39840d09f695a7e1bc13bce1c27f9d3"
+		wantSignature = "5d56361c47c8464f77021ed3b14c8bee9c489cc5fc7fdb4b82a5cb2f2f4bcc1c" +
+			"a53db7597dc8e50ad58bd80590452b7a778587db86dff8316138dc37ce1b8b0d"
+	)
+	key := signer(0x42)
+	message := chatutil.GrantMessage(7, 2, 42, sealed(0xab, chatutil.SealedKeyBytes))
+	if got := hex.EncodeToString(key.Public().(ed25519.PublicKey)); got != wantPublic {
+		t.Errorf("public key = %s", got)
+	}
+	if got := hex.EncodeToString(message); got != wantMessage {
+		t.Errorf("message = %s", got)
+	}
+	signature, _ := hex.DecodeString(wantSignature)
+	if !ed25519.Verify(key.Public().(ed25519.PublicKey), message, signature) {
+		t.Error("the fixed signature doesn't verify")
+	}
+}
+
+// TestGrantSignaturesAreVerified refuses grants the caller didn't sign over
+// the exact transcript, before anything is stored (#2486).
+func TestGrantSignaturesAreVerified(t *testing.T) {
+	f := newFixture(t)
+	f.publishKeys(t, "bob", "carol", "dave")
+	general := f.general(t)
+	ctx := context.Background()
+
+	forged := f.signedGrant("carol", general.ID, 1, "bob", 9)
+	if _, err := chatutil.CreateKeyVersion(chatutil.CreateKeyVersionParams{
+		Ctx: ctx, Database: f.database, Principal: f.as("bob"), ChannelID: general.ID,
+		Version: 1, SealedKey: forged.SealedKey, Signature: forged.Signature,
+	}); !errors.Is(err, chatutil.ErrGrantSignature) {
+		t.Fatalf("a version with carol's signature on bob's grant: %v, want ErrGrantSignature", err)
+	}
+	if _, err := f.createVersion("bob", general.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	// relabel keeps a grant's sealed key and signature but addresses it to
+	// carol for version 1, as a replay would.
+	relabel := func(g chatutil.GrantUpload) chatutil.GrantUpload {
+		g.UserID, g.Version = f.users["carol"], 1
+		return g
+	}
+	wrong := map[string]chatutil.GrantUpload{
+		"signed by someone else": f.signedGrant("carol", general.ID, 1, "carol", 1),
+		"signed for dave":        relabel(f.signedGrant("bob", general.ID, 1, "dave", 1)),
+		"signed for version 2":   relabel(f.signedGrant("bob", general.ID, 2, "carol", 1)),
+		"signed for channel 999": f.signedGrant("bob", 999, 1, "carol", 1),
+	}
+	tampered := f.signedGrant("bob", general.ID, 1, "carol", 1)
+	tampered.SealedKey = sealed(2, chatutil.SealedKeyBytes)
+	wrong["another sealed key"] = tampered
+	for name, g := range wrong {
+		if _, err := chatutil.UploadGrants(chatutil.UploadGrantsParams{
+			Ctx: ctx, Database: f.database, Principal: f.as("bob"), ChannelID: general.ID, Grants: []chatutil.GrantUpload{g},
+		}); !errors.Is(err, chatutil.ErrGrantSignature) {
+			t.Errorf("%s: %v, want ErrGrantSignature", name, err)
+		}
+	}
+	if got := f.channelKeys(t, "carol", general.ID).Grants; len(got) != 0 {
+		t.Errorf("a bad grant was stored: %+v", got)
+	}
+	if _, err := f.grant("bob", general.ID, 1, "carol", 1); err != nil {
+		t.Errorf("a well-signed grant: %v", err)
+	}
+}
+
+// TestRecipientRejectsGrant lets carol drop a grant she can't open, which
+// makes her pending again and asks the holders to refill it (#2486).
+func TestRecipientRejectsGrant(t *testing.T) {
+	f := newFixture(t)
+	f.publishKeys(t, "bob", "carol", "dave")
+	general := f.general(t)
+	if _, err := f.createVersion("bob", general.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.grant("dave", general.ID, 1, "carol", 1); !errors.Is(err, chatutil.ErrNotHolder) {
+		t.Fatalf("dave granted without holding: %v", err)
+	}
+	if _, err := f.grant("bob", general.ID, 1, "dave", 1); err != nil {
+		t.Fatal(err)
+	}
+	// dave squats carol's grant with a signed but useless sealed key.
+	if _, err := f.grant("dave", general.ID, 1, "carol", 7); err != nil {
+		t.Fatal(err)
+	}
+	reject := func(as string) error {
+		_, err := chatutil.RejectGrant(chatutil.RejectGrantParams{
+			Ctx: context.Background(), Database: f.database, EventBus: f.bus, Principal: f.as(as), ChannelID: general.ID, Version: 1,
+		})
+		return err
+	}
+	events, unsub := f.bus.Subscribe("reject-grant-test")
+	defer unsub()
+	if err := reject("carol"); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.channelKeys(t, "carol", general.ID).Grants; len(got) != 0 {
+		t.Errorf("carol's rejected grant is still there: %+v", got)
+	}
+	if got := f.pendingFor(t, "bob", general.ID); !slices.Equal(got[1], []string{"carol"}) {
+		t.Errorf("pending after carol rejected = %v, want carol", got)
+	}
+	heard := false
+	for !heard {
+		select {
+		case evt := <-events:
+			changed, ok := evt.Data.(eventbus.ChatChannelChanged)
+			heard = evt.Kind == eventbus.EventChatKeyNeeded && ok && changed.ChannelID == general.ID &&
+				slices.Contains(changed.Audience, f.users["bob"])
+		case <-time.After(time.Second):
+			t.Fatal("no chat_key_needed to bob after the rejection")
+		}
+	}
+	if err := reject("carol"); !errors.Is(err, chatutil.ErrGrantNotFound) {
+		t.Errorf("rejecting twice: %v, want ErrGrantNotFound", err)
+	}
+	if err := reject("admin"); !errors.Is(err, chatutil.ErrGrantNotFound) {
+		t.Errorf("admin, holding nothing: %v, want ErrGrantNotFound", err)
+	}
+	if _, err := f.grant("bob", general.ID, 1, "carol", 1); err != nil {
+		t.Errorf("refilling carol after she rejected: %v", err)
+	}
+	if got := f.channelKeys(t, "carol", general.ID).Grants; len(got) != 1 || got[0].GrantedBy != f.users["bob"] {
+		t.Errorf("carol's refilled grants = %+v", got)
 	}
 }

@@ -23,6 +23,7 @@ func (r *router) Routes() []*serverutil.Route {
 		createKeyVersionRoute,
 		listPendingGrantsRoute,
 		uploadGrantsRoute,
+		deleteKeyGrantRoute,
 		listChannelEventsRoute,
 		signChannelEventRoute,
 		postMessageRoute,
