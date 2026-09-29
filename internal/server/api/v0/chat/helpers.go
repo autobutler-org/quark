@@ -54,20 +54,24 @@ func chatError(err error) *serverutil.Response {
 	case errors.Is(err, chatutil.ErrChannelNotFound), errors.Is(err, chatutil.ErrMemberNotFound),
 		errors.Is(err, accessutil.ErrPrincipalNotFound), errors.Is(err, chatutil.ErrKeysNotFound):
 		return serverutil.NotFound(err)
-	case errors.Is(err, chatutil.ErrEventNotFound):
+	case errors.Is(err, chatutil.ErrEventNotFound), errors.Is(err, chatutil.ErrMessageNotFound):
 		return serverutil.NotFound(err)
 	case errors.Is(err, chatutil.ErrForbidden), errors.Is(err, chatutil.ErrNotHeld),
 		errors.Is(err, chatutil.ErrNotSubset), errors.Is(err, chatutil.ErrCreatorRow),
-		errors.Is(err, chatutil.ErrNotHolder):
+		errors.Is(err, chatutil.ErrNotHolder),
+		errors.Is(err, chatutil.ErrReadOnly), errors.Is(err, chatutil.ErrNotMessageAuthor):
 		return serverutil.Forbidden(err)
 	case errors.Is(err, chatutil.ErrInvalidPerms), errors.Is(err, chatutil.ErrNoPerms):
 		return serverutil.NewResponse().WithStatusCode(http.StatusUnprocessableEntity).WithError(err)
+	case errors.Is(err, chatutil.ErrMessageTooLarge):
+		return serverutil.NewResponse().WithStatusCode(http.StatusRequestEntityTooLarge).WithError(err)
 	case errors.Is(err, chatutil.ErrNameTaken), errors.Is(err, chatutil.ErrVersionConflict), errors.Is(err, chatutil.ErrEventSigned):
 		return serverutil.Conflict(err)
 	case errors.Is(err, chatutil.ErrInvalidName), errors.Is(err, chatutil.ErrInvalidTopic),
 		errors.Is(err, chatutil.ErrDefaultChannel), errors.Is(err, chatutil.ErrDefaultEveryone),
 		errors.Is(err, accessutil.ErrGrantTarget),
-		errors.Is(err, chatutil.ErrInvalidKeys), errors.Is(err, chatutil.ErrInvalidGrant):
+		errors.Is(err, chatutil.ErrInvalidKeys), errors.Is(err, chatutil.ErrInvalidGrant),
+		errors.Is(err, chatutil.ErrInvalidMessage):
 		return serverutil.BadRequest(err)
 	default:
 		return serverutil.InternalServerError(err)

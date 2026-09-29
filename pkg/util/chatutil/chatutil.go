@@ -34,6 +34,13 @@
 // chat_key_needed.
 // Membership and key changes are also recorded as channel events, which the
 // actor's client signs.
+//
+// Messages (#2418) are ciphertext under a channel key version; the Quark
+// stores, pages and tombstones them and never opens one. Posting and deleting
+// publish chat_message_created and chat_message_deleted to the channel's
+// readers, the holders of read_messages, alone: delegated managers and admins
+// who aren't readers hear neither, and like everyone else get
+// ErrChannelNotFound for its messages.
 package chatutil
 
 import (
@@ -44,6 +51,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -1312,8 +1320,11 @@ func ListEvents(params ListEventsParams) (ListEventsResult, error) {
 
 // SignEventParams attaches the actor's signature to an event.
 type SignEventParams struct {
-	Ctx       context.Context
-	Database  *db.DatabaseSqlc
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_channel_changed, so members showing the event as
+	// unverified refetch it (#2418). Nil skips it.
+	EventBus  *eventbus.Bus
 	Principal accessutil.Principal
 	ChannelID int64
 	EventID   int64
@@ -1326,8 +1337,9 @@ type SignEventResult struct {
 }
 
 // SignEvent stores the caller's signature on an event the caller made, once,
-// with the caller's published signing key beside it. An event that isn't the
-// caller's is ErrEventNotFound, and one already signed ErrEventSigned.
+// with the caller's published signing key beside it, and tells the members with
+// chat_channel_changed. An event that isn't the caller's is ErrEventNotFound,
+// and one already signed ErrEventSigned.
 func SignEvent(params SignEventParams) (SignEventResult, error) {
 	if len(params.Signature) != SignatureBytes {
 		return SignEventResult{}, ErrInvalidGrant
@@ -1359,6 +1371,11 @@ func SignEvent(params SignEventParams) (SignEventResult, error) {
 	case signed == 0:
 		return SignEventResult{}, ErrEventSigned
 	}
+	members, err := memberIDs(params.Ctx, queries, params.ChannelID)
+	if err != nil {
+		log.Printf("chat: event %d signed but not announced: %v", params.EventID, err)
+	}
+	publish(params.EventBus, params.ChannelID, members)
 	return SignEventResult{Event: eventFromRow(row)}, nil
 }
 
@@ -1436,4 +1453,228 @@ func WatchKeyNeeds(params WatchKeyNeedsParams) {
 			}
 		}
 	}
+}
+
+// Message limits (#2418). A message's ciphertext is the 24-byte nonce, the
+// encrypted body and the 16-byte tag, so anything shorter than MinCiphertext
+// can't be one.
+const (
+	MaxCiphertextBytes = 16 << 10
+	MinCiphertextBytes = 24 + 16
+	// MaxMessageRequestBytes caps a post's body: the ciphertext in base64
+	// plus room for the JSON around it.
+	MaxMessageRequestBytes = 24 << 10
+	// DefaultMessagesPage and MaxMessagesPage bound one ListMessages page.
+	DefaultMessagesPage = 50
+	MaxMessagesPage     = 200
+)
+
+var (
+	// ErrMessageTooLarge reports ciphertext over MaxCiphertextBytes.
+	ErrMessageTooLarge = errors.New("a message can be at most 16 KiB once encrypted")
+	// ErrInvalidMessage reports ciphertext too short to be one, or a key
+	// version the channel doesn't have.
+	ErrInvalidMessage = errors.New("a message needs ciphertext under one of the channel's key versions")
+	// ErrReadOnly reports a post from a member without send_messages.
+	ErrReadOnly = errors.New("you can read this channel but not send messages in it")
+	// ErrMessageNotFound reports a message that doesn't exist or is in a
+	// channel the caller doesn't read.
+	ErrMessageNotFound = errors.New("no message has that id")
+	// ErrNotMessageAuthor reports deleting someone else's message without
+	// delete_messages.
+	ErrNotMessageAuthor = errors.New("only its author or a member with delete_messages can delete a message")
+)
+
+// Message is one stored chat message. The Quark sees who sent it, when, and
+// under which key version, never what it says. Byte fields travel as base64.
+type Message struct {
+	ID        int64 `json:"id"`
+	ChannelID int64 `json:"channelId"`
+	// AuthorID is absent once the author's account is deleted.
+	AuthorID   int64 `json:"authorId,omitempty"`
+	KeyVersion int64 `json:"keyVersion"`
+	// Ciphertext is nonce || XChaCha20-Poly1305 output under the channel key
+	// of KeyVersion, with the channel id and key version as additional data
+	// (docs/chat-security.md). Absent once deleted.
+	Ciphertext []byte     `json:"ciphertext,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	EditedAt   *time.Time `json:"editedAt,omitempty"`
+	DeletedAt  *time.Time `json:"deletedAt,omitempty"`
+}
+
+// PostMessageParams posts ciphertext to a channel.
+type PostMessageParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_message_created. Nil skips it.
+	EventBus   *eventbus.Bus
+	Principal  accessutil.Principal
+	ChannelID  int64
+	KeyVersion int64
+	Ciphertext []byte
+}
+
+// PostMessageResult is the message as stored.
+type PostMessageResult struct {
+	Message Message
+}
+
+// PostMessage stores a message from a member holding send_messages and sends
+// it to the channel's readers as chat_message_created. Ciphertext over the cap
+// is ErrMessageTooLarge, a reader without send_messages gets ErrReadOnly, and
+// anyone without read_messages, delegated managers and admins included,
+// ErrChannelNotFound.
+func PostMessage(params PostMessageParams) (PostMessageResult, error) {
+	if len(params.Ciphertext) > MaxCiphertextBytes {
+		return PostMessageResult{}, ErrMessageTooLarge
+	}
+	if len(params.Ciphertext) < MinCiphertextBytes {
+		return PostMessageResult{}, ErrInvalidMessage
+	}
+	if params.Database == nil {
+		return PostMessageResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	perms, err := memberPerms(params.Ctx, queries, params.Principal, params.ChannelID)
+	if err != nil {
+		return PostMessageResult{}, err
+	}
+	if !perms.Has(PermSendMessages) {
+		return PostMessageResult{}, ErrReadOnly
+	}
+	versions, err := queries.ListChatChannelKeys(params.Ctx, params.ChannelID)
+	if err != nil {
+		return PostMessageResult{}, err
+	}
+	if !slices.ContainsFunc(versions, func(k db.ChatChannelKey) bool { return k.Version == params.KeyVersion }) {
+		return PostMessageResult{}, ErrInvalidMessage
+	}
+	row, err := queries.CreateChatMessage(params.Ctx, db.CreateChatMessageParams{
+		ChannelID:  params.ChannelID,
+		AuthorID:   sql.NullInt64{Int64: params.Principal.UserID, Valid: true},
+		KeyVersion: params.KeyVersion,
+		Ciphertext: params.Ciphertext,
+	})
+	if err != nil {
+		return PostMessageResult{}, err
+	}
+	message := messageFromRow(row)
+	if err := publishMessage(params.Ctx, queries, params.EventBus, eventbus.EventChatMessageCreated, message); err != nil {
+		log.Printf("chat: message %d stored but not announced: %v", row.ID, err)
+	}
+	return PostMessageResult{Message: message}, nil
+}
+
+// ListMessagesParams pages a channel's messages. Forward pages after After;
+// otherwise the page ends before Before, or at the newest when Before is 0.
+type ListMessagesParams struct {
+	Ctx       context.Context
+	Database  *db.DatabaseSqlc
+	Principal accessutil.Principal
+	ChannelID int64
+	Before    int64
+	After     int64
+	Forward   bool
+	// Limit is capped at MaxMessagesPage; 0 means DefaultMessagesPage.
+	Limit int64
+}
+
+// ListMessagesResult is a page of messages, oldest first, tombstones
+// included.
+type ListMessagesResult struct {
+	Messages []Message `json:"messages"`
+}
+
+// ListMessages pages a channel's messages for a holder of read_messages.
+// Access errors are GetChannelKeys'.
+func ListMessages(params ListMessagesParams) (ListMessagesResult, error) {
+	if params.Database == nil {
+		return ListMessagesResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	if _, err := memberPerms(params.Ctx, queries, params.Principal, params.ChannelID); err != nil {
+		return ListMessagesResult{}, err
+	}
+	limit := params.Limit
+	if limit <= 0 {
+		limit = DefaultMessagesPage
+	}
+	limit = min(limit, MaxMessagesPage)
+	var rows []db.ChatMessage
+	var err error
+	if params.Forward {
+		rows, err = queries.ListChatMessagesAfter(params.Ctx, db.ListChatMessagesAfterParams{
+			ChannelID: params.ChannelID, ID: params.After, Limit: limit,
+		})
+	} else {
+		before := params.Before
+		if before <= 0 {
+			before = math.MaxInt64
+		}
+		rows, err = queries.ListChatMessagesBefore(params.Ctx, db.ListChatMessagesBeforeParams{
+			ChannelID: params.ChannelID, ID: before, Limit: limit,
+		})
+		slices.Reverse(rows)
+	}
+	if err != nil {
+		return ListMessagesResult{}, err
+	}
+	messages := make([]Message, 0, len(rows))
+	for _, row := range rows {
+		messages = append(messages, messageFromRow(row))
+	}
+	return ListMessagesResult{Messages: messages}, nil
+}
+
+// DeleteMessageParams deletes one message.
+type DeleteMessageParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_message_deleted. Nil skips it.
+	EventBus  *eventbus.Bus
+	Principal accessutil.Principal
+	MessageID int64
+}
+
+// DeleteMessageResult is the tombstone left behind.
+type DeleteMessageResult struct {
+	Message Message
+}
+
+// DeleteMessage wipes a message's ciphertext and marks it deleted, for its
+// author or a holder of delete_messages, and tells the readers. Either must
+// hold read_messages now: anyone without it, an author who was removed or
+// demoted to a manage-only set and admins included, gets ErrMessageNotFound,
+// and a reader who is neither ErrNotMessageAuthor.
+func DeleteMessage(params DeleteMessageParams) (DeleteMessageResult, error) {
+	if params.Database == nil {
+		return DeleteMessageResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	row, err := queries.GetChatMessage(params.Ctx, params.MessageID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return DeleteMessageResult{}, ErrMessageNotFound
+	}
+	if err != nil {
+		return DeleteMessageResult{}, err
+	}
+	perms, err := memberPerms(params.Ctx, queries, params.Principal, row.ChannelID)
+	if errors.Is(err, ErrChannelNotFound) {
+		return DeleteMessageResult{}, ErrMessageNotFound
+	}
+	if err != nil {
+		return DeleteMessageResult{}, err
+	}
+	if row.AuthorID.Int64 != params.Principal.UserID && !perms.Has(PermDeleteMessages) {
+		return DeleteMessageResult{}, ErrNotMessageAuthor
+	}
+	row, err = queries.TombstoneChatMessage(params.Ctx, params.MessageID)
+	if err != nil {
+		return DeleteMessageResult{}, err
+	}
+	message := messageFromRow(row)
+	if err := publishMessage(params.Ctx, queries, params.EventBus, eventbus.EventChatMessageDeleted, message); err != nil {
+		log.Printf("chat: message %d deleted but not announced: %v", row.ID, err)
+	}
+	return DeleteMessageResult{Message: message}, nil
 }

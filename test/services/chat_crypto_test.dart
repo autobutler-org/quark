@@ -175,4 +175,36 @@ void main() {
     expect(low.sublist(prefix, prefix + 8), [0, 0, 0, 0, 0, 0, 0, 1]);
     expect(high.sublist(prefix, prefix + 8), [0, 0, 0, 1, 0, 0, 0, 1]);
   });
+
+  test('a message opens only under the channel and version it names', () {
+    final key = crypto.newChannelKey();
+    final message = Uint8List.fromList(utf8.encode('see you at six'));
+    final sealed = crypto.encrypt(
+      message,
+      key,
+      additionalData: crypto.messageAad(channelId: 7, keyVersion: 2),
+    );
+
+    expect(
+      crypto.decrypt(
+        sealed,
+        key,
+        additionalData: crypto.messageAad(channelId: 7, keyVersion: 2),
+      ),
+      message,
+    );
+    for (final (channelId, keyVersion) in [(8, 2), (7, 3)]) {
+      expect(
+        () => crypto.decrypt(
+          sealed,
+          key,
+          additionalData: crypto.messageAad(
+            channelId: channelId,
+            keyVersion: keyVersion,
+          ),
+        ),
+        throwsA(anything),
+      );
+    }
+  });
 }

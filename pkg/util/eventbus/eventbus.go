@@ -57,6 +57,13 @@ const (
 	// EventChatKeyGranted fires when grants were stored for members (#2417).
 	// Data is a ChatChannelChanged whose Audience is the recipients.
 	EventChatKeyGranted EventKind = "chat_key_granted"
+
+	// EventChatMessageCreated fires when a chat message is posted (#2418).
+	// Data is a ChatMessageChanged carrying the stored ciphertext row.
+	EventChatMessageCreated EventKind = "chat_message_created"
+	// EventChatMessageDeleted fires when a chat message is deleted (#2418).
+	// Data is a ChatMessageChanged with no Message.
+	EventChatMessageDeleted EventKind = "chat_message_deleted"
 )
 
 // ChatChannelChanged is the data of a chat_channel_changed, chat_key_needed or
@@ -68,6 +75,21 @@ type ChatChannelChanged struct {
 	// Audience is every account with a non-empty set on the channel before
 	// the change or after it, the only non-admins who hear the event. It is
 	// never sent.
+	Audience []int64 `json:"-"`
+}
+
+// ChatMessageChanged is the data of a chat_message_created or
+// chat_message_deleted event. Unlike every other chat event it reaches only
+// the channel's members, admins included: an admin who isn't a member hears
+// nothing.
+type ChatMessageChanged struct {
+	ChannelID int64 `json:"channelId"`
+	MessageID int64 `json:"messageId"`
+	// Message is the stored row, a chatutil.Message, on chat_message_created.
+	// It is ciphertext and capped at 16 KiB, so it rides the event whole.
+	Message any `json:"message,omitempty"`
+	// Audience is the channel's readers, the accounts holding read_messages.
+	// It is never sent.
 	Audience []int64 `json:"-"`
 }
 
