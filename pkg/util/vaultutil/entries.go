@@ -36,6 +36,18 @@ type GetEntryResult struct {
 	Entry EntryDetail
 }
 
+// BackfillEntryHostsParams recomputes url_host for entries stored with an empty
+// one, which the key is needed for because the URL itself is encrypted.
+type BackfillEntryHostsParams struct {
+	Queries *db.Queries
+	Key     []byte
+}
+
+// BackfillEntryHostsResult counts the entries whose host was filled in.
+type BackfillEntryHostsResult struct {
+	Updated int
+}
+
 // CreateEntryParams encrypts a new entry and stores it.
 type CreateEntryParams struct {
 	Queries *db.Queries
@@ -94,6 +106,38 @@ func ListEntries(ctx context.Context, params ListEntriesParams) (ListEntriesResu
 	}
 
 	return ListEntriesResult{Entries: items}, nil
+}
+
+// BackfillEntryHosts fills in url_host for entries saved before HostFromURL
+// understood URLs without a scheme (#2545). Entries that still have no host,
+// such as ones with no URL at all, are left as they are. An entry that fails
+// to decrypt is skipped rather than aborting the rest.
+func BackfillEntryHosts(ctx context.Context, params BackfillEntryHostsParams) (BackfillEntryHostsResult, error) {
+	rows, err := params.Queries.ListVaultEntriesWithoutHost(ctx)
+	if err != nil {
+		return BackfillEntryHostsResult{}, fmt.Errorf("list entries without host: %w", err)
+	}
+
+	updated := 0
+	for _, row := range rows {
+		plaintext, err := vaultcrypto.Decrypt(params.Key, row.Ciphertext, row.Nonce)
+		if err != nil {
+			continue
+		}
+		var payload EntryPayload
+		if err := json.Unmarshal(plaintext, &payload); err != nil {
+			continue
+		}
+		host := HostFromURL(payload.URL)
+		if host == "" {
+			continue
+		}
+		if err := params.Queries.UpdateVaultEntryHost(ctx, db.UpdateVaultEntryHostParams{UrlHost: host, ID: row.ID}); err != nil {
+			return BackfillEntryHostsResult{Updated: updated}, fmt.Errorf("update entry host: %w", err)
+		}
+		updated++
+	}
+	return BackfillEntryHostsResult{Updated: updated}, nil
 }
 
 // GetEntry reads one entry and decrypts its payload. It returns

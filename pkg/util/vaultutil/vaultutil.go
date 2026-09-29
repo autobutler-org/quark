@@ -14,6 +14,7 @@ package vaultutil
 import (
 	"errors"
 	"net/url"
+	"strings"
 )
 
 // Sentinel errors the caller maps onto a status code. Their text is the copy a
@@ -137,16 +138,22 @@ type FolderFields struct {
 	SortOrder int64
 }
 
-// HostFromURL returns the hostname of a URL, or "" when it is empty or
-// unparseable. It is what the vault stores in the clear alongside an entry so
-// the list view can show where a login belongs without the key.
+// HostFromURL returns the lowercased hostname of a URL, or "" when it is empty
+// or unparseable. It is what the vault stores in the clear alongside an entry
+// so the list view, and the browser extension's site matching, can tell where
+// a login belongs without the key. A URL typed without a scheme ("github.com")
+// is read as https, since url.Parse would otherwise take it for a path (#2545).
 func HostFromURL(rawURL string) string {
-	if rawURL == "" {
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed == "" {
 		return ""
 	}
-	u, err := url.Parse(rawURL)
+	if !strings.Contains(trimmed, "://") {
+		trimmed = "https://" + trimmed
+	}
+	u, err := url.Parse(trimmed)
 	if err != nil {
 		return ""
 	}
-	return u.Hostname()
+	return strings.ToLower(u.Hostname())
 }
