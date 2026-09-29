@@ -494,6 +494,40 @@ definitions:
           $ref: '#/definitions/chatutil.KeyGrant'
         type: array
     type: object
+  featureflagutil.FlagState:
+    properties:
+      default:
+        description: Default is whether the feature is on while no admin has set the
+          flag.
+        type: boolean
+      description:
+        type: string
+      enabled:
+        type: boolean
+      introducedIn:
+        description: |-
+          IntroducedIn is the release or issue the beta started at, so a flag
+          that has outlived its beta is visible.
+        type: string
+      key:
+        description: 'Key is stable: it is the flag''s name in the API and in settings.json.'
+        type: string
+      label:
+        description: |-
+          Label and Description are admin-facing copy. Description says what
+          turning the flag off actually does.
+        type: string
+      sunsetIssue:
+        description: SunsetIssue is the issue that removes the flag. Required.
+        type: integer
+    type: object
+  featureflagutil.ListFlagsResult:
+    properties:
+      features:
+        items:
+          $ref: '#/definitions/featureflagutil.FlagState'
+        type: array
+    type: object
   grouputil.Group:
     properties:
       builtin:
@@ -1401,7 +1435,7 @@ definitions:
     required:
     - enabled
     type: object
-  v0_settings.chatSetting:
+  v0_settings.featureSetting:
     properties:
       enabled:
         type: boolean
@@ -3564,9 +3598,9 @@ paths:
     get:
       description: 'Returns whether initial setup has been completed and, once it
         has, accessRequestsEnabled: whether the sign-in page may offer to request
-        an account, and chatEnabled: whether the chat beta is on. For a caller with
-        a valid session it also returns that caller''s username, userId and isAdmin
-        flag, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.'
+        an account. For a caller with a valid session it also returns that caller''s
+        username, userId and isAdmin flag, and avatarUpdatedAt (Unix milliseconds)
+        when they have a profile picture.'
       produces:
       - application/json
       responses:
@@ -6204,27 +6238,59 @@ paths:
       summary: Turn account requests on or off
       tags:
       - settings
-  /settings/chat:
-    put:
-      consumes:
-      - application/json
-      description: Sets whether chat is available. Chat is on until an admin turns
-        it off; while off every /chat route answers 404, and nothing stored is deleted.
-        Admin-only.
-      parameters:
-      - description: Whether chat is on
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/v0_settings.chatSetting'
+  /settings/features:
+    get:
+      description: Returns every registered beta feature flag with its admin-facing
+        label and description, its default, the release or issue it was introduced
+        in, the issue that will remove it, and whether it is on now. Open to any signed-in
+        user, so the app can hide a feature that is off.
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/v0_settings.chatSetting'
+            $ref: '#/definitions/featureflagutil.ListFlagsResult'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: List the beta feature flags
+      tags:
+      - settings
+  /settings/features/{key}:
+    put:
+      consumes:
+      - application/json
+      description: Sets whether the beta feature named by key is on for everyone on
+        the Quark, and publishes feature_flag_changed. Turning a feature off hides
+        it; nothing it stored is deleted. A key the registry does not declare, including
+        a retired flag's, is 404. Admin-only.
+      parameters:
+      - description: Feature flag key
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: Whether the feature is on
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_settings.featureSetting'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/featureflagutil.FlagState'
         "400":
           description: Bad Request
           schema:
@@ -6237,13 +6303,17 @@ paths:
           description: Forbidden
           schema:
             $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: unknown feature flag
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serverutil.Response'
       security:
       - BearerAuth: []
-      summary: Turn the chat beta on or off
+      summary: Turn a beta feature flag on or off
       tags:
       - settings
   /settings/remote-access:

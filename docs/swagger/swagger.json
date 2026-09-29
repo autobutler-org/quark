@@ -2390,7 +2390,7 @@
         },
         "/auth/status": {
             "get": {
-                "description": "Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account, and chatEnabled: whether the chat beta is on. For a caller with a valid session it also returns that caller's username, userId and isAdmin flag, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.",
+                "description": "Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username, userId and isAdmin flag, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.",
                 "produces": [
                     "application/json"
                 ],
@@ -6164,14 +6164,51 @@
                 }
             }
         },
-        "/settings/chat": {
+        "/settings/features": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns every registered beta feature flag with its admin-facing label and description, its default, the release or issue it was introduced in, the issue that will remove it, and whether it is on now. Open to any signed-in user, so the app can hide a feature that is off.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "List the beta feature flags",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/featureflagutil.ListFlagsResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/features/{key}": {
             "put": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Sets whether chat is available. Chat is on until an admin turns it off; while off every /chat route answers 404, and nothing stored is deleted. Admin-only.",
+                "description": "Sets whether the beta feature named by key is on for everyone on the Quark, and publishes feature_flag_changed. Turning a feature off hides it; nothing it stored is deleted. A key the registry does not declare, including a retired flag's, is 404. Admin-only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6181,15 +6218,22 @@
                 "tags": [
                     "settings"
                 ],
-                "summary": "Turn the chat beta on or off",
+                "summary": "Turn a beta feature flag on or off",
                 "parameters": [
                     {
-                        "description": "Whether chat is on",
+                        "type": "string",
+                        "description": "Feature flag key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Whether the feature is on",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/v0_settings.chatSetting"
+                            "$ref": "#/definitions/v0_settings.featureSetting"
                         }
                     }
                 ],
@@ -6197,7 +6241,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/v0_settings.chatSetting"
+                            "$ref": "#/definitions/featureflagutil.FlagState"
                         }
                     },
                     "400": {
@@ -6214,6 +6258,12 @@
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "unknown feature flag",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -9856,6 +9906,48 @@
                 }
             }
         },
+        "featureflagutil.FlagState": {
+            "type": "object",
+            "properties": {
+                "default": {
+                    "description": "Default is whether the feature is on while no admin has set the flag.",
+                    "type": "boolean"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "introducedIn": {
+                    "description": "IntroducedIn is the release or issue the beta started at, so a flag\nthat has outlived its beta is visible.",
+                    "type": "string"
+                },
+                "key": {
+                    "description": "Key is stable: it is the flag's name in the API and in settings.json.",
+                    "type": "string"
+                },
+                "label": {
+                    "description": "Label and Description are admin-facing copy. Description says what\nturning the flag off actually does.",
+                    "type": "string"
+                },
+                "sunsetIssue": {
+                    "description": "SunsetIssue is the issue that removes the flag. Required.",
+                    "type": "integer"
+                }
+            }
+        },
+        "featureflagutil.ListFlagsResult": {
+            "type": "object",
+            "properties": {
+                "features": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/featureflagutil.FlagState"
+                    }
+                }
+            }
+        },
         "grouputil.Group": {
             "type": "object",
             "properties": {
@@ -11171,7 +11263,7 @@
                 }
             }
         },
-        "v0_settings.chatSetting": {
+        "v0_settings.featureSetting": {
             "type": "object",
             "required": [
                 "enabled"

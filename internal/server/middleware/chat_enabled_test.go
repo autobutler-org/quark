@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/server/middleware"
+	"github.com/autobutler-org/quark/pkg/util/featureflagutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/gin-gonic/gin"
 )
@@ -29,7 +30,7 @@ func TestRequireChatEnabled(t *testing.T) {
 	if code := get(); code != http.StatusOK {
 		t.Errorf("chat on: GET = %d, want 200", code)
 	}
-	if err := settingsutil.SetChatEnabled(false); err != nil {
+	if _, err := featureflagutil.SetFlag(featureflagutil.SetFlagParams{Key: featureflagutil.Chat, Enabled: false}); err != nil {
 		t.Fatal(err)
 	}
 	if code := get(); code != http.StatusNotFound {
