@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -135,6 +136,11 @@ func Unlock(ctx context.Context, params UnlockParams) (UnlockResult, error) {
 	}
 
 	params.Session.Unlock(key, time.Duration(config.AutoLockSeconds)*time.Second)
+
+	if result, err := BackfillEntryHosts(ctx, BackfillEntryHostsParams{Queries: params.Queries, Key: key}); err != nil {
+		slog.Warn("vault: backfill entry hosts", "err", err, "updated", result.Updated)
+	}
+	vaultcrypto.ZeroKey(key)
 
 	return UnlockResult{Locked: false}, nil
 }

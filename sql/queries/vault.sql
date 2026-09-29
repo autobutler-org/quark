@@ -48,6 +48,12 @@ WHERE id = ?;
 -- name: DeleteVaultEntry :exec
 DELETE FROM vault_entries WHERE id = ?;
 
+-- name: ListVaultEntriesWithoutHost :many
+SELECT id, ciphertext, nonce FROM vault_entries WHERE url_host = '';
+
+-- name: UpdateVaultEntryHost :exec
+UPDATE vault_entries SET url_host = ? WHERE id = ?;
+
 -- name: ListAllVaultEntriesForReEncrypt :many
 SELECT id, ciphertext, nonce FROM vault_entries;
 

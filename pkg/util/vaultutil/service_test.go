@@ -317,3 +317,97 @@ func TestImportResult_OmitsIgnoredWhenZero(t *testing.T) {
 		t.Errorf("result %s carries ignored; existing clients should see no change", encoded)
 	}
 }
+
+func TestBackfillEntryHosts_FillsHostsSavedWithoutAScheme(t *testing.T) {
+	ctx := context.Background()
+	vault := openTestVault(t)
+
+	legacy := func(name, rawURL string) int64 {
+		t.Helper()
+		ciphertext, nonce, err := encryptFields(testKey, EntryFields{Name: name, URL: rawURL, Password: "pw"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		row, err := vault.Queries.CreateVaultEntry(ctx, db.CreateVaultEntryParams{
+			Name:       name,
+			UrlHost:    "",
+			Ciphertext: ciphertext,
+			Nonce:      nonce,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return row.ID
+	}
+	github := legacy("GitHub", "github.com/login")
+	noURL := legacy("Wi-Fi", "")
+
+	result, err := BackfillEntryHosts(ctx, BackfillEntryHostsParams{Queries: vault.Queries, Key: testKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Updated != 1 {
+		t.Fatalf("updated = %d, want 1", result.Updated)
+	}
+
+	hosts := map[int64]string{}
+	list, err := ListEntries(ctx, ListEntriesParams{Queries: vault.Queries})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range list.Entries {
+		hosts[entry.ID] = entry.URLHost
+	}
+	if hosts[github] != "github.com" {
+		t.Errorf("github host = %q, want github.com", hosts[github])
+	}
+	if hosts[noURL] != "" {
+		t.Errorf("entry without a URL got host %q", hosts[noURL])
+	}
+
+	again, err := BackfillEntryHosts(ctx, BackfillEntryHostsParams{Queries: vault.Queries, Key: testKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Updated != 0 {
+		t.Errorf("second run updated %d entries, want 0", again.Updated)
+	}
+}
+
+func TestBackfillEntryHosts_SkipsEntriesItCannotDecrypt(t *testing.T) {
+	ctx := context.Background()
+	vault := openTestVault(t)
+
+	ciphertext, nonce, err := encryptFields(bytes.Repeat([]byte{9}, 32), EntryFields{Name: "Other key", URL: "example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := vault.Queries.CreateVaultEntry(ctx, db.CreateVaultEntryParams{Name: "Other key", Ciphertext: ciphertext, Nonce: nonce}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := BackfillEntryHosts(ctx, BackfillEntryHostsParams{Queries: vault.Queries, Key: testKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Updated != 0 {
+		t.Fatalf("updated = %d, want 0", result.Updated)
+	}
+}
+
+func TestCreateEntry_StoresHostForURLWithoutScheme(t *testing.T) {
+	ctx := context.Background()
+	vault := openTestVault(t)
+
+	created, err := CreateEntry(ctx, CreateEntryParams{
+		Queries: vault.Queries,
+		Key:     testKey,
+		Fields:  EntryFields{Name: "GitHub", URL: "GitHub.com/login", Password: "pw"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Entry.URLHost != "github.com" {
+		t.Fatalf("urlHost = %q, want github.com", created.Entry.URLHost)
+	}
+}

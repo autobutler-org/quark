@@ -256,6 +256,39 @@ func (q *Queries) ListVaultEntries(ctx context.Context) ([]ListVaultEntriesRow, 
 	return items, nil
 }
 
+const listVaultEntriesWithoutHost = `-- name: ListVaultEntriesWithoutHost :many
+SELECT id, ciphertext, nonce FROM vault_entries WHERE url_host = ''
+`
+
+type ListVaultEntriesWithoutHostRow struct {
+	ID         int64
+	Ciphertext []byte
+	Nonce      []byte
+}
+
+func (q *Queries) ListVaultEntriesWithoutHost(ctx context.Context) ([]ListVaultEntriesWithoutHostRow, error) {
+	rows, err := q.db.QueryContext(ctx, listVaultEntriesWithoutHost)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListVaultEntriesWithoutHostRow
+	for rows.Next() {
+		var i ListVaultEntriesWithoutHostRow
+		if err := rows.Scan(&i.ID, &i.Ciphertext, &i.Nonce); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVaultFolders = `-- name: ListVaultFolders :many
 SELECT id, name, parent_id, sort_order, created_at FROM vault_folders ORDER BY sort_order, name
 `
@@ -348,6 +381,20 @@ type UpdateVaultEntryCiphertextParams struct {
 
 func (q *Queries) UpdateVaultEntryCiphertext(ctx context.Context, arg UpdateVaultEntryCiphertextParams) error {
 	_, err := q.db.ExecContext(ctx, updateVaultEntryCiphertext, arg.Ciphertext, arg.Nonce, arg.ID)
+	return err
+}
+
+const updateVaultEntryHost = `-- name: UpdateVaultEntryHost :exec
+UPDATE vault_entries SET url_host = ? WHERE id = ?
+`
+
+type UpdateVaultEntryHostParams struct {
+	UrlHost string
+	ID      int64
+}
+
+func (q *Queries) UpdateVaultEntryHost(ctx context.Context, arg UpdateVaultEntryHostParams) error {
+	_, err := q.db.ExecContext(ctx, updateVaultEntryHost, arg.UrlHost, arg.ID)
 	return err
 }
 

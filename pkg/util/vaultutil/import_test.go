@@ -163,6 +163,11 @@ func TestHostFromURL(t *testing.T) {
 		{"http://localhost:8080/path", "localhost"},
 		{"", ""},
 		{"not a url", ""},
+		{"github.com", "github.com"},
+		{"github.com/login", "github.com"},
+		{"  www.amazon.com  ", "www.amazon.com"},
+		{"192.168.1.1", "192.168.1.1"},
+		{"https://GitHub.com/login", "github.com"},
 	}
 	for _, tt := range tests {
 		if got := HostFromURL(tt.input); got != tt.want {
