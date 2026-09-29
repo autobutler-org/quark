@@ -557,7 +557,7 @@ func FilterEvent(params FilterEventParams) FilterEventResult {
 	}
 
 	switch evt.Kind {
-	case eventbus.EventTrashChanged, eventbus.EventAccountChanged, eventbus.EventFeatureFlagChanged:
+	case eventbus.EventTrashChanged, eventbus.EventAccountChanged, eventbus.EventFeatureFlagChanged, eventbus.EventCalendarChanged:
 		return FilterEventResult{Event: evt, Deliver: true}
 	case eventbus.EventBackupStarted, eventbus.EventBackupProgress, eventbus.EventBackupCompleted,
 		eventbus.EventBackupFailed, eventbus.EventVaultDeviceDisconnected, eventbus.EventVaultDeviceReconnected,
