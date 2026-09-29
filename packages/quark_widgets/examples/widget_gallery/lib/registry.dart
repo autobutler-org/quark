@@ -2045,6 +2045,29 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'CalendarPersonFilter',
+    group: 'Calendar',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 16,
+      children: [
+        for (final (mine, person, people) in const [
+          (false, null, <String>[]),
+          (true, null, <String>['maya', 'sam', 'robin']),
+          (false, 'sam', <String>['maya', 'sam', 'robin']),
+        ])
+          CalendarPersonFilter(
+            mine: mine,
+            person: person,
+            people: people,
+            onEveryone: () => log('onEveryone'),
+            onMine: () => log('onMine'),
+            onPerson: (name) => log('onPerson $name'),
+          ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'CalendarReminderBanner',
     group: 'Calendar',
     build: (context, log) => SizedBox(

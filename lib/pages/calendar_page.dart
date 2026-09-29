@@ -70,20 +70,43 @@ class _CalendarPageState extends State<CalendarPage>
     super.dispose();
   }
 
-  /// Shows the view and date the route names; a missing or bad date is today.
+  /// Shows the view, date and filter the route names; a missing or bad date
+  /// is today, and no filter is everyone's events.
   void _followRoute() {
-    final param = GoRouterState.of(
-      context,
-    ).uri.queryParameters[AppRoutes.calendarDateParam];
-    final date = DateTime.tryParse(param ?? '') ?? _calendar.today;
-    unawaited(_calendar.show(widget.view, date));
+    final query = GoRouterState.of(context).uri.queryParameters;
+    final date =
+        DateTime.tryParse(query[AppRoutes.calendarDateParam] ?? '') ??
+        _calendar.today;
+    final person = query[AppRoutes.calendarPersonParam];
+    unawaited(
+      _calendar.show(
+        widget.view,
+        date,
+        mineOnly: query[AppRoutes.calendarMineParam] == 'true',
+        person: person == null || person.isEmpty ? null : person,
+      ),
+    );
   }
 
   @override
   Future<void> refresh() => _calendar.refresh();
 
-  void _go(CalendarView view, DateTime date) =>
-      context.go(AppRoutes.calendarView(view, date: date));
+  /// Goes to [view] around [date], keeping the filter unless [mine] or
+  /// [person] replaces it.
+  void _go(
+    CalendarView view,
+    DateTime date, {
+    bool? mine,
+    String? person,
+    bool everyone = false,
+  }) => context.go(
+    AppRoutes.calendarView(
+      view,
+      date: date,
+      mine: everyone ? false : (mine ?? _calendar.mineOnly),
+      person: everyone || mine == true ? null : (person ?? _calendar.person),
+    ),
+  );
 
   Future<void> _edit(CalendarEventItem item) {
     final event = _calendar.eventById(item.eventId);
@@ -126,28 +149,48 @@ class _CalendarPageState extends State<CalendarPage>
           title: 'Calendar',
           icon: QuarkIcons.calendar_month_outlined,
           drawer: const AppDrawer(activeSection: QuarkDrawerSection.calendar),
-          body: CalendarBody(
-            view: view,
-            anchor: _calendar.anchor,
-            days: _calendar.days,
-            today: _calendar.today,
-            now: _calendar.now,
-            occurrences: _calendar.occurrences,
-            upcoming: _calendar.upcoming,
-            isInitialLoad: _calendar.isInitialLoad,
-            dueReminder: _calendar.dueReminder,
-            error: error == null
-                ? null
-                : Errors.message(error, 'load your calendar'),
-            onPrevious: () => _go(view, _calendar.previousAnchor),
-            onNext: () => _go(view, _calendar.nextAnchor),
-            onRetry: manualRefresh,
-            onDayTap: (day) => _go(CalendarView.day, day),
-            onCreateOn: (day) => _create(CalendarEventDraft.allDayOn(day)),
-            onCreateAt: (start) => _create(CalendarEventDraft.at(start)),
-            onEventTap: _edit,
-            onAddEvent: () => _create(_newDraft()),
-            onDismissReminder: _calendar.dismissReminder,
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: CalendarPersonFilter(
+                  mine: _calendar.mineOnly,
+                  person: _calendar.person,
+                  people: _calendar.people,
+                  onEveryone: () => _go(view, _calendar.anchor, everyone: true),
+                  onMine: () => _go(view, _calendar.anchor, mine: true),
+                  onPerson: (name) =>
+                      _go(view, _calendar.anchor, mine: false, person: name),
+                ),
+              ),
+              Expanded(
+                child: CalendarBody(
+                  view: view,
+                  anchor: _calendar.anchor,
+                  days: _calendar.days,
+                  today: _calendar.today,
+                  now: _calendar.now,
+                  occurrences: _calendar.occurrences,
+                  upcoming: _calendar.upcoming,
+                  isInitialLoad: _calendar.isInitialLoad,
+                  dueReminder: _calendar.dueReminder,
+                  error: error == null
+                      ? null
+                      : Errors.message(error, 'load your calendar'),
+                  onPrevious: () => _go(view, _calendar.previousAnchor),
+                  onNext: () => _go(view, _calendar.nextAnchor),
+                  onRetry: manualRefresh,
+                  onDayTap: (day) => _go(CalendarView.day, day),
+                  onCreateOn: (day) =>
+                      _create(CalendarEventDraft.allDayOn(day)),
+                  onCreateAt: (start) => _create(CalendarEventDraft.at(start)),
+                  onEventTap: _edit,
+                  onAddEvent: () => _create(_newDraft()),
+                  onDismissReminder: _calendar.dismissReminder,
+                ),
+              ),
+            ],
           ),
           appBar: QuarkAppBar(
             label: 'Calendar',

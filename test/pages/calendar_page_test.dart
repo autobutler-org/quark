@@ -28,7 +28,15 @@ void main() {
     hour,
   ).toUtc().toIso8601String();
 
-  Map<String, Object?> event(int id, String title, int hour) => {
+  Map<String, Object?> event(
+    int id,
+    String title,
+    int hour, {
+    String owner = 'me',
+    bool mine = true,
+  }) => {
+    'owner': owner,
+    'mine': mine,
     'id': id,
     'calendarId': 1,
     'title': title,
@@ -54,13 +62,26 @@ void main() {
     resetSharedHttpClient();
     sharedHttpClientFactory = () => MockClient((request) async {
       requests.add(request);
+      if (request.url.path == '/api/v0/admin/users') {
+        return http.Response(
+          jsonEncode([
+            {'id': 1, 'username': 'me', 'status': 'active'},
+            {'id': 2, 'username': 'sam', 'status': 'active'},
+            {'id': 3, 'username': 'newbie', 'status': 'pending'},
+          ]),
+          200,
+        );
+      }
       if (request.url.path == '/api/v0/calendar/events') {
         if (request.method == 'POST') {
           return http.Response(jsonEncode(event(9, 'Dentist', 10)), 201);
         }
         return http.Response(
           jsonEncode({
-            'events': [event(1, 'Plumber visit', 9)],
+            'events': [
+              event(1, 'Plumber visit', 9),
+              event(2, 'Soccer practice', 13, owner: 'sam', mine: false),
+            ],
           }),
           200,
         );
@@ -264,6 +285,79 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('calendar_menu_today')));
     await tester.pumpAndSettle();
     expect(at(r), '/calendar/week?date=$todayKey');
+  });
+
+  for (final (name, size) in [
+    ('narrow', const Size(360, 640)),
+    ('wide', const Size(1280, 800)),
+  ]) {
+    testWidgets('$name: My events hides everyone else (#2544)', (tester) async {
+      final r = await pumpCalendar(
+        tester,
+        AppRoutes.calendarView(CalendarView.day, date: today),
+        size,
+      );
+      expect(find.text('Soccer practice'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('calendar_filter_mine')));
+      await tester.pumpAndSettle();
+      expect(at(r), '/calendar/day?date=$todayKey&mine=true');
+      expect(find.text('Plumber visit'), findsOneWidget);
+      expect(find.text('Soccer practice'), findsNothing);
+
+      // The filter stays through a step and a view switch.
+      await tester.tap(find.byKey(const ValueKey('calendar_next')));
+      await tester.pumpAndSettle();
+      expect(at(r), contains('mine=true'));
+
+      await tester.tap(find.byKey(const ValueKey('calendar_filter_everyone')));
+      await tester.pumpAndSettle();
+      expect(at(r), isNot(contains('mine')));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('a person in the URL narrows to their events', (tester) async {
+    await pumpCalendar(
+      tester,
+      '${AppRoutes.calendarView(CalendarView.day, date: today)}&person=sam',
+      const Size(1280, 800),
+    );
+    expect(find.text('Soccer practice'), findsOneWidget);
+    expect(find.text('Plumber visit'), findsNothing);
+  });
+
+  testWidgets('an admin picks one person from the active accounts', (
+    tester,
+  ) async {
+    settings.isAdmin.value = true;
+    addTearDown(() => settings.isAdmin.value = false);
+    final r = await pumpCalendar(
+      tester,
+      AppRoutes.calendarView(CalendarView.day, date: today),
+      const Size(1280, 800),
+    );
+    await tester.tap(find.byKey(const ValueKey('calendar_filter_people')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('calendar_filter_person_newbie')),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(const ValueKey('calendar_filter_person_sam')));
+    await tester.pumpAndSettle();
+    expect(at(r), '/calendar/day?date=$todayKey&person=sam');
+    expect(find.text('Soccer practice'), findsOneWidget);
+    expect(find.text('Plumber visit'), findsNothing);
+  });
+
+  testWidgets('a non-admin gets no person picker', (tester) async {
+    await pumpCalendar(
+      tester,
+      AppRoutes.calendarView(CalendarView.week),
+      const Size(1280, 800),
+    );
+    expect(find.byKey(const ValueKey('calendar_filter_mine')), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar_filter_people')), findsNothing);
   });
 
   testWidgets('a month date opens that day', (tester) async {

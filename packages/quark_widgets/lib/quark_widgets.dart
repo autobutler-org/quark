@@ -18,6 +18,7 @@ export 'src/calendar/calendar_event_editor.dart';
 export 'src/calendar/calendar_labels.dart';
 export 'src/calendar/calendar_month_grid.dart';
 export 'src/calendar/calendar_period_header.dart';
+export 'src/calendar/calendar_person_filter.dart';
 export 'src/calendar/calendar_reminder_banner.dart';
 export 'src/calendar/calendar_reminders.dart';
 export 'src/calendar/calendar_time_grid.dart';

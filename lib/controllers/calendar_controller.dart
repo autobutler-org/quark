@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:quark/models/calendar_event.dart';
 import 'package:quark/models/calendar_view.dart';
+import 'package:quark/models/user_account.dart';
+import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/calendar_service.dart';
+import 'package:quark/services/users_service.dart';
 import 'package:quark/utils/calendar_recurrence.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -12,6 +15,14 @@ typedef ListCalendarEventsFn =
 typedef SaveCalendarEventFn =
     Future<CalendarEvent> Function(CalendarEventDraft draft, {int? id});
 typedef DeleteCalendarEventFn = Future<void> Function(int id);
+typedef ListCalendarPeopleFn = Future<List<String>> Function();
+
+/// The usernames of the Quark's active accounts, alphabetically: whom an
+/// admin can narrow the calendar to. Only admins may list accounts.
+Future<List<String>> listCalendarPeople() async => [
+  for (final account in await UsersService.list())
+    if (account.status == UserAccount.active) account.username,
+]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
 /// State behind the Calendar page (#1144): which view and date are on show,
 /// the events in that span expanded into occurrences, the next seven days for
@@ -22,11 +33,18 @@ typedef DeleteCalendarEventFn = Future<void> Function(int id);
 /// due reminder shows whichever month is on screen. Saving or deleting reloads
 /// both but never moves the view (#320): an event made in November leaves
 /// November on screen.
+///
+/// It can narrow everything it shows to one person's events (#2544): the
+/// signed-in person's with [mineOnly], or a named person's with [person],
+/// which an admin picks from [people]. The calendar stays shared, so this is
+/// a filter over what every account can see anyway.
 class CalendarController extends ChangeNotifier {
   CalendarController({
     this.listEvents = CalendarService.listEvents,
     this.saveEvent = CalendarService.saveEvent,
     this.deleteEvent = CalendarService.deleteEvent,
+    this.listPeople = listCalendarPeople,
+    this.canListPeople = _isAdmin,
     this.clock = DateTime.now,
     this.firstWeekday = DateTime.sunday,
   }) : _anchor = CalendarDates.dateOnly(clock()),
@@ -35,7 +53,15 @@ class CalendarController extends ChangeNotifier {
   final ListCalendarEventsFn listEvents;
   final SaveCalendarEventFn saveEvent;
   final DeleteCalendarEventFn deleteEvent;
+
+  /// Lists the people an admin can narrow the calendar to.
+  final ListCalendarPeopleFn listPeople;
+
+  /// Whether the signed-in account may list people, which is an admin's.
+  final bool Function() canListPeople;
   final DateTime Function() clock;
+
+  static bool _isAdmin() => AppSettings.instance.isAdmin.value;
 
   /// The weekday a week and a month row start on.
   final int firstWeekday;
@@ -56,6 +82,26 @@ class CalendarController extends ChangeNotifier {
   int _generation = 0;
   final Set<String> _dismissed = {};
   bool _disposed = false;
+  bool _mineOnly = false;
+  String? _person;
+  List<String> _people = const [];
+
+  /// Whether only the signed-in person's events are shown.
+  bool get mineOnly => _mineOnly;
+
+  /// The one person whose events are shown, or null. Unused while [mineOnly].
+  String? get person => _mineOnly ? null : _person;
+
+  /// Whom the person filter offers: the active accounts for an admin, and
+  /// nobody for anyone else.
+  List<String> get people => _people;
+
+  /// Whether [event] passes the filter.
+  bool _shows(CalendarEvent event) {
+    if (_mineOnly) return event.mine;
+    final person = _person;
+    return person == null || event.owner == person;
+  }
 
   /// The view on show.
   CalendarView get view => _view;
@@ -100,7 +146,7 @@ class CalendarController extends ChangeNotifier {
   List<CalendarEventItem> get occurrences {
     final span = days;
     return expandOccurrences(
-      _viewEvents,
+      _viewEvents.where(_shows),
       span.first,
       CalendarDates.addDays(span.last, 1),
     );
@@ -144,7 +190,7 @@ class CalendarController extends ChangeNotifier {
 
   List<CalendarEventItem> _upcomingItems() => [
     for (final item in expandOccurrences(
-      _upcomingEvents,
+      _upcomingEvents.where(_shows),
       today,
       CalendarDates.addDays(today, upcomingDays),
     ))
@@ -173,12 +219,21 @@ class CalendarController extends ChangeNotifier {
     CalendarView.upcoming => _anchor,
   };
 
-  /// Shows [view] around [anchor], loading its span when it changed.
-  Future<void> show(CalendarView view, DateTime anchor) async {
+  /// Shows [view] around [anchor], narrowed to the signed-in person's events
+  /// with [mineOnly] or to [person]'s, loading its span when it changed.
+  /// Changing only the filter loads nothing: it narrows what is loaded.
+  Future<void> show(
+    CalendarView view,
+    DateTime anchor, {
+    bool mineOnly = false,
+    String? person,
+  }) async {
     final date = CalendarDates.dateOnly(anchor);
     final before = days;
     _view = view;
     _anchor = date;
+    _mineOnly = mineOnly;
+    _person = person;
     final after = days;
     final sameSpan =
         _viewLoaded && before.first == after.first && before.last == after.last;
@@ -189,7 +244,22 @@ class CalendarController extends ChangeNotifier {
   /// Loads the view's span and the upcoming days again.
   Future<void> refresh() async {
     _now = clock();
-    await Future.wait([_loadView(), _loadUpcoming()]);
+    await Future.wait([_loadView(), _loadUpcoming(), _loadPeople()]);
+  }
+
+  Future<void> _loadPeople() async {
+    if (!canListPeople()) {
+      _people = const [];
+      return;
+    }
+    try {
+      _people = await listPeople();
+      notifyListeners();
+    } catch (_) {
+      // Without the list the person chip is hidden; Everyone and My events
+      // still work.
+      _people = const [];
+    }
   }
 
   Future<void> _loadView() async {

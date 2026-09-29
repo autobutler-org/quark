@@ -66,14 +66,35 @@ class AppRoutes {
   /// `yyyy-mm-dd`. Without it a view shows today.
   static const calendarDateParam = 'date';
 
+  /// The query parameter that narrows the calendar to the signed-in person's
+  /// events, `mine=true` (#2544).
+  static const calendarMineParam = 'mine';
+
+  /// The query parameter that narrows the calendar to one person's events,
+  /// by username (#2544). A separate name from [calendarMineParam], so an
+  /// account called "me" is not mistaken for the signed-in one.
+  static const calendarPersonParam = 'person';
+
   /// One calendar view around [date], e.g. calendarView(CalendarView.day,
-  /// date: DateTime(2026, 9, 29)) → '/calendar/day?date=2026-09-29'.
-  static String calendarView(CalendarView view, {DateTime? date}) => Uri(
-    path: '$calendar/${view.slug}',
-    queryParameters: date == null
-        ? null
-        : {calendarDateParam: CalendarDates.key(date)},
-  ).toString();
+  /// date: DateTime(2026, 9, 29)) → '/calendar/day?date=2026-09-29', narrowed
+  /// to the signed-in person with [mine] or to [person].
+  static String calendarView(
+    CalendarView view, {
+    DateTime? date,
+    bool mine = false,
+    String? person,
+  }) {
+    final query = {
+      if (date != null) calendarDateParam: CalendarDates.key(date),
+      if (mine) calendarMineParam: 'true',
+      if (!mine && person != null) calendarPersonParam: person,
+    };
+    return Uri(
+      path: '$calendar/${view.slug}',
+      queryParameters: query.isEmpty ? null : query,
+    ).toString();
+  }
+
   static const trash = '/trash';
 
   /// The chat beta (#2421). This bare path redirects to the default channel,
