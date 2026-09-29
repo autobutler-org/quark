@@ -1,18 +1,21 @@
 package v0_auth
 
 import (
+	"log/slog"
 	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/avatarutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
 
 // getAuthStatus godoc
 // @Summary Check auth setup status
-// @Description Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username and isAdmin flag.
+// @Description Returns whether initial setup has been completed and, once it has, accessRequestsEnabled: whether the sign-in page may offer to request an account. For a caller with a valid session it also returns that caller's username, userId and isAdmin flag, and avatarUpdatedAt (Unix milliseconds) when they have a profile picture.
 // @Tags auth
 // @Produce json
 // @Success 200 {object} object
@@ -42,7 +45,16 @@ func getAuthStatus(c *gin.Context) *serverutil.Response {
 	}
 	if status.Authenticated {
 		body["username"] = status.Username
+		body["userId"] = status.UserID
 		body["isAdmin"] = status.IsAdmin
+		// Left out rather than failing the status call, which gates sign-in:
+		// the app then shows initials.
+		avatar, err := avatarutil.Stat(avatarutil.StatParams{DataDir: storageutil.GetDataDir(), UserID: status.UserID})
+		if err != nil {
+			slog.Warn("auth status: profile picture lookup failed", "error", err)
+		} else if avatar.Exists {
+			body["avatarUpdatedAt"] = avatar.UpdatedAt.UnixMilli()
+		}
 	}
 	return serverutil.Ok().WithData(body)
 }

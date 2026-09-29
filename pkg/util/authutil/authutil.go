@@ -113,6 +113,8 @@ type DeleteUserParams struct {
 
 // DeleteUserResult reports where the deleted account's files went.
 type DeleteUserResult struct {
+	// UserID is the deleted account's id.
+	UserID int64
 	// HeirUserID owns what the account owned, zero when nobody was left to.
 	HeirUserID          int64
 	OwnerRowsReassigned int64
@@ -219,7 +221,9 @@ type GetAuthStatusResult struct {
 	// Authenticated is true only when SessionToken named a valid session.
 	Authenticated bool
 	Username      string
-	IsAdmin       bool
+	// UserID is the caller's account id, zero without a valid session.
+	UserID  int64
+	IsAdmin bool
 }
 
 // RecoverParams contains parameters for password recovery.
@@ -349,7 +353,7 @@ func GetAuthStatus(ctx context.Context, queries *db.Queries, params GetAuthStatu
 	if params.SessionToken == "" {
 		return result, nil
 	}
-	username, _, err := ValidateSession(ctx, queries, params.SessionToken)
+	username, userID, err := ValidateSession(ctx, queries, params.SessionToken)
 	if err != nil {
 		return result, nil
 	}
@@ -359,6 +363,7 @@ func GetAuthStatus(ctx context.Context, queries *db.Queries, params GetAuthStatu
 	}
 	result.Authenticated = true
 	result.Username = username
+	result.UserID = userID
 	result.IsAdmin = isAdmin
 	return result, nil
 }
@@ -976,6 +981,7 @@ func DeleteUser(ctx context.Context, params DeleteUserParams) (DeleteUserResult,
 		if target.ID == params.ActorUserID {
 			return ErrSelfAction
 		}
+		result.UserID = target.ID
 
 		if errors.Is(ensureAnotherActiveAdmin(ctx, q, target), ErrLastAdmin) {
 			others, err := q.CountOtherAccounts(ctx, target.ID)

@@ -77,6 +77,7 @@ var queryTokenPrefixes = []string{
 	"/api/v0/files",      // file download / streaming (src= attribute usage)
 	"/api/v0/photos",     // photo serving
 	"/api/v0/thumbnails", // thumbnail serving (Image.network src= cannot set headers)
+	"/api/v0/users",      // profile pictures (Image.network src= cannot set headers)
 	"/videos/",           // video deep-link player
 	"/audio/",            // audio deep-link player
 }
