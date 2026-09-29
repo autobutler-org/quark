@@ -63,6 +63,9 @@ lib/widgets/
     storage_tab.dart            refreshes itself through its service or
     jobs_tab.dart               JobsController, and reports whether it is
                                 refreshing to the page's app bar
+  thumbnails/
+    backfilling_thumbnail.dart  builds a Quark thumbnail and, when it fails,
+                                asks ThumbnailBackfill to render and upload one
   users/
     user_avatar.dart            UserAvatar, a QuarkAvatar showing an account's
                                 picture from UsersService.avatarUrl

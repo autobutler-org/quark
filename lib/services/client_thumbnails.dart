@@ -30,6 +30,13 @@ Future<Uint8List?> renderThumbnailFromBytes(String name, Uint8List bytes) =>
 Future<Uint8List?> renderThumbnailFromPath(String name, String path) =>
     platform.renderThumbnailFromPathPlatform(name, path);
 
+/// The thumbnail of the video [name] streamed from [url], which must carry
+/// its own authentication (`FilesService.constructMediaUrl`). Only as much of
+/// the video as the frame needs is read, through range requests. Anything
+/// but a video renders nothing.
+Future<Uint8List?> renderVideoThumbnailFromUrl(String name, Uri url) =>
+    platform.renderVideoThumbnailFromUrlPlatform(name, url);
+
 /// The thumbnail of a file that arrived by drag and drop.
 Future<Uint8List?> renderDroppedFileThumbnail(DropItemFile file) =>
     platform.renderDroppedFileThumbnailPlatform(file);

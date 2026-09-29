@@ -757,6 +757,8 @@ class PhotosPageState extends State<PhotosPage>
                                 PhotoThumbnail(
                                   url: c.thumbnailUrl(photo.id),
                                   asset: c.assetFor(photo.id),
+                                  path: c.thumbnailSource(photo.id)?.path,
+                                  serial: c.thumbnailSource(photo.id)?.serial,
                                 ),
                             onTap: (i) => _onPhotoTap(photos, i),
                             // In an album the menu takes the long press.

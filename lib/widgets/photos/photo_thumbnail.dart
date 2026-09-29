@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:quark/services/demo_photos_service.dart';
+import 'package:quark/widgets/thumbnails/backfilling_thumbnail.dart';
 
 /// The picture inside a photo tile: a Quark photo's thumbnail over the
 /// network, or a device photo's straight off disk through photo_manager.
@@ -14,11 +15,21 @@ import 'package:quark/services/demo_photos_service.dart';
 /// stands in until the picture arrives, or when it never does.
 class PhotoThumbnail extends StatelessWidget {
   /// Creates the thumbnail for a Quark photo at [url] or a device [asset].
-  const PhotoThumbnail({this.url, this.asset, super.key})
-    : assert((url == null) != (asset == null), 'pass a url or an asset');
+  const PhotoThumbnail({
+    this.url,
+    this.asset,
+    this.path,
+    this.serial,
+    super.key,
+  }) : assert((url == null) != (asset == null), 'pass a url or an asset');
 
   /// Where a Quark photo's thumbnail is served.
   final Uri? url;
+
+  /// The Quark photo's path and device. With them, a HEIC whose thumbnail
+  /// the Quark lacks gets one rendered here and uploaded (#2381).
+  final String? path;
+  final String? serial;
 
   /// A photo on this device.
   final AssetEntity? asset;
@@ -29,6 +40,25 @@ class PhotoThumbnail extends StatelessWidget {
     final url = this.url;
     if (url != null && url.scheme == DemoPhotosService.assetScheme) {
       return Image.asset(url.path, fit: BoxFit.cover);
+    }
+    final path = this.path;
+    if (url != null && path != null) {
+      return BackfillingThumbnail(
+        path: path,
+        serial: serial,
+        // A failed load is not cached, so a new element loads it afresh.
+        builder: (context, generation, onFailed) => Image.network(
+          url.toString(),
+          key: ValueKey(generation),
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, progress) =>
+              progress == null ? child : placeholder,
+          errorBuilder: (context, error, stack) {
+            onFailed();
+            return placeholder;
+          },
+        ),
+      );
     }
     if (url != null) {
       return Image.network(
