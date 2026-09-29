@@ -80,7 +80,7 @@ func uploadFilesNested(c *gin.Context, rootDir string) *serverutil.Response {
 		return serverutil.BadRequest(err)
 	}
 	dest := uploadDestination(deps)
-	sidecars := uploadutil.Sidecars{Database: deps.Database(), Serial: serial}
+	sidecars := uploadutil.Sidecars{Database: deps.Database(), Storage: deps.StorageService(), Serial: serial}
 
 	// VFS path: only when no serial is provided (VFS handles the local namespace).
 	if fsys := dest.FilesVFS(serial); fsys != nil {

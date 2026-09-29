@@ -10,6 +10,44 @@ import (
 	"database/sql"
 )
 
+const deletePhotoHash = `-- name: DeletePhotoHash :exec
+DELETE FROM photo_hashes
+WHERE device_serial = ? AND rel_path = ?
+`
+
+type DeletePhotoHashParams struct {
+	DeviceSerial string
+	RelPath      string
+}
+
+// DeletePhotoHash drops the hashes of one photo that is no longer on disk.
+func (q *Queries) DeletePhotoHash(ctx context.Context, arg DeletePhotoHashParams) error {
+	_, err := q.db.ExecContext(ctx, deletePhotoHash, arg.DeviceSerial, arg.RelPath)
+	return err
+}
+
+const deletePhotoHashesUnder = `-- name: DeletePhotoHashesUnder :exec
+DELETE FROM photo_hashes
+WHERE
+    device_serial = ?1
+    AND (
+        rel_path = ?2
+        OR substr(rel_path, 1, length(?2) + 1) = ?2 || '/'
+    )
+`
+
+type DeletePhotoHashesUnderParams struct {
+	DeviceSerial string
+	RelPath      string
+}
+
+// DeletePhotoHashesUnder drops the hashes of a deleted or moved path, and of
+// everything under it when the path is a folder.
+func (q *Queries) DeletePhotoHashesUnder(ctx context.Context, arg DeletePhotoHashesUnderParams) error {
+	_, err := q.db.ExecContext(ctx, deletePhotoHashesUnder, arg.DeviceSerial, arg.RelPath)
+	return err
+}
+
 const listExactDuplicates = `-- name: ListExactDuplicates :many
 SELECT content_hash, device_serial, rel_path
 FROM photo_hashes
@@ -52,14 +90,15 @@ func (q *Queries) ListExactDuplicates(ctx context.Context) ([]ListExactDuplicate
 }
 
 const listNearDuplicates = `-- name: ListNearDuplicates :many
-SELECT dhash, device_serial, rel_path
+SELECT dhash, content_hash, device_serial, rel_path
 FROM photo_hashes
 WHERE dhash IS NOT NULL
-ORDER BY dhash
+ORDER BY dhash, device_serial, rel_path
 `
 
 type ListNearDuplicatesRow struct {
 	Dhash        sql.NullString
+	ContentHash  sql.NullString
 	DeviceSerial string
 	RelPath      string
 }
@@ -73,7 +112,12 @@ func (q *Queries) ListNearDuplicates(ctx context.Context) ([]ListNearDuplicatesR
 	var items []ListNearDuplicatesRow
 	for rows.Next() {
 		var i ListNearDuplicatesRow
-		if err := rows.Scan(&i.Dhash, &i.DeviceSerial, &i.RelPath); err != nil {
+		if err := rows.Scan(
+			&i.Dhash,
+			&i.ContentHash,
+			&i.DeviceSerial,
+			&i.RelPath,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

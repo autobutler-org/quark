@@ -3,6 +3,9 @@ package v0_thumbnails_test
 import (
 	"archive/zip"
 	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"image"
 	"image/color"
 	"image/png"
@@ -12,6 +15,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	v0_thumbnails "github.com/autobutler-org/quark/internal/server/api/v0/thumbnails"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
@@ -35,14 +39,16 @@ func (f *fakeDetector) DetectDevices() ([]storageutil.Device, error) {
 // newThumbnailEngine builds the thumbnails router over a temp HOME, so the
 // thumbnail cache and default files directory stay inside the test. With
 // withVFS the files namespace is a LocalVFS; without it every read goes
-// through the StorageService. It returns the directory files go in.
-func newThumbnailEngine(t *testing.T, withVFS bool) (*gin.Engine, string) {
+// through the StorageService. It returns the directory files go in and the
+// database.
+func newThumbnailEngine(t *testing.T, withVFS bool) (*gin.Engine, string, *db.DatabaseSqlc) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 
 	mountPoint := t.TempDir()
+	database := dbtest.NewDB(t)
 	deps := deputil.NewDependencies().
-		WithDatabase(dbtest.NewDB(t)).
+		WithDatabase(database).
 		WithStorageService(storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint}))
 
 	dir, err := storageutil.GetFilesDirForDevice(mountPoint)
@@ -72,7 +78,7 @@ func newThumbnailEngine(t *testing.T, withVFS bool) (*gin.Engine, string) {
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_thumbnails.NewRouter())
-	return engine, dir
+	return engine, dir, database
 }
 
 // pngBytes encodes a small image as PNG.
@@ -137,7 +143,7 @@ func expectSmallPNG(t *testing.T, w *httptest.ResponseRecorder) {
 func TestGetThumbnail_ArchiveEntry(t *testing.T) {
 	for name, withVFS := range map[string]bool{"vfs": true, "storage": false} {
 		t.Run(name, func(t *testing.T) {
-			engine, dir := newThumbnailEngine(t, withVFS)
+			engine, dir, database := newThumbnailEngine(t, withVFS)
 			writeZipWithPNG(t, dir)
 
 			expectSmallPNG(t, get(engine, "/api/v0/thumbnails/photos.zip/pics/red.png?size=sm"))
@@ -154,6 +160,49 @@ func TestGetThumbnail_ArchiveEntry(t *testing.T) {
 					t.Errorf("%s: got %d, want 404: %s", path, w.Code, w.Body.String())
 				}
 			}
+
+			// An archive entry is not a library photo: it gets no hashes.
+			if rows, err := database.Queries.ListNearDuplicates(context.Background()); err != nil || len(rows) != 0 {
+				t.Errorf("archive entry hashed: %+v, %v", rows, err)
+			}
+		})
+	}
+}
+
+// TestGetThumbnail_StoresPhotoHashes: internal-drive photos take the VFS
+// path, which used to store no hash, so duplicate detection saw none of them
+// (#1666). Both routes now store the dHash and the file's SHA-256, keyed by
+// the canonical path.
+func TestGetThumbnail_StoresPhotoHashes(t *testing.T) {
+	for name, withVFS := range map[string]bool{"vfs": true, "storage": false} {
+		t.Run(name, func(t *testing.T) {
+			engine, dir, database := newThumbnailEngine(t, withVFS)
+			if !withVFS {
+				// A photo with no serial resolves under HOME.
+				var err error
+				if dir, err = storageutil.GetFilesDir(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			data := pngBytes(t)
+			if err := os.MkdirAll(filepath.Join(dir, "trip"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "trip", "red.png"), data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			expectSmallPNG(t, get(engine, "/api/v0/thumbnails/trip/red.png?size=sm"))
+
+			rows, err := database.Queries.ListNearDuplicates(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			sum := sha256.Sum256(data)
+			if len(rows) != 1 || rows[0].RelPath != "trip/red.png" ||
+				rows[0].ContentHash.String != hex.EncodeToString(sum[:]) {
+				t.Fatalf("rows = %+v, want trip/red.png with its SHA-256", rows)
+			}
 		})
 	}
 }
@@ -161,7 +210,7 @@ func TestGetThumbnail_ArchiveEntry(t *testing.T) {
 // TestGetThumbnail_FolderNamedLikeArchive: a folder called album.zip is still a
 // folder, and the images in it get ordinary thumbnails.
 func TestGetThumbnail_FolderNamedLikeArchive(t *testing.T) {
-	engine, dir := newThumbnailEngine(t, true)
+	engine, dir, _ := newThumbnailEngine(t, true)
 	if err := os.MkdirAll(filepath.Join(dir, "album.zip"), 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -175,7 +224,7 @@ func TestGetThumbnail_FolderNamedLikeArchive(t *testing.T) {
 // TestGetThumbnail_PathThroughFileIsNotFound: a path that treats a regular
 // file as a folder is a missing file, not a server error.
 func TestGetThumbnail_PathThroughFileIsNotFound(t *testing.T) {
-	engine, _ := newThumbnailEngine(t, false)
+	engine, _, _ := newThumbnailEngine(t, false)
 	filesDir, err := storageutil.GetFilesDir()
 	if err != nil {
 		t.Fatalf("GetFilesDir: %v", err)

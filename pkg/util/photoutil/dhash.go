@@ -4,10 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"image"
-	"image/color"
 	"math/bits"
-
-	xdraw "golang.org/x/image/draw"
 )
 
 const (
@@ -21,33 +18,28 @@ const (
 // DHash computes the difference hash (dHash) of img as a 64-bit integer.
 //
 // Algorithm:
-//  1. Resize img to dHashWidth × dHashHeight (9 × 8) using bilinear interpolation.
-//  2. Convert to grayscale.
-//  3. For each row, compare adjacent pixel pairs left-to-right: set bit = 1
-//     when left pixel is brighter than right pixel.
+//  1. Average the luma of img over a dHashWidth × dHashHeight (9 × 8) grid of
+//     cells. Every source pixel counts once, so the result depends on the
+//     picture rather than which pixels a sparse sample landed on: that is
+//     what lets a full-resolution decode and a 400px client thumbnail of the
+//     same photo land within a few bits.
+//  2. For each row, compare adjacent cells left-to-right: set bit = 1 when
+//     the left cell is brighter than the right one.
+//
+// It reads each pixel once and allocates nothing, so hashing a
+// full-resolution decode costs its pixels in time, not memory.
 //
 // The result is an 8-byte (64-bit) value. Two images with a Hamming distance
 // <= 10 are considered near-duplicates in practice.
 func DHash(img image.Image) uint64 {
-	// Resize to 9x8 using bilinear interpolation.
-	small := image.NewGray(image.Rect(0, 0, dHashWidth, dHashHeight))
-	tmp := image.NewRGBA(small.Bounds())
-	xdraw.BiLinear.Scale(tmp, tmp.Bounds(), img, img.Bounds(), xdraw.Over, nil)
-	// Convert RGBA → grey.
-	for y := 0; y < dHashHeight; y++ {
-		for x := 0; x < dHashWidth; x++ {
-			small.Set(x, y, color.GrayModel.Convert(tmp.At(x, y)))
-		}
-	}
+	grid := lumaGrid(img)
 
 	// Compute horizontal differences row by row.
 	var hash uint64
 	var bit uint64 = 1
 	for y := 0; y < dHashHeight; y++ {
 		for x := 0; x < dHashWidth-1; x++ {
-			l := small.GrayAt(x, y).Y
-			r := small.GrayAt(x+1, y).Y
-			if l > r {
+			if grid[y][x] > grid[y][x+1] {
 				hash |= bit
 			}
 			bit <<= 1
@@ -91,4 +83,63 @@ func hexToUint64(s string) (uint64, error) {
 		return 0, err
 	}
 	return binary.BigEndian.Uint64(raw), nil
+}
+
+// lumaGrid is the mean luma of img over each cell of a 9 × 8 grid. A cell
+// with no pixels, in an image narrower or shorter than the grid, takes the
+// pixel it falls on.
+func lumaGrid(img image.Image) [dHashHeight][dHashWidth]float64 {
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	var grid [dHashHeight][dHashWidth]float64
+	if w == 0 || h == 0 {
+		return grid
+	}
+	at := pixelLuma(img)
+	var sum, count [dHashHeight][dHashWidth]uint64
+	for y := range h {
+		gy := y * dHashHeight / h
+		for x := range w {
+			gx := x * dHashWidth / w
+			sum[gy][gx] += uint64(at(b.Min.X+x, b.Min.Y+y))
+			count[gy][gx]++
+		}
+	}
+	for gy := range dHashHeight {
+		for gx := range dHashWidth {
+			if count[gy][gx] == 0 {
+				grid[gy][gx] = float64(at(b.Min.X+gx*w/dHashWidth, b.Min.Y+gy*h/dHashHeight))
+				continue
+			}
+			grid[gy][gx] = float64(sum[gy][gx]) / float64(count[gy][gx])
+		}
+	}
+	return grid
+}
+
+// pixelLuma returns a reader of the 8-bit luma at a pixel of img. The image
+// types the decoders here produce read straight from their pixel buffers;
+// anything else goes through At, which allocates.
+func pixelLuma(img image.Image) func(x, y int) uint32 {
+	switch m := img.(type) {
+	case *image.YCbCr:
+		// JPEG: the Y plane is the luma already.
+		return func(x, y int) uint32 { return uint32(m.Y[m.YOffset(x, y)]) }
+	case *image.Gray:
+		return func(x, y int) uint32 { return uint32(m.Pix[m.PixOffset(x, y)]) }
+	case *image.RGBA:
+		return func(x, y int) uint32 { return rgbLuma(m.Pix[m.PixOffset(x, y):]) }
+	case *image.NRGBA:
+		return func(x, y int) uint32 { return rgbLuma(m.Pix[m.PixOffset(x, y):]) }
+	}
+	return func(x, y int) uint32 {
+		r, g, b, _ := img.At(x, y).RGBA()
+		return (19595*r + 38470*g + 7471*b + 1<<15) >> 24
+	}
+}
+
+// rgbLuma is the luma of the 8-bit R, G, B at the start of p, weighted the
+// way color.GrayModel weighs them.
+func rgbLuma(p []uint8) uint32 {
+	return (19595*uint32(p[0]) + 38470*uint32(p[1]) + 7471*uint32(p[2]) + 1<<15) >> 16
 }

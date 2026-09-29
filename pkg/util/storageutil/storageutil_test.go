@@ -2207,3 +2207,36 @@ func TestStatFilePopulatesSizeAndModTime(t *testing.T) {
 		t.Error("expected non-zero ModTime")
 	}
 }
+
+// TestStorageService_FileExists checks a device's files directory for a path,
+// and refuses one that climbs out of it (#1666).
+func TestStorageService_FileExists(t *testing.T) {
+	tempDir := t.TempDir()
+	const serial = "ABC123"
+	svc := NewStorageService(&mockDetector{
+		devices: []Device{
+			{Name: "usb-disk", MountPoint: tempDir, UsbInfo: &mockUsbDevice{serial: serial, mountPoint: tempDir}},
+		},
+	})
+	filesDir, err := GetFilesDirForDevice(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(filesDir, "trip"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filesDir, "trip", "a.jpg"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	exists := svc.FileExists()
+	if !exists(serial, "trip/a.jpg") {
+		t.Error("a file that is there reads as missing")
+	}
+	if exists(serial, "trip/gone.jpg") {
+		t.Error("a missing file reads as there")
+	}
+	if exists(serial, "../../etc/passwd") {
+		t.Error("a path out of the files directory reads as there")
+	}
+}
