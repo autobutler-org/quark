@@ -31,6 +31,7 @@ func TestFilterEvent(t *testing.T) {
 		{name: "admin hears a private move", access: admin, event: move("private/a", "private/b")},
 		{name: "trash changed", access: before, event: eventbus.Event{Kind: eventbus.EventTrashChanged, DeviceSerial: "USB-1"}},
 		{name: "account changed", access: before, event: eventbus.Event{Kind: eventbus.EventAccountChanged}},
+		{name: "feature flag changed", access: before, event: eventbus.Event{Kind: eventbus.EventFeatureFlagChanged}},
 		{name: "backup dropped", access: before, event: eventbus.Event{Kind: eventbus.EventBackupProgress}, want: &eventbus.Event{}},
 		{name: "vault dropped", access: before, event: eventbus.Event{Kind: eventbus.EventVaultStorageChanged}, want: &eventbus.Event{}},
 		{name: "readable upload", access: before, event: eventbus.Event{Kind: eventbus.EventUpload, Path: "shared/sub"}},

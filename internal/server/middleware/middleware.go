@@ -17,8 +17,8 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/downloadutil"
+	"github.com/autobutler-org/quark/pkg/util/featureflagutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
-	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -353,11 +353,11 @@ func RequireAdmin(deps deputil.Dependencies) gin.HandlerFunc {
 }
 
 // RequireChatEnabled answers 404 for every route behind it while an admin has
-// the chat beta turned off (#2421), as if chat were not there. Nothing stored
+// the chat feature flag turned off (#2421, #2542), as if chat were not there. Nothing stored
 // is touched, so turning it back on picks up where it left off.
 func RequireChatEnabled() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !settingsutil.GetChatEnabled() {
+		if !featureflagutil.Enabled(featureflagutil.Chat) {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "chat is turned off"})
 			return
 		}

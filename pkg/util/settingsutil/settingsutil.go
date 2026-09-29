@@ -36,9 +36,10 @@ type Settings struct {
 	// sign-in page (#1908). Nil means on: requests start on, and a file written
 	// before the setting existed carries no value.
 	AccessRequestsEnabled *bool `json:"accessRequestsEnabled,omitempty"`
-	// ChatEnabled is whether the chat beta is on (#2421). Nil means on, like
-	// AccessRequestsEnabled. Off hides chat; nothing stored is deleted.
-	ChatEnabled *bool `json:"chatEnabled,omitempty"`
+	// FeatureFlags holds the beta switches an admin has set, by the key
+	// featureflagutil registers them under (#2542). A missing key means the
+	// registry's default. A retired flag's key is removed by a migration.
+	FeatureFlags map[string]bool `json:"featureFlags,omitempty"`
 }
 
 var (
@@ -57,8 +58,7 @@ func Load() (*Settings, error) {
 	defer mu.Unlock()
 
 	if cached != nil {
-		snapshot := *cached
-		return &snapshot, nil
+		return snapshotOf(cached), nil
 	}
 
 	path := settingsPath()
@@ -66,8 +66,7 @@ func Load() (*Settings, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		cached = &Settings{SettingsVersion: len(migrations)}
-		snapshot := *cached
-		return &snapshot, nil
+		return snapshotOf(cached), nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to read settings file: %w", err)
@@ -84,8 +83,7 @@ func Load() (*Settings, error) {
 	}
 
 	cached = s
-	snapshot := *cached
-	return &snapshot, nil
+	return snapshotOf(cached), nil
 }
 
 // Save writes settings to disk and updates the in-process cache.
@@ -100,9 +98,9 @@ func Save(s *Settings) error {
 		return fmt.Errorf("failed to create settings directory: %w", err)
 	}
 
-	snapshot := *s
+	snapshot := snapshotOf(s)
 	snapshot.SettingsVersion = len(migrations)
-	data, err := json.MarshalIndent(&snapshot, "", "  ")
+	data, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal settings: %w", err)
 	}
@@ -111,7 +109,7 @@ func Save(s *Settings) error {
 		return fmt.Errorf("failed to write settings file: %w", err)
 	}
 
-	cached = &snapshot
+	cached = snapshot
 	return nil
 }
 
@@ -223,30 +221,26 @@ func SetAccessRequestsEnabled(enabled bool) error {
 	return Save(s)
 }
 
-// GetChatEnabled returns whether the chat beta is on. An unset value is on;
-// settings that cannot be read are off, as for GetAccessRequestsEnabled.
-func GetChatEnabled() bool {
+// GetFeatureFlag returns the stored value of the feature flag key, and
+// whether one is stored at all; the caller supplies the default. An error
+// means settings could not be read.
+func GetFeatureFlag(key string) (enabled, set bool, err error) {
 	s, err := Load()
 	if err != nil {
-		return false
+		return false, false, err
 	}
-	return s.ChatEnabled == nil || *s.ChatEnabled
+	enabled, set = s.FeatureFlags[key]
+	return enabled, set, nil
 }
 
-// SetChatEnabled turns the chat beta on or off and persists it.
-func SetChatEnabled(enabled bool) error {
-	mu.Lock()
-	s := cached
-	mu.Unlock()
-
-	if s == nil {
-		loaded, err := Load()
-		if err != nil {
-			loaded = &Settings{}
-		}
-		s = loaded
+// SetFeatureFlag stores the feature flag key as on or off and persists it.
+// It does not check key against the registry; featureflagutil does.
+func SetFeatureFlag(key string, enabled bool) error {
+	s, err := Load()
+	if err != nil {
+		return err
 	}
-	s.ChatEnabled = &enabled
+	s.FeatureFlags[key] = enabled
 	return Save(s)
 }
 

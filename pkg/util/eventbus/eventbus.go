@@ -39,6 +39,11 @@ const (
 	// demoted), so signed-in apps refetch what they are allowed to show.
 	EventAccountChanged EventKind = "account_changed"
 
+	// EventFeatureFlagChanged fires when an admin turns a beta feature flag on
+	// or off (#2542), so every signed-in app reloads /settings/features and
+	// hides or shows the feature. Path is empty.
+	EventFeatureFlagChanged EventKind = "feature_flag_changed"
+
 	// EventAccessChanged fires when access rows moved with a path or were
 	// deleted with it (#1905). Path and DeviceSerial name where the rows are
 	// now, or where they were deleted from.

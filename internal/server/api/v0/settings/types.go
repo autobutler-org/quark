@@ -47,6 +47,7 @@ func (r *router) Routes() []*serverutil.Route {
 		getSettingsRoute,
 		getRemoteAccessRoute,
 		pairDeviceRoute,
+		listFeaturesRoute,
 	}
 }
 
@@ -60,7 +61,7 @@ func (r *adminRouter) Routes() []*serverutil.Route {
 		enableRemoteAccessRoute,
 		disableRemoteAccessRoute,
 		updateAccessRequestsRoute,
-		updateChatRoute,
+		updateFeatureRoute,
 	}
 }
 
@@ -70,8 +71,8 @@ type accessRequestsSetting struct {
 	Enabled *bool `json:"enabled" binding:"required"`
 }
 
-// chatSetting is whether the chat beta is on. A pointer, so a body that
+// featureSetting is whether a feature flag is on. A pointer, so a body that
 // leaves it out is refused rather than read as off.
-type chatSetting struct {
+type featureSetting struct {
 	Enabled *bool `json:"enabled" binding:"required"`
 }
