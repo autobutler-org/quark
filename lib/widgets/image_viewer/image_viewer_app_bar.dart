@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:quark/models/photo_album.dart';
 import 'package:quark/widgets/image_viewer/image_viewer_more_menu.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -26,24 +25,17 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// server actions only exist for the former.
   final String? relPath;
 
-  /// Album the user navigated from, which turns "Add to Album" into
-  /// "Remove from [PhotoAlbum.name]".
-  final PhotoAlbum? sourceAlbum;
-
   final VoidCallback onClose;
   final VoidCallback onToggleFavorite;
   final VoidCallback onRotate;
   final VoidCallback onDownload;
   final VoidCallback onToggleSidebar;
-  final VoidCallback onAddToAlbum;
-  final VoidCallback onRemoveFromAlbum;
-  final VoidCallback onMakeACopy;
 
-  /// Opens the share sheet for the photo (#1911). Offered only for a photo on
-  /// the Quark.
-  final VoidCallback onShare;
-  final VoidCallback onDelete;
   final VoidCallback onShowShortcuts;
+
+  /// The "More options" menu. The page builds it, since a right-click on the
+  /// photo opens the same one (#2276).
+  final ImageViewerMoreMenu moreMenu;
 
   const ImageViewerAppBar({
     super.key,
@@ -57,18 +49,13 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.isFavorite,
     required this.sidebarOpen,
     required this.relPath,
-    required this.sourceAlbum,
     required this.onClose,
     required this.onToggleFavorite,
     required this.onRotate,
     required this.onDownload,
     required this.onToggleSidebar,
-    required this.onAddToAlbum,
-    required this.onRemoveFromAlbum,
-    required this.onMakeACopy,
-    required this.onShare,
-    required this.onDelete,
     required this.onShowShortcuts,
+    required this.moreMenu,
   });
 
   @override
@@ -78,22 +65,6 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final showNav = imageCount > 1;
-    final moreMenu = ImageViewerMoreMenu(
-      includeBarActions: !isDesktop,
-      isFavorite: isFavorite,
-      sidebarOpen: sidebarOpen,
-      relPath: relPath,
-      sourceAlbum: sourceAlbum,
-      onToggleFavorite: onToggleFavorite,
-      onRotate: onRotate,
-      onDownload: onDownload,
-      onToggleSidebar: onToggleSidebar,
-      onAddToAlbum: onAddToAlbum,
-      onRemoveFromAlbum: onRemoveFromAlbum,
-      onMakeACopy: onMakeACopy,
-      onShare: onShare,
-      onDelete: onDelete,
-    );
     return AppBar(
       leading: Center(
         child: QuarkBarIconButton(

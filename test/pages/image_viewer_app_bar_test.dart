@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -114,5 +115,54 @@ void main() {
     expect(find.byIcon(QuarkIcons.keyboard_outlined), findsOneWidget);
     // No relPath, so no more menu on desktop.
     expect(find.byIcon(QuarkIcons.more_vert), findsNothing);
+  });
+
+  group('right-click on the photo (#2276)', () {
+    List<String> entries(WidgetTester tester) => tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.byType(PopupMenuItem<int>),
+            matching: find.byType(Text),
+          ),
+        )
+        .map((t) => t.data!)
+        .toList();
+
+    testWidgets('opens the More options menu at the pointer', (tester) async {
+      await pumpViewer(tester, phoneSize);
+      await tester.tap(find.byIcon(QuarkIcons.more_vert));
+      await tester.pumpAndSettle();
+      final fromButton = entries(tester);
+      await tester.tapAt(const Offset(5, 400));
+      await tester.pumpAndSettle();
+
+      final photo = tester.getCenter(
+        find.byKey(const ValueKey('image_viewer_photo')),
+      );
+      await tester.tapAt(photo, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+
+      expect(entries(tester), fromButton);
+      expect(fromButton, contains('Rotate 90° CW'));
+      expect(
+        tester.getTopLeft(find.byType(PopupMenuItem<int>).first).dy,
+        closeTo(photo.dy, 40),
+      );
+    });
+
+    testWidgets('opens nothing when the menu would be empty', (tester) async {
+      // Wide, the bar shows favorite, rotate and info as buttons, and a
+      // device photo has no server actions, so there is no menu.
+      await pumpViewer(tester, desktopSize);
+
+      await tester.tapAt(
+        tester.getCenter(find.byKey(const ValueKey('image_viewer_photo'))),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PopupMenuItem<int>), findsNothing);
+      expect(find.byIcon(QuarkIcons.more_vert), findsNothing);
+    });
   });
 }

@@ -195,7 +195,7 @@ expired items. The page also refreshes on `access_changed` (JN-TR-013).
 
 **Steps:**
 
-1. Open the context menu on a file inside it (long-press the row, or use its three-dot menu) and select
+1. Open the context menu on a file inside it (long-press or right-click the row, or use its three-dot menu) and select
    **Restore** — or tap **Select items** in the app bar, pick several, and tap the restore button.
 2. Open the context menu on another file, select **Delete permanently**, and confirm.
 

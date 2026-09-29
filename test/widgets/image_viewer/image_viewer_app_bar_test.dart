@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/image_viewer/image_viewer_app_bar.dart';
+import 'package:quark/widgets/image_viewer/image_viewer_more_menu.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -35,18 +36,28 @@ void main() {
             isFavorite: false,
             sidebarOpen: false,
             relPath: relPath,
-            sourceAlbum: null,
             onClose: () {},
             onToggleFavorite: () {},
             onRotate: () {},
             onDownload: () {},
             onToggleSidebar: () {},
-            onAddToAlbum: () {},
-            onRemoveFromAlbum: () {},
-            onMakeACopy: () {},
-            onShare: () => events.add('share'),
-            onDelete: () {},
             onShowShortcuts: () {},
+            moreMenu: ImageViewerMoreMenu(
+              includeBarActions: !isDesktop,
+              isFavorite: false,
+              sidebarOpen: false,
+              relPath: relPath,
+              sourceAlbum: null,
+              onToggleFavorite: () {},
+              onRotate: () {},
+              onDownload: () {},
+              onToggleSidebar: () {},
+              onAddToAlbum: () {},
+              onRemoveFromAlbum: () {},
+              onMakeACopy: () {},
+              onShare: () => events.add('share'),
+              onDelete: () {},
+            ),
           ),
         ),
       ),

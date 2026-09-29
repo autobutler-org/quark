@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -336,4 +337,65 @@ void main() {
       );
     });
   }
+
+  group('right-click (#2276)', () {
+    List<String> labels(WidgetTester tester) => [
+      for (final item in tester.widgetList<PopupMenuItem<int>>(
+        find.byType(PopupMenuItem<int>),
+      ))
+        (item.key! as ValueKey<String>).value,
+    ];
+
+    testBothViewports('opens the same menu as the button, at the pointer', (
+      tester,
+      size,
+    ) async {
+      final deleted = <String>[];
+      await pumpAt(
+        tester,
+        scrolling(
+          UserList(
+            users: users,
+            selfUsername: 'ada',
+            onPromote: (_) {},
+            onDisable: (_) {},
+            onDelete: deleted.add,
+          ),
+        ),
+        size: size,
+      );
+      await openMenu(tester, 'bob');
+      final fromButton = labels(tester);
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
+
+      final row = tester.getCenter(find.byKey(const ValueKey('user_row_bob')));
+      await tester.tapAt(row, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(labels(tester), fromButton);
+      expect(fromButton, isNotEmpty);
+      await tester.tap(find.byKey(const ValueKey('user_action_delete_bob')));
+      await tester.pumpAndSettle();
+      expect(deleted, ['bob']);
+    });
+
+    testWidgets('opens nothing on your own row', (tester) async {
+      await pumpAt(
+        tester,
+        scrolling(
+          UserList(users: users, selfUsername: 'ada', onDelete: (_) {}),
+        ),
+      );
+
+      await tester.tapAt(
+        tester.getCenter(find.byKey(const ValueKey('user_row_ada'))),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PopupMenuItem<int>), findsNothing);
+    });
+  });
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/quark_loader.dart';
 import '../../core/quark_menu_button.dart';
+import '../../core/show_quark_menu.dart';
 import '../../models/group_item.dart';
 import '../../models/quark_menu_entry.dart';
 import '../../theme/quark_tokens.dart';
@@ -64,34 +65,47 @@ class GroupRow extends StatelessWidget {
             _ => '$count members',
           };
 
-    return ListTile(
-      key: ValueKey('group_row_$id'),
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.group_outlined),
-      title: Text(group.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        details,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: tokens.mutedForeground),
+    final entries = [
+      for (final (action, label, callback) in actions)
+        QuarkMenuEntry(
+          key: ValueKey('group_action_${action}_$id'),
+          label: label,
+          destructive: action == 'delete',
+          onSelected: callback,
+        ),
+    ];
+    final hasMenu = !isBusy && entries.isNotEmpty;
+
+    // A right-click on the row opens the same menu as its button (#2276).
+    return GestureDetector(
+      onSecondaryTapUp: hasMenu
+          ? (details) => showQuarkMenu(
+              context,
+              position: details.globalPosition,
+              entries: entries,
+            )
+          : null,
+      child: ListTile(
+        key: ValueKey('group_row_$id'),
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.group_outlined),
+        title: Text(group.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          details,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: tokens.mutedForeground),
+        ),
+        trailing: isBusy
+            ? const QuarkLoader(size: 24)
+            : actions.isEmpty
+            ? null
+            : QuarkMenuButton(
+                key: ValueKey('group_menu_$id'),
+                tooltip: 'Actions for ${group.name}',
+                entries: entries,
+              ),
       ),
-      trailing: isBusy
-          ? const QuarkLoader(size: 24)
-          : actions.isEmpty
-          ? null
-          : QuarkMenuButton(
-              key: ValueKey('group_menu_$id'),
-              tooltip: 'Actions for ${group.name}',
-              entries: [
-                for (final (action, label, callback) in actions)
-                  QuarkMenuEntry(
-                    key: ValueKey('group_action_${action}_$id'),
-                    label: label,
-                    destructive: action == 'delete',
-                    onSelected: callback,
-                  ),
-              ],
-            ),
     );
   }
 }
