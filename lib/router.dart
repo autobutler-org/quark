@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/chat_controller.dart';
+import 'package:quark/models/calendar_view.dart';
 import 'package:quark/models/feature_flag.dart';
 import 'package:quark/models/trash_item.dart';
 import 'package:quark/pages/account_and_data_page.dart';
+import 'package:quark/pages/calendar_page.dart';
 import 'package:quark/pages/chat_page.dart';
 import 'package:quark/pages/docs_page.dart';
 import 'package:quark/pages/document_editor_page.dart';
@@ -27,6 +29,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/feature_flags_service.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
+import 'package:quark_widgets/quark_widgets.dart' show CalendarDates;
 
 // Route paths — use these constants everywhere instead of string literals.
 class AppRoutes {
@@ -54,6 +57,23 @@ class AppRoutes {
 
   /// The query parameter naming the album the Photos page shows.
   static const photosAlbumParam = 'album';
+
+  /// The household calendar (#1144). Its views have their own URLs, see
+  /// [calendarView]; this bare path redirects to the default one, Week.
+  static const calendar = '/calendar';
+
+  /// The query parameter naming the date a calendar view shows,
+  /// `yyyy-mm-dd`. Without it a view shows today.
+  static const calendarDateParam = 'date';
+
+  /// One calendar view around [date], e.g. calendarView(CalendarView.day,
+  /// date: DateTime(2026, 9, 29)) → '/calendar/day?date=2026-09-29'.
+  static String calendarView(CalendarView view, {DateTime? date}) => Uri(
+    path: '$calendar/${view.slug}',
+    queryParameters: date == null
+        ? null
+        : {calendarDateParam: CalendarDates.key(date)},
+  ).toString();
   static const trash = '/trash';
 
   /// The chat beta (#2421). This bare path redirects to the default channel,
@@ -325,10 +345,14 @@ enum SettingsTab implements RouteTab {
 /// route pattern rather than its location, so switching tabs hands the new
 /// tab to the page already on screen: its `State` survives and nothing is
 /// loaded again. Keep the tabs in that one route for this to hold.
+///
+/// [keepQuery] carries the query across a tab switch, for a page whose query
+/// is shared by every tab (the date the Calendar's views show).
 List<GoRoute> tabbedRoutes<T extends RouteTab>({
   required String path,
   required List<T> tabs,
   required Widget Function(T tab, ValueChanged<T> onTabSelected) builder,
+  bool keepQuery = false,
 }) {
   String firstTab(GoRouterState state) =>
       state.uri.replace(path: '$path/${tabs.first.slug}').toString();
@@ -342,7 +366,11 @@ List<GoRoute> tabbedRoutes<T extends RouteTab>({
       },
       builder: (context, state) => builder(
         tabs.firstWhere((tab) => tab.slug == state.pathParameters['tab']),
-        (tab) => context.go('$path/${tab.slug}'),
+        (tab) => context.go(
+          keepQuery
+              ? state.uri.replace(path: '$path/${tab.slug}').toString()
+              : '$path/${tab.slug}',
+        ),
       ),
     ),
   ];
@@ -519,6 +547,13 @@ final router = GoRouter(
         final serial = state.uri.queryParameters['serial'] ?? '';
         return SpreadsheetEditorPage(filePath: filePath, deviceSerial: serial);
       },
+    ),
+    ...tabbedRoutes(
+      path: AppRoutes.calendar,
+      tabs: CalendarView.values,
+      keepQuery: true,
+      builder: (view, onViewSelected) =>
+          CalendarPage(view: view, onViewSelected: onViewSelected),
     ),
     GoRoute(
       path: AppRoutes.vault,

@@ -20,6 +20,7 @@ void main() {
     activeSection: active,
     onTapFiles: callbacks[QuarkDrawerSection.files],
     onTapPhotos: callbacks[QuarkDrawerSection.photos],
+    onTapCalendar: callbacks[QuarkDrawerSection.calendar],
     onTapTrash: callbacks[QuarkDrawerSection.trash],
     onTapDocs: callbacks[QuarkDrawerSection.docs],
     onTapSheets: callbacks[QuarkDrawerSection.sheets],
@@ -54,6 +55,7 @@ void main() {
     for (final label in [
       'Files',
       'Photos',
+      'Calendar',
       'Trash',
       'Docs',
       'Sheets',
