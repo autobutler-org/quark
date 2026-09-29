@@ -18,6 +18,8 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// Quark closes an account's socket on purpose when its role or status
 /// changes. Files, Trash and Photos reload their listing when the socket comes
 /// back, but not when it first opens, since each already loads on its own.
+/// Photos also reloads on a file-tree event, so returning from the duplicates
+/// view underneath it shows what was deleted there.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -130,6 +132,33 @@ void main() {
       EventsService.instance.stop();
     });
   }
+  testWidgets('Photos reloads on a delete event', (tester) async {
+    Future<void> settle() async {
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    await tester.pumpWidget(const MaterialApp(home: PhotosPage()));
+    await settle();
+    channels.last.open();
+    await settle();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1100)),
+    );
+
+    final before = requests;
+    channels.last.send('{"kind":"job_progress"}');
+    await settle();
+    expect(requests, before, reason: 'an unrelated event reloads nothing');
+
+    channels.last.send('{"kind":"delete","path":"/Photos/IMG_1.jpg"}');
+    await settle();
+    expect(requests, greaterThan(before));
+
+    await tester.pumpWidget(const SizedBox());
+    EventsService.instance.stop();
+  });
 }
 
 /// A socket that opens when the test says so and closes when the test says
@@ -150,6 +179,8 @@ class ControlledChannel implements WebSocketChannel {
   void open() => _ready.complete();
 
   void closeFromServer() => _incoming.close();
+
+  void send(String data) => _incoming.add(data);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

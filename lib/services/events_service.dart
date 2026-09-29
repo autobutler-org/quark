@@ -30,6 +30,18 @@ class FileEvent {
     newPath: json['newPath'] as String?,
     data: json['data'],
   );
+
+  /// Whether this event can change a listing of files or photos: something
+  /// uploaded, deleted, moved or created, or access to it changed.
+  /// `access_changed` means something was shared or unshared with this
+  /// account, or its groups changed, so what it can see may have too.
+  bool get changesListing => const {
+    'upload',
+    'delete',
+    'move',
+    'new_folder',
+    'access_changed',
+  }.contains(kind);
 }
 
 /// Maintains a WebSocket connection to `GET /api/v0/events` and broadcasts

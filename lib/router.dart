@@ -9,6 +9,7 @@ import 'package:quark/pages/docs_page.dart';
 import 'package:quark/pages/document_editor_page.dart';
 import 'package:quark/pages/file_browser_page.dart';
 import 'package:quark/pages/login_page.dart';
+import 'package:quark/pages/photo_duplicates_page.dart';
 import 'package:quark/pages/photos_page.dart';
 import 'package:quark/pages/plaintext_editor_page.dart';
 import 'package:quark/pages/recover_page.dart';
@@ -47,6 +48,9 @@ class AppRoutes {
   static const filesDeep = '/files/:path(.*)';
 
   static const photos = '/photos';
+
+  /// Photos that duplicate each other, a drill-down from Photos (#1666).
+  static const photoDuplicates = '/photos/duplicates';
 
   /// The query parameter naming the album the Photos page shows.
   static const photosAlbumParam = 'album';
@@ -436,6 +440,12 @@ final router = GoRouter(
       builder: (context, state) => PhotosPage(
         album: state.uri.queryParameters[AppRoutes.photosAlbumParam],
       ),
+      routes: [
+        GoRoute(
+          path: 'duplicates',
+          builder: (context, state) => const PhotoDuplicatesPage(),
+        ),
+      ],
     ),
     GoRoute(
       path: AppRoutes.trash,

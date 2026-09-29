@@ -87,10 +87,11 @@ class PhotosPageState extends State<PhotosPage>
   void initState() {
     super.initState();
     EventsService.instance.start();
-    // A sharing change, or a change to one of this account's groups, decides
-    // which photos it can see.
+    // A photo deleted, moved or uploaded anywhere, the duplicates view
+    // underneath this page included, or a sharing change. This page's own
+    // upload reloads once it finishes.
     _eventSub = EventsService.instance.events.listen((evt) {
-      if (evt.kind == 'access_changed') manualRefresh();
+      if (evt.changesListing && !_controller.isUploading) manualRefresh();
     });
     // Whatever changed while the socket was down sent no event we saw.
     _reconnectSub = EventsService.instance.reconnects.listen(
@@ -675,6 +676,15 @@ class PhotosPageState extends State<PhotosPage>
                     icon: QuarkIcons.check_circle_outline,
                     tooltip: 'Select',
                     onPressed: c.enterSelectionMode,
+                  ),
+                // Duplicates are found on the Quark, which Demo mode never
+                // asks (#1666).
+                if (album == null && !_demo)
+                  QuarkBarIconButton(
+                    key: const ValueKey('photos_duplicates'),
+                    icon: QuarkIcons.content_copy,
+                    tooltip: 'Duplicates',
+                    onPressed: () => context.go(AppRoutes.photoDuplicates),
                   ),
                 // The Quark fills system albums itself and refuses edits (#992).
                 // An empty album carries this button in its empty state

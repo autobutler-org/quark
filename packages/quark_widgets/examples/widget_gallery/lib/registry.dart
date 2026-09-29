@@ -1204,6 +1204,15 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'DuplicateFormatButton',
+    group: 'Photos',
+    build: (context, log) => DuplicateFormatButton(
+      formats: const ['HEIC', 'JPEG'],
+      preferred: 'HEIC',
+      onChanged: (f) => log('DuplicateFormatButton.onChanged($f)'),
+    ),
+  ),
+  GalleryEntry(
     name: 'DuplicateGroupList',
     group: 'Photos',
     build: (context, log) =>

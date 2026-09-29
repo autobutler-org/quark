@@ -89,6 +89,7 @@ export 'src/models/ssh_key_item.dart';
 export 'src/models/transcode_format_option.dart';
 export 'src/models/upload_target.dart';
 export 'src/models/user_account_item.dart';
+export 'src/photos/duplicate_format_button.dart';
 export 'src/photos/duplicate_group_list.dart';
 export 'src/photos/live_badge.dart';
 export 'src/photos/photo_category_list.dart';
