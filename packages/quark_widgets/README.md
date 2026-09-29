@@ -12,7 +12,10 @@ Data in, callbacks out: a widget takes immutable values and handlers, never
 fetches, never navigates, and never reads global state, so selection, loading,
 and error live in the caller. Colors, radii, and spacing come from `QuarkTokens`
 through the theme, never a hardcoded value — the gallery's theme panel edits the
-tokens live, which turns a hardcoded color into something you can see. Every
+tokens live, which turns a hardcoded color into something you can see. See
+[`docs/architecture/styling.md`](../../docs/architecture/styling.md) for how the
+token set and theme fit together and what keeps every page consistent with them.
+Every
 widget ships as a set: a file in `lib/src/<group>/`, an export from the barrel,
 `///` docs on the class, a test with a 360x640 and a 1280x800 case, and a
 gallery entry. A widget that animates honors reduced motion from both

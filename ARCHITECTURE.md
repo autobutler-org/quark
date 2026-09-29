@@ -59,6 +59,7 @@ flowchart LR
 | [Request flows](docs/architecture/request-flows.md)              | auth, streaming upload, live events, background jobs        |
 | [Data](docs/architecture/data.md)                                | SQLite databases, schema, VFS, the vault                     |
 | [Frontend](docs/architecture/frontend.md)                        | Flutter app layers, routing, the widget package             |
+| [Styling](docs/architecture/styling.md)                          | design tokens, the theme, and what keeps pages visually consistent |
 | [Build and tooling](docs/architecture/tooling.md)                | code generation, checks, how the knowledge base stays true  |
 
 Contributor rules — where a file goes, what a check enforces — are in [`AGENTS.md`](AGENTS.md).
