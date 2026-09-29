@@ -69,6 +69,15 @@ type ChatMessage struct {
 	DeletedAt  sql.NullTime
 }
 
+type ChatReaction struct {
+	ID         int64
+	MessageID  int64
+	UserID     int64
+	KeyVersion int64
+	Ciphertext []byte
+	CreatedAt  time.Time
+}
+
 type ChatServer struct {
 	ID        int64
 	Name      string

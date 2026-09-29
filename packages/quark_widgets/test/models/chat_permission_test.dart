@@ -11,6 +11,7 @@ void main() {
   const delete = ChatPermission.deleteMessages;
   const channel = ChatPermission.manageChannel;
   const members = ChatPermission.manageMembers;
+  const reactions = ChatPermission.manageReactions;
 
   test('every permission carries the name the Quark uses', () {
     expect(
@@ -20,6 +21,7 @@ void main() {
         'send_messages',
         'add_reactions',
         'delete_messages',
+        'manage_reactions',
         'manage_channel',
         'manage_members',
       ],
@@ -34,8 +36,23 @@ void main() {
     final want = {
       ChatPermissionPreset.viewer: {read},
       ChatPermissionPreset.member: {read, send, react},
-      ChatPermissionPreset.moderator: {read, send, react, delete, members},
-      ChatPermissionPreset.owner: {read, send, react, delete, channel, members},
+      ChatPermissionPreset.moderator: {
+        read,
+        send,
+        react,
+        delete,
+        reactions,
+        members,
+      },
+      ChatPermissionPreset.owner: {
+        read,
+        send,
+        react,
+        delete,
+        reactions,
+        channel,
+        members,
+      },
     };
     for (final MapEntry(key: preset, value: set) in want.entries) {
       expect(preset.permissions, set, reason: preset.name);
@@ -56,6 +73,7 @@ void main() {
     expect(send.requires, {read});
     expect(react.requires, {read});
     expect(delete.requires, {read});
+    expect(reactions.requires, {read});
     expect(read.requires, isEmpty);
     expect(channel.requires, isEmpty);
     expect(members.requires, isEmpty);

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -227,6 +228,51 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fake.opened[1]!.deleted, [12]);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a member reacts and sees reactions grouped ($label)', (
+      tester,
+    ) async {
+      ChatReaction reaction(int id, int userId) => ChatReaction(
+        id: id,
+        messageId: 12,
+        userId: userId,
+        keyVersion: 1,
+        ciphertext: Uint8List(0),
+        createdAt: DateTime.utc(2026, 9, 25, 10),
+      );
+      final fake = FakeChat();
+      fake.entries[1] = [
+        ChatTimelineMessage(
+          message: ChatMessage(
+            id: 12,
+            channelId: 1,
+            authorId: 8,
+            keyVersion: 1,
+            ciphertext: null,
+            createdAt: DateTime.utc(2026, 9, 25, 10),
+          ),
+          state: ChatMessageState.ready,
+          text: 'lunch?',
+          reactions: [
+            ChatOpenReaction(reaction: reaction(20, 7), emoji: '👍'),
+            ChatOpenReaction(reaction: reaction(21, 8), emoji: '👍'),
+            ChatOpenReaction(reaction: reaction(22, 8)),
+          ],
+        ),
+      ];
+      await pumpChat(tester, size, chat: fake);
+
+      expect(find.text('👍 2'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('message_reaction_12_👍')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('message_react_12')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('message_react_12_🎉')));
+      await tester.pumpAndSettle();
+
+      expect(fake.opened[1]!.reacted, ['12 👍', '12 🎉']);
       expect(tester.takeException(), isNull);
     });
 

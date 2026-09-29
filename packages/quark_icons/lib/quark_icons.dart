@@ -329,4 +329,5 @@ class QuarkIcons {
   static const IconData forum_outlined = Icons.forum_outlined;
   static const IconData menu = Icons.menu;
   static const IconData person_add_outlined = Icons.person_add_outlined;
+  static const IconData add_reaction_outlined = Icons.add_reaction_outlined;
 }

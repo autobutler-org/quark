@@ -35,6 +35,9 @@ class FakeChatMessages extends ChatMessagesController {
   /// Every message id [delete] was called with.
   final List<int> deleted = [];
 
+  /// Every `messageId emoji` [toggleReaction] was called with.
+  final List<String> reacted = [];
+
   /// How many times [open] ran.
   int opens = 0;
 
@@ -61,6 +64,10 @@ class FakeChatMessages extends ChatMessagesController {
 
   @override
   Future<void> delete(int messageId) async => deleted.add(messageId);
+
+  @override
+  Future<void> toggleReaction(int messageId, String emoji) async =>
+      reacted.add('$messageId $emoji');
 
   @override
   void dispose() {

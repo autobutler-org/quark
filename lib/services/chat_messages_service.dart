@@ -8,7 +8,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 
 /// The chat message routes (#2418): paging a channel's messages, posting
-/// one, and deleting one.
+/// one, and deleting one; and reacting to one and taking a reaction back
+/// (#2426).
 ///
 /// Everything here is ciphertext; `ChatMessagesController` encrypts and
 /// decrypts.
@@ -73,6 +74,33 @@ class ChatMessagesService with AuthenticatedService {
     );
     _check(response, 'delete message $messageId');
     return ChatMessage.fromJson(_json(response));
+  }
+
+  /// Adds [ciphertext], a reaction encrypted under [keyVersion], to message
+  /// [messageId] and returns the stored reaction.
+  static Future<ChatReaction> addReaction(
+    int messageId,
+    int keyVersion,
+    Uint8List ciphertext,
+  ) async {
+    final response = await instance.authenticatedPost(
+      apiBaseUri.resolve('/api/v0/chat/messages/$messageId/reactions'),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'keyVersion': keyVersion,
+        'ciphertext': base64Encode(ciphertext),
+      }),
+    );
+    _check(response, 'react to message $messageId');
+    return ChatReaction.fromJson(_json(response));
+  }
+
+  /// Removes reaction [reactionId].
+  static Future<void> deleteReaction(int reactionId) async {
+    final response = await instance.authenticatedDelete(
+      apiBaseUri.resolve('/api/v0/chat/reactions/$reactionId'),
+    );
+    _check(response, 'remove reaction $reactionId');
   }
 
   static Uri _channelUri(int channelId, [Map<String, String>? query]) =>

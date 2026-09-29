@@ -3,7 +3,8 @@
 Covers the chat beta (#2414): opening a channel, sending and receiving
 end-to-end encrypted messages, unlocking chat on web after a reload, waiting
 for a channel key, an admin turning the beta off, and creating, sharing,
-renaming, leaving and deleting channels (#2422).
+renaming, leaving and deleting channels (#2422), and reacting to messages
+(#2426).
 
 ---
 
@@ -307,3 +308,31 @@ renaming, leaving and deleting channels (#2422).
 
 - The header, settings and members show, but no messages: the message pane and the composer read "You are not a member of this conversation".
 - Settings offer **Edit name and topic**, **Members** and **Delete channel**.
+
+---
+
+### JN-CHAT-016: React to a message
+
+**Preconditions:** Two accounts, `bob` and `carol`, are **Member**s of a channel, and `carol` has sent a message.
+Both have the channel open.
+
+**Steps:**
+
+1. As `bob`, tap the add-reaction button on `carol`'s message and pick 👍.
+2. As `carol`, tap the 👍 chip under the message.
+3. As `bob`, tap the 👍 chip again.
+4. As `carol`, delete the message.
+
+**Expected result:**
+
+- After step 1, both see "👍 1" under the message, highlighted for `bob`.
+- After step 2, both see "👍 2", highlighted for each of them.
+- After step 3, both see "👍 1", highlighted only for `carol`.
+- After step 4, the message reads "This message was deleted" with no reactions.
+
+**Notes:**
+
+- The Quark stores each reaction encrypted: it sees who reacted when, not with which emoji
+  ([`docs/chat-security.md`](../chat-security.md)).
+- A **Viewer**, without **Add reactions**, sees the chips but gets no add-reaction button, and tapping a chip does
+  nothing.

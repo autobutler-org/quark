@@ -40,13 +40,24 @@ import 'quark_message_list/chat_system_line.dart';
 /// [ChatPermission.deleteMessages]. It fires [onDelete]; the caller asks for
 /// confirmation if it wants one.
 ///
+/// A text message's reactions show under it as chips, one per emoji with its
+/// count, highlighted where the user reacted. When [onReact] is set and
+/// [permissions] holds [ChatPermission.addReactions] (or is null), each text
+/// message gets an add-reaction button offering a short list of emoji, and
+/// tapping a chip fires [onReact] too; the caller decides from its own state
+/// whether that adds the user's reaction or takes it back. Waiting, deleted
+/// and system lines draw no reactions.
+///
 /// [permissions] without [ChatPermission.readMessages] is someone who manages
 /// the channel without being in the conversation. They get [notMemberText]
 /// in place of the list: no messages, no spinner and no waiting for a key,
 /// because no key is coming.
 ///
 /// Key prefixes: `message_<id>` on each message, `message_delete_<id>` on its
-/// delete button, `message_list_load_older` on the load button,
+/// delete button, `message_react_<id>` on its add-reaction button,
+/// `message_react_<id>_<emoji>` on each emoji that button offers,
+/// `message_reaction_<id>_<emoji>` on each reaction chip,
+/// `message_list_load_older` on the load button,
 /// `message_list_retry` on the retry button, and `message_list_not_member`
 /// on the not-a-member pane.
 ///
@@ -60,6 +71,7 @@ import 'quark_message_list/chat_system_line.dart';
 ///   permissions: controller.selectedPermissions,
 ///   currentUserId: controller.userId,
 ///   onDelete: controller.deleteMessage,
+///   onReact: controller.toggleReaction,
 ///   avatarBuilder: (context, userId) => AppAvatar(userId: userId),
 /// );
 /// ```
@@ -74,6 +86,7 @@ class QuarkMessageList extends StatelessWidget {
     this.permissions,
     this.currentUserId,
     this.onDelete,
+    this.onReact,
     this.avatarBuilder,
     this.controller,
     super.key,
@@ -123,6 +136,11 @@ class QuarkMessageList extends StatelessWidget {
   /// button out.
   final ValueChanged<String>? onDelete;
 
+  /// Called with a message's id and an emoji when the user picks that emoji
+  /// or taps its chip. Null, or [permissions] without
+  /// [ChatPermission.addReactions], only shows reactions.
+  final void Function(String messageId, String emoji)? onReact;
+
   /// Builds the avatar for an author's id, [avatarSize] across. Null draws
   /// a [QuarkAvatar] with the author's initials.
   final Widget Function(BuildContext context, String userId)? avatarBuilder;
@@ -160,6 +178,10 @@ class QuarkMessageList extends StatelessWidget {
     final permissions = this.permissions;
     final deletesAny =
         permissions?.contains(ChatPermission.deleteMessages) ?? false;
+    final onReact =
+        permissions == null || permissions.contains(ChatPermission.addReactions)
+        ? this.onReact
+        : null;
 
     if (permissions != null &&
         !permissions.contains(ChatPermission.readMessages)) {
@@ -240,6 +262,9 @@ class QuarkMessageList extends StatelessWidget {
                           !(deletesAny || message.authorId == currentUserId)
                       ? null
                       : () => onDelete(message.id),
+                  onReact: onReact == null
+                      ? null
+                      : (emoji) => onReact(message.id, emoji),
                   avatar: !startsGroup(message, older)
                       ? null
                       : avatarBuilder != null

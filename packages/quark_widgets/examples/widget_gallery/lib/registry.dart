@@ -1169,6 +1169,8 @@ final List<GalleryEntry> registry = [
             permissions: ChatPermissionPreset.moderator.permissions,
             currentUserId: galleryChatUserId,
             onDelete: (id) => log('QuarkMessageList.onDelete($id)'),
+            onReact: (id, emoji) =>
+                log('QuarkMessageList.onReact($id, $emoji)'),
           ),
         ),
         SizedBox(

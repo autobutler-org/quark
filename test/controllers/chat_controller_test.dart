@@ -329,6 +329,7 @@ void main() {
             'send_messages',
             'add_reactions',
             'delete_messages',
+            'manage_reactions',
             'manage_members',
           ],
         }),

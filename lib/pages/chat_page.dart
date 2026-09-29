@@ -34,7 +34,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// the member list. Any member with a row of their own may leave, except in
 /// `general`. An admin's channels they are not in are listed apart and open
 /// without their messages. The author of a message, or a holder of
-/// `delete_messages`, deletes it after confirming.
+/// `delete_messages`, deletes it after confirming. A holder of `add_reactions`
+/// reacts to a message, and taps a reaction of their own to take it back.
 class ChatPage extends StatefulWidget {
   /// Creates the page on channel [channelId].
   const ChatPage({required this.channelId, this.controller, super.key});
@@ -115,6 +116,14 @@ class _ChatPageState extends State<ChatPage>
     if (error == null || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(Errors.message(error, 'delete the message'))),
+    );
+  }
+
+  Future<void> _react(String id, String emoji) async {
+    final error = await _controller.toggleReaction(id, emoji);
+    if (error == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(Errors.message(error, 'react to the message'))),
     );
   }
 
@@ -359,6 +368,7 @@ class _ChatPageState extends State<ChatPage>
                               : c.selectedPermissions,
                           currentUserId: c.currentUserKey,
                           onDelete: _deleteMessage,
+                          onReact: _react,
                           avatarBuilder: (context, userId) {
                             final id = int.tryParse(userId) ?? 0;
                             return UserAvatar(

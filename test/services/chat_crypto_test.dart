@@ -207,4 +207,41 @@ void main() {
       );
     }
   });
+
+  test('a reaction is padded to one length and opens only where it was '
+      'made', () {
+    for (final emoji in ['👍', '❤️', '👩‍👩‍👧‍👦']) {
+      final padded = ChatCrypto.padReaction(emoji);
+      expect(padded.length, ChatCrypto.reactionPlaintextBytes);
+      expect(ChatCrypto.stripReaction(padded), emoji);
+    }
+    expect(() => ChatCrypto.padReaction(''), throwsFormatException);
+    expect(() => ChatCrypto.padReaction('👍' * 17), throwsFormatException);
+
+    final key = crypto.newChannelKey();
+    Uint8List aad(int messageId, int userId) => crypto.reactionAad(
+      channelId: 7,
+      keyVersion: 1,
+      messageId: messageId,
+      userId: userId,
+    );
+    final sealed = crypto.encrypt(
+      ChatCrypto.padReaction('🎉'),
+      key,
+      additionalData: aad(3, 2),
+    );
+    expect(
+      ChatCrypto.stripReaction(
+        crypto.decrypt(sealed, key, additionalData: aad(3, 2)),
+      ),
+      '🎉',
+    );
+    for (final (messageId, userId) in [(4, 2), (3, 5)]) {
+      expect(
+        () =>
+            crypto.decrypt(sealed, key, additionalData: aad(messageId, userId)),
+        throwsA(anything),
+      );
+    }
+  });
 }

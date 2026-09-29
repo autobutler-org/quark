@@ -362,7 +362,8 @@ class ChatController extends ChangeNotifier {
             sentAt: p.sentAt,
             body: p.text,
           ),
-      for (final entry in messages.entries.reversed) itemFor(entry, nameOf),
+      for (final entry in messages.entries.reversed)
+        itemFor(entry, nameOf, me: me),
     ];
   }
 
@@ -538,6 +539,21 @@ class ChatController extends ChangeNotifier {
     }
   }
 
+  /// Adds or takes back this account's [emoji] reaction on message
+  /// [messageId], an id from [messageItems], in the open channel. Null on
+  /// success, otherwise the failure, for `Errors.message`.
+  Future<Object?> toggleReaction(String messageId, String emoji) async {
+    final messages = _messages;
+    final id = int.tryParse(messageId);
+    if (messages == null || id == null) return null;
+    try {
+      await messages.toggleReaction(id, emoji);
+      return null;
+    } catch (e) {
+      return e;
+    }
+  }
+
   /// Creates channel [name] with [topic], owned by this account, sets up its
   /// first key, and lists it. The new channel, or null with [saveError] set.
   /// The page then goes to it.
@@ -665,12 +681,19 @@ class ChatController extends ChangeNotifier {
     _notify();
   }
 
-  /// [entry] as `QuarkMessageList` draws it, with authors named by [nameOf].
+  /// [entry] as `QuarkMessageList` draws it, with authors named by [nameOf]
+  /// and reactions grouped by emoji, marked where account [me] reacted.
   static ChatMessageItem itemFor(
     ChatTimelineEntry entry,
-    String Function(int userId) nameOf,
-  ) => switch (entry) {
-    ChatTimelineMessage(:final message, :final state, :final text) =>
+    String Function(int userId) nameOf, {
+    int? me,
+  }) => switch (entry) {
+    ChatTimelineMessage(
+      :final message,
+      :final state,
+      :final text,
+      :final reactions,
+    ) =>
       ChatMessageItem(
         id: '${message.id}',
         authorId: '${message.authorId}',
@@ -688,6 +711,7 @@ class ChatController extends ChangeNotifier {
           ChatMessageState.deleted => ChatMessageKind.deleted,
         },
         isUnverified: state == ChatMessageState.unreadable,
+        reactions: reactionItems(reactions, me),
       ),
     ChatTimelineSystem(:final event, :final isUnverified) => ChatMessageItem(
       id: 'event_${event.id}',
@@ -699,6 +723,31 @@ class ChatController extends ChangeNotifier {
       isUnverified: isUnverified,
     ),
   };
+
+  /// [reactions] grouped by emoji in the order each emoji first appeared,
+  /// with how many carry it and whether account [me] is among them. One
+  /// that didn't open is left out.
+  static List<ChatReactionItem> reactionItems(
+    List<ChatOpenReaction> reactions,
+    int? me,
+  ) {
+    final counts = <String, int>{};
+    final mine = <String>{};
+    for (final r in reactions) {
+      final emoji = r.emoji;
+      if (emoji == null) continue;
+      counts[emoji] = (counts[emoji] ?? 0) + 1;
+      if (r.reaction.userId == me) mine.add(emoji);
+    }
+    return [
+      for (final MapEntry(key: emoji, value: count) in counts.entries)
+        ChatReactionItem(
+          emoji: emoji,
+          count: count,
+          reactedByMe: mine.contains(emoji),
+        ),
+    ];
+  }
 
   /// The sentence a system line reads for [event]: who was given what, who
   /// left or was removed, or who made a new channel key. A set of permissions

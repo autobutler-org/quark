@@ -64,6 +64,7 @@ export 'src/models/chat_member_item.dart';
 export 'src/models/chat_message_item.dart';
 export 'src/models/chat_permission.dart';
 export 'src/models/chat_permission_preset.dart';
+export 'src/models/chat_reaction_item.dart';
 export 'src/models/create_user_input.dart';
 export 'src/models/file_shortcut.dart';
 export 'src/models/grant_item.dart';

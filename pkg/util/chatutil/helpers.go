@@ -1,10 +1,12 @@
 package chatutil
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -579,21 +581,98 @@ func publishMessage(ctx context.Context, queries *db.Queries, bus *eventbus.Bus,
 	if bus == nil {
 		return nil
 	}
-	users, err := memberUsers(ctx, queries, message.ChannelID)
+	audience, err := readers(ctx, queries, message.ChannelID)
 	if err != nil {
 		return err
-	}
-	// Ciphertext is for readers only, never a delegated manager (#2418).
-	audience := []int64{}
-	for _, user := range users {
-		if user.Perms.Has(PermReadMessages) {
-			audience = append(audience, user.UserID)
-		}
 	}
 	data := eventbus.ChatMessageChanged{ChannelID: message.ChannelID, MessageID: message.ID, Audience: audience}
 	if kind == eventbus.EventChatMessageCreated {
 		data.Message = message
 	}
 	bus.Publish(eventbus.Event{Kind: kind, Data: data})
+	return nil
+}
+
+// readers is the accounts holding read_messages on a channel, the audience of
+// anything carrying ciphertext: never a delegated manager (#2418).
+func readers(ctx context.Context, queries *db.Queries, channelID int64) ([]int64, error) {
+	users, err := memberUsers(ctx, queries, channelID)
+	if err != nil {
+		return nil, err
+	}
+	audience := []int64{}
+	for _, user := range users {
+		if user.Perms.Has(PermReadMessages) {
+			audience = append(audience, user.UserID)
+		}
+	}
+	return audience, nil
+}
+
+// readableMessage is a message and the caller's set on its channel, or
+// ErrMessageNotFound when either the message doesn't exist or the caller
+// doesn't hold read_messages there.
+func readableMessage(ctx context.Context, queries *db.Queries, principal accessutil.Principal, messageID int64) (db.ChatMessage, Perms, error) {
+	message, err := queries.GetChatMessage(ctx, messageID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return db.ChatMessage{}, 0, ErrMessageNotFound
+	}
+	if err != nil {
+		return db.ChatMessage{}, 0, err
+	}
+	perms, err := memberPerms(ctx, queries, principal, message.ChannelID)
+	if errors.Is(err, ErrChannelNotFound) {
+		return db.ChatMessage{}, 0, ErrMessageNotFound
+	}
+	return message, perms, err
+}
+
+func reactionFromRow(row db.ChatReaction) Reaction {
+	return Reaction{
+		ID:         row.ID,
+		MessageID:  row.MessageID,
+		UserID:     row.UserID,
+		KeyVersion: row.KeyVersion,
+		Ciphertext: row.Ciphertext,
+		CreatedAt:  row.CreatedAt,
+	}
+}
+
+// attachReactions fills in the reactions of messages, one page of a
+// channel's messages sorted by id.
+func attachReactions(ctx context.Context, queries *db.Queries, channelID int64, messages []Message) error {
+	if len(messages) == 0 {
+		return nil
+	}
+	rows, err := queries.ListChatReactionsBetween(ctx, db.ListChatReactionsBetweenParams{
+		ChannelID: channelID, FirstID: messages[0].ID, LastID: messages[len(messages)-1].ID,
+	})
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		i, found := slices.BinarySearchFunc(messages, row.MessageID, func(m Message, id int64) int { return cmp.Compare(m.ID, id) })
+		if found {
+			messages[i].Reactions = append(messages[i].Reactions, reactionFromRow(row))
+		}
+	}
+	return nil
+}
+
+// publishReaction tells a channel's readers a reaction on messageID was added,
+// with the stored row, or removed, with reaction nil.
+func publishReaction(ctx context.Context, queries *db.Queries, bus *eventbus.Bus, channelID, messageID, reactionID int64, reaction *Reaction) error {
+	if bus == nil {
+		return nil
+	}
+	audience, err := readers(ctx, queries, channelID)
+	if err != nil {
+		return err
+	}
+	data := eventbus.ChatReactionChanged{ChannelID: channelID, MessageID: messageID, ReactionID: reactionID, Audience: audience}
+	if reaction != nil {
+		data.Reaction = *reaction
+	}
+	bus.Publish(eventbus.Event{Kind: eventbus.EventChatReactionChanged, Data: data})
 	return nil
 }

@@ -44,6 +44,12 @@
 // readers, the holders of read_messages, alone: delegated managers and admins
 // who aren't readers hear neither, and like everyone else get
 // ErrChannelNotFound for its messages.
+//
+// Reactions (#2426) are ciphertext too, one row per account, message and
+// emoji; the Quark sees who reacted to what and when, not with what. Adding
+// one needs add_reactions, removing your own the same, and removing someone
+// else's manage_reactions. Both publish chat_reaction_changed to the readers
+// alone, and a deleted message's reactions go with its tombstone.
 package chatutil
 
 import (
@@ -129,11 +135,11 @@ var (
 // manage-only set is a delegated manager, who runs a channel without being in
 // the conversation or holding its key.
 //
-// Reserved for later phases, with no bit yet: attach_files, mention_everyone,
-// manage_reactions and pin_messages.
+// Reserved for later phases, with no bit yet: attach_files, mention_everyone
+// and pin_messages.
 type Perms uint64
 
-// The phase 1 permissions, in bit order.
+// The permissions, in bit order.
 const (
 	// PermReadMessages sees the channel and reads it: its name, topic,
 	// members, history and live messages. The one permission that entitles a
@@ -150,6 +156,9 @@ const (
 	PermManageChannel
 	// PermManageMembers adds and removes members and edits their sets.
 	PermManageMembers
+	// PermManageReactions removes other people's reactions (#2426). Anyone
+	// with PermAddReactions may remove their own.
+	PermManageReactions
 )
 
 // The presets the app offers (#2415). The Quark stores and serves only
@@ -158,9 +167,9 @@ const (
 const (
 	PresetViewer    = PermReadMessages
 	PresetMember    = PresetViewer | PermSendMessages | PermAddReactions
-	PresetModerator = PresetMember | PermDeleteMessages | PermManageMembers
+	PresetModerator = PresetMember | PermDeleteMessages | PermManageReactions | PermManageMembers
 	PresetOwner     = PresetModerator | PermManageChannel
-	// PermsAll is every phase 1 permission.
+	// PermsAll is every permission.
 	PermsAll = PresetOwner
 )
 
@@ -173,6 +182,7 @@ var permNames = []string{
 	"delete_messages",
 	"manage_channel",
 	"manage_members",
+	"manage_reactions",
 }
 
 // ParsePerms reads a list of permission names. An unknown name is
@@ -219,7 +229,7 @@ func (p Perms) Validate() error {
 	if p.Has(PermReadMessages) {
 		return nil
 	}
-	for _, needsRead := range []Perms{PermSendMessages, PermAddReactions, PermDeleteMessages} {
+	for _, needsRead := range []Perms{PermSendMessages, PermAddReactions, PermDeleteMessages, PermManageReactions} {
 		if p.Has(needsRead) {
 			return fmt.Errorf("%w: %s needs read_messages", ErrInvalidPerms, needsRead)
 		}
@@ -258,7 +268,7 @@ type Channel struct {
 	IsPrivate bool `json:"isPrivate"`
 	// Permissions is the caller's effective set: the union of every row that
 	// reaches them. Empty for an admin managing a channel they are not in.
-	Permissions Perms `json:"permissions" swaggertype:"array,string" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members"`
+	Permissions Perms `json:"permissions" swaggertype:"array,string" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions"`
 	// CreatedBy is the account that created the channel; absent for general
 	// and for a channel whose creator was deleted.
 	CreatedBy int64     `json:"createdBy,omitempty"`
@@ -276,7 +286,7 @@ type Member struct {
 	// Builtin marks the everyone group.
 	Builtin bool `json:"builtin"`
 	// Permissions is this row's set, not anyone's effective one.
-	Permissions Perms `json:"permissions" swaggertype:"array,string" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members"`
+	Permissions Perms `json:"permissions" swaggertype:"array,string" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions"`
 	// AvatarUpdatedAt is an account's profile picture version in Unix
 	// milliseconds, absent when it has none.
 	AvatarUpdatedAt int64 `json:"avatarUpdatedAt,omitempty"`
@@ -1549,6 +1559,10 @@ type Message struct {
 	CreatedAt  time.Time  `json:"createdAt"`
 	EditedAt   *time.Time `json:"editedAt,omitempty"`
 	DeletedAt  *time.Time `json:"deletedAt,omitempty"`
+	// Reactions are the message's reactions, oldest first, in a
+	// ListMessages page. A deleted message has none: they go with its
+	// ciphertext.
+	Reactions []Reaction `json:"reactions,omitempty"`
 }
 
 // PostMessageParams posts ciphertext to a channel.
@@ -1629,7 +1643,7 @@ type ListMessagesParams struct {
 }
 
 // ListMessagesResult is a page of messages, oldest first, tombstones
-// included.
+// included, each with its reactions.
 type ListMessagesResult struct {
 	Messages []Message `json:"messages"`
 }
@@ -1671,6 +1685,9 @@ func ListMessages(params ListMessagesParams) (ListMessagesResult, error) {
 	messages := make([]Message, 0, len(rows))
 	for _, row := range rows {
 		messages = append(messages, messageFromRow(row))
+	}
+	if err := attachReactions(params.Ctx, queries, params.ChannelID, messages); err != nil {
+		return ListMessagesResult{}, err
 	}
 	return ListMessagesResult{Messages: messages}, nil
 }
@@ -1726,4 +1743,183 @@ func DeleteMessage(params DeleteMessageParams) (DeleteMessageResult, error) {
 		log.Printf("chat: message %d deleted but not announced: %v", row.ID, err)
 	}
 	return DeleteMessageResult{Message: message}, nil
+}
+
+// Reaction limits (#2426). A reaction's ciphertext is a padded emoji under
+// the channel key, so it is small; MaxReactionsPerUser bounds how many rows
+// one account can pile onto a message, since the Quark can't tell two of
+// them apart.
+const (
+	MaxReactionCiphertextBytes = 256
+	// MaxReactionRequestBytes caps an add's body: the ciphertext in base64
+	// plus room for the JSON around it.
+	MaxReactionRequestBytes = 1 << 10
+	MaxReactionsPerUser     = 20
+)
+
+var (
+	// ErrInvalidReaction reports ciphertext too short or too long to be a
+	// reaction, or a key version the channel doesn't have.
+	ErrInvalidReaction = errors.New("a reaction needs ciphertext under one of the channel's key versions")
+	// ErrNoReactions reports a reader without add_reactions reacting, or
+	// removing a reaction of their own.
+	ErrNoReactions = errors.New("you can read this channel but not react in it")
+	// ErrTooManyReactions reports an account at MaxReactionsPerUser on one
+	// message.
+	ErrTooManyReactions = errors.New("you have reacted to this message as many times as you can")
+	// ErrMessageDeleted reports reacting to a deleted message.
+	ErrMessageDeleted = errors.New("that message was deleted")
+	// ErrReactionNotFound reports a reaction that doesn't exist or is in a
+	// channel the caller doesn't read.
+	ErrReactionNotFound = errors.New("no reaction has that id")
+	// ErrNotReactionAuthor reports removing someone else's reaction without
+	// manage_reactions.
+	ErrNotReactionAuthor = errors.New("only its author or a member with manage_reactions can remove a reaction")
+)
+
+// Reaction is one stored reaction. The Quark sees who reacted to which
+// message and when, never with what. Byte fields travel as base64.
+type Reaction struct {
+	ID        int64 `json:"id"`
+	MessageID int64 `json:"messageId"`
+	UserID    int64 `json:"userId"`
+	// KeyVersion is the channel key the reaction was encrypted under, which
+	// needn't be its message's.
+	KeyVersion int64 `json:"keyVersion"`
+	// Ciphertext is nonce || XChaCha20-Poly1305 output under the channel key
+	// of KeyVersion, with the channel, key version, message and reacting
+	// account as additional data (docs/chat-security.md).
+	Ciphertext []byte    `json:"ciphertext"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+// AddReactionParams reacts to a message with ciphertext.
+type AddReactionParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_reaction_changed. Nil skips it.
+	EventBus   *eventbus.Bus
+	Principal  accessutil.Principal
+	MessageID  int64
+	KeyVersion int64
+	Ciphertext []byte
+}
+
+// AddReactionResult is the reaction as stored.
+type AddReactionResult struct {
+	Reaction Reaction
+}
+
+// AddReaction stores a reaction from a reader holding add_reactions and sends
+// it to the channel's readers as chat_reaction_changed. Anyone without
+// read_messages, delegated managers and admins included, gets
+// ErrMessageNotFound; a reader without add_reactions ErrNoReactions; a
+// deleted message ErrMessageDeleted; and an account already at
+// MaxReactionsPerUser on the message ErrTooManyReactions.
+func AddReaction(params AddReactionParams) (AddReactionResult, error) {
+	if len(params.Ciphertext) < MinCiphertextBytes || len(params.Ciphertext) > MaxReactionCiphertextBytes {
+		return AddReactionResult{}, ErrInvalidReaction
+	}
+	if params.Database == nil {
+		return AddReactionResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	message, perms, err := readableMessage(params.Ctx, queries, params.Principal, params.MessageID)
+	if err != nil {
+		return AddReactionResult{}, err
+	}
+	if !perms.Has(PermAddReactions) {
+		return AddReactionResult{}, ErrNoReactions
+	}
+	if message.DeletedAt.Valid {
+		return AddReactionResult{}, ErrMessageDeleted
+	}
+	versions, err := queries.ListChatChannelKeys(params.Ctx, message.ChannelID)
+	if err != nil {
+		return AddReactionResult{}, err
+	}
+	if !slices.ContainsFunc(versions, func(k db.ChatChannelKey) bool { return k.Version == params.KeyVersion }) {
+		return AddReactionResult{}, ErrInvalidReaction
+	}
+	held, err := queries.CountUserChatReactions(params.Ctx, db.CountUserChatReactionsParams{
+		MessageID: params.MessageID, UserID: params.Principal.UserID,
+	})
+	if err != nil {
+		return AddReactionResult{}, err
+	}
+	if held >= MaxReactionsPerUser {
+		return AddReactionResult{}, ErrTooManyReactions
+	}
+	row, err := queries.CreateChatReaction(params.Ctx, db.CreateChatReactionParams{
+		MessageID:  params.MessageID,
+		UserID:     params.Principal.UserID,
+		KeyVersion: params.KeyVersion,
+		Ciphertext: params.Ciphertext,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		// Deleted between the read above and the insert.
+		return AddReactionResult{}, ErrMessageDeleted
+	}
+	if err != nil {
+		return AddReactionResult{}, err
+	}
+	reaction := reactionFromRow(row)
+	if err := publishReaction(params.Ctx, queries, params.EventBus, message.ChannelID, reaction.MessageID, reaction.ID, &reaction); err != nil {
+		log.Printf("chat: reaction %d stored but not announced: %v", row.ID, err)
+	}
+	return AddReactionResult{Reaction: reaction}, nil
+}
+
+// RemoveReactionParams removes one reaction.
+type RemoveReactionParams struct {
+	Ctx      context.Context
+	Database *db.DatabaseSqlc
+	// EventBus hears chat_reaction_changed. Nil skips it.
+	EventBus   *eventbus.Bus
+	Principal  accessutil.Principal
+	ReactionID int64
+}
+
+// RemoveReactionResult is the reaction that was removed.
+type RemoveReactionResult struct {
+	Reaction Reaction
+}
+
+// RemoveReaction deletes a reaction and tells the channel's readers with a
+// chat_reaction_changed that carries no reaction. Removing your own needs
+// add_reactions (ErrNoReactions) and someone else's manage_reactions
+// (ErrNotReactionAuthor); either way the caller must hold read_messages now,
+// or gets ErrReactionNotFound, delegated managers and admins included.
+func RemoveReaction(params RemoveReactionParams) (RemoveReactionResult, error) {
+	if params.Database == nil {
+		return RemoveReactionResult{}, accessutil.ErrNoDatabase
+	}
+	queries := params.Database.Queries
+	row, err := queries.GetChatReaction(params.Ctx, params.ReactionID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RemoveReactionResult{}, ErrReactionNotFound
+	}
+	if err != nil {
+		return RemoveReactionResult{}, err
+	}
+	message, perms, err := readableMessage(params.Ctx, queries, params.Principal, row.MessageID)
+	if errors.Is(err, ErrMessageNotFound) {
+		return RemoveReactionResult{}, ErrReactionNotFound
+	}
+	if err != nil {
+		return RemoveReactionResult{}, err
+	}
+	switch {
+	case row.UserID == params.Principal.UserID && !perms.Has(PermAddReactions):
+		return RemoveReactionResult{}, ErrNoReactions
+	case row.UserID != params.Principal.UserID && !perms.Has(PermManageReactions):
+		return RemoveReactionResult{}, ErrNotReactionAuthor
+	}
+	if err := queries.DeleteChatReaction(params.Ctx, row.ID); err != nil {
+		return RemoveReactionResult{}, err
+	}
+	if err := publishReaction(params.Ctx, queries, params.EventBus, message.ChannelID, row.MessageID, row.ID, nil); err != nil {
+		log.Printf("chat: reaction %d removed but not announced: %v", row.ID, err)
+	}
+	return RemoveReactionResult{Reaction: reactionFromRow(row)}, nil
 }

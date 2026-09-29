@@ -28,6 +28,8 @@ func (r *router) Routes() []*serverutil.Route {
 		postMessageRoute,
 		listMessagesRoute,
 		deleteMessageRoute,
+		addReactionRoute,
+		deleteReactionRoute,
 	}
 }
 
@@ -50,7 +52,7 @@ type setMemberBody struct {
 	UserID  int64 `json:"userId,omitempty"`
 	GroupID int64 `json:"groupId,omitempty"`
 	// Permissions is the whole set the row carries, by name.
-	Permissions []string `json:"permissions" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members"`
+	Permissions []string `json:"permissions" enums:"read_messages,send_messages,add_reactions,delete_messages,manage_channel,manage_members,manage_reactions"`
 }
 
 // removeMemberBody removes one account's or group's row from a channel.
@@ -81,6 +83,13 @@ type signEventBody struct {
 // postMessageBody is a message the caller's client encrypted. Ciphertext is
 // base64 nonce || XChaCha20-Poly1305 output.
 type postMessageBody struct {
+	Ciphertext []byte `json:"ciphertext"`
+	KeyVersion int64  `json:"keyVersion"`
+}
+
+// reactionBody is a reaction the caller's client encrypted. Ciphertext is
+// base64 nonce || XChaCha20-Poly1305 output.
+type reactionBody struct {
 	Ciphertext []byte `json:"ciphertext"`
 	KeyVersion int64  `json:"keyVersion"`
 }

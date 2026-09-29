@@ -425,7 +425,7 @@ void main() {
       expect(events, [
         'add group_2 read_messages,send_messages,add_reactions',
         'add group_2 read_messages,send_messages,add_reactions,'
-            'delete_messages,manage_members',
+            'delete_messages,manage_reactions,manage_members',
       ]);
     });
 

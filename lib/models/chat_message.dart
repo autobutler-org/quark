@@ -8,7 +8,8 @@ import 'package:quark/models/chat_channel_keys.dart';
 ///
 /// [ciphertext] is `nonce || XChaCha20-Poly1305 output`, with the channel id
 /// and key version bound as additional data (`ChatCrypto.messageAad`). A
-/// deleted message is a tombstone: [deletedAt] set and no ciphertext.
+/// deleted message is a tombstone: [deletedAt] set, no ciphertext and no
+/// [reactions].
 class ChatMessage {
   /// Builds a message explicitly; tests use it.
   const ChatMessage({
@@ -20,6 +21,7 @@ class ChatMessage {
     required this.createdAt,
     this.editedAt,
     this.deletedAt,
+    this.reactions = const [],
   });
 
   /// Increasing within the Quark, across every channel.
@@ -46,6 +48,9 @@ class ChatMessage {
   /// When it was deleted, if it was.
   final DateTime? deletedAt;
 
+  /// Its reactions, oldest first (#2426), still encrypted.
+  final List<ChatReaction> reactions;
+
   /// Whether this is a tombstone.
   bool get isDeleted => deletedAt != null;
 
@@ -60,6 +65,19 @@ class ChatMessage {
     createdAt: createdAt,
     editedAt: editedAt,
     deletedAt: deletedAt ?? at,
+  );
+
+  /// This message with [reactions] in place of its own.
+  ChatMessage withReactions(List<ChatReaction> reactions) => ChatMessage(
+    id: id,
+    channelId: channelId,
+    authorId: authorId,
+    keyVersion: keyVersion,
+    ciphertext: ciphertext,
+    createdAt: createdAt,
+    editedAt: editedAt,
+    deletedAt: deletedAt,
+    reactions: List.unmodifiable(reactions),
   );
 
   /// Reads one message as the API or a `chat_message_created` event sends it.
@@ -79,8 +97,71 @@ class ChatMessage {
       createdAt: DateTime.parse(json['createdAt'] as String),
       editedAt: time('editedAt'),
       deletedAt: time('deletedAt'),
+      reactions: List.unmodifiable([
+        for (final r in json['reactions'] as List? ?? const [])
+          ChatReaction.fromJson(r as Map<String, dynamic>),
+      ]),
     );
   }
+}
+
+/// One reaction as the Quark stores it (#2426): who reacted to which message
+/// and when, and the emoji as ciphertext the Quark can't open.
+///
+/// [ciphertext] is `nonce || XChaCha20-Poly1305 output` of the padded emoji
+/// (`ChatCrypto.padReaction`), bound to the channel, key version, message and
+/// reacting account (`ChatCrypto.reactionAad`).
+class ChatReaction {
+  /// Builds a reaction explicitly; tests use it.
+  const ChatReaction({
+    required this.id,
+    required this.messageId,
+    required this.userId,
+    required this.keyVersion,
+    required this.ciphertext,
+    required this.createdAt,
+  });
+
+  /// Increasing within the Quark.
+  final int id;
+
+  /// The message reacted to.
+  final int messageId;
+
+  /// Who reacted.
+  final int userId;
+
+  /// The channel key version it was encrypted under.
+  final int keyVersion;
+
+  /// The encrypted, padded emoji.
+  final Uint8List ciphertext;
+
+  /// When the Quark stored it.
+  final DateTime createdAt;
+
+  /// Reads one reaction as the API or a `chat_reaction_changed` event sends
+  /// it.
+  factory ChatReaction.fromJson(Map<String, dynamic> json) => ChatReaction(
+    id: (json['id'] as num).toInt(),
+    messageId: (json['messageId'] as num).toInt(),
+    userId: (json['userId'] as num).toInt(),
+    keyVersion: (json['keyVersion'] as num).toInt(),
+    ciphertext: base64Decode(json['ciphertext'] as String),
+    createdAt: DateTime.parse(json['createdAt'] as String),
+  );
+}
+
+/// A [ChatReaction] with its emoji, when the client could open it.
+final class ChatOpenReaction {
+  /// Wraps [reaction] with what it decrypted to.
+  const ChatOpenReaction({required this.reaction, this.emoji});
+
+  /// The stored reaction.
+  final ChatReaction reaction;
+
+  /// The emoji, or null while its key hasn't arrived or when it won't open.
+  final String? emoji;
 }
 
 /// What the client could make of a [ChatMessage].
@@ -119,6 +200,7 @@ final class ChatTimelineMessage extends ChatTimelineEntry {
     required this.message,
     required this.state,
     this.text,
+    this.reactions = const [],
   });
 
   /// The stored message.
@@ -129,6 +211,9 @@ final class ChatTimelineMessage extends ChatTimelineEntry {
 
   /// The decrypted body, only when [state] is [ChatMessageState.ready].
   final String? text;
+
+  /// The message's reactions, each with its emoji when it opened.
+  final List<ChatOpenReaction> reactions;
 
   @override
   DateTime get createdAt => message.createdAt;
