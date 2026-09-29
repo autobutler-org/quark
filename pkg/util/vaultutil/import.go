@@ -16,10 +16,12 @@ import (
 // Import formats the parser understands. FormatAuto asks [DetectFormat] to
 // pick one from the bytes.
 const (
-	FormatAuto      = "auto"
-	FormatJSON      = "json"
-	FormatBitwarden = "bitwarden"
-	FormatCSV       = "csv"
+	FormatAuto       = "auto"
+	FormatJSON       = "json"
+	FormatBitwarden  = "bitwarden"
+	FormatProtonPass = "proton"
+	FormatGoogle     = "google"
+	FormatCSV        = "csv"
 )
 
 // ImportEntry is one login recovered from an export file, before it is
@@ -47,11 +49,14 @@ type ImportParams struct {
 	Format string
 }
 
-// ImportResult counts what the import did. Errors holds one line per row the
-// import could not take, so a mostly-good file still lands its good rows.
+// ImportResult counts what the import did. Skipped counts entries already in
+// the vault. Ignored counts items the vault has no place for, such as Proton
+// Pass notes, aliases and cards. Errors holds one line per row the import
+// could not take, so a mostly-good file still lands its good rows.
 type ImportResult struct {
 	Imported int      `json:"imported"`
 	Skipped  int      `json:"skipped"`
+	Ignored  int      `json:"ignored,omitempty"`
 	Errors   []string `json:"errors,omitempty"`
 }
 
@@ -94,13 +99,16 @@ func Import(ctx context.Context, params ImportParams) (ImportResult, error) {
 
 	var entries []ImportEntry
 	var parseErrors []string
+	ignored := 0
 
 	switch format {
 	case FormatJSON:
 		entries, parseErrors = ParseQuarkJSON(params.Data)
 	case FormatBitwarden:
 		entries, parseErrors = ParseBitwardenCSV(params.Data)
-	case FormatCSV:
+	case FormatProtonPass:
+		entries, parseErrors, ignored = ParseProtonPassCSV(params.Data)
+	case FormatGoogle, FormatCSV:
 		entries, parseErrors = ParseGenericCSV(params.Data)
 	default:
 		return ImportResult{}, ErrUnsupportedImportFormat
@@ -132,7 +140,7 @@ func Import(ctx context.Context, params ImportParams) (ImportResult, error) {
 		folderMap[f.Name] = f.ID
 	}
 
-	result := ImportResult{Errors: parseErrors}
+	result := ImportResult{Ignored: ignored, Errors: parseErrors}
 
 	for _, entry := range entries {
 		host := HostFromURL(entry.URL)
@@ -202,8 +210,8 @@ func dedupKey(name, urlHost string) string {
 }
 
 // DetectFormat guesses an export file's format from its first bytes: JSON by
-// its opening brace or bracket, Bitwarden by its distinctive CSV header, and
-// generic CSV for everything else.
+// its opening brace or bracket, then Bitwarden, Proton Pass and Google Password
+// Manager by their CSV headers, and generic CSV for everything else.
 func DetectFormat(data []byte) string {
 	trimmed := strings.TrimSpace(string(data))
 	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
@@ -216,6 +224,13 @@ func DetectFormat(data []byte) string {
 	lower := strings.ToLower(firstLine)
 	if strings.Contains(lower, "login_uri") || strings.Contains(lower, "login_username") {
 		return FormatBitwarden
+	}
+	columns := csvHeaderIndex(strings.Split(lower, ","))
+	if hasColumns(columns, "type", "email", "totp", "vault") {
+		return FormatProtonPass
+	}
+	if len(columns) <= 5 && hasColumns(columns, "name", "url", "username", "password") {
+		return FormatGoogle
 	}
 	return FormatCSV
 }
@@ -283,6 +298,52 @@ func ParseBitwardenCSV(data []byte) ([]ImportEntry, []string) {
 		entries = append(entries, e)
 	}
 	return entries, errors
+}
+
+// ParseProtonPassCSV reads a Proton Pass CSV export. Only login items become
+// entries: notes, aliases, cards and identities have nowhere to go in the
+// vault, so they are counted in the third return rather than reported as
+// errors. A login saved with an email but no username keeps the email, the
+// first of several URLs is used, and the Proton vault becomes the folder.
+func ParseProtonPassCSV(data []byte) ([]ImportEntry, []string, int) {
+	records, errs := readCSV(data)
+	if errs != nil {
+		return nil, errs, 0
+	}
+
+	idx := csvHeaderIndex(records[0])
+
+	var entries []ImportEntry
+	var errors []string
+	ignored := 0
+
+	for i, row := range records[1:] {
+		if kind := strings.ToLower(csvCol(row, idx, "type")); kind != "" && kind != "login" {
+			ignored++
+			continue
+		}
+		e := ImportEntry{
+			Name:       csvCol(row, idx, "name"),
+			URL:        firstURL(csvCol(row, idx, "url")),
+			Username:   csvColAny(row, idx, "username", "email"),
+			Password:   csvCol(row, idx, "password"),
+			Notes:      csvCol(row, idx, "note"),
+			TOTPSecret: csvCol(row, idx, "totp"),
+			Folder:     csvCol(row, idx, "vault"),
+		}
+		if e.Username == "" && e.Password == "" {
+			errors = append(errors, fmt.Sprintf("Row %d: login has no username or password", i+2))
+			continue
+		}
+		if e.Name == "" {
+			e.Name = HostFromURL(e.URL)
+			if e.Name == "" {
+				e.Name = fmt.Sprintf("Entry %d", i+2)
+			}
+		}
+		entries = append(entries, e)
+	}
+	return entries, errors, ignored
 }
 
 // ParseGenericCSV reads a CSV from any of the browsers and managers that
@@ -358,4 +419,23 @@ func csvColAny(row []string, idx map[string]int, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func hasColumns(idx map[string]int, keys ...string) bool {
+	for _, k := range keys {
+		if _, ok := idx[k]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// firstURL returns the first URL of a list Proton Pass joins with commas or
+// spaces.
+func firstURL(value string) string {
+	fields := strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == ' ' })
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
 }

@@ -1361,6 +1361,8 @@ definitions:
         items:
           type: string
         type: array
+      ignored:
+        type: integer
       imported:
         type: integer
       skipped:
@@ -5849,7 +5851,8 @@ paths:
         name: file
         required: true
         type: file
-      - description: Source format; sniffed from the bytes when absent
+      - description: 'Source format: auto, json, bitwarden, proton, google or csv;
+          sniffed from the bytes when absent'
         in: formData
         name: format
         type: string

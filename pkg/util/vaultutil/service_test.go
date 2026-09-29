@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -273,4 +274,46 @@ func findEntry(t *testing.T, entries []EntryListItem, name string) EntryListItem
 	}
 	t.Fatalf("no entry named %q in %+v", name, entries)
 	return EntryListItem{}
+}
+
+func TestImport_ProtonPassReportsIgnoredItems(t *testing.T) {
+	ctx := context.Background()
+	vault := openTestVault(t)
+
+	result, err := Import(ctx, ImportParams{VaultDB: vault, Key: testKey, Data: []byte(protonPassExport), Format: FormatAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Imported != 2 || result.Ignored != 3 || len(result.Errors) != 1 {
+		t.Fatalf("result = %+v, want 2 imported, 3 ignored, 1 error", result)
+	}
+
+	list, err := ListEntries(ctx, ListEntriesParams{Queries: vault.Queries})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range list.Entries {
+		if entry.Name != "GitHub" {
+			continue
+		}
+		detail, err := GetEntry(ctx, GetEntryParams{Queries: vault.Queries, Key: testKey, ID: entry.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if detail.Entry.TOTPSecret != "JBSWY3DPEHPK3PXP" || detail.Entry.URLHost != "github.com" {
+			t.Errorf("imported GitHub entry = %+v", detail.Entry)
+		}
+		return
+	}
+	t.Fatal("GitHub entry not imported")
+}
+
+func TestImportResult_OmitsIgnoredWhenZero(t *testing.T) {
+	encoded, err := json.Marshal(ImportResult{Imported: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "ignored") {
+		t.Errorf("result %s carries ignored; existing clients should see no change", encoded)
+	}
 }
