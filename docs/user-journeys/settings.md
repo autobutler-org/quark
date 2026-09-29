@@ -2,8 +2,8 @@
 
 Covers the Settings page (`/settings`) — host management, theme, version updates, remote access, connected devices, and sign out.
 
-Settings is split into five tabs, each with its own URL (#2350). `/settings` redirects to `/settings/general`, and an
-unknown tab lands on General too.
+Settings is split into tabs, each with its own URL (#2350). `/settings` redirects to `/settings/general`, and an
+unknown tab lands on General too. Admins get a sixth tab, Features, while the Quark has a feature in beta (#2542).
 
 | Tab | URL | Holds |
 | --- | --- | --- |
@@ -12,6 +12,7 @@ unknown tab lands on General too.
 | **Network** | `/settings/network` | Remote access, connected devices, SSH access (admins) |
 | **Updates** | `/settings/updates` | The Quark's version, updates and automatic updates (admins), Repair installation (admins) |
 | **About** | `/settings/about` | The app's version, Help & Support, Terms of Service, the software bill of materials |
+| **Features** | `/settings/features` | A switch per beta feature, such as Chat (admins, only while a beta exists) |
 
 ---
 
@@ -469,3 +470,31 @@ The password travels in the request body, never the URL, and attempts share the 
   one box.
 - A wrong password shows "That password isn't right. Nothing was deleted."
 - The right one erases what was chosen and returns the Quark to first-boot setup.
+
+---
+
+### JN-ST-028: Turn a beta feature off
+
+**Preconditions:** Logged in as an admin (JN-AUTH-002). A second, non-admin account is signed in on another device.
+The Quark has at least one feature in beta, such as Chat.
+
+**Steps:**
+
+1. Navigate to `/settings/features`.
+2. Turn off a feature, say **Chat** (marked **Beta**).
+3. On the member's device, open the drawer, then open the feature's page directly (`/chat`).
+
+**Expected result:**
+
+- Each beta shows its name, a **Beta** badge, what turning it off does, and a switch. The switch holds still until the
+  Quark has saved it.
+- The member's drawer loses the feature's row without a reload, and a member already on its page is moved to Files.
+- Opening the page directly goes to Files.
+- Turning it back on brings the row back for everyone. The copy says so plainly: turning a beta off hides it and keeps
+  its stored data.
+
+**Notes:**
+
+- Non-admins get no Features tab, and `/settings/features` sends them to Files. With no feature in beta, admins get no
+  Features tab either.
+- A refused change says so ("Couldn't change the feature…") and leaves the switch where it was.

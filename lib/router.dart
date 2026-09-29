@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/chat_controller.dart';
+import 'package:quark/models/feature_flag.dart';
 import 'package:quark/models/trash_item.dart';
 import 'package:quark/pages/account_and_data_page.dart';
 import 'package:quark/pages/chat_page.dart';
@@ -23,6 +24,7 @@ import 'package:quark/pages/users_page.dart';
 import 'package:quark/pages/vault_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
+import 'package:quark/services/feature_flags_service.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 
 // Route paths — use these constants everywhere instead of string literals.
@@ -294,7 +296,11 @@ enum SettingsTab implements RouteTab {
   account('account'),
   network('network'),
   updates('updates'),
-  about('about');
+  about('about'),
+
+  /// Admin-only, and hidden while the Quark has no betas (#2542). Last, so
+  /// hiding it leaves every other tab's index alone.
+  features('features');
 
   const SettingsTab(this.slug);
 
@@ -355,8 +361,8 @@ final Listenable routerRefreshListenable = Listenable.merge([
   // An admin demoted while on an admin-only page is moved off it: the flag
   // changing re-runs the gate, which asks the Quark again (#1928).
   AppSettings.instance.isAdmin,
-  // The chat beta turned off moves anyone on /chat to Files (#2421).
-  AppSettings.instance.chatEnabled,
+  // A beta turned off moves anyone on its page to Files (#2421, #2542).
+  AppSettings.instance.featureFlags,
 ]);
 
 /// Every route in the app. It opens on the login page, and [authRedirect] sends a visitor who is signed out, or
@@ -606,7 +612,11 @@ Future<AuthStatus> Function() authStatusProbe = AuthService.checkStatus;
 /// Pages only an admin can use, with everything under them, such as a tab's
 /// URL. [authRedirect] sends anyone else to [AppRoutes.files]; the Quark
 /// refuses their requests either way.
-const adminRoutes = {AppRoutes.vault, AppRoutes.users};
+const adminRoutes = {
+  AppRoutes.vault,
+  AppRoutes.users,
+  '${AppRoutes.settings}/features',
+};
 
 /// Whether [location] is one of [routes] or a path under one: `/users/groups`
 /// is under `/users`, `/users-old` is not. An exact match let a page's tab URLs
@@ -614,10 +624,17 @@ const adminRoutes = {AppRoutes.vault, AppRoutes.users};
 bool _isUnderAny(Set<String> routes, String location) =>
     routes.any((route) => location == route || location.startsWith('$route/'));
 
-/// Whether the Quark says the chat beta is on. False when it cannot say.
-Future<bool> _chatIsEnabled() async {
+/// How the gate below asks the Quark for its beta feature flags. A `var` so
+/// tests can answer without a server, like [authStatusProbe].
+Future<List<FeatureFlag>> Function() featureFlagsProbe =
+    FeatureFlagsService.list;
+
+/// Whether the Quark says the flag [key] is on. False when it cannot say.
+Future<bool> _featureIsEnabled(String key) async {
   try {
-    return (await authStatusProbe()).chatEnabled;
+    return (await featureFlagsProbe()).any(
+      (flag) => flag.key == key && flag.enabled,
+    );
   } catch (_) {
     return false;
   }
@@ -699,7 +716,7 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
   // whose every request would 404.
   if (AppSettings.instance.sessionToken != null &&
       _isUnderAny(const {AppRoutes.chat}, location)) {
-    return await _chatIsEnabled() ? null : AppRoutes.files;
+    return await _featureIsEnabled(FeatureFlag.chat) ? null : AppRoutes.files;
   }
 
   // Already authenticated.

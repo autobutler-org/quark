@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark/controllers/feature_flags_controller.dart';
+import 'package:quark/models/feature_flag.dart';
 import 'package:quark/pages/settings_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -37,7 +40,15 @@ void main() {
     }
     await settings.setSessionToken(null);
     settings.isAdmin.value = false;
+    settings.featureFlags.value = const [];
   }
+
+  const chat = FeatureFlag(
+    key: FeatureFlag.chat,
+    label: 'Chat',
+    description: 'Hides chat; stored data is kept.',
+    enabled: true,
+  );
 
   setUp(() async {
     priorOverrides = HttpOverrides.current;
@@ -50,6 +61,7 @@ void main() {
     await settings.setSessionToken('a-session');
     await settings.setUsername('ada');
     settings.isAdmin.value = true;
+    settings.featureFlags.value = const [chat];
   });
 
   tearDown(() async {
@@ -62,8 +74,9 @@ void main() {
   Future<List<SettingsTab>> pumpAt(
     WidgetTester tester,
     SettingsTab tab,
-    Size size,
-  ) async {
+    Size size, {
+    FeatureFlagsController? featureFlags,
+  }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -71,7 +84,11 @@ void main() {
     final selected = <SettingsTab>[];
     await tester.pumpWidget(
       MaterialApp(
-        home: SettingsPage(tab: tab, onTabSelected: selected.add),
+        home: SettingsPage(
+          tab: tab,
+          onTabSelected: selected.add,
+          featureFlags: featureFlags,
+        ),
       ),
     );
     for (var i = 0; i < 5; i++) {
@@ -93,6 +110,7 @@ void main() {
     SettingsTab.network: 'Remote access',
     SettingsTab.updates: 'Quark version (installed)',
     SettingsTab.about: 'Software Bill of Materials',
+    SettingsTab.features: 'Hides chat; stored data is kept.',
   };
 
   const viewports = {'narrow': Size(360, 640), 'wide': Size(1280, 800)};
@@ -128,25 +146,76 @@ void main() {
     expect(find.byKey(const ValueKey('settings_reset_quark')), findsNothing);
   });
 
-  testWidgets('offers admins the chat beta switch, and no one else', (
+  /// The Features tab's label in the tab bar.
+  Finder featuresTab() => find.text('Features');
+
+  testWidgets('shows admins the Features tab (#2542)', (tester) async {
+    await pumpAt(tester, SettingsTab.general, const Size(1280, 800));
+
+    expect(featuresTab(), findsOneWidget);
+  });
+
+  testWidgets('keeps the Features tab from anyone who is not an admin', (
     tester,
   ) async {
-    settings.chatEnabled.value = true;
-    addTearDown(() => settings.chatEnabled.value = false);
-    await pumpAt(tester, SettingsTab.general, const Size(1280, 800));
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('settings_chat_enabled')),
-      200,
-      scrollable: tabList(),
-    );
-    final toggle = tester.widget<SwitchListTile>(
-      find.byKey(const ValueKey('settings_chat_enabled')),
-    );
-    expect(toggle.value, isTrue);
-
     settings.isAdmin.value = false;
+    await pumpAt(tester, SettingsTab.features, const Size(1280, 800));
+
+    expect(featuresTab(), findsNothing);
+    expect(find.byKey(const ValueKey('feature_flag_tile_chat')), findsNothing);
+    // A link to the hidden tab shows General instead.
+    expect(find.text('Backend hosts'), findsOneWidget);
+  });
+
+  testWidgets('shows no Features tab while the Quark has no betas', (
+    tester,
+  ) async {
+    settings.featureFlags.value = const [];
+    await pumpAt(tester, SettingsTab.general, const Size(1280, 800));
+
+    expect(featuresTab(), findsNothing);
+  });
+
+  testWidgets('flipping a flag asks the Quark once, holding the switch', (
+    tester,
+  ) async {
+    final saving = Completer<FeatureFlag>();
+    final calls = <(String, bool)>[];
+    final controller = FeatureFlagsController(
+      setFlag: (key, enabled) {
+        calls.add((key, enabled));
+        return saving.future;
+      },
+    );
+    addTearDown(controller.dispose);
+    await pumpAt(
+      tester,
+      SettingsTab.features,
+      const Size(1280, 800),
+      featureFlags: controller,
+    );
+    final tile = find.byKey(const ValueKey('feature_flag_tile_chat'));
+    await tester.scrollUntilVisible(tile, 200, scrollable: tabList());
+
+    await tester.tap(tile);
     await tester.pump();
-    expect(find.byKey(const ValueKey('settings_chat_enabled')), findsNothing);
+    await tester.tap(tile);
+    await tester.pump();
+    expect(calls, [(FeatureFlag.chat, false)]);
+    expect(tester.widget<SwitchListTile>(tile).onChanged, isNull);
+
+    saving.complete(
+      const FeatureFlag(
+        key: FeatureFlag.chat,
+        label: 'Chat',
+        description: 'Hides chat; stored data is kept.',
+        enabled: false,
+      ),
+    );
+    await tester.pump();
+    expect(calls, hasLength(1));
+    expect(tester.widget<SwitchListTile>(tile).value, isFalse);
+    expect(settings.isFeatureEnabled(FeatureFlag.chat), isFalse);
   });
 
   testWidgets('links to the drives instead of listing them', (tester) async {

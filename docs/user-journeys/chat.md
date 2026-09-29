@@ -119,7 +119,7 @@ renaming, leaving and deleting channels (#2422), and reacting to messages
 
 **Steps:**
 
-1. Open **Settings**, General tab.
+1. Open **Settings**, Features tab (JN-ST-028).
 2. Turn off **Chat** (marked **Beta**).
 3. As another account, open the drawer, then open `/chat` directly.
 
@@ -132,7 +132,8 @@ renaming, leaving and deleting channels (#2422), and reacting to messages
 
 **Notes:**
 
-- Only admins see the switch. Chat is on until an admin turns it off.
+- Only admins see the Features tab. Chat is on until an admin turns it off.
+- A member already on `/chat` is moved to Files, and their drawer loses the row, without a reload.
 
 ---
 

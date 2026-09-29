@@ -109,8 +109,10 @@ the package `UploadTargetPicker`. Selecting wears the package
 
 Settings is split into tabs (#2350), one widget each under `settings/`:
 `settings_general_tab.dart`, `settings_account_tab.dart`,
-`settings_network_tab.dart`, `settings_updates_tab.dart` and
-`settings_about_tab.dart`, with the Network tab's `remote_access_card.dart` and
+`settings_network_tab.dart`, `settings_updates_tab.dart`,
+`settings_about_tab.dart` and the admin-only `settings_features_tab.dart`
+(#2542), which lists the package `FeatureFlagTile` over the app's
+`FeatureFlag` model, with the Network tab's `remote_access_card.dart` and
 `connected_devices_card.dart`. The page still loads everything and hands each
 tab its values and callbacks; the tabs stay app-side because they take the
 app's service models and host `HostManager`, `SshAccessSection` and
