@@ -14,7 +14,10 @@ const settingsFileName = "settings.json"
 
 // Settings holds application-level user-configurable settings.
 type Settings struct {
-	AutoUpdate bool `json:"autoUpdate"`
+	// SettingsVersion is how many of the package's migrations the file has
+	// been through. Load runs the rest; Save stamps the current count.
+	SettingsVersion int  `json:"settingsVersion"`
+	AutoUpdate      bool `json:"autoUpdate"`
 	// RemoteAccessEnabled is the user's choice. The node's credential is its
 	// tsnet state dir, not a key kept here (#1876): files written before then
 	// still carry a remoteAccessAuthKey, which parsing ignores and the next
@@ -44,8 +47,9 @@ var (
 	pathOverride string // set by ResetForTesting only
 )
 
-// Load reads settings from disk (or returns defaults if not present).
-// The result is cached for the lifetime of the process.
+// Load reads settings from disk (or returns defaults if not present),
+// first bringing an older file up to date by running the migrations it has
+// not been through and writing it back. The result is cached for the lifetime of the process.
 // Returns a copy of the cached settings to prevent callers from mutating
 // the shared state without holding the lock.
 func Load() (*Settings, error) {
@@ -61,12 +65,17 @@ func Load() (*Settings, error) {
 
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		cached = &Settings{}
+		cached = &Settings{SettingsVersion: len(migrations)}
 		snapshot := *cached
 		return &snapshot, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to read settings file: %w", err)
+	}
+
+	data, err = migrate(path, data)
+	if err != nil {
+		return nil, err
 	}
 
 	s := &Settings{}
@@ -91,7 +100,9 @@ func Save(s *Settings) error {
 		return fmt.Errorf("failed to create settings directory: %w", err)
 	}
 
-	data, err := json.MarshalIndent(s, "", "  ")
+	snapshot := *s
+	snapshot.SettingsVersion = len(migrations)
+	data, err := json.MarshalIndent(&snapshot, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal settings: %w", err)
 	}
@@ -100,7 +111,6 @@ func Save(s *Settings) error {
 		return fmt.Errorf("failed to write settings file: %w", err)
 	}
 
-	snapshot := *s
 	cached = &snapshot
 	return nil
 }
