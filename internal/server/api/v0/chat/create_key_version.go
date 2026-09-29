@@ -22,6 +22,7 @@ import (
 // @Failure 401 {object} serverutil.Response
 // @Failure 404 {object} serverutil.Response "no such channel, the caller isn't a member, or has no chat keys"
 // @Failure 409 {object} serverutil.Response "version isn't the next one (another member created it first), or the key doesn't need rotating"
+// @Failure 429 {object} serverutil.Response "the caller sent too many of these in a short time; the limit is per account"
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /chat/channels/{id}/keys [post]
@@ -29,6 +30,9 @@ func createKeyVersion(c *gin.Context) *serverutil.Response {
 	deps, principal, failed := callerContext(c)
 	if failed != nil {
 		return failed
+	}
+	if limited := rateLimited(deps, principal, "keys"); limited != nil {
+		return limited
 	}
 	id, failed := channelID(c)
 	if failed != nil {

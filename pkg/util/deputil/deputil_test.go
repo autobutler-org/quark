@@ -20,8 +20,8 @@ func TestNewDependencies(t *testing.T) {
 		t.Error("Expected HealthDatabase() to be nil initially")
 	}
 
-	// These three replaced package-level globals, so every graph must have
-	// them ready without a With* call (#1674).
+	// These replaced package-level globals, or joined them, so every graph
+	// must have them ready without a With* call (#1674).
 	if deps.BackupJobStore() == nil {
 		t.Error("Expected BackupJobStore() to be ready")
 	}
@@ -30,6 +30,9 @@ func TestNewDependencies(t *testing.T) {
 	}
 	if deps.VaultRateLimiter() == nil {
 		t.Error("Expected VaultRateLimiter() to be ready")
+	}
+	if deps.ChatRateLimiter() == nil {
+		t.Error("Expected ChatRateLimiter() to be ready")
 	}
 }
 

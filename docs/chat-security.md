@@ -265,6 +265,15 @@ the oldest, which also picks up deletions the socket dropped.
 - `POST /api/v0/chat/messages/:id/reactions` takes `{ciphertext, keyVersion}`.
 - `DELETE /api/v0/chat/reactions/:id` removes one.
 
+## Rate limits
+
+Posting a message, creating a key version, and uploading key grants are each limited per account (#2485), with a
+separate bucket per route, so a member can't flood a channel with ciphertext or grant rows. The limit is a burst of
+100 and then 10 a second (`ChatWriteRate` and `ChatWriteBurst` in `pkg/util/deputil`), far above what the app
+sends: a grant upload carries up to 256 grants, so one burst refills a rotation for thousands of members. Going
+over gets 429, which the app shows as "wait a moment and try again". The limits live in memory and reset when the
+Quark restarts.
+
 ## Threat model
 
 ### What this protects against

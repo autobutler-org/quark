@@ -1,9 +1,15 @@
 package v0_chat
 
 import (
+	"errors"
+
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 )
+
+// errTooManyRequests is a rate-limited chat write's error, written for the
+// app to show like chatutil's sentinels.
+var errTooManyRequests = errors.New("you're sending these too quickly; wait a moment and try again")
 
 type router struct{}
 

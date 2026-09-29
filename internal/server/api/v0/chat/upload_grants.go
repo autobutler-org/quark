@@ -22,6 +22,7 @@ import (
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response "the caller holds no grant for that version"
 // @Failure 404 {object} serverutil.Response "no such channel, the caller isn't a member, or has no chat keys"
+// @Failure 429 {object} serverutil.Response "the caller sent too many of these in a short time; the limit is per account"
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /chat/channels/{id}/keys/grants [post]
@@ -29,6 +30,9 @@ func uploadGrants(c *gin.Context) *serverutil.Response {
 	deps, principal, failed := callerContext(c)
 	if failed != nil {
 		return failed
+	}
+	if limited := rateLimited(deps, principal, "grants"); limited != nil {
+		return limited
 	}
 	id, failed := channelID(c)
 	if failed != nil {
