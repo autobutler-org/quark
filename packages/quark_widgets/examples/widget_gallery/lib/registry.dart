@@ -6,6 +6,7 @@ import 'widgets/album_sidebar_demo.dart';
 import 'widgets/album_tree_demo.dart';
 import 'widgets/chat_demo_data.dart';
 import 'widgets/chat_layout_demo.dart';
+import 'widgets/duplicate_group_list_demo.dart';
 import 'widgets/framed_viewport.dart';
 import 'widgets/password_strength_demo.dart';
 import 'widgets/split_view_demo.dart';
@@ -1201,6 +1202,12 @@ final List<GalleryEntry> registry = [
         ),
       ),
     ),
+  ),
+  GalleryEntry(
+    name: 'DuplicateGroupList',
+    group: 'Photos',
+    build: (context, log) =>
+        SizedBox(height: 480, child: DuplicateGroupListDemo(log: log)),
   ),
   GalleryEntry(
     name: 'PhotoCategoryList',
