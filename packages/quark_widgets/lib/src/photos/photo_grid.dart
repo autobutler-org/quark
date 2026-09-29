@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../core/quark_loader.dart';
+import '../models/photo_grid_section.dart';
 import '../models/photo_item.dart';
 import '../theme/quark_tokens.dart';
+import 'photo_grid/photo_grid_section_header.dart';
 import 'photo_grid_tile.dart';
 
 /// A grid of [PhotoGridTile]s, as a sliver, with its loading, error, empty
@@ -30,8 +32,15 @@ import 'photo_grid_tile.dart';
 /// right-click and a long press, which then no longer calls [onLongPress].
 /// See [PhotoGridTile.onMenu].
 ///
-/// Key prefixes: `photo_grid` on the grid, `photo_grid_loading_more` on the
-/// trailing spinner cell, and every tile's own `photo_tile_<id>`,
+/// [sections] splits [photos] into consecutive runs, each under a
+/// [PhotoGridSectionHeader] that pins to the top of the viewport while its
+/// run scrolls past. Every run is its own lazy grid, so only the visible
+/// tiles are built however many sections there are. Indices in callbacks
+/// still count across the whole of [photos].
+///
+/// Key prefixes: `photo_grid` on the grid, `photo_grid_section_<id>` on each
+/// section header, `photo_grid_loading_more` on the trailing spinner cell,
+/// and every tile's own `photo_tile_<id>`,
 /// `photo_tile_check_<id>` and `photo_tile_menu_<id>`.
 ///
 /// ```dart
@@ -61,6 +70,7 @@ class PhotoGrid extends StatelessWidget {
     required this.onLongPress,
     this.onDoubleTap,
     this.onMenu,
+    this.sections,
     this.selectedIds = const {},
     this.selectionMode = false,
     this.isLoading = false,
@@ -96,6 +106,11 @@ class PhotoGrid extends StatelessWidget {
   /// Called with a tile's index and the global position to open its menu at.
   /// Offered outside [selectionMode] only. Null gives the tiles no menu.
   final void Function(int index, Offset globalPosition)? onMenu;
+
+  /// Splits [photos], in order, into runs with a pinned header each. Their
+  /// counts must add up to the length of [photos]. Null or empty draws one
+  /// grid with no headers.
+  final List<PhotoGridSection>? sections;
 
   /// The [PhotoItem.id]s in the selection.
   final Set<String> selectedIds;
@@ -140,40 +155,88 @@ class PhotoGrid extends StatelessWidget {
 
     final onDoubleTap = this.onDoubleTap;
     final onMenu = this.onMenu;
-    return SliverPadding(
-      padding: EdgeInsets.all(gap),
-      sliver: SliverGrid(
-        key: const ValueKey('photo_grid'),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossAxisCount,
-          crossAxisSpacing: gap,
-          mainAxisSpacing: gap,
+    final sections = this.sections;
+    final gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: crossAxisCount,
+      crossAxisSpacing: gap,
+      mainAxisSpacing: gap,
+    );
+    const loadingMore = Center(
+      key: ValueKey('photo_grid_loading_more'),
+      child: Padding(padding: EdgeInsets.all(16), child: QuarkLoader()),
+    );
+
+    Widget tile(int index) {
+      final photo = photos[index];
+      return PhotoGridTile(
+        key: ValueKey(photo.id),
+        item: photo,
+        isSelected: selectedIds.contains(photo.id),
+        selectionMode: selectionMode,
+        thumbnailBuilder: thumbnailBuilder,
+        onTap: () => onTap(index),
+        onLongPress: () => onLongPress(index),
+        onDoubleTap: onDoubleTap != null && photo.isRemote && !selectionMode
+            ? () => onDoubleTap(index)
+            : null,
+        onMenu: onMenu != null && !selectionMode
+            ? (position) => onMenu(index, position)
+            : null,
+      );
+    }
+
+    if (sections == null || sections.isEmpty) {
+      return SliverPadding(
+        padding: EdgeInsets.all(gap),
+        sliver: SliverGrid(
+          key: const ValueKey('photo_grid'),
+          gridDelegate: gridDelegate,
+          delegate: SliverChildBuilderDelegate(
+            (context, index) =>
+                index >= photos.length ? loadingMore : tile(index),
+            childCount: photos.length + (hasMore ? 1 : 0),
+          ),
         ),
-        delegate: SliverChildBuilderDelegate((context, index) {
-          if (index >= photos.length) {
-            return const Center(
-              key: ValueKey('photo_grid_loading_more'),
-              child: Padding(padding: EdgeInsets.all(16), child: QuarkLoader()),
-            );
-          }
-          final photo = photos[index];
-          return PhotoGridTile(
-            key: ValueKey(photo.id),
-            item: photo,
-            isSelected: selectedIds.contains(photo.id),
-            selectionMode: selectionMode,
-            thumbnailBuilder: thumbnailBuilder,
-            onTap: () => onTap(index),
-            onLongPress: () => onLongPress(index),
-            onDoubleTap: onDoubleTap != null && photo.isRemote && !selectionMode
-                ? () => onDoubleTap(index)
-                : null,
-            onMenu: onMenu != null && !selectionMode
-                ? (position) => onMenu(index, position)
-                : null,
-          );
-        }, childCount: photos.length + (hasMore ? 1 : 0)),
-      ),
+      );
+    }
+
+    assert(
+      sections.fold<int>(0, (sum, s) => sum + s.count) == photos.length,
+      'The section counts must add up to the number of photos.',
+    );
+    final starts = <int>[];
+    var next = 0;
+    for (final section in sections) {
+      starts.add(next);
+      next += section.count;
+    }
+    return SliverMainAxisGroup(
+      key: const ValueKey('photo_grid'),
+      slivers: [
+        for (final (i, section) in sections.indexed)
+          if (section.count > 0)
+            SliverMainAxisGroup(
+              slivers: [
+                PinnedHeaderSliver(
+                  child: PhotoGridSectionHeader(
+                    key: ValueKey('photo_grid_section_${section.id}'),
+                    label: section.label,
+                  ),
+                ),
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(gap, 0, gap, gap),
+                  sliver: SliverGrid(
+                    gridDelegate: gridDelegate,
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => tile(starts[i] + index),
+                      childCount: section.count,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+        if (hasMore) const SliverToBoxAdapter(child: loadingMore),
+      ],
     );
   }
 }
