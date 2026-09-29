@@ -2903,7 +2903,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Starts a channel's key (version 1) or rotates it, storing the caller's own grant of the new key: sealedKey is the 80-byte crypto_box_seal of the key to the caller's X25519 key and signature the caller's 64-byte Ed25519 signature over the grant, both base64. The caller then fills the other members' grants. Any member with published chat keys may do it. Returns the key_created event for the caller to sign. Publishes chat_key_needed to key holders when members lack the new version.",
+                "description": "Starts a channel's key (version 1) or rotates it once rotationNeeded is true, storing the caller's own grant of the new key: sealedKey is the 80-byte crypto_box_seal of the key to the caller's X25519 key and signature the caller's 64-byte Ed25519 signature over the grant, both base64. The caller then fills the other members' grants. Any member with published chat keys may do it. Returns the key_created event for the caller to sign. Publishes chat_key_needed to key holders when members lack the new version.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2958,7 +2958,7 @@ const docTemplate = `{
                         }
                     },
                     "409": {
-                        "description": "version isn't the next one; another member created it first",
+                        "description": "version isn't the next one (another member created it first), or the key doesn't need rotating",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
