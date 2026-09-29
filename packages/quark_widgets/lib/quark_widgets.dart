@@ -87,6 +87,7 @@ export 'src/models/user_account_item.dart';
 export 'src/photos/live_badge.dart';
 export 'src/photos/photo_category_list.dart';
 export 'src/photos/photo_grid.dart';
+export 'src/photos/photo_grid_scroll_label.dart';
 export 'src/photos/photo_grid_tile.dart';
 export 'src/photos/photo_library_sidebar.dart';
 export 'src/photos/photo_selection_bar.dart';

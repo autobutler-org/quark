@@ -686,104 +686,110 @@ class PhotosPageState extends State<PhotosPage>
                   children: [
                     RefreshIndicator(
                       onRefresh: manualRefresh,
-                      child: QuarkSplitView(
-                        controller: _scrollController,
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        // The collapsed layout stacks the sidebar above the
-                        // grid in the same scroll view, and the page measures
-                        // it so the grid starts flush with the top.
-                        collapsedSidebarKey: _navPanelKey,
-                        sidebar: PhotoLibrarySidebar(
-                          columns: c.columns,
-                          minColumns: columnBounds.min,
-                          maxColumns: columnBounds.max,
-                          onColumnsChanged: c.setColumns,
-                          categories: c.showsCategories
-                              ? PhotoCategoryList(
-                                  categories: c.categories,
-                                  selectedId: c.selectedCategory.name,
-                                  expanded: c.categoriesExpanded,
-                                  onToggleExpanded: c.toggleCategoriesExpanded,
-                                  onSelected: (id) => c.selectCategory(
-                                    PhotoCategory.values.byName(id),
-                                  ),
-                                )
-                              : null,
-                          albums: AlbumSidebar(
-                            albums: c.albums,
-                            isLoading: c.albumsLoading,
-                            expandedIds: c.expandedAlbumIds,
-                            shrinkWrap: compact,
-                            selectedAlbumId: c.selectedAlbumId,
-                            onAllPhotosSelected: () => _showAlbum(null),
-                            onAlbumSelected: (item) => _showAlbum(item.id),
-                            onToggleExpanded: c.toggleAlbumExpanded,
-                            onCreateAlbum: _createAlbum,
-                            onAlbumMenu: _showAlbumActions,
-                            sort: c.albumSort,
-                            onSortChanged: c.setAlbumSort,
-                          ),
-                        ),
-                        slivers: [
-                          PhotoGrid(
-                            photos: photos,
-                            sections: c.photoSections,
-                            crossAxisCount: PhotoGridConfig.columnsFor(
-                              contentWidth,
-                              c.columns,
+                      child: PhotoGridScrollLabel(
+                        child: QuarkSplitView(
+                          controller: _scrollController,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          // The collapsed layout stacks the sidebar above the
+                          // grid in the same scroll view, and the page measures
+                          // it so the grid starts flush with the top.
+                          collapsedSidebarKey: _navPanelKey,
+                          sidebar: PhotoLibrarySidebar(
+                            columns: c.columns,
+                            minColumns: columnBounds.min,
+                            maxColumns: columnBounds.max,
+                            onColumnsChanged: c.setColumns,
+                            categories: c.showsCategories
+                                ? PhotoCategoryList(
+                                    categories: c.categories,
+                                    selectedId: c.selectedCategory.name,
+                                    expanded: c.categoriesExpanded,
+                                    onToggleExpanded:
+                                        c.toggleCategoriesExpanded,
+                                    onSelected: (id) => c.selectCategory(
+                                      PhotoCategory.values.byName(id),
+                                    ),
+                                  )
+                                : null,
+                            albums: AlbumSidebar(
+                              albums: c.albums,
+                              isLoading: c.albumsLoading,
+                              expandedIds: c.expandedAlbumIds,
+                              shrinkWrap: compact,
+                              selectedAlbumId: c.selectedAlbumId,
+                              onAllPhotosSelected: () => _showAlbum(null),
+                              onAlbumSelected: (item) => _showAlbum(item.id),
+                              onToggleExpanded: c.toggleAlbumExpanded,
+                              onCreateAlbum: _createAlbum,
+                              onAlbumMenu: _showAlbumActions,
+                              sort: c.albumSort,
+                              onSortChanged: c.setAlbumSort,
                             ),
-                            selectedIds: selectedIds,
-                            selectionMode: c.selectionMode,
-                            isLoading: isInitialLoad || c.albumLoading,
-                            // Unreachable has its own view in the empty state.
-                            error: albumError == null || c.quarkUnreachable
-                                ? null
-                                : Errors.message(albumError, 'load the album'),
-                            hasMore: c.hasMore,
-                            isLoadingMore: c.isLoadingMore,
-                            emptyState: PhotosEmptyState(
-                              unreachable: c.quarkUnreachable,
-                              showingFavorites: album == null
-                                  ? c.selectedCategory ==
-                                        PhotoCategory.favorites
-                                  : album.isFavorites,
-                              albumName: album?.name,
-                              hostAddress: c.activeHost,
-                              onRetry: manualRefresh,
-                              onManageHosts: () => context.go(
-                                AppRoutes.settingsTab(SettingsTab.general),
+                          ),
+                          slivers: [
+                            PhotoGrid(
+                              photos: photos,
+                              sections: c.photoSections,
+                              crossAxisCount: PhotoGridConfig.columnsFor(
+                                contentWidth,
+                                c.columns,
                               ),
-                              onUploadPhotos: c.isUploading
+                              selectedIds: selectedIds,
+                              selectionMode: c.selectionMode,
+                              isLoading: isInitialLoad || c.albumLoading,
+                              // Unreachable has its own view in the empty state.
+                              error: albumError == null || c.quarkUnreachable
                                   ? null
-                                  : _uploadPhotos,
-                              // Same action as the app bar's Add Photos, and
-                              // absent for the same albums (#992).
-                              onAddPhotosToAlbum:
-                                  album != null && !album.isSystemAlbum
-                                  ? () => _addPhotosTo(album.toAlbumItem())
-                                  : null,
-                            ),
-                            thumbnailBuilder: (context, photo) =>
-                                PhotoThumbnail(
-                                  url: c.thumbnailUrl(photo.id),
-                                  asset: c.assetFor(photo.id),
-                                  path: c.thumbnailSource(photo.id)?.path,
-                                  serial: c.thumbnailSource(photo.id)?.serial,
+                                  : Errors.message(
+                                      albumError,
+                                      'load the album',
+                                    ),
+                              hasMore: c.hasMore,
+                              isLoadingMore: c.isLoadingMore,
+                              emptyState: PhotosEmptyState(
+                                unreachable: c.quarkUnreachable,
+                                showingFavorites: album == null
+                                    ? c.selectedCategory ==
+                                          PhotoCategory.favorites
+                                    : album.isFavorites,
+                                albumName: album?.name,
+                                hostAddress: c.activeHost,
+                                onRetry: manualRefresh,
+                                onManageHosts: () => context.go(
+                                  AppRoutes.settingsTab(SettingsTab.general),
                                 ),
-                            onTap: (i) => _onPhotoTap(photos, i),
-                            // In an album the menu takes the long press.
-                            onLongPress: (i) =>
-                                c.selectFromLongPress(photos[i].id),
-                            onMenu: album == null || _demo
-                                ? null
-                                : (i, position) => _showAlbumItemActions(
-                                    album,
-                                    photos[i].id,
-                                    position,
+                                onUploadPhotos: c.isUploading
+                                    ? null
+                                    : _uploadPhotos,
+                                // Same action as the app bar's Add Photos, and
+                                // absent for the same albums (#992).
+                                onAddPhotosToAlbum:
+                                    album != null && !album.isSystemAlbum
+                                    ? () => _addPhotosTo(album.toAlbumItem())
+                                    : null,
+                              ),
+                              thumbnailBuilder: (context, photo) =>
+                                  PhotoThumbnail(
+                                    url: c.thumbnailUrl(photo.id),
+                                    asset: c.assetFor(photo.id),
+                                    path: c.thumbnailSource(photo.id)?.path,
+                                    serial: c.thumbnailSource(photo.id)?.serial,
                                   ),
-                            onDoubleTap: (i) => _toggleFavorite(photos[i].id),
-                          ),
-                        ],
+                              onTap: (i) => _onPhotoTap(photos, i),
+                              // In an album the menu takes the long press.
+                              onLongPress: (i) =>
+                                  c.selectFromLongPress(photos[i].id),
+                              onMenu: album == null || _demo
+                                  ? null
+                                  : (i, position) => _showAlbumItemActions(
+                                      album,
+                                      photos[i].id,
+                                      position,
+                                    ),
+                              onDoubleTap: (i) => _toggleFavorite(photos[i].id),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     // The collapsed layout starts scrolled past its nav panel,

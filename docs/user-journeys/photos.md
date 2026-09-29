@@ -383,6 +383,8 @@ by date (JN-PH-018).
 
 - Photos sit under month headers such as **March 2025**, in the grid's sort order. The header of the month in
   view stays pinned to the top of the grid until the next month's header pushes it out.
+- While the grid scrolls, a label naming the month in view floats at the right edge of the grid, and fades
+  out about a second and a half after scrolling stops. Scrolling the album sidebar does not show it.
 - In an album, a photo is filed under the month it was added to the album. A photo with no date sits under
   **Unknown date**.
 - Under a name sort there are no headers.
