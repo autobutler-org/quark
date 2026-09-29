@@ -119,7 +119,8 @@ someone who left a group on the channel, a member demoted to a set without `read
 included), a turned-off account, or a deleted one. Changing any other permission needs no crypto work. A grant to a deleted account is
 kept with no recipient for this purpose. The Quark reports `rotationNeeded` and sends `chat_key_needed`, and the
 next member client online creates the next version and grants it to the remaining members. That member doesn't
-have to hold the old version. Messages from then on use the new key.
+have to hold the old version. Messages from then on use the new key. The Quark refuses any version after the first
+unless `rotationNeeded` is true, with 409, so a member can't bury the channel under versions nobody needs (#2485).
 
 ### Channel events
 
@@ -272,6 +273,8 @@ the oldest, which also picks up deletions the socket dropped.
   the login stops sending the password itself; that's #2430. Until then, chat is a beta, and this is the reason.
 - **Metadata.** The Quark sees who is in which channel, when each message was sent, and how big it is, and
   who reacted to which message and when.
+  Admins also see the names and topics of private channels they aren't in, through the admin channel list
+  (`ListChannels` with `All`); that is by design, for admin tooling (#2488).
 - **A device that's already unlocked.** On phones and desktop the unwrapped seeds sit in the platform keystore
   while signed in, so anyone who can use the signed-in app can read chat.
 - **A removed member's copies.** Removal rotates the channel key for future messages, but nothing takes back what

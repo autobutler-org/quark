@@ -67,7 +67,8 @@ func chatError(err error) *serverutil.Response {
 		return serverutil.NewResponse().WithStatusCode(http.StatusUnprocessableEntity).WithError(err)
 	case errors.Is(err, chatutil.ErrMessageTooLarge):
 		return serverutil.NewResponse().WithStatusCode(http.StatusRequestEntityTooLarge).WithError(err)
-	case errors.Is(err, chatutil.ErrNameTaken), errors.Is(err, chatutil.ErrVersionConflict), errors.Is(err, chatutil.ErrEventSigned),
+	case errors.Is(err, chatutil.ErrNameTaken), errors.Is(err, chatutil.ErrVersionConflict), errors.Is(err, chatutil.ErrRotationNotNeeded),
+		errors.Is(err, chatutil.ErrEventSigned),
 		errors.Is(err, chatutil.ErrMessageDeleted), errors.Is(err, chatutil.ErrTooManyReactions):
 		return serverutil.Conflict(err)
 	case errors.Is(err, chatutil.ErrInvalidName), errors.Is(err, chatutil.ErrInvalidTopic),

@@ -126,7 +126,17 @@ func TestPendingSetCoversDirectGroupAndEveryone(t *testing.T) {
 		t.Errorf("after admin published keys, pending = %v", got)
 	}
 
-	// A new member gets every version, so they can read the history.
+	// A new member gets every version, so they can read the history. admin
+	// holding version 1 and then leaving is what lets bob rotate.
+	if err := f.set(t, "bob", channel.ID, f.users["admin"], 0, chatutil.PresetViewer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.grant("bob", channel.ID, 1, "admin", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.remove("bob", channel.ID, f.users["admin"], 0); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := f.createVersion("bob", channel.ID, 2); err != nil {
 		t.Fatal(err)
 	}
@@ -140,11 +150,16 @@ func TestPendingSetCoversDirectGroupAndEveryone(t *testing.T) {
 // checks the watcher tells the key holder to fill the newcomer's grants.
 func TestGroupJoinIsAnnouncedWithoutOpeningSettings(t *testing.T) {
 	f := newFixture(t)
-	f.publishKeys(t, "bob", "carol", "dave")
+	f.publishKeys(t, "admin", "bob", "carol", "dave")
 	team := f.group(t, "team", "carol")
 	channel := f.create(t, "bob", "design")
-	if err := f.set(t, "bob", channel.ID, 0, team, chatutil.PresetViewer); err != nil {
-		t.Fatal(err)
+	for _, err := range []error{
+		f.set(t, "bob", channel.ID, 0, team, chatutil.PresetViewer),
+		f.set(t, "bob", channel.ID, f.users["admin"], 0, chatutil.PresetViewer),
+	} {
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	for v := int64(1); v <= 2; v++ {
 		if _, err := f.createVersion("bob", channel.ID, v); err != nil {
@@ -152,6 +167,15 @@ func TestGroupJoinIsAnnouncedWithoutOpeningSettings(t *testing.T) {
 		}
 		if _, err := f.grant("bob", channel.ID, v, "carol", 1); err != nil {
 			t.Fatal(err)
+		}
+		// admin holding version 1 and leaving is what lets bob rotate.
+		if v == 1 {
+			if _, err := f.grant("bob", channel.ID, v, "admin", 1); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.remove("bob", channel.ID, f.users["admin"], 0); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -284,6 +308,9 @@ func TestRemovalNeedsRotation(t *testing.T) {
 	}
 	if f.channelKeys(t, "bob", channel.ID).RotationNeeded {
 		t.Fatal("rotation needed before anyone left")
+	}
+	if _, err := f.createVersion("carol", channel.ID, 2); !errors.Is(err, chatutil.ErrRotationNotNeeded) {
+		t.Errorf("rotating before anyone left: %v, want ErrRotationNotNeeded", err)
 	}
 
 	// carol leaves.

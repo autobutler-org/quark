@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:quark/widgets/error_banner.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -8,7 +9,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// It asks for the account password and hands it to [onUnlock]; whether that
 /// worked is the caller's, [isBusy] and [error] in. The field is [State] only
-/// because Flutter needs its controller to live across rebuilds.
+/// because Flutter needs its controller to live across rebuilds. Submitting
+/// finishes the autofill context and clears the field, so the password does
+/// not linger in the widget tree (#2489).
 ///
 /// Key prefixes: `chat_unlock_password` on the field, `chat_unlock_submit` on
 /// the button.
@@ -44,8 +47,11 @@ class _ChatUnlockPromptState extends State<ChatUnlockPrompt> {
   }
 
   void _submit() {
-    if (widget.isBusy || _password.text.isEmpty) return;
-    widget.onUnlock(_password.text);
+    final password = _password.text;
+    if (widget.isBusy || password.isEmpty) return;
+    TextInput.finishAutofillContext();
+    _password.clear();
+    widget.onUnlock(password);
   }
 
   @override
@@ -80,17 +86,19 @@ class _ChatUnlockPromptState extends State<ChatUnlockPrompt> {
                 ErrorBanner(message: error),
                 SizedBox(height: tokens.spacingMd),
               ],
-              TextField(
-                key: const ValueKey('chat_unlock_password'),
-                controller: _password,
-                obscureText: true,
-                autofocus: true,
-                autofillHints: const [AutofillHints.password],
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
+              AutofillGroup(
+                child: TextField(
+                  key: const ValueKey('chat_unlock_password'),
+                  controller: _password,
+                  obscureText: true,
+                  autofocus: true,
+                  autofillHints: const [AutofillHints.password],
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _submit(),
                 ),
-                onSubmitted: (_) => _submit(),
               ),
               SizedBox(height: tokens.spacingMd),
               FilledButton(

@@ -1015,6 +1015,9 @@ var (
 	// ErrVersionConflict reports creating a key version that isn't the next
 	// one, usually because another member created it first.
 	ErrVersionConflict = errors.New("another member already created that key version")
+	// ErrRotationNotNeeded reports creating a key version after the first
+	// while nobody outside the channel holds the current one.
+	ErrRotationNotNeeded = errors.New("the channel key doesn't need rotating")
 	// ErrInvalidGrant reports a grant of the wrong size, or for an account
 	// that isn't a member with published chat keys.
 	ErrInvalidGrant = errors.New("that key grant is malformed or names someone who can't receive it")
@@ -1269,9 +1272,10 @@ type CreateKeyVersionResult struct {
 	Event   ChannelEvent `json:"event"`
 }
 
-// CreateKeyVersion lets any member start a channel's key, or rotate it,
-// storing the caller's grant of the new key with it; the caller then fills
-// the other members' grants through UploadGrants. A version that isn't the
+// CreateKeyVersion lets any member start a channel's key, or rotate it once
+// rotation is needed (ErrRotationNotNeeded otherwise), storing the caller's
+// grant of the new key with it; the caller then fills the other members'
+// grants through UploadGrants. A version that isn't the
 // next one is ErrVersionConflict, so two clients racing to rotate leave one
 // winner. Access errors are GetChannelKeys'.
 func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, error) {
@@ -1291,12 +1295,17 @@ func CreateKeyVersion(params CreateKeyVersionParams) (CreateKeyVersionResult, er
 	}
 	var result CreateKeyVersionResult
 	err = inTx(params.Ctx, params.Database, func(q *db.Queries) error {
-		versions, err := q.ListChatChannelKeys(params.Ctx, params.ChannelID)
+		state, err := loadKeyState(params.Ctx, q, params.ChannelID)
 		if err != nil {
 			return err
 		}
-		if params.Version != int64(len(versions))+1 {
+		if params.Version != int64(len(state.versions))+1 {
 			return ErrVersionConflict
+		}
+		// Only a removal rotates the key (#2485): without one, a member could
+		// mint versions at will and bury the channel's history under them.
+		if state.current > 0 && !state.rotationNeeded() {
+			return ErrRotationNotNeeded
 		}
 		actor := sql.NullInt64{Int64: params.Principal.UserID, Valid: true}
 		key, err := q.CreateChatChannelKey(params.Ctx, db.CreateChatChannelKeyParams{
