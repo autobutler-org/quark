@@ -2,12 +2,14 @@ package v0_calendar
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
@@ -18,19 +20,24 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// newCalendarEngine serves the calendar router to a signed-in member who is not
-// an admin, and returns the bus the handlers publish to.
+// newCalendarEngine serves the calendar router to a signed-in member, "member",
+// who is not an admin, and returns the bus the handlers publish to.
 func newCalendarEngine(t *testing.T) (*gin.Engine, <-chan eventbus.Event) {
 	t.Helper()
 	bus := eventbus.New()
 	events, unsubscribe := bus.Subscribe("test")
 	t.Cleanup(unsubscribe)
-	deps := deputil.NewDependencies().WithDatabase(dbtest.NewDB(t)).WithEventBus(bus)
+	database := dbtest.NewDB(t)
+	member, err := database.Queries.CreateUser(context.Background(), db.CreateUserParams{Username: "member", PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	deps := deputil.NewDependencies().WithDatabase(database).WithEventBus(bus)
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
-		c = ctxutil.With(c, "principal", accessutil.Principal{UserID: 2})
+		c = ctxutil.With(c, "principal", accessutil.Principal{UserID: member.ID})
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), NewRouter())
@@ -77,6 +84,9 @@ func TestEventRoundTrip(t *testing.T) {
 	created := decode[EventJSON](t, w)
 	if created.Start != "2026-09-29T23:00:00Z" || created.End != "2026-09-29T23:45:00Z" {
 		t.Errorf("times = %s..%s, want them in UTC", created.Start, created.End)
+	}
+	if !created.Mine || created.Owner != "member" {
+		t.Errorf("owner = %q mine = %v, want the caller's own event", created.Owner, created.Mine)
 	}
 	if created.Repeat != "weekly" || created.ReminderMinutes == nil || *created.ReminderMinutes != 30 || created.ColorIndex != 2 {
 		t.Errorf("created = %+v, want the request's fields", created)
@@ -152,5 +162,43 @@ func TestEventRequestErrors(t *testing.T) {
 	case e := <-events:
 		t.Errorf("a failed request published %+v", e)
 	default:
+	}
+}
+
+func TestEventOwnerFields(t *testing.T) {
+	database := dbtest.NewDB(t)
+	ctx := context.Background()
+	maya, err := database.Queries.CreateUser(ctx, db.CreateUserParams{Username: "maya", PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	sam, err := database.Queries.CreateUser(ctx, db.CreateUserParams{Username: "sam", PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	engineAs := func(id int64) *gin.Engine {
+		deps := deputil.NewDependencies().WithDatabase(database)
+		engine := gin.New()
+		engine.Use(func(c *gin.Context) {
+			c = ctxutil.With(c, "deps", deps)
+			c = ctxutil.With(c, "principal", accessutil.Principal{UserID: id})
+			c.Next()
+		})
+		serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), NewRouter())
+		return engine
+	}
+
+	if w := do(engineAs(maya.ID), http.MethodPost, "/api/v0/calendar/events", vet); w.Code != http.StatusCreated {
+		t.Fatalf("create = %d %s", w.Code, w.Body.String())
+	}
+	list := "/api/v0/calendar/events?from=2026-09-29T00:00:00Z&to=2026-09-30T12:00:00Z"
+	for _, tt := range []struct {
+		as   int64
+		mine bool
+	}{{maya.ID, true}, {sam.ID, false}} {
+		events := decode[EventListJSON](t, do(engineAs(tt.as), http.MethodGet, list, "")).Events
+		if len(events) != 1 || events[0].Owner != "maya" || events[0].Mine != tt.mine {
+			t.Errorf("as %d: events = %+v, want maya's event with mine=%v", tt.as, events, tt.mine)
+		}
 	}
 }

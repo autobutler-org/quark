@@ -12,7 +12,7 @@ import (
 
 // updateEvent godoc
 // @Summary Update a calendar event
-// @Description Replaces every field of an event, under the same rules as a create, and tells every open client it changed. For a repeating event the change applies to the whole series.
+// @Description Replaces every field of an event, under the same rules as a create, and tells every open client it changed. For a repeating event the change applies to the whole series. The event keeps its owner.
 // @Tags calendar
 // @Accept json
 // @Produce json
@@ -52,7 +52,7 @@ func updateEvent(c *gin.Context) *serverutil.Response {
 		return eventError(err)
 	}
 	publishChanged(deps, id)
-	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(toEventJSON(result.Event))
+	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(toEventJSON(result.Event, callerID(c)))
 }
 
 var updateEventRoute = serverutil.ApiRoute(

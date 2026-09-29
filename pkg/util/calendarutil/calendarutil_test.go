@@ -234,3 +234,54 @@ func TestDeleteEvent(t *testing.T) {
 		t.Errorf("second DeleteEvent = %v, want sql.ErrNoRows", err)
 	}
 }
+
+func TestEventOwner(t *testing.T) {
+	q := dbtest.NewDB(t).Queries
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx, db.CreateUserParams{Username: "maya", PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	created, err := calendarutil.CreateEvent(ctx, calendarutil.CreateEventParams{
+		Queries:   q,
+		Input:     timed("Piano", "2026-09-17T16:00:00Z", "2026-09-17T17:00:00Z"),
+		CreatedBy: user.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreateEvent: %v", err)
+	}
+	if created.Event.OwnerID != user.ID || created.Event.OwnerName != "maya" {
+		t.Errorf("owner = %d %q, want maya", created.Event.OwnerID, created.Event.OwnerName)
+	}
+
+	// Someone else's edit leaves the owner alone.
+	updated, err := calendarutil.UpdateEvent(ctx, calendarutil.UpdateEventParams{
+		Queries: q, ID: created.Event.ID, Input: timed("Piano lesson", "2026-09-17T16:00:00Z", "2026-09-17T17:00:00Z"),
+	})
+	if err != nil {
+		t.Fatalf("UpdateEvent: %v", err)
+	}
+	if updated.Event.OwnerName != "maya" || updated.Event.Title != "Piano lesson" {
+		t.Errorf("updated = %+v, want the title changed and maya still the owner", updated.Event)
+	}
+
+	listed, err := calendarutil.ListEvents(ctx, calendarutil.ListEventsParams{
+		Queries: q, From: at("2026-09-17T00:00:00Z"), To: at("2026-09-18T00:00:00Z"),
+	})
+	if err != nil || len(listed.Events) != 1 || listed.Events[0].OwnerName != "maya" {
+		t.Fatalf("ListEvents = %+v, %v; want maya's event", listed.Events, err)
+	}
+
+	// Deleting the account keeps the event and forgets its owner.
+	if err := q.DeleteUser(ctx, user.ID); err != nil {
+		t.Fatalf("DeleteUser: %v", err)
+	}
+	orphan, err := calendarutil.GetEvent(ctx, calendarutil.GetEventParams{Queries: q, ID: created.Event.ID})
+	if err != nil {
+		t.Fatalf("GetEvent after the owner was deleted: %v", err)
+	}
+	if orphan.Event.OwnerID != 0 || orphan.Event.OwnerName != "" {
+		t.Errorf("owner after delete = %d %q, want none", orphan.Event.OwnerID, orphan.Event.OwnerName)
+	}
+}

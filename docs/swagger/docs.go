@@ -2519,7 +2519,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Adds an event to the household calendar and tells every open client it changed. Times are RFC 3339; an all-day event starts and ends at midnight UTC, the end exclusive. repeat is none, daily, weekly or monthly, and a repeating event must end before it repeats. reminderMinutes counts back from the start, 0 to a week; an all-day event's may be negative down to -1439 so it falls on its own day (-540 is 9 AM). colorIndex is 0 to 5.",
+                "description": "Adds an event to the household calendar, owned by the caller, and tells every open client it changed. Times are RFC 3339; an all-day event starts and ends at midnight UTC, the end exclusive. repeat is none, daily, weekly or monthly, and a repeating event must end before it repeats. reminderMinutes counts back from the start, 0 to a week; an all-day event's may be negative down to -1439 so it falls on its own day (-540 is 9 AM). colorIndex is 0 to 5.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2620,7 +2620,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Replaces every field of an event, under the same rules as a create, and tells every open client it changed. For a repeating event the change applies to the whole series.",
+                "description": "Replaces every field of an event, under the same rules as a create, and tells every open client it changed. For a repeating event the change applies to the whole series. The event keeps its owner.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10878,7 +10878,15 @@ const docTemplate = `{
                 "location": {
                     "type": "string"
                 },
+                "mine": {
+                    "description": "Mine is true when the caller created the event.",
+                    "type": "boolean"
+                },
                 "notes": {
+                    "type": "string"
+                },
+                "owner": {
+                    "description": "Owner is the username of the account that created the event, or empty\nfor an event with no owner (#2544).",
                     "type": "string"
                 },
                 "reminderMinutes": {

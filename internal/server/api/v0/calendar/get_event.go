@@ -38,7 +38,7 @@ func getEvent(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return eventError(err)
 	}
-	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(toEventJSON(result.Event))
+	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(toEventJSON(result.Event, callerID(c)))
 }
 
 var getEventRoute = serverutil.ApiRoute(

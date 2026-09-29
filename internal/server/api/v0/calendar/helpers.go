@@ -6,7 +6,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/calendarutil"
+	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -59,8 +61,14 @@ func toInput(req eventRequest) (calendarutil.EventInput, error) {
 	}, nil
 }
 
-// toEventJSON converts a stored event for a response.
-func toEventJSON(e calendarutil.Event) EventJSON {
+// callerID is the signed-in account's id, or 0 when the request carries none.
+func callerID(c *gin.Context) int64 {
+	principal, _ := ctxutil.Get[accessutil.Principal](c, "principal")
+	return principal.UserID
+}
+
+// toEventJSON converts a stored event for a response to account caller.
+func toEventJSON(e calendarutil.Event, caller int64) EventJSON {
 	return EventJSON{
 		ID:              e.ID,
 		CalendarID:      e.CalendarID,
@@ -74,6 +82,8 @@ func toEventJSON(e calendarutil.Event) EventJSON {
 		Repeat:          string(e.Repeat),
 		ReminderMinutes: e.ReminderMinutes,
 		ColorIndex:      e.ColorIndex,
+		Owner:           e.OwnerName,
+		Mine:            e.OwnerID != 0 && e.OwnerID == caller,
 		CreatedAt:       e.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt:       e.UpdatedAt.UTC().Format(time.RFC3339),
 	}

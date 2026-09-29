@@ -13,7 +13,7 @@ import (
 
 // createEvent godoc
 // @Summary Create a calendar event
-// @Description Adds an event to the household calendar and tells every open client it changed. Times are RFC 3339; an all-day event starts and ends at midnight UTC, the end exclusive. repeat is none, daily, weekly or monthly, and a repeating event must end before it repeats. reminderMinutes counts back from the start, 0 to a week; an all-day event's may be negative down to -1439 so it falls on its own day (-540 is 9 AM). colorIndex is 0 to 5.
+// @Description Adds an event to the household calendar, owned by the caller, and tells every open client it changed. Times are RFC 3339; an all-day event starts and ends at midnight UTC, the end exclusive. repeat is none, daily, weekly or monthly, and a repeating event must end before it repeats. reminderMinutes counts back from the start, 0 to a week; an all-day event's may be negative down to -1439 so it falls on its own day (-540 is 9 AM). colorIndex is 0 to 5.
 // @Tags calendar
 // @Accept json
 // @Produce json
@@ -39,14 +39,15 @@ func createEvent(c *gin.Context) *serverutil.Response {
 	}
 
 	result, err := calendarutil.CreateEvent(c.Request.Context(), calendarutil.CreateEventParams{
-		Queries: deps.Database().Queries,
-		Input:   input,
+		Queries:   deps.Database().Queries,
+		Input:     input,
+		CreatedBy: callerID(c),
 	})
 	if err != nil {
 		return eventError(err)
 	}
 	publishChanged(deps, result.Event.ID)
-	return serverutil.Ok().WithStatusCode(http.StatusCreated).WithContentType(serverutil.ContentTypeJSON).WithData(toEventJSON(result.Event))
+	return serverutil.Ok().WithStatusCode(http.StatusCreated).WithContentType(serverutil.ContentTypeJSON).WithData(toEventJSON(result.Event, callerID(c)))
 }
 
 var createEventRoute = serverutil.ApiRoute(

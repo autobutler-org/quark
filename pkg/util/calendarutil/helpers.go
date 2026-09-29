@@ -150,8 +150,8 @@ func updateParams(id int64, input EventInput) db.UpdateCalendarEventParams {
 	}
 }
 
-// fromRow reads a stored row back as an Event.
-func fromRow(row db.CalendarEvent) (Event, error) {
+// fromRow reads a stored row back as an Event owned by ownerName.
+func fromRow(row db.CalendarEvent, ownerName string) (Event, error) {
 	start, err := time.Parse(storedTimeLayout, row.StartsAt)
 	if err != nil {
 		return Event{}, fmt.Errorf("event %d start: %w", row.ID, err)
@@ -178,6 +178,8 @@ func fromRow(row db.CalendarEvent) (Event, error) {
 		Repeat:          Repeat(row.Repeat),
 		ReminderMinutes: reminder,
 		ColorIndex:      int(row.ColorIndex),
+		OwnerID:         row.CreatedBy.Int64,
+		OwnerName:       ownerName,
 		CreatedAt:       row.CreatedAt,
 		UpdatedAt:       row.UpdatedAt,
 	}, nil

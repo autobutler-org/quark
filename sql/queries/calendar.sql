@@ -21,7 +21,8 @@ INSERT INTO
         time_zone,
         repeat,
         reminder_minutes,
-        color_index
+        color_index,
+        created_by
     )
 VALUES
     (
@@ -35,17 +36,21 @@ VALUES
         sqlc.arg(time_zone),
         sqlc.arg(repeat),
         sqlc.arg(reminder_minutes),
-        sqlc.arg(color_index)
+        sqlc.arg(color_index),
+        sqlc.arg(created_by)
     )
 RETURNING *;
 
+-- Reads carry the owner's username, empty for an event with no owner (#2544).
 -- name: GetCalendarEvent :one
 SELECT
-    *
+    sqlc.embed(calendar_events),
+    CAST(COALESCE(users.username, '') AS TEXT) AS owner_name
 FROM
     calendar_events
+    LEFT JOIN users ON users.id = calendar_events.created_by
 WHERE
-    id = sqlc.arg(id)
+    calendar_events.id = sqlc.arg(id)
 LIMIT
     1;
 
@@ -54,19 +59,21 @@ LIMIT
 -- of its occurrences may fall in the range; the app expands them.
 -- name: ListCalendarEventsInRange :many
 SELECT
-    *
+    sqlc.embed(calendar_events),
+    CAST(COALESCE(users.username, '') AS TEXT) AS owner_name
 FROM
     calendar_events
+    LEFT JOIN users ON users.id = calendar_events.created_by
 WHERE
-    calendar_id = sqlc.arg(calendar_id)
-    AND starts_at < sqlc.arg(range_end)
+    calendar_events.calendar_id = sqlc.arg(calendar_id)
+    AND calendar_events.starts_at < sqlc.arg(range_end)
     AND (
-        repeat != 'none'
-        OR ends_at > sqlc.arg(range_start)
+        calendar_events.repeat != 'none'
+        OR calendar_events.ends_at > sqlc.arg(range_start)
     )
 ORDER BY
-    starts_at,
-    id;
+    calendar_events.starts_at,
+    calendar_events.id;
 
 -- name: UpdateCalendarEvent :one
 UPDATE calendar_events
