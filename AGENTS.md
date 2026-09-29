@@ -21,7 +21,7 @@ internal/server/middleware/   gin middleware (auth, admin)
 internal/server/public/       the embedded web build (//go:embed), generated
 pkg/util/<x>util/             the business logic the handlers call
 pkg/vfs/                      the virtual filesystem every file access goes through
-pkg/backup/, pkg/calendar/    standalone services
+pkg/backup/                   the standalone backup service
 sql/queries/                  sqlc query sources
 lib/                          the Flutter app
 packages/                     independent Dart/Flutter packages (see Packages Directory)

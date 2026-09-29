@@ -9,6 +9,30 @@ import (
 	"time"
 )
 
+type Calendar struct {
+	ID        int64
+	Name      string
+	IsDefault int64
+	CreatedAt time.Time
+}
+
+type CalendarEvent struct {
+	ID              int64
+	CalendarID      int64
+	Title           string
+	Notes           string
+	Location        string
+	StartsAt        string
+	EndsAt          string
+	AllDay          int64
+	TimeZone        string
+	Repeat          string
+	ReminderMinutes sql.NullInt64
+	ColorIndex      int64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
 type ChatChannel struct {
 	ID        int64
 	ServerID  int64
