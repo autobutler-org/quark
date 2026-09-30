@@ -1,6 +1,7 @@
 package v0_photos
 
 import (
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
@@ -27,7 +28,7 @@ type PaginatedPhotosResponse struct {
 // @Param offset query int false "Pagination offset (default 0)"
 // @Param limit query int false "Page size (default 50, max 200)"
 // @Param serial query string false "Device serial to filter by"
-// @Param sort query string false "Sort field: added (date added) or name (default added)"
+// @Param sort query string false "Sort field: added (date added), taken (date taken) or name (default added)"
 // @Param order query string false "Sort order: asc or desc (default desc)"
 // @Success 200 {object} PaginatedPhotosResponse
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
@@ -54,6 +55,13 @@ func listPhotos(c *gin.Context) *serverutil.Response {
 		}
 	}
 
+	// Capture dates are read from the database; without one, the taken sort
+	// falls back to the date added.
+	var queries *db.Queries
+	if database := deps.Database(); database != nil {
+		queries = database.Queries
+	}
+
 	result, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
 		Ctx:     c.Request.Context(),
 		FS:      fsys,
@@ -62,6 +70,7 @@ func listPhotos(c *gin.Context) *serverutil.Response {
 		Access:  access,
 		Sort:    photoutil.ParseSort(c.Query("sort")),
 		Order:   photoutil.ParseOrder(c.Query("order")),
+		Queries: queries,
 		Offset:  offset,
 		Limit:   limit,
 	})

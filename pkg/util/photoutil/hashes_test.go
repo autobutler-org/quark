@@ -94,8 +94,9 @@ func TestBackfillHashes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res != (photoutil.BackfillHashesResult{Scanned: 5, Hashed: 4}) {
-		t.Fatalf("result = %+v, want 5 scanned and 4 hashed", res)
+	// done.jpg's hashes are complete, so only its capture date is read.
+	if res != (photoutil.BackfillHashesResult{Scanned: 5, Hashed: 4, Dated: 1}) {
+		t.Fatalf("result = %+v, want 5 scanned, 4 hashed and 1 dated", res)
 	}
 
 	rows := hashRows(t, database.Queries)

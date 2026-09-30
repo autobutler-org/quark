@@ -681,6 +681,11 @@ definitions:
         type: string
       size:
         type: integer
+      takenAt:
+        description: |-
+          TakenAt is the EXIF capture date in Unix seconds, set under SortTaken
+          for a photo whose date is known (#2592).
+        type: integer
     type: object
   serverutil.ContentType:
     enum:
@@ -867,6 +872,11 @@ definitions:
       id:
         type: integer
       relPath:
+        type: string
+      takenAt:
+        description: |-
+          TakenAt is the photo's EXIF capture date, sent under sort=taken when
+          it is known (#2592).
         type: string
     type: object
   v0_albums.AlbumJSON:
@@ -3025,7 +3035,8 @@ paths:
         name: id
         required: true
         type: integer
-      - description: 'Sort field: added (date added) or name (default added)'
+      - description: 'Sort field: added (date added), taken (date taken) or name (default
+          added)'
         in: query
         name: sort
         type: string
@@ -5869,7 +5880,8 @@ paths:
         in: query
         name: serial
         type: string
-      - description: 'Sort field: added (date added) or name (default added)'
+      - description: 'Sort field: added (date added), taken (date taken) or name (default
+          added)'
         in: query
         name: sort
         type: string

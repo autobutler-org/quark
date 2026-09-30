@@ -186,6 +186,8 @@ type PhotoHash struct {
 	Dhash        sql.NullString
 	ContentHash  sql.NullString
 	ComputedAt   time.Time
+	TakenAt      sql.NullTime
+	TakenChecked bool
 }
 
 type PhotoRotation struct {

@@ -5,6 +5,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/favoritesutil"
@@ -45,8 +46,9 @@ func nameConflictOr(err error) error {
 
 // sortItems orders items by sortBy and order in place, defaulting to the
 // added_at DESC order ListAlbumItems already returns for a zero-value or
-// unrecognized sortBy/order (#2509).
-func sortItems(items []db.PhotoAlbumItem, sortBy, order string) {
+// unrecognized sortBy/order (#2509). photoutil.SortTaken orders by takenAt,
+// keyed by item ID, standing in added_at for an item missing from it.
+func sortItems(items []db.PhotoAlbumItem, sortBy, order string, takenAt map[int64]time.Time) {
 	ascending := order == photoutil.OrderAsc
 	if sortBy == photoutil.SortName {
 		sort.Slice(items, func(i, j int) bool {
@@ -56,6 +58,21 @@ func sortItems(items []db.PhotoAlbumItem, sortBy, order string) {
 				return ni < nj
 			}
 			return ni > nj
+		})
+		return
+	}
+	if sortBy == photoutil.SortTaken {
+		date := func(item db.PhotoAlbumItem) time.Time {
+			if t, ok := takenAt[item.ID]; ok {
+				return t
+			}
+			return item.AddedAt
+		}
+		sort.SliceStable(items, func(i, j int) bool {
+			if ascending {
+				return date(items[i]).Before(date(items[j]))
+			}
+			return date(items[i]).After(date(items[j]))
 		})
 		return
 	}

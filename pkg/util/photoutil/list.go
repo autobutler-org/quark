@@ -2,10 +2,13 @@ package photoutil
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -16,10 +19,12 @@ const maxLimit = 200
 
 // Sort field and order values ListPhotos and the album-items listing accept.
 // An unrecognized value falls back to SortAdded / OrderDesc, the historical
-// fixed order (#2509).
+// fixed order (#2509). SortTaken orders by the EXIF capture date, where one is
+// known, and by the date added otherwise (#2592).
 const (
 	SortAdded = "added"
 	SortName  = "name"
+	SortTaken = "taken"
 
 	OrderAsc  = "asc"
 	OrderDesc = "desc"
@@ -33,6 +38,9 @@ type PhotoSummary struct {
 	MTime        int64  `json:"mtime"`
 	Serial       string `json:"serial"`
 	HasLiveVideo bool   `json:"hasLiveVideo,omitempty"`
+	// TakenAt is the EXIF capture date in Unix seconds, set under SortTaken
+	// for a photo whose date is known (#2592).
+	TakenAt int64 `json:"takenAt,omitempty"`
 }
 
 // ListPhotosParams describes one page of the photo library.
@@ -48,10 +56,14 @@ type ListPhotosParams struct {
 	// Access drops the photos the caller cannot read, before sorting and
 	// paging, so a page stays full and Total counts only what they can see.
 	Access accessutil.Access
-	// Sort is SortAdded (default) or SortName; Order is OrderDesc (default) or
-	// OrderAsc. Anything else is treated as the default for that field.
+	// Sort is SortAdded (default), SortName or SortTaken; Order is OrderDesc
+	// (default) or OrderAsc. Anything else is treated as the default for that
+	// field.
 	Sort  string
 	Order string
+	// Queries reads the capture dates SortTaken orders by. Nil sorts SortTaken
+	// by the date added alone.
+	Queries *db.Queries
 	// Offset and Limit page the sorted result.
 	Offset int
 	Limit  int
@@ -83,10 +95,38 @@ func ParsePagination(offsetRaw, limitRaw string) (offset, limit int) {
 // ParseSort reads the sort query parameter, falling back to SortAdded for
 // anything unrecognized.
 func ParseSort(raw string) string {
-	if raw == SortName {
-		return SortName
+	switch raw {
+	case SortName, SortTaken:
+		return raw
 	}
 	return SortAdded
+}
+
+// TakenDatesParams names where capture dates are stored.
+type TakenDatesParams struct {
+	Ctx     context.Context
+	Queries *db.Queries
+}
+
+// TakenDatesResult maps a photo, keyed by device serial and canonical path,
+// to its EXIF capture date.
+type TakenDatesResult struct {
+	Dates map[DuplicatePhoto]time.Time
+}
+
+// TakenDates reads every capture date the photo scan has recorded (#2592).
+// A photo missing from the map has no date, or has not been read yet.
+func TakenDates(params TakenDatesParams) (TakenDatesResult, error) {
+	rows, err := params.Queries.ListPhotoTakenAt(params.Ctx)
+	if err != nil {
+		return TakenDatesResult{}, fmt.Errorf("list capture dates: %w", err)
+	}
+	dates := make(map[DuplicatePhoto]time.Time, len(rows))
+	for _, row := range rows {
+		key := DuplicatePhoto{DeviceSerial: row.DeviceSerial, RelPath: row.RelPath}
+		dates[key] = row.TakenAt.Time
+	}
+	return TakenDatesResult{Dates: dates}, nil
 }
 
 // ParseOrder reads the order query parameter, falling back to OrderDesc for
@@ -100,7 +140,8 @@ func ParseOrder(raw string) string {
 
 // sortPhotos orders photos by sortBy and order, defaulting to newest-first by
 // modification time — the fixed order ListPhotos used before #2509 — for a
-// zero-value or unrecognized sortBy/order.
+// zero-value or unrecognized sortBy/order. SortTaken orders by TakenAt,
+// standing in the modification time for a photo without one.
 func sortPhotos(photos []PhotoSummary, sortBy, order string) {
 	ascending := order == OrderAsc
 	if sortBy == SortName {
@@ -114,11 +155,20 @@ func sortPhotos(photos []PhotoSummary, sortBy, order string) {
 		})
 		return
 	}
+	key := func(p PhotoSummary) int64 { return p.MTime }
+	if sortBy == SortTaken {
+		key = func(p PhotoSummary) int64 {
+			if p.TakenAt != 0 {
+				return p.TakenAt
+			}
+			return p.MTime
+		}
+	}
 	sort.Slice(photos, func(i, j int) bool {
 		if ascending {
-			return photos[i].MTime < photos[j].MTime
+			return key(photos[i]) < key(photos[j])
 		}
-		return photos[i].MTime > photos[j].MTime
+		return key(photos[i]) > key(photos[j])
 	})
 }
 
@@ -201,6 +251,18 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 		}
 	}
 
+	if params.Sort == SortTaken && params.Queries != nil {
+		taken, err := TakenDates(TakenDatesParams{Ctx: params.Ctx, Queries: params.Queries})
+		if err != nil {
+			return ListPhotosResult{}, err
+		}
+		for i, photo := range allPhotos {
+			key := DuplicatePhoto{DeviceSerial: photo.Serial, RelPath: accessutil.Canonical(photo.RelPath)}
+			if t, ok := taken.Dates[key]; ok {
+				allPhotos[i].TakenAt = t.Unix()
+			}
+		}
+	}
 	sortPhotos(allPhotos, params.Sort, params.Order)
 
 	total := len(allPhotos)

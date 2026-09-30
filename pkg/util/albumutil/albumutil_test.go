@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
@@ -190,6 +191,57 @@ func TestListItems_SortByName(t *testing.T) {
 	for i, want := range wantDesc {
 		if descending.Items[i].RelPath != want {
 			t.Fatalf("descending[%d] = %q, want %q", i, descending.Items[i].RelPath, want)
+		}
+	}
+}
+
+// TestListItems_SortByTaken orders by the photo's capture date, standing in
+// added_at for a photo with none, and reports the dates it used (#2592).
+func TestListItems_SortByTaken(t *testing.T) {
+	q, owner := newOwnedQueries(t)
+	ctx := context.Background()
+	album := create(t, q, owner, "Trips", sql.NullInt64{})
+	// Added in this order, so undated.jpg's added_at is now: the newest date.
+	for _, name := range []string{"2023.jpg", "2019.jpg", "undated.jpg"} {
+		if _, err := q.AddPhotoToAlbum(ctx, db.AddPhotoToAlbumParams{AlbumID: album.ID, DeviceSerial: "dev", RelPath: name}); err != nil {
+			t.Fatalf("AddPhotoToAlbum(%q): %v", name, err)
+		}
+	}
+	dates := map[string]time.Time{
+		"2019.jpg": time.Date(2019, 7, 4, 12, 0, 0, 0, time.UTC),
+		"2023.jpg": time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+	}
+	for name, taken := range dates {
+		if err := q.UpsertPhotoHash(ctx, db.UpsertPhotoHashParams{
+			DeviceSerial: "dev", RelPath: name, TakenAt: sql.NullTime{Time: taken, Valid: true}, TakenChecked: true,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, tt := range []struct {
+		order string
+		want  []string
+	}{
+		{photoutil.OrderDesc, []string{"undated.jpg", "2023.jpg", "2019.jpg"}},
+		{photoutil.OrderAsc, []string{"2019.jpg", "2023.jpg", "undated.jpg"}},
+	} {
+		result, err := albumutil.ListItems(ctx, albumutil.ListItemsParams{
+			Queries: q, Access: fullAccess(t), AlbumID: album.ID, Sort: photoutil.SortTaken, Order: tt.order,
+		})
+		if err != nil {
+			t.Fatalf("ListItems %s: %v", tt.order, err)
+		}
+		for i, want := range tt.want {
+			if result.Items[i].RelPath != want {
+				t.Fatalf("%s[%d] = %q, want %q", tt.order, i, result.Items[i].RelPath, want)
+			}
+		}
+		for _, item := range result.Items {
+			got, ok := result.TakenAt[item.ID]
+			if want, dated := dates[item.RelPath]; ok != dated || !got.Equal(want) {
+				t.Errorf("TakenAt[%s] = %v (present %v), want %v", item.RelPath, got, ok, want)
+			}
 		}
 	}
 }

@@ -1529,7 +1529,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Sort field: added (date added) or name (default added)",
+                        "description": "Sort field: added (date added), taken (date taken) or name (default added)",
                         "name": "sort",
                         "in": "query"
                     },
@@ -5616,7 +5616,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Sort field: added (date added) or name (default added)",
+                        "description": "Sort field: added (date added), taken (date taken) or name (default added)",
                         "name": "sort",
                         "in": "query"
                     },
@@ -10123,6 +10123,10 @@ const docTemplate = `{
                 },
                 "size": {
                     "type": "integer"
+                },
+                "takenAt": {
+                    "description": "TakenAt is the EXIF capture date in Unix seconds, set under SortTaken\nfor a photo whose date is known (#2592).",
+                    "type": "integer"
                 }
             }
         },
@@ -10386,6 +10390,10 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "relPath": {
+                    "type": "string"
+                },
+                "takenAt": {
+                    "description": "TakenAt is the photo's EXIF capture date, sent under sort=taken when\nit is known (#2592).",
                     "type": "string"
                 }
             }

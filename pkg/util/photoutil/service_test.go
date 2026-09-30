@@ -71,6 +71,7 @@ func TestParseSort(t *testing.T) {
 		{"", "added"},
 		{"added", "added"},
 		{"name", "name"},
+		{"taken", "taken"},
 		{"garbage", "added"},
 	}
 	for _, tc := range cases {
