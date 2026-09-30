@@ -117,6 +117,48 @@ void main() {
     expect(events, ['menu:2']);
   });
 
+  testBothViewports('offers no menu on a device photo (#2276)', (
+    tester,
+    size,
+  ) async {
+    await pumpGrid(tester, size: size, withMenu: true);
+
+    // b is a device photo: nothing on the Quark to act on.
+    expect(find.byKey(const ValueKey('photo_tile_menu_a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('photo_tile_menu_b')), findsNothing);
+  });
+
+  testBothViewports('a long press can stay selection with a menu', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpAt(
+      tester,
+      CustomScrollView(
+        slivers: [
+          PhotoGrid(
+            photos: _photos,
+            crossAxisCount: 3,
+            emptyState: const SizedBox(),
+            thumbnailBuilder: (context, photo) =>
+                const ColoredBox(color: Colors.teal),
+            onTap: (_) {},
+            onLongPress: (i) => events.add('long:$i'),
+            onMenu: (i, _) => events.add('menu:$i'),
+            longPressOpensMenu: false,
+          ),
+        ],
+      ),
+      size: size,
+    );
+
+    await tester.longPress(find.byKey(const ValueKey('photo_tile_a')));
+    await tester.pump();
+
+    expect(events, ['long:0']);
+  });
+
   testBothViewports('offers no menu in selection mode', (tester, size) async {
     await pumpGrid(tester, size: size, withMenu: true, selectionMode: true);
 

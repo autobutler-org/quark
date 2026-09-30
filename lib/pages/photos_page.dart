@@ -21,6 +21,9 @@ import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/photos/add_to_album_sheet.dart';
 import 'package:quark/widgets/photos/album_actions_menu.dart';
+import 'package:quark/utils/file_browser_dialog_utils.dart';
+import 'package:quark/widgets/sharing/show_share_sheet.dart';
+import 'package:quark/widgets/photos/library_photo_menu.dart';
 import 'package:quark/widgets/photos/album_item_menu.dart';
 import 'package:quark/widgets/photos/album_name_dialog.dart';
 import 'package:quark/widgets/photos/album_picker_sheet.dart';
@@ -515,6 +518,59 @@ class PhotosPageState extends State<PhotosPage>
     ).showAt(context, position);
   }
 
+  /// A Quark photo's menu in the library, opened at [position] by the tile's
+  /// button or a right-click (#2276).
+  void _showLibraryPhotoActions(PhotoItem photo, Offset position) {
+    final path = _controller.quarkPathOf(photo.id);
+    if (path == null) return;
+    LibraryPhotoMenu(
+      isFavorite: photo.isFavorite,
+      onAddToAlbum: () => AddToAlbumSheetHost.show(
+        context,
+        deviceSerial: path.serial,
+        relPath: path.relPath,
+      ),
+      onToggleFavorite: () => _toggleFavorite(photo.id),
+      onDownload: () => _downloadPhoto(photo.id),
+      onShare: () => showShareSheet(
+        context,
+        deviceSerial: path.serial,
+        relPath: path.relPath,
+        name: photo.name,
+      ),
+      onMakeACopy: () => _copyPhoto(photo.id),
+      onDelete: () => _deletePhoto(photo),
+    ).showAt(context, position);
+  }
+
+  Future<void> _downloadPhoto(String id) async {
+    try {
+      await _controller.downloadPhoto(id);
+    } catch (e) {
+      if (mounted) _snack(Errors.message(e, 'download the photo'));
+    }
+  }
+
+  Future<void> _copyPhoto(String id) async {
+    try {
+      final name = await _controller.copyPhoto(id);
+      if (mounted && name != null) _snack('Copy saved as $name');
+    } catch (e) {
+      if (mounted) _snack(Errors.message(e, 'copy the photo'));
+    }
+  }
+
+  Future<void> _deletePhoto(PhotoItem photo) async {
+    // The same confirmation Files and the image viewer use.
+    final confirmed = await confirmDelete(context, '"${photo.name}"');
+    if (confirmed != true || !mounted) return;
+    try {
+      await _controller.deletePhoto(photo.id);
+    } catch (e) {
+      if (mounted) _snack(Errors.message(e, 'delete the photo'));
+    }
+  }
+
   Future<void> _removeFromAlbum(String id) async {
     if (!await RemoveFromAlbumDialog.show(context)) return;
     try {
@@ -769,11 +825,18 @@ class PhotosPageState extends State<PhotosPage>
                                     serial: c.thumbnailSource(photo.id)?.serial,
                                   ),
                               onTap: (i) => _onPhotoTap(photos, i),
-                              // In an album the menu takes the long press.
+                              // In an album the menu takes the long press; in
+                              // the library it stays selection (#2276).
                               onLongPress: (i) =>
                                   c.selectFromLongPress(photos[i].id),
-                              onMenu: album == null || _demo
+                              longPressOpensMenu: album != null,
+                              onMenu: _demo
                                   ? null
+                                  : album == null
+                                  ? (i, position) => _showLibraryPhotoActions(
+                                      photos[i],
+                                      position,
+                                    )
                                   : (i, position) => _showAlbumItemActions(
                                       album,
                                       photos[i].id,

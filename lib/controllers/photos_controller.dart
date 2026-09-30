@@ -148,6 +148,22 @@ class PhotosController extends ChangeNotifier {
         renderDroppedFileThumbnail,
     Future<Uint8List?> Function(String name, String path) renderFromPath =
         renderThumbnailFromPath,
+    Future<String?> Function(
+          String filePath, {
+          String? serial,
+          String? fileName,
+        })
+        saveFile =
+        FilesService.saveFile,
+    Future<String> Function(String relPath, {String? serial}) copyPhoto =
+        FilesService.copyPhoto,
+    Future<void> Function(
+          String rootDir,
+          String fileName, {
+          String? deviceSerial,
+        })
+        deleteFile =
+        FilesService.deleteFile,
     PhotoBytesCache? bytesCache,
     bool isWeb = kIsWeb,
   }) : _getPhotos = getPhotos,
@@ -170,6 +186,9 @@ class PhotosController extends ChangeNotifier {
        _renderFromBytes = renderFromBytes,
        _renderDroppedFile = renderDroppedFile,
        _renderFromPath = renderFromPath,
+       _saveFile = saveFile,
+       _copyPhoto = copyPhoto,
+       _deleteFile = deleteFile,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
        _isWeb = isWeb;
 
@@ -263,6 +282,19 @@ class PhotosController extends ChangeNotifier {
   _renderFromBytes;
   final Future<Uint8List?> Function(DropItemFile file) _renderDroppedFile;
   final Future<Uint8List?> Function(String name, String path) _renderFromPath;
+  final Future<String?> Function(
+    String filePath, {
+    String? serial,
+    String? fileName,
+  })
+  _saveFile;
+  final Future<String> Function(String relPath, {String? serial}) _copyPhoto;
+  final Future<void> Function(
+    String rootDir,
+    String fileName, {
+    String? deviceSerial,
+  })
+  _deleteFile;
   final PhotoBytesCache _bytesCache;
   final bool _isWeb;
 
@@ -995,6 +1027,48 @@ class PhotosController extends ChangeNotifier {
     final relPath = photo?.relPath;
     if (relPath == null) return null;
     return (serial: photo!.serial ?? '', relPath: relPath);
+  }
+
+  // ── One Quark photo ───────────────────────────────────────────────────────
+
+  /// Downloads the Quark photo [id] to the device (#2276). Does nothing for a
+  /// device photo. Throws what the Quark threw.
+  Future<void> downloadPhoto(String id) async {
+    final path = quarkPathOf(id);
+    if (path == null) return;
+    await _saveFile(
+      path.relPath,
+      serial: path.serial.isEmpty ? null : path.serial,
+      fileName: _byId(id)!.name,
+    );
+  }
+
+  /// Copies the Quark photo [id] beside itself and reloads the library, so
+  /// the copy shows. Returns the copy's file name, or null for a device
+  /// photo. Throws what the Quark threw.
+  Future<String?> copyPhoto(String id) async {
+    final path = quarkPathOf(id);
+    if (path == null) return null;
+    final copy = await _copyPhoto(
+      path.relPath,
+      serial: path.serial.isEmpty ? null : path.serial,
+    );
+    await refresh();
+    return copy.split('/').last;
+  }
+
+  /// Moves the Quark photo [id] to the trash and reloads the library. Does
+  /// nothing for a device photo. Throws what the Quark threw.
+  Future<void> deletePhoto(String id) async {
+    final path = quarkPathOf(id);
+    if (path == null) return;
+    final slash = path.relPath.lastIndexOf('/');
+    await _deleteFile(
+      slash < 0 ? '' : path.relPath.substring(0, slash),
+      path.relPath.substring(slash + 1),
+      deviceSerial: path.serial.isEmpty ? null : path.serial,
+    );
+    await refresh();
   }
 
   /// Loads the items of the album being shown, if any. A failure is kept for
