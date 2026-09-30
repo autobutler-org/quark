@@ -8,7 +8,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// The load is injected rather than called here, so this widget holds the
 /// dialog's loading state without knowing a service exists. [show] answers
-/// with the chosen format and quality, or null when canceled.
+/// with the chosen format, or null when canceled.
 class TranscodeDialogHost extends StatefulWidget {
   /// Creates the host for a video whose own format is [sourceFormat].
   const TranscodeDialogHost({
@@ -17,13 +17,13 @@ class TranscodeDialogHost extends StatefulWidget {
     super.key,
   });
 
-  /// Shows the dialog and answers with the format and quality chosen, or null.
-  static Future<(String, TranscodeQuality)?> show(
+  /// Shows the dialog and answers with the format chosen, or null.
+  static Future<String?> show(
     BuildContext context, {
     required Future<List<TranscodeFormat>> Function() loadFormats,
     String? sourceFormat,
   }) {
-    return showDialog<(String, TranscodeQuality)>(
+    return showDialog<String>(
       context: context,
       builder: (_) => TranscodeDialogHost(
         loadFormats: loadFormats,
@@ -32,7 +32,7 @@ class TranscodeDialogHost extends StatefulWidget {
     );
   }
 
-  /// Fetches the formats this Quark can convert to.
+  /// Fetches the formats this Quark can convert the video to.
   final Future<List<TranscodeFormat>> Function() loadFormats;
 
   /// The video's own format, the extension without the dot, or null.
@@ -84,8 +84,7 @@ class _TranscodeDialogHostState extends State<TranscodeDialogHost> {
       sourceFormat: widget.sourceFormat,
       isLoading: _loading,
       error: _error,
-      onConvert: (format, quality) =>
-          Navigator.of(context).pop((format, quality)),
+      onConvert: (format) => Navigator.of(context).pop(format),
       onCancel: () => Navigator.of(context).pop(),
       onRetry: _load,
     );
