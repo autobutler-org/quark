@@ -25,12 +25,9 @@ class AddToAlbumSheetHost extends StatefulWidget {
     required String deviceSerial,
     required String relPath,
   }) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(QuarkColors.radiusLg),
-      ),
+    return showQuarkSheet<void>(
+      context,
+      title: 'Add to album',
       builder: (_) =>
           AddToAlbumSheetHost(deviceSerial: deviceSerial, relPath: relPath),
     );

@@ -18,17 +18,14 @@ void main() {
     size,
   ) async {
     final events = <String>[];
-    await pumpAt(
+    await pumpInSheet(
       tester,
-      Align(
-        alignment: Alignment.bottomCenter,
-        child: UploadTargetPicker(
-          targets: const [_internal, _usb],
-          selected: _internal,
-          onSelected: (t) => events.add('select:${t.serial}'),
-          onCancel: () => events.add('cancel'),
-          onConfirm: () => events.add('confirm'),
-        ),
+      UploadTargetPicker(
+        targets: const [_internal, _usb],
+        selected: _internal,
+        onSelected: (t) => events.add('select:${t.serial}'),
+        onCancel: () => events.add('cancel'),
+        onConfirm: () => events.add('confirm'),
       ),
       size: size,
     );

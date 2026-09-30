@@ -21,7 +21,7 @@ void main() {
     bool isLoading = false,
     List<String>? events,
   }) {
-    return pumpAt(
+    return pumpInSheet(
       tester,
       AddToAlbumSheet(
         albums: albums,
@@ -69,7 +69,7 @@ void main() {
     size,
   ) async {
     var creates = 0;
-    await pumpAt(
+    await pumpInSheet(
       tester,
       AddToAlbumSheet(
         albums: const [],
@@ -90,7 +90,7 @@ void main() {
   testWidgets('a caller that cannot create albums offers nothing', (
     tester,
   ) async {
-    await pumpAt(
+    await pumpInSheet(
       tester,
       AddToAlbumSheet(
         albums: const [],

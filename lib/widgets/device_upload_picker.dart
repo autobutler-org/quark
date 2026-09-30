@@ -9,8 +9,9 @@ Future<UploadTarget?> showDeviceUploadPicker(
   BuildContext context,
   List<UploadTarget> targets,
 ) {
-  return showModalBottomSheet<UploadTarget>(
-    context: context,
+  return showQuarkSheet<UploadTarget>(
+    context,
+    title: 'Upload to device',
     builder: (ctx) => DeviceUploadPicker(targets: targets),
   );
 }

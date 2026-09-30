@@ -574,6 +574,7 @@ class PhotosPageState extends State<PhotosPage>
   void _showAlbumActions(AlbumItem album) {
     AlbumActionsSheet.show(
       context,
+      albumName: album.name,
       onRename: () => _renameAlbum(album),
       onCreateSubAlbum: () => _createAlbum(parentId: album.id),
       onDelete: () => _deleteAlbum(album),

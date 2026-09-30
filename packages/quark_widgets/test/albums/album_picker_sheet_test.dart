@@ -17,16 +17,14 @@ void main() {
   Future<void> pumpSheet(
     WidgetTester tester, {
     Size size = wideViewport,
-    int selectedCount = 2,
     List<AlbumItem> albums = _albums,
     bool isLoading = false,
     String? error,
     List<String>? events,
   }) {
-    return pumpAt(
+    return pumpInSheet(
       tester,
       AlbumPickerSheet(
-        selectedCount: selectedCount,
         albums: albums,
         isLoading: isLoading,
         error: error,
@@ -45,17 +43,10 @@ void main() {
     await pumpSheet(tester, size: size, events: events);
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Add 2 photos to...'), findsOneWidget);
     expect(find.text('Iceland'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('album_picker_2')));
     expect(events, ['pick:2']);
-  });
-
-  testBothViewports('says "photo" for exactly one', (tester, size) async {
-    await pumpSheet(tester, size: size, selectedCount: 1);
-
-    expect(find.text('Add 1 photo to...'), findsOneWidget);
   });
 
   testBothViewports('shows a spinner while loading', (tester, size) async {
@@ -92,10 +83,9 @@ void main() {
     size,
   ) async {
     var creates = 0;
-    await pumpAt(
+    await pumpInSheet(
       tester,
       AlbumPickerSheet(
-        selectedCount: 4,
         albums: const [],
         onPicked: (_) {},
         onRetry: () {},
@@ -114,43 +104,22 @@ void main() {
   /// #2060: the selection bar behind this sheet has a Cancel that throws the
   /// selection away. A second button with the same word, dismissing only the
   /// sheet, is how someone ends up believing they backed out of a selection
-  /// they are still in.
+  /// they are still in. The sheet's own close button says Close.
   testBothViewports('the sheet closes with Close, not a second Cancel', (
     tester,
     size,
   ) async {
-    var closes = 0;
-    await pumpAt(
+    await pumpInSheet(
       tester,
       AlbumPickerSheet(
-        selectedCount: 3,
         albums: const [AlbumItem(id: 1, name: 'Trips')],
         onPicked: (_) {},
         onRetry: () {},
-        onClose: () => closes++,
       ),
       size: size,
     );
 
     expect(find.text('Cancel'), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('album_picker_close')));
-    await tester.pump();
-
-    expect(closes, 1);
-  });
-
-  testWidgets('a sheet with no close handler shows no button', (tester) async {
-    await pumpAt(
-      tester,
-      AlbumPickerSheet(
-        selectedCount: 1,
-        albums: const [AlbumItem(id: 1, name: 'Trips')],
-        onPicked: (_) {},
-        onRetry: () {},
-      ),
-      size: narrowViewport,
-    );
-
-    expect(find.byKey(const ValueKey('album_picker_close')), findsNothing);
+    expect(find.byTooltip('Close'), findsOneWidget);
   });
 }

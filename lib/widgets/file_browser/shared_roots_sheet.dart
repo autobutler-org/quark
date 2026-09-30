@@ -10,9 +10,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 Future<String?> showSharedRootsSheet(
   BuildContext context,
   List<SharedRoot> roots,
-) => showModalBottomSheet<String>(
-  context: context,
-  isScrollControlled: true,
+) => showQuarkSheet<String>(
+  context,
+  title: 'Shared with me',
   builder: (sheetContext) => SharedRootsSheet(
     items: [
       for (final root in roots)
