@@ -116,4 +116,18 @@ void main() {
       isFalse,
     );
   });
+
+  testWidgets('survives 200% text on a phone (#2606)', (tester) async {
+    await expectSurvivesLargeText(
+      tester,
+      Center(child: chip(onPressed: () {}, keepLabel: true)),
+    );
+
+    expect(find.text('Upload'), findsOneWidget);
+    expect(
+      drawnSize(tester, find.byKey(key)).height,
+      greaterThan(QuarkBarIconButton.size),
+      reason: 'the chip grows with its label',
+    );
+  });
 }

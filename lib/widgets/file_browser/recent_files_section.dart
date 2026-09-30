@@ -93,19 +93,26 @@ class _RecentFilesSectionState extends State<RecentFilesSection> {
                     color: colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    'Recently uploaded',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+                  Flexible(
+                    child: Text(
+                      'Recently uploaded',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: colorScheme.onSurface.withValues(alpha: 0.4),
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
+              // A chip's name and device lines are 13 and 11 pixels at the
+              // default text size; the strip grows by however much a large
+              // text size grows them (#2606).
               SizedBox(
-                height: 72,
+                height:
+                    72 + MediaQuery.textScalerOf(context).scale(13 + 11) - 24,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: files.length,

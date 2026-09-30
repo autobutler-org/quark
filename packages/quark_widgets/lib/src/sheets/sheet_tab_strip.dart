@@ -94,6 +94,9 @@ class _SheetTabStripState extends State<SheetTabStrip> {
   // needs a handle on the tab's element to find where it is.
   final GlobalKey _selectedKey = GlobalKey();
 
+  /// The size of a tab's label at the default text size.
+  static const double _labelSize = 14;
+
   @override
   void initState() {
     super.initState();
@@ -124,8 +127,13 @@ class _SheetTabStripState extends State<SheetTabStrip> {
 
     return Container(
       // A full tap target for every tab and button (#2605), under the strip's
-      // 1 pixel border and a tab's 2 pixel indicator.
-      height: kMinInteractiveDimension + 3,
+      // 1 pixel border and a tab's 2 pixel indicator, and taller by however
+      // much a large text size grows a tab's label (#2606).
+      height:
+          kMinInteractiveDimension +
+          3 +
+          MediaQuery.textScalerOf(context).scale(_labelSize) -
+          _labelSize,
       decoration: BoxDecoration(
         color: tokens.sidebar,
         border: Border(top: BorderSide(color: tokens.border)),

@@ -88,4 +88,16 @@ void main() {
 
     await expectTapTargetsMeetGuideline(tester);
   });
+
+  testWidgets('survives 200% text on a phone (#2606)', (tester) async {
+    await expectSurvivesLargeText(
+      tester,
+      Center(
+        child: SizedBox(
+          width: QuarkBrandButton.preferredWidth,
+          child: QuarkBrandButton(label: 'Files', onTap: () {}),
+        ),
+      ),
+    );
+  });
 }

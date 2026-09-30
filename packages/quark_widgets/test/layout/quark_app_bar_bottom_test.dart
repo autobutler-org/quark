@@ -11,7 +11,12 @@ void main() {
       label: 'Files',
       icon: QuarkIcons.folder_outlined,
       bottom: QuarkAppBarBottom(
-        lead: const Text('Home / Documents'),
+        // A lead truncates itself to the width the actions leave.
+        lead: const Text(
+          'Home / Documents',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           QuarkBarChip(
             key: const ValueKey('upload'),
@@ -85,5 +90,11 @@ void main() {
     await pumpAt(tester, page((_) {}), size: size, scaffold: false);
 
     await expectTapTargetsMeetGuideline(tester);
+  });
+
+  testWidgets('survives 200% text on a phone (#2606)', (tester) async {
+    await expectSurvivesLargeText(tester, page((_) {}), scaffold: false);
+
+    expect(find.text('Views'), findsOneWidget);
   });
 }

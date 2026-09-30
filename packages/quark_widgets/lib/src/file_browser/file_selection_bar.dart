@@ -52,7 +52,7 @@ class FileSelectionBar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
   });
 
-  /// The bar's height below any top inset.
+  /// The bar's height below any top inset, at the default text size.
   static const double height = 56;
 
   /// How many entries are selected, shown in the count label.
@@ -116,8 +116,10 @@ class FileSelectionBar extends StatelessWidget implements PreferredSizeWidget {
       // controls clear of the notch in landscape.
       child: SafeArea(
         bottom: false,
-        child: SizedBox(
-          height: height,
+        // A minimum, so a large text size grows the bar rather than cutting
+        // the count off (#2606).
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: height),
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: tokens.spacingSm),
             child: Row(

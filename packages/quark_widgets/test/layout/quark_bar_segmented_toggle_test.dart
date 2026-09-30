@@ -80,4 +80,10 @@ void main() {
 
     expect(chosen, ['grid']);
   });
+
+  testWidgets('survives 200% text on a phone (#2606)', (tester) async {
+    await expectSurvivesLargeText(tester, toggle('grid', (_) {}));
+
+    expect(find.text('Grid'), findsOneWidget);
+  });
 }

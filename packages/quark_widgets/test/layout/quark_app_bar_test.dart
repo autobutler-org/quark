@@ -270,4 +270,25 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('survives 200% text on a phone (#2606)', (tester) async {
+    await expectSurvivesLargeText(
+      tester,
+      Scaffold(
+        appBar: QuarkAppBar(
+          label: 'Photos',
+          icon: QuarkIcons.photo_library_outlined,
+          onRefresh: () {},
+          actions: [
+            QuarkBarChip(
+              icon: QuarkIcons.add_rounded,
+              label: 'New album',
+              onPressed: () {},
+            ),
+          ],
+        ),
+      ),
+      scaffold: false,
+    );
+  });
 }

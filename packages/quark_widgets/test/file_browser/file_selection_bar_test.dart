@@ -301,4 +301,25 @@ void main() {
       expect(bar.color, tokens.sidebar);
     });
   }
+
+  testWidgets('survives 200% text on a phone (#2606)', (tester) async {
+    await expectSurvivesLargeText(
+      tester,
+      Column(
+        children: [
+          FileSelectionBar(
+            selectedCount: 3,
+            totalCount: 3,
+            onSelectAll: () {},
+            onDeselectAll: () {},
+            onCancel: () {},
+            onDelete: () {},
+            onRestore: () {},
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('3 selected'), findsOneWidget);
+  });
 }

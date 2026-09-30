@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/widgets/file_browser/recent_files_section.dart';
+import 'package:quark/widgets/file_browser/recent_files_section/recent_file_chip.dart';
 
 import '../../support/tap_targets.dart';
 
@@ -96,4 +97,36 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('the strip survives 200% text on a phone (#2606)', (
+    tester,
+  ) async {
+    setViewport(tester, narrowViewport);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, app) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(2)),
+          child: app!,
+        ),
+        home: Scaffold(
+          body: RecentFilesSection(
+            getRecentFiles: fakeGetRecentFiles,
+            onOpenFile: (_) {},
+            onNavigateToFolder: (_) {},
+          ),
+        ),
+      ),
+    );
+    fetches.single.complete([_file('a.txt'), _file('b.txt')]);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    final chip = tester.getRect(find.byType(RecentFileChip).first);
+    for (final line in ['a.txt', 'disk']) {
+      final text = tester.getRect(find.text(line).first);
+      expect(text.bottom, lessThanOrEqualTo(chip.bottom), reason: line);
+    }
+  });
 }

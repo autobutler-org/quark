@@ -77,4 +77,23 @@ void main() {
 
     expect(find.byIcon(QuarkIcons.circle), findsNothing);
   });
+
+  testWidgets('never draws its label below 11 pixels (#2606)', (tester) async {
+    await pumpAt(tester, const LiveBadge(), size: narrowViewport);
+
+    for (final text in tester.widgetList<Text>(find.byType(Text))) {
+      expect(text.style!.fontSize, greaterThanOrEqualTo(11));
+    }
+  });
+
+  testWidgets('survives 200% text on a phone (#2606)', (tester) async {
+    await expectSurvivesLargeText(
+      tester,
+      const Align(alignment: Alignment.topLeft, child: LiveBadge()),
+    );
+    await expectSurvivesLargeText(
+      tester,
+      const Align(alignment: Alignment.topLeft, child: LiveBadge(ready: true)),
+    );
+  });
 }

@@ -335,4 +335,13 @@ void main() {
 
     await expectTapTargetsMeetGuideline(tester);
   });
+
+  testWidgets('survives 200% text on a phone (#2606)', (tester) async {
+    await expectSurvivesLargeText(
+      tester,
+      Align(alignment: Alignment.bottomCenter, child: strip(three)),
+    );
+
+    expect(find.text('Budget'), findsOneWidget);
+  });
 }

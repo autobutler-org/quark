@@ -7,10 +7,11 @@ import '../quark_bar_segmented_toggle.dart';
 /// One segment of a [QuarkBarSegmentedToggle]: a glyph and a word, tinted
 /// with the primary color while [selected].
 ///
-/// It draws [QuarkBarIconButton.size] tall with no border of its own, since
-/// the toggle draws one frame around every segment, and answers taps across
-/// [QuarkBarIconButton.hitSize]. The toggle rounds the outer corners of its
-/// first and last segments through [borderRadius].
+/// It draws at least [QuarkBarIconButton.size] tall, taller when a large text
+/// size needs the room, with its own border, and answers taps across
+/// [QuarkBarIconButton.hitSize]. The toggle overlaps neighboring borders into
+/// single dividers and rounds the outer corners of its first and last
+/// segments through [borderRadius].
 ///
 /// Key prefixes: `bar_segment_<id>` on the label.
 ///
@@ -65,8 +66,12 @@ class QuarkBarSegmentButton extends StatelessWidget {
             foregroundColor: foreground,
             iconColor: foreground,
             backgroundColor: selected
-                ? tokens.primary.withValues(alpha: 0.12)
-                : Colors.transparent,
+                ? Color.alphaBlend(
+                    tokens.primary.withValues(alpha: 0.12),
+                    tokens.input,
+                  )
+                : tokens.input,
+            side: BorderSide(color: tokens.border),
             shape: RoundedRectangleBorder(borderRadius: borderRadius),
             iconSize: QuarkBarIconButton.glyphSize,
             textStyle: Theme.of(context).textTheme.labelLarge,
@@ -74,7 +79,6 @@ class QuarkBarSegmentButton extends StatelessWidget {
               horizontal: tokens.spacingSm + tokens.spacingXs,
             ),
             minimumSize: const Size(0, QuarkBarIconButton.size),
-            maximumSize: const Size(double.infinity, QuarkBarIconButton.size),
             tapTargetSize: MaterialTapTargetSize.padded,
             visualDensity: VisualDensity.standard,
           ),

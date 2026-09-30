@@ -147,7 +147,7 @@ class TrimBar extends StatelessWidget {
           child: Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white, fontSize: 10),
+            style: const TextStyle(color: Colors.white, fontSize: 11),
           ),
         ),
       ),

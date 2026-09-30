@@ -14,7 +14,8 @@ import 'quark_bar_icon_button.dart';
 ///
 /// A null [onPressed] renders it disabled. Like the icon button, it draws
 /// at [QuarkBarIconButton.size] but answers taps across
-/// [QuarkBarIconButton.hitSize].
+/// [QuarkBarIconButton.hitSize]; a large text size grows it taller rather
+/// than clipping its label.
 ///
 /// On a phone — a viewport narrower than [compactBreakpoint] — a chip gives
 /// its label up to its tooltip and renders as a [QuarkBarIconButton], so a bar
@@ -103,8 +104,9 @@ class QuarkBarChip extends StatelessWidget {
         padding: EdgeInsets.symmetric(
           horizontal: tokens.spacingSm + tokens.spacingXs,
         ),
+        // A minimum, not a fixed height: a large text size grows the chip
+        // rather than cutting its label off (#2606).
         minimumSize: const Size(0, QuarkBarIconButton.size),
-        maximumSize: const Size(double.infinity, QuarkBarIconButton.size),
         tapTargetSize: MaterialTapTargetSize.padded,
         visualDensity: VisualDensity.standard,
       ),
