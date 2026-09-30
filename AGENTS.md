@@ -116,6 +116,15 @@ prose. cspell does read Markdown, though.
   more than ~10 files gets two or three options with tradeoffs before any code is written.
 - **Build what was asked.** No mechanisms (ports, detach modes, config knobs, abstractions) nobody requested.
 
+### Say it once
+
+Collapse repetition as you write, in Go and Dart alike. When every branch of an `if`/`else` or `switch`
+ends with the same statements, write the branches so they differ only where they actually differ, and move
+the shared tail after the branch. When you add a new branch, fix the existing ones that way too; don't add
+another copy. `AppSettings.load`'s default-host block (#2595) is the pattern: each branch picks a host, and
+one `_activeIndex = 0; await _saveHosts();` follows. No helper, no new abstraction, just fewer lines saying
+the same thing.
+
 ### Root cause over symptom
 
 - **State the causal chain before writing a fix:** the user action, the line responsible, and how you will
