@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// Picks a highlight color for the current selection.
 ///
 /// Pops the chosen color, [Colors.transparent] for "Clear", or null when
 /// canceled. Each swatch is named by its tooltip, so a screen reader reads
-/// "Yellow" rather than an unlabeled button.
+/// "Yellow" rather than an unlabeled button, and each takes keyboard focus
+/// and picks its color on Enter or Space.
 class HighlightPickerDialog extends StatelessWidget {
   const HighlightPickerDialog({super.key});
 
@@ -31,16 +33,20 @@ class HighlightPickerDialog extends StatelessWidget {
             message: entry.key,
             child: Semantics(
               button: true,
-              child: GestureDetector(
-                key: ValueKey('highlight_swatch_${entry.key.toLowerCase()}'),
-                onTap: () => Navigator.of(context).pop(entry.value),
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: entry.value,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.black26, width: 1.5),
+              child: QuarkFocusRing(
+                shape: BoxShape.circle,
+                child: InkWell(
+                  key: ValueKey('highlight_swatch_${entry.key.toLowerCase()}'),
+                  customBorder: const CircleBorder(),
+                  onTap: () => Navigator.of(context).pop(entry.value),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: entry.value,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.black26, width: 1.5),
+                    ),
                   ),
                 ),
               ),

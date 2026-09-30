@@ -425,113 +425,127 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                         // gesture is caught outside it; the tile's context is
                         // what the entries dispatch against, since it outlives
                         // the menu.
-                        child: GestureDetector(
-                          onLongPressStart:
+                        child: CallbackShortcuts(
+                          // The context-menu key and Shift+F10 open it from
+                          // the keyboard.
+                          bindings:
                               !widget.showFileSizeAndMenu ||
                                   widget.selectionMode
-                              ? null
-                              : (details) => menu.showAt(
-                                  context,
-                                  details.globalPosition,
-                                ),
-                          // A right-click opens the same menu (#2276).
-                          onSecondaryTapUp:
-                              !widget.showFileSizeAndMenu ||
-                                  widget.selectionMode
-                              ? null
-                              : (details) => menu.showAt(
-                                  context,
-                                  details.globalPosition,
-                                ),
-                          child: InkWell(
-                            onTap: widget.selectionMode
-                                ? () => widget.onSelectionChanged?.call(item)
-                                : widget.onOpenDirectory == null
-                                ? null
-                                : () => widget.onOpenDirectory!(item),
-                            child: Stack(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(cardPadding),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      AspectRatio(
-                                        aspectRatio: 1,
-                                        child: FileGridPreview(item: item),
-                                      ),
-                                      const SizedBox(height: slotGap),
-                                      SizedBox(
-                                        height: nameSlotHeight,
-                                        child: Text(
-                                          item.name,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      const SizedBox(height: slotGap),
-                                      SizedBox(
-                                        height: menuRowHeight,
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            if (widget.showFileSizeAndMenu)
-                                              Flexible(
-                                                child: Text(
-                                                  formatFileSize(
-                                                    item.size,
-                                                    item.isDir,
-                                                    compressedSize:
-                                                        item.compressedSize,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            if (widget.showFileSizeAndMenu)
-                                              FileMenuButton(menu: menu),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
+                              ? const {}
+                              : quarkMenuKeyBindings(
+                                  () => menu.showAt(
+                                    context,
+                                    quarkMenuAnchor(context),
                                   ),
                                 ),
-                                // Checkbox overlay in selection mode.
-                                if (widget.selectionMode)
-                                  Positioned(
-                                    top: 4,
-                                    left: 4,
-                                    child: IgnorePointer(
-                                      child: Container(
-                                        width: 24,
-                                        height: 24,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .surface
-                                              .withValues(alpha: 0.75),
-                                          shape: BoxShape.circle,
+                          child: GestureDetector(
+                            onLongPressStart:
+                                !widget.showFileSizeAndMenu ||
+                                    widget.selectionMode
+                                ? null
+                                : (details) => menu.showAt(
+                                    context,
+                                    details.globalPosition,
+                                  ),
+                            // A right-click opens the same menu (#2276).
+                            onSecondaryTapUp:
+                                !widget.showFileSizeAndMenu ||
+                                    widget.selectionMode
+                                ? null
+                                : (details) => menu.showAt(
+                                    context,
+                                    details.globalPosition,
+                                  ),
+                            child: InkWell(
+                              onTap: widget.selectionMode
+                                  ? () => widget.onSelectionChanged?.call(item)
+                                  : widget.onOpenDirectory == null
+                                  ? null
+                                  : () => widget.onOpenDirectory!(item),
+                              child: Stack(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(cardPadding),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        AspectRatio(
+                                          aspectRatio: 1,
+                                          child: FileGridPreview(item: item),
                                         ),
-                                        child: Icon(
-                                          isSelected
-                                              ? Icons.check_circle
-                                              : Icons.radio_button_unchecked,
-                                          size: 20,
-                                          color: isSelected
-                                              ? Theme.of(
-                                                  context,
-                                                ).colorScheme.primary
-                                              : Theme.of(
-                                                  context,
-                                                ).colorScheme.onSurfaceVariant,
+                                        const SizedBox(height: slotGap),
+                                        SizedBox(
+                                          height: nameSlotHeight,
+                                          child: Text(
+                                            item.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(height: slotGap),
+                                        SizedBox(
+                                          height: menuRowHeight,
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              if (widget.showFileSizeAndMenu)
+                                                Flexible(
+                                                  child: Text(
+                                                    formatFileSize(
+                                                      item.size,
+                                                      item.isDir,
+                                                      compressedSize:
+                                                          item.compressedSize,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              if (widget.showFileSizeAndMenu)
+                                                FileMenuButton(menu: menu),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Checkbox overlay in selection mode.
+                                  if (widget.selectionMode)
+                                    Positioned(
+                                      top: 4,
+                                      left: 4,
+                                      child: IgnorePointer(
+                                        child: Container(
+                                          width: 24,
+                                          height: 24,
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .surface
+                                                .withValues(alpha: 0.75),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            isSelected
+                                                ? Icons.check_circle
+                                                : Icons.radio_button_unchecked,
+                                            size: 20,
+                                            color: isSelected
+                                                ? Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),

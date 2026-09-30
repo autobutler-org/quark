@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -146,7 +147,33 @@ void main() {
     await expectLabeledTapTargets(tester);
     expect(
       tester.getSemantics(find.byKey(const ValueKey('breadcrumb_segment_0'))),
-      matchesSemantics(label: 'photos', isButton: true, hasTapAction: true),
+      isSemantics(label: 'photos', isButton: true, hasTapAction: true),
     );
+  });
+
+  testBothViewports('home and ancestors open from the keyboard', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpBar(
+      tester,
+      path: '/photos/2024/june',
+      size: size,
+      events: events,
+    );
+
+    final home = find.byKey(const ValueKey('breadcrumb_home'));
+    await tabTo(tester, home);
+    expect(focusRingShown(tester, home), true);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+
+    final segment = find.byKey(const ValueKey('breadcrumb_segment_1'));
+    await tabTo(tester, segment);
+    expect(focusRingShown(tester, segment), true);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+
+    expect(events, ['home', 'select:/photos/2024']);
   });
 }

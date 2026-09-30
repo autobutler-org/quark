@@ -28,6 +28,7 @@ export 'src/core/quark_avatar.dart';
 export 'src/core/quark_beta_badge.dart';
 export 'src/core/quark_disconnected_state.dart';
 export 'src/core/quark_file_icon.dart';
+export 'src/core/quark_focus_ring.dart';
 export 'src/core/quark_loader.dart';
 export 'src/core/quark_menu_button.dart';
 export 'src/core/quark_name_dialog.dart';

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/document_editor/highlight_picker_dialog.dart';
+import 'package:flutter/services.dart';
+import '../../support/tab_to.dart';
 
 /// #2603: the swatches were bare colored circles, so a screen reader could
 /// not tell one highlight from another.
@@ -48,5 +50,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(popped, [const Color(0xFF8BC34A)]);
+  });
+
+  testWidgets('picks a swatch from the keyboard', (tester) async {
+    final popped = <Color?>[];
+    await pumpDialog(tester, popped);
+
+    await tabTo(tester, find.byKey(const ValueKey('highlight_swatch_blue')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(popped, [const Color(0xFF4FC3F7)]);
   });
 }

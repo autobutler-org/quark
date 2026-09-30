@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// One clickable column label in a sort header. The arrow shows only on the
 /// column currently doing the sorting, and a screen reader hears the same
 /// thing as the cell's value: "sorted ascending" or "sorted descending".
+/// The cell takes keyboard focus and sorts on Enter or Space.
 class FileSortHeaderCell extends StatelessWidget {
   const FileSortHeaderCell({
     required this.label,
@@ -36,10 +38,11 @@ class FileSortHeaderCell extends StatelessWidget {
             : sortDirection == SortDirection.asc
             ? 'sorted ascending'
             : 'sorted descending',
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: GestureDetector(
+        child: QuarkFocusRing(
+          borderRadius: BorderRadius.circular(4),
+          child: InkWell(
             onTap: () => onToggleSort(column),
+            borderRadius: BorderRadius.circular(4),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/quark_theme.dart';
 import '../theme/quark_tokens.dart';
 import 'quark_bar_icon_button.dart';
 
@@ -12,7 +13,8 @@ import 'quark_bar_icon_button.dart';
 /// the user should be able to read the state of: [active] tints it with the
 /// primary color.
 ///
-/// A null [onPressed] renders it disabled.
+/// A null [onPressed] renders it disabled. With keyboard focus its border
+/// becomes [QuarkTheme.focusRing]'s two-pixel primary outline.
 ///
 /// On a phone — a viewport narrower than [compactBreakpoint] — a chip gives
 /// its label up to its tooltip and renders as a [QuarkBarIconButton], so a bar
@@ -81,31 +83,36 @@ class QuarkBarChip extends StatelessWidget {
       onPressed: onPressed,
       icon: Icon(icon),
       label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: foreground,
-        iconColor: foreground,
-        disabledForegroundColor: tokens.mutedForeground,
-        disabledIconColor: tokens.mutedForeground,
-        backgroundColor: active
-            ? tokens.primary.withValues(alpha: 0.12)
-            : tokens.input,
-        disabledBackgroundColor: tokens.input,
-        side: BorderSide(
-          color: active ? tokens.primary.withValues(alpha: 0.3) : tokens.border,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(tokens.radiusLg),
-        ),
-        iconSize: QuarkBarIconButton.glyphSize,
-        textStyle: Theme.of(context).textTheme.labelLarge,
-        padding: EdgeInsets.symmetric(
-          horizontal: tokens.spacingSm + tokens.spacingXs,
-        ),
-        minimumSize: const Size(0, QuarkBarIconButton.size),
-        maximumSize: const Size(double.infinity, QuarkBarIconButton.size),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        visualDensity: VisualDensity.standard,
-      ),
+      style:
+          OutlinedButton.styleFrom(
+            foregroundColor: foreground,
+            iconColor: foreground,
+            disabledForegroundColor: tokens.mutedForeground,
+            disabledIconColor: tokens.mutedForeground,
+            backgroundColor: active
+                ? tokens.primary.withValues(alpha: 0.12)
+                : tokens.input,
+            disabledBackgroundColor: tokens.input,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(tokens.radiusLg),
+            ),
+            iconSize: QuarkBarIconButton.glyphSize,
+            textStyle: Theme.of(context).textTheme.labelLarge,
+            padding: EdgeInsets.symmetric(
+              horizontal: tokens.spacingSm + tokens.spacingXs,
+            ),
+            minimumSize: const Size(0, QuarkBarIconButton.size),
+            maximumSize: const Size(double.infinity, QuarkBarIconButton.size),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.standard,
+          ).copyWith(
+            side: QuarkTheme.focusRing(
+              tokens,
+              resting: active
+                  ? tokens.primary.withValues(alpha: 0.3)
+                  : tokens.border,
+            ),
+          ),
     );
     final message = tooltip;
     return message == null ? chip : Tooltip(message: message, child: chip);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -57,5 +58,27 @@ void main() {
       QuarkBarIconButton.size,
     );
     expect(find.byTooltip('Grid'), findsOneWidget);
+  });
+
+  testBothViewports('rings the toggle while a segment has keyboard focus', (
+    tester,
+    size,
+  ) async {
+    final chosen = <String>[];
+    await pumpAt(tester, toggle('list', chosen.add), size: size);
+    final grid = find.byKey(const ValueKey('bar_segment_grid'));
+    expect(focusRingShown(tester, grid), false);
+
+    await tabTo(tester, find.byType(QuarkBarSegmentedToggle));
+    expect(focusRingShown(tester, grid), true);
+
+    // Tab moves on to the segment that is off; Space chooses it.
+    await tabTo(
+      tester,
+      find.ancestor(of: grid, matching: find.byType(TextButton)),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(chosen, ['grid']);
   });
 }

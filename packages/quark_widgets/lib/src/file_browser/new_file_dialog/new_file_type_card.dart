@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../core/quark_focus_ring.dart';
 import '../../theme/quark_tokens.dart';
 import '../new_file_dialog.dart';
 
 /// One selectable file type in [NewFileDialog]'s type picker, announced to a
-/// screen reader as a button that is selected or not.
+/// screen reader as a button that is selected or not. It takes keyboard
+/// focus, shows a [QuarkFocusRing] while it holds it, and picks the type on
+/// Enter or Space.
 ///
 /// Key prefix: `new_file_type_<extension without the dot, or `generic`>`.
 class NewFileTypeCard extends StatelessWidget {
@@ -37,53 +40,60 @@ class NewFileTypeCard extends StatelessWidget {
     // label every time the selection moves.
     final borderWidth = isSelected ? 2.0 : 1.0;
     final inset = borderWidth - 1;
+    final radius = BorderRadius.circular(tokens.radiusMd);
 
     return Semantics(
       button: true,
       selected: isSelected,
-      child: GestureDetector(
-        key: ValueKey('new_file_type_$slug'),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          width: 88,
-          padding: EdgeInsets.symmetric(
-            vertical: tokens.spacingSm + tokens.spacingXs - inset,
-            horizontal: tokens.spacingSm - inset,
-          ),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? colorScheme.primaryContainer
-                : colorScheme.surfaceContainerHighest,
-            border: Border.all(
-              color: isSelected ? colorScheme.primary : colorScheme.outline,
-              width: borderWidth,
+      child: QuarkFocusRing(
+        borderRadius: radius,
+        child: InkWell(
+          key: ValueKey('new_file_type_$slug'),
+          onTap: onTap,
+          borderRadius: radius,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 88,
+            padding: EdgeInsets.symmetric(
+              vertical: tokens.spacingSm + tokens.spacingXs - inset,
+              horizontal: tokens.spacingSm - inset,
             ),
-            borderRadius: BorderRadius.circular(tokens.radiusMd),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                type.icon,
-                size: 28,
-                color: isSelected
-                    ? colorScheme.primary
-                    : colorScheme.onSurface.withValues(alpha: 0.5),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? colorScheme.primaryContainer
+                  : colorScheme.surfaceContainerHighest,
+              border: Border.all(
+                color: isSelected ? colorScheme.primary : colorScheme.outline,
+                width: borderWidth,
               ),
-              SizedBox(height: tokens.spacingXs + tokens.spacingXs / 2),
-              Text(
-                type.label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              borderRadius: radius,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  type.icon,
+                  size: 28,
                   color: isSelected
                       ? colorScheme.primary
-                      : colorScheme.onSurface,
+                      : colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+                SizedBox(height: tokens.spacingXs + tokens.spacingXs / 2),
+                Text(
+                  type.label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                    color: isSelected
+                        ? colorScheme.primary
+                        : colorScheme.onSurface,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
         ),
       ),

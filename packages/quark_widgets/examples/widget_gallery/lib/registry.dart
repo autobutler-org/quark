@@ -157,6 +157,35 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkFocusRing',
+    group: 'Core',
+    // Tab onto either card to see its ring.
+    build: (context, log) => Wrap(
+      spacing: 16,
+      runSpacing: 16,
+      children: [
+        for (final name in const ['First', 'Second'])
+          QuarkFocusRing(
+            borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              onTap: () => log('QuarkFocusRing $name tapped'),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                width: 120,
+                height: 72,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: QuarkTokens.of(context).input,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(name),
+              ),
+            ),
+          ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'CopyButton',
     group: 'Core',
     build: (context, log) => Wrap(

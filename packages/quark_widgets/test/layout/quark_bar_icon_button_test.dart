@@ -103,4 +103,18 @@ void main() {
 
     expect(presses, 0);
   });
+
+  testBothViewports('wears a two-pixel outline under keyboard focus', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(tester, button(onPressed: () {}), size: size);
+    expect(buttonSide(tester, find.byKey(key)).width, lessThan(2));
+
+    await tabTo(tester, find.byKey(key));
+
+    final side = buttonSide(tester, find.byKey(key));
+    expect(side.width, 2);
+    expect(side.color, QuarkTokens.dark.primary);
+  });
 }

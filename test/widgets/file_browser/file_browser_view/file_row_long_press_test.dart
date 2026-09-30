@@ -5,6 +5,8 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_browser_list_tile.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:flutter/services.dart';
+import '../../../support/tab_to.dart';
 
 final _file = FileNode(
   name: 'notes.txt',
@@ -197,5 +199,24 @@ void main() {
 
       expect(_entries(tester), ['Download', 'Move/Rename', 'Share…', 'Delete']);
     });
+  });
+
+  testWidgets('the context-menu key and Shift+F10 open the focused row menu', (
+    tester,
+  ) async {
+    await _pumpTile(tester);
+    await tabTo(tester, find.byType(ListTile));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.contextMenu);
+    await tester.pumpAndSettle();
+    expect(_entries(tester), ['Download', 'Move/Rename', 'Share…', 'Delete']);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(PopupMenuItem<int>), findsNothing);
+
+    await pressShiftF10(tester);
+    await tester.pumpAndSettle();
+    expect(_entries(tester), ['Download', 'Move/Rename', 'Share…', 'Delete']);
   });
 }

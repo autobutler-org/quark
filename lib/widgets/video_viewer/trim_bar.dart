@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// A trim range bar with two draggable handles (start and end).
 ///
@@ -8,8 +10,10 @@ import 'package:flutter/material.dart';
 /// - Draggable circular handles at start and end positions
 /// - Timestamp labels above each handle
 ///
-/// A screen reader hears each handle as "Trim start" or "Trim end" with its
-/// timestamp as the value.
+/// A screen reader hears each handle as a "Trim start" or "Trim end" slider
+/// with its timestamp as the value. Each handle takes keyboard focus, shows a
+/// ring while it holds it, and moves a hundredth of the clip per Left or
+/// Right arrow press.
 class TrimBar extends StatelessWidget {
   final double start; // 0.0–1.0 fraction
   final double end; // 0.0–1.0 fraction
@@ -27,6 +31,9 @@ class TrimBar extends StatelessWidget {
   });
 
   static const _handleSize = 24.0;
+
+  /// How far one arrow key press moves a handle: a hundredth of the clip.
+  static const _nudge = 0.01;
   static const _trackHeight = 6.0;
 
   // The label sits in a fixed slot above the handle. Reserving the slot (rather
@@ -57,9 +64,6 @@ class TrimBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    final totalMs = duration.inMilliseconds;
-    final startLabel = _formatMs((start * totalMs).round());
-    final endLabel = _formatMs((end * totalMs).round());
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -99,24 +103,18 @@ class TrimBar extends StatelessWidget {
                 // Start handle + label
                 ..._buildHandle(
                   name: 'Trim start',
-                  centerX: startX,
+                  fraction: start,
                   width: width,
-                  label: startLabel,
                   color: primary,
-                  onDragDelta: (dx) => onStartChanged(
-                    ((startX + dx) / width).clamp(0.0, end - 0.01),
-                  ),
+                  onChanged: (v) => onStartChanged(v.clamp(0.0, end - 0.01)),
                 ),
                 // End handle + label
                 ..._buildHandle(
                   name: 'Trim end',
-                  centerX: endX,
+                  fraction: end,
                   width: width,
-                  label: endLabel,
                   color: primary,
-                  onDragDelta: (dx) => onEndChanged(
-                    ((endX + dx) / width).clamp(start + 0.01, 1.0),
-                  ),
+                  onChanged: (v) => onEndChanged(v.clamp(start + 0.01, 1.0)),
                 ),
               ],
             ),
@@ -130,14 +128,19 @@ class TrimBar extends StatelessWidget {
   /// them in a single Column made the Column — not the handle — the thing
   /// being positioned, so the handle inherited the label's width and height
   /// and drifted right and down off the track.
+  ///
+  /// [onChanged] takes the fraction the handle was moved to and clamps it.
   List<Widget> _buildHandle({
     required String name,
-    required double centerX,
+    required double fraction,
     required double width,
-    required String label,
     required Color color,
-    required ValueChanged<double> onDragDelta,
+    required ValueChanged<double> onChanged,
   }) {
+    final centerX = fraction * width;
+    String labelAt(double f) =>
+        _formatMs((f.clamp(0.0, 1.0) * duration.inMilliseconds).round());
+    final label = labelAt(fraction);
     // Slot widths can exceed the bar on very narrow layouts; keep the clamp
     // bounds ordered so they stay valid.
     final labelLeftMax = (width - _labelWidth).clamp(0.0, double.infinity);
@@ -163,22 +166,44 @@ class TrimBar extends StatelessWidget {
         top: _centerY - _handleSize / 2,
         left: (centerX - _handleSize / 2).clamp(0.0, handleLeftMax),
         child: Semantics(
+          slider: true,
           label: name,
           value: label,
-          child: GestureDetector(
-            onHorizontalDragUpdate: (details) => onDragDelta(details.delta.dx),
-            child: Container(
-              width: _handleSize,
-              height: _handleSize,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    blurRadius: 4,
+          increasedValue: labelAt(fraction + _nudge),
+          decreasedValue: labelAt(fraction - _nudge),
+          onIncrease: () => onChanged(fraction + _nudge),
+          onDecrease: () => onChanged(fraction - _nudge),
+          child: QuarkFocusRing(
+            shape: BoxShape.circle,
+            child: Focus(
+              onKeyEvent: (_, event) {
+                if (event is KeyUpEvent) return KeyEventResult.ignored;
+                final step = switch (event.logicalKey) {
+                  LogicalKeyboardKey.arrowLeft => -_nudge,
+                  LogicalKeyboardKey.arrowRight => _nudge,
+                  _ => null,
+                };
+                if (step == null) return KeyEventResult.ignored;
+                onChanged(fraction + step);
+                return KeyEventResult.handled;
+              },
+              child: GestureDetector(
+                onHorizontalDragUpdate: (details) =>
+                    onChanged(fraction + details.delta.dx / width),
+                child: Container(
+                  width: _handleSize,
+                  height: _handleSize,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        blurRadius: 4,
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),

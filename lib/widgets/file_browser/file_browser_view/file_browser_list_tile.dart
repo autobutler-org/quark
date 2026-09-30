@@ -5,6 +5,7 @@ import 'package:quark/widgets/file_browser/file_browser_view/file_list_leading.d
 import 'package:quark/widgets/file_browser/file_browser_view/file_menu.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_menu_button.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// One file or folder in the list view.
 class FileBrowserListTile extends StatelessWidget {
@@ -67,79 +68,87 @@ class FileBrowserListTile extends StatelessWidget {
     );
     // ListTile.onLongPress hands over no position, so the gestures are caught
     // outside it; the row's own context is what the entries dispatch against,
-    // since it outlives the menu. A right-click opens the same menu (#2276).
+    // since it outlives the menu. A right-click opens the same menu (#2276),
+    // and so do the context-menu key and Shift+F10 on the focused row.
     final hasMenu = showFileSizeAndMenu && !selectionMode;
-    return GestureDetector(
-      onLongPressStart: hasMenu
-          ? (details) => menu.showAt(context, details.globalPosition)
-          : null,
-      onSecondaryTapUp: hasMenu
-          ? (details) => menu.showAt(context, details.globalPosition)
-          : null,
-      child: Material(
-        color: isSelected
-            ? colors.primaryContainer.withValues(alpha: 0.35)
-            : Colors.transparent,
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 2,
-          ),
-          leading: selectionMode
-              ? Checkbox(
-                  value: isSelected,
-                  onChanged: (_) => onSelectionChanged?.call(item),
-                )
-              : FileListLeading(key: ValueKey(item.apiPath), item: item),
-          title: Row(
-            children: [
-              Expanded(
-                flex: 5,
-                child: Text(
-                  item.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+    return CallbackShortcuts(
+      bindings: hasMenu
+          ? quarkMenuKeyBindings(
+              () => menu.showAt(context, quarkMenuAnchor(context)),
+            )
+          : const {},
+      child: GestureDetector(
+        onLongPressStart: hasMenu
+            ? (details) => menu.showAt(context, details.globalPosition)
+            : null,
+        onSecondaryTapUp: hasMenu
+            ? (details) => menu.showAt(context, details.globalPosition)
+            : null,
+        child: Material(
+          color: isSelected
+              ? colors.primaryContainer.withValues(alpha: 0.35)
+              : Colors.transparent,
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 2,
+            ),
+            leading: selectionMode
+                ? Checkbox(
+                    value: isSelected,
+                    onChanged: (_) => onSelectionChanged?.call(item),
+                  )
+                : FileListLeading(key: ValueKey(item.apiPath), item: item),
+            title: Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: Text(
+                    item.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  item.deviceName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
-              ),
-              if (showFileSizeAndMenu)
                 Expanded(
                   flex: 2,
                   child: Text(
-                    formatFileSize(
-                      item.size,
-                      item.isDir,
-                      compressedSize: item.compressedSize,
-                    ),
+                    item.deviceName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: colors.onSurfaceVariant),
                   ),
                 ),
-            ],
+                if (showFileSizeAndMenu)
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      formatFileSize(
+                        item.size,
+                        item.isDir,
+                        compressedSize: item.compressedSize,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.onSurfaceVariant),
+                    ),
+                  ),
+              ],
+            ),
+            subtitle: subtitle == null
+                ? null
+                : Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: colors.onSurfaceVariant),
+                  ),
+            trailing: showFileSizeAndMenu ? FileMenuButton(menu: menu) : null,
+            onTap: selectionMode
+                ? () => onSelectionChanged?.call(item)
+                : onOpenDirectory == null
+                ? null
+                : () => onOpenDirectory!(item),
           ),
-          subtitle: subtitle == null
-              ? null
-              : Text(
-                  subtitle!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
-          trailing: showFileSizeAndMenu ? FileMenuButton(menu: menu) : null,
-          onTap: selectionMode
-              ? () => onSelectionChanged?.call(item)
-              : onOpenDirectory == null
-              ? null
-              : () => onOpenDirectory!(item),
         ),
       ),
     );

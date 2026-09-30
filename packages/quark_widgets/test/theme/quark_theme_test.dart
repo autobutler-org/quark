@@ -169,6 +169,49 @@ void main() {
           expect(resting?.width ?? 0, lessThan(2));
         }
       });
+
+      test('$name: a focused icon button wears the same outline', () {
+        final side = QuarkTheme.from(
+          tokens,
+          brightness,
+        ).iconButtonTheme.style!.side!;
+
+        final focused = side.resolve({WidgetState.focused})!;
+        expect(focused.color, tokens.primary);
+        expect(focused.width, 2);
+        expect(side.resolve(<WidgetState>{}), isNull);
+      });
+
+      test('$name: ink and list tiles tint strongly under focus', () {
+        final theme = QuarkTheme.from(tokens, brightness);
+
+        expect(theme.focusColor.a, closeTo(QuarkTheme.focusAlpha, 0.01));
+        expect(
+          theme.focusColor.withValues(alpha: 1),
+          tokens.primary.withValues(alpha: 1),
+        );
+        // Material's own default is 0.12, which is what was too faint.
+        expect(QuarkTheme.focusAlpha, greaterThan(0.12 * 2));
+      });
+
+      test('$name: switches, checkboxes and radios show a strong halo', () {
+        final theme = QuarkTheme.from(tokens, brightness);
+
+        for (final overlay in [
+          theme.switchTheme.overlayColor,
+          theme.checkboxTheme.overlayColor,
+          theme.radioTheme.overlayColor,
+        ]) {
+          final focused = overlay!.resolve({WidgetState.focused})!;
+          expect(focused.a, closeTo(QuarkTheme.focusAlpha, 0.01));
+          // Hover and press keep Material's defaults.
+          expect(overlay.resolve({WidgetState.hovered}), isNull);
+        }
+        final box = theme.checkboxTheme.side! as WidgetStateBorderSide;
+        final focusedBox = box.resolve({WidgetState.focused})!;
+        expect(focusedBox.width, 2);
+        expect(focusedBox.color, tokens.primary);
+      });
     }
   });
 }

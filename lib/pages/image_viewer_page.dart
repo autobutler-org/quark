@@ -816,49 +816,61 @@ class _ImageViewerPageState extends State<ImageViewerPage>
         if (didPop) return;
         Navigator.of(context).pop(_listChanged);
       },
-      child: KeyboardListener(
-        focusNode: _focusNode,
-        autofocus: true,
-        onKeyEvent: (e) => _handleKey(_focusNode, e),
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          appBar: ImageViewerAppBar(
-            isDesktop: isDesktop,
-            currentIndex: _currentIndex,
-            imageCount: _liveImageCount,
-            hasPrev: _hasPrev,
-            hasNext: _hasNext,
-            onPrevious: () => _goToPage(-1),
-            onNext: () => _goToPage(1),
-            isFavorite: _isFavorite,
-            sidebarOpen: _sidebarOpen,
-            relPath: _currentRelPath,
-            onClose: () => Navigator.of(context).pop(_listChanged),
-            onToggleFavorite: _toggleFavorite,
-            onRotate: _rotate,
-            onDownload: _download,
-            onToggleSidebar: _toggleSidebar,
-            onShowShortcuts: () => _showShortcutsDialog(context),
-            moreMenu: moreMenu,
-          ),
-          body: isDesktop
-              ? DesktopBody(
-                  photoArea: clickablePhoto,
-                  sidebarOpen: _sidebarOpen,
-                  name: _currentName,
-                  metadata: _metadata,
-                  loading: _metadataLoading,
-                  onAlbumTap: _navigateToAlbum,
-                )
-              : MobileBody(
-                  photoArea: clickablePhoto,
-                  sidebarOpen: _sidebarOpen,
-                  drawerController: _drawerController,
-                  name: _currentName,
-                  metadata: _metadata,
-                  loading: _metadataLoading,
-                  onAlbumTap: _navigateToAlbum,
+      child: CallbackShortcuts(
+        // The context-menu key and Shift+F10 open the photo's menu, the one a
+        // right-click opens, in the middle of the screen.
+        bindings: moreMenu.isEmpty
+            ? const {}
+            : quarkMenuKeyBindings(
+                () => moreMenu.showAt(
+                  context,
+                  MediaQuery.sizeOf(context).center(Offset.zero),
                 ),
+              ),
+        child: KeyboardListener(
+          focusNode: _focusNode,
+          autofocus: true,
+          onKeyEvent: (e) => _handleKey(_focusNode, e),
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            appBar: ImageViewerAppBar(
+              isDesktop: isDesktop,
+              currentIndex: _currentIndex,
+              imageCount: _liveImageCount,
+              hasPrev: _hasPrev,
+              hasNext: _hasNext,
+              onPrevious: () => _goToPage(-1),
+              onNext: () => _goToPage(1),
+              isFavorite: _isFavorite,
+              sidebarOpen: _sidebarOpen,
+              relPath: _currentRelPath,
+              onClose: () => Navigator.of(context).pop(_listChanged),
+              onToggleFavorite: _toggleFavorite,
+              onRotate: _rotate,
+              onDownload: _download,
+              onToggleSidebar: _toggleSidebar,
+              onShowShortcuts: () => _showShortcutsDialog(context),
+              moreMenu: moreMenu,
+            ),
+            body: isDesktop
+                ? DesktopBody(
+                    photoArea: clickablePhoto,
+                    sidebarOpen: _sidebarOpen,
+                    name: _currentName,
+                    metadata: _metadata,
+                    loading: _metadataLoading,
+                    onAlbumTap: _navigateToAlbum,
+                  )
+                : MobileBody(
+                    photoArea: clickablePhoto,
+                    sidebarOpen: _sidebarOpen,
+                    drawerController: _drawerController,
+                    name: _currentName,
+                    metadata: _metadata,
+                    loading: _metadataLoading,
+                    onAlbumTap: _navigateToAlbum,
+                  ),
+          ),
         ),
       ),
     );

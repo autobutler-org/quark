@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_focus_ring.dart';
 import '../theme/quark_tokens.dart';
 
 /// The path trail above a file listing: an up button, a home glyph, and one
@@ -10,6 +11,9 @@ import '../theme/quark_tokens.dart';
 /// tapping it would go nowhere. The trail scrolls horizontally rather than
 /// wrapping, so a deep path never grows the bar's height on a narrow screen.
 /// It renders nothing in search mode, where there is no path to show.
+///
+/// The home glyph and every ancestor segment take keyboard focus, show a
+/// [QuarkFocusRing] while they hold it, and open on Enter or Space.
 ///
 /// Key prefixes: `breadcrumb_up`, `breadcrumb_home`, and
 /// `breadcrumb_segment_<index>` counting from zero at the shallowest.
@@ -57,6 +61,7 @@ class FileBreadcrumbBar extends StatelessWidget {
     }
     final tokens = QuarkTokens.of(context);
     final atRoot = currentPath.isEmpty;
+    final radius = BorderRadius.circular(tokens.radiusSm);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -90,13 +95,12 @@ class FileBreadcrumbBar extends StatelessWidget {
                     child: Semantics(
                       button: true,
                       enabled: !atRoot,
-                      child: MouseRegion(
-                        cursor: atRoot
-                            ? SystemMouseCursors.basic
-                            : SystemMouseCursors.click,
-                        child: GestureDetector(
+                      child: QuarkFocusRing(
+                        borderRadius: radius,
+                        child: InkWell(
                           key: const ValueKey('breadcrumb_home'),
                           onTap: atRoot ? null : onGoHome,
+                          borderRadius: radius,
                           child: Padding(
                             padding: EdgeInsets.symmetric(
                               horizontal: tokens.spacingXs,
@@ -125,6 +129,7 @@ class FileBreadcrumbBar extends StatelessWidget {
   }
 
   List<Widget> _buildBreadcrumbs(BuildContext context, QuarkTokens tokens) {
+    final radius = BorderRadius.circular(tokens.radiusSm);
     final style = Theme.of(context).textTheme.titleMedium;
     if (currentPath.isEmpty) {
       return [Text('/', style: style)];
@@ -165,15 +170,19 @@ class FileBreadcrumbBar extends StatelessWidget {
       children.add(
         Semantics(
           button: true,
-          child: GestureDetector(
-            key: ValueKey('breadcrumb_segment_$index'),
-            onTap: () => onPathSelected(targetPath),
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: tokens.spacingXs),
-              child: Text(
-                segment,
-                style: style?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
+          child: QuarkFocusRing(
+            borderRadius: radius,
+            child: InkWell(
+              key: ValueKey('breadcrumb_segment_$index'),
+              onTap: () => onPathSelected(targetPath),
+              borderRadius: radius,
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: tokens.spacingXs),
+                child: Text(
+                  segment,
+                  style: style?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
               ),
             ),

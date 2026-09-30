@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/quark_loader.dart';
+import '../theme/quark_theme.dart';
 import '../theme/quark_tokens.dart';
 
 /// A square, bordered, filled icon button: the one shape a top bar action
@@ -14,7 +15,9 @@ import '../theme/quark_tokens.dart';
 ///
 /// A null [onPressed] renders it disabled rather than hiding it, so a bar
 /// keeps its shape as an action comes and goes. [isBusy] swaps the glyph for
-/// a spinner and refuses taps, for an action that is already running.
+/// a spinner and refuses taps, for an action that is already running. With
+/// keyboard focus its border becomes [QuarkTheme.focusRing]'s two-pixel
+/// primary outline.
 ///
 /// Key prefixes: none of its own. Every bar action passes its own `key`, and
 /// that is the one a test or a `.probe` script reaches for.
@@ -77,7 +80,6 @@ class QuarkBarIconButton extends StatelessWidget {
         disabledForegroundColor: tokens.mutedForeground,
         backgroundColor: tokens.input,
         disabledBackgroundColor: tokens.input,
-        side: BorderSide(color: tokens.border),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(tokens.radiusMd),
         ),
@@ -86,7 +88,7 @@ class QuarkBarIconButton extends StatelessWidget {
         maximumSize: const Size.square(size),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         visualDensity: VisualDensity.standard,
-      ),
+      ).copyWith(side: QuarkTheme.focusRing(tokens, resting: tokens.border)),
       icon: isBusy ? QuarkLoader(size: glyphSize) : Icon(icon),
     );
   }

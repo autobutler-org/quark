@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/quark_menu_entry.dart';
 import '../theme/quark_tokens.dart';
@@ -72,6 +73,26 @@ Future<void> showQuarkMenu(
   if (picked == null) return;
   entries[picked].onSelected?.call();
 }
+
+/// Key bindings that open an item's menu without a pointer: the context-menu
+/// key, and Shift+F10 for a keyboard without one. Hand them to a
+/// [CallbackShortcuts] around the item, so the keys work while the item or
+/// anything inside it holds focus, and a menu a right-click opens is reachable
+/// from the keyboard too (WCAG 2.1.1).
+///
+/// ```dart
+/// CallbackShortcuts(
+///   bindings: quarkMenuKeyBindings(
+///     () => menu.showAt(context, quarkMenuAnchor(context)),
+///   ),
+///   child: row,
+/// );
+/// ```
+Map<ShortcutActivator, VoidCallback> quarkMenuKeyBindings(VoidCallback open) =>
+    {
+      const SingleActivator(LogicalKeyboardKey.contextMenu): open,
+      const SingleActivator(LogicalKeyboardKey.f10, shift: true): open,
+    };
 
 /// Where a menu opened from the widget at [context] should start: the bottom
 /// left corner of that widget's box, so the menu drops down from a button.

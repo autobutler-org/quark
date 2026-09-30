@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -72,3 +73,41 @@ Future<void> pumpInSheet(
 /// unnamed button (WCAG 1.1.1, 4.1.2).
 Future<void> expectLabeledTapTargets(WidgetTester tester) =>
     expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+
+/// Presses Tab until keyboard focus lands inside [target], the way a keyboard
+/// user reaches it, and fails when it never does.
+Future<void> tabTo(
+  WidgetTester tester,
+  Finder target, {
+  int maxTabs = 30,
+}) async {
+  for (var i = 0; i < maxTabs; i++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    final focused = FocusManager.instance.primaryFocus?.context;
+    final inside = find.descendant(
+      of: target,
+      matching: find.byElementPredicate((element) => element == focused),
+    );
+    if (focused != null && inside.evaluate().isNotEmpty) return;
+  }
+  fail('Tab never reached $target');
+}
+
+/// Whether the [QuarkFocusRing] around [target] is drawing its outline.
+bool focusRingShown(WidgetTester tester, Finder target) {
+  final ring = find.ancestor(of: target, matching: find.byType(QuarkFocusRing));
+  final box = tester.widget<DecoratedBox>(
+    find.descendant(of: ring.first, matching: find.byType(DecoratedBox)).first,
+  );
+  return (box.decoration as BoxDecoration).border != null;
+}
+
+/// The border a Material button under [target] is drawn with right now, which
+/// is how a test sees its focus outline.
+BorderSide buttonSide(WidgetTester tester, Finder target) {
+  final material = tester.widget<Material>(
+    find.descendant(of: target, matching: find.byType(Material)).first,
+  );
+  return (material.shape! as OutlinedBorder).side;
+}

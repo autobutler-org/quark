@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/quark_focus_ring.dart';
+import '../theme/quark_theme.dart';
 import '../theme/quark_tokens.dart';
 import 'quark_bar_icon_button.dart';
 
@@ -29,6 +31,9 @@ class QuarkBarSegment {
 ///
 /// The selected segment is inert: choosing what is already on is not a change
 /// worth a callback.
+///
+/// While a segment holds keyboard focus, a [QuarkFocusRing] outlines the whole
+/// toggle and the focused segment is tinted with the primary color.
 ///
 /// Key prefixes: `bar_segment_<id>` on each segment's label, one per entry in
 /// [segments].
@@ -65,42 +70,55 @@ class QuarkBarSegmentedToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
-    return SegmentedButton<String>(
-      segments: [
-        for (final segment in segments)
-          ButtonSegment(
-            value: segment.id,
-            icon: Icon(segment.icon),
-            tooltip: segment.label,
-            label: Text(
-              segment.label,
-              key: ValueKey('bar_segment_${segment.id}'),
+    // The segments are separate buttons inside one outline the SegmentedButton
+    // draws itself, so a segment cannot thicken its own border. The ring goes
+    // around the whole toggle and the focused segment carries the tint.
+    return QuarkFocusRing(
+      borderRadius: BorderRadius.circular(tokens.radiusLg),
+      child: SegmentedButton<String>(
+        segments: [
+          for (final segment in segments)
+            ButtonSegment(
+              value: segment.id,
+              icon: Icon(segment.icon),
+              tooltip: segment.label,
+              label: Text(
+                segment.label,
+                key: ValueKey('bar_segment_${segment.id}'),
+              ),
             ),
-          ),
-      ],
-      selected: {selectedId},
-      onSelectionChanged: (selection) => onSelected(selection.single),
-      showSelectedIcon: false,
-      style: SegmentedButton.styleFrom(
-        foregroundColor: tokens.secondaryForeground,
-        backgroundColor: tokens.input,
-        selectedForegroundColor: tokens.primary,
-        selectedBackgroundColor: tokens.primary.withValues(alpha: 0.12),
-        side: BorderSide(color: tokens.border),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(tokens.radiusLg),
-        ),
-        iconSize: QuarkBarIconButton.glyphSize,
-        textStyle: Theme.of(context).textTheme.labelLarge,
-        padding: EdgeInsets.symmetric(
-          horizontal: tokens.spacingSm + tokens.spacingXs,
-        ),
-        minimumSize: const Size(0, QuarkBarIconButton.size),
-        maximumSize: const Size(double.infinity, QuarkBarIconButton.size),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        // SegmentedButton floors its height at 40 and only density moves the
-        // floor: one step down is 36, a bar button's height.
-        visualDensity: const VisualDensity(vertical: -1),
+        ],
+        selected: {selectedId},
+        onSelectionChanged: (selection) => onSelected(selection.single),
+        showSelectedIcon: false,
+        style:
+            SegmentedButton.styleFrom(
+              foregroundColor: tokens.secondaryForeground,
+              backgroundColor: tokens.input,
+              selectedForegroundColor: tokens.primary,
+              selectedBackgroundColor: tokens.primary.withValues(alpha: 0.12),
+              side: BorderSide(color: tokens.border),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(tokens.radiusLg),
+              ),
+              iconSize: QuarkBarIconButton.glyphSize,
+              textStyle: Theme.of(context).textTheme.labelLarge,
+              padding: EdgeInsets.symmetric(
+                horizontal: tokens.spacingSm + tokens.spacingXs,
+              ),
+              minimumSize: const Size(0, QuarkBarIconButton.size),
+              maximumSize: const Size(double.infinity, QuarkBarIconButton.size),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              // SegmentedButton floors its height at 40 and only density moves the
+              // floor: one step down is 36, a bar button's height.
+              visualDensity: const VisualDensity(vertical: -1),
+            ).copyWith(
+              overlayColor: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.focused)
+                    ? tokens.primary.withValues(alpha: QuarkTheme.focusAlpha)
+                    : null,
+              ),
+            ),
       ),
     );
   }

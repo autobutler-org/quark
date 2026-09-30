@@ -20,6 +20,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// Segments outside [rootPath] are shown but not offered: a member's reach
 /// starts at their own home, and the `users` folder on the way to it is a
 /// waypoint they cannot use (#2139).
+///
+/// Home, the hidden-ancestors menu and every open-able segment take keyboard
+/// focus, wear a [QuarkFocusRing] while they hold it, and open on Enter or
+/// Space.
 class FileTopBarBreadcrumb extends StatelessWidget {
   const FileTopBarBreadcrumb({
     required this.currentPath,
@@ -80,18 +84,21 @@ class FileTopBarBreadcrumb extends StatelessWidget {
                   cursor: canGoHome
                       ? SystemMouseCursors.click
                       : SystemMouseCursors.basic,
-                  child: InkWell(
-                    key: const ValueKey('file_top_bar_home'),
-                    onTap: canGoHome ? onGoHome : null,
+                  child: QuarkFocusRing(
                     borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.all(2),
-                      child: Icon(
-                        QuarkIcons.home_rounded,
-                        size: 16,
-                        color: canGoHome
-                            ? colorScheme.onSurfaceVariant
-                            : colorScheme.onSurface.withValues(alpha: 0.4),
+                    child: InkWell(
+                      key: const ValueKey('file_top_bar_home'),
+                      onTap: canGoHome ? onGoHome : null,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.all(2),
+                        child: Icon(
+                          QuarkIcons.home_rounded,
+                          size: 16,
+                          color: canGoHome
+                              ? colorScheme.onSurfaceVariant
+                              : colorScheme.onSurface.withValues(alpha: 0.4),
+                        ),
                       ),
                     ),
                   ),
@@ -214,25 +221,31 @@ class FileTopBarBreadcrumb extends StatelessWidget {
             cursor: navEnabled
                 ? SystemMouseCursors.click
                 : SystemMouseCursors.basic,
-            child: InkWell(
-              key: const ValueKey('file_top_bar_hidden_crumbs'),
-              onTap: !navEnabled
-                  ? null
-                  : () {
-                      if (hiddenCrumbsController.isOpen) {
-                        hiddenCrumbsController.close();
-                      } else {
-                        hiddenCrumbsController.open();
-                      }
-                    },
+            child: QuarkFocusRing(
               borderRadius: BorderRadius.circular(4),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                child: Icon(
-                  QuarkIcons.more_horiz_rounded,
-                  semanticLabel: 'Show hidden folders',
-                  size: 14,
-                  color: colorScheme.onSurface.withValues(alpha: 0.55),
+              child: InkWell(
+                key: const ValueKey('file_top_bar_hidden_crumbs'),
+                onTap: !navEnabled
+                    ? null
+                    : () {
+                        if (hiddenCrumbsController.isOpen) {
+                          hiddenCrumbsController.close();
+                        } else {
+                          hiddenCrumbsController.open();
+                        }
+                      },
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  child: Icon(
+                    QuarkIcons.more_horiz_rounded,
+                    semanticLabel: 'Show hidden folders',
+                    size: 14,
+                    color: colorScheme.onSurface.withValues(alpha: 0.55),
+                  ),
                 ),
               ),
             ),
@@ -266,19 +279,24 @@ class FileTopBarBreadcrumb extends StatelessWidget {
           cursor: tappable
               ? SystemMouseCursors.click
               : SystemMouseCursors.basic,
-          child: InkWell(
-            onTap: tappable ? () => onPathSelected!(targetPath) : null,
+          child: QuarkFocusRing(
             borderRadius: BorderRadius.circular(4),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: tappable ? colorScheme.primary : colorScheme.onSurface,
+            child: InkWell(
+              onTap: tappable ? () => onPathSelected!(targetPath) : null,
+              borderRadius: BorderRadius.circular(4),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: tappable
+                        ? colorScheme.primary
+                        : colorScheme.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.clip,
               ),
             ),
           ),

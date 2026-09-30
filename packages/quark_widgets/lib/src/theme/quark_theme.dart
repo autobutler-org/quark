@@ -46,6 +46,10 @@ abstract final class QuarkTheme {
       brightness: brightness,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: tokens.background,
+      // Every InkWell and ListTile paints this while it holds keyboard focus.
+      // Material's default is a faint 12% wash; a keyboard user has to be
+      // able to find it at a glance (WCAG 2.4.7).
+      focusColor: tokens.primary.withValues(alpha: focusAlpha),
       useMaterial3: true,
       extensions: <ThemeExtension<dynamic>>[tokens],
       appBarTheme: AppBarTheme(
@@ -100,7 +104,7 @@ abstract final class QuarkTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(tokens.radiusMd),
           ),
-        ).copyWith(side: _focusRing(tokens)),
+        ).copyWith(side: focusRing(tokens)),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
@@ -109,12 +113,15 @@ abstract final class QuarkTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(tokens.radiusMd),
           ),
-        ).copyWith(side: _focusRing(tokens, resting: tokens.border)),
+        ).copyWith(side: focusRing(tokens, resting: tokens.border)),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: tokens.primary,
-        ).copyWith(side: _focusRing(tokens)),
+        ).copyWith(side: focusRing(tokens)),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(side: focusRing(tokens)),
       ),
       dividerTheme: DividerThemeData(color: tokens.border, thickness: 1),
       drawerTheme: DrawerThemeData(backgroundColor: tokens.sidebar),
@@ -140,17 +147,27 @@ abstract final class QuarkTheme {
           if (states.contains(WidgetState.selected)) return tokens.primary;
           return tokens.outline;
         }),
+        overlayColor: _focusHalo(tokens),
       ),
       checkboxTheme: CheckboxThemeData(
         fillColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) return tokens.primary;
           return Colors.transparent;
         }),
-        side: BorderSide(color: tokens.outline, width: 1.5),
+        side: WidgetStateBorderSide.resolveWith(
+          (states) => BorderSide(
+            color: states.contains(WidgetState.focused)
+                ? tokens.primary
+                : tokens.outline,
+            width: states.contains(WidgetState.focused) ? 2 : 1.5,
+          ),
+        ),
+        overlayColor: _focusHalo(tokens),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(tokens.radiusSm),
         ),
       ),
+      radioTheme: RadioThemeData(overlayColor: _focusHalo(tokens)),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: tokens.card,
         contentTextStyle: TextStyle(color: tokens.foreground),
@@ -175,25 +192,42 @@ abstract final class QuarkTheme {
       iconTheme: IconThemeData(color: tokens.secondaryForeground, size: 20),
     );
   }
-}
 
-/// The outline a button wears while it holds keyboard focus.
-///
-/// Material's own focus cue for a button is a faint overlay tint, which on a
-/// filled button sits on top of a color it barely differs from. A keyboard
-/// user needs to see where they are before they press Enter — on a sign-in
-/// form most of all, which is where this was reported (#2028).
-///
-/// [resting] is the border the button wears the rest of the time, or null for
-/// no border at all.
-WidgetStateProperty<BorderSide?> _focusRing(
-  QuarkTokens tokens, {
-  Color? resting,
-}) {
-  return WidgetStateProperty.resolveWith((states) {
-    if (states.contains(WidgetState.focused)) {
-      return BorderSide(color: tokens.primary, width: 2);
-    }
-    return resting == null ? null : BorderSide(color: resting);
-  });
+  /// The outline a button wears while it holds keyboard focus: two pixels of
+  /// [QuarkTokens.primary].
+  ///
+  /// Material's own focus cue for a button is a faint overlay tint, which on a
+  /// filled button sits on top of a color it barely differs from. A keyboard
+  /// user needs to see where they are before they press Enter — on a sign-in
+  /// form most of all, which is where this was reported (#2028).
+  ///
+  /// [resting] is the border the button wears the rest of the time, or null
+  /// for no border at all. A widget that sets its own `side` in a
+  /// [ButtonStyle] overrides the theme's, so it passes this instead of a
+  /// plain [BorderSide] to keep the ring.
+  static WidgetStateProperty<BorderSide?> focusRing(
+    QuarkTokens tokens, {
+    Color? resting,
+  }) {
+    return WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.focused)) {
+        return BorderSide(color: tokens.primary, width: 2);
+      }
+      return resting == null ? null : BorderSide(color: resting);
+    });
+  }
+
+  /// The halo a switch, checkbox or radio wears while it holds keyboard
+  /// focus. Material's default is a tenth-strength tint, which is next to
+  /// invisible on a card; this one is strong enough to find.
+  static WidgetStateProperty<Color?> _focusHalo(QuarkTokens tokens) =>
+      WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.focused)) {
+          return tokens.primary.withValues(alpha: focusAlpha);
+        }
+        return null;
+      });
+
+  /// How strong the focus tint on an ink surface or a toggle's halo is.
+  static const double focusAlpha = 0.32;
 }

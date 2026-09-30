@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -202,5 +203,22 @@ void main() {
       tester.getSemantics(find.byKey(const ValueKey('photo_tile_p1'))),
       isSemantics(label: 'beach.jpg, favorite', isSelected: true),
     );
+  });
+
+  testBothViewports('opens from the keyboard and shows where focus is', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpTile(tester, size: size, events: events);
+
+    final tile = find.byKey(const ValueKey('photo_tile_p1'));
+    expect(focusRingShown(tester, tile), false);
+    await tabTo(tester, tile);
+    expect(focusRingShown(tester, tile), true);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(events, ['tap']);
   });
 }

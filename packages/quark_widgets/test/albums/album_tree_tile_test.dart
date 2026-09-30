@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -269,7 +270,7 @@ void main() {
     await expectLabeledTapTargets(tester);
     expect(
       tester.getSemantics(find.byKey(const ValueKey('album_expand_1'))),
-      matchesSemantics(
+      isSemantics(
         label: 'Collapse Trips',
         isButton: true,
         hasExpandedState: true,
@@ -284,12 +285,29 @@ void main() {
 
     expect(
       tester.getSemantics(find.byKey(const ValueKey('album_expand_1'))),
-      matchesSemantics(
+      isSemantics(
         label: 'Expand Trips',
         isButton: true,
         hasExpandedState: true,
+        isExpanded: false,
         hasTapAction: true,
       ),
     );
+  });
+
+  testBothViewports('the chevron toggles from the keyboard', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpTile(tester, size: size, events: events);
+
+    final chevron = find.byKey(const ValueKey('album_expand_1'));
+    await tabTo(tester, chevron);
+    expect(focusRingShown(tester, chevron), true);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(events, ['toggle:1']);
   });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -160,7 +161,7 @@ void main() {
         : first.extension.substring(1);
     expect(
       tester.getSemantics(find.byKey(ValueKey('new_file_type_$slug'))),
-      matchesSemantics(
+      isSemantics(
         label: first.label,
         isButton: true,
         hasSelectedState: true,
@@ -168,5 +169,23 @@ void main() {
         hasTapAction: true,
       ),
     );
+  });
+
+  testBothViewports('picks a type from the keyboard', (tester, size) async {
+    final created = await pumpDialog(tester, size: size);
+
+    final sheet = find.byKey(const ValueKey('new_file_type_qsheet'));
+    await tabTo(tester, sheet);
+    expect(focusRingShown(tester, sheet), true);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('new_file_name')),
+      'budget',
+    );
+    await tester.tap(find.byKey(const ValueKey('new_file_create')));
+    await tester.pump();
+
+    expect(created, ['budget.qsheet']);
   });
 }

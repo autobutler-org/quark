@@ -106,4 +106,15 @@ void main() {
       isFalse,
     );
   });
+
+  testWidgets('wears a two-pixel outline under keyboard focus', (tester) async {
+    await pumpAt(tester, chip(onPressed: () {}, active: true));
+    expect(buttonSide(tester, find.byKey(key)).width, lessThan(2));
+
+    await tabTo(tester, find.byKey(key));
+
+    final side = buttonSide(tester, find.byKey(key));
+    expect(side.width, 2);
+    expect(side.color, QuarkTokens.dark.primary);
+  });
 }

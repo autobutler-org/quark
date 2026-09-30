@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_focus_ring.dart';
 import '../core/show_quark_menu.dart';
 import '../models/album_item.dart';
 import '../theme/quark_tokens.dart';
@@ -19,7 +20,8 @@ import '../theme/quark_tokens.dart';
 ///
 /// The disclosure chevron is its own button to a screen reader, named
 /// "Expand" or "Collapse" and the album's name, and reporting whether it is
-/// expanded.
+/// expanded. It takes keyboard focus apart from the row, shows a
+/// [QuarkFocusRing] while it holds it, and toggles on Enter or Space.
 ///
 /// Key prefixes: `album_tile_<id>` on the row, `album_expand_<id>` on the
 /// disclosure chevron, which is only rendered when the album has children,
@@ -136,15 +138,19 @@ class AlbumTreeTile extends StatelessWidget {
                       label: isExpanded
                           ? 'Collapse ${album.name}'
                           : 'Expand ${album.name}',
-                      child: GestureDetector(
-                        key: ValueKey('album_expand_${album.id}'),
-                        onTap: () => onToggleExpanded(album.id),
-                        child: Icon(
-                          isExpanded
-                              ? QuarkIcons.expand_more_rounded
-                              : QuarkIcons.chevron_right_rounded,
-                          size: 16,
-                          color: colorScheme.onSurfaceVariant,
+                      child: QuarkFocusRing(
+                        borderRadius: BorderRadius.circular(tokens.radiusSm),
+                        child: InkWell(
+                          key: ValueKey('album_expand_${album.id}'),
+                          onTap: () => onToggleExpanded(album.id),
+                          borderRadius: BorderRadius.circular(tokens.radiusSm),
+                          child: Icon(
+                            isExpanded
+                                ? QuarkIcons.expand_more_rounded
+                                : QuarkIcons.chevron_right_rounded,
+                            size: 16,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
                     )
