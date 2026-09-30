@@ -90,6 +90,40 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkMenuButton',
+    group: 'Core',
+    build: (context, log) => Align(
+      alignment: Alignment.topLeft,
+      child: QuarkMenuButton(
+        tooltip: 'Actions for vacation.jpg',
+        entries: [
+          QuarkMenuEntry(
+            label: 'Rename',
+            icon: QuarkIcons.edit_outlined,
+            onSelected: () => log('QuarkMenuEntry(Rename).onSelected'),
+          ),
+          QuarkMenuEntry(
+            label: 'Share…',
+            icon: QuarkIcons.person_outline,
+            onSelected: () => log('QuarkMenuEntry(Share).onSelected'),
+          ),
+          const QuarkMenuEntry(
+            label: 'Extracting...',
+            busy: true,
+            onSelected: null,
+          ),
+          const QuarkMenuEntry.divider(),
+          QuarkMenuEntry(
+            label: 'Delete',
+            icon: QuarkIcons.delete_outline,
+            destructive: true,
+            onSelected: () => log('QuarkMenuEntry(Delete).onSelected'),
+          ),
+        ],
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkLoader',
     group: 'Core',
     build: (context, log) => Wrap(
