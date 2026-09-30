@@ -42,7 +42,13 @@ func movePhotoRows(ctx context.Context, q *db.Queries, oldSerial, oldPath, newSe
 	}); err != nil {
 		return err
 	}
-	return q.DeletePhotoFromAllAlbums(ctx, db.DeletePhotoFromAllAlbumsParams{DeviceSerial: oldSerial, RelPath: oldPath})
+	if err := q.DeletePhotoFromAllAlbums(ctx, db.DeletePhotoFromAllAlbumsParams{DeviceSerial: oldSerial, RelPath: oldPath}); err != nil {
+		return err
+	}
+	// Hashes are dropped rather than carried: the next thumbnail at the new
+	// path computes them again, and a stale row would list a duplicate that
+	// is no longer there (#1666).
+	return q.DeletePhotoHashesUnder(ctx, db.DeletePhotoHashesUnderParams{DeviceSerial: oldSerial, RelPath: oldPath})
 }
 
 // notFound marks an error as a 404 for the handler.

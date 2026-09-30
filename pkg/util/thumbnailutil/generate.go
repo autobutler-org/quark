@@ -2,8 +2,9 @@ package thumbnailutil
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"time"
 
@@ -41,22 +42,15 @@ func Generate(params GenerateParams) (GenerateResult, error) {
 		result.Thumbnail = photoutil.ApplyRotation(result.Thumbnail, params.RotationQuarters)
 	}
 
-	// Compute and store perceptual dHash async — the image is already
-	// decoded here so hashing is nearly free. Non-blocking; a failure to
-	// store the hash does not affect thumbnail delivery.
-	if !params.IsVideo {
-		thumb := result.Thumbnail
-		go func() {
-			hashHex := photoutil.DHashHex(thumb)
-			_ = params.Queries.UpsertPhotoHash(
-				context.Background(),
-				db.UpsertPhotoHashParams{
-					DeviceSerial: params.Serial,
-					RelPath:      params.RelPath,
-					Dhash:        sql.NullString{String: hashHex, Valid: true},
-				},
-			)
-		}()
+	// The file was just read whole to decode it, so hashing its bytes reads
+	// them back from the page cache.
+	if !params.IsVideo && params.Queries != nil {
+		if source, err := os.Open(params.SourcePath); err != nil {
+			slog.Warn("thumbnail: could not open photo to hash it", "path", params.RelPath, "err", err)
+		} else {
+			storeHashes(params.Queries, params.Serial, params.RelPath, result.DHash, source)
+			source.Close()
+		}
 	}
 
 	modTime, err := writeCache(params.CachedPath, result.Thumbnail, !params.IsVideo && params.Ext == ".png")
@@ -80,11 +74,26 @@ func GenerateFromReader(params GenerateFromReaderParams) (GenerateResult, error)
 		result.Thumbnail = photoutil.ApplyRotation(result.Thumbnail, params.RotationQuarters)
 	}
 
+	if source, ok := params.Reader.(io.ReadSeeker); ok && params.Queries != nil {
+		storeHashes(params.Queries, params.Serial, params.RelPath, result.DHash, source)
+	}
+
 	modTime, err := writeCache(params.CachedPath, result.Thumbnail, params.Ext == ".png")
 	if err != nil {
 		return GenerateResult{}, err
 	}
 	return GenerateResult{CachedModTime: modTime}, nil
+}
+
+// storeHashes records a photo's hashes for duplicate detection. A failure is
+// logged rather than returned: it must not cost the caller its thumbnail.
+func storeHashes(queries *db.Queries, serial, relPath, dhash string, source io.ReadSeeker) {
+	if _, err := photoutil.StorePhotoHashes(photoutil.StorePhotoHashesParams{
+		Ctx: context.Background(), Queries: queries,
+		Serial: serial, RelPath: relPath, DHash: dhash, Source: source,
+	}); err != nil {
+		slog.Warn("thumbnail: could not store photo hashes", "path", relPath, "serial", serial, "err", err)
+	}
 }
 
 // extractVideoFrame writes a representative frame of a video to a temporary

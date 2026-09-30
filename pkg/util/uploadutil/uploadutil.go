@@ -182,9 +182,12 @@ type WriteMultipartResult struct {
 // part named "thumbnail" whose filename is the file's own. Pass its Attach as
 // the writer's Sidecar.
 type Sidecars struct {
-	// Database stores the perceptual hash of a photo's thumbnail. Nil skips
-	// the hash.
+	// Database stores a photo's hashes for duplicate detection. Nil skips
+	// them.
 	Database *db.DatabaseSqlc
+	// Storage resolves the uploaded file, which is read for its content hash.
+	// Nil stores only the perceptual hash.
+	Storage *storageutil.StorageService
 	// Serial is the device the upload goes to, empty for the internal one.
 	Serial string
 }

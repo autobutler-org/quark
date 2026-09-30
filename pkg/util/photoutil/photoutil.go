@@ -12,14 +12,12 @@ import (
 	_ "image/gif"
 	"io"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
-	"github.com/KononK/resize"
 	// Registers the HEIC decoder with image.Decode.
 	_ "github.com/gen2brain/heic"
 	// Registers the BMP decoder with image.Decode.
@@ -67,6 +65,10 @@ type GenerateThumbnailParams struct {
 type GenerateThumbnailResult struct {
 	Thumbnail image.Image
 	Format    string
+	// DHash is the perceptual hash of the whole upright source image, taken
+	// before the crop and before any user rotation, so every size tier and
+	// every path to the same file agrees on it (#1666). Empty for video.
+	DHash string
 }
 
 // FilterPhotoFiles filters a list of files to only include photo files
@@ -139,56 +141,16 @@ func FindAllPhotosRecursively(rootDir string) ([]PhotoInfo, error) {
 	return photos, nil
 }
 
+// ImageToThumbnail decodes an image file, turns it upright, and scales and
+// center-crops it to width × height. It returns the decoded format too.
 func ImageToThumbnail(filePath string, width, height uint) (image.Image, string, error) {
-	file, err := os.Open(filePath)
+	img, format, err := decodeImageFile(filePath)
 	if err != nil {
-		return nil, "", fmt.Errorf("error opening image file %s: %w", filePath, err)
+		return nil, "", err
 	}
-	defer file.Close()
-
-	img, format, err := image.Decode(file)
+	cropped, _, err := cropToFit(img, width, height)
 	if err != nil {
-		return nil, "", fmt.Errorf("error decoding image file %s: %w", filePath, err)
-	}
-
-	img = orientDecodedImage(img, file, ImageFormatFromPath(filePath))
-
-	// Scale so the shorter side fills the target dimension, then center-crop.
-	// This preserves aspect ratio rather than squishing the image.
-	bounds := img.Bounds()
-	srcW := uint(bounds.Dx())
-	srcH := uint(bounds.Dy())
-
-	var scaledW, scaledH uint
-	if srcW*height > srcH*width {
-		// Image is wider than target: scale by height, crop width
-		scaledH = height
-		scaledW = srcW * height / srcH
-	} else {
-		// Image is taller than target: scale by width, crop height
-		scaledW = width
-		scaledH = srcH * width / srcW
-	}
-
-	scaled := resize.Resize(scaledW, scaledH, img, resize.Lanczos3)
-
-	scaledBounds := scaled.Bounds()
-	x0 := (scaledBounds.Dx() - int(width)) / 2
-	y0 := (scaledBounds.Dy() - int(height)) / 2
-
-	type subImager interface {
-		SubImage(r image.Rectangle) image.Image
-	}
-	if si, ok := scaled.(subImager); ok {
-		return si.SubImage(image.Rect(x0, y0, x0+int(width), y0+int(height))), format, nil
-	}
-
-	// Fallback: manual pixel copy (resize library always returns a subImager in practice)
-	cropped := image.NewRGBA(image.Rect(0, 0, int(width), int(height)))
-	for y := 0; y < int(height); y++ {
-		for x := 0; x < int(width); x++ {
-			cropped.Set(x, y, scaled.At(x0+x, y0+y))
-		}
+		return nil, "", fmt.Errorf("error cropping image file %s: %w", filePath, err)
 	}
 	return cropped, format, nil
 }
@@ -237,7 +199,7 @@ func GenerateThumbnailFromReader(r io.Reader, ext string, width, height uint) (*
 	if err != nil {
 		return nil, fmt.Errorf("GenerateThumbnailFromReader: crop: %w", err)
 	}
-	return &GenerateThumbnailResult{Thumbnail: cropped, Format: format}, nil
+	return &GenerateThumbnailResult{Thumbnail: cropped, Format: format, DHash: DHashHex(img)}, nil
 }
 
 // GenerateThumbnail creates a thumbnail image from an image file. A video's
@@ -259,10 +221,14 @@ func GenerateThumbnail(params GenerateThumbnailParams) (*GenerateThumbnailResult
 		if cropErr != nil {
 			return nil, fmt.Errorf("crop RAW thumbnail: %w", cropErr)
 		}
-		return &GenerateThumbnailResult{Thumbnail: cropped, Format: "jpeg"}, nil
+		return &GenerateThumbnailResult{Thumbnail: cropped, Format: "jpeg", DHash: DHashHex(img)}, nil
 	}
 
-	thumbnail, format, err := ImageToThumbnail(params.FilePath, params.Width, params.Height)
+	img, format, err := decodeImageFile(params.FilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate thumbnail: %w", err)
+	}
+	thumbnail, _, err := cropToFit(img, params.Width, params.Height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate thumbnail: %w", err)
 	}
@@ -270,6 +236,7 @@ func GenerateThumbnail(params GenerateThumbnailParams) (*GenerateThumbnailResult
 	return &GenerateThumbnailResult{
 		Thumbnail: thumbnail,
 		Format:    format,
+		DHash:     DHashHex(img),
 	}, nil
 }
 

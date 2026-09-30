@@ -5706,7 +5706,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns groups of exact duplicates (same SHA-256 content hash) and near-duplicates (perceptual dHash Hamming distance within threshold). Requires photo hashes to have been computed via the thumbnail or hash-index endpoints.",
+                "description": "Returns groups of duplicate photos, each photo in at most one group. A group is exact when every photo shares a SHA-256 content hash, and near when their perceptual dHashes are within the threshold. Each group carries maxDistance, the largest Hamming distance between any two of its dHashes (0 for exact). Exact groups come first, then near groups by ascending maxDistance; ties sort by first photo, and photos within a group by device, then path. Photos are hashed when a thumbnail is rendered or uploaded, and a pass at server start hashes the rest of the library; trashed photos and photos no longer on disk are left out.",
                 "produces": [
                     "application/json"
                 ],
@@ -10036,6 +10036,10 @@
                 "kind": {
                     "description": "Kind is \"exact\" (identical content hash) or \"near\" (perceptual hash\nHamming distance within the configured threshold).",
                     "type": "string"
+                },
+                "maxDistance": {
+                    "description": "MaxDistance is the largest Hamming distance between any two of the\ngroup's dHashes, over every photo clustered, including any the caller\ncannot read. It is 0 for an exact group.",
+                    "type": "integer"
                 },
                 "photos": {
                     "description": "Photos is the list of photos in this duplicate group.",

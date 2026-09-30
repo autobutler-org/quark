@@ -109,6 +109,10 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	// existing documents are never searchable.
 	go backfillContentIndex(deps)
 
+	// Hash the library photos duplicate detection has no hashes for, one at a
+	// time under the IO semaphore.
+	go backfillPhotoHashes(deps)
+
 	initExternalVault(deps)
 	go vaultDeviceMonitor(deps)
 	go usbDeviceMonitor(deps)

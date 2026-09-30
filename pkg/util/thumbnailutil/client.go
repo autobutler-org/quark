@@ -2,7 +2,6 @@ package thumbnailutil
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"image"
@@ -14,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
@@ -93,12 +91,25 @@ func StoreClientThumbnail(params StoreClientThumbnailParams) (StoreClientThumbna
 	}
 
 	if !params.IsVideo && params.Queries != nil {
-		width, height := Dimensions(SizeLg)
-		thumb, err := decodeClientThumbnail(tmpPath, width, height)
+		// Hashed whole, not cropped to a tier, the way the device hashes a
+		// photo it decodes itself.
+		dhash, err := photoutil.DHashFile(tmpPath)
 		if err != nil {
 			return StoreClientThumbnailResult{}, fmt.Errorf("%w: %w", ErrInvalidThumbnail, err)
 		}
-		if err := upsertDHash(params.Queries, params.Serial, params.RelPath, thumb); err != nil {
+		var source io.ReadSeeker
+		if params.SourcePath != "" {
+			f, err := os.Open(params.SourcePath)
+			if err != nil {
+				return StoreClientThumbnailResult{}, fmt.Errorf("open photo to hash it: %w", err)
+			}
+			defer f.Close()
+			source = f
+		}
+		if _, err := photoutil.StorePhotoHashes(photoutil.StorePhotoHashesParams{
+			Ctx: context.Background(), Queries: params.Queries,
+			Serial: params.Serial, RelPath: params.RelPath, DHash: dhash, Source: source,
+		}); err != nil {
 			return StoreClientThumbnailResult{}, err
 		}
 	}
@@ -192,11 +203,12 @@ func StoreClientThumbnails(params StoreClientThumbnailsParams) (StoreClientThumb
 			continue
 		}
 		_, err = StoreClientThumbnail(StoreClientThumbnailParams{
-			Queries: params.Queries,
-			Serial:  params.Serial,
-			RelPath: params.RelPath,
-			Reader:  part,
-			IsVideo: fileType == storageutil.FileTypeVideo,
+			Queries:    params.Queries,
+			Serial:     params.Serial,
+			RelPath:    params.RelPath,
+			SourcePath: resolved.FullPath,
+			Reader:     part,
+			IsVideo:    fileType == storageutil.FileTypeVideo,
 		})
 		part.Close()
 		return StoreClientThumbnailsResult{}, err
@@ -215,17 +227,4 @@ func decodeClientThumbnail(file string, width, height uint) (image.Image, error)
 		return nil, fmt.Errorf("resize client thumbnail: %w", err)
 	}
 	return result.Thumbnail, nil
-}
-
-// upsertDHash records the perceptual hash near-duplicate detection compares,
-// keyed by the path spelled the way the photo tables spell it.
-func upsertDHash(queries *db.Queries, serial, relPath string, img image.Image) error {
-	if err := queries.UpsertPhotoHash(context.Background(), db.UpsertPhotoHashParams{
-		DeviceSerial: serial,
-		RelPath:      strings.TrimPrefix(path.Clean("/"+filepath.ToSlash(relPath)), "/"),
-		Dhash:        sql.NullString{String: photoutil.DHashHex(img), Valid: true},
-	}); err != nil {
-		return fmt.Errorf("store perceptual hash: %w", err)
-	}
-	return nil
 }

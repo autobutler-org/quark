@@ -105,9 +105,9 @@ type PrepareResult struct {
 type GenerateParams struct {
 	// Ctx bounds the ffmpeg probe and frame extraction.
 	Ctx context.Context
-	// Queries stores the perceptual hash.
+	// Queries stores a photo's hashes for duplicate detection. Nil skips them.
 	Queries *db.Queries
-	// Serial and RelPath identify the photo the perceptual hash belongs to.
+	// Serial and RelPath identify the photo the hashes belong to.
 	Serial  string
 	RelPath string
 	// SourcePath is the file to render.
@@ -129,6 +129,13 @@ type GenerateParams struct {
 // the VFS path, which has no OS path to hand to an external tool. Video and
 // RAW sources are not supported here.
 type GenerateFromReaderParams struct {
+	// Queries stores the photo's hashes for duplicate detection when Reader
+	// can seek, which a VFS file can. Nil skips them, as an archive entry
+	// does: it is not a library photo.
+	Queries *db.Queries
+	// Serial and RelPath identify the photo the hashes belong to.
+	Serial  string
+	RelPath string
 	// Reader streams the source image.
 	Reader io.Reader
 	// Ext is the lowercase source extension, used for format detection.
@@ -150,11 +157,14 @@ type GenerateResult struct {
 // StoreClientThumbnailParams is a thumbnail a client rendered for a file: a
 // JPEG, long edge 400, rotation applied.
 type StoreClientThumbnailParams struct {
-	// Queries stores the perceptual hash of a photo's thumbnail. Nil skips it.
+	// Queries stores a photo's hashes for duplicate detection. Nil skips them.
 	Queries *db.Queries
 	// Serial and RelPath name the file, as a request spells them.
 	Serial  string
 	RelPath string
+	// SourcePath is the file the thumbnail is of, streamed for its content
+	// hash. Empty stores only the perceptual hash.
+	SourcePath string
 	// Reader is the JPEG, read to EOF or one byte past the size limit.
 	Reader io.Reader
 	// IsVideo skips the perceptual hash, which only photos are compared by.

@@ -3,6 +3,8 @@ package thumbnailutil
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"image"
 	"image/jpeg"
@@ -109,11 +111,11 @@ func TestClientThumbnailOlderThanItsFileIsStale(t *testing.T) {
 	}
 }
 
-func TestStoreClientThumbnailRecordsDHashForPhotos(t *testing.T) {
-	writeSource(t, "photo.heic")
+func TestStoreClientThumbnailRecordsHashesForPhotos(t *testing.T) {
+	source, _ := writeSource(t, "photo.heic")
 	database := dbtest.NewDB(t)
 	if err := store(t, StoreClientThumbnailParams{
-		Queries: database.Queries, RelPath: "photo.heic",
+		Queries: database.Queries, RelPath: "/photo.heic", SourcePath: source,
 		Reader: bytes.NewReader(clientJPEG(t, 300, 400)),
 	}); err != nil {
 		t.Fatal(err)
@@ -122,8 +124,11 @@ func TestStoreClientThumbnailRecordsDHashForPhotos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 1 || rows[0].RelPath != "photo.heic" || !rows[0].Dhash.Valid {
-		t.Fatalf("want one dHash row for photo.heic, got %+v", rows)
+	// The SHA-256 of the file, not of the thumbnail.
+	want := sha256.Sum256([]byte("not decodable here"))
+	if len(rows) != 1 || rows[0].RelPath != "photo.heic" || !rows[0].Dhash.Valid ||
+		rows[0].ContentHash.String != hex.EncodeToString(want[:]) {
+		t.Fatalf("want one row for photo.heic with both hashes, got %+v", rows)
 	}
 }
 

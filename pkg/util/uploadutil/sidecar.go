@@ -41,12 +41,19 @@ func (s Sidecars) store(part *multipart.Part, relPath string) error {
 	if s.Database != nil {
 		queries = s.Database.Queries
 	}
+	sourcePath := ""
+	if s.Storage != nil {
+		if resolved, err := s.Storage.ResolvePath(storageutil.ResolvePathParams{RelPath: relPath, Serial: s.Serial}); err == nil {
+			sourcePath = resolved.FullPath
+		}
+	}
 	_, err := thumbnailutil.StoreClientThumbnail(thumbnailutil.StoreClientThumbnailParams{
-		Queries: queries,
-		Serial:  s.Serial,
-		RelPath: relPath,
-		Reader:  part,
-		IsVideo: fileType == storageutil.FileTypeVideo,
+		Queries:    queries,
+		Serial:     s.Serial,
+		RelPath:    relPath,
+		SourcePath: sourcePath,
+		Reader:     part,
+		IsVideo:    fileType == storageutil.FileTypeVideo,
 	})
 	return err
 }

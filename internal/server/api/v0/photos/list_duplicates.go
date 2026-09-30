@@ -13,7 +13,7 @@ import (
 
 // listDuplicates godoc
 // @Summary List duplicate photos
-// @Description Returns groups of exact duplicates (same SHA-256 content hash) and near-duplicates (perceptual dHash Hamming distance within threshold). Requires photo hashes to have been computed via the thumbnail or hash-index endpoints.
+// @Description Returns groups of duplicate photos, each photo in at most one group. A group is exact when every photo shares a SHA-256 content hash, and near when their perceptual dHashes are within the threshold. Each group carries maxDistance, the largest Hamming distance between any two of its dHashes (0 for exact). Exact groups come first, then near groups by ascending maxDistance; ties sort by first photo, and photos within a group by device, then path. Photos are hashed when a thumbnail is rendered or uploaded, and a pass at server start hashes the rest of the library; trashed photos and photos no longer on disk are left out.
 // @Tags photos
 // @Produce json
 // @Param threshold query int false "Hamming distance threshold for near-duplicates (default 10, max 20)"
@@ -36,6 +36,7 @@ func listDuplicates(c *gin.Context) *serverutil.Response {
 		Queries:   deps.Database().Queries,
 		Threshold: photoutil.ParseDuplicateThreshold(c.Query("threshold")),
 		Access:    access,
+		Exists:    deps.StorageService().FileExists(),
 	})
 	if err != nil {
 		return serverutil.InternalServerError(err)

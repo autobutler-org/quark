@@ -207,6 +207,9 @@ func getThumbnailVFS(
 		defer r.Close()
 
 		generated, genErr := thumbnailutil.GenerateFromReader(thumbnailutil.GenerateFromReaderParams{
+			Queries:          deps.Database().Queries,
+			Serial:           serial,
+			RelPath:          relPath,
 			Reader:           r,
 			Ext:              ext,
 			Width:            prepared.Width,

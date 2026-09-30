@@ -2,6 +2,7 @@ package fileutil
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -196,5 +197,110 @@ func TestDeleteFilesForgetsFavoritesAndAlbumItems(t *testing.T) {
 	}
 	if got := albumKeys(t, q, user.ID); len(got) != 0 {
 		t.Errorf("user album = %v, want empty", got)
+	}
+}
+
+// hashKeys lists every stored photo hash as "serial|path", sorted.
+func hashKeys(t *testing.T, q *db.Queries) []string {
+	t.Helper()
+	rows, err := q.ListNearDuplicates(context.Background())
+	if err != nil {
+		t.Fatalf("ListNearDuplicates: %v", err)
+	}
+	keys := []string{}
+	for _, r := range rows {
+		keys = append(keys, r.DeviceSerial+"|"+r.RelPath)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func hashPhoto(t *testing.T, q *db.Queries, serial, relPath string) {
+	t.Helper()
+	if err := q.UpsertPhotoHash(context.Background(), db.UpsertPhotoHashParams{
+		DeviceSerial: serial,
+		RelPath:      relPath,
+		Dhash:        sql.NullString{String: "0000000000000000", Valid: true},
+	}); err != nil {
+		t.Fatalf("UpsertPhotoHash(%q): %v", relPath, err)
+	}
+}
+
+// TestMoveFileDropsPhotoHashes: a moved photo's hashes go with the old path,
+// so the duplicates view never lists a path that is no longer there (#1666).
+func TestMoveFileDropsPhotoHashes(t *testing.T) {
+	ctx := context.Background()
+	fsys := vfs.NewMemVFS(filesNamespace)
+	for _, p := range []string{"a.jpg", "trip/b.jpg", "trips/c.jpg"} {
+		if err := fsys.Write(ctx, p, strings.NewReader("x"), vfs.WriteOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, fsys); err != nil {
+		t.Fatal(err)
+	}
+	database := dbtest.NewDB(t)
+	q := database.Queries
+	for _, p := range []string{"a.jpg", "trip/b.jpg", "trips/c.jpg"} {
+		hashPhoto(t, q, "", p)
+	}
+
+	for _, m := range [][2]string{{"a.jpg", "renamed.jpg"}, {"trip", "2024/trip"}} {
+		if _, err := MoveFile(MoveFileParams{
+			Ctx: ctx, Registry: registry, EventBus: eventbus.New(), Database: database,
+			OldFilePath: m[0], NewFilePath: m[1],
+		}); err != nil {
+			t.Fatalf("MoveFile(%q, %q): %v", m[0], m[1], err)
+		}
+	}
+
+	if got, want := hashKeys(t, q), []string{"|trips/c.jpg"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("hashes = %v, want %v", got, want)
+	}
+}
+
+// TestDeleteFilesDropsPhotoHashes: a deleted photo, or a photo in a deleted
+// folder, loses its hashes; its neighbors keep theirs (#1666).
+func TestDeleteFilesDropsPhotoHashes(t *testing.T) {
+	const serial = "USB-1666"
+	mountPoint := t.TempDir()
+	filesDir := filepath.Join(mountPoint, "quark", "data", "files")
+	paths := []string{"keep.jpg", "gone.jpg", "trip/b.jpg", "trips/d.jpg"}
+	for _, p := range paths {
+		full := filepath.Join(filesDir, p)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	database := dbtest.NewDB(t)
+	q := database.Queries
+	for _, p := range paths {
+		hashPhoto(t, q, serial, p)
+	}
+	hashPhoto(t, q, "", "gone.jpg") // same path, other device
+
+	if _, err := DeleteFiles(DeleteFilesParams{
+		Storage:   storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: serial}),
+		EventBus:  eventbus.New(),
+		Database:  database,
+		RootDir:   "/",
+		FilePaths: []string{"gone.jpg", "trip"},
+		Serial:    serial,
+	}); err != nil {
+		t.Fatalf("DeleteFiles: %v", err)
+	}
+
+	want := []string{"USB-1666|keep.jpg", "USB-1666|trips/d.jpg", "|gone.jpg"}
+	sort.Strings(want)
+	deadline := time.Now().Add(5 * time.Second)
+	for !reflect.DeepEqual(hashKeys(t, q), want) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := hashKeys(t, q); !reflect.DeepEqual(got, want) {
+		t.Errorf("hashes = %v, want %v", got, want)
 	}
 }

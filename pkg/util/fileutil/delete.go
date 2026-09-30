@@ -126,6 +126,12 @@ func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 			}); err != nil {
 				log.Printf("quark: delete cleanup: remove rotation for %q (serial=%q): %v", p, serial, err)
 			}
+			if err := database.Queries.DeletePhotoHashesUnder(ctx, db.DeletePhotoHashesUnderParams{
+				DeviceSerial: serial,
+				RelPath:      key,
+			}); err != nil {
+				log.Printf("quark: delete cleanup: remove photo hashes for %q (serial=%q): %v", p, serial, err)
+			}
 		}
 	}()
 

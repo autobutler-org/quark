@@ -2,6 +2,9 @@ package thumbnailutil
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"image"
 	"image/color"
@@ -9,6 +12,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
+	"github.com/autobutler-org/quark/pkg/util/photoutil"
 )
 
 // sourceJPEG returns the bytes of a small solid-color JPEG to thumbnail.
@@ -81,5 +88,86 @@ func TestGenerateFromReaderRejectsUndecodableSource(t *testing.T) {
 	}
 	if _, statErr := os.Stat(cachedPath); !os.IsNotExist(statErr) {
 		t.Errorf("a failed generation must not leave a cache entry behind: %v", statErr)
+	}
+}
+
+// photoRow reads the one photo_hashes row a test expects.
+func photoRow(t *testing.T, q *db.Queries) db.ListNearDuplicatesRow {
+	t.Helper()
+	rows, err := q.ListNearDuplicates(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("want one photo_hashes row, got %+v", rows)
+	}
+	return rows[0]
+}
+
+// TestGenerateFromReaderStoresPhotoHashes: the VFS path, which internal-drive
+// photos take, used to store no hash at all, so duplicate detection found
+// nothing (#1666).
+func TestGenerateFromReaderStoresPhotoHashes(t *testing.T) {
+	data := sourceJPEG(t)
+	source := filepath.Join(t.TempDir(), "a.jpg")
+	if err := os.WriteFile(source, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	database := dbtest.NewDB(t)
+
+	if _, err := GenerateFromReader(GenerateFromReaderParams{
+		Queries: database.Queries, RelPath: "/trip/a.jpg", Reader: f, Ext: ".jpg",
+		Width: 16, Height: 16, CachedPath: filepath.Join(t.TempDir(), "entry"),
+	}); err != nil {
+		t.Fatalf("GenerateFromReader: %v", err)
+	}
+
+	row := photoRow(t, database.Queries)
+	sum := sha256.Sum256(data)
+	if row.RelPath != "trip/a.jpg" || row.ContentHash.String != hex.EncodeToString(sum[:]) {
+		t.Fatalf("row = %+v, want trip/a.jpg keyed with the file's SHA-256", row)
+	}
+	wantDHash, err := photoutil.DHashFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.Dhash.String != wantDHash {
+		t.Errorf("dhash = %q, want the whole-image hash %q", row.Dhash.String, wantDHash)
+	}
+}
+
+// TestGenerateStoresTheSameHashesAtEveryTier: the dHash used to come from the
+// cropped thumbnail of whichever tier rendered last.
+func TestGenerateStoresTheSameHashesAtEveryTier(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	source := filepath.Join(t.TempDir(), "a.jpg")
+	if err := os.WriteFile(source, sourceJPEG(t), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	database := dbtest.NewDB(t)
+	var first db.ListNearDuplicatesRow
+	for i, size := range []Size{SizeSm, SizeMd, SizeLg} {
+		w, h := Dimensions(size)
+		if _, err := Generate(GenerateParams{
+			Ctx: context.Background(), Queries: database.Queries, RelPath: "a.jpg",
+			SourcePath: source, Ext: ".jpg", Width: w, Height: h,
+			CachedPath: filepath.Join(t.TempDir(), string(size)),
+		}); err != nil {
+			t.Fatalf("Generate %s: %v", size, err)
+		}
+		row := photoRow(t, database.Queries)
+		if !row.Dhash.Valid || !row.ContentHash.Valid {
+			t.Fatalf("%s: want both hashes, got %+v", size, row)
+		}
+		if i == 0 {
+			first = row
+		} else if row.Dhash != first.Dhash || row.ContentHash != first.ContentHash {
+			t.Errorf("%s: hashes %+v differ from the sm tier's %+v", size, row, first)
+		}
 	}
 }
