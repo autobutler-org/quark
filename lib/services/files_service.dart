@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/paginated_photos_response.dart';
 import 'package:quark/models/photo_metadata.dart';
+import 'package:quark/models/photo_sort.dart';
 import 'package:quark/models/thumbnail_probe.dart';
 import 'package:quark/models/transcode_format.dart';
 import 'package:quark/models/trim_result.dart';
@@ -128,8 +129,15 @@ class FilesService with AuthenticatedService {
     int offset = 0,
     int limit = 50,
     String? serial,
+    PhotoSortField sort = PhotoSortField.added,
+    PhotoSortOrder order = PhotoSortOrder.desc,
   }) async {
-    final querySegments = <String>['offset=$offset', 'limit=$limit'];
+    final querySegments = <String>[
+      'offset=$offset',
+      'limit=$limit',
+      'sort=${sort.apiValue}',
+      'order=${order.apiValue}',
+    ];
     final serialValue = serial?.trim() ?? '';
     if (serialValue.isNotEmpty) {
       querySegments.add('serial=${Uri.encodeQueryComponent(serialValue)}');

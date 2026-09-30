@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/photos_controller.dart';
 import 'package:quark/models/photo_album.dart';
+import 'package:quark/models/photo_sort.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/demo_photos_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -63,16 +64,34 @@ void main() {
   });
 
   test(
-    'a single page covers the whole library, so nothing pages further',
+    'a single page covers the whole library, newest first by default (#2509)',
     () async {
       final response = await DemoPhotosService.getPhotos();
 
-      expect(response.photos, photos);
+      // The catalog above is listed oldest first; the default sort is
+      // added/desc, the same default the real endpoint applies.
+      expect(response.photos, photos.reversed.toList());
       expect(response.total, photos.length);
       expect(response.offset, 0);
       expect(response.limit, greaterThanOrEqualTo(photos.length));
     },
   );
+
+  test('getPhotos honors an explicit sort and order (#2509)', () async {
+    final oldestFirst = await DemoPhotosService.getPhotos(
+      sort: PhotoSortField.added,
+      order: PhotoSortOrder.asc,
+    );
+    expect(oldestFirst.photos, photos);
+
+    final byName = await DemoPhotosService.getPhotos(
+      sort: PhotoSortField.name,
+      order: PhotoSortOrder.asc,
+    );
+    final expectedNames = [...photos.map((p) => p.fileName)]
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    expect(byName.photos.map((p) => p.fileName).toList(), expectedNames);
+  });
 
   test('albums only ever point at listed photos', () {
     final albums = DemoPhotosService.albums();
@@ -143,6 +162,28 @@ void main() {
 
   test('an unknown album is empty rather than an error', () {
     expect(DemoPhotosService.listAlbumItems(42), isEmpty);
+  });
+
+  test('listAlbumItems honors an explicit sort and order (#2509)', () {
+    final items = DemoPhotosService.listAlbumItems(
+      DemoPhotosService.summerTripAlbumId,
+      sort: PhotoSortField.name,
+      order: PhotoSortOrder.asc,
+    );
+    final names = items.map((i) => i.relPath.split('/').last).toList();
+    final expected = [...names]
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    expect(names, expected);
+
+    final reversed = DemoPhotosService.listAlbumItems(
+      DemoPhotosService.summerTripAlbumId,
+      sort: PhotoSortField.name,
+      order: PhotoSortOrder.desc,
+    );
+    expect(
+      reversed.map((i) => i.relPath.split('/').last).toList(),
+      names.reversed.toList(),
+    );
   });
 
   group('PhotosController.demo', () {

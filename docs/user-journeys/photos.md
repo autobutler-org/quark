@@ -330,3 +330,22 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 **Notes:**
 
 - Photos are recognized by extension, raw camera formats included. SVG and video files are not photos here.
+
+---
+
+### JN-PH-018: Change the sort order
+
+**Preconditions:** Photos are visible in the grid (JN-PH-001), an album (JN-PH-012), or a category tab.
+
+**Steps:**
+
+1. Tap the sort button in the app bar.
+2. Choose **Newest first**, **Oldest first**, **Name (A-Z)**, or **Name (Z-A)**.
+
+**Expected result:**
+
+- The grid reloads in the chosen order: All photos, every category tab (Quark, Mobile, Favorites), and every
+  album view.
+- The choice is remembered across navigation and app restart, defaulting to **Newest first** the first time.
+- A device photo has no filename to sort by, so a Mobile-tab name sort leaves those photos in the device's own
+  order; a date sort still applies to them.

@@ -8,8 +8,10 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/albumutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/sqlutil"
 
@@ -22,6 +24,8 @@ import (
 // @Tags albums
 // @Produce json
 // @Param id path int true "Album ID"
+// @Param sort query string false "Sort field: added (date added) or name (default added)"
+// @Param order query string false "Sort order: asc or desc (default desc)"
 // @Success 200 {array} AlbumItemJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 404 {object} serverutil.Response "Not Found: no album of the caller's has that id"
@@ -50,16 +54,19 @@ func listAlbumItems(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
-	items, err := deps.Database().Queries.ListAlbumItems(context.Background(), id)
+	listResult, err := albumutil.ListItems(context.Background(), albumutil.ListItemsParams{
+		Queries: deps.Database().Queries,
+		Access:  access,
+		AlbumID: id,
+		Sort:    photoutil.ParseSort(c.Query("sort")),
+		Order:   photoutil.ParseOrder(c.Query("order")),
+	})
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
 
-	result := make([]AlbumItemJSON, 0, len(items))
-	for _, item := range items {
-		if !access.Check(item.DeviceSerial, item.RelPath, accessutil.Read).Readable {
-			continue
-		}
+	result := make([]AlbumItemJSON, 0, len(listResult.Items))
+	for _, item := range listResult.Items {
 		result = append(result, AlbumItemJSON{
 			ID:           item.ID,
 			AlbumID:      item.AlbumID,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -12,6 +13,17 @@ import (
 
 const defaultLimit = 50
 const maxLimit = 200
+
+// Sort field and order values ListPhotos and the album-items listing accept.
+// An unrecognized value falls back to SortAdded / OrderDesc, the historical
+// fixed order (#2509).
+const (
+	SortAdded = "added"
+	SortName  = "name"
+
+	OrderAsc  = "asc"
+	OrderDesc = "desc"
+)
 
 // PhotoSummary is a photo file as the listing endpoints report it.
 type PhotoSummary struct {
@@ -36,6 +48,10 @@ type ListPhotosParams struct {
 	// Access drops the photos the caller cannot read, before sorting and
 	// paging, so a page stays full and Total counts only what they can see.
 	Access accessutil.Access
+	// Sort is SortAdded (default) or SortName; Order is OrderDesc (default) or
+	// OrderAsc. Anything else is treated as the default for that field.
+	Sort  string
+	Order string
 	// Offset and Limit page the sorted result.
 	Offset int
 	Limit  int
@@ -64,7 +80,49 @@ func ParsePagination(offsetRaw, limitRaw string) (offset, limit int) {
 	return offset, min(limit, maxLimit)
 }
 
-// ListPhotos returns one page of the photo library, newest first.
+// ParseSort reads the sort query parameter, falling back to SortAdded for
+// anything unrecognized.
+func ParseSort(raw string) string {
+	if raw == SortName {
+		return SortName
+	}
+	return SortAdded
+}
+
+// ParseOrder reads the order query parameter, falling back to OrderDesc for
+// anything unrecognized.
+func ParseOrder(raw string) string {
+	if raw == OrderAsc {
+		return OrderAsc
+	}
+	return OrderDesc
+}
+
+// sortPhotos orders photos by sortBy and order, defaulting to newest-first by
+// modification time — the fixed order ListPhotos used before #2509 — for a
+// zero-value or unrecognized sortBy/order.
+func sortPhotos(photos []PhotoSummary, sortBy, order string) {
+	ascending := order == OrderAsc
+	if sortBy == SortName {
+		sort.Slice(photos, func(i, j int) bool {
+			ni := strings.ToLower(photos[i].FileName)
+			nj := strings.ToLower(photos[j].FileName)
+			if ascending {
+				return ni < nj
+			}
+			return ni > nj
+		})
+		return
+	}
+	sort.Slice(photos, func(i, j int) bool {
+		if ascending {
+			return photos[i].MTime < photos[j].MTime
+		}
+		return photos[i].MTime > photos[j].MTime
+	})
+}
+
+// ListPhotos returns one page of the photo library, sorted by Sort and Order.
 //
 // TODO: For very large collections, an index/cache would be needed instead
 // of walking the entire directory tree on every request. The walk itself is
@@ -143,10 +201,7 @@ func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
 		}
 	}
 
-	// Sort by modification time descending (newest first)
-	sort.Slice(allPhotos, func(i, j int) bool {
-		return allPhotos[i].MTime > allPhotos[j].MTime
-	})
+	sortPhotos(allPhotos, params.Sort, params.Order)
 
 	total := len(allPhotos)
 	if params.Offset >= total {

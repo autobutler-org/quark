@@ -117,6 +117,7 @@ class QuarkIcons {
 
   // ── Data operations ───────────────────────────────────────────────────────────────
   static const IconData sort = Icons.sort;
+  static const IconData sort_by_alpha = Icons.sort_by_alpha;
 
   /// Remove duplicate rows — deselect/layers-clear is closest standard icon.
   static const IconData remove_duplicates = Icons.deselect;

@@ -11,6 +11,8 @@ import 'package:quark/controllers/photo_bytes_cache.dart';
 import 'package:quark/controllers/photos_controller.dart';
 import 'package:quark/models/paginated_photos_response.dart' as wire;
 import 'package:quark/models/photo_album.dart';
+import 'package:quark/models/photo_sort.dart';
+import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -107,6 +109,13 @@ class _FakeQuark {
   };
   Object? albumItemsError;
 
+  /// The sort/order the last getPhotos and listAlbumItems calls were asked
+  /// for, so a test can check the controller passes them through (#2509).
+  PhotoSortField? lastPhotosSort;
+  PhotoSortOrder? lastPhotosOrder;
+  PhotoSortField? lastAlbumItemsSort;
+  PhotoSortOrder? lastAlbumItemsOrder;
+
   /// Holds the album tree back until it completes, when set.
   Future<void>? albumsGate;
   Object? albumsError;
@@ -119,18 +128,27 @@ class _FakeQuark {
   PhotosController controller() => PhotosController(
     isWeb: false,
     activeHost: () => host,
-    getPhotos: ({int offset = 0, int limit = 50, String? serial}) async {
-      calls.add('getPhotos($offset)');
-      final error = photosError;
-      if (error != null) throw error;
-      final end = (offset + limit).clamp(0, total);
-      return wire.PaginatedPhotosResponse(
-        photos: [for (var i = offset; i < end; i++) _wirePhoto(i)],
-        total: total,
-        offset: offset,
-        limit: limit,
-      );
-    },
+    getPhotos:
+        ({
+          int offset = 0,
+          int limit = 50,
+          String? serial,
+          PhotoSortField sort = PhotoSortField.added,
+          PhotoSortOrder order = PhotoSortOrder.desc,
+        }) async {
+          calls.add('getPhotos($offset)');
+          lastPhotosSort = sort;
+          lastPhotosOrder = order;
+          final error = photosError;
+          if (error != null) throw error;
+          final end = (offset + limit).clamp(0, total);
+          return wire.PaginatedPhotosResponse(
+            photos: [for (var i = offset; i < end; i++) _wirePhoto(i)],
+            total: total,
+            offset: offset,
+            limit: limit,
+          );
+        },
     loadDeviceAssets: () async => [
       AssetEntity(id: 'dev1', typeInt: 1, width: 1, height: 1),
     ],
@@ -182,25 +200,32 @@ class _FakeQuark {
           calls.add('remove($albumId, $relPath)');
           albumFiles[albumId]?.remove(relPath);
         },
-    listAlbumItems: (albumId) async {
-      calls.add('items($albumId)');
-      final error = albumItemsError;
-      if (error != null) throw error;
-      // Favorites mirrors the stars, the way the Quark's does (#992).
-      final paths = albumId == 3
-          ? [for (final key in favorites) key.substring('sd1:'.length)]
-          : albumFiles[albumId] ?? const <String>[];
-      return [
-        for (final (i, path) in paths.indexed)
-          PhotoAlbumItem(
-            id: i,
-            albumId: albumId,
-            deviceSerial: 'sd1',
-            relPath: path,
-            addedAt: DateTime(2024),
-          ),
-      ];
-    },
+    listAlbumItems:
+        (
+          albumId, {
+          PhotoSortField sort = PhotoSortField.added,
+          PhotoSortOrder order = PhotoSortOrder.desc,
+        }) async {
+          calls.add('items($albumId)');
+          lastAlbumItemsSort = sort;
+          lastAlbumItemsOrder = order;
+          final error = albumItemsError;
+          if (error != null) throw error;
+          // Favorites mirrors the stars, the way the Quark's does (#992).
+          final paths = albumId == 3
+              ? [for (final key in favorites) key.substring('sd1:'.length)]
+              : albumFiles[albumId] ?? const <String>[];
+          return [
+            for (final (i, path) in paths.indexed)
+              PhotoAlbumItem(
+                id: i,
+                albumId: albumId,
+                deviceSerial: 'sd1',
+                relPath: path,
+                addedAt: DateTime(2024),
+              ),
+          ];
+        },
     listDevices: () async => [_device('a'), _device('b', enabled: false)],
     uploadFiles:
         (
@@ -218,7 +243,13 @@ class _FakeQuark {
 }
 
 void main() {
-  setUp(PhotoBytesCache.instance.clear);
+  setUp(() {
+    PhotoBytesCache.instance.clear();
+    // AppSettings is a singleton; a sort choice from one test must not leak
+    // into the next controller's initial state (#2509).
+    AppSettings.instance.photoSortField.value = PhotoSortField.added;
+    AppSettings.instance.photoSortOrder.value = PhotoSortOrder.desc;
+  });
 
   group('refresh', () {
     test('loads the first page, device photos, favorites and albums', () async {
@@ -324,6 +355,67 @@ void main() {
       expect(controller.photos, hasLength(50));
       expect(controller.isLoadingMore, isFalse);
     });
+  });
+
+  group('sort', () {
+    test('defaults to added/desc and passes it to both endpoints', () async {
+      final quark = _FakeQuark()..albumFiles = {1: []};
+      final controller = quark.controller();
+
+      await controller.refresh();
+      await controller.showAlbum(1);
+
+      expect(controller.sortField, PhotoSortField.added);
+      expect(controller.sortOrder, PhotoSortOrder.desc);
+      expect(quark.lastPhotosSort, PhotoSortField.added);
+      expect(quark.lastPhotosOrder, PhotoSortOrder.desc);
+      expect(quark.lastAlbumItemsSort, PhotoSortField.added);
+      expect(quark.lastAlbumItemsOrder, PhotoSortOrder.desc);
+    });
+
+    test(
+      'setSort reloads with the new field and order and persists it',
+      () async {
+        final quark = _FakeQuark();
+        final controller = quark.controller();
+        await controller.refresh();
+        final callsBefore = quark.calls
+            .where((c) => c.startsWith('getPhotos'))
+            .length;
+
+        await controller.setSort(PhotoSortField.name, PhotoSortOrder.asc);
+
+        expect(controller.sortField, PhotoSortField.name);
+        expect(controller.sortOrder, PhotoSortOrder.asc);
+        expect(quark.lastPhotosSort, PhotoSortField.name);
+        expect(quark.lastPhotosOrder, PhotoSortOrder.asc);
+        expect(
+          quark.calls.where((c) => c.startsWith('getPhotos')).length,
+          greaterThan(callsBefore),
+        );
+        expect(AppSettings.instance.photoSortField.value, PhotoSortField.name);
+        expect(AppSettings.instance.photoSortOrder.value, PhotoSortOrder.asc);
+      },
+    );
+
+    test(
+      'setSort is a no-op for the field and order already showing',
+      () async {
+        final quark = _FakeQuark();
+        final controller = quark.controller();
+        await controller.refresh();
+        final callsBefore = quark.calls
+            .where((c) => c.startsWith('getPhotos'))
+            .length;
+
+        await controller.setSort(PhotoSortField.added, PhotoSortOrder.desc);
+
+        expect(
+          quark.calls.where((c) => c.startsWith('getPhotos')).length,
+          callsBefore,
+        );
+      },
+    );
   });
 
   group('categories', () {
@@ -1037,8 +1129,14 @@ void main() {
         activeHost: () => 'h',
         listAlbums: ({bool tree = false}) async => [],
         listFavoriteKeys: () async => {},
-        getPhotos: ({int offset = 0, int limit = 50, String? serial}) async =>
-            wire.PaginatedPhotosResponse(
+        getPhotos:
+            ({
+              int offset = 0,
+              int limit = 50,
+              String? serial,
+              PhotoSortField sort = PhotoSortField.added,
+              PhotoSortOrder order = PhotoSortOrder.desc,
+            }) async => wire.PaginatedPhotosResponse(
               photos: [
                 const wire.PhotoItem(
                   relPath: '404.jpg',

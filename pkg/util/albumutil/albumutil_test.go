@@ -8,9 +8,21 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/albumutil"
 	"github.com/autobutler-org/quark/pkg/util/favoritesutil"
+	"github.com/autobutler-org/quark/pkg/util/photoutil"
 )
+
+// fullAccess is an admin's access, which filters nothing.
+func fullAccess(t *testing.T) accessutil.Access {
+	t.Helper()
+	loaded, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return loaded.Access
+}
 
 func under(id int64) sql.NullInt64 { return sql.NullInt64{Int64: id, Valid: true} }
 
@@ -140,6 +152,75 @@ func TestMoveAlbum(t *testing.T) {
 				t.Fatalf("MoveAlbum(%d) error = %v, want %v", tt.id, err, tt.want)
 			}
 		})
+	}
+}
+
+// TestListItems_SortByName checks the name sort against RelPath's base name,
+// independent of insertion (added_at) order.
+func TestListItems_SortByName(t *testing.T) {
+	q, owner := newOwnedQueries(t)
+	ctx := context.Background()
+	album := create(t, q, owner, "Trips", sql.NullInt64{})
+	for _, name := range []string{"charlie.jpg", "alpha.jpg", "bravo.jpg"} {
+		if _, err := q.AddPhotoToAlbum(ctx, db.AddPhotoToAlbumParams{AlbumID: album.ID, DeviceSerial: "dev", RelPath: name}); err != nil {
+			t.Fatalf("AddPhotoToAlbum(%q): %v", name, err)
+		}
+	}
+
+	ascending, err := albumutil.ListItems(ctx, albumutil.ListItemsParams{
+		Queries: q, Access: fullAccess(t), AlbumID: album.ID, Sort: photoutil.SortName, Order: photoutil.OrderAsc,
+	})
+	if err != nil {
+		t.Fatalf("ListItems asc: %v", err)
+	}
+	wantAsc := []string{"alpha.jpg", "bravo.jpg", "charlie.jpg"}
+	for i, want := range wantAsc {
+		if ascending.Items[i].RelPath != want {
+			t.Fatalf("ascending[%d] = %q, want %q", i, ascending.Items[i].RelPath, want)
+		}
+	}
+
+	descending, err := albumutil.ListItems(ctx, albumutil.ListItemsParams{
+		Queries: q, Access: fullAccess(t), AlbumID: album.ID, Sort: photoutil.SortName, Order: photoutil.OrderDesc,
+	})
+	if err != nil {
+		t.Fatalf("ListItems desc: %v", err)
+	}
+	wantDesc := []string{"charlie.jpg", "bravo.jpg", "alpha.jpg"}
+	for i, want := range wantDesc {
+		if descending.Items[i].RelPath != want {
+			t.Fatalf("descending[%d] = %q, want %q", i, descending.Items[i].RelPath, want)
+		}
+	}
+}
+
+// TestListItems_DefaultMatchesAddedAtDesc checks that an unspecified Sort and
+// Order leaves the SQL query's own added_at DESC order untouched.
+func TestListItems_DefaultMatchesAddedAtDesc(t *testing.T) {
+	q, owner := newOwnedQueries(t)
+	ctx := context.Background()
+	album := create(t, q, owner, "Trips", sql.NullInt64{})
+	for _, name := range []string{"first.jpg", "second.jpg"} {
+		if _, err := q.AddPhotoToAlbum(ctx, db.AddPhotoToAlbumParams{AlbumID: album.ID, DeviceSerial: "dev", RelPath: name}); err != nil {
+			t.Fatalf("AddPhotoToAlbum(%q): %v", name, err)
+		}
+	}
+
+	direct, err := q.ListAlbumItems(ctx, album.ID)
+	if err != nil {
+		t.Fatalf("ListAlbumItems: %v", err)
+	}
+	result, err := albumutil.ListItems(ctx, albumutil.ListItemsParams{Queries: q, Access: fullAccess(t), AlbumID: album.ID})
+	if err != nil {
+		t.Fatalf("ListItems: %v", err)
+	}
+	if len(result.Items) != len(direct) {
+		t.Fatalf("got %d items, want %d", len(result.Items), len(direct))
+	}
+	for i := range direct {
+		if result.Items[i].RelPath != direct[i].RelPath {
+			t.Fatalf("item %d = %q, want %q (default order should match ListAlbumItems)", i, result.Items[i].RelPath, direct[i].RelPath)
+		}
 	}
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:quark/models/paginated_photos_response.dart';
 import 'package:quark/models/photo_album.dart';
+import 'package:quark/models/photo_sort.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/error_text.dart';
 
@@ -81,12 +82,23 @@ class DemoPhotosService {
     int offset = 0,
     int limit = 0,
     String? serial,
-  }) async => PaginatedPhotosResponse(
-    photos: photos,
-    total: photos.length,
-    offset: 0,
-    limit: photos.length,
-  );
+    PhotoSortField sort = PhotoSortField.added,
+    PhotoSortOrder order = PhotoSortOrder.desc,
+  }) async {
+    final sorted = _sorted(
+      photos,
+      sort,
+      order,
+      (p) => p.fileName,
+      (p) => p.mtime,
+    );
+    return PaginatedPhotosResponse(
+      photos: sorted,
+      total: sorted.length,
+      offset: 0,
+      limit: sorted.length,
+    );
+  }
 
   /// Something non-null, so the controller loads the sample library even
   /// with no Quark configured.
@@ -157,9 +169,13 @@ class DemoPhotosService {
     _album(cityBreakAlbumId, 'City Break'),
   ]);
 
-  static List<PhotoAlbumItem> listAlbumItems(int albumId) {
+  static List<PhotoAlbumItem> listAlbumItems(
+    int albumId, {
+    PhotoSortField sort = PhotoSortField.added,
+    PhotoSortOrder order = PhotoSortOrder.desc,
+  }) {
     final files = _filesIn(albumId);
-    return List.unmodifiable([
+    final items = [
       for (final (index, file) in files.indexed)
         PhotoAlbumItem(
           id: albumId * 100 - index,
@@ -168,7 +184,37 @@ class DemoPhotosService {
           relPath: _relPath(file),
           addedAt: _albumDate,
         ),
-    ]);
+    ];
+    return List.unmodifiable(
+      _sorted(
+        items,
+        sort,
+        order,
+        (item) => item.relPath,
+        (item) => item.addedAt.millisecondsSinceEpoch,
+      ),
+    );
+  }
+
+  /// Orders [items] by [sort]/[order], the same rules the real endpoints
+  /// apply server-side, so Demo mode's sort control behaves like a real
+  /// Quark's (#2509).
+  static List<T> _sorted<T>(
+    List<T> items,
+    PhotoSortField sort,
+    PhotoSortOrder order,
+    String Function(T) name,
+    int Function(T) addedTime,
+  ) {
+    final ascending = order == PhotoSortOrder.asc;
+    final sorted = [...items];
+    sorted.sort((a, b) {
+      final cmp = sort == PhotoSortField.name
+          ? name(a).toLowerCase().compareTo(name(b).toLowerCase())
+          : addedTime(a).compareTo(addedTime(b));
+      return ascending ? cmp : -cmp;
+    });
+    return sorted;
   }
 
   static Future<Never> _refuse() async =>

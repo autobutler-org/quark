@@ -107,6 +107,43 @@ func CountItems(ctx context.Context, params CountItemsParams) (CountItemsResult,
 	return CountItemsResult{Count: count}, nil
 }
 
+// ListItemsParams lists one album's items in the caller's chosen order.
+type ListItemsParams struct {
+	Queries *db.Queries
+	// Access leaves out the items the caller cannot read (#1904).
+	Access  accessutil.Access
+	AlbumID int64
+	// Sort is photoutil.SortAdded (default) or photoutil.SortName; Order is
+	// photoutil.OrderDesc (default) or photoutil.OrderAsc (#2509).
+	Sort  string
+	Order string
+}
+
+// ListItemsResult carries the items the caller can read, in the requested
+// order.
+type ListItemsResult struct {
+	Items []db.PhotoAlbumItem
+}
+
+// ListItems returns an album's items the caller can read, sorted by Sort and
+// Order. photo_album_items has no filename column, so a name sort compares
+// each item's RelPath base name case-insensitively; an added-date sort uses
+// the SQL query's own added_at DESC order, reversed in Go for ascending.
+func ListItems(ctx context.Context, params ListItemsParams) (ListItemsResult, error) {
+	items, err := params.Queries.ListAlbumItems(ctx, params.AlbumID)
+	if err != nil {
+		return ListItemsResult{}, err
+	}
+	visible := make([]db.PhotoAlbumItem, 0, len(items))
+	for _, item := range items {
+		if params.Access.Check(item.DeviceSerial, item.RelPath, accessutil.Read).Readable {
+			visible = append(visible, item)
+		}
+	}
+	sortItems(visible, params.Sort, params.Order)
+	return ListItemsResult{Items: visible}, nil
+}
+
 // CreateAlbum creates an album, refusing a name with '/' or one a sibling
 // already holds.
 func CreateAlbum(ctx context.Context, params CreateAlbumParams) (CreateAlbumResult, error) {
