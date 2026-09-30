@@ -233,7 +233,8 @@ class _ImageViewerPageState extends State<ImageViewerPage>
 
   // A PageView carries the swipe so the photo tracks the finger and settles
   // with an animation (#1707). The keyboard and the chevrons drive the same
-  // controller so every route to the next photo animates the same way.
+  // controller so every route to the next photo animates the same way, or,
+  // under reduced motion, jumps straight there (#2607).
   //
   // The step counts from the newest requested photo rather than the one on
   // screen, so a second press while the first is still downloading moves on
@@ -243,6 +244,10 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     if (target < 0 || target >= _liveImageCount) return;
     if (!_pageController.hasClients) {
       _navigate(target);
+      return;
+    }
+    if (reduceMotionOf(context)) {
+      _pageController.jumpToPage(target);
       return;
     }
     _pageController.animateToPage(
@@ -513,7 +518,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       begin: oldAngle,
       end: newAngle,
     ).animate(CurvedAnimation(parent: _rotationAnim, curve: Curves.easeOut));
-    _rotationAnim.forward(from: 0);
+    _rotationAnim.forward(from: reduceMotionOf(context) ? 1 : 0);
 
     try {
       await FilesService.rotatePhoto(
@@ -546,7 +551,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
           CurvedAnimation(parent: _rotationAnim, curve: Curves.easeOut),
         );
       });
-      _rotationAnim.forward(from: 0);
+      _rotationAnim.forward(from: reduceMotionOf(context) ? 1 : 0);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(Errors.message(e, 'rotate the photo'))),
       );

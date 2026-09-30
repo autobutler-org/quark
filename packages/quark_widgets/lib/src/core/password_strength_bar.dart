@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/quark_tokens.dart';
+import 'reduce_motion.dart';
 
 /// Password strength, from weakest to strongest.
 enum PasswordStrength {
@@ -133,13 +134,7 @@ class _PasswordStrengthBarState extends State<PasswordStrengthBar>
   void didChangeAccessibilityFeatures() => setState(_updateMotion);
 
   void _updateMotion() {
-    _reduceMotion =
-        MediaQuery.disableAnimationsOf(context) ||
-        WidgetsBinding
-            .instance
-            .platformDispatcher
-            .accessibilityFeatures
-            .reduceMotion;
+    _reduceMotion = reduceMotionOf(context);
   }
 
   @override

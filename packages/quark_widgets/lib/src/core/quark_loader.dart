@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../theme/quark_tokens.dart';
 import 'quark_loader/quark_loader_painter.dart';
+import 'reduce_motion.dart';
 
 /// Quark's indeterminate loading indicator: three orbit rings, tilted 60
 /// degrees apart, spinning inside a track circle, one full turn a second.
@@ -62,13 +63,7 @@ class _QuarkLoaderState extends State<QuarkLoader>
   void didChangeAccessibilityFeatures() => setState(_updateMotion);
 
   void _updateMotion() {
-    final reduce =
-        MediaQuery.disableAnimationsOf(context) ||
-        WidgetsBinding
-            .instance
-            .platformDispatcher
-            .accessibilityFeatures
-            .reduceMotion;
+    final reduce = reduceMotionOf(context);
     if (reduce == _reduceMotion) return;
     _reduceMotion = reduce;
     _controller

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../core/reduce_motion.dart';
 import '../theme/quark_tokens.dart';
 import 'photo_grid_scroll_label/photo_grid_scroll_label_pill.dart';
 import 'photo_grid_scroll_label/photo_grid_scroll_label_scope.dart';
@@ -72,13 +73,7 @@ class _PhotoGridScrollLabelState extends State<PhotoGridScrollLabel>
   void didChangeAccessibilityFeatures() => setState(_updateMotion);
 
   void _updateMotion() {
-    _reduceMotion =
-        MediaQuery.disableAnimationsOf(context) ||
-        WidgetsBinding
-            .instance
-            .platformDispatcher
-            .accessibilityFeatures
-            .reduceMotion;
+    _reduceMotion = reduceMotionOf(context);
   }
 
   bool _onScroll(ScrollUpdateNotification notification) {

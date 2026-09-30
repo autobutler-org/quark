@@ -59,22 +59,12 @@ class RemoteAccessCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final status = this.status;
-    const spinner = SizedBox(
-      width: 14,
-      height: 14,
-      child: CircularProgressIndicator(strokeWidth: 2),
-    );
+    const spinner = QuarkLoader(size: 14);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: isLoading
-            ? const Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
+            ? const Center(child: QuarkLoader(size: 20))
             : error != null
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

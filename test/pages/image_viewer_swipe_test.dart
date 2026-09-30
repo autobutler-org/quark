@@ -141,6 +141,31 @@ void main() {
     expect(requested, [2]);
   });
 
+  // Under reduced motion the chevron jumps straight to the next photo instead
+  // of sliding across (#2607), so the page changes on the very next frame.
+  testWidgets('the chevron jumps under reduced motion', (tester) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(reduceMotion: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    final requested = await pumpViewer(tester);
+
+    await tester.tap(find.byTooltip('Next (\u2192)'));
+    await tester.pump();
+    expect(requested, [2]);
+    await tester.pumpAndSettle();
+  });
+
+  // Without it, the same tap is still mid-slide one frame later.
+  testWidgets('the chevron slides without reduced motion', (tester) async {
+    final requested = await pumpViewer(tester);
+
+    await tester.tap(find.byTooltip('Next (\u2192)'));
+    await tester.pump();
+    expect(requested, isEmpty);
+    await tester.pumpAndSettle();
+    expect(requested, [2]);
+  });
+
   // A zoomed photo pans inside the InteractiveViewer, so the page must stop
   // scrolling until the pinch is undone.
   testWidgets('pinching to zoom locks page scrolling', (tester) async {

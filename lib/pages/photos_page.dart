@@ -484,6 +484,10 @@ class PhotosPageState extends State<PhotosPage>
     if (!_compactLayout || !_scrollController.hasClients) return;
     final box = _navPanelKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
+    if (reduceMotionOf(context)) {
+      _scrollController.jumpTo(box.size.height);
+      return;
+    }
     _scrollController.animateTo(
       box.size.height,
       duration: const Duration(milliseconds: 250),

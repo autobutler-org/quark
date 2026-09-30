@@ -32,6 +32,7 @@ export 'src/core/quark_loader.dart';
 export 'src/core/quark_menu_button.dart';
 export 'src/core/quark_name_dialog.dart';
 export 'src/core/quark_storage_bar.dart';
+export 'src/core/reduce_motion.dart';
 export 'src/core/scroll_up_hint.dart';
 export 'src/core/show_quark_menu.dart';
 export 'src/file_browser/file_breadcrumb_bar.dart';

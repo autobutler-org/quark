@@ -179,14 +179,14 @@ void main() {
     expect(events, ['sort:name_desc']);
   });
 
-  testBothViewports('shows a progress bar while loading', (tester, size) async {
+  testBothViewports('shows a loader while loading', (tester, size) async {
     await pumpAt(
       tester,
       bounded(sidebar(isLoading: true, withAllPhotos: true)),
       size: size,
     );
 
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
     expect(find.text('Trips'), findsNothing);
     expect(find.byKey(_allPhotos), findsOneWidget);
   });

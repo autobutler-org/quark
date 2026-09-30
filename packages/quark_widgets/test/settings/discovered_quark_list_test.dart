@@ -37,7 +37,7 @@ void main() {
     await pumpAt(tester, const DiscoveredQuarkList(quarks: []), size: size);
 
     expect(find.byKey(const ValueKey('discovered_quark_none')), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(QuarkLoader), findsNothing);
   });
 
   testBothViewports('renders the error the caller handed it', (

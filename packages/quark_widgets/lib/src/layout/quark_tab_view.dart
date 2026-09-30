@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/reduce_motion.dart';
 import '../theme/quark_tokens.dart';
 import 'quark_section.dart';
 
@@ -105,13 +106,7 @@ class _QuarkTabViewState extends State<QuarkTabView>
   /// times the tab bar's indicator and the view's page slide alike, so a
   /// change in reduced motion replaces the controller, keeping the tab.
   void _updateMotion() {
-    final reduce =
-        MediaQuery.disableAnimationsOf(context) ||
-        WidgetsBinding
-            .instance
-            .platformDispatcher
-            .accessibilityFeatures
-            .reduceMotion;
+    final reduce = reduceMotionOf(context);
     if (reduce == _reduceMotion) return;
     _reduceMotion = reduce;
     _replaceController(_controller?.index ?? widget.selectedIndex ?? 0);

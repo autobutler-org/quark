@@ -119,11 +119,7 @@ class SettingsUpdatesTab extends StatelessWidget {
                     'hosts, on the General tab',
                   )
                 else if (isLoadingVersion)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                  const QuarkLoader(size: 20)
                 else if (versionError != null)
                   Text(
                     disconnected ? quarkDisconnectedShort : versionError!,
@@ -177,11 +173,7 @@ class SettingsUpdatesTab extends StatelessWidget {
                           ? null
                           : onUpdate,
                       icon: isUpdating
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
+                          ? const QuarkLoader(size: 14)
                           : const Icon(QuarkIcons.update),
                       label: Text(isUpdating ? 'Updating...' : 'Start update'),
                     ),
@@ -198,11 +190,7 @@ class SettingsUpdatesTab extends StatelessWidget {
                 ? const ListTile(
                     title: Text('Automatic updates'),
                     subtitle: autoUpdateHint,
-                    trailing: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
+                    trailing: QuarkLoader(size: 24),
                   )
                 : SwitchListTile(
                     title: const Text('Automatic updates'),
