@@ -4,11 +4,13 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The photo grid's sort control (#2509): one bar button that opens a menu of
-/// the four Date/Name x ascending/descending combinations, rather than two
-/// separate bar widgets that overflow the actions row on a phone.
+/// the six date taken/date added/name x ascending/descending combinations,
+/// rather than two separate bar widgets that overflow the actions row on a
+/// phone.
 ///
 /// Key prefixes: `photos_sort` on the button, `photos_sort_option_<id>` on
-/// each menu row (`added_desc`, `added_asc`, `name_asc`, `name_desc`).
+/// each menu row (`taken_desc`, `taken_asc`, `added_desc`, `added_asc`,
+/// `name_asc`, `name_desc`).
 class PhotoSortButton extends StatelessWidget {
   /// Creates the sort button showing [sortField]/[sortOrder] as the current
   /// choice, calling [onChanged] with the option the user picks.
@@ -30,14 +32,26 @@ class PhotoSortButton extends StatelessWidget {
 
   static const _options = [
     (
+      id: 'taken_desc',
+      label: 'Taken, newest first',
+      field: PhotoSortField.taken,
+      order: PhotoSortOrder.desc,
+    ),
+    (
+      id: 'taken_asc',
+      label: 'Taken, oldest first',
+      field: PhotoSortField.taken,
+      order: PhotoSortOrder.asc,
+    ),
+    (
       id: 'added_desc',
-      label: 'Newest first',
+      label: 'Added, newest first',
       field: PhotoSortField.added,
       order: PhotoSortOrder.desc,
     ),
     (
       id: 'added_asc',
-      label: 'Oldest first',
+      label: 'Added, oldest first',
       field: PhotoSortField.added,
       order: PhotoSortOrder.asc,
     ),
@@ -74,12 +88,7 @@ class PhotoSortButton extends StatelessWidget {
         for (final option in _options)
           MenuItemButton(
             key: ValueKey('photos_sort_option_${option.id}'),
-            leadingIcon: Icon(
-              option.field == PhotoSortField.name
-                  ? QuarkIcons.sort_by_alpha
-                  : QuarkIcons.schedule_rounded,
-              size: 18,
-            ),
+            leadingIcon: Icon(_iconFor(option.field), size: 18),
             trailingIcon: option.field == sortField && option.order == sortOrder
                 ? Icon(
                     QuarkIcons.check_rounded,
@@ -93,13 +102,17 @@ class PhotoSortButton extends StatelessWidget {
       ],
       builder: (context, controller, _) => QuarkBarIconButton(
         key: const ValueKey('photos_sort'),
-        icon: sortField == PhotoSortField.name
-            ? QuarkIcons.sort_by_alpha
-            : QuarkIcons.schedule_rounded,
+        icon: _iconFor(sortField),
         tooltip: 'Sort',
         onPressed: () =>
             controller.isOpen ? controller.close() : controller.open(),
       ),
     );
   }
+
+  static IconData _iconFor(PhotoSortField field) => switch (field) {
+    PhotoSortField.taken => QuarkIcons.camera_alt_outlined,
+    PhotoSortField.added => QuarkIcons.schedule_rounded,
+    PhotoSortField.name => QuarkIcons.sort_by_alpha,
+  };
 }

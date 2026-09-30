@@ -213,7 +213,7 @@ class PhotosController extends ChangeNotifier {
     listAlbumItems:
         (
           id, {
-          sort = PhotoSortField.added,
+          sort = PhotoSortField.taken,
           order = PhotoSortOrder.desc,
         }) async =>
             DemoPhotosService.listAlbumItems(id, sort: sort, order: order),
@@ -371,12 +371,18 @@ class PhotosController extends ChangeNotifier {
       ),
   ];
 
-  /// The month runs [photos] is split into under the date sort, or null under
-  /// a name sort, where a month header would split nothing meaningful (#979).
-  List<PhotoGridSection>? get photoSections {
-    if (_sortField != PhotoSortField.added) return null;
-    return photoMonthSections([for (final photo in _visible()) photo.date]);
-  }
+  /// The month runs [photos] is split into under a date sort, headed by the
+  /// date that sort orders by (#2592), or null under a name sort, where a
+  /// month header would split nothing meaningful (#979).
+  List<PhotoGridSection>? get photoSections => switch (_sortField) {
+    PhotoSortField.name => null,
+    PhotoSortField.added => photoMonthSections([
+      for (final photo in _visible()) photo.date,
+    ]),
+    PhotoSortField.taken => photoMonthSections([
+      for (final photo in _visible()) photo.takenDate ?? photo.date,
+    ]),
+  };
 
   /// How many photos the grid shows.
   int get photoCount => _visible().length;
@@ -662,10 +668,11 @@ class PhotosController extends ChangeNotifier {
   ///
   /// A device photo carries no real filename ([_Photo.fromAsset] uses the
   /// asset id as a placeholder), so [PhotoSortField.name] has nothing
-  /// meaningful to sort by and leaves the device's own order in place; only
-  /// [PhotoSortField.added] (the asset's creation time) is applied here.
+  /// meaningful to sort by and leaves the device's own order in place. Both
+  /// date sorts order by the asset's creation time, which is when the device
+  /// took or saved it.
   List<_Photo> _sortDevicePhotos(List<_Photo> photos) {
-    if (_sortField != PhotoSortField.added) return photos;
+    if (_sortField == PhotoSortField.name) return photos;
     final ascending = _sortOrder == PhotoSortOrder.asc;
     final sorted = [...photos];
     sorted.sort((a, b) {
@@ -1379,6 +1386,7 @@ class _Photo {
     this.asset,
     this.hasLiveVideo = false,
     this.date,
+    this.takenDate,
   });
 
   /// A Quark-stored photo from the paginated photos endpoint.
@@ -1401,6 +1409,9 @@ class _Photo {
       date: photo.mtime > 0
           ? DateTime.fromMillisecondsSinceEpoch(photo.mtime * 1000)
           : null,
+      takenDate: photo.takenAt == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(photo.takenAt! * 1000),
     );
   }
 
@@ -1412,6 +1423,7 @@ class _Photo {
     relPath: item.relPath,
     serial: item.deviceSerial,
     date: item.addedAt,
+    takenDate: item.takenAt,
   );
 
   /// A photo on this device.
@@ -1435,10 +1447,17 @@ class _Photo {
   final AssetEntity? asset;
   final bool hasLiveVideo;
 
-  /// When the photo was added, as the date sort sees it: the file's modified
-  /// time on the Quark, the time it joined an album, or a device photo's
-  /// creation time. Null when the Quark sent none.
+  /// When the photo was added, as the date-added sort sees it: the file's
+  /// modified time on the Quark, the time it joined an album, or a device
+  /// photo's creation time. Null when the Quark sent none.
   final DateTime? date;
+
+  /// When the photo was taken, from its EXIF data, as the date-taken sort
+  /// sees it (#2592). Null when the Quark has not read one, in which case the
+  /// sort and its month headers stand in [date], the way the Quark orders it.
+  /// A device photo's creation time already is its capture time, so it
+  /// carries none and uses [date].
+  final DateTime? takenDate;
 
   bool get isRemote => relPath != null;
 }

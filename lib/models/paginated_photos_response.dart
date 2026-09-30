@@ -37,6 +37,10 @@ class PhotoItem {
   final String serial;
   final bool hasLiveVideo;
 
+  /// When the photo was taken, from its EXIF data, in Unix seconds. Sent only
+  /// under the date-taken sort, and only once the Quark has read it (#2592).
+  final int? takenAt;
+
   const PhotoItem({
     required this.relPath,
     required this.fileName,
@@ -44,6 +48,7 @@ class PhotoItem {
     required this.mtime,
     required this.serial,
     this.hasLiveVideo = false,
+    this.takenAt,
   });
 
   factory PhotoItem.fromJson(Map<String, dynamic> json) {
@@ -54,6 +59,7 @@ class PhotoItem {
       mtime: json['mtime'] as int? ?? 0,
       serial: json['serial'] as String? ?? '',
       hasLiveVideo: json['hasLiveVideo'] as bool? ?? false,
+      takenAt: json['takenAt'] as int?,
     );
   }
 }

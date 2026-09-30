@@ -126,9 +126,10 @@ class AppSettings {
   final ValueNotifier<bool> demoMode = ValueNotifier(false);
 
   /// How the photo grid orders its items, and the direction — All photos,
-  /// every category tab, and every album view (#2509).
+  /// every category tab, and every album view (#2509). Newest taken first
+  /// until the user picks otherwise (#2592).
   final ValueNotifier<PhotoSortField> photoSortField = ValueNotifier(
-    PhotoSortField.added,
+    PhotoSortField.taken,
   );
   final ValueNotifier<PhotoSortOrder> photoSortOrder = ValueNotifier(
     PhotoSortOrder.desc,
@@ -241,7 +242,7 @@ class AppSettings {
     final sortFieldRaw = _prefs!.getString(_photoSortFieldKey);
     photoSortField.value = PhotoSortField.values.firstWhere(
       (f) => f.apiValue == sortFieldRaw,
-      orElse: () => PhotoSortField.added,
+      orElse: () => PhotoSortField.taken,
     );
     final sortOrderRaw = _prefs!.getString(_photoSortOrderKey);
     photoSortOrder.value = PhotoSortOrder.values.firstWhere(

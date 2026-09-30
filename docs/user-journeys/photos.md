@@ -340,15 +340,21 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
 **Steps:**
 
 1. Tap the sort button in the app bar.
-2. Choose **Newest first**, **Oldest first**, **Name (A-Z)**, or **Name (Z-A)**.
+2. Choose **Taken, newest first**, **Taken, oldest first**, **Added, newest first**, **Added, oldest first**,
+   **Name (A-Z)**, or **Name (Z-A)**.
 
 **Expected result:**
 
 - The grid reloads in the chosen order: All photos, every category tab (Quark, Mobile, Favorites), and every
   album view.
-- The choice is remembered across navigation and app restart, defaulting to **Newest first** the first time.
+- The choice is remembered across navigation and app restart, defaulting to **Taken, newest first** the first
+  time.
+- **Taken** goes by the capture date in the photo's EXIF data. A photo with none, or one the Quark has not read
+  yet, goes by its date added instead. The Quark reads a photo's date the first time its thumbnail is made, and
+  reads the rest of the library when it starts.
+- **Added** goes by when the file arrived on the Quark, or, in an album, when the photo joined the album.
 - A device photo has no filename to sort by, so a Mobile-tab name sort leaves those photos in the device's own
-  order; a date sort still applies to them.
+  order. Both date sorts order device photos by when the device took or saved them.
 
 ---
 
@@ -381,12 +387,14 @@ by date (JN-PH-018).
 
 **Expected result:**
 
-- Photos sit under month headers such as **March 2025**, in the grid's sort order. The header of the month in
+- Photos sit under month headers such as **March 2025**, in the grid's sort order, headed by the date that sort
+  goes by: a photo taken in 2019 and uploaded today is under its 2019 month when sorted by date taken, and under
+  this month when sorted by date added. The header of the month in
   view stays pinned to the top of the grid until the next month's header pushes it out.
 - While the grid scrolls, a label naming the month in view floats at the right edge of the grid, and fades
   out about a second and a half after scrolling stops. Scrolling the album sidebar does not show it.
-- In an album, a photo is filed under the month it was added to the album. A photo with no date sits under
-  **Unknown date**.
+- In an album sorted by date added, a photo is filed under the month it was added to the album. A photo with no
+  date sits under **Unknown date**.
 - Under a name sort there are no headers.
 - The **All** tab lists Quark photos before device photos, so a month can appear once for each.
 

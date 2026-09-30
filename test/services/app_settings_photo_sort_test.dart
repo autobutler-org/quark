@@ -31,11 +31,17 @@ void main() {
     await settings.load();
   }
 
-  test('defaults to added/desc until changed', () async {
+  test('defaults to taken/desc until changed (#2592)', () async {
     await loadWith({});
 
-    expect(settings.photoSortField.value, PhotoSortField.added);
+    expect(settings.photoSortField.value, PhotoSortField.taken);
     expect(settings.photoSortOrder.value, PhotoSortOrder.desc);
+  });
+
+  test('keeps an explicit date-added choice made before #2592', () async {
+    await loadWith({'photoSortField': 'added', 'photoSortOrder': 'desc'});
+
+    expect(settings.photoSortField.value, PhotoSortField.added);
   });
 
   test('reads a persisted sort on load', () async {
@@ -48,7 +54,7 @@ void main() {
   test('an unrecognized persisted value falls back to the default', () async {
     await loadWith({'photoSortField': 'garbage', 'photoSortOrder': 'garbage'});
 
-    expect(settings.photoSortField.value, PhotoSortField.added);
+    expect(settings.photoSortField.value, PhotoSortField.taken);
     expect(settings.photoSortOrder.value, PhotoSortOrder.desc);
   });
 

@@ -186,6 +186,19 @@ void main() {
     );
   });
 
+  test('album items sort by when each sample was taken (#2592)', () {
+    final items = DemoPhotosService.listAlbumItems(
+      DemoPhotosService.summerTripAlbumId,
+      sort: PhotoSortField.taken,
+      order: PhotoSortOrder.asc,
+    );
+    final taken = [for (final item in items) item.takenAt!];
+    expect(taken, [...taken]..sort());
+    // Every sample shares one date added, so only the capture date orders
+    // them.
+    expect(taken.toSet().length, taken.length);
+  });
+
   group('PhotosController.demo', () {
     test('shows the whole catalog, starred as listed', () async {
       final controller = PhotosController.demo();
