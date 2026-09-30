@@ -76,6 +76,7 @@ export 'src/models/group_item.dart';
 export 'src/models/host_item.dart';
 export 'src/models/job_item.dart';
 export 'src/models/photo_category_entry.dart';
+export 'src/models/photo_grid_section.dart';
 export 'src/models/photo_item.dart';
 export 'src/models/principal_item.dart';
 export 'src/models/shared_root_item.dart';

@@ -24,14 +24,18 @@ void main() {
     Set<String> selectedIds = const {},
     List<String>? events,
     bool withMenu = false,
+    List<PhotoGridSection>? sections,
+    ScrollController? controller,
   }) {
     void record(String e) => events?.add(e);
     return pumpAt(
       tester,
       CustomScrollView(
+        controller: controller,
         slivers: [
           PhotoGrid(
             photos: photos,
+            sections: sections,
             crossAxisCount: 3,
             isLoading: isLoading,
             error: error,
@@ -161,5 +165,163 @@ void main() {
       find.byKey(const ValueKey('photo_grid_loading_more')),
       findsOneWidget,
     );
+  });
+
+  group('sections', () {
+    final many = [
+      for (var i = 0; i < 60; i++) PhotoItem(id: 'p$i', name: 'p$i.jpg'),
+    ];
+    const split = [
+      PhotoGridSection(id: '2025-03', label: 'March 2025', count: 30),
+      PhotoGridSection(id: '2025-02', label: 'February 2025', count: 30),
+    ];
+
+    Rect header(WidgetTester tester, String id) =>
+        tester.getRect(find.byKey(ValueKey('photo_grid_section_$id')));
+
+    testBothViewports('heads each run and still reports whole-list indices', (
+      tester,
+      size,
+    ) async {
+      final events = <String>[];
+      await pumpGrid(
+        tester,
+        size: size,
+        events: events,
+        sections: const [
+          PhotoGridSection(id: 'mar', label: 'March 2025', count: 2),
+          PhotoGridSection(id: 'feb', label: 'February 2025', count: 1),
+        ],
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('photo_grid')), findsOneWidget);
+      expect(find.text('March 2025'), findsOneWidget);
+      expect(find.text('February 2025'), findsOneWidget);
+      expect(header(tester, 'mar').top, lessThan(header(tester, 'feb').top));
+
+      // b is a device photo, so its tap is not held for a double tap.
+      await tester.longPress(find.byKey(const ValueKey('photo_tile_c')));
+      await tester.tap(find.byKey(const ValueKey('photo_tile_b')));
+      await tester.pump();
+
+      expect(events, ['long:2', 'tap:1']);
+    });
+
+    testBothViewports('pins the current header while its run scrolls past', (
+      tester,
+      size,
+    ) async {
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+      await pumpGrid(
+        tester,
+        size: size,
+        photos: many,
+        sections: split,
+        controller: controller,
+      );
+      final top = tester.getTopLeft(find.byType(CustomScrollView)).dy;
+
+      controller.jumpTo(40);
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(header(tester, '2025-03').top, top);
+
+      // Deep into the second run, its header has pushed the first one out.
+      controller.jumpTo(controller.position.maxScrollExtent);
+      await tester.pump();
+
+      expect(header(tester, '2025-02').top, top);
+      expect(
+        find.byKey(const ValueKey('photo_grid_section_2025-03')).hitTestable(),
+        findsNothing,
+      );
+    });
+
+    testBothViewports('draws no header for an empty run', (tester, size) async {
+      await pumpGrid(
+        tester,
+        size: size,
+        sections: const [
+          PhotoGridSection(id: 'none', label: 'January 2025', count: 0),
+          PhotoGridSection(id: 'all', label: 'December 2024', count: 3),
+        ],
+      );
+
+      expect(find.text('January 2025'), findsNothing);
+      expect(find.text('December 2024'), findsOneWidget);
+    });
+
+    testBothViewports('appends the spinner after the last run', (
+      tester,
+      size,
+    ) async {
+      await pumpGrid(
+        tester,
+        size: size,
+        hasMore: true,
+        sections: const [
+          PhotoGridSection(id: 'mar', label: 'March 2025', count: 3),
+        ],
+      );
+
+      expect(
+        find.byKey(const ValueKey('photo_grid_loading_more')),
+        findsOneWidget,
+      );
+    });
+
+    testBothViewports('survives a long label', (tester, size) async {
+      await pumpGrid(
+        tester,
+        size: size,
+        sections: [
+          PhotoGridSection(id: 'long', label: 'Vacation ' * 40, count: 3),
+        ],
+      );
+
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final (label, brightness, tokens) in [
+      ('dark', Brightness.dark, QuarkTokens.dark),
+      ('light', Brightness.light, QuarkTokens.light),
+    ]) {
+      testWidgets('$label: the header is opaque in the background token', (
+        tester,
+      ) async {
+        await pumpAt(
+          tester,
+          CustomScrollView(
+            slivers: [
+              PhotoGrid(
+                photos: _photos,
+                crossAxisCount: 3,
+                sections: const [
+                  PhotoGridSection(id: 'mar', label: 'March 2025', count: 3),
+                ],
+                emptyState: const SizedBox(),
+                thumbnailBuilder: (context, photo) => const SizedBox(),
+                onTap: (_) {},
+                onLongPress: (_) {},
+              ),
+            ],
+          ),
+          brightness: brightness,
+        );
+
+        final box = tester.widget<ColoredBox>(
+          find
+              .descendant(
+                of: find.byKey(const ValueKey('photo_grid_section_mar')),
+                matching: find.byType(ColoredBox),
+              )
+              .first,
+        );
+        expect(box.color, tokens.background);
+      });
+    }
   });
 }

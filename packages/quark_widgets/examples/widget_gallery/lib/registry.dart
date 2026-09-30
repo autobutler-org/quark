@@ -1054,6 +1054,38 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'PhotoGrid (sections)',
+    group: 'Photos',
+    build: (context, log) => SizedBox(
+      height: 420,
+      child: CustomScrollView(
+        slivers: [
+          PhotoGrid(
+            photos: [
+              for (var i = 0; i < 40; i++)
+                PhotoItem(id: 's$i', name: 'photo_$i.jpg'),
+            ],
+            sections: const [
+              PhotoGridSection(id: '2025-03', label: 'March 2025', count: 18),
+              PhotoGridSection(id: '2025-02', label: 'February 2025', count: 7),
+              PhotoGridSection(
+                id: '2024-12',
+                label: 'December 2024',
+                count: 15,
+              ),
+            ],
+            crossAxisCount: 4,
+            emptyState: const Center(child: Text('No photos yet')),
+            thumbnailBuilder: (context, photo) =>
+                const ColoredBox(color: Color(0xFF7C8AA0)),
+            onTap: (i) => log('PhotoGrid.onTap($i)'),
+            onLongPress: (i) => log('PhotoGrid.onLongPress($i)'),
+          ),
+        ],
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'PhotoCategoryList',
     group: 'Photos',
     build: (context, log) => SizedBox(
