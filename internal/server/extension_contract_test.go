@@ -21,7 +21,7 @@ import (
 )
 
 // TestExtensionContract pins the request and response shapes the browser
-// extension (autobutler-org/browser-extension, src/shared/api.ts) depends on.
+// extension (autobutler-org/quark-browser-extensions, src/shared/api.ts) depends on.
 // That client lives in another repository, so nothing else here would notice
 // a renamed field or a changed status code. A change that breaks this test
 // needs a matching change in the extension.

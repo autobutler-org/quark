@@ -675,8 +675,9 @@ widgets and reads in one screen.
   frontend PR above it updates the models, services and tests that consume the change, so both sides are
   built and tested before the stack merges
 - **The login and vault API has a client outside this repository.** `internal/server/extension_contract_test.go`
-  pins the shapes and status codes [browser-extension](https://github.com/autobutler-org/browser-extension) reads
-  from `/auth/login`, `/auth/logout` and `/vault/*`. A change that breaks it also needs a browser-extension PR
+  pins the shapes and status codes
+  [quark-browser-extensions](https://github.com/autobutler-org/quark-browser-extensions) reads from `/auth/login`,
+  `/auth/logout` and `/vault/*`. A change that breaks it also needs a quark-browser-extensions PR
 - Run `make check` before pushing; the pre-commit hook runs it too, once `make setup/hooks` has
 
 ### Platform and generated code
