@@ -1086,6 +1086,89 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'PhotoGridScrollLabel',
+    group: 'Photos',
+    build: (context, log) => SizedBox(
+      height: 420,
+      child: PhotoGridScrollLabel(
+        child: CustomScrollView(
+          slivers: [
+            PhotoGrid(
+              photos: [
+                for (var i = 0; i < 60; i++)
+                  PhotoItem(id: 'l$i', name: 'photo_$i.jpg'),
+              ],
+              sections: const [
+                PhotoGridSection(id: '2025-03', label: 'March 2025', count: 24),
+                PhotoGridSection(
+                  id: '2025-02',
+                  label: 'February 2025',
+                  count: 20,
+                ),
+                PhotoGridSection(
+                  id: '2024-12',
+                  label: 'December 2024',
+                  count: 16,
+                ),
+              ],
+              crossAxisCount: 4,
+              emptyState: const Center(child: Text('No photos yet')),
+              thumbnailBuilder: (context, photo) =>
+                  const ColoredBox(color: Color(0xFF7C8AA0)),
+              onTap: (i) => log('PhotoGrid.onTap($i)'),
+              onLongPress: (i) => log('PhotoGrid.onLongPress($i)'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ),
+  GalleryEntry(
+    name: 'PhotoGridScrollLabel (reduced motion)',
+    group: 'Photos',
+    build: (context, log) => SizedBox(
+      height: 420,
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(disableAnimations: true),
+        child: PhotoGridScrollLabel(
+          child: CustomScrollView(
+            slivers: [
+              PhotoGrid(
+                photos: [
+                  for (var i = 0; i < 60; i++)
+                    PhotoItem(id: 'l$i', name: 'photo_$i.jpg'),
+                ],
+                sections: const [
+                  PhotoGridSection(
+                    id: '2025-03',
+                    label: 'March 2025',
+                    count: 24,
+                  ),
+                  PhotoGridSection(
+                    id: '2025-02',
+                    label: 'February 2025',
+                    count: 20,
+                  ),
+                  PhotoGridSection(
+                    id: '2024-12',
+                    label: 'December 2024',
+                    count: 16,
+                  ),
+                ],
+                crossAxisCount: 4,
+                emptyState: const Center(child: Text('No photos yet')),
+                thumbnailBuilder: (context, photo) =>
+                    const ColoredBox(color: Color(0xFF7C8AA0)),
+                onTap: (i) => log('PhotoGrid.onTap($i)'),
+                onLongPress: (i) => log('PhotoGrid.onLongPress($i)'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'PhotoCategoryList',
     group: 'Photos',
     build: (context, log) => SizedBox(
