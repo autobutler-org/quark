@@ -91,6 +91,7 @@ class DemoPhotosService {
       order,
       (p) => p.fileName,
       (p) => p.mtime,
+      (p) => p.takenAt ?? p.mtime,
     );
     return PaginatedPhotosResponse(
       photos: sorted,
@@ -183,6 +184,7 @@ class DemoPhotosService {
           deviceSerial: deviceSerial,
           relPath: _relPath(file),
           addedAt: _albumDate,
+          takenAt: _takenAt(file),
         ),
     ];
     return List.unmodifiable(
@@ -191,27 +193,33 @@ class DemoPhotosService {
         sort,
         order,
         (item) => item.relPath,
-        (item) => item.addedAt.millisecondsSinceEpoch,
+        (item) => item.addedAt.millisecondsSinceEpoch ~/ 1000,
+        (item) => (item.takenAt ?? item.addedAt).millisecondsSinceEpoch ~/ 1000,
       ),
     );
   }
 
   /// Orders [items] by [sort]/[order], the same rules the real endpoints
   /// apply server-side, so Demo mode's sort control behaves like a real
-  /// Quark's (#2509).
+  /// Quark's (#2509, #2592).
   static List<T> _sorted<T>(
     List<T> items,
     PhotoSortField sort,
     PhotoSortOrder order,
     String Function(T) name,
     int Function(T) addedTime,
+    int Function(T) takenTime,
   ) {
     final ascending = order == PhotoSortOrder.asc;
     final sorted = [...items];
     sorted.sort((a, b) {
-      final cmp = sort == PhotoSortField.name
-          ? name(a).toLowerCase().compareTo(name(b).toLowerCase())
-          : addedTime(a).compareTo(addedTime(b));
+      final cmp = switch (sort) {
+        PhotoSortField.name => name(
+          a,
+        ).toLowerCase().compareTo(name(b).toLowerCase()),
+        PhotoSortField.added => addedTime(a).compareTo(addedTime(b)),
+        PhotoSortField.taken => takenTime(a).compareTo(takenTime(b)),
+      };
       return ascending ? cmp : -cmp;
     });
     return sorted;
@@ -240,7 +248,21 @@ class DemoPhotosService {
     size: size,
     mtime: taken.millisecondsSinceEpoch ~/ 1000,
     serial: deviceSerial,
+    takenAt: taken.millisecondsSinceEpoch ~/ 1000,
   );
+
+  /// When the sample [file] was taken, as its album items report it.
+  static DateTime? _takenAt(String file) {
+    for (final photo in photos) {
+      if (photo.fileName == file && photo.takenAt != null) {
+        return DateTime.fromMillisecondsSinceEpoch(
+          photo.takenAt! * 1000,
+          isUtc: true,
+        );
+      }
+    }
+    return null;
+  }
 
   static PhotoAlbum _album(int id, String name, {String? smartType}) =>
       PhotoAlbum(

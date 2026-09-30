@@ -50,12 +50,17 @@ class PhotoAlbumItem {
   final String relPath;
   final DateTime addedAt;
 
+  /// When the photo was taken, from its EXIF data. Sent only under the
+  /// date-taken sort, and only once the Quark has read it (#2592).
+  final DateTime? takenAt;
+
   const PhotoAlbumItem({
     required this.id,
     required this.albumId,
     required this.deviceSerial,
     required this.relPath,
     required this.addedAt,
+    this.takenAt,
   });
 
   factory PhotoAlbumItem.fromJson(Map<String, dynamic> json) {
@@ -65,6 +70,9 @@ class PhotoAlbumItem {
       deviceSerial: json['deviceSerial'] as String,
       relPath: json['relPath'] as String,
       addedAt: DateTime.parse(json['addedAt'] as String),
+      takenAt: json['takenAt'] == null
+          ? null
+          : DateTime.parse(json['takenAt'] as String),
     );
   }
 }

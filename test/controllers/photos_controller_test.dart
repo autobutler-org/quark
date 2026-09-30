@@ -17,15 +17,20 @@ import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-wire.PhotoItem _wirePhoto(int i, {String serial = 'sd1', int mtime = 0}) =>
-    wire.PhotoItem(
-      relPath: 'camera/$i.jpg',
-      fileName: '$i.jpg',
-      size: 1,
-      mtime: mtime,
-      serial: serial,
-      hasLiveVideo: i == 0,
-    );
+wire.PhotoItem _wirePhoto(
+  int i, {
+  String serial = 'sd1',
+  int mtime = 0,
+  int? takenAt,
+}) => wire.PhotoItem(
+  relPath: 'camera/$i.jpg',
+  fileName: '$i.jpg',
+  size: 1,
+  mtime: mtime,
+  serial: serial,
+  hasLiveVideo: i == 0,
+  takenAt: takenAt,
+);
 
 PhotoAlbum _album(int id, String name, {String? smartType, int count = 0}) =>
     PhotoAlbum(
@@ -113,6 +118,13 @@ class _FakeQuark {
   /// The modified time, in seconds, the Quark reports for photo i.
   int Function(int i) mtimeOf = (_) => 0;
 
+  /// The capture date, in seconds, the Quark reports for photo i, or null
+  /// when it has none (#2592).
+  int? Function(int i) takenOf = (_) => null;
+
+  /// The capture date the Quark reports for an album item's path.
+  DateTime? Function(String relPath) albumTakenOf = (_) => null;
+
   /// The sort/order the last getPhotos and listAlbumItems calls were asked
   /// for, so a test can check the controller passes them through (#2509).
   PhotoSortField? lastPhotosSort;
@@ -149,7 +161,7 @@ class _FakeQuark {
           return wire.PaginatedPhotosResponse(
             photos: [
               for (var i = offset; i < end; i++)
-                _wirePhoto(i, mtime: mtimeOf(i)),
+                _wirePhoto(i, mtime: mtimeOf(i), takenAt: takenOf(i)),
             ],
             total: total,
             offset: offset,
@@ -230,6 +242,7 @@ class _FakeQuark {
                 deviceSerial: 'sd1',
                 relPath: path,
                 addedAt: DateTime(2024),
+                takenAt: albumTakenOf(path),
               ),
           ];
         },
@@ -476,6 +489,52 @@ void main() {
 
       expect(controller.photoSections!.single.label, 'January 2024');
     });
+
+    test(
+      'the taken sort heads each photo by when it was taken (#2592)',
+      () async {
+        AppSettings.instance.photoSortField.value = PhotoSortField.taken;
+        final uploaded = secondsAt(DateTime(2026, 9, 29));
+        final quark = _FakeQuark(total: 2)
+          ..mtimeOf = ((_) => uploaded)
+          ..takenOf = (i) => i == 0 ? secondsAt(DateTime(2019, 3, 5)) : null;
+        final controller = quark.controller();
+
+        await controller.refresh();
+
+        // A photo the Quark has no capture date for stands in its date added.
+        expect(controller.photoSections!.map((s) => s.label), [
+          'March 2019',
+          'September 2026',
+        ]);
+      },
+    );
+
+    test('the added sort heads by date added, whatever was taken', () async {
+      final uploaded = secondsAt(DateTime(2026, 9, 29));
+      final quark = _FakeQuark(total: 1)
+        ..mtimeOf = ((_) => uploaded)
+        ..takenOf = (_) => secondsAt(DateTime(2019, 3, 5));
+      final controller = quark.controller();
+
+      await controller.refresh();
+
+      expect(controller.photoSections!.single.label, 'September 2026');
+    });
+
+    test(
+      'an album under the taken sort groups by when each was taken',
+      () async {
+        AppSettings.instance.photoSortField.value = PhotoSortField.taken;
+        final quark = _FakeQuark()..albumTakenOf = (_) => DateTime(2019, 3, 5);
+        final controller = quark.controller();
+        await controller.loadAlbums();
+
+        await controller.showAlbum(1);
+
+        expect(controller.photoSections!.single.label, 'March 2019');
+      },
+    );
 
     test('the name sort draws no headers', () async {
       final quark = _FakeQuark()..mtimeOf = (i) => secondsAt(DateTime(2025, 3));
