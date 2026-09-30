@@ -691,22 +691,14 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
   }
 
   void _showOverflowMenu(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
+    showQuarkSheet<void>(
+      context,
+      title: 'Export or print',
       builder: (_) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(height: 8),
-          Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.outline,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 16),
           ListTile(
+            contentPadding: EdgeInsets.zero,
             leading: const Icon(QuarkIcons.picture_as_pdf_outlined),
             title: const Text('Export as PDF'),
             onTap: () {
@@ -715,6 +707,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
             },
           ),
           ListTile(
+            contentPadding: EdgeInsets.zero,
             leading: const Icon(QuarkIcons.print_outlined),
             title: const Text('Print'),
             onTap: () {
@@ -722,7 +715,6 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
               _printDocument();
             },
           ),
-          const SizedBox(height: 16),
         ],
       ),
     );

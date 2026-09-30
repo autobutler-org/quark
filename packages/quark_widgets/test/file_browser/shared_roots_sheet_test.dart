@@ -16,7 +16,7 @@ void main() {
     Size size = wideViewport,
     List<SharedRootItem> entries = items,
     void Function(String path)? onPicked,
-  }) => pumpAt(
+  }) => pumpInSheet(
     tester,
     SharedRootsSheet(items: entries, onPicked: (path) => onPicked?.call(path)),
     size: size,

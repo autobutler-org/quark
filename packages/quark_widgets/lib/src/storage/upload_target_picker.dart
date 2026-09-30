@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../layout/quark_sheet.dart';
 import '../models/upload_target.dart';
 import '../theme/quark_tokens.dart';
 
 /// The body of a bottom sheet for choosing which device an upload goes to.
+/// Show it with [showQuarkSheet], which gives it its title, close button and
+/// height cap (#2585).
 ///
 /// A radio list of [targets] with cancel and upload buttons. The choice is the
 /// caller's: [selected] in, [onSelected] out, and [onConfirm] fires when the
@@ -52,69 +55,52 @@ class UploadTargetPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: tokens.spacingMd),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RadioGroup<UploadTarget>(
+          groupValue: selected,
+          onChanged: (target) {
+            if (target != null) onSelected(target);
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final (index, target) in targets.indexed)
+                RadioListTile<UploadTarget>(
+                  key: ValueKey('upload_target_$index'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(target.name.isNotEmpty ? target.name : 'Device'),
+                  subtitle: Text(
+                    [
+                      if (target.mountPoint.isNotEmpty) target.mountPoint,
+                      if (target.isInternal) 'Internal',
+                    ].join(' · '),
+                  ),
+                  value: target,
+                ),
+            ],
+          ),
+        ),
+        SizedBox(height: tokens.spacingSm),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: tokens.spacingMd),
-              child: Text(
-                'Upload to device',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+            TextButton(
+              key: const ValueKey('upload_target_cancel'),
+              onPressed: onCancel,
+              child: const Text('Cancel'),
             ),
-            SizedBox(height: tokens.spacingSm),
-            RadioGroup<UploadTarget>(
-              groupValue: selected,
-              onChanged: (target) {
-                if (target != null) onSelected(target);
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final (index, target) in targets.indexed)
-                    RadioListTile<UploadTarget>(
-                      key: ValueKey('upload_target_$index'),
-                      title: Text(
-                        target.name.isNotEmpty ? target.name : 'Device',
-                      ),
-                      subtitle: Text(
-                        [
-                          if (target.mountPoint.isNotEmpty) target.mountPoint,
-                          if (target.isInternal) 'Internal',
-                        ].join(' · '),
-                      ),
-                      value: target,
-                    ),
-                ],
-              ),
-            ),
-            SizedBox(height: tokens.spacingSm),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: tokens.spacingMd),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    key: const ValueKey('upload_target_cancel'),
-                    onPressed: onCancel,
-                    child: const Text('Cancel'),
-                  ),
-                  SizedBox(width: tokens.spacingSm),
-                  FilledButton(
-                    key: const ValueKey('upload_target_confirm'),
-                    onPressed: onConfirm,
-                    child: const Text('Upload'),
-                  ),
-                ],
-              ),
+            SizedBox(width: tokens.spacingSm),
+            FilledButton(
+              key: const ValueKey('upload_target_confirm'),
+              onPressed: onConfirm,
+              child: const Text('Upload'),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 }

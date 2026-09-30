@@ -2204,77 +2204,81 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   }
 
   void _showCreateBottomSheet() {
-    showModalBottomSheet<void>(
-      context: context,
+    showQuarkSheet<void>(
+      context,
+      title: 'Add to this folder',
       builder: (ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_controller.isPhotoUploadSupported)
-                ListTile(
-                  leading: const Icon(QuarkIcons.photo_library_outlined),
-                  title: const Text('Upload photos'),
-                  enabled: !_isUploading,
-                  onTap: _isUploading
-                      ? null
-                      : () {
-                          Navigator.of(ctx).pop();
-                          _handleUploadPhotosPressed();
-                        },
-                ),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_controller.isPhotoUploadSupported)
               ListTile(
-                leading: _isUploading
-                    ? const QuarkLoader(size: 24)
-                    : const Icon(QuarkIcons.upload_rounded),
-                title: Text(
-                  _isUploading
-                      ? (_uploadTotal > 0
-                            ? 'Uploading $_uploadCompleted/$_uploadTotal…'
-                            : 'Uploading…')
-                      : 'Upload files',
-                ),
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(QuarkIcons.photo_library_outlined),
+                title: const Text('Upload photos'),
                 enabled: !_isUploading,
                 onTap: _isUploading
                     ? null
                     : () {
                         Navigator.of(ctx).pop();
-                        _handleUploadPressed();
+                        _handleUploadPhotosPressed();
                       },
               ),
-              if (_controller.isFolderUploadSupported)
-                ListTile(
-                  leading: const Icon(Icons.drive_folder_upload_outlined),
-                  title: const Text('Upload folder'),
-                  enabled: !_isUploading,
-                  onTap: _isUploading
-                      ? null
-                      : () {
-                          Navigator.of(ctx).pop();
-                          _handleUploadFolderPressed();
-                        },
-                ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: _isUploading
+                  ? const QuarkLoader(size: 24)
+                  : const Icon(QuarkIcons.upload_rounded),
+              title: Text(
+                _isUploading
+                    ? (_uploadTotal > 0
+                          ? 'Uploading $_uploadCompleted/$_uploadTotal…'
+                          : 'Uploading…')
+                    : 'Upload files',
+              ),
+              enabled: !_isUploading,
+              onTap: _isUploading
+                  ? null
+                  : () {
+                      Navigator.of(ctx).pop();
+                      _handleUploadPressed();
+                    },
+            ),
+            if (_controller.isFolderUploadSupported)
               ListTile(
-                leading: const Icon(QuarkIcons.create_new_folder_outlined),
-                title: const Text('New folder'),
-                enabled: !_isCreatingFolder,
-                onTap: _isCreatingFolder
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.drive_folder_upload_outlined),
+                title: const Text('Upload folder'),
+                enabled: !_isUploading,
+                onTap: _isUploading
                     ? null
                     : () {
                         Navigator.of(ctx).pop();
-                        _handleCreateFolderPressed();
+                        _handleUploadFolderPressed();
                       },
               ),
-              ListTile(
-                leading: const Icon(QuarkIcons.edit_document),
-                title: const Text('New file'),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _handleNewFilePressed();
-                },
-              ),
-            ],
-          ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(QuarkIcons.create_new_folder_outlined),
+              title: const Text('New folder'),
+              enabled: !_isCreatingFolder,
+              onTap: _isCreatingFolder
+                  ? null
+                  : () {
+                      Navigator.of(ctx).pop();
+                      _handleCreateFolderPressed();
+                    },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(QuarkIcons.edit_document),
+              title: const Text('New file'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _handleNewFilePressed();
+              },
+            ),
+          ],
         );
       },
     );

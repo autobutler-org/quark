@@ -2,25 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../core/quark_loader.dart';
+import '../layout/quark_sheet.dart';
 import '../models/album_item.dart';
 import '../theme/quark_tokens.dart';
 
-/// A draggable bottom sheet for choosing the album to add photos to.
+/// The body of a bottom sheet for choosing the album to add photos to.
 ///
 /// Lists the whole album tree flat, each sub-album indented under its parent.
 /// It never loads: the albums, [isLoading] and [error] come in, and the
-/// caller loads again when [onRetry] fires. Show it with
-/// `showModalBottomSheet(isScrollControlled: true, ...)`.
+/// caller loads again when [onRetry] fires. Show it with [showQuarkSheet],
+/// which gives it its title, close button and height cap (#2585). Its close
+/// button leaves the selection behind the sheet alone; the selection bar owns
+/// Cancel (#2060).
 ///
-/// Key prefixes: `album_picker_<id>` on each album row and
-/// `album_picker_retry` on the retry button, rendered only with an [error].
+/// Key prefixes: `album_picker_<id>` on each album row,
+/// `album_picker_retry` on the retry button, rendered only with an [error],
+/// and `album_picker_create` on the create action.
 ///
 /// ```dart
-/// showModalBottomSheet<AlbumItem>(
-///   context: context,
-///   isScrollControlled: true,
+/// showQuarkSheet<AlbumItem>(
+///   context,
+///   title: 'Add 3 photos to...',
 ///   builder: (context) => AlbumPickerSheet(
-///     selectedCount: 3,
 ///     albums: albums,
 ///     onPicked: (album) => Navigator.of(context).pop(album),
 ///     onRetry: reload,
@@ -28,21 +31,16 @@ import '../theme/quark_tokens.dart';
 /// );
 /// ```
 class AlbumPickerSheet extends StatelessWidget {
-  /// Creates the picker for [selectedCount] photos.
+  /// Creates the picker over [albums].
   const AlbumPickerSheet({
-    required this.selectedCount,
     required this.albums,
     required this.onPicked,
     required this.onRetry,
     this.isLoading = false,
     this.error,
-    this.onClose,
     this.onCreateAlbum,
     super.key,
   });
-
-  /// How many photos are being added, for the title.
-  final int selectedCount;
 
   /// The root albums, each with its sub-albums.
   final List<AlbumItem> albums;
@@ -59,117 +57,74 @@ class AlbumPickerSheet extends StatelessWidget {
   /// A user-facing message for a load that failed, or null.
   final String? error;
 
-  /// Dismisses the sheet without picking an album. Null leaves the sheet to
-  /// be dragged away.
-  ///
-  /// Labeled Close, never Cancel: the selection bar behind this sheet has a
-  /// Cancel of its own that throws the selection away, and two buttons with
-  /// one word doing different things is how a user ends up thinking they
-  /// backed out of something they are still in (#2060).
-  final VoidCallback? onClose;
-
   /// Makes a new album to put these photos in. Null leaves the empty state as
   /// copy, for a caller that cannot create one.
   final VoidCallback? onCreateAlbum;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final tokens = QuarkTokens.of(context);
     final error = this.error;
 
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.5,
-      minChildSize: 0.3,
-      maxChildSize: 0.85,
-      builder: (context, scrollController) => Column(
-        children: [
-          SizedBox(height: tokens.spacingSm),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: colorScheme.outline,
-              borderRadius: BorderRadius.circular(tokens.radiusSm / 2),
+    if (isLoading) {
+      return Padding(
+        padding: EdgeInsets.all(tokens.spacingLg),
+        child: const Center(child: QuarkLoader()),
+      );
+    }
+    if (error != null) {
+      return Padding(
+        padding: EdgeInsets.all(tokens.spacingLg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(error, textAlign: TextAlign.center),
+            SizedBox(height: tokens.spacingSm),
+            TextButton(
+              key: const ValueKey('album_picker_retry'),
+              onPressed: onRetry,
+              child: const Text('Retry'),
             ),
-          ),
-          SizedBox(height: tokens.spacingSm + tokens.spacingXs),
-          Text(
-            'Add $selectedCount ${selectedCount == 1 ? 'photo' : 'photos'} '
-            'to...',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          SizedBox(height: tokens.spacingXs),
-          Expanded(
-            child: isLoading
-                ? const Center(child: QuarkLoader())
-                : error != null
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(error, textAlign: TextAlign.center),
-                        SizedBox(height: tokens.spacingSm),
-                        TextButton(
-                          key: const ValueKey('album_picker_retry'),
-                          onPressed: onRetry,
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  )
-                : albums.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('No albums yet'),
-                        if (onCreateAlbum != null) ...[
-                          SizedBox(height: tokens.spacingMd),
-                          FilledButton.icon(
-                            key: const ValueKey('album_picker_create'),
-                            onPressed: onCreateAlbum,
-                            icon: const Icon(QuarkIcons.add_rounded, size: 18),
-                            label: const Text('Create album'),
-                          ),
-                        ],
-                      ],
-                    ),
-                  )
-                : ListView(
-                    controller: scrollController,
-                    children: [
-                      for (final (album, depth) in AlbumItem.depthFirst(albums))
-                        ListTile(
-                          key: ValueKey('album_picker_${album.id}'),
-                          contentPadding: EdgeInsets.only(
-                            left: tokens.spacingMd * (depth + 1),
-                            right: tokens.spacingMd,
-                          ),
-                          leading: const Icon(QuarkIcons.photo_album_outlined),
-                          title: Text(album.name),
-                          subtitle: Text(album.photoCountLabel),
-                          onTap: () => onPicked(album),
-                        ),
-                    ],
-                  ),
-          ),
-          if (onClose != null)
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: tokens.spacingMd),
-              child: SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  key: const ValueKey('album_picker_close'),
-                  onPressed: onClose,
-                  child: const Text('Close'),
-                ),
+          ],
+        ),
+      );
+    }
+    if (albums.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.all(tokens.spacingLg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('No albums yet'),
+            if (onCreateAlbum != null) ...[
+              SizedBox(height: tokens.spacingMd),
+              FilledButton.icon(
+                key: const ValueKey('album_picker_create'),
+                onPressed: onCreateAlbum,
+                icon: const Icon(QuarkIcons.add_rounded, size: 18),
+                label: const Text('Create album'),
               ),
+            ],
+          ],
+        ),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (album, depth) in AlbumItem.depthFirst(albums))
+          ListTile(
+            key: ValueKey('album_picker_${album.id}'),
+            contentPadding: EdgeInsetsDirectional.only(
+              start: tokens.spacingMd * depth,
             ),
-          SizedBox(height: tokens.spacingSm),
-        ],
-      ),
+            leading: const Icon(QuarkIcons.photo_album_outlined),
+            title: Text(album.name),
+            subtitle: Text(album.photoCountLabel),
+            onTap: () => onPicked(album),
+          ),
+      ],
     );
   }
 }

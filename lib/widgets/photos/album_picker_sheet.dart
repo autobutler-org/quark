@@ -9,37 +9,32 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// sheet's loading state without knowing a service exists. Pops with the
 /// picked album, or null when dismissed.
 class AlbumPickerSheetHost extends StatefulWidget {
-  /// Creates the host for [selectedCount] photos.
+  /// Creates the host over the albums [loadAlbums] fetches.
   const AlbumPickerSheetHost({
-    required this.selectedCount,
     required this.loadAlbums,
     this.onCreateAlbum,
     super.key,
   });
 
-  /// Shows the picker and answers with the album chosen, or null.
+  /// Shows the picker for [selectedCount] photos and answers with the album
+  /// chosen, or null.
   static Future<AlbumItem?> show(
     BuildContext context, {
     required int selectedCount,
     required Future<List<AlbumItem>> Function() loadAlbums,
     Future<AlbumItem?> Function()? onCreateAlbum,
   }) {
-    return showModalBottomSheet<AlbumItem>(
-      context: context,
-      isScrollControlled: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(QuarkColors.radiusLg),
-      ),
+    return showQuarkSheet<AlbumItem>(
+      context,
+      title:
+          'Add $selectedCount ${selectedCount == 1 ? 'photo' : 'photos'} '
+          'to...',
       builder: (_) => AlbumPickerSheetHost(
-        selectedCount: selectedCount,
         loadAlbums: loadAlbums,
         onCreateAlbum: onCreateAlbum,
       ),
     );
   }
-
-  /// How many photos are being added.
-  final int selectedCount;
 
   /// Fetches the album tree.
   final Future<List<AlbumItem>> Function() loadAlbums;
@@ -95,15 +90,11 @@ class _AlbumPickerSheetHostState extends State<AlbumPickerSheetHost> {
   @override
   Widget build(BuildContext context) {
     return AlbumPickerSheet(
-      selectedCount: widget.selectedCount,
       albums: _albums,
       isLoading: _loading,
       error: _error,
       onPicked: (album) => Navigator.of(context).pop(album),
       onRetry: _load,
-      // Closes the sheet and leaves the selection alone — the selection bar
-      // behind it owns Cancel (#2060).
-      onClose: () => Navigator.of(context).pop(),
       onCreateAlbum: widget.onCreateAlbum == null ? null : _createAndPick,
     );
   }

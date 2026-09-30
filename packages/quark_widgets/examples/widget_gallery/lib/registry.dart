@@ -864,13 +864,21 @@ final List<GalleryEntry> registry = [
   GalleryEntry(
     name: 'SharedRootsSheet',
     group: 'File browser',
-    build: (context, log) => SharedRootsSheet(
-      items: const [
-        SharedRootItem(path: 'users/alice/Trip', name: 'Trip', owner: 'alice'),
-        SharedRootItem(path: 'Family', name: 'Family', owner: 'carol'),
-        SharedRootItem(path: 'Loose', name: 'Loose'),
-      ],
-      onPicked: (path) => log('SharedRootsSheet.onPicked($path)'),
+    build: (context, log) => QuarkSheet(
+      title: 'Shared with me',
+      onClose: () => log('QuarkSheet.onClose'),
+      child: SharedRootsSheet(
+        items: const [
+          SharedRootItem(
+            path: 'users/alice/Trip',
+            name: 'Trip',
+            owner: 'alice',
+          ),
+          SharedRootItem(path: 'Family', name: 'Family', owner: 'carol'),
+          SharedRootItem(path: 'Loose', name: 'Loose'),
+        ],
+        onPicked: (path) => log('SharedRootsSheet.onPicked($path)'),
+      ),
     ),
   ),
   GalleryEntry(
@@ -1107,11 +1115,14 @@ final List<GalleryEntry> registry = [
     group: 'Albums',
     build: (context, log) => SizedBox(
       height: 420,
-      child: AlbumPickerSheet(
-        selectedCount: 3,
-        albums: _galleryAlbumList,
-        onPicked: (a) => log('AlbumPickerSheet.onPicked(${a.name})'),
-        onRetry: () => log('AlbumPickerSheet.onRetry'),
+      child: QuarkSheet(
+        title: 'Add 3 photos to...',
+        onClose: () => log('QuarkSheet.onClose'),
+        child: AlbumPickerSheet(
+          albums: _galleryAlbumList,
+          onPicked: (a) => log('AlbumPickerSheet.onPicked(${a.name})'),
+          onRetry: () => log('AlbumPickerSheet.onRetry'),
+        ),
       ),
     ),
   ),
@@ -1120,10 +1131,14 @@ final List<GalleryEntry> registry = [
     group: 'Albums',
     build: (context, log) => SizedBox(
       height: 420,
-      child: AddToAlbumSheet(
-        albums: _galleryAlbumList,
-        memberAlbumIds: const {4},
-        onToggle: (a) => log('AddToAlbumSheet.onToggle(${a.name})'),
+      child: QuarkSheet(
+        title: 'Add to album',
+        onClose: () => log('QuarkSheet.onClose'),
+        child: AddToAlbumSheet(
+          albums: _galleryAlbumList,
+          memberAlbumIds: const {4},
+          onToggle: (a) => log('AddToAlbumSheet.onToggle(${a.name})'),
+        ),
       ),
     ),
   ),
@@ -1417,12 +1432,16 @@ final List<GalleryEntry> registry = [
   GalleryEntry(
     name: 'UploadTargetPicker',
     group: 'Storage',
-    build: (context, log) => UploadTargetPicker(
-      targets: _galleryTargets,
-      selected: _galleryTargets.first,
-      onSelected: (t) => log('UploadTargetPicker.onSelected(${t.name})'),
-      onCancel: () => log('UploadTargetPicker.onCancel'),
-      onConfirm: () => log('UploadTargetPicker.onConfirm'),
+    build: (context, log) => QuarkSheet(
+      title: 'Upload to device',
+      onClose: () => log('QuarkSheet.onClose'),
+      child: UploadTargetPicker(
+        targets: _galleryTargets,
+        selected: _galleryTargets.first,
+        onSelected: (t) => log('UploadTargetPicker.onSelected(${t.name})'),
+        onCancel: () => log('UploadTargetPicker.onCancel'),
+        onConfirm: () => log('UploadTargetPicker.onConfirm'),
+      ),
     ),
   ),
 
