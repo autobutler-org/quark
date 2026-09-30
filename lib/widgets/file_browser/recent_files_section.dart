@@ -3,6 +3,7 @@ import 'package:quark/services/files_service.dart';
 import 'package:quark/widgets/file_browser/recent_files_section/recent_file_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// A horizontally-scrolling strip showing recently uploaded files.
 /// Displayed at the root of the file browser (not in search mode).
@@ -90,7 +91,7 @@ class _RecentFilesSectionState extends State<RecentFilesSection> {
                   Icon(
                     QuarkIcons.schedule_rounded,
                     size: 14,
-                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                    color: QuarkTokens.of(context).mutedForeground,
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -98,7 +99,7 @@ class _RecentFilesSectionState extends State<RecentFilesSection> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+                      color: QuarkTokens.of(context).mutedForeground,
                     ),
                   ),
                 ],

@@ -30,6 +30,34 @@ void main() {
     expect(find.text('Upload a file to get started.'), findsOneWidget);
   });
 
+  // Half-alpha onSurface was 2.5–3.3:1; the muted token holds 4.5:1 (#2602).
+  for (final brightness in Brightness.values) {
+    testWidgets('subtext uses the muted token in ${brightness.name}', (
+      tester,
+    ) async {
+      await pumpAt(
+        tester,
+        const EmptyStateWidget(
+          icon: Icons.folder,
+          headline: 'Nothing here',
+          subtext: 'Upload a file to get started.',
+        ),
+        brightness: brightness,
+      );
+
+      final tokens = brightness == Brightness.dark
+          ? QuarkTokens.dark
+          : QuarkTokens.light;
+      expect(
+        tester
+            .widget<Text>(find.text('Upload a file to get started.'))
+            .style
+            ?.color,
+        tokens.mutedForeground,
+      );
+    });
+  }
+
   testBothViewports('renders and wires the action', (tester, size) async {
     var taps = 0;
     await pumpAt(

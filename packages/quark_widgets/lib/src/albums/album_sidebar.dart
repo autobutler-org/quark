@@ -122,10 +122,7 @@ class AlbumSidebar extends StatelessWidget {
     final error = this.error;
     final onAllPhotosSelected = this.onAllPhotosSelected;
     final onSortChanged = this.onSortChanged;
-    final hint = TextStyle(
-      fontSize: 13,
-      color: colorScheme.onSurface.withValues(alpha: 0.4),
-    );
+    final hint = TextStyle(fontSize: 13, color: tokens.mutedForeground);
     final hintPadding = EdgeInsets.symmetric(
       horizontal: tokens.spacingSm + tokens.spacingXs,
       vertical: tokens.spacingXs,
@@ -172,7 +169,7 @@ class AlbumSidebar extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface.withValues(alpha: 0.5),
+                  color: tokens.mutedForeground,
                   letterSpacing: 0.8,
                 ),
               ),

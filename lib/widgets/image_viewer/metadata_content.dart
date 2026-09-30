@@ -48,7 +48,7 @@ class MetadataContent {
                 padding: EdgeInsets.only(left: 40, top: 2),
                 child: Text(
                   'Estimated from file date',
-                  style: TextStyle(color: Colors.white38, fontSize: 11),
+                  style: TextStyle(color: Colors.white70, fontSize: 11),
                 ),
               ),
           ],
@@ -170,7 +170,7 @@ class MetadataContent {
           padding: EdgeInsets.all(24),
           child: Text(
             'No metadata available',
-            style: TextStyle(color: Colors.white38),
+            style: TextStyle(color: Colors.white70),
             textAlign: TextAlign.center,
           ),
         ),

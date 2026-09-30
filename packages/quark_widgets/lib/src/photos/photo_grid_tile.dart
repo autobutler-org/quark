@@ -210,10 +210,10 @@ class PhotoGridTile extends StatelessWidget {
                     ),
                   ),
                   child: isSelected
-                      ? const Icon(
+                      ? Icon(
                           QuarkIcons.check,
                           size: 14,
-                          color: Colors.white,
+                          color: colorScheme.onPrimary,
                         )
                       : null,
                 ),

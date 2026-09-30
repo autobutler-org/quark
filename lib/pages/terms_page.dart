@@ -4,6 +4,7 @@ import 'package:quark/widgets/terms/agree_button.dart';
 import 'package:quark/widgets/terms/terms_summary.dart';
 import 'package:quark/widgets/terms/terms_section.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// Terms and Conditions acceptance gate.
 ///
@@ -32,15 +33,17 @@ class TermsPage extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
+                children: [
+                  const Text(
                     'Terms and Conditions',
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Text(
                     'Last updated: September 8, 2026',
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(
+                      color: QuarkTokens.of(context).mutedForeground,
+                    ),
                   ),
                   SizedBox(height: 20),
                   // Before the document, not instead of it: a new owner

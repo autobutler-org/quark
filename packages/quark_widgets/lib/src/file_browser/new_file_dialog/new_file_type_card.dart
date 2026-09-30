@@ -65,7 +65,7 @@ class NewFileTypeCard extends StatelessWidget {
               size: 28,
               color: isSelected
                   ? colorScheme.primary
-                  : colorScheme.onSurface.withValues(alpha: 0.5),
+                  : tokens.secondaryForeground,
             ),
             SizedBox(height: tokens.spacingXs + tokens.spacingXs / 2),
             Text(

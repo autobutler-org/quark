@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/widgets/health/health_severity.dart';
 
 /// One health metric: a labelled value with a progress bar that turns orange
@@ -44,7 +45,7 @@ class MetricCard extends StatelessWidget {
 
   Color _barColor(BuildContext context) {
     if (_isCritical) return Theme.of(context).colorScheme.error;
-    if (_isElevated) return Colors.orange;
+    if (_isElevated) return QuarkTokens.of(context).warning;
     return Theme.of(context).colorScheme.primary;
   }
 
@@ -141,7 +142,7 @@ class MetricCard extends StatelessWidget {
                     final coreColor = e.value >= healthCoreCriticalPercent
                         ? Theme.of(context).colorScheme.error
                         : e.value >= healthCoreWarningPercent
-                        ? Colors.orange
+                        ? QuarkTokens.of(context).warning
                         : Theme.of(context).colorScheme.primary;
                     return Chip(
                       label: Text(

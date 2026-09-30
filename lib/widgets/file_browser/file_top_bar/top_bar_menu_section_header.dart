@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The small upper-case label that separates one group of items from the next
 /// inside the top bar's Views menu.
@@ -9,7 +10,6 @@ class TopBarMenuSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       child: Text(
@@ -18,7 +18,7 @@ class TopBarMenuSectionHeader extends StatelessWidget {
           fontSize: 11,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.8,
-          color: colorScheme.onSurface.withValues(alpha: 0.45),
+          color: QuarkTokens.of(context).mutedForeground,
         ),
       ),
     );

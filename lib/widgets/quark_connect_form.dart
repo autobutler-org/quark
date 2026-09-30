@@ -111,7 +111,9 @@ class _QuarkConnectFormState extends State<QuarkConnectForm> {
         Text(
           'Enter the address of your Quark device on your home network.',
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: QuarkTokens.of(context).mutedForeground,
+          ),
         ),
         const SizedBox(height: 16),
         NearbyQuarks(

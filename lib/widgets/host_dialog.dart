@@ -159,9 +159,12 @@ class _HostDialogState extends State<HostDialog> {
               style: TextStyle(fontSize: 12, color: colors.error),
             )
           else
-            const Text(
+            Text(
               'Usually https://quark.local or the IP address shown on your device.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 12,
+                color: QuarkTokens.of(context).mutedForeground,
+              ),
             ),
         ],
       ),

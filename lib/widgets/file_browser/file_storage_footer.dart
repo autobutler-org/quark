@@ -71,7 +71,7 @@ class FileStorageFooter extends StatelessWidget {
                   Icon(
                     QuarkIcons.storage_rounded,
                     size: 14,
-                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                    color: QuarkTokens.of(context).mutedForeground,
                   ),
                   const SizedBox(width: 8),
                   // Sized to its text, capped at half the row so a phone
@@ -94,7 +94,7 @@ class FileStorageFooter extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
-                        color: colorScheme.onSurface.withValues(alpha: 0.4),
+                        color: QuarkTokens.of(context).mutedForeground,
                       ),
                     ),
                   ),

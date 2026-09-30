@@ -10,9 +10,9 @@ typedef DocumentEditorKeyHandler =
 
 // ── Quill styles ──────────────────────────────────────────────────────────────
 
-DefaultStyles _quillStyles(ColorScheme cs) {
+DefaultStyles _quillStyles(ColorScheme cs, QuarkTokens tokens) {
   final fg = cs.onSurface;
-  final muted = cs.onSurface.withValues(alpha: 0.5);
+  final muted = tokens.mutedForeground;
   final codeBg = cs.surfaceContainerHighest;
   final outline = cs.outline;
 
@@ -151,9 +151,8 @@ class DocumentPageFrame extends StatelessWidget {
     // editor page consistent with the rest of the app's design language
     // while allowing the user to choose page brightness independently of
     // the global theme toggle.
-    final pageCs = darkPage
-        ? QuarkTheme.dark().colorScheme
-        : QuarkTheme.light().colorScheme;
+    final pageTheme = darkPage ? QuarkTheme.dark() : QuarkTheme.light();
+    final pageCs = pageTheme.colorScheme;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
@@ -198,7 +197,10 @@ class DocumentPageFrame extends StatelessWidget {
                 onTap();
                 return false;
               },
-              customStyles: _quillStyles(pageCs),
+              customStyles: _quillStyles(
+                pageCs,
+                pageTheme.extension<QuarkTokens>()!,
+              ),
               customShortcuts: editorNavigationShortcuts(),
               // Type the markdown, get the block — see
               // [documentSpaceShortcuts] for the whole table (#1854).

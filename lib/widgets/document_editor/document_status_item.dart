@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// One icon-and-label pair in the document editor's status bar.
 class DocumentStatusItem extends StatelessWidget {
@@ -26,9 +27,7 @@ class DocumentStatusItem extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 12,
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurface.withValues(alpha: 0.5),
+            color: QuarkTokens.of(context).mutedForeground,
           ),
         ),
       ],

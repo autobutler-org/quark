@@ -149,7 +149,7 @@ class QuarkDisconnectedView extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 14,
                   height: 1.5,
-                  color: colorScheme.onSurface.withValues(alpha: 0.5),
+                  color: tokens.mutedForeground,
                 ),
               ),
               if (address != null && address.isNotEmpty) ...[
@@ -157,10 +157,7 @@ class QuarkDisconnectedView extends StatelessWidget {
                 Text(
                   address,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colorScheme.onSurface.withValues(alpha: 0.5),
-                  ),
+                  style: TextStyle(fontSize: 13, color: tokens.mutedForeground),
                 ),
               ],
               SizedBox(height: tokens.spacingLg),

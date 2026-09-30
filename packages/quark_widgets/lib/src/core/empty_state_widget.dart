@@ -78,7 +78,7 @@ class EmptyStateWidget extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
-                  color: colorScheme.onSurface.withValues(alpha: 0.5),
+                  color: tokens.mutedForeground,
                   height: 1.5,
                 ),
               ),

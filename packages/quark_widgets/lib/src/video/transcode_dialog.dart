@@ -81,11 +81,10 @@ class _TranscodeDialogState extends State<TranscodeDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final tokens = QuarkTokens.of(context);
-    final labelStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
-      color: colorScheme.onSurface.withValues(alpha: 0.5),
-    );
+    final labelStyle = Theme.of(
+      context,
+    ).textTheme.labelMedium?.copyWith(color: tokens.mutedForeground);
     final error = widget.error;
     final chosen = _format;
     final canConvert =

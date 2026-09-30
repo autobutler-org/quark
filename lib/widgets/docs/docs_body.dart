@@ -142,9 +142,7 @@ class DocsBody extends StatelessWidget {
             Text(
               isSearching ? 'No docs match your search.' : 'No docs yet.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: colorScheme.onSurface.withValues(alpha: 0.5),
-              ),
+              style: TextStyle(color: QuarkTokens.of(context).mutedForeground),
             ),
             if (contentSearching) ...const [
               SizedBox(height: 16),

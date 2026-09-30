@@ -142,9 +142,7 @@ class SheetsBody extends StatelessWidget {
             Text(
               isSearching ? 'No sheets match your search.' : 'No sheets yet.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: colorScheme.onSurface.withValues(alpha: 0.5),
-              ),
+              style: TextStyle(color: QuarkTokens.of(context).mutedForeground),
             ),
             if (contentSearching) ...const [
               SizedBox(height: 16),

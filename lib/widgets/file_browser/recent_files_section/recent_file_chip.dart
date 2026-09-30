@@ -65,7 +65,7 @@ class RecentFileChip extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 11,
-                            color: colorScheme.onSurface.withValues(alpha: 0.4),
+                            color: QuarkTokens.of(context).mutedForeground,
                           ),
                         ),
                     ],
@@ -85,7 +85,7 @@ class RecentFileChip extends StatelessWidget {
                         child: Icon(
                           QuarkIcons.folder_open_rounded,
                           size: 14,
-                          color: colorScheme.onSurface.withValues(alpha: 0.4),
+                          color: QuarkTokens.of(context).secondaryForeground,
                         ),
                       ),
                     ),

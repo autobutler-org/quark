@@ -225,7 +225,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
                 child: Icon(
                   QuarkIcons.more_horiz_rounded,
                   size: 14,
-                  color: colorScheme.onSurface.withValues(alpha: 0.55),
+                  color: QuarkTokens.of(context).secondaryForeground,
                 ),
               ),
             ),
@@ -242,7 +242,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
           child: Icon(
             QuarkIcons.chevron_right_rounded,
             size: 14,
-            color: colorScheme.onSurface.withValues(alpha: 0.4),
+            color: QuarkTokens.of(context).mutedForeground,
           ),
         ),
       );

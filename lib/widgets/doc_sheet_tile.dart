@@ -64,7 +64,7 @@ class DocSheetTile extends StatelessWidget {
     final snippet = this.snippet;
     final subtitleStyle = TextStyle(
       fontSize: 12,
-      color: colorScheme.onSurface.withValues(alpha: 0.55),
+      color: QuarkTokens.of(context).mutedForeground,
     );
 
     final onRename = this.onRename;
