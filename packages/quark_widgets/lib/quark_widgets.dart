@@ -53,6 +53,7 @@ export 'src/layout/quark_checkerboard.dart';
 export 'src/layout/quark_drawer.dart';
 export 'src/layout/quark_page_scaffold.dart';
 export 'src/layout/quark_section.dart';
+export 'src/layout/quark_sheet.dart';
 export 'src/layout/quark_split_view.dart';
 export 'src/layout/quark_tab_view.dart';
 export 'src/layout/quark_toolbar.dart';
