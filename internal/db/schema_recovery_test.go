@@ -201,10 +201,12 @@ func applySchema(t *testing.T, conn *sql.DB, schema string) {
 	}
 }
 
-// A stamp above the top of the compressed set is what every machine that ran
-// Quark before #1758 carries. golang-migrate refuses it outright, and the error
-// travels out through ConnectToDatabase, so before this recovery the server
-// could not start at all.
+// A stamp above the top of the migration set - a pre-#1758 database, or one a
+// newer build migrated before a downgrade - is refused outright by
+// golang-migrate, and the error travels out through ConnectToDatabase, so
+// without this recovery the server could not start at all. The stamp is one
+// past the top rather than a fixed number, because the set keeps growing and a
+// fixed stamp eventually becomes a version the set can serve.
 func TestInitSchemaRecoversFromVersionAboveTheMigrationSet(t *testing.T) {
 	conn := openSchemaTestDB(t)
 	applySchema(t, conn, legacySchemaAtVersion21)
@@ -213,7 +215,7 @@ func TestInitSchemaRecoversFromVersionAboveTheMigrationSet(t *testing.T) {
 	); err != nil {
 		t.Fatalf("seed legacy user: %v", err)
 	}
-	stampSchemaVersion(t, conn, 21, false)
+	stampSchemaVersion(t, conn, latestSchemaVersion(t)+1, false)
 
 	if err := initSchema(&DatabaseSqlc{Db: conn}); err != nil {
 		t.Fatalf("initSchema on a legacy database: %v", err)
