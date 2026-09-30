@@ -35,6 +35,11 @@ against every surface, and `outline` (the edge of an input, a checkbox, an off s
 for decorative hairlines only, which WCAG exempts. `packages/quark_widgets/test/theme/quark_theme_test.dart`
 checks every pair, so a token edit that drops below AA fails the build.
 
+`QuarkTokens.highContrastDark` and `QuarkTokens.highContrastLight` hold WCAG AAA's 7:1 for text, with 7:1
+borders as well (#2601). `QuarkTheme.highContrastDark()` and `QuarkTheme.highContrastLight()` build them;
+the app uses them when the Settings switch is on, and hands them to `MaterialApp` as `highContrastTheme` and
+`highContrastDarkTheme` so the platform's own high-contrast setting picks them too.
+
 A widget reaches the current set with `QuarkTokens.of(context)` rather than a hardcoded `Color` or literal
 size. This is what lets the widget gallery's theme panel restyle the whole app live — a hardcoded value simply
 does not move when the panel edits a token, which is the fastest way to spot one in review.

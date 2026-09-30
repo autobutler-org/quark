@@ -77,15 +77,29 @@ void main() {
       expect(QuarkTheme.dark().extension<QuarkTokens>(), QuarkTokens.dark);
       expect(QuarkTheme.light().extension<QuarkTokens>(), QuarkTokens.light);
     });
+
+    test('the high-contrast themes are from() with their tokens', () {
+      final dark = QuarkTheme.highContrastDark();
+      final light = QuarkTheme.highContrastLight();
+
+      expect(dark.brightness, Brightness.dark);
+      expect(light.brightness, Brightness.light);
+      expect(dark.extension<QuarkTokens>(), QuarkTokens.highContrastDark);
+      expect(light.extension<QuarkTokens>(), QuarkTokens.highContrastLight);
+    });
   });
 
   /// #2600: WCAG 2.1 AA asks 4.5:1 of text (1.4.3) and 3:1 of the edges and
   /// indicators a user needs to find a control (1.4.11). White on the sky-500
   /// primary was 2.77:1, and dark's muted text 2.4:1.
-  group('the tokens meet WCAG AA', () {
-    for (final (name, tokens) in [
-      ('dark', QuarkTokens.dark),
-      ('light', QuarkTokens.light),
+  ///
+  /// #2601: the high-contrast sets hold AAA's 7:1 for text instead (1.4.6).
+  group('the tokens meet WCAG contrast', () {
+    for (final (name, tokens, textMin) in [
+      ('dark', QuarkTokens.dark, 4.5),
+      ('light', QuarkTokens.light, 4.5),
+      ('highContrastDark', QuarkTokens.highContrastDark, 7.0),
+      ('highContrastLight', QuarkTokens.highContrastLight, 7.0),
     ]) {
       final surfaces = {
         'background': tokens.background,
@@ -106,8 +120,11 @@ void main() {
 
       for (final MapEntry(key: fg, value: fgColor) in text.entries) {
         for (final MapEntry(key: bg, value: bgColor) in surfaces.entries) {
-          test('$name: $fg on $bg is at least 4.5:1', () {
-            expect(contrastRatio(fgColor, bgColor), greaterThanOrEqualTo(4.5));
+          test('$name: $fg on $bg is at least $textMin:1', () {
+            expect(
+              contrastRatio(fgColor, bgColor),
+              greaterThanOrEqualTo(textMin),
+            );
           });
         }
       }
@@ -121,10 +138,17 @@ void main() {
         });
       }
 
-      test('$name: primaryForeground on primary is at least 4.5:1', () {
+      test('$name: primaryForeground on primary is at least $textMin:1', () {
         expect(
           contrastRatio(tokens.primaryForeground, tokens.primary),
-          greaterThanOrEqualTo(4.5),
+          greaterThanOrEqualTo(textMin),
+        );
+      });
+
+      test('$name: errorForeground on error is at least $textMin:1', () {
+        expect(
+          contrastRatio(tokens.errorForeground, tokens.error),
+          greaterThanOrEqualTo(textMin),
         );
       });
     }

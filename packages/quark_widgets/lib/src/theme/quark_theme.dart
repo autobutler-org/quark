@@ -12,6 +12,8 @@ import 'quark_tokens.dart';
 /// MaterialApp(
 ///   theme: QuarkTheme.light(),
 ///   darkTheme: QuarkTheme.dark(),
+///   highContrastTheme: QuarkTheme.highContrastLight(),
+///   highContrastDarkTheme: QuarkTheme.highContrastDark(),
 /// );
 /// ```
 abstract final class QuarkTheme {
@@ -20,6 +22,16 @@ abstract final class QuarkTheme {
 
   /// Quark's light theme, built from [QuarkTokens.light].
   static ThemeData light() => from(QuarkTokens.light, Brightness.light);
+
+  /// Quark's dark high-contrast theme, built from
+  /// [QuarkTokens.highContrastDark].
+  static ThemeData highContrastDark() =>
+      from(QuarkTokens.highContrastDark, Brightness.dark);
+
+  /// Quark's light high-contrast theme, built from
+  /// [QuarkTokens.highContrastLight].
+  static ThemeData highContrastLight() =>
+      from(QuarkTokens.highContrastLight, Brightness.light);
 
   /// Builds a [ThemeData] for [brightness] out of [tokens].
   ///

@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark_icons/quark_icons.dart';
 
-/// The General tab of Settings (#2350): backend hosts, theme, the
-/// auto-refresh interval and demo mode, plus a link to the drives. Beta
-/// switches live on the Features tab (#2542).
+/// The General tab of Settings (#2350): backend hosts, theme, high contrast
+/// (#2601), the auto-refresh interval and demo mode, plus a link to the
+/// drives. Beta switches live on the Features tab (#2542).
 ///
 /// First because it holds the backend hosts, which every "manage hosts" link
 /// in the app lands on. The page owns the values; this tab renders them and
@@ -14,6 +14,8 @@ class SettingsGeneralTab extends StatelessWidget {
   const SettingsGeneralTab({
     required this.theme,
     required this.onThemeChanged,
+    required this.highContrast,
+    required this.onHighContrastChanged,
     required this.refreshIntervalSeconds,
     required this.onRefreshIntervalChanged,
     required this.demoMode,
@@ -29,6 +31,12 @@ class SettingsGeneralTab extends StatelessWidget {
 
   /// Called with the theme the user picked.
   final ValueChanged<ThemeMode> onThemeChanged;
+
+  /// Whether the high-contrast theme is on.
+  final bool highContrast;
+
+  /// Called when the user flips high contrast.
+  final ValueChanged<bool> onHighContrastChanged;
 
   /// How often pages refresh themselves, in seconds; 0 is off.
   final int refreshIntervalSeconds;
@@ -85,6 +93,15 @@ class SettingsGeneralTab extends StatelessWidget {
               ),
             ],
           ),
+        ),
+        SwitchListTile(
+          title: const Text('High contrast'),
+          subtitle: const Text(
+            'Stronger text, borders and focus colors. Also comes on when '
+            'your device asks for more contrast.',
+          ),
+          value: highContrast,
+          onChanged: onHighContrastChanged,
         ),
         const SizedBox(height: 24),
         const Text('Auto-refresh interval', style: heading),

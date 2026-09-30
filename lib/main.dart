@@ -59,15 +59,25 @@ class QuarkApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: AppSettings.instance.themeMode,
-      builder: (context, mode, _) {
+    final settings = AppSettings.instance;
+    return ListenableBuilder(
+      listenable: Listenable.merge([settings.themeMode, settings.highContrast]),
+      builder: (context, _) {
+        // The high-contrast themes also stand in for the platform's own
+        // high-contrast setting, which Flutter applies by itself (#2601).
+        final highContrast = settings.highContrast.value;
         return MaterialApp.router(
           debugShowCheckedModeBanner: false,
           title: 'Quark',
-          theme: QuarkTheme.light(),
-          darkTheme: QuarkTheme.dark(),
-          themeMode: mode,
+          theme: highContrast
+              ? QuarkTheme.highContrastLight()
+              : QuarkTheme.light(),
+          darkTheme: highContrast
+              ? QuarkTheme.highContrastDark()
+              : QuarkTheme.dark(),
+          highContrastTheme: QuarkTheme.highContrastLight(),
+          highContrastDarkTheme: QuarkTheme.highContrastDark(),
+          themeMode: settings.themeMode.value,
           routerConfig: router,
           scaffoldMessengerKey: rootScaffoldMessengerKey,
           builder: (context, child) => JobFinishAnnouncer(

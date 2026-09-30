@@ -28,6 +28,7 @@ class WidgetGalleryApp extends StatefulWidget {
 
 class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
   Brightness _brightness = Brightness.dark;
+  bool _highContrast = false;
   QuarkTokens _tokens = QuarkTokens.dark;
   GalleryEntry _selected = registry.first;
   String _filter = '';
@@ -45,13 +46,26 @@ class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
       _brightness = _brightness == Brightness.dark
           ? Brightness.light
           : Brightness.dark;
-      // Start each side from its shipped token set rather than carrying dark
-      // colors into the light theme.
-      _tokens = _brightness == Brightness.dark
-          ? QuarkTokens.dark
-          : QuarkTokens.light;
+      _tokens = _shippedTokens();
     });
   }
+
+  void _toggleHighContrast() {
+    setState(() {
+      _highContrast = !_highContrast;
+      _tokens = _shippedTokens();
+    });
+  }
+
+  /// The shipped token set for the current brightness and contrast, so each
+  /// switch starts from a designed set rather than carrying one set's colors
+  /// into another.
+  QuarkTokens _shippedTokens() => switch ((_brightness, _highContrast)) {
+    (Brightness.dark, false) => QuarkTokens.dark,
+    (Brightness.light, false) => QuarkTokens.light,
+    (Brightness.dark, true) => QuarkTokens.highContrastDark,
+    (Brightness.light, true) => QuarkTokens.highContrastLight,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +87,8 @@ class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
           tokens: _tokens,
           brightness: _brightness,
           onToggleBrightness: _toggleBrightness,
+          highContrast: _highContrast,
+          onToggleHighContrast: _toggleHighContrast,
           onTokensChanged: (tokens) => setState(() => _tokens = tokens),
         ),
         events: GalleryEventsPanel(

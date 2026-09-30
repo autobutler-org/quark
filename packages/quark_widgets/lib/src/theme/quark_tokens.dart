@@ -20,7 +20,9 @@ import 'package:flutter/material.dart';
 /// );
 /// ```
 ///
-/// [QuarkTokens.dark] and [QuarkTokens.light] are the two sets the app ships.
+/// [QuarkTokens.dark] and [QuarkTokens.light] are the sets the app ships, with
+/// [QuarkTokens.highContrastDark] and [QuarkTokens.highContrastLight] for high
+/// contrast.
 @immutable
 class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// Creates a token set. Every value is required so a new token cannot be
@@ -186,6 +188,70 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     errorForeground: Color(0xFFFFFFFF),
     warning: Color(0xFFB45309),
     success: Color(0xFF047857),
+    radiusSm: 4,
+    radiusMd: 8,
+    radiusLg: 12,
+    spacingXs: 4,
+    spacingSm: 8,
+    spacingMd: 16,
+    spacingLg: 24,
+    spacingXl: 32,
+  );
+
+  /// The dark high-contrast token set (#2601), for users who turn on high
+  /// contrast in Settings or in their platform's accessibility settings.
+  ///
+  /// Held to WCAG AAA: every text color is at least 7:1 on every surface, and
+  /// both [border] and [outline] are, so no edge depends on a faint hairline.
+  /// Surfaces are true black, and the accents are their 300 shades with black
+  /// text on them.
+  static const QuarkTokens highContrastDark = QuarkTokens(
+    background: Color(0xFF000000),
+    card: Color(0xFF0B0F17),
+    sidebar: Color(0xFF000000),
+    border: Color(0xFF94A3B8),
+    outline: Color(0xFFE2E8F0),
+    input: Color(0xFF0B0F17),
+    mutedForeground: Color(0xFFCBD5E1),
+    secondaryForeground: Color(0xFFE2E8F0),
+    foreground: Color(0xFFFFFFFF),
+    cardForeground: Color(0xFFFFFFFF),
+    primary: Color(0xFF7DD3FC),
+    primaryForeground: Color(0xFF000000),
+    error: Color(0xFFFCA5A5),
+    errorForeground: Color(0xFF000000),
+    warning: Color(0xFFFCD34D),
+    success: Color(0xFF6EE7B7),
+    radiusSm: 4,
+    radiusMd: 8,
+    radiusLg: 12,
+    spacingXs: 4,
+    spacingSm: 8,
+    spacingMd: 16,
+    spacingLg: 24,
+    spacingXl: 32,
+  );
+
+  /// The light high-contrast token set (#2601), held to the same WCAG AAA
+  /// contrast as [highContrastDark]. Every surface is white, so panels are set
+  /// apart by their borders rather than by a tint that costs text contrast.
+  static const QuarkTokens highContrastLight = QuarkTokens(
+    background: Color(0xFFFFFFFF),
+    card: Color(0xFFFFFFFF),
+    sidebar: Color(0xFFFFFFFF),
+    border: Color(0xFF475569),
+    outline: Color(0xFF0F172A),
+    input: Color(0xFFFFFFFF),
+    mutedForeground: Color(0xFF334155),
+    secondaryForeground: Color(0xFF0F172A),
+    foreground: Color(0xFF000000),
+    cardForeground: Color(0xFF000000),
+    primary: Color(0xFF075985),
+    primaryForeground: Color(0xFFFFFFFF),
+    error: Color(0xFF991B1B),
+    errorForeground: Color(0xFFFFFFFF),
+    warning: Color(0xFF92400E),
+    success: Color(0xFF065F46),
     radiusSm: 4,
     radiusMd: 8,
     radiusLg: 12,

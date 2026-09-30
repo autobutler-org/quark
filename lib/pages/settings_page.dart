@@ -152,6 +152,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   ThemeMode _theme = ThemeMode.system;
+  bool _highContrast = false;
 
   late final FeatureFlagsController _features =
       widget.featureFlags ?? FeatureFlagsController();
@@ -245,6 +246,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _load() {
     _theme = AppSettings.instance.themeMode.value;
+    _highContrast = AppSettings.instance.highContrast.value;
     _refreshIntervalSeconds = AppSettings.instance.refreshIntervalSeconds;
     _demoMode = AppSettings.instance.demoMode.value;
     // Cleared up front so removing the last host retires the banner: with no
@@ -659,6 +661,8 @@ class _SettingsPageState extends State<SettingsPage> {
               header: banner,
               theme: _theme,
               onThemeChanged: _setTheme,
+              highContrast: _highContrast,
+              onHighContrastChanged: _setHighContrast,
               refreshIntervalSeconds: _refreshIntervalSeconds,
               onRefreshIntervalChanged: _setRefreshInterval,
               demoMode: _demoMode,
@@ -779,6 +783,11 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _setTheme(ThemeMode mode) async {
     await AppSettings.instance.setThemeMode(mode);
     if (mounted) setState(() => _theme = mode);
+  }
+
+  Future<void> _setHighContrast(bool enabled) async {
+    await AppSettings.instance.setHighContrast(enabled);
+    if (mounted) setState(() => _highContrast = enabled);
   }
 
   Future<void> _setRefreshInterval(int seconds) async {

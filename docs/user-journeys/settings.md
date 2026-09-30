@@ -7,7 +7,7 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 
 | Tab | URL | Holds |
 | --- | --- | --- |
-| **General** | `/settings/general` | Backend hosts, theme, auto-refresh interval, demo mode, a link to the drives |
+| **General** | `/settings/general` | Backend hosts, theme, high contrast, auto-refresh interval, demo mode, a link to the drives |
 | **Account** | `/settings/account` | Sign out, then an **Account and data** row at the bottom that leads to Delete account and (admins) Reset this Quark |
 | **Network** | `/settings/network` | Remote access, connected devices, SSH access (admins) |
 | **Updates** | `/settings/updates` | The Quark's version, updates and automatic updates (admins), Repair installation (admins) |
@@ -498,3 +498,20 @@ The Quark has at least one feature in beta, such as Chat.
 - Non-admins get no Features tab, and `/settings/features` sends them to Files. With no feature in beta, admins get no
   Features tab either.
 - A refused change says so ("Couldn't change the feature…") and leaves the switch where it was.
+
+---
+
+### JN-ST-029: Turn on high contrast
+
+**Preconditions:** User is on the General tab of Settings (`/settings/general`).
+
+**Steps:**
+
+1. Under **Theme**, switch **High contrast** on.
+
+**Expected result:**
+
+- Text, borders and focus rings switch to the high-contrast colors at once, in light and dark.
+- Setting is persisted across app restarts.
+- With the switch off, turning on the device's own high-contrast setting (for example iOS Increase Contrast)
+  also shows the high-contrast colors.
