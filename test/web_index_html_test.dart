@@ -72,4 +72,10 @@ void main() {
       expect(html, contains('splash.remove();'));
     });
   });
+
+  /// #2599: screen readers pick a pronunciation from the document language,
+  /// and WCAG 3.1.1 requires one.
+  test('declares the page language', () {
+    expect(flattened(), contains('<html lang="en">'));
+  });
 }

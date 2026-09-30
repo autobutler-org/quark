@@ -43,6 +43,9 @@ Future<void> main() async {
   // the browser's menu is turned off once, for the whole app. Text fields
   // fall back to Flutter's own copy/paste menu.
   if (kIsWeb) await BrowserContextMenu.disableContextMenu();
+  // The web engine builds no semantics tree until someone finds its hidden
+  // "Enable accessibility" button, so a screen reader sees nothing (#2599).
+  if (kIsWeb) binding.ensureSemantics();
   deferFirstFrameUntilRouted(binding, router.routerDelegate);
   runApp(const QuarkApp());
 }
