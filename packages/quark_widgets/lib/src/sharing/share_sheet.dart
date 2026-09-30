@@ -5,6 +5,7 @@ import '../models/access_level.dart';
 import '../models/chat_permission.dart';
 import '../models/grant_item.dart';
 import '../models/principal_item.dart';
+import '../layout/quark_sheet.dart';
 import '../theme/quark_tokens.dart';
 import 'share_sheet/add_grant_form.dart';
 import 'share_sheet/add_permission_grant_form.dart';
@@ -40,9 +41,9 @@ import 'share_sheet/permission_grant_row.dart';
 /// stays read-only either way, such as the caller's own ownership.
 ///
 /// The caller confirms whatever deserves it, such as removing an owner,
-/// before acting on a callback. Show the sheet with
-/// `showModalBottomSheet(isScrollControlled: true, ...)`: it scrolls itself
-/// and moves clear of the keyboard.
+/// before acting on a callback. Show it with [showQuarkSheet], which gives
+/// it a title, a close button and a height cap, scrolls it, and moves it
+/// clear of the keyboard (#2585).
 ///
 /// Key prefixes, where `<kind>_<id>` is [PrincipalItem.keySuffix]:
 /// `share_grant_<kind>_<id>` on each row set on the item,
@@ -56,11 +57,10 @@ import 'share_sheet/permission_grant_row.dart';
 /// keys start `share_perms_<kind>_<id>` and the form's `share_add_perms`.
 ///
 /// ```dart
-/// showModalBottomSheet<void>(
-///   context: context,
-///   isScrollControlled: true,
+/// showQuarkSheet<void>(
+///   context,
+///   title: 'Share Recipes',
 ///   builder: (context) => ShareSheet(
-///     itemName: 'Recipes',
 ///     grants: controller.grants,
 ///     principals: controller.principals,
 ///     canManage: controller.canManage,
@@ -77,7 +77,6 @@ import 'share_sheet/permission_grant_row.dart';
 class ShareSheet extends StatelessWidget {
   /// Creates the sheet for the item named [itemName].
   const ShareSheet({
-    required this.itemName,
     required this.grants,
     required this.principals,
     this.canManage = false,
@@ -94,9 +93,6 @@ class ShareSheet extends StatelessWidget {
     this.onSetPermissions,
     super.key,
   });
-
-  /// The name of the file or folder being shared, shown in the title.
-  final String itemName;
 
   /// Everyone with access, set on the item or inherited, in the order shown
   /// within each list.
@@ -124,7 +120,7 @@ class ShareSheet extends StatelessWidget {
   final bool isLoading;
 
   /// A sentence saying why loading or the last change failed, composed by
-  /// the caller. Shown under the title.
+  /// the caller. Shown first.
   final String? error;
 
   /// Called with who to share with and at what level. Null leaves the form
@@ -179,108 +175,89 @@ class ShareSheet extends StatelessWidget {
       fontWeight: FontWeight.w600,
     );
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(tokens.spacingMd),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Share $itemName',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (error != null) ...[
+          Text(error, style: TextStyle(color: tokens.error)),
+          SizedBox(height: tokens.spacingSm),
+        ],
+        if (isLoading)
+          Padding(
+            padding: EdgeInsets.all(tokens.spacingLg),
+            child: const Center(child: QuarkLoader()),
+          )
+        else if (hasAccess) ...[
+          if (sharesSets && canManage && onAddPermissions != null) ...[
+            AddPermissionGrantForm(
+              principals: principals,
+              heldPermissions: heldPermissions,
+              busyKeys: busyKeys,
+              onAdd: onAddPermissions,
+            ),
+            SizedBox(height: tokens.spacingMd),
+          ] else if (!sharesSets && canManage && onAdd != null) ...[
+            AddGrantForm(
+              principals: principals,
+              canGrantOwner: canGrantOwner,
+              busyKeys: busyKeys,
+              onAdd: onAdd,
+            ),
+            SizedBox(height: tokens.spacingMd),
+          ],
+          Text(sharesSets ? 'Members' : 'Who has access', style: heading),
+          SizedBox(height: tokens.spacingXs),
+          if (direct.isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: tokens.spacingSm),
+              child: Text(
+                'No one has access set on this item',
+                style: TextStyle(color: tokens.mutedForeground),
               ),
-              if (error != null) ...[
-                SizedBox(height: tokens.spacingSm),
-                Text(error, style: TextStyle(color: tokens.error)),
-              ],
-              SizedBox(height: tokens.spacingSm),
-              if (isLoading)
-                Padding(
-                  padding: EdgeInsets.all(tokens.spacingLg),
-                  child: const Center(child: QuarkLoader()),
+            )
+          else
+            for (final grant in direct)
+              if (sharesSets)
+                PermissionGrantRow(
+                  grant: grant,
+                  heldPermissions: heldPermissions,
+                  isBusy: busyKeys.contains(grant.principal.keySuffix),
+                  canChange:
+                      canManage &&
+                      !lockedKeys.contains(grant.principal.keySuffix),
+                  onSetPermissions: onSetPermissions == null
+                      ? null
+                      : (permissions) =>
+                            onSetPermissions(grant.principal, permissions),
+                  onRevoke: onRevoke == null
+                      ? null
+                      : () => onRevoke(grant.principal),
                 )
-              else if (hasAccess) ...[
-                if (sharesSets && canManage && onAddPermissions != null) ...[
-                  AddPermissionGrantForm(
-                    principals: principals,
-                    heldPermissions: heldPermissions,
-                    busyKeys: busyKeys,
-                    onAdd: onAddPermissions,
-                  ),
-                  SizedBox(height: tokens.spacingMd),
-                ] else if (!sharesSets && canManage && onAdd != null) ...[
-                  AddGrantForm(
-                    principals: principals,
-                    canGrantOwner: canGrantOwner,
-                    busyKeys: busyKeys,
-                    onAdd: onAdd,
-                  ),
-                  SizedBox(height: tokens.spacingMd),
-                ],
-                Text(sharesSets ? 'Members' : 'Who has access', style: heading),
-                SizedBox(height: tokens.spacingXs),
-                if (direct.isEmpty)
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: tokens.spacingSm),
-                    child: Text(
-                      'No one has access set on this item',
-                      style: TextStyle(color: tokens.mutedForeground),
-                    ),
-                  )
-                else
-                  for (final grant in direct)
-                    if (sharesSets)
-                      PermissionGrantRow(
-                        grant: grant,
-                        heldPermissions: heldPermissions,
-                        isBusy: busyKeys.contains(grant.principal.keySuffix),
-                        canChange:
-                            canManage &&
-                            !lockedKeys.contains(grant.principal.keySuffix),
-                        onSetPermissions: onSetPermissions == null
-                            ? null
-                            : (permissions) => onSetPermissions(
-                                grant.principal,
-                                permissions,
-                              ),
-                        onRevoke: onRevoke == null
-                            ? null
-                            : () => onRevoke(grant.principal),
-                      )
-                    else
-                      GrantRow(
-                        grant: grant,
-                        isBusy: busyKeys.contains(grant.principal.keySuffix),
-                        canGrantOwner: canGrantOwner,
-                        canChange:
-                            canManage &&
-                            !lockedKeys.contains(grant.principal.keySuffix) &&
-                            (grant.level != AccessLevel.owner || canGrantOwner),
-                        onSetLevel: onSetLevel == null
-                            ? null
-                            : (level) => onSetLevel(grant.principal, level),
-                        onRevoke: onRevoke == null
-                            ? null
-                            : () => onRevoke(grant.principal),
-                      ),
-                if (inherited.isNotEmpty) ...[
-                  SizedBox(height: tokens.spacingMd),
-                  Text('Inherited access', style: heading),
-                  SizedBox(height: tokens.spacingXs),
-                  for (final grant in inherited) GrantRow(grant: grant),
-                ],
-              ],
-            ],
-          ),
-        ),
-      ),
+              else
+                GrantRow(
+                  grant: grant,
+                  isBusy: busyKeys.contains(grant.principal.keySuffix),
+                  canGrantOwner: canGrantOwner,
+                  canChange:
+                      canManage &&
+                      !lockedKeys.contains(grant.principal.keySuffix) &&
+                      (grant.level != AccessLevel.owner || canGrantOwner),
+                  onSetLevel: onSetLevel == null
+                      ? null
+                      : (level) => onSetLevel(grant.principal, level),
+                  onRevoke: onRevoke == null
+                      ? null
+                      : () => onRevoke(grant.principal),
+                ),
+          if (inherited.isNotEmpty) ...[
+            SizedBox(height: tokens.spacingMd),
+            Text('Inherited access', style: heading),
+            SizedBox(height: tokens.spacingXs),
+            for (final grant in inherited) GrantRow(grant: grant),
+          ],
+        ],
+      ],
     );
   }
 }

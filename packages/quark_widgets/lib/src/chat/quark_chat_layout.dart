@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../layout/quark_bar_icon_button.dart';
+import '../layout/quark_sheet.dart';
 import '../layout/quark_split_view.dart';
 import '../theme/quark_tokens.dart';
 
@@ -19,14 +20,18 @@ import '../theme/quark_tokens.dart';
 /// `QuarkMemberList`. In the collapsed layout, whether the drawer and the
 /// sheet are showing is the caller's too: [isChannelListOpen] and
 /// [isMemberListOpen] in, [onToggleChannelList] and [onToggleMemberList] out,
-/// fired by the buttons beside [header] and by a tap on the scrim. A caller
+/// fired by the buttons beside [header] and by a tap on the scrim. The member
+/// sheet is a [QuarkSheet] with a close button that fires
+/// [onToggleMemberList] too, and system back closes an open drawer or sheet
+/// through the same callbacks rather than leaving the page (#2585). A caller
 /// closes the drawer itself when a channel is picked from it. Nothing slides:
 /// the drawer and the sheet appear in place, so there is no motion to reduce.
 ///
 /// Key prefixes: `chat_layout_channels`, `chat_layout_messages` and
 /// `chat_layout_members` on the three panes, `chat_layout_channels_toggle`
-/// and `chat_layout_members_toggle` on the collapsed layout's buttons, and
-/// `chat_layout_scrim` behind an open drawer or sheet.
+/// and `chat_layout_members_toggle` on the collapsed layout's buttons,
+/// `chat_layout_scrim` behind an open drawer or sheet, and [QuarkSheet]'s
+/// `quark_sheet_close` on the member sheet's close button.
 ///
 /// ```dart
 /// QuarkChatLayout(
@@ -152,70 +157,79 @@ class QuarkChatLayout extends StatelessWidget {
     final scrimColor = tokens.background.withValues(alpha: 0.7);
     final showMembers = isMemberListOpen && memberList != null;
 
-    return Stack(
-      children: [
-        Column(
-          key: const ValueKey('chat_layout_messages'),
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: EdgeInsets.all(tokens.spacingSm),
-              child: Row(
-                children: [
-                  QuarkBarIconButton(
-                    key: const ValueKey('chat_layout_channels_toggle'),
-                    tooltip: 'Channels',
-                    icon: QuarkIcons.menu,
-                    onPressed: onToggleChannelList,
-                  ),
-                  SizedBox(width: tokens.spacingSm),
-                  Expanded(child: header ?? const SizedBox.shrink()),
-                  if (memberList != null) ...[
-                    SizedBox(width: tokens.spacingSm),
+    final closeOverlay = isChannelListOpen
+        ? onToggleChannelList
+        : showMembers
+        ? onToggleMemberList
+        : null;
+
+    // Back closes the drawer or the sheet before it leaves the page.
+    return PopScope(
+      canPop: closeOverlay == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) closeOverlay?.call();
+      },
+      child: Stack(
+        children: [
+          Column(
+            key: const ValueKey('chat_layout_messages'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: EdgeInsets.all(tokens.spacingSm),
+                child: Row(
+                  children: [
                     QuarkBarIconButton(
-                      key: const ValueKey('chat_layout_members_toggle'),
-                      tooltip: 'Members',
-                      icon: QuarkIcons.group_outlined,
-                      onPressed: onToggleMemberList,
+                      key: const ValueKey('chat_layout_channels_toggle'),
+                      tooltip: 'Channels',
+                      icon: QuarkIcons.menu,
+                      onPressed: onToggleChannelList,
                     ),
+                    SizedBox(width: tokens.spacingSm),
+                    Expanded(child: header ?? const SizedBox.shrink()),
+                    if (memberList != null) ...[
+                      SizedBox(width: tokens.spacingSm),
+                      QuarkBarIconButton(
+                        key: const ValueKey('chat_layout_members_toggle'),
+                        tooltip: 'Members',
+                        icon: QuarkIcons.group_outlined,
+                        onPressed: onToggleMemberList,
+                      ),
+                    ],
                   ],
-                ],
+                ),
+              ),
+              Divider(height: 1, color: tokens.border),
+              Expanded(child: messages),
+            ],
+          ),
+          if (isChannelListOpen) ...[
+            ModalBarrier(
+              key: const ValueKey('chat_layout_scrim'),
+              color: scrimColor,
+              onDismiss: onToggleChannelList,
+            ),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: SizedBox(
+                width: channelListWidth,
+                height: double.infinity,
+                child: Material(
+                  key: const ValueKey('chat_layout_channels'),
+                  color: tokens.sidebar,
+                  elevation: 8,
+                  child: SafeArea(right: false, child: channelList),
+                ),
               ),
             ),
-            Divider(height: 1, color: tokens.border),
-            Expanded(child: messages),
-          ],
-        ),
-        if (isChannelListOpen) ...[
-          ModalBarrier(
-            key: const ValueKey('chat_layout_scrim'),
-            color: scrimColor,
-            onDismiss: onToggleChannelList,
-          ),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: SizedBox(
-              width: channelListWidth,
-              height: double.infinity,
-              child: Material(
-                key: const ValueKey('chat_layout_channels'),
-                color: tokens.sidebar,
-                elevation: 8,
-                child: SafeArea(right: false, child: channelList),
-              ),
+          ] else if (showMembers) ...[
+            ModalBarrier(
+              key: const ValueKey('chat_layout_scrim'),
+              color: scrimColor,
+              onDismiss: onToggleMemberList,
             ),
-          ),
-        ] else if (showMembers) ...[
-          ModalBarrier(
-            key: const ValueKey('chat_layout_scrim'),
-            color: scrimColor,
-            onDismiss: onToggleMemberList,
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: FractionallySizedBox(
-              widthFactor: 1,
-              heightFactor: 0.6,
+            Align(
+              alignment: Alignment.bottomCenter,
               child: Material(
                 key: const ValueKey('chat_layout_members'),
                 color: tokens.sidebar,
@@ -224,12 +238,17 @@ class QuarkChatLayout extends StatelessWidget {
                   top: Radius.circular(tokens.radiusLg),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: SafeArea(top: false, child: memberList),
+                child: QuarkSheet(
+                  title: 'Members',
+                  onClose: onToggleMemberList ?? () {},
+                  scrollable: false,
+                  child: memberList,
+                ),
               ),
             ),
-          ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

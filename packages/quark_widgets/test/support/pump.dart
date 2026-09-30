@@ -48,3 +48,21 @@ void testBothViewports(
     testWidgets('$description ($label)', (tester) => body(tester, size));
   }
 }
+
+/// Pumps the sheet body [body] inside a [QuarkSheet] at [size], the frame
+/// every sheet body is shown in, so a body taller than the viewport scrolls
+/// the way it does in the app.
+Future<void> pumpInSheet(
+  WidgetTester tester,
+  Widget body, {
+  Size size = wideViewport,
+  Brightness brightness = Brightness.dark,
+}) => pumpAt(
+  tester,
+  Align(
+    alignment: Alignment.bottomCenter,
+    child: QuarkSheet(title: 'Sheet', onClose: () {}, child: body),
+  ),
+  size: size,
+  brightness: brightness,
+);

@@ -44,9 +44,9 @@ Future<void> showShareSheetFor(
   final message = ValueNotifier<String?>(null);
   unawaited(controller.load());
 
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
+  await showQuarkSheet<void>(
+    context,
+    title: 'Share $name',
     builder: (sheetContext) => ListenableBuilder(
       listenable: Listenable.merge([controller, message]),
       builder: (sheetContext, _) {
@@ -99,7 +99,6 @@ Future<void> showShareSheetFor(
 
         final loadError = controller.error;
         return ShareSheet(
-          itemName: name,
           grants: controller.grants,
           principals: controller.principals,
           canManage: controller.canManage,
