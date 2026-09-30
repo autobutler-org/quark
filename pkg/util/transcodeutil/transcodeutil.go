@@ -1,13 +1,12 @@
 // Package transcodeutil is the video-transcode job kind: Enqueue validates and
-// queues a conversion into any video format, and the Handler from NewHandler
-// writes the result into a new file beside the source when the job runs.
+// queues a conversion into another video container, and the Handler from
+// NewHandler remuxes the source into a new file beside it when the job runs.
+// A conversion copies the streams and never re-encodes them.
 package transcodeutil
 
 import (
 	"context"
 	"errors"
-	"fmt"
-	"slices"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
@@ -20,25 +19,25 @@ import (
 // under. It is the one place the string is spelled.
 const Kind = "video-transcode"
 
-// The lanes transcode jobs run in, and how many of each run at once. A
-// re-encode already uses every core and a lot of memory, so encodes run one at
-// a time. A stream copy mostly waits on the disk and takes seconds, so copies
-// get their own lane rather than queueing behind an encode that takes hours.
+// LaneCopy is the one lane transcode jobs run in, and copyLaneLimit how many
+// run at once. A remux mostly waits on the disk.
 const (
-	LaneEncode = "encode"
-	LaneCopy   = "copy"
-
-	encodeLaneLimit = 1
-	copyLaneLimit   = 2
+	LaneCopy      = "copy"
+	copyLaneLimit = 2
 )
 
+// QualityOriginal is the one quality a conversion has: the streams are copied
+// as they are. Params.Quality may name it or be empty.
+const QualityOriginal = "original"
+
 var (
-	// ErrInvalidFormat is returned for a format that is unknown, that this
-	// device's ffmpeg cannot write, or that is the source's own format at
-	// original quality, which would only copy the file.
+	// ErrInvalidFormat is returned for a format that is unknown, that cannot
+	// hold the source's codecs, or that is the source's own, which would only
+	// copy the file.
 	ErrInvalidFormat = errors.New("invalid format")
-	// ErrInvalidQuality is returned for a quality other than original or small.
-	ErrInvalidQuality = errors.New("quality must be original or small")
+	// ErrInvalidQuality is returned for a quality other than original, such as
+	// the small quality a re-encode used to offer.
+	ErrInvalidQuality = errors.New("quality must be original: a conversion copies the streams and never re-encodes them")
 	// ErrInvalidPath is returned for an empty relPath or one that escapes the
 	// device files directory.
 	ErrInvalidPath = errors.New("invalid relPath")
@@ -53,15 +52,18 @@ var (
 // Params is what a transcode job stores. Paths are resolved again every time
 // the job runs, so a retry sees the device's current files directory.
 type Params struct {
-	RelPath string            `json:"relPath"`
-	Serial  string            `json:"serial"`
-	Format  videoutil.Format  `json:"format"`
-	Quality videoutil.Quality `json:"quality"`
+	RelPath string           `json:"relPath"`
+	Serial  string           `json:"serial"`
+	Format  videoutil.Format `json:"format"`
+	// Quality is QualityOriginal or empty. It is kept so a request or a queued
+	// job from before conversions became remux-only, asking for small, is
+	// refused rather than quietly run at full size.
+	Quality string `json:"quality,omitempty"`
 }
 
-// TranscodeFunc does the conversion. It has the signature of
-// videoutil.Transcode, which is the default; tests pass a fake.
-type TranscodeFunc func(ctx context.Context, params videoutil.TranscodeParams) error
+// RemuxFunc does the conversion. It has the signature of videoutil.Remux,
+// which is the default; tests pass a fake.
+type RemuxFunc func(ctx context.Context, params videoutil.RemuxParams) error
 
 // EnqueueParams describes a transcode request.
 type EnqueueParams struct {
@@ -78,21 +80,14 @@ type EnqueueResult struct {
 	Job jobutil.Job
 }
 
-// Enqueue checks the request and queues the job in LaneCopy when the source's
-// streams can be copied into the format, and LaneEncode otherwise. It returns
-// ErrInvalidFormat, ErrInvalidQuality, or ErrInvalidPath for a bad request, and
-// ErrSourceNotFound when the source does not probe as a video.
+// Enqueue checks the request and queues the job. It returns ErrInvalidFormat,
+// ErrInvalidQuality, or ErrInvalidPath for a bad request, including a format
+// that cannot hold the source's codecs, and ErrSourceNotFound when the source
+// does not probe as a video.
 func Enqueue(ctx context.Context, params EnqueueParams) (EnqueueResult, error) {
 	src, err := resolveSource(params.Storage, params.Params)
 	if err != nil {
 		return EnqueueResult{}, err
-	}
-	available, err := videoutil.AvailableFormats()
-	if err != nil {
-		return EnqueueResult{}, err
-	}
-	if !slices.Contains(available, params.Params.Format) {
-		return EnqueueResult{}, fmt.Errorf("%w: ffmpeg on this device cannot write %s", ErrInvalidFormat, params.Params.Format.Label())
 	}
 
 	result, err := params.Queue.Enqueue(ctx, jobutil.EnqueueParams{
@@ -121,30 +116,31 @@ type NewHandlerParams struct {
 	// EventBus receives the upload event for a finished output. Nil publishes
 	// nothing.
 	EventBus *eventbus.Bus
-	// Transcode does the conversion. Nil means videoutil.Transcode.
-	Transcode TranscodeFunc
+	// Remux does the conversion. Nil means videoutil.Remux.
+	Remux RemuxFunc
 }
 
-// NewHandler returns the jobutil Handler for Kind, with its encode and copy
-// lanes. Run writes the output into the device data dir's tmp/transcode-jobs,
-// outside the files tree, moves it beside the source on success without
-// replacing any file, removes it on failure or cancel, and publishes the same
-// upload event a new file does. Run acts as the account that queued the job:
+// NewHandler returns the jobutil Handler for Kind, in its one lane. Run writes
+// the output into the device data dir's tmp/transcode-jobs, outside the files
+// tree, moves it beside the source on success without replacing any file,
+// removes it on failure or cancel, and publishes the same upload event a new
+// file does. Run acts as the account that queued the job:
 // it needs read on the source and write on its folder when it starts and again
 // just before the output lands, fails with ErrCreatorForbidden or
 // accessutil.ErrCreatorInactive otherwise, and makes that account the owner of
 // the output. Validate refuses a retry whose source no longer exists, and Lane
-// probes the source to choose between the lanes.
+// probes the source and refuses a format that cannot hold its codecs, at
+// enqueue and again at retry.
 func NewHandler(params NewHandlerParams) jobutil.Handler {
-	transcode := params.Transcode
-	if transcode == nil {
-		transcode = videoutil.Transcode
+	remux := params.Remux
+	if remux == nil {
+		remux = videoutil.Remux
 	}
-	h := handler{storage: params.Storage, database: params.Database, bus: params.EventBus, transcode: transcode}
+	h := handler{storage: params.Storage, database: params.Database, bus: params.EventBus, remux: remux}
 	return jobutil.Handler{
 		Run:      h.run,
 		Validate: h.validate,
 		Lane:     h.lane,
-		Lanes:    map[string]int{LaneEncode: encodeLaneLimit, LaneCopy: copyLaneLimit},
+		Lanes:    map[string]int{LaneCopy: copyLaneLimit},
 	}
 }

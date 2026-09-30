@@ -11,12 +11,12 @@ It carries a released binary and its runtime dependencies — no Go toolchain an
 `linux/amd64` and `linux/arm64` are both in the manifest, so the same tag runs on a cloud VM and on
 a Raspberry Pi.
 
-The image is around 600 MB, and most of that is `ffmpeg`. Quark shells out to `ffmpeg` and
-`ffprobe` for video thumbnails and transcoding, so they have to be on `PATH`; Debian's `ffmpeg`
-package pulls in the full codec set. A deployment that never touches video still carries it. If it
-were ever left out, Quark would still start and serve: `videoutil.Available()` gates every caller,
-so `POST /api/v0/videos/trim` answers `501 Not Implemented` and thumbnail generation returns an
-error for video files, while everything else works normally.
+The image is around 600 MB, and most of that is `ffmpeg`. Quark shells out to `ffmpeg` for video
+thumbnails, so it has to be on `PATH`; Debian's `ffmpeg` package pulls in the full codec set. A
+deployment that never touches video still carries it. If it were ever left out, Quark would still
+start and serve: `videoutil.Available()` gates thumbnail generation, which returns an error for
+video files, while everything else works normally. Probing, trimming, and converting video need no
+`ffmpeg` at all; they copy streams in pure Go.
 
 To build it yourself for the host architecture, `make build/docker`. It packages the most recent
 git tag; pass `BUILD_NAME=X.Y.Z` for a different released version. The image cannot be built for a

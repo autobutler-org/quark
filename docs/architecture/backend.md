@@ -16,7 +16,7 @@ flowchart TB
 
     subgraph logic["Business logic — pkg/util/*util"]
         files["fileutil · uploadutil · searchutil"]
-        media["photoutil · albumutil · videoutil<br/>thumbnailutil · transcodeutil · ffmpegutil"]
+        media["photoutil · albumutil · videoutil<br/>thumbnailutil · transcodeutil"]
         auth["authutil · accessutil"]
         ops["storageutil · jobutil · workerutil<br/>settingsutil · updateutil · remoteutil"]
         vault["vaultutil · vaultcrypto"]

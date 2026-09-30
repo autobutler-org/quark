@@ -256,22 +256,23 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
 
     setState(() => _exportingTrim = true);
     try {
-      final savedPath = await FilesService.trimVideo(
+      final trimmed = await FilesService.trimVideo(
         relPath,
         serial: serial,
         startMs: startMs,
         endMs: endMs,
       );
       if (!mounted) return;
-      final fileName = savedPath.split('/').last;
       setState(() {
         _trimMode = false;
         _trimStart = 0.0;
         _trimEnd = 1.0;
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Clip saved as $fileName')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(trimmed.savedMessage(Duration(milliseconds: startMs))),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -9,8 +9,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
-	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
@@ -21,7 +21,7 @@ import (
 )
 
 // stagingDirName is the directory, under a device data dir's tmp area, where
-// ffmpeg writes a transcode until it finishes. It is deliberately outside the
+// a remux is written until it finishes. It is deliberately outside the
 // files tree, so a partial output never shows up in a listing, and on the same
 // device as the output, so moving it into place is a link rather than a copy of
 // a file that can be many gigabytes.
@@ -29,9 +29,6 @@ const stagingDirName = "transcode-jobs"
 
 // stagingPattern names staged outputs. prepareStaging clears only these.
 const stagingPattern = "transcode-*"
-
-// probeTimeout bounds how long choosing a job's lane waits on ffprobe.
-const probeTimeout = 10 * time.Second
 
 // maxMoveAttempts bounds how often moveIntoPlace picks a new name after a file
 // takes the one it chose. Each retry means yet another file appeared at that
@@ -45,14 +42,14 @@ func resolveSource(storage *storageutil.StorageService, p Params) (source, error
 	if !p.Format.Valid() {
 		return source{}, fmt.Errorf("%w: %q is not a video format this device converts to", ErrInvalidFormat, p.Format)
 	}
-	if !p.Quality.Valid() {
+	if p.Quality != "" && p.Quality != QualityOriginal {
 		return source{}, ErrInvalidQuality
 	}
 	if p.RelPath == "" {
 		return source{}, fmt.Errorf("%w: relPath is required", ErrInvalidPath)
 	}
-	if p.Quality == videoutil.QualityOriginal && strings.EqualFold(filepath.Ext(p.RelPath), "."+string(p.Format)) {
-		return source{}, fmt.Errorf("%w: the video is already %s; choose small quality to shrink it", ErrInvalidFormat, p.Format.Label())
+	if strings.EqualFold(filepath.Ext(p.RelPath), "."+string(p.Format)) {
+		return source{}, fmt.Errorf("%w: the video is already %s", ErrInvalidFormat, p.Format.Label())
 	}
 	filesDir, ok := storage.FindDeviceFilesDirBySerial(p.Serial)
 	if !ok {
@@ -71,14 +68,9 @@ func resolveSource(storage *storageutil.StorageService, p Params) (source, error
 	return source{filesDir: cleanFilesDir, fullPath: fullPath, relPath: relPath(cleanFilesDir, fullPath)}, nil
 }
 
-// jobName is the job's display text: "Convert clip.mkv to MOV", with
-// " (small)" when the quality is small.
+// jobName is the job's display text: "Convert clip.mov to MKV".
 func jobName(src source, p Params) string {
-	name := "Convert " + filepath.Base(src.relPath) + " to " + p.Format.Label()
-	if p.Quality == videoutil.QualitySmall {
-		name += " (small)"
-	}
-	return name
+	return "Convert " + filepath.Base(src.relPath) + " to " + p.Format.Label()
 }
 
 func relPath(filesDir, path string) string {
@@ -111,11 +103,10 @@ func (h handler) validate(raw json.RawMessage) error {
 	return nil
 }
 
-// lane puts a job in LaneCopy when its source's streams can be copied into the
-// target format, which is exactly when videoutil.Transcode copies them, and in
-// LaneEncode otherwise. It probes the source, so it also refuses one that is
-// missing or not a video.
-func (h handler) lane(ctx context.Context, raw json.RawMessage) (string, error) {
+// lane puts every job in LaneCopy once the source probes as a video whose
+// codecs the target format holds, which is the table the formats endpoint
+// lists from and Remux acts on.
+func (h handler) lane(_ context.Context, raw json.RawMessage) (string, error) {
 	p, err := decodeParams(raw)
 	if err != nil {
 		return "", err
@@ -124,16 +115,14 @@ func (h handler) lane(ctx context.Context, raw json.RawMessage) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
-	defer cancel()
-	info, err := videoutil.Probe(probeCtx, src.fullPath)
+	targets, err := videoutil.Targets(src.fullPath)
 	if err != nil {
 		return "", fmt.Errorf("%w: %s", ErrSourceNotFound, p.RelPath)
 	}
-	if videoutil.CanCopy(info, p.Format, p.Quality) {
-		return LaneCopy, nil
+	if !slices.Contains(targets, p.Format) {
+		return "", fmt.Errorf("%w: this video's streams can't be copied into %s", ErrInvalidFormat, p.Format.Label())
 	}
-	return LaneEncode, nil
+	return LaneCopy, nil
 }
 
 func (h handler) run(ctx context.Context, raw json.RawMessage, report func(float64)) error {
@@ -164,11 +153,10 @@ func (h handler) run(ctx context.Context, raw json.RawMessage, report func(float
 	// name is already gone.
 	defer func() { _ = os.Remove(staged) }()
 
-	err = h.transcode(ctx, videoutil.TranscodeParams{
+	err = h.remux(ctx, videoutil.RemuxParams{
 		Source:     src.fullPath,
 		Output:     staged,
 		Format:     p.Format,
-		Quality:    p.Quality,
 		OnProgress: report,
 	})
 	if err != nil {
@@ -238,8 +226,8 @@ func (h handler) checkCreator(ctx context.Context, p Params, src source) (access
 
 // prepareStaging returns the staging directory for the device whose files dir
 // is filesDir (ConstructFilesDir puts it directly under the data dir), emptied
-// of outputs an earlier process left behind. Jobs in different lanes run at
-// the same time, so only files older than this process are removed: anything
+// of outputs an earlier process left behind. Two jobs run at the same
+// time, so only files older than this process are removed: anything
 // newer may be another job's output still being written. Clearing here rather
 // than at startup covers every device without enumerating them.
 func prepareStaging(filesDir string) (string, error) {
@@ -259,8 +247,8 @@ func prepareStaging(filesDir string) (string, error) {
 
 // moveIntoPlace moves the staged output beside the source under the first free
 // name, never replacing a file, and returns where it landed. The output name is
-// chosen now, when the encode is done, so it reflects files that appeared while
-// ffmpeg ran. LocalVFS.MoveFileIn hard-links when it can and otherwise streams
+// chosen now, when the remux is done, so it reflects files that appeared while
+// it ran. LocalVFS.MoveFileIn hard-links when it can and otherwise streams
 // a copy through a hidden write temp, the same way a finished upload lands.
 // A LocalVFS rooted at the source's files dir serves device serials too, which
 // the registered files namespace does not.

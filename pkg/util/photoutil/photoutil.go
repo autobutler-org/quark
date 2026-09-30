@@ -240,28 +240,12 @@ func GenerateThumbnailFromReader(r io.Reader, ext string, width, height uint) (*
 	return &GenerateThumbnailResult{Thumbnail: cropped, Format: format}, nil
 }
 
-// GenerateThumbnail creates a thumbnail image from a source file.
-// Supports both image and video files (video requires ffmpeg).
+// GenerateThumbnail creates a thumbnail image from an image file. A video's
+// frame is extracted by the caller first and passed in as an image.
 func GenerateThumbnail(params GenerateThumbnailParams) (*GenerateThumbnailResult, error) {
 	ext := strings.ToLower(filepath.Ext(params.FilePath))
-	fileType := storageutil.DetermineFileTypeFromPath("file" + ext)
-
-	if fileType != storageutil.FileTypeImage && fileType != storageutil.FileTypeVideo {
+	if storageutil.DetermineFileTypeFromPath("file"+ext) != storageutil.FileTypeImage {
 		return nil, fmt.Errorf("unsupported file type for thumbnail: %s", ext)
-	}
-
-	if fileType == storageutil.FileTypeVideo {
-		if !IsFFmpegAvailable() {
-			return nil, fmt.Errorf("ffmpeg is required for video thumbnails but was not found on PATH")
-		}
-		thumbnail, err := VideoToThumbnail(params.FilePath, params.Width, params.Height)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate video thumbnail: %w", err)
-		}
-		return &GenerateThumbnailResult{
-			Thumbnail: thumbnail,
-			Format:    "jpeg",
-		}, nil
 	}
 
 	// RAW camera files can't be decoded by Go's image package — convert

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:quark/utils/playback_time.dart';
 import 'package:video_player/video_player.dart';
 
 /// Transport controls for the audio player: scrubber, seek, play/pause, mute
@@ -29,15 +30,6 @@ class _AudioControlsState extends State<AudioControls> {
   void dispose() {
     _positionTimer?.cancel();
     super.dispose();
-  }
-
-  String _formatDuration(Duration d) {
-    final clamped = d < Duration.zero ? Duration.zero : d;
-    final hours = clamped.inHours;
-    final minutes = clamped.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = clamped.inSeconds.remainder(60).toString().padLeft(2, '0');
-    if (hours > 0) return '$hours:$minutes:$seconds';
-    return '${clamped.inMinutes}:$seconds';
   }
 
   Future<void> _seekBy(Duration delta) async {
@@ -100,11 +92,11 @@ class _AudioControlsState extends State<AudioControls> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    _formatDuration(position),
+                    formatPlaybackTime(position),
                     style: theme.textTheme.bodySmall,
                   ),
                   Text(
-                    _formatDuration(duration),
+                    formatPlaybackTime(duration),
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
