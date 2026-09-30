@@ -10,15 +10,13 @@ import (
 )
 
 // Search runs a full-text query against the FTS5 index and returns up to
-// limit results ordered by relevance rank. If limit <= 0, DefaultLimit is used.
+// limit results ordered by relevance rank. If limit <= 0, DefaultLimit is used,
+// and a limit above MaxLimit is clamped to it.
 // The query string is passed directly to FTS5's MATCH operator — callers
 // should sanitize it for user-facing inputs (e.g. quote terms to avoid FTS5
 // syntax errors).
 func Search(ctx context.Context, db *sql.DB, query string, limit int) ([]SearchResult, error) {
-	if limit <= 0 {
-		limit = DefaultLimit
-	}
-	return searchPage(ctx, db, query, limit, 0)
+	return searchPage(ctx, db, query, clampLimit(limit), 0)
 }
 
 // SearchReadableParams is a content search on behalf of one caller.
@@ -27,7 +25,8 @@ type SearchReadableParams struct {
 	DB  *sql.DB
 	// Query is passed to Search.
 	Query string
-	// Limit caps the results, DefaultLimit when zero or less.
+	// Limit caps the results, DefaultLimit when zero or less and never more
+	// than MaxLimit.
 	Limit int
 	// Access drops the matches the caller cannot read. A snippet is file
 	// content, so an unreadable match must not come back at all.
@@ -43,10 +42,7 @@ type SearchReadableResult struct {
 // can read, still returning up to Limit of them when that many exist (#1907).
 // An admin's search is the single query Search runs.
 func SearchReadable(params SearchReadableParams) (SearchReadableResult, error) {
-	limit := params.Limit
-	if limit <= 0 {
-		limit = DefaultLimit
-	}
+	limit := clampLimit(params.Limit)
 	if params.Access.Principal().IsAdmin {
 		results, err := searchPage(params.Ctx, params.DB, params.Query, limit, 0)
 		return SearchReadableResult{Results: results}, err
@@ -76,6 +72,16 @@ func SearchReadable(params SearchReadableParams) (SearchReadableResult, error) {
 			return SearchReadableResult{Results: kept}, nil
 		}
 	}
+}
+
+// clampLimit bounds a caller's limit to (0, MaxLimit], using DefaultLimit for
+// zero or less. SearchReadable sizes a slice from it, so it must never trust
+// the caller's value.
+func clampLimit(limit int) int {
+	if limit <= 0 {
+		return DefaultLimit
+	}
+	return min(limit, MaxLimit)
 }
 
 // searchPage returns up to limit matches ranked after the first offset.

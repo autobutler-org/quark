@@ -3,6 +3,8 @@ package searchutil
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -287,6 +289,26 @@ func TestSearch_LimitRespected(t *testing.T) {
 	}
 	if len(results) > 3 {
 		t.Errorf("expected <= 3 results, got %d", len(results))
+	}
+}
+
+func TestSearch_LimitClampedToMax(t *testing.T) {
+	db := newTestDB(t)
+	ctx := context.Background()
+
+	for i := 0; i < MaxLimit+5; i++ {
+		if err := UpsertContent(ctx, db, "dev", fmt.Sprintf("f%d.txt", i),
+			"common keyword here"); err != nil {
+			t.Fatalf("UpsertContent %d: %v", i, err)
+		}
+	}
+
+	results, err := Search(ctx, db, "keyword", math.MaxInt)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != MaxLimit {
+		t.Errorf("expected %d results, got %d", MaxLimit, len(results))
 	}
 }
 
