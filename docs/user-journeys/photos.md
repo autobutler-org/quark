@@ -409,3 +409,36 @@ by date (JN-PH-018).
   trash.
 - A long press on the photo still starts selecting, as before. A device photo has no menu, since there is nothing on
   the Quark to act on.
+
+---
+
+### JN-PH-022: Clear out duplicate photos
+
+**Preconditions:** Demo mode is off, and the library holds copies of the same photo. Quark hashes a photo when it
+renders or receives its thumbnail, and hashes the rest of the library in the background each time it starts, so a copy
+added outside Quark shows up once its thumbnail loads or after the next restart.
+
+**Steps:**
+
+1. On All photos, tap **Duplicates** in the app bar (`/photos/duplicates`).
+2. Tap a copy to switch it between **Keep** and **Delete**.
+3. Optionally, when a picture is saved in more than one format, pick a format from **Keep: Any** in the app bar.
+4. Tap **Delete N photos** and confirm.
+
+**Expected result:**
+
+- Photos are grouped as **Identical copies** (the same file) or **Similar photos** (alike, but maybe edited or
+  resized). Each copy shows its name and folder, and its drive when it is not on the internal one.
+- In a group of identical copies, every copy but the first starts marked **Delete**; similar photos start with none
+  marked. A group always keeps at least one copy.
+- The page refreshes itself now and then without losing the marks: only a group that appears for the first time gets
+  the starting marks.
+- **Keep: Any** appears only when a similar group is one picture saved in several formats: every copy is a
+  different format (`IMG_1.HEIC` and an exported `IMG_1.jpg`), and their perceptual hashes are all within a few bits
+  of each other. Names play no part, so a renamed export still counts and two shots that merely share a name do not.
+  Picking a format marks the other formats' copies in each such group that has one, and leaves identical and other
+  similar groups alone. Picking **Any** clears those marks. The choice lasts until you leave the page, applies to
+  groups that appear later, and a copy tapped afterwards stays as tapped until the choice changes.
+- Confirming moves the marked copies to the trash and reloads the groups. A copy that could not be deleted is named
+  in a snack bar by count.
+- A photo appears in one group at most, and a photo that was deleted, moved or trashed stops appearing.

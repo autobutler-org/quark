@@ -4,6 +4,7 @@ import 'dart:io' show File;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:http/http.dart' as http;
+import 'package:quark/models/duplicate_group.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/paginated_photos_response.dart';
 import 'package:quark/models/photo_metadata.dart';
@@ -157,6 +158,24 @@ class FilesService with AuthenticatedService {
     }
 
     return PaginatedPhotosResponse.fromJson(decoded);
+  }
+
+  /// The groups of duplicate photos the caller can see (#1666).
+  static Future<List<DuplicateGroup>> getDuplicates() async {
+    final response = await instance.authenticatedGet(
+      apiBaseUri.resolve('/api/v0/photos/duplicates'),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Failed to load duplicates');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Unexpected duplicates response format');
+    }
+    return [
+      for (final g in (decoded['groups'] as List<dynamic>? ?? const []))
+        DuplicateGroup.fromJson(g as Map<String, dynamic>),
+    ];
   }
 
   static Future<List<FileNode>> getFiles(
