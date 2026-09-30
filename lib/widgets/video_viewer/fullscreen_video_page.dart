@@ -59,6 +59,7 @@ class _FullscreenVideoPageState extends State<FullscreenVideoPage> {
           child: Align(
             alignment: Alignment.topLeft,
             child: IconButton(
+              tooltip: 'Exit fullscreen',
               icon: const Icon(QuarkIcons.arrow_back, color: Colors.white),
               onPressed: () => Navigator.of(context).pop(),
             ),

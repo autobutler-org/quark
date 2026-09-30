@@ -19,7 +19,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// zooms over it.
 ///
 /// [bytes] is the raw file content and [name] the file name shown in the app
-/// bar.
+/// bar and read out by a screen reader as the artwork's label.
 class SvgViewerPage extends StatelessWidget {
   final Uint8List bytes;
   final String name;
@@ -32,7 +32,13 @@ class SvgViewerPage extends StatelessWidget {
       appBar: AppBar(title: Text(name), actions: const [AppThemeToggle()]),
       body: QuarkCheckerboard(
         child: InteractiveViewer(
-          child: Center(child: SvgPicture.memory(bytes, fit: BoxFit.contain)),
+          child: Center(
+            child: SvgPicture.memory(
+              bytes,
+              fit: BoxFit.contain,
+              semanticsLabel: name,
+            ),
+          ),
         ),
       ),
     );

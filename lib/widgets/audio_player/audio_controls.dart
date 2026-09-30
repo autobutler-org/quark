@@ -77,6 +77,8 @@ class _AudioControlsState extends State<AudioControls> {
                 overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
               ),
               child: Slider(
+                semanticFormatterCallback: (_) =>
+                    '${formatPlaybackTime(position)} of ${formatPlaybackTime(duration)}',
                 value: progress.clamp(0.0, 1.0),
                 onChanged: (v) {
                   final target = Duration(
@@ -107,12 +109,14 @@ class _AudioControlsState extends State<AudioControls> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
+                  tooltip: 'Back 10 seconds',
                   onPressed: () => _seekBy(const Duration(seconds: -10)),
                   icon: const Icon(Icons.replay_10),
                   iconSize: 28,
                 ),
                 const SizedBox(width: 12),
                 IconButton.filled(
+                  tooltip: isPlaying ? 'Pause' : 'Play',
                   onPressed: () {
                     isPlaying
                         ? widget.controller.pause()
@@ -126,6 +130,7 @@ class _AudioControlsState extends State<AudioControls> {
                 ),
                 const SizedBox(width: 12),
                 IconButton(
+                  tooltip: 'Forward 10 seconds',
                   onPressed: () => _seekBy(const Duration(seconds: 10)),
                   icon: const Icon(Icons.forward_10),
                   iconSize: 28,
@@ -137,6 +142,7 @@ class _AudioControlsState extends State<AudioControls> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
+                  tooltip: isMuted ? 'Unmute' : 'Mute',
                   onPressed: () {
                     widget.controller.setVolume(isMuted ? 1 : 0);
                   },

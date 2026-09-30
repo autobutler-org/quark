@@ -7,6 +7,9 @@ import 'package:flutter/material.dart';
 /// - A highlighted selected region between start and end
 /// - Draggable circular handles at start and end positions
 /// - Timestamp labels above each handle
+///
+/// A screen reader hears each handle as "Trim start" or "Trim end" with its
+/// timestamp as the value.
 class TrimBar extends StatelessWidget {
   final double start; // 0.0–1.0 fraction
   final double end; // 0.0–1.0 fraction
@@ -95,6 +98,7 @@ class TrimBar extends StatelessWidget {
                 ),
                 // Start handle + label
                 ..._buildHandle(
+                  name: 'Trim start',
                   centerX: startX,
                   width: width,
                   label: startLabel,
@@ -105,6 +109,7 @@ class TrimBar extends StatelessWidget {
                 ),
                 // End handle + label
                 ..._buildHandle(
+                  name: 'Trim end',
                   centerX: endX,
                   width: width,
                   label: endLabel,
@@ -126,6 +131,7 @@ class TrimBar extends StatelessWidget {
   /// being positioned, so the handle inherited the label's width and height
   /// and drifted right and down off the track.
   List<Widget> _buildHandle({
+    required String name,
     required double centerX,
     required double width,
     required String label,
@@ -144,30 +150,36 @@ class TrimBar extends StatelessWidget {
         width: _labelWidth,
         height: _labelHeight,
         child: Center(
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white, fontSize: 10),
+          child: ExcludeSemantics(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontSize: 10),
+            ),
           ),
         ),
       ),
       Positioned(
         top: _centerY - _handleSize / 2,
         left: (centerX - _handleSize / 2).clamp(0.0, handleLeftMax),
-        child: GestureDetector(
-          onHorizontalDragUpdate: (details) => onDragDelta(details.delta.dx),
-          child: Container(
-            width: _handleSize,
-            height: _handleSize,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 4,
-                ),
-              ],
+        child: Semantics(
+          label: name,
+          value: label,
+          child: GestureDetector(
+            onHorizontalDragUpdate: (details) => onDragDelta(details.delta.dx),
+            child: Container(
+              width: _handleSize,
+              height: _handleSize,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
             ),
           ),
         ),

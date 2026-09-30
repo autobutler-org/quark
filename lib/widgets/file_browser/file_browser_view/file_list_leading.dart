@@ -8,7 +8,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shimmer/shimmer.dart';
 
 /// Every row reserves the same leading slot so titles line up whether the
-/// row ends up showing a thumbnail or a file-type icon.
+/// row ends up showing a thumbnail or a file-type icon. The thumbnail is hidden
+/// from screen readers: the row's title already names the file.
 ///
 /// The thumbnail, and the icon when the file has none, are keyed by
 /// [FileNode.apiPath]. A list reuses the element in a slot; without that key
@@ -49,7 +50,11 @@ class FileListLeading extends StatelessWidget {
                 // and error states fall back to it so nothing shifts.
                 imageBuilder: (context, imageProvider) => ClipRRect(
                   borderRadius: BorderRadius.circular(4),
-                  child: Image(image: imageProvider, fit: BoxFit.cover),
+                  child: Image(
+                    image: imageProvider,
+                    fit: BoxFit.cover,
+                    excludeFromSemantics: true,
+                  ),
                 ),
                 placeholder: (context, url) => Shimmer.fromColors(
                   baseColor: Colors.grey[800]!,

@@ -146,4 +146,27 @@ void main() {
 
     expect(events, ['cancel']);
   });
+
+  testBothViewports('announces each type as a button and which is selected', (
+    tester,
+    size,
+  ) async {
+    await pumpDialog(tester, size: size);
+
+    await expectLabeledTapTargets(tester);
+    final first = kNewFileTypes.first;
+    final slug = first.extension.isEmpty
+        ? 'generic'
+        : first.extension.substring(1);
+    expect(
+      tester.getSemantics(find.byKey(ValueKey('new_file_type_$slug'))),
+      matchesSemantics(
+        label: first.label,
+        isButton: true,
+        hasSelectedState: true,
+        isSelected: true,
+        hasTapAction: true,
+      ),
+    );
+  });
 }

@@ -90,14 +90,19 @@ class PlayerControls extends StatelessWidget {
                   },
                 )
               else
-                VideoProgressIndicator(
-                  controller,
-                  allowScrubbing: !trimMode,
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  colors: VideoProgressColors(
-                    playedColor: Theme.of(context).colorScheme.primary,
-                    bufferedColor: Colors.white54,
-                    backgroundColor: Colors.white24,
+                Semantics(
+                  label: 'Playback position',
+                  value:
+                      '${formatPlaybackTime(position)} of ${formatPlaybackTime(duration)}',
+                  child: VideoProgressIndicator(
+                    controller,
+                    allowScrubbing: !trimMode,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    colors: VideoProgressColors(
+                      playedColor: Theme.of(context).colorScheme.primary,
+                      bufferedColor: Colors.white54,
+                      backgroundColor: Colors.white24,
+                    ),
                   ),
                 ),
               SingleChildScrollView(
@@ -105,6 +110,7 @@ class PlayerControls extends StatelessWidget {
                 child: Row(
                   children: [
                     IconButton(
+                      tooltip: value.isPlaying ? 'Pause' : 'Play',
                       onPressed: () {
                         onInteraction();
                         value.isPlaying
@@ -119,6 +125,7 @@ class PlayerControls extends StatelessWidget {
                       ),
                     ),
                     IconButton(
+                      tooltip: 'Back 10 seconds',
                       onPressed: () {
                         onInteraction();
                         _seekBy(const Duration(seconds: -10));
@@ -129,6 +136,7 @@ class PlayerControls extends StatelessWidget {
                       ),
                     ),
                     IconButton(
+                      tooltip: 'Forward 10 seconds',
                       onPressed: () {
                         onInteraction();
                         _seekBy(const Duration(seconds: 10));
@@ -143,6 +151,7 @@ class PlayerControls extends StatelessWidget {
                       style: const TextStyle(color: Colors.white),
                     ),
                     IconButton(
+                      tooltip: isMuted ? 'Unmute' : 'Mute',
                       onPressed: () {
                         onInteraction();
                         controller.setVolume(isMuted ? 1 : 0);
@@ -176,6 +185,7 @@ class PlayerControls extends StatelessWidget {
                       ),
                     ),
                     IconButton(
+                      tooltip: isFullscreen ? 'Exit fullscreen' : 'Fullscreen',
                       onPressed: () {
                         onInteraction();
                         onToggleFullscreen();

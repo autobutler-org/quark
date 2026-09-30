@@ -87,25 +87,28 @@ class FileBreadcrumbBar extends StatelessWidget {
                     message: atRoot
                         ? 'You are in the top folder'
                         : 'Go to the top folder',
-                    child: MouseRegion(
-                      cursor: atRoot
-                          ? SystemMouseCursors.basic
-                          : SystemMouseCursors.click,
-                      child: GestureDetector(
-                        key: const ValueKey('breadcrumb_home'),
-                        onTap: atRoot ? null : onGoHome,
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: tokens.spacingXs,
-                          ),
-                          child: Icon(
-                            QuarkIcons.home_rounded,
-                            size: 20,
-                            color: atRoot
-                                ? Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface.withValues(alpha: 0.4)
-                                : Theme.of(context).colorScheme.primary,
+                    child: Semantics(
+                      button: true,
+                      enabled: !atRoot,
+                      child: MouseRegion(
+                        cursor: atRoot
+                            ? SystemMouseCursors.basic
+                            : SystemMouseCursors.click,
+                        child: GestureDetector(
+                          key: const ValueKey('breadcrumb_home'),
+                          onTap: atRoot ? null : onGoHome,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: tokens.spacingXs,
+                            ),
+                            child: Icon(
+                              QuarkIcons.home_rounded,
+                              size: 20,
+                              color: atRoot
+                                  ? Theme.of(context).colorScheme.onSurface
+                                        .withValues(alpha: 0.4)
+                                  : Theme.of(context).colorScheme.primary,
+                            ),
                           ),
                         ),
                       ),
@@ -160,15 +163,18 @@ class FileBreadcrumbBar extends StatelessWidget {
 
       final targetPath = '/${segments.take(index + 1).join('/')}';
       children.add(
-        GestureDetector(
-          key: ValueKey('breadcrumb_segment_$index'),
-          onTap: () => onPathSelected(targetPath),
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: tokens.spacingXs),
-            child: Text(
-              segment,
-              style: style?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
+        Semantics(
+          button: true,
+          child: GestureDetector(
+            key: ValueKey('breadcrumb_segment_$index'),
+            onTap: () => onPathSelected(targetPath),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: tokens.spacingXs),
+              child: Text(
+                segment,
+                style: style?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
             ),
           ),

@@ -70,6 +70,7 @@ class EntryEditForm extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
+                  tooltip: showPassword ? 'Hide password' : 'Show password',
                   icon: Icon(
                     showPassword
                         ? QuarkIcons.visibility_off

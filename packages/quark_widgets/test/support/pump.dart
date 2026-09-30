@@ -66,3 +66,9 @@ Future<void> pumpInSheet(
   size: size,
   brightness: brightness,
 );
+
+/// Fails when anything on screen that can be tapped or long-pressed has
+/// neither a label nor a tooltip, which a screen reader would announce as an
+/// unnamed button (WCAG 1.1.1, 4.1.2).
+Future<void> expectLabeledTapTargets(WidgetTester tester) =>
+    expectLater(tester, meetsGuideline(labeledTapTargetGuideline));

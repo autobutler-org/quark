@@ -17,6 +17,10 @@ import '../theme/quark_tokens.dart';
 /// or right-click on the row does the same thing, so a mouse user can find the
 /// album's actions as easily as a touch user (#2261, #2262).
 ///
+/// The disclosure chevron is its own button to a screen reader, named
+/// "Expand" or "Collapse" and the album's name, and reporting whether it is
+/// expanded.
+///
 /// Key prefixes: `album_tile_<id>` on the row, `album_expand_<id>` on the
 /// disclosure chevron, which is only rendered when the album has children,
 /// and `album_menu_<id>` on the menu button, which is only rendered with
@@ -125,15 +129,23 @@ class AlbumTreeTile extends StatelessWidget {
               child: Row(
                 children: [
                   if (hasChildren)
-                    GestureDetector(
-                      key: ValueKey('album_expand_${album.id}'),
-                      onTap: () => onToggleExpanded(album.id),
-                      child: Icon(
-                        isExpanded
-                            ? QuarkIcons.expand_more_rounded
-                            : QuarkIcons.chevron_right_rounded,
-                        size: 16,
-                        color: colorScheme.onSurfaceVariant,
+                    Semantics(
+                      container: true,
+                      button: true,
+                      expanded: isExpanded,
+                      label: isExpanded
+                          ? 'Collapse ${album.name}'
+                          : 'Expand ${album.name}',
+                      child: GestureDetector(
+                        key: ValueKey('album_expand_${album.id}'),
+                        onTap: () => onToggleExpanded(album.id),
+                        child: Icon(
+                          isExpanded
+                              ? QuarkIcons.expand_more_rounded
+                              : QuarkIcons.chevron_right_rounded,
+                          size: 16,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     )
                   else

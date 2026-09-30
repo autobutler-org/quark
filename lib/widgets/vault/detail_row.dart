@@ -38,6 +38,7 @@ class DetailRow extends StatelessWidget {
               Expanded(child: SelectableText(value)),
               if (copiable)
                 IconButton(
+                  tooltip: 'Copy ${label.toLowerCase()}',
                   icon: const Icon(QuarkIcons.copy, size: 18),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: copyValue ?? value));

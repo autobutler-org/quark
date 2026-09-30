@@ -176,4 +176,31 @@ void main() {
 
     expect(find.byIcon(QuarkIcons.check), findsOneWidget);
   });
+
+  testBothViewports('names the tile after the photo for a screen reader', (
+    tester,
+    size,
+  ) async {
+    await pumpTile(tester, size: size, withMenu: true);
+
+    await expectLabeledTapTargets(tester);
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('photo_tile_p1'))),
+      isSemantics(label: 'beach.jpg', isButton: true, isImage: true),
+    );
+  });
+
+  testWidgets('announces a favorite and the selection', (tester) async {
+    await pumpTile(
+      tester,
+      item: const PhotoItem(id: 'p1', name: 'beach.jpg', isFavorite: true),
+      selectionMode: true,
+      isSelected: true,
+    );
+
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('photo_tile_p1'))),
+      isSemantics(label: 'beach.jpg, favorite', isSelected: true),
+    );
+  });
 }

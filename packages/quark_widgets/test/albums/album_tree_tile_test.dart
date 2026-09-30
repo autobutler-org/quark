@@ -259,4 +259,37 @@ void main() {
     expect(find.byIcon(QuarkIcons.star_rounded), findsOneWidget);
     expect(find.byIcon(QuarkIcons.photo_album_outlined), findsNothing);
   });
+
+  testBothViewports('names the chevron and reports whether it is expanded', (
+    tester,
+    size,
+  ) async {
+    await pumpTile(tester, size: size, expandedIds: {1}, withMenu: true);
+
+    await expectLabeledTapTargets(tester);
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('album_expand_1'))),
+      matchesSemantics(
+        label: 'Collapse Trips',
+        isButton: true,
+        hasExpandedState: true,
+        isExpanded: true,
+        hasTapAction: true,
+      ),
+    );
+  });
+
+  testWidgets('a collapsed chevron offers to expand', (tester) async {
+    await pumpTile(tester);
+
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('album_expand_1'))),
+      matchesSemantics(
+        label: 'Expand Trips',
+        isButton: true,
+        hasExpandedState: true,
+        hasTapAction: true,
+      ),
+    );
+  });
 }

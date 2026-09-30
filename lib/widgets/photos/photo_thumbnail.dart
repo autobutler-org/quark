@@ -13,6 +13,9 @@ import 'package:quark/widgets/thumbnails/backfilling_thumbnail.dart';
 /// App-side because both sources need something the widget package does not
 /// depend on. Pass exactly one of [url] and [asset]; either way a grey box
 /// stands in until the picture arrives, or when it never does.
+///
+/// The picture is hidden from screen readers: the tile it sits in carries the
+/// photo's name.
 class PhotoThumbnail extends StatelessWidget {
   /// Creates the thumbnail for a Quark photo at [url] or a device [asset].
   const PhotoThumbnail({
@@ -39,7 +42,11 @@ class PhotoThumbnail extends StatelessWidget {
     final placeholder = ColoredBox(color: Colors.grey.shade300);
     final url = this.url;
     if (url != null && url.scheme == DemoPhotosService.assetScheme) {
-      return Image.asset(url.path, fit: BoxFit.cover);
+      return Image.asset(
+        url.path,
+        fit: BoxFit.cover,
+        excludeFromSemantics: true,
+      );
     }
     final path = this.path;
     if (url != null && path != null) {
@@ -51,6 +58,7 @@ class PhotoThumbnail extends StatelessWidget {
           url.toString(),
           key: ValueKey(generation),
           fit: BoxFit.cover,
+          excludeFromSemantics: true,
           loadingBuilder: (context, child, progress) =>
               progress == null ? child : placeholder,
           errorBuilder: (context, error, stack) {
@@ -64,6 +72,7 @@ class PhotoThumbnail extends StatelessWidget {
       return Image.network(
         url.toString(),
         fit: BoxFit.cover,
+        excludeFromSemantics: true,
         loadingBuilder: (context, child, progress) =>
             progress == null ? child : placeholder,
         errorBuilder: (context, error, stack) => placeholder,
@@ -74,7 +83,11 @@ class PhotoThumbnail extends StatelessWidget {
       builder: (context, snapshot) {
         final thumb = snapshot.data;
         if (thumb == null) return placeholder;
-        return Image.memory(thumb, fit: BoxFit.cover);
+        return Image.memory(
+          thumb,
+          fit: BoxFit.cover,
+          excludeFromSemantics: true,
+        );
       },
     );
   }

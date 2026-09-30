@@ -6,9 +6,10 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:video_player/video_player.dart';
 
 /// The photo on screen: the Live Photo video while it plays, otherwise the
-/// rotatable, zoomable still.
+/// rotatable, zoomable still, labeled with [name] for screen readers.
 class CurrentPhoto extends StatelessWidget {
   final Uint8List bytes;
+  final String name;
   final Animation<double> rotation;
   final TransformationController zoomController;
   final bool zoomedIn;
@@ -18,6 +19,7 @@ class CurrentPhoto extends StatelessWidget {
   const CurrentPhoto({
     super.key,
     required this.bytes,
+    required this.name,
     required this.rotation,
     required this.zoomController,
     required this.zoomedIn,
@@ -61,6 +63,7 @@ class CurrentPhoto extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) => Image.memory(
             bytes,
+            semanticLabel: name,
             fit: BoxFit.contain,
             cacheWidth: _decodeWidth(context, constraints),
             // Keep the downscaled frame on screen while the full-resolution

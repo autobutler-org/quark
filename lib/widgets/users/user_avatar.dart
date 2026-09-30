@@ -47,6 +47,8 @@ class UserAvatar extends StatelessWidget {
               width: size,
               height: size,
               fit: BoxFit.cover,
+              // QuarkAvatar already names the circle after the account.
+              excludeFromSemantics: true,
               errorBuilder: (context, error, stackTrace) =>
                   QuarkAvatar(id: id, name: name, size: size),
             ),

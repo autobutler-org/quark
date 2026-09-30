@@ -758,6 +758,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       currentPhoto: bytes != null
           ? CurrentPhoto(
               bytes: bytes,
+              name: _currentName,
               rotation: _rotationValue,
               zoomController: _zoomController,
               zoomedIn: _zoomedIn,

@@ -95,6 +95,9 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
+                      tooltip: _showPassword
+                          ? 'Hide password'
+                          : 'Show password',
                       icon: Icon(
                         _showPassword
                             ? QuarkIcons.visibility_off

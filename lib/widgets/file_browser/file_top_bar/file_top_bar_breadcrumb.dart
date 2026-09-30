@@ -72,22 +72,27 @@ class FileTopBarBreadcrumb extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Home icon — always visible, never truncated.
-              MouseRegion(
-                cursor: canGoHome
-                    ? SystemMouseCursors.click
-                    : SystemMouseCursors.basic,
-                child: InkWell(
-                  key: const ValueKey('file_top_bar_home'),
-                  onTap: canGoHome ? onGoHome : null,
-                  borderRadius: BorderRadius.circular(4),
-                  child: Padding(
-                    padding: const EdgeInsets.all(2),
-                    child: Icon(
-                      QuarkIcons.home_rounded,
-                      size: 16,
-                      color: canGoHome
-                          ? colorScheme.onSurfaceVariant
-                          : colorScheme.onSurface.withValues(alpha: 0.4),
+              Semantics(
+                button: true,
+                enabled: canGoHome,
+                label: 'Go to the top folder',
+                child: MouseRegion(
+                  cursor: canGoHome
+                      ? SystemMouseCursors.click
+                      : SystemMouseCursors.basic,
+                  child: InkWell(
+                    key: const ValueKey('file_top_bar_home'),
+                    onTap: canGoHome ? onGoHome : null,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Icon(
+                        QuarkIcons.home_rounded,
+                        size: 16,
+                        color: canGoHome
+                            ? colorScheme.onSurfaceVariant
+                            : colorScheme.onSurface.withValues(alpha: 0.4),
+                      ),
                     ),
                   ),
                 ),
@@ -210,6 +215,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
                 ? SystemMouseCursors.click
                 : SystemMouseCursors.basic,
             child: InkWell(
+              key: const ValueKey('file_top_bar_hidden_crumbs'),
               onTap: !navEnabled
                   ? null
                   : () {
@@ -224,6 +230,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 child: Icon(
                   QuarkIcons.more_horiz_rounded,
+                  semanticLabel: 'Show hidden folders',
                   size: 14,
                   color: colorScheme.onSurface.withValues(alpha: 0.55),
                 ),

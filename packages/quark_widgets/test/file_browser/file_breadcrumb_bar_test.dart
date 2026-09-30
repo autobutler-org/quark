@@ -136,4 +136,17 @@ void main() {
     expect(events, ['home']);
     expect(find.byTooltip('Go to the top folder'), findsOneWidget);
   });
+
+  testBothViewports('names every tap target for a screen reader', (
+    tester,
+    size,
+  ) async {
+    await pumpBar(tester, path: '/photos/2024/june', size: size);
+
+    await expectLabeledTapTargets(tester);
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('breadcrumb_segment_0'))),
+      matchesSemantics(label: 'photos', isButton: true, hasTapAction: true),
+    );
+  });
 }

@@ -24,6 +24,7 @@ class SheetsSearchBar extends StatelessWidget {
           prefixIcon: const Icon(QuarkIcons.search_rounded, size: 20),
           suffixIcon: controller.text.isNotEmpty
               ? IconButton(
+                  tooltip: 'Clear search',
                   icon: const Icon(QuarkIcons.clear_rounded, size: 18),
                   onPressed: () => controller.clear(),
                 )

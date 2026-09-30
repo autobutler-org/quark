@@ -28,6 +28,7 @@ class EntryDetailView extends StatelessWidget {
           copiable: true,
           copyValue: entry.password,
           trailing: IconButton(
+            tooltip: showPassword ? 'Hide password' : 'Show password',
             icon: Icon(
               showPassword ? QuarkIcons.visibility_off : QuarkIcons.visibility,
             ),

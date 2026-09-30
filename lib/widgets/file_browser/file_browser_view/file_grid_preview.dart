@@ -9,7 +9,8 @@ import 'package:shimmer/shimmer.dart';
 
 /// Preview slot for a grid tile. The caller gives it a square slot, and the
 /// thumbnail fills that square with [BoxFit.cover], replacing the icon only
-/// once it decodes.
+/// once it decodes. The thumbnail is hidden from screen readers: the file
+/// name printed under it already says what it is.
 ///
 /// The thumbnail, and the icon when the file has none, are keyed by
 /// [FileNode.apiPath]. The grid reuses a tile's element when the file in
@@ -42,8 +43,11 @@ class FileGridPreview extends StatelessWidget {
                 key: thumbKey,
                 imageUrl: url,
                 cacheKey: '$url#$generation',
-                imageBuilder: (context, imageProvider) =>
-                    Image(image: imageProvider, fit: BoxFit.cover),
+                imageBuilder: (context, imageProvider) => Image(
+                  image: imageProvider,
+                  fit: BoxFit.cover,
+                  excludeFromSemantics: true,
+                ),
                 placeholder: (context, url) => Shimmer.fromColors(
                   baseColor: Colors.grey[800]!,
                   highlightColor: Colors.grey[700]!,
