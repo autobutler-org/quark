@@ -191,3 +191,31 @@ func TestMigrateVault_FolderParentIDs(t *testing.T) {
 		t.Errorf("child parent_id = %v, want 1", parentID)
 	}
 }
+
+// A move cut short after its copy committed leaves a vault in the target. The
+// retry replaces it rather than failing on its ids (#2517).
+func TestMigrateVault_ReplacesAnEarlierCopy(t *testing.T) {
+	ctx := context.Background()
+	src := openTestVaultDB(t)
+	defer src.Db.Close()
+	dst := openTestVaultDB(t)
+	defer dst.Db.Close()
+
+	seedVault(t, src)
+	if err := MigrateVault(ctx, src, dst); err != nil {
+		t.Fatalf("first MigrateVault: %v", err)
+	}
+	if _, err := src.Db.ExecContext(ctx, `DELETE FROM vault_entries WHERE id = 2`); err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateVault(ctx, src, dst); err != nil {
+		t.Fatalf("retried MigrateVault: %v", err)
+	}
+
+	if n := countRows(t, dst.Db, "vault_config"); n != 1 {
+		t.Errorf("vault_config rows = %d, want 1", n)
+	}
+	if n := countRows(t, dst.Db, "vault_entries"); n != 1 {
+		t.Errorf("vault_entries rows = %d, want the source's 1", n)
+	}
+}

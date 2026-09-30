@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -143,8 +144,14 @@ func GetLocation(ctx context.Context, params GetLocationParams) (GetLocationResu
 }
 
 // SetLocation migrates the vault to another device and points the recorded
-// location at it. The source is only truncated once the copy has landed, so a
-// failure mid-move leaves the vault where it was.
+// location at it. The steps run in the one order a crash between any two of
+// them survives: the copy commits, then the recorded location moves to it, and
+// only then is the source emptied. Emptying first left a window where the
+// location still named a vault with nothing in it, and a restart there offered
+// to set up a new vault over the user's secrets (#2517). A crash before the
+// location moves leaves the vault where it was, and a retry replaces the
+// partial copy; one after leaves a stale copy on the source, which the next
+// move onto that device replaces.
 //
 // It returns [ErrVaultAlreadyOnDevice] when the target is where the vault
 // already lives, and [ErrDeviceNotFound] when the target device is not
@@ -183,14 +190,17 @@ func SetLocation(ctx context.Context, params SetLocationParams) (SetLocationResu
 		return SetLocationResult{}, fmt.Errorf("migrate vault: %w", err)
 	}
 
-	if err := backup.TruncateVaultTables(ctx, sourceDB); err != nil {
-		closeTarget()
-		return SetLocationResult{}, fmt.Errorf("truncate source: %w", err)
-	}
-
 	if err := params.MainDB.Queries.SetVaultLocation(ctx, params.TargetSerial); err != nil {
 		closeTarget()
 		return SetLocationResult{}, fmt.Errorf("update vault location: %w", err)
+	}
+
+	// The vault has moved. A source that cannot be emptied now holds a stale
+	// copy, still encrypted under the master password, and failing the move
+	// here would leave the caller serving a vault the recorded location no
+	// longer names.
+	if err := backup.TruncateVaultTables(ctx, sourceDB); err != nil {
+		slog.Warn("vault: empty the previous location", "err", err)
 	}
 
 	return SetLocationResult{TargetDB: targetDB}, nil

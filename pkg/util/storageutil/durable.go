@@ -1,0 +1,93 @@
+package storageutil
+
+import (
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"syscall"
+)
+
+// WriteFileAtomic streams r into a temp file beside absPath, flushes it to
+// disk, and renames it over absPath, so the real name never holds a
+// half-written file: not after a failed write, and not after a power cut.
+// Without the flush, a rename can reach the disk before the bytes it names, and
+// the file comes back empty under its real name (#2517). The temp carries
+// [WriteTempPrefix] so listings skip it (#1828).
+func WriteFileAtomic(absPath string, r io.Reader) error {
+	dir := filepath.Dir(absPath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, WriteTempPrefix+"*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	// A no-op once the rename has happened; cleans up after any failure before it.
+	defer func() { _ = os.Remove(tmpName) }()
+
+	if _, err := io.Copy(tmp, r); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	// os.CreateTemp makes 0600; a renamed-in file gets what os.Create would
+	// have given it under the usual 022 umask.
+	if err := tmp.Chmod(0o644); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, absPath); err != nil {
+		return err
+	}
+	return SyncDir(dir)
+}
+
+// SyncFile flushes the file at path to disk. A file that is about to be renamed
+// or linked into place is flushed first, so the name never outlives its bytes
+// across a power cut.
+func SyncFile(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// SyncDir flushes dir's entries to disk, so a file just renamed, linked or
+// created in it is still there after a power cut. A filesystem that cannot sync
+// a directory reports EINVAL; there is nothing more to flush on one of those,
+// so that is not an error.
+func SyncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	if err := d.Sync(); err != nil && !errors.Is(err, syscall.EINVAL) {
+		_ = d.Close()
+		return err
+	}
+	return d.Close()
+}
+
+// copyIntoPlace copies the file at src to dst through [WriteFileAtomic], for a
+// move that cannot rename or link across the two.
+func copyIntoPlace(src, dst string) error {
+	f, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	return WriteFileAtomic(dst, f)
+}

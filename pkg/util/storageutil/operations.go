@@ -503,12 +503,24 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 				part.Close()
 				return result, fmt.Errorf("failed to write temp file: %w", err)
 			}
+			// Flushed before it is named: a rename or link can reach the disk
+			// ahead of the bytes, and a power cut then leaves an empty file under
+			// the real name (#2517).
+			if err := tmpFile.Sync(); err != nil {
+				tmpFile.Close()
+				os.Remove(tmpPath)
+				part.Close()
+				return result, fmt.Errorf("failed to flush temp file: %w", err)
+			}
 			tmpFile.Close()
 
-			// Place the temp file at destPath.
-			// Overwrite: replace atomically (os.Rename) or truncate on copy.
-			// KeepBoth: retry with numbered names on conflict.
-			// Neither: a conflict is the caller's to resolve.
+			// Place the temp file at destPath: a rename to overwrite, a hard link
+			// to refuse a taken name atomically. Where neither works — another
+			// filesystem (EXDEV), or one without hard links (exFAT) — the bytes
+			// are copied through WriteFileAtomic, never straight into the real
+			// name, so a copy cut short cannot pass for a finished upload.
+			// KeepBoth retries with numbered names on conflict; otherwise a
+			// conflict is the caller's to resolve.
 			candidate := fileName
 			i := 0
 			for {
@@ -520,46 +532,25 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 					return result, fmt.Errorf("invalid candidate path: %w", joinErr)
 				}
 
+				var placeErr error
 				if params.Overwrite {
-					// Atomic replace: rename temp over existing file (works same-FS).
-					if err := os.Rename(tmpPath, destPath); err == nil {
-						break
+					placeErr = os.Rename(tmpPath, destPath)
+				} else {
+					placeErr = os.Link(tmpPath, destPath)
+					if placeErr != nil && !os.IsExist(placeErr) {
+						if _, statErr := os.Lstat(destPath); statErr == nil {
+							placeErr = fs.ErrExist
+						}
 					}
-					// Cross-device: fall back to truncating copy.
-					tmpR, rerr := os.Open(tmpPath)
-					if rerr != nil {
-						os.Remove(tmpPath)
-						part.Close()
-						return result, fmt.Errorf("failed to open temp file for fallback copy: %w", rerr)
-					}
-					dst, derr := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-					if derr != nil {
-						tmpR.Close()
-						os.Remove(tmpPath)
-						part.Close()
-						return result, fmt.Errorf("failed to open destination for overwrite: %w", derr)
-					}
-					if _, cerr := io.Copy(dst, tmpR); cerr != nil {
-						dst.Close()
-						tmpR.Close()
-						os.Remove(tmpPath)
-						part.Close()
-						return result, fmt.Errorf("failed to copy temp to destination: %w", cerr)
-					}
-					dst.Close()
-					tmpR.Close()
+				}
+				if placeErr != nil && !os.IsExist(placeErr) {
+					placeErr = copyIntoPlace(tmpPath, destPath)
+				}
+				if placeErr == nil {
 					os.Remove(tmpPath)
 					break
 				}
-
-				// Attempt hard link first (atomic and avoids extra copy)
-				linkErr := os.Link(tmpPath, destPath)
-				if linkErr == nil {
-					// Success: remove temp and we're done
-					os.Remove(tmpPath)
-					break
-				}
-				if os.IsExist(linkErr) {
+				if os.IsExist(placeErr) {
 					if !params.KeepBoth {
 						os.Remove(tmpPath)
 						part.Close()
@@ -569,44 +560,13 @@ func UploadFilesStreamedImpl(params UploadFilesStreamedParams, device *ManagedDe
 					candidate = NumberedName(fileName, i)
 					continue
 				}
-				// Hard link failed for another reason (e.g., EXDEV). Try exclusive create + copy.
-				// Open temp for reading
-				tmpR, rerr := os.Open(tmpPath)
-				if rerr != nil {
-					os.Remove(tmpPath)
-					part.Close()
-					return result, fmt.Errorf("failed to open temp file for fallback copy: %w", rerr)
-				}
-				dst, derr := os.OpenFile(destPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
-				if derr == nil {
-					// Copy content from temp to destination
-					if _, cerr := io.Copy(dst, tmpR); cerr != nil {
-						dst.Close()
-						tmpR.Close()
-						os.Remove(tmpPath)
-						part.Close()
-						return result, fmt.Errorf("failed to copy temp to destination: %w", cerr)
-					}
-					dst.Close()
-					tmpR.Close()
-					os.Remove(tmpPath)
-					break
-				}
-				tmpR.Close()
-				if os.IsExist(derr) {
-					if !params.KeepBoth {
-						os.Remove(tmpPath)
-						part.Close()
-						return result, nameTaken(params.RootDir, fileName)
-					}
-					i++
-					candidate = NumberedName(fileName, i)
-					continue
-				}
-				// Unknown error creating destination
 				os.Remove(tmpPath)
 				part.Close()
-				return result, fmt.Errorf("failed to move uploaded file into place: linkErr=%v createErr=%v", linkErr, derr)
+				return result, fmt.Errorf("failed to move uploaded file into place: %w", placeErr)
+			}
+			if err := SyncDir(destDir); err != nil {
+				part.Close()
+				return result, fmt.Errorf("failed to flush the upload directory: %w", err)
 			}
 			part.Close()
 			rel, relErr := filepath.Rel(filepath.Clean(filesDir), destPath)

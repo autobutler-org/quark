@@ -8,6 +8,10 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 )
 
+// MigrateVault copies the vault from source into target in one transaction on
+// target. Whatever target already holds is replaced, not merged: a move cut
+// short after its copy committed leaves one behind, and the retry has to
+// succeed over it rather than fail on its ids (#2517).
 func MigrateVault(ctx context.Context, source, target *db.DatabaseSqlc) error {
 	srcDB := source.Db
 	dstDB := target.Db
@@ -18,6 +22,9 @@ func MigrateVault(ctx context.Context, source, target *db.DatabaseSqlc) error {
 	}
 	defer tx.Rollback()
 
+	if err := clearVaultTables(ctx, tx); err != nil {
+		return err
+	}
 	if err := copyVaultConfig(ctx, srcDB, tx); err != nil {
 		return err
 	}
@@ -31,9 +38,26 @@ func MigrateVault(ctx context.Context, source, target *db.DatabaseSqlc) error {
 	return tx.Commit()
 }
 
+// TruncateVaultTables empties the vault in d in one transaction, so it is
+// either all there or all gone.
 func TruncateVaultTables(ctx context.Context, d *db.DatabaseSqlc) error {
+	tx, err := d.Db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin truncate tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if err := clearVaultTables(ctx, tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// clearVaultTables deletes every vault row inside tx, children before the
+// config they hang off.
+func clearVaultTables(ctx context.Context, tx *sql.Tx) error {
 	for _, table := range []string{"vault_entries", "vault_folders", "vault_config"} {
-		if _, err := d.Db.ExecContext(ctx, "DELETE FROM "+table); err != nil {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM "+table); err != nil {
 			return fmt.Errorf("truncate %s: %w", table, err)
 		}
 	}

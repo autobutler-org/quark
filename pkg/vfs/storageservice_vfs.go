@@ -263,7 +263,7 @@ func (v *StorageServiceVFS) Write(_ context.Context, path string, r io.Reader, o
 			return ErrConflict
 		}
 	}
-	return writeAtomic(safePath, r)
+	return storageutil.WriteFileAtomic(safePath, r)
 }
 
 // MoveFileIn places the host file at srcAbs at path, renaming it rather than
