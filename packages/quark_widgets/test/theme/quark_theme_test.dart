@@ -24,7 +24,7 @@ void main() {
         expect(scheme.onSecondary, tokens.secondaryForeground);
         expect(scheme.error, tokens.error);
         expect(scheme.onError, tokens.errorForeground);
-        expect(scheme.outline, tokens.border);
+        expect(scheme.outline, tokens.outline);
         expect(scheme.outlineVariant, tokens.border);
         expect(theme.scaffoldBackgroundColor, tokens.background);
       });
@@ -41,7 +41,7 @@ void main() {
         final scheme = QuarkTheme.from(tokens, brightness).colorScheme;
         expect(
           contrastRatio(scheme.onError, scheme.error),
-          greaterThanOrEqualTo(3.0),
+          greaterThanOrEqualTo(4.5),
         );
       });
     }
@@ -77,6 +77,57 @@ void main() {
       expect(QuarkTheme.dark().extension<QuarkTokens>(), QuarkTokens.dark);
       expect(QuarkTheme.light().extension<QuarkTokens>(), QuarkTokens.light);
     });
+  });
+
+  /// #2600: WCAG 2.1 AA asks 4.5:1 of text (1.4.3) and 3:1 of the edges and
+  /// indicators a user needs to find a control (1.4.11). White on the sky-500
+  /// primary was 2.77:1, and dark's muted text 2.4:1.
+  group('the tokens meet WCAG AA', () {
+    for (final (name, tokens) in [
+      ('dark', QuarkTokens.dark),
+      ('light', QuarkTokens.light),
+    ]) {
+      final surfaces = {
+        'background': tokens.background,
+        'card': tokens.card,
+        'sidebar': tokens.sidebar,
+        'input': tokens.input,
+      };
+      final text = {
+        'foreground': tokens.foreground,
+        'cardForeground': tokens.cardForeground,
+        'secondaryForeground': tokens.secondaryForeground,
+        'mutedForeground': tokens.mutedForeground,
+        'primary': tokens.primary,
+        'error': tokens.error,
+        'warning': tokens.warning,
+        'success': tokens.success,
+      };
+
+      for (final MapEntry(key: fg, value: fgColor) in text.entries) {
+        for (final MapEntry(key: bg, value: bgColor) in surfaces.entries) {
+          test('$name: $fg on $bg is at least 4.5:1', () {
+            expect(contrastRatio(fgColor, bgColor), greaterThanOrEqualTo(4.5));
+          });
+        }
+      }
+
+      for (final MapEntry(key: bg, value: bgColor) in surfaces.entries) {
+        test('$name: outline on $bg is at least 3:1', () {
+          expect(
+            contrastRatio(tokens.outline, bgColor),
+            greaterThanOrEqualTo(3.0),
+          );
+        });
+      }
+
+      test('$name: primaryForeground on primary is at least 4.5:1', () {
+        expect(
+          contrastRatio(tokens.primaryForeground, tokens.primary),
+          greaterThanOrEqualTo(4.5),
+        );
+      });
+    }
   });
 
   /// #2028: a keyboard user had nothing to tell them where they were. The

@@ -38,15 +38,9 @@ abstract final class QuarkTheme {
       onSecondary: tokens.secondaryForeground,
       error: tokens.error,
       onError: tokens.errorForeground,
-      outline: tokens.border,
+      outline: tokens.outline,
       outlineVariant: tokens.border,
     );
-
-    // The recessive track behind an off switch: the input fill reads as a well
-    // on dark, but disappears on light, where the hairline is the right weight.
-    final switchTrackOff = brightness == Brightness.dark
-        ? tokens.input
-        : tokens.border;
 
     return ThemeData(
       brightness: brightness,
@@ -74,13 +68,15 @@ abstract final class QuarkTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: tokens.input,
+        // A field's edge is how a user finds it, so it is the 3:1 outline,
+        // not the decorative hairline (#2600).
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(tokens.radiusMd),
-          borderSide: BorderSide(color: tokens.border),
+          borderSide: BorderSide(color: tokens.outline),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(tokens.radiusMd),
-          borderSide: BorderSide(color: tokens.border),
+          borderSide: BorderSide(color: tokens.outline),
         ),
         // Two pixels, not one. A keyboard user has no pointer to tell them
         // where they are, and a focused field that differs from a resting one
@@ -126,16 +122,23 @@ abstract final class QuarkTheme {
         textColor: tokens.foreground,
         iconColor: tokens.secondaryForeground,
       ),
+      // An on switch is a solid primary track, not a 30% tint of one: the
+      // tint fell to 1.4–1.7:1 against the card, below WCAG 1.4.11 (#2600).
+      // An off switch shows its track edge in the outline for the same reason.
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return tokens.primary;
+          if (states.contains(WidgetState.selected)) {
+            return tokens.primaryForeground;
+          }
           return tokens.mutedForeground;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return tokens.primary.withValues(alpha: 0.3);
-          }
-          return switchTrackOff;
+          if (states.contains(WidgetState.selected)) return tokens.primary;
+          return tokens.input;
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return tokens.primary;
+          return tokens.outline;
         }),
       ),
       checkboxTheme: CheckboxThemeData(
@@ -143,7 +146,7 @@ abstract final class QuarkTheme {
           if (states.contains(WidgetState.selected)) return tokens.primary;
           return Colors.transparent;
         }),
-        side: BorderSide(color: tokens.border, width: 1.5),
+        side: BorderSide(color: tokens.outline, width: 1.5),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(tokens.radiusSm),
         ),

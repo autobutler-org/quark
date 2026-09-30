@@ -26,8 +26,9 @@ void main() {
     test('dark and light are different token sets', () {
       expect(QuarkTokens.dark, isNot(QuarkTokens.light));
       expect(QuarkTokens.dark.background, isNot(QuarkTokens.light.background));
-      // The accent is deliberately shared between the two.
-      expect(QuarkTokens.dark.primary, QuarkTokens.light.primary);
+      // The accent is one hue, a shade deeper on light: sky-500 falls to
+      // 2.77:1 on white, below WCAG AA (#2600).
+      expect(QuarkTokens.dark.primary, isNot(QuarkTokens.light.primary));
     });
 
     test('lerp moves every value and ends on the target', () {

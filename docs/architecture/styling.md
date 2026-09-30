@@ -24,11 +24,16 @@ flowchart LR
 ## The token set
 
 [`QuarkTokens`](../../packages/quark_widgets/lib/src/theme/quark_tokens.dart) is the single source of truth for
-every color, corner radius, and spacing value in the app: `background`, `card`, `sidebar`, `border`, `input`,
+every color, corner radius, and spacing value in the app: `background`, `card`, `sidebar`, `border`, `outline`, `input`,
 three text colors, `primary`/`error`/`warning`/`success` accents, three radii (`radiusSm/Md/Lg`), and a
 five-step spacing scale (`spacingXs` through `spacingXl`). `QuarkTokens.dark` and `QuarkTokens.light` are the
 two sets Quark ships; dark is the default. Every field is `required`, so a new token cannot silently default
 into a theme nobody has designed for.
+
+Both sets meet WCAG 2.1 AA (#2600): every text color, `mutedForeground` and the accents included, holds 4.5:1
+against every surface, and `outline` (the edge of an input, a checkbox, an off switch) holds 3:1. `border` is
+for decorative hairlines only, which WCAG exempts. `packages/quark_widgets/test/theme/quark_theme_test.dart`
+checks every pair, so a token edit that drops below AA fails the build.
 
 A widget reaches the current set with `QuarkTokens.of(context)` rather than a hardcoded `Color` or literal
 size. This is what lets the widget gallery's theme panel restyle the whole app live — a hardcoded value simply
