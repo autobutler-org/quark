@@ -145,17 +145,27 @@ class _HostManagerState extends State<HostManager> {
             children: hosts.asMap().entries.map((e) {
               final idx = e.key;
               final host = e.value;
-              return Card(
-                child: ListTile(
-                  leading: Radio<int>(value: idx),
-                  title: Text(host.name),
-                  subtitle: Text(host.hostAddress),
-                  trailing: QuarkMenuButton(
-                    key: ValueKey('host_menu_$idx'),
-                    tooltip: 'Actions for ${host.name}',
-                    entries: _hostMenu(idx),
+              // A right-click on the row opens the same menu as its button
+              // (#2276).
+              return GestureDetector(
+                key: ValueKey('host_row_$idx'),
+                onSecondaryTapUp: (details) => showQuarkMenu(
+                  context,
+                  position: details.globalPosition,
+                  entries: _hostMenu(idx),
+                ),
+                child: Card(
+                  child: ListTile(
+                    leading: Radio<int>(value: idx),
+                    title: Text(host.name),
+                    subtitle: Text(host.hostAddress),
+                    trailing: QuarkMenuButton(
+                      key: ValueKey('host_menu_$idx'),
+                      tooltip: 'Actions for ${host.name}',
+                      entries: _hostMenu(idx),
+                    ),
+                    onTap: () => _setActive(idx),
                   ),
-                  onTap: () => _setActive(idx),
                 ),
               );
             }).toList(),

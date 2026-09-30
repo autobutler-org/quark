@@ -124,7 +124,7 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 **Steps:**
 
 1. Navigate to `/files`.
-2. Long-press a file, or open its three-dot menu.
+2. Open the file's menu: its three-dot button, a long press, or a right-click, which opens it at the pointer.
 3. Select **Download**.
 
 **Expected result:**

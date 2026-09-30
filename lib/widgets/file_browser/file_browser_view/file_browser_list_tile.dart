@@ -65,13 +65,17 @@ class FileBrowserListTile extends StatelessWidget {
       onDispatchMenuAction: onDispatchMenuAction,
       onNavigateToFolder: onNavigateToFolder,
     );
-    // ListTile.onLongPress hands over no position, so the gesture is caught
+    // ListTile.onLongPress hands over no position, so the gestures are caught
     // outside it; the row's own context is what the entries dispatch against,
-    // since it outlives the menu.
+    // since it outlives the menu. A right-click opens the same menu (#2276).
+    final hasMenu = showFileSizeAndMenu && !selectionMode;
     return GestureDetector(
-      onLongPressStart: !showFileSizeAndMenu || selectionMode
-          ? null
-          : (details) => menu.showAt(context, details.globalPosition),
+      onLongPressStart: hasMenu
+          ? (details) => menu.showAt(context, details.globalPosition)
+          : null,
+      onSecondaryTapUp: hasMenu
+          ? (details) => menu.showAt(context, details.globalPosition)
+          : null,
       child: Material(
         color: isSelected
             ? colors.primaryContainer.withValues(alpha: 0.35)

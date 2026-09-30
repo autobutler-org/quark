@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -98,9 +97,6 @@ class PhotosPageState extends State<PhotosPage>
     _scheduleNavMeasure();
     _controller.addListener(_scheduleAlbumUrlSync);
     _controller.showAlbumLink(widget.album);
-    // A right-click on an album photo opens its menu (#2260); the browser's
-    // own menu would open on top of it.
-    if (kIsWeb) unawaited(BrowserContextMenu.disableContextMenu());
   }
 
   /// go_router keeps this State when only the query changes, so a new
@@ -212,7 +208,6 @@ class PhotosPageState extends State<PhotosPage>
 
   @override
   void dispose() {
-    if (kIsWeb) unawaited(BrowserContextMenu.enableContextMenu());
     _eventSub?.cancel();
     _reconnectSub?.cancel();
     _scrollController.removeListener(_onScroll);

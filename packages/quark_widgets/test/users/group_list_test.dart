@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -283,4 +284,54 @@ void main() {
       );
     });
   }
+
+  group('right-click (#2276)', () {
+    List<String> labels(WidgetTester tester) => [
+      for (final item in tester.widgetList<PopupMenuItem<int>>(
+        find.byType(PopupMenuItem<int>),
+      ))
+        (item.key! as ValueKey<String>).value,
+    ];
+
+    testBothViewports('opens the same menu as the button, at the pointer', (
+      tester,
+      size,
+    ) async {
+      final deleted = <int>[];
+      await pumpAt(
+        tester,
+        GroupList(groups: groups, onRename: (_) {}, onDelete: deleted.add),
+        size: size,
+      );
+      await openMenu(tester, 2);
+      final fromButton = labels(tester);
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(
+        tester.getCenter(find.byKey(const ValueKey('group_row_2'))),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(labels(tester), fromButton);
+      expect(fromButton, isNotEmpty);
+      await tester.tap(find.byKey(const ValueKey('group_action_delete_2')));
+      await tester.pumpAndSettle();
+      expect(deleted, [2]);
+    });
+
+    testWidgets('the built-in group opens nothing', (tester) async {
+      await pumpAt(tester, GroupList(groups: groups, onDelete: (_) {}));
+
+      await tester.tapAt(
+        tester.getCenter(find.byKey(const ValueKey('group_row_1'))),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PopupMenuItem<int>), findsNothing);
+    });
+  });
 }

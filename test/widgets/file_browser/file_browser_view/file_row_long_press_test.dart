@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_node.dart';
@@ -136,5 +137,65 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_entries(tester), ['Download', 'Move/Rename', 'Share…', 'Delete']);
+  });
+
+  group('right-click (#2276)', () {
+    Future<List<String>> buttonEntries(WidgetTester tester) async {
+      await tester.tap(find.byIcon(QuarkIcons.more_vert));
+      await tester.pumpAndSettle();
+      final entries = _entries(tester);
+      await tester.tapAt(const Offset(5, 300));
+      await tester.pumpAndSettle();
+      return entries;
+    }
+
+    testWidgets('opens the button menu at the pointer on a row', (
+      tester,
+    ) async {
+      await _pumpTile(tester);
+      final fromButton = await buttonEntries(tester);
+
+      await tester.tapAt(_press, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+
+      expect(_entries(tester), fromButton);
+      expect(fromButton, isNotEmpty);
+      final menuX = tester.getTopLeft(find.byType(PopupMenuItem<int>).first).dx;
+      expect(menuX, closeTo(_press.dx, 40));
+    });
+
+    testWidgets('opens no menu in selection mode', (tester) async {
+      await _pumpTile(tester, selectionMode: true, onSelectionChanged: (_) {});
+
+      await tester.tapAt(_press, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PopupMenuItem<int>), findsNothing);
+    });
+
+    testWidgets('opens the menu on a grid tile too', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: FileBrowserView(
+              filesFuture: Future.value([_file]),
+              onFileMenuAction: (_, _) async {},
+              onOpenDirectory: (_) {},
+              isGridView: true,
+              currentPath: '',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(
+        tester.getCenter(find.text('notes.txt')),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+
+      expect(_entries(tester), ['Download', 'Move/Rename', 'Share…', 'Delete']);
+    });
   });
 }

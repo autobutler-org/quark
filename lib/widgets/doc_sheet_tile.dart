@@ -67,65 +67,78 @@ class DocSheetTile extends StatelessWidget {
       color: colorScheme.onSurface.withValues(alpha: 0.55),
     );
 
-    return ListTile(
-      leading: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: accent.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(6),
+    final onRename = this.onRename;
+    final entries = [
+      if (onRename != null)
+        QuarkMenuEntry(
+          key: ValueKey('doc_sheet_rename_$relPath'),
+          label: 'Rename',
+          onSelected: onRename,
         ),
-        child: Icon(
-          sheet
-              ? QuarkIcons.table_chart_outlined
-              : QuarkIcons.description_outlined,
-          size: 18,
-          color: accent,
-        ),
-      ),
-      title: Text(
-        filename.replaceAll(
-          RegExp(r'\.(qdoc|qsheet)$', caseSensitive: false),
-          '',
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: location.isEmpty && snippet == null
+    ];
+    // A right-click on the row opens the same menu as its button (#2276).
+    return GestureDetector(
+      onSecondaryTapUp: entries.isEmpty
           ? null
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (location.isNotEmpty)
-                  Text(
-                    location,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: subtitleStyle,
-                  ),
-                if (snippet != null)
-                  Text(
-                    snippet,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: subtitleStyle,
-                  ),
-              ],
+          : (details) => showQuarkMenu(
+              context,
+              position: details.globalPosition,
+              entries: entries,
             ),
-      trailing: onRename == null
-          ? null
-          : QuarkMenuButton(
-              key: ValueKey('doc_sheet_menu_$relPath'),
-              entries: [
-                QuarkMenuEntry(
-                  key: ValueKey('doc_sheet_rename_$relPath'),
-                  label: 'Rename',
-                  onSelected: onRename,
-                ),
-              ],
-            ),
-      onTap: onTap,
+      child: ListTile(
+        leading: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(
+            sheet
+                ? QuarkIcons.table_chart_outlined
+                : QuarkIcons.description_outlined,
+            size: 18,
+            color: accent,
+          ),
+        ),
+        title: Text(
+          filename.replaceAll(
+            RegExp(r'\.(qdoc|qsheet)$', caseSensitive: false),
+            '',
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: location.isEmpty && snippet == null
+            ? null
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (location.isNotEmpty)
+                    Text(
+                      location,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: subtitleStyle,
+                    ),
+                  if (snippet != null)
+                    Text(
+                      snippet,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: subtitleStyle,
+                    ),
+                ],
+              ),
+        trailing: entries.isEmpty
+            ? null
+            : QuarkMenuButton(
+                key: ValueKey('doc_sheet_menu_$relPath'),
+                entries: entries,
+              ),
+        onTap: onTap,
+      ),
     );
   }
 }

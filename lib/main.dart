@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -37,6 +39,10 @@ Future<void> main() async {
   ChatKeysController.instance.start();
   // Shares channel keys with members who are waiting for them (#2417).
   ChatChannelKeysController.instance.start();
+  // A right-click opens an item's own menu everywhere it has one (#2276), so
+  // the browser's menu is turned off once, for the whole app. Text fields
+  // fall back to Flutter's own copy/paste menu.
+  if (kIsWeb) await BrowserContextMenu.disableContextMenu();
   deferFirstFrameUntilRouted(binding, router.routerDelegate);
   runApp(const QuarkApp());
 }

@@ -19,6 +19,7 @@ import 'package:quark/utils/image_viewer_config.dart';
 import 'package:quark/widgets/image_viewer/current_photo.dart';
 import 'package:quark/widgets/image_viewer/desktop_body.dart';
 import 'package:quark/widgets/image_viewer/image_viewer_app_bar.dart';
+import 'package:quark/widgets/image_viewer/image_viewer_more_menu.dart';
 import 'package:quark/widgets/image_viewer/mobile_body.dart';
 import 'package:quark/widgets/image_viewer/photo_area.dart';
 import 'package:quark/widgets/image_viewer/shortcut_row.dart';
@@ -736,6 +737,23 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     final isLive = _metadata?.isLivePhoto ?? false;
     final bytes = _currentBytes;
     final loadError = _loadError;
+    // One menu for the bar's `more_vert` and a right-click on the photo.
+    final moreMenu = ImageViewerMoreMenu(
+      includeBarActions: !isDesktop,
+      isFavorite: _isFavorite,
+      sidebarOpen: _sidebarOpen,
+      relPath: _currentRelPath,
+      sourceAlbum: widget.sourceAlbum,
+      onToggleFavorite: _toggleFavorite,
+      onRotate: _rotate,
+      onDownload: _download,
+      onToggleSidebar: _toggleSidebar,
+      onAddToAlbum: _addToAlbum,
+      onRemoveFromAlbum: () => _removeFromAlbum(widget.sourceAlbum!),
+      onMakeACopy: _makeACopy,
+      onShare: _share,
+      onDelete: _confirmDelete,
+    );
     final photoArea = PhotoArea(
       currentPhoto: bytes != null
           ? CurrentPhoto(
@@ -776,6 +794,15 @@ class _ImageViewerPageState extends State<ImageViewerPage>
           ? () => setState(() => _sidebarOpen = false)
           : null,
     );
+    // The photo is the one item on screen, so a right-click anywhere on it
+    // opens its menu, at the pointer (#2276).
+    final clickablePhoto = GestureDetector(
+      key: const ValueKey('image_viewer_photo'),
+      onSecondaryTapUp: moreMenu.isEmpty
+          ? null
+          : (details) => moreMenu.showAt(context, details.globalPosition),
+      child: photoArea,
+    );
     // `canPop: false` reports `RoutePopDisposition.doNotPop`, which is what
     // turns off the iOS left-edge back-swipe on this route. Without it that
     // edge gesture beats the photo page view near the bezel and drops the
@@ -805,22 +832,17 @@ class _ImageViewerPageState extends State<ImageViewerPage>
             isFavorite: _isFavorite,
             sidebarOpen: _sidebarOpen,
             relPath: _currentRelPath,
-            sourceAlbum: widget.sourceAlbum,
             onClose: () => Navigator.of(context).pop(_listChanged),
             onToggleFavorite: _toggleFavorite,
             onRotate: _rotate,
             onDownload: _download,
             onToggleSidebar: _toggleSidebar,
-            onAddToAlbum: _addToAlbum,
-            onRemoveFromAlbum: () => _removeFromAlbum(widget.sourceAlbum!),
-            onMakeACopy: _makeACopy,
-            onShare: _share,
-            onDelete: _confirmDelete,
             onShowShortcuts: () => _showShortcutsDialog(context),
+            moreMenu: moreMenu,
           ),
           body: isDesktop
               ? DesktopBody(
-                  photoArea: photoArea,
+                  photoArea: clickablePhoto,
                   sidebarOpen: _sidebarOpen,
                   name: _currentName,
                   metadata: _metadata,
@@ -828,7 +850,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
                   onAlbumTap: _navigateToAlbum,
                 )
               : MobileBody(
-                  photoArea: photoArea,
+                  photoArea: clickablePhoto,
                   sidebarOpen: _sidebarOpen,
                   drawerController: _drawerController,
                   name: _currentName,

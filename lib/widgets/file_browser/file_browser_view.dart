@@ -434,6 +434,15 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                                   context,
                                   details.globalPosition,
                                 ),
+                          // A right-click opens the same menu (#2276).
+                          onSecondaryTapUp:
+                              !widget.showFileSizeAndMenu ||
+                                  widget.selectionMode
+                              ? null
+                              : (details) => menu.showAt(
+                                  context,
+                                  details.globalPosition,
+                                ),
                           child: InkWell(
                             onTap: widget.selectionMode
                                 ? () => widget.onSelectionChanged?.call(item)
