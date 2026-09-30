@@ -249,6 +249,7 @@ void main() {
     // into the next controller's initial state (#2509).
     AppSettings.instance.photoSortField.value = PhotoSortField.added;
     AppSettings.instance.photoSortOrder.value = PhotoSortOrder.desc;
+    AppSettings.instance.albumSort.value = AlbumSort.nameAsc;
   });
 
   group('refresh', () {
@@ -575,6 +576,121 @@ void main() {
       ]);
       expect(controller.albums.first.isFavorites, isTrue);
       expect(controller.albumById(1)?.name, 'Trips');
+    });
+
+    group('sort (#2510)', () {
+      PhotoAlbum dated(
+        int id,
+        String name,
+        int year, {
+        String? smartType,
+        List<PhotoAlbum> children = const [],
+      }) => PhotoAlbum(
+        id: id,
+        name: name,
+        smartType: smartType,
+        createdAt: DateTime(year),
+        updatedAt: DateTime(year),
+        itemCount: 0,
+        children: children,
+      );
+
+      _FakeQuark quark() => _FakeQuark()
+        ..albums = [
+          dated(1, 'trips', 2022),
+          dated(2, 'Inbox', 2020, smartType: 'inbox'),
+          dated(3, 'Favorites', 2021, smartType: 'favorites'),
+          dated(
+            4,
+            'Birthdays',
+            2024,
+            children: [dated(5, 'Zoe', 2019), dated(6, 'amy', 2025)],
+          ),
+          dated(7, 'Concerts', 2023),
+        ];
+
+      List<String> names(PhotosController c) => [
+        for (final a in c.albums) a.name,
+      ];
+
+      test('defaults to A-Z, ignoring case, children included', () async {
+        final controller = quark().controller();
+        await controller.loadAlbums();
+
+        expect(controller.albumSort, AlbumSort.nameAsc);
+        expect(names(controller), [
+          'Favorites',
+          'Inbox',
+          'Birthdays',
+          'Concerts',
+          'trips',
+        ]);
+        expect(controller.albums[2].children.map((a) => a.name), [
+          'amy',
+          'Zoe',
+        ]);
+      });
+
+      test('every order keeps the system albums on top', () async {
+        final controller = quark().controller();
+        await controller.loadAlbums();
+
+        final expected = {
+          AlbumSort.nameDesc: ['trips', 'Concerts', 'Birthdays'],
+          AlbumSort.newest: ['Birthdays', 'Concerts', 'trips'],
+          AlbumSort.oldest: ['trips', 'Concerts', 'Birthdays'],
+        };
+        for (final MapEntry(key: sort, value: users) in expected.entries) {
+          await controller.setAlbumSort(sort);
+          expect(names(controller), [
+            'Favorites',
+            'Inbox',
+            ...users,
+          ], reason: sort.id);
+        }
+      });
+
+      test('sorts sub-albums by the same order', () async {
+        final controller = quark().controller();
+        await controller.loadAlbums();
+
+        await controller.setAlbumSort(AlbumSort.newest);
+
+        final birthdays = controller.albums.firstWhere((a) => a.id == 4);
+        expect(birthdays.children.map((a) => a.name), ['amy', 'Zoe']);
+
+        await controller.setAlbumSort(AlbumSort.nameDesc);
+
+        final again = controller.albums.firstWhere((a) => a.id == 4);
+        expect(again.children.map((a) => a.name), ['Zoe', 'amy']);
+      });
+
+      test('persists the choice and reorders without refetching', () async {
+        final fake = quark();
+        final controller = fake.controller();
+        await controller.loadAlbums();
+        fake.calls.clear();
+        var notified = 0;
+        controller.addListener(() => notified++);
+
+        await controller.setAlbumSort(AlbumSort.oldest);
+
+        expect(AppSettings.instance.albumSort.value, AlbumSort.oldest);
+        expect(fake.calls, isEmpty);
+        expect(notified, 1);
+
+        await controller.setAlbumSort(AlbumSort.oldest);
+        expect(notified, 1);
+      });
+
+      test('starts from the persisted choice', () async {
+        AppSettings.instance.albumSort.value = AlbumSort.newest;
+        final controller = quark().controller();
+        await controller.loadAlbums();
+
+        expect(controller.albumSort, AlbumSort.newest);
+        expect(names(controller).skip(2), ['Birthdays', 'Concerts', 'trips']);
+      });
     });
 
     test('the add-to-album picker leaves out system albums', () async {

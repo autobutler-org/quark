@@ -61,6 +61,7 @@ export 'src/layout/refresh_icon_button.dart';
 export 'src/layout/theme_toggle_button.dart';
 export 'src/models/access_level.dart';
 export 'src/models/album_item.dart';
+export 'src/models/album_sort.dart';
 export 'src/models/chat_channel_item.dart';
 export 'src/models/chat_member_item.dart';
 export 'src/models/chat_message_item.dart';

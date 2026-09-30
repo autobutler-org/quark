@@ -25,6 +25,8 @@ void main() {
     bool shrinkWrap = false,
     int? selectedAlbumId,
     bool withAllPhotos = false,
+    bool withSort = false,
+    AlbumSort sort = AlbumSort.nameAsc,
     List<String>? events,
   }) {
     void record(String e) => events?.add(e);
@@ -40,6 +42,8 @@ void main() {
       onCreateAlbum: () => record('create'),
       onAlbumMenu: (a) => record('menu:${a.id}'),
       onAllPhotosSelected: withAllPhotos ? () => record('all') : null,
+      sort: sort,
+      onSortChanged: withSort ? (s) => record('sort:${s.id}') : null,
     );
   }
 
@@ -128,6 +132,51 @@ void main() {
     await tester.pump();
 
     expect(events, ['menu:2']);
+  });
+
+  testBothViewports('leaves out the sort button without its callback', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(tester, bounded(sidebar()), size: size);
+
+    expect(find.byKey(const ValueKey('album_sort')), findsNothing);
+  });
+
+  testBothViewports('offers every order, checks the current one, and reports', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpAt(
+      tester,
+      bounded(sidebar(withSort: true, sort: AlbumSort.newest, events: events)),
+      size: size,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('album_sort')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    for (final option in AlbumSort.values) {
+      expect(
+        find.byKey(ValueKey('album_sort_option_${option.id}')),
+        findsOneWidget,
+      );
+    }
+    final newest = tester.widget<MenuItemButton>(
+      find.byKey(const ValueKey('album_sort_option_newest')),
+    );
+    final oldest = tester.widget<MenuItemButton>(
+      find.byKey(const ValueKey('album_sort_option_oldest')),
+    );
+    expect(newest.trailingIcon, isNotNull);
+    expect(oldest.trailingIcon, isNull);
+
+    await tester.tap(find.byKey(const ValueKey('album_sort_option_name_desc')));
+    await tester.pumpAndSettle();
+
+    expect(events, ['sort:name_desc']);
   });
 
   testBothViewports('shows a progress bar while loading', (tester, size) async {

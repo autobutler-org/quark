@@ -19,6 +19,7 @@ import 'package:quark/services/files_service.dart';
 import 'package:quark/services/client_thumbnails.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/album_link.dart' as link;
+import 'package:quark/utils/album_order.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/photo_grid_config.dart';
@@ -292,6 +293,10 @@ class PhotosController extends ChangeNotifier {
   PhotoSortField _sortField = AppSettings.instance.photoSortField.value;
   PhotoSortOrder _sortOrder = AppSettings.instance.photoSortOrder.value;
 
+  /// How the sidebar orders the user's albums, persisted like the grid sort
+  /// (#2510).
+  AlbumSort _albumSort = AppSettings.instance.albumSort.value;
+
   // ── Selection ──────────────────────────────────────────────────────────────
 
   bool _selectionMode = false;
@@ -427,9 +432,13 @@ class PhotosController extends ChangeNotifier {
   /// The album the selection is being added to, or null in plain selection.
   AlbumItem? get addingToAlbum => _addingToAlbum;
 
+  /// How the user's albums are ordered in [albums].
+  AlbumSort get albumSort => _albumSort;
+
   /// The album tree in display order: system albums first, favorites leading
-  /// them, then the user's.
+  /// them, then the user's in [albumSort] order, sub-albums included.
   List<AlbumItem> get albums {
+    final order = albumOrder(_albumSort);
     final system = _albums.where((a) => a.isSystemAlbum).toList()
       ..sort((a, b) {
         if (a.isFavorites) return -1;
@@ -438,8 +447,9 @@ class PhotosController extends ChangeNotifier {
       });
     return [
       for (final album in system) album.toAlbumItem(),
-      for (final album in _albums.where((a) => !a.isSystemAlbum))
-        album.toAlbumItem(),
+      for (final album
+          in _albums.where((a) => !a.isSystemAlbum).toList()..sort(order))
+        album.toAlbumItem(childOrder: order),
     ];
   }
 
@@ -711,6 +721,15 @@ class PhotosController extends ChangeNotifier {
     await AppSettings.instance.setPhotoSort(field, order);
     notifyListeners();
     await refresh();
+  }
+
+  /// Reorders the sidebar's albums by [sort] and persists the choice. The
+  /// albums are already loaded, so nothing is fetched (#2510).
+  Future<void> setAlbumSort(AlbumSort sort) async {
+    if (sort == _albumSort) return;
+    _albumSort = sort;
+    notifyListeners();
+    await AppSettings.instance.setAlbumSort(sort);
   }
 
   // ── Favorites ──────────────────────────────────────────────────────────────

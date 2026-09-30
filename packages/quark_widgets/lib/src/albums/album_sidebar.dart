@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../models/album_item.dart';
+import '../models/album_sort.dart';
 import '../theme/quark_tokens.dart';
 import 'album_sidebar/album_sidebar_all_photos_tile.dart';
+import 'album_sidebar/album_sidebar_sort_button.dart';
 import 'album_tree_tile.dart';
 
 /// The album section of a sidebar: an "Albums" header with a create button,
@@ -24,7 +26,12 @@ import 'album_tree_tile.dart';
 /// visible while the albums load, fail, or turn out to be empty, since the
 /// library is still there to go back to.
 ///
-/// Key prefixes: `album_create` on the create button,
+/// Give it [onSortChanged] and a sort button sits beside the create button,
+/// offering every [AlbumSort] with [sort] checked. The widget never reorders
+/// [albums] itself: the caller applies the choice and passes the list back in.
+///
+/// Key prefixes: `album_create` on the create button, `album_sort` and
+/// `album_sort_option_<id>` on the sort button and its menu rows,
 /// `album_sidebar_all_photos` on the "All photos" row, and every album row's
 /// own `album_tile_<id>`, `album_expand_<id>`, and `album_menu_<id>` from
 /// [AlbumTreeTile].
@@ -40,6 +47,8 @@ import 'album_tree_tile.dart';
 ///   onToggleExpanded: controller.toggleAlbumExpanded,
 ///   onCreateAlbum: promptForNewAlbum,
 ///   onAlbumMenu: showAlbumMenu,
+///   sort: controller.albumSort,
+///   onSortChanged: controller.setAlbumSort,
 /// );
 /// ```
 class AlbumSidebar extends StatelessWidget {
@@ -53,6 +62,8 @@ class AlbumSidebar extends StatelessWidget {
     this.onAlbumMenu,
     this.onAllPhotosSelected,
     this.selectedAlbumId,
+    this.sort = AlbumSort.nameAsc,
+    this.onSortChanged,
     this.isLoading = false,
     this.error,
     this.shrinkWrap = false,
@@ -87,6 +98,13 @@ class AlbumSidebar extends StatelessWidget {
   /// [onAllPhotosSelected] set, null highlights the "All photos" row.
   final int? selectedAlbumId;
 
+  /// The order [albums] arrive in, checked in the sort menu.
+  final AlbumSort sort;
+
+  /// Called with the order the user picked from the sort menu. Null leaves
+  /// the sort button out.
+  final ValueChanged<AlbumSort>? onSortChanged;
+
   /// Whether the albums are loading. Shows a progress bar in place of the
   /// list.
   final bool isLoading;
@@ -103,6 +121,7 @@ class AlbumSidebar extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
     final error = this.error;
     final onAllPhotosSelected = this.onAllPhotosSelected;
+    final onSortChanged = this.onSortChanged;
     final hint = TextStyle(
       fontSize: 13,
       color: colorScheme.onSurface.withValues(alpha: 0.4),
@@ -158,6 +177,8 @@ class AlbumSidebar extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              if (onSortChanged != null)
+                AlbumSidebarSortButton(sort: sort, onChanged: onSortChanged),
               IconButton(
                 key: const ValueKey('album_create'),
                 icon: const Icon(QuarkIcons.add_rounded, size: 16),
