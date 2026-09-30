@@ -141,6 +141,90 @@ void main() {
     expect(events, ['members']);
   });
 
+  testWidgets('narrow: the member sheet closes from its close button', (
+    tester,
+  ) async {
+    final events = <String>[];
+    await pumpAt(
+      tester,
+      layout(membersOpen: true, events: events),
+      size: narrowViewport,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('quark_sheet_close')));
+    await tester.pump();
+    expect(events, ['members']);
+    expect(tester.takeException(), isNull);
+  });
+
+  // #2585: back used to pop the whole chat page with the sheet still open.
+  for (final (label, open, event) in [
+    (
+      'sheet',
+      (List<String> e) => layout(membersOpen: true, events: e),
+      'members',
+    ),
+    (
+      'drawer',
+      (List<String> e) => layout(channelsOpen: true, events: e),
+      'channels',
+    ),
+  ]) {
+    testWidgets('narrow: back closes an open $label, not the page', (
+      tester,
+    ) async {
+      final events = <String>[];
+      await pumpAt(
+        tester,
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => Scaffold(body: open(events)),
+              ),
+            ),
+            child: const Text('open chat'),
+          ),
+        ),
+        size: narrowViewport,
+      );
+      await tester.tap(find.text('open chat'));
+      await tester.pumpAndSettle();
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(events, [event]);
+      expect(find.byType(QuarkChatLayout), findsOneWidget);
+    });
+  }
+
+  testWidgets('narrow: back leaves the page when nothing is open', (
+    tester,
+  ) async {
+    final events = <String>[];
+    await pumpAt(
+      tester,
+      Builder(
+        builder: (context) => TextButton(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => Scaffold(body: layout(events: events)),
+            ),
+          ),
+          child: const Text('open chat'),
+        ),
+      ),
+      size: narrowViewport,
+    );
+    await tester.tap(find.text('open chat'));
+    await tester.pumpAndSettle();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(events, isEmpty);
+    expect(find.byType(QuarkChatLayout), findsNothing);
+  });
+
   testWidgets('narrow: no member button without a member list', (tester) async {
     await pumpAt(
       tester,

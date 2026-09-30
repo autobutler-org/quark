@@ -348,6 +348,51 @@ void main() {
       });
     }
 
+    // #2585: a channel with many members made the sheet taller than a phone,
+    // leaving no scrim to tap and no close button, so it could not be closed.
+    for (final (label, size) in [
+      ('narrow', const Size(360, 640)),
+      ('wide', const Size(1280, 800)),
+    ]) {
+      final many = [
+        for (var i = 10; i < 40; i++)
+          ChatMember(userId: i, name: 'member$i', permissions: member),
+      ];
+
+      testWidgets('a tall member list still closes by its button ($label)', (
+        tester,
+      ) async {
+        members = many;
+        await openChannel(
+          tester,
+          ChatChannel(id: 2, name: 'design', permissions: owner),
+          size: size,
+        );
+        final sheet = tester.getRect(find.byType(BottomSheet));
+        expect(sheet.height, lessThanOrEqualTo(size.height * 0.85));
+
+        await tester.tap(find.byKey(const ValueKey('quark_sheet_close')));
+        await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsNothing);
+      });
+
+      testWidgets('a tall member list still closes on the scrim ($label)', (
+        tester,
+      ) async {
+        members = many;
+        await openChannel(
+          tester,
+          ChatChannel(id: 2, name: 'design', permissions: owner),
+          size: size,
+        );
+        // The sheet has to stop short of the top, or there is no scrim.
+        expect(tester.getRect(find.byType(BottomSheet)).top, greaterThan(8));
+        await tester.tapAt(const Offset(8, 8));
+        await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsNothing);
+      });
+    }
+
     testWidgets('a custom set shows as Custom', (tester) async {
       members = const [
         ChatMember(

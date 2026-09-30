@@ -15,13 +15,12 @@ void main() {
   const candidates = [ada, bob, cy];
 
   testBothViewports('lists the members of the group', (tester, size) async {
-    await pumpAt(
+    await pumpInSheet(
       tester,
       GroupMembersSheet(group: family, candidates: candidates, onAdd: (_) {}),
       size: size,
     );
 
-    expect(find.text('Members of Family'), findsOneWidget);
     expect(find.byKey(const ValueKey('group_member_1')), findsOneWidget);
     expect(find.byKey(const ValueKey('group_member_2')), findsOneWidget);
     expect(find.text('No members yet'), findsNothing);
@@ -32,7 +31,7 @@ void main() {
     tester,
     size,
   ) async {
-    await pumpAt(
+    await pumpInSheet(
       tester,
       GroupMembersSheet(
         group: const GroupItem(id: 7, name: 'Family'),
@@ -51,7 +50,7 @@ void main() {
 
   testBothViewports('reports the member to remove', (tester, size) async {
     final removed = <int>[];
-    await pumpAt(
+    await pumpInSheet(
       tester,
       GroupMembersSheet(
         group: family,
@@ -72,7 +71,7 @@ void main() {
     size,
   ) async {
     final added = <int>[];
-    await pumpAt(
+    await pumpInSheet(
       tester,
       GroupMembersSheet(
         group: family,
@@ -96,7 +95,7 @@ void main() {
   testWidgets('a member mid-change shows progress and no remove button', (
     tester,
   ) async {
-    await pumpAt(
+    await pumpInSheet(
       tester,
       GroupMembersSheet(
         group: family,
@@ -117,7 +116,7 @@ void main() {
   });
 
   testWidgets('no callbacks means no picker and no remove', (tester) async {
-    await pumpAt(
+    await pumpInSheet(
       tester,
       const GroupMembersSheet(group: family, candidates: candidates),
     );
@@ -137,7 +136,7 @@ void main() {
     tester,
     size,
   ) async {
-    await pumpAt(
+    await pumpInSheet(
       tester,
       const GroupMembersSheet(
         group: family,
@@ -151,7 +150,7 @@ void main() {
   });
 
   testWidgets('every remove button names itself', (tester) async {
-    await pumpAt(
+    await pumpInSheet(
       tester,
       GroupMembersSheet(
         group: family,
@@ -179,7 +178,7 @@ void main() {
           name: 'user$i${'x' * 80}',
         ),
     ];
-    await pumpAt(
+    await pumpInSheet(
       tester,
       GroupMembersSheet(
         group: GroupItem(id: 7, name: 'Family ' * 20, members: many),
@@ -203,7 +202,7 @@ void main() {
     ('light', Brightness.light, QuarkTokens.light),
   ]) {
     testWidgets('$label: colors come from the tokens', (tester) async {
-      await pumpAt(
+      await pumpInSheet(
         tester,
         const GroupMembersSheet(
           group: GroupItem(id: 7, name: 'Family'),

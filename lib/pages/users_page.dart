@@ -202,10 +202,12 @@ class _UsersPageState extends State<UsersPage>
   /// reload. A refusal shows in the sheet, where a snack bar would be hidden
   /// under it.
   Future<void> _openMembers(int id) async {
+    final name = _groups.group(id)?.name;
+    if (name == null) return;
     final message = ValueNotifier<String?>(null);
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
+    await showQuarkSheet<void>(
+      context,
+      title: 'Members of $name',
       builder: (sheetContext) => ListenableBuilder(
         listenable: Listenable.merge([_controllers, message]),
         builder: (sheetContext, _) {

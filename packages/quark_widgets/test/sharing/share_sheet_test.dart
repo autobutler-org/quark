@@ -48,7 +48,6 @@ void main() {
     String? error,
     List<String>? events,
   }) => ShareSheet(
-    itemName: 'Recipes',
     grants: grants,
     principals: principals,
     canManage: canManage,
@@ -82,7 +81,7 @@ void main() {
     tester,
     size,
   ) async {
-    await pumpAt(tester, sheet(isLoading: true), size: size);
+    await pumpInSheet(tester, sheet(isLoading: true), size: size);
 
     expect(find.byType(QuarkLoader), findsOneWidget);
     expect(key('share_grant_user_1'), findsNothing);
@@ -93,7 +92,7 @@ void main() {
     tester,
     size,
   ) async {
-    await pumpAt(
+    await pumpInSheet(
       tester,
       sheet(
         grants: const [],
@@ -115,7 +114,7 @@ void main() {
   testBothViewports(
     'lists access set on the item, then inherited access with its folder',
     (tester, size) async {
-      await pumpAt(tester, sheet(), size: size);
+      await pumpInSheet(tester, sheet(), size: size);
 
       for (final suffix in ['group_1', 'user_1', 'user_2']) {
         expect(key('share_grant_$suffix'), findsOneWidget, reason: suffix);
@@ -134,7 +133,7 @@ void main() {
   );
 
   testWidgets('inherited access offers no control at all', (tester) async {
-    await pumpAt(tester, sheet());
+    await pumpInSheet(tester, sheet());
 
     for (final suffix in ['group_2', 'user_2']) {
       expect(
@@ -161,7 +160,7 @@ void main() {
     size,
   ) async {
     final events = <String>[];
-    await pumpAt(tester, sheet(events: events), size: size);
+    await pumpInSheet(tester, sheet(events: events), size: size);
 
     await tapKey(tester, 'share_level_user_2');
     await tester.tap(key('share_level_user_2_read'));
@@ -172,7 +171,7 @@ void main() {
   });
 
   testWidgets('owner is only on offer with canGrantOwner', (tester) async {
-    await pumpAt(tester, sheet(canGrantOwner: false));
+    await pumpInSheet(tester, sheet(canGrantOwner: false));
 
     expect(key('share_add_level_owner'), findsNothing);
     expect(levelMenuEnabled(tester, 'user_1'), isFalse);
@@ -183,7 +182,7 @@ void main() {
     await tester.tap(key('share_level_user_2_write'));
     await tester.pumpAndSettle();
 
-    await pumpAt(tester, sheet());
+    await pumpInSheet(tester, sheet());
 
     expect(key('share_add_level_owner'), findsOneWidget);
     expect(levelMenuEnabled(tester, 'user_1'), isTrue);
@@ -192,7 +191,7 @@ void main() {
   });
 
   testWidgets('a locked row stays read-only for a manager', (tester) async {
-    await pumpAt(tester, sheet(lockedKeys: const {'user_1'}));
+    await pumpInSheet(tester, sheet(lockedKeys: const {'user_1'}));
 
     expect(levelMenuEnabled(tester, 'user_1'), isFalse);
     expect(revokeOf(tester, 'user_1'), isNull);
@@ -201,7 +200,7 @@ void main() {
   });
 
   testWidgets('without canManage the sheet changes nothing', (tester) async {
-    await pumpAt(tester, sheet(canManage: false));
+    await pumpInSheet(tester, sheet(canManage: false));
 
     expect(key('principal_search'), findsNothing);
     expect(key('share_add_submit'), findsNothing);
@@ -212,7 +211,7 @@ void main() {
   });
 
   testWidgets('a row with a change in flight shows progress', (tester) async {
-    await pumpAt(tester, sheet(busyKeys: const {'user_2'}));
+    await pumpInSheet(tester, sheet(busyKeys: const {'user_2'}));
 
     expect(key('share_revoke_user_2'), findsNothing);
     expect(
@@ -229,7 +228,7 @@ void main() {
     size,
   ) async {
     final events = <String>[];
-    await pumpAt(tester, sheet(events: events), size: size);
+    await pumpInSheet(tester, sheet(events: events), size: size);
 
     expect(
       tester.widget<FilledButton>(key('share_add_submit')).onPressed,
@@ -245,10 +244,13 @@ void main() {
 
   testWidgets('the share button waits while that share is out', (tester) async {
     final events = <String>[];
-    await pumpAt(tester, sheet(events: events));
+    await pumpInSheet(tester, sheet(events: events));
     await tapKey(tester, 'principal_option_user_2');
 
-    await pumpAt(tester, sheet(events: events, busyKeys: const {'user_2'}));
+    await pumpInSheet(
+      tester,
+      sheet(events: events, busyKeys: const {'user_2'}),
+    );
 
     expect(
       tester.widget<FilledButton>(key('share_add_submit')).onPressed,
@@ -264,7 +266,7 @@ void main() {
   });
 
   testWidgets('says so when nothing is set on the item itself', (tester) async {
-    await pumpAt(
+    await pumpInSheet(
       tester,
       sheet(
         grants: const [
@@ -282,7 +284,7 @@ void main() {
   });
 
   testWidgets('every icon control names itself', (tester) async {
-    await pumpAt(tester, sheet());
+    await pumpInSheet(tester, sheet());
 
     for (final button in tester.widgetList<IconButton>(
       find.byType(IconButton),
@@ -300,10 +302,9 @@ void main() {
     tester,
     size,
   ) async {
-    await pumpAt(
+    await pumpInSheet(
       tester,
       ShareSheet(
-        itemName: 'A folder with a very long name ' * 5,
         grants: [
           for (var i = 0; i < 40; i++)
             GrantItem(
@@ -335,7 +336,7 @@ void main() {
     ('light', Brightness.light, QuarkTokens.light),
   ]) {
     testWidgets('$label: colors come from the tokens', (tester) async {
-      await pumpAt(tester, sheet(error: 'Nope.'), brightness: brightness);
+      await pumpInSheet(tester, sheet(error: 'Nope.'), brightness: brightness);
 
       expect(tester.takeException(), isNull);
       expect(
@@ -369,7 +370,6 @@ void main() {
       Set<String> lockedKeys = const {},
       List<String>? events,
     }) => ShareSheet(
-      itemName: '#design',
       grants: channelGrants,
       principals: principals,
       canManage: true,
@@ -386,7 +386,7 @@ void main() {
       tester,
       size,
     ) async {
-      await pumpAt(tester, channelSheet(), size: size);
+      await pumpInSheet(tester, channelSheet(), size: size);
 
       expect(find.text('Members'), findsOneWidget);
       expect(find.text('Member · Every account'), findsOneWidget);
@@ -400,7 +400,7 @@ void main() {
       size,
     ) async {
       final events = <String>[];
-      await pumpAt(tester, channelSheet(events: events), size: size);
+      await pumpInSheet(tester, channelSheet(events: events), size: size);
 
       await tapKey(tester, 'share_perms_group_1_preset_viewer');
       await tapKey(tester, 'share_perms_user_2_manage_members');
@@ -413,7 +413,7 @@ void main() {
       size,
     ) async {
       final events = <String>[];
-      await pumpAt(tester, channelSheet(events: events), size: size);
+      await pumpInSheet(tester, channelSheet(events: events), size: size);
 
       await tester.enterText(key('principal_search'), 'Family');
       await tester.pumpAndSettle();
@@ -433,7 +433,7 @@ void main() {
       tester,
       size,
     ) async {
-      await pumpAt(
+      await pumpInSheet(
         tester,
         channelSheet(lockedKeys: const {'user_1'}),
         size: size,
