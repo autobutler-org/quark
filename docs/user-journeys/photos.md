@@ -367,3 +367,23 @@ Covers the Photos page (`/photos`), including Quark photos, mobile device photos
   album was created; names ignore case.
 - The system albums (Favorites and the inbox) stay at the top in every order.
 - The choice is remembered across navigation and app restart, defaulting to **A–Z** the first time.
+
+---
+
+### JN-PH-020: Browse photos by month
+
+**Preconditions:** Photos are visible in the grid (JN-PH-001), an album (JN-PH-012), or a category tab, sorted
+by date (JN-PH-018).
+
+**Steps:**
+
+1. Scroll through the grid.
+
+**Expected result:**
+
+- Photos sit under month headers such as **March 2025**, in the grid's sort order. The header of the month in
+  view stays pinned to the top of the grid until the next month's header pushes it out.
+- In an album, a photo is filed under the month it was added to the album. A photo with no date sits under
+  **Unknown date**.
+- Under a name sort there are no headers.
+- The **All** tab lists Quark photos before device photos, so a month can appear once for each.

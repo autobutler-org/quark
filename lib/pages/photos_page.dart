@@ -727,6 +727,7 @@ class PhotosPageState extends State<PhotosPage>
                         slivers: [
                           PhotoGrid(
                             photos: photos,
+                            sections: c.photoSections,
                             crossAxisCount: PhotoGridConfig.columnsFor(
                               contentWidth,
                               c.columns,

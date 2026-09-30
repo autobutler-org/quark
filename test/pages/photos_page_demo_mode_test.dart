@@ -17,7 +17,9 @@ import '../support/unreachable_quark.dart';
 /// is rendered. Both halves matter — the second is the one that protects a
 /// real user from seeing photos that are not theirs.
 void main() {
-  const desktopSize = Size(1400, 900);
+  // Tall enough that the whole sample library, month headers included
+  // (#979), is laid out at once, since the grid only builds what is visible.
+  const desktopSize = Size(1400, 1400);
   final settings = AppSettings.instance;
 
   late HttpOverrides? priorOverrides;
@@ -274,7 +276,12 @@ void main() {
 
       // A short album may not scroll that far, but its photos are on screen.
       final home = DemoPhotosService.homeAlbumId;
-      final homeRow = find.byKey(ValueKey('album_tile_$home'));
+      // Scrolled fully out of view now, so the finder has to look offstage
+      // for ensureVisible to bring it back.
+      final homeRow = find.byKey(
+        ValueKey('album_tile_$home'),
+        skipOffstage: false,
+      );
       await tester.ensureVisible(homeRow);
       await tester.pump();
       await tester.tap(homeRow);
