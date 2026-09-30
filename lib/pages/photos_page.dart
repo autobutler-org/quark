@@ -21,7 +21,7 @@ import 'package:quark/widgets/device_upload_picker.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/photos/add_to_album_sheet.dart';
-import 'package:quark/widgets/photos/album_actions_sheet.dart';
+import 'package:quark/widgets/photos/album_actions_menu.dart';
 import 'package:quark/widgets/photos/album_item_menu.dart';
 import 'package:quark/widgets/photos/album_name_dialog.dart';
 import 'package:quark/widgets/photos/album_picker_sheet.dart';
@@ -572,14 +572,12 @@ class PhotosPageState extends State<PhotosPage>
     }
   }
 
-  void _showAlbumActions(AlbumItem album) {
-    AlbumActionsSheet.show(
-      context,
-      albumName: album.name,
+  void _showAlbumActions(AlbumItem album, Offset position) {
+    AlbumActionsMenu(
       onRename: () => _renameAlbum(album),
       onCreateSubAlbum: () => _createAlbum(parentId: album.id),
       onDelete: () => _deleteAlbum(album),
-    );
+    ).showAt(context, position);
   }
 
   @override

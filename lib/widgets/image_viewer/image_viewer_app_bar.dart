@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/models/photo_album.dart';
+import 'package:quark/widgets/image_viewer/image_viewer_more_menu.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -77,6 +78,22 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final showNav = imageCount > 1;
+    final moreMenu = ImageViewerMoreMenu(
+      includeBarActions: !isDesktop,
+      isFavorite: isFavorite,
+      sidebarOpen: sidebarOpen,
+      relPath: relPath,
+      sourceAlbum: sourceAlbum,
+      onToggleFavorite: onToggleFavorite,
+      onRotate: onRotate,
+      onDownload: onDownload,
+      onToggleSidebar: onToggleSidebar,
+      onAddToAlbum: onAddToAlbum,
+      onRemoveFromAlbum: onRemoveFromAlbum,
+      onMakeACopy: onMakeACopy,
+      onShare: onShare,
+      onDelete: onDelete,
+    );
     return AppBar(
       leading: Center(
         child: QuarkBarIconButton(
@@ -140,64 +157,16 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
                 onPressed: onToggleSidebar,
               ),
             ],
-            if (!isDesktop || relPath != null)
-              MenuAnchor(
-                menuChildren: [
-                  if (!isDesktop) ...[
-                    MenuItemButton(
-                      onPressed: onToggleFavorite,
-                      child: Text(isFavorite ? 'Unfavorite' : 'Favorite'),
-                    ),
-                    MenuItemButton(
-                      onPressed: onRotate,
-                      child: const Text('Rotate 90° CW'),
-                    ),
-                    if (relPath != null)
-                      MenuItemButton(
-                        onPressed: onDownload,
-                        child: const Text('Download'),
-                      ),
-                    MenuItemButton(
-                      onPressed: onToggleSidebar,
-                      child: Text(sidebarOpen ? 'Hide info' : 'Show info'),
-                    ),
-                  ],
-                  if (relPath != null) ...[
-                    if (!isDesktop) const Divider(height: 1),
-                    if (sourceAlbum != null)
-                      MenuItemButton(
-                        onPressed: onRemoveFromAlbum,
-                        child: Text('Remove from ${sourceAlbum!.name}'),
-                      )
-                    else
-                      MenuItemButton(
-                        onPressed: onAddToAlbum,
-                        child: const Text('Add to Album'),
-                      ),
-                    MenuItemButton(
-                      onPressed: onMakeACopy,
-                      child: const Text('Make a Copy'),
-                    ),
-                    MenuItemButton(
-                      onPressed: onShare,
-                      child: const Text('Share…'),
-                    ),
-                    MenuItemButton(
-                      onPressed: onDelete,
-                      style: MenuItemButton.styleFrom(
-                        foregroundColor: tokens.error,
-                      ),
-                      child: const Text('Delete photo'),
-                    ),
-                  ],
-                ],
-                builder: (context, controller, _) => QuarkBarIconButton(
+            if (!moreMenu.isEmpty)
+              // A Builder for the button's own box, which the menu opens
+              // under.
+              Builder(
+                builder: (context) => QuarkBarIconButton(
                   key: const ValueKey('image_viewer_more'),
                   icon: QuarkIcons.more_vert,
                   tooltip: 'More options',
-                  onPressed: () => controller.isOpen
-                      ? controller.close()
-                      : controller.open(),
+                  onPressed: () =>
+                      moreMenu.showAt(context, quarkMenuAnchor(context)),
                 ),
               ),
             // Keyboard shortcuts and the theme toggle need a keyboard and a

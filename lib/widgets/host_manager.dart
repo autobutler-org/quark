@@ -3,6 +3,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/widgets/host_dialog.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The list of configured Quarks, with switch / add / edit / remove.
 ///
@@ -84,6 +85,21 @@ class _HostManagerState extends State<HostManager> {
     _published();
   }
 
+  /// The actions on the Quark at [index], for its menu.
+  List<QuarkMenuEntry> _hostMenu(int index) => [
+    QuarkMenuEntry(
+      key: ValueKey('host_action_edit_$index'),
+      label: 'Edit',
+      onSelected: () => _addOrEdit(index: index),
+    ),
+    QuarkMenuEntry(
+      key: ValueKey('host_action_remove_$index'),
+      label: 'Remove',
+      destructive: true,
+      onSelected: () => _remove(index),
+    ),
+  ];
+
   Future<void> _remove(int index) async {
     final confirm = await QuarkWidget.showDialog<bool>(
       context,
@@ -134,21 +150,10 @@ class _HostManagerState extends State<HostManager> {
                   leading: Radio<int>(value: idx),
                   title: Text(host.name),
                   subtitle: Text(host.hostAddress),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (action) {
-                      if (action == 'edit') {
-                        _addOrEdit(index: idx);
-                      } else if (action == 'remove') {
-                        _remove(idx);
-                      }
-                    },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      const PopupMenuItem(
-                        value: 'remove',
-                        child: Text('Remove'),
-                      ),
-                    ],
+                  trailing: QuarkMenuButton(
+                    key: ValueKey('host_menu_$idx'),
+                    tooltip: 'Actions for ${host.name}',
+                    entries: _hostMenu(idx),
                   ),
                   onTap: () => _setActive(idx),
                 ),

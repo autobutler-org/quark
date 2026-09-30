@@ -26,6 +26,7 @@ void main() {
     List<String>? events,
     bool withMenu = false,
     IconData? systemIcon,
+    List<Offset>? positions,
   }) {
     void record(String e) => events?.add(e);
     return pumpAt(
@@ -41,7 +42,12 @@ void main() {
             systemIcon: systemIcon,
             onSelected: (a) => record('select:${a.id}'),
             onToggleExpanded: (id) => record('toggle:$id'),
-            onMenu: withMenu ? (a) => record('menu:${a.id}') : null,
+            onMenu: withMenu
+                ? (a, position) {
+                    record('menu:${a.id}');
+                    positions?.add(position);
+                  }
+                : null,
           ),
         ),
       ),
@@ -204,6 +210,23 @@ void main() {
     await tester.pump();
 
     expect(events, ['menu:1']);
+  });
+
+  testBothViewports('opens at the right-click, and under the button', (
+    tester,
+    size,
+  ) async {
+    final positions = <Offset>[];
+    await pumpTile(tester, size: size, withMenu: true, positions: positions);
+
+    final row = tester.getCenter(find.byKey(const ValueKey('album_tile_1')));
+    await tester.tapAt(row, buttons: kSecondaryButton);
+    await tester.pump();
+    final button = tester.getRect(find.byKey(const ValueKey('album_menu_1')));
+    await tester.tap(find.byKey(const ValueKey('album_menu_1')));
+    await tester.pump();
+
+    expect(positions, [row, button.bottomLeft]);
   });
 
   testBothViewports('offers no menu without a handler', (tester, size) async {

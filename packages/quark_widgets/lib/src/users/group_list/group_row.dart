@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:quark_icons/quark_icons.dart';
 
 import '../../core/quark_loader.dart';
+import '../../core/quark_menu_button.dart';
 import '../../models/group_item.dart';
+import '../../models/quark_menu_entry.dart';
 import '../../theme/quark_tokens.dart';
 
 /// One group in a [GroupList]: its name, who is in it, and a menu of the
@@ -78,22 +79,16 @@ class GroupRow extends StatelessWidget {
           ? const QuarkLoader(size: 24)
           : actions.isEmpty
           ? null
-          : PopupMenuButton<VoidCallback>(
+          : QuarkMenuButton(
               key: ValueKey('group_menu_$id'),
               tooltip: 'Actions for ${group.name}',
-              icon: const Icon(QuarkIcons.more_vert),
-              onSelected: (action) => action(),
-              itemBuilder: (context) => [
+              entries: [
                 for (final (action, label, callback) in actions)
-                  PopupMenuItem(
+                  QuarkMenuEntry(
                     key: ValueKey('group_action_${action}_$id'),
-                    value: callback,
-                    child: Text(
-                      label,
-                      style: action == 'delete'
-                          ? TextStyle(color: tokens.error)
-                          : null,
-                    ),
+                    label: label,
+                    destructive: action == 'delete',
+                    onSelected: callback,
                   ),
               ],
             ),

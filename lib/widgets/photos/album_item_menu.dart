@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The menu on a photo while an album is showing: add it to another album,
 /// and take it out of this one when the album allows that. The tile's
@@ -35,43 +36,32 @@ class AlbumItemMenu {
 
   /// Opens the menu at [globalPosition].
   Future<void> showAt(BuildContext context, Offset globalPosition) {
-    final error = Theme.of(context).colorScheme.error;
     final onRemoveFromFavorites = this.onRemoveFromFavorites;
     final onRemoveFromAlbum = this.onRemoveFromAlbum;
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    return showMenu<void>(
-      context: context,
-      position: RelativeRect.fromRect(
-        globalPosition & Size.zero,
-        Offset.zero & overlay.size,
-      ),
-      items: [
-        PopupMenuItem<void>(
+    return showQuarkMenu(
+      context,
+      position: globalPosition,
+      entries: [
+        QuarkMenuEntry(
           key: const ValueKey('album_item_action_add'),
-          onTap: onAddToAnotherAlbum,
-          child: const ListTile(
-            leading: Icon(QuarkIcons.photo_album_outlined),
-            title: Text('Add to another album'),
-          ),
+          label: 'Add to another album',
+          icon: QuarkIcons.photo_album_outlined,
+          onSelected: onAddToAnotherAlbum,
         ),
         if (onRemoveFromFavorites != null)
-          PopupMenuItem<void>(
+          QuarkMenuEntry(
             key: const ValueKey('album_item_action_unfavorite'),
-            onTap: onRemoveFromFavorites,
-            child: const ListTile(
-              leading: Icon(QuarkIcons.star_rounded),
-              title: Text('Remove from favorites'),
-            ),
+            label: 'Remove from favorites',
+            icon: QuarkIcons.star_rounded,
+            onSelected: onRemoveFromFavorites,
           ),
         if (onRemoveFromAlbum != null)
-          PopupMenuItem<void>(
+          QuarkMenuEntry(
             key: const ValueKey('album_item_action_remove'),
-            onTap: onRemoveFromAlbum,
-            child: ListTile(
-              leading: Icon(QuarkIcons.remove_circle_outline, color: error),
-              title: Text('Remove from album', style: TextStyle(color: error)),
-            ),
+            label: 'Remove from album',
+            icon: QuarkIcons.remove_circle_outline,
+            destructive: true,
+            onSelected: onRemoveFromAlbum,
           ),
       ],
     );

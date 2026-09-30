@@ -40,7 +40,7 @@ void main() {
       onAlbumSelected: (a) => record('select:${a.id}'),
       onToggleExpanded: (id) => record('toggle:$id'),
       onCreateAlbum: () => record('create'),
-      onAlbumMenu: (a) => record('menu:${a.id}'),
+      onAlbumMenu: (a, _) => record('menu:${a.id}'),
       onAllPhotosSelected: withAllPhotos ? () => record('all') : null,
       sort: sort,
       onSortChanged: withSort ? (s) => record('sort:${s.id}') : null,
