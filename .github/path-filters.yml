@@ -19,6 +19,8 @@ backend:
   - internal/**
   - scripts/apply-coverage-ignore.bash
   - scripts/coverage-excluded-packages.txt
+  # test/chaos/powercut builds its image from these.
+  - test/chaos/powercut/**
 flutter: &flutter
   - *ci
   - lib/**

@@ -73,5 +73,8 @@ In plain English, for support copy:
 
 ## How it is tested
 
-Unit tests pin each ordering rule: `storageutil/durable_test.go`, `vaultutil/location_test.go`,
-`backup/vault_migrate_test.go`.
+- Unit tests pin each ordering rule: `storageutil/durable_test.go`, `vaultutil/location_test.go`,
+  `backup/vault_migrate_test.go`.
+- `make test/chaos/powercut` runs the real write paths on [LazyFS](https://github.com/dsrhaslab/lazyfs), a FUSE
+  file system that loses everything not yet flushed when it is killed, cuts the power at chosen points mid-write,
+  and checks what reached the disk. See [`test/chaos/powercut/README.md`](../../test/chaos/powercut/README.md).

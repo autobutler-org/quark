@@ -118,3 +118,4 @@ entirely.
 
 - `test/performance/` — wrk throughput/load profiles (spins its own temporary server via Make)
 - `make test/integration` — in-process Gin integration tests under `internal/server/api/v0/`
+- `test/chaos/powercut/` — power cuts under the upload and vault write paths on LazyFS (`make test/chaos/powercut`)

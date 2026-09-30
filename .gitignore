@@ -101,6 +101,7 @@ flutter.zip
 playwright-report/
 test-results/performance/*
 !test-results/performance/.gitkeep
+test-results/powercut/
 
 # Ralph loops
 .ralph/

@@ -1,0 +1,34 @@
+diff --git a/lazyfs/CMakeLists.txt b/lazyfs/CMakeLists.txt
+index 3bc1555..ebcdb37 100644
+--- a/lazyfs/CMakeLists.txt
++++ b/lazyfs/CMakeLists.txt
+@@ -34,7 +34,7 @@ target_sources(
+     src/main.cpp
+ )
+ 
+-target_link_libraries(${CMAKE_PROJECT_NAME} fuse3 Threads::Threads libpcache.so)
++target_link_libraries(${CMAKE_PROJECT_NAME} fuse3 Threads::Threads libpcache.so spdlog fmt)
+ 
+ # ------------------ LazyFS tests ------------------
+ 
+diff --git a/libs/libpcache/CMakeLists.txt b/libs/libpcache/CMakeLists.txt
+index 9e4226a..0e75a4e 100644
+--- a/libs/libpcache/CMakeLists.txt
++++ b/libs/libpcache/CMakeLists.txt
+@@ -12,15 +12,7 @@ FetchContent_Declare(
+ )
+ FetchContent_MakeAvailable(toml)
+ 
+-FetchContent_Declare(spdlog
+-    URL             https://github.com/gabime/spdlog/archive/v1.10.0.tar.gz
+-    UPDATE_COMMAND  ""
+-    INSTALL_COMMAND ""
+-)
+-
+-FetchContent_MakeAvailable(spdlog)
+-
+-set_target_properties(spdlog PROPERTIES POSITION_INDEPENDENT_CODE ON)
++find_package(spdlog REQUIRED)
+ 
+ set(warn_opts -Wall -Wextra)
+ 
