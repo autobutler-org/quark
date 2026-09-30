@@ -274,8 +274,14 @@ class AppSettings {
         _activeIndex = 0;
         await _saveHosts();
       } else if (kIsWeb) {
-        // Otherwise, add a default that targets the URL it is the web version
+        // On the web the app is served by the Quark itself, so target it.
         _hosts = [HostEntry(name: 'Default', hostAddress: '/')];
+        _activeIndex = 0;
+        await _saveHosts();
+      } else {
+        // A native app is separate from the Quark it talks to, so start on
+        // the hostname every device advertises — the one on the QR card.
+        _hosts = [HostEntry(name: 'Quark', hostAddress: 'https://quark.local')];
         _activeIndex = 0;
         await _saveHosts();
       }
