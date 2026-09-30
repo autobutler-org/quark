@@ -49,13 +49,35 @@ void main() {
     expect(chosen, isEmpty);
   });
 
-  testWidgets('stands as tall as a bar icon button', (tester) async {
-    await pumpAt(tester, toggle('grid', (_) {}), size: narrowViewport);
+  testBothViewports('draws as tall as a bar icon button', (tester, size) async {
+    await pumpAt(tester, toggle('grid', (_) {}), size: size);
 
-    expect(
-      tester.getSize(find.byType(SegmentedButton<String>)).height,
-      QuarkBarIconButton.size,
-    );
+    final toggleFinder = find.byType(QuarkBarSegmentedToggle);
+    expect(drawnSize(tester, toggleFinder).height, QuarkBarIconButton.size);
+    expect(tester.getSize(toggleFinder).height, QuarkBarIconButton.hitSize);
     expect(find.byTooltip('Grid'), findsOneWidget);
+  });
+
+  testBothViewports('answers taps across a 48 pixel target', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(tester, toggle('grid', (_) {}), size: size);
+
+    await expectTapTargetsMeetGuideline(tester);
+  });
+
+  testBothViewports('takes a tap just outside the frame', (tester, size) async {
+    final chosen = <String>[];
+    await pumpAt(tester, toggle('list', chosen.add), size: size);
+
+    final label = tester.getRect(
+      find.byKey(const ValueKey('bar_segment_grid')),
+    );
+    final toggleRect = tester.getRect(find.byType(QuarkBarSegmentedToggle));
+    await tester.tapAt(Offset(label.center.dx, toggleRect.top + 2));
+    await tester.pump();
+
+    expect(chosen, ['grid']);
   });
 }

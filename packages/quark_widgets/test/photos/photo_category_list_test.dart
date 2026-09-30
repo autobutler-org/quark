@@ -82,4 +82,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('photo_category_favorites')));
     expect(events, ['select:favorites']);
   });
+
+  testBothViewports('every row is a 48 pixel target (#2605)', (
+    tester,
+    size,
+  ) async {
+    await pumpList(tester, size: size, expanded: true);
+
+    await expectTapTargetsMeetGuideline(tester);
+  });
 }

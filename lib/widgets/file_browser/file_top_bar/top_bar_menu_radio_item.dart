@@ -23,7 +23,6 @@ class TopBarMenuRadioItem extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       dense: true,
-      visualDensity: VisualDensity.compact,
       leading: Icon(
         icon,
         size: 18,

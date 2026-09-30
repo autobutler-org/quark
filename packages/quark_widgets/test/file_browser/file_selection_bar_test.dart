@@ -31,23 +31,27 @@ void main() {
     void record(String event) => log?.call(event);
     return pumpAt(
       tester,
-      MediaQuery(
-        data: MediaQueryData(padding: insets, viewPadding: insets),
-        child: Column(
-          children: [
-            FileSelectionBar(
-              selectedCount: selectedCount,
-              totalCount: totalCount,
-              onSelectAll: () => record('selectAll'),
-              onDeselectAll: () => record('deselectAll'),
-              onCancel: () => record('cancel'),
-              onDelete: canDelete ? () => record('delete') : null,
-              onRestore: canRestore ? () => record('restore') : null,
-              deleteTooltip: canRestore
-                  ? 'Delete permanently'
-                  : 'Delete selected',
-            ),
-          ],
+      Builder(
+        builder: (context) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(padding: insets, viewPadding: insets),
+          child: Column(
+            children: [
+              FileSelectionBar(
+                selectedCount: selectedCount,
+                totalCount: totalCount,
+                onSelectAll: () => record('selectAll'),
+                onDeselectAll: () => record('deselectAll'),
+                onCancel: () => record('cancel'),
+                onDelete: canDelete ? () => record('delete') : null,
+                onRestore: canRestore ? () => record('restore') : null,
+                deleteTooltip: canRestore
+                    ? 'Delete permanently'
+                    : 'Delete selected',
+              ),
+            ],
+          ),
         ),
       ),
       size: size,
@@ -63,7 +67,7 @@ void main() {
     final controls = <String, Finder>{
       'the close button': find.byTooltip('Cancel selection'),
       'the count label': find.text('3 selected'),
-      'Deselect all': find.text('Deselect all'),
+      'Deselect all': find.byKey(const ValueKey('file_selection_toggle_all')),
       'the delete button': find.byTooltip('Delete selected'),
     };
     for (final entry in controls.entries) {
@@ -140,8 +144,10 @@ void main() {
       log: events.add,
     );
 
-    expect(find.text('Select all'), findsOneWidget);
-    expect(find.text('Deselect all'), findsNothing);
+    // A phone keeps the word in the tooltip.
+    final word = size == narrowViewport ? find.byTooltip : find.text;
+    expect(word('Select all'), findsOneWidget);
+    expect(word('Deselect all'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('file_selection_toggle_all')));
     await tester.pump();

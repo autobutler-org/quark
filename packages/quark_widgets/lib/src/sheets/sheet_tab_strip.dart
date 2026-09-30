@@ -123,7 +123,9 @@ class _SheetTabStripState extends State<SheetTabStrip> {
     final last = names.length - 1;
 
     return Container(
-      height: 40,
+      // A full tap target for every tab and button (#2605), under the strip's
+      // 1 pixel border and a tab's 2 pixel indicator.
+      height: kMinInteractiveDimension + 3,
       decoration: BoxDecoration(
         color: tokens.sidebar,
         border: Border(top: BorderSide(color: tokens.border)),

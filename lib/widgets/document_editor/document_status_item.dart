@@ -22,13 +22,19 @@ class DocumentStatusItem extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: color),
         const SizedBox(width: 5),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurface.withValues(alpha: 0.5),
+        // Flexible, so a phone cuts a label short rather than overflowing
+        // the bar.
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
           ),
         ),
       ],

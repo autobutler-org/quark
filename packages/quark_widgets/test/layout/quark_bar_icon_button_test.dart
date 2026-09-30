@@ -42,16 +42,21 @@ void main() {
     expect(presses, 1);
   });
 
-  testBothViewports('is one fixed square with an 18px glyph', (
+  testBothViewports('draws a 36px square with an 18px glyph in a 48px target', (
     tester,
     size,
   ) async {
     await pumpAt(tester, button(onPressed: () {}), size: size);
 
     expect(
-      tester.getSize(find.byKey(key)),
+      drawnSize(tester, find.byKey(key)),
       const Size.square(QuarkBarIconButton.size),
     );
+    expect(
+      tester.getSize(find.byKey(key)),
+      const Size.square(QuarkBarIconButton.hitSize),
+    );
+    await expectTapTargetsMeetGuideline(tester);
     expect(glyph(tester).text.style!.fontSize, QuarkBarIconButton.glyphSize);
     expect(tester.takeException(), isNull);
   });

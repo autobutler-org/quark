@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_breadcrumb.dart';
 
+import '../../../support/tap_targets.dart';
+
 /// #2010: home opens the landing folder, so once there it must stop looking
 /// and behaving like a button — no handler, no pointer cursor.
 void main() {
@@ -77,4 +79,23 @@ void main() {
     expect(events, ['home']);
     expect(homeCursor(tester), SystemMouseCursors.click);
   });
+
+  for (final (label, size) in [
+    ('narrow', narrowViewport),
+    ('wide', wideViewport),
+  ]) {
+    testWidgets('home, crumbs and the hidden-ancestor menu are 48 pixel '
+        'targets ($label, #2605)', (tester) async {
+      setViewport(tester, size);
+      await pumpCrumb(
+        tester,
+        currentPath: '/a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t/u/v/w/x/y/z',
+        rootPath: '',
+      );
+
+      expect(find.text('a'), findsNothing, reason: 'the ancestors collapse');
+      await expectTapTargetsMeetGuideline(tester);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

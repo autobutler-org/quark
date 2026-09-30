@@ -55,39 +55,46 @@ class QuarkBrandButton extends StatelessWidget {
           key: const ValueKey('brand_button'),
           onTap: onTap,
           borderRadius: radius,
-          child: Padding(
-            padding: EdgeInsets.all(tokens.spacingXs),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary,
-                    borderRadius: radius,
-                  ),
-                  child: Center(
-                    child: Icon(icon, size: 16, color: colorScheme.onPrimary),
-                  ),
-                ),
-                SizedBox(width: tokens.spacingSm + tokens.spacingXs / 2),
-                // Flexible, with an ellipsis: the button sits in a bar slot
-                // of a fixed width, so a page name longer than fits has to be
-                // clipped rather than overflow the bar.
-                Flexible(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    softWrap: false,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
+          // At least 48 tall, so the badge and label answer taps across a
+          // full target rather than the 36 pixels they draw (#2605).
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: kMinInteractiveDimension,
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(tokens.spacingXs),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary,
+                      borderRadius: radius,
+                    ),
+                    child: Center(
+                      child: Icon(icon, size: 16, color: colorScheme.onPrimary),
                     ),
                   ),
-                ),
-              ],
+                  SizedBox(width: tokens.spacingSm + tokens.spacingXs / 2),
+                  // Flexible, with an ellipsis: the button sits in a bar slot
+                  // of a fixed width, so a page name longer than fits has to be
+                  // clipped rather than overflow the bar.
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

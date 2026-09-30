@@ -77,4 +77,13 @@ void main() {
       kToolbarHeight + QuarkAppBarBottom.height,
     );
   });
+
+  testBothViewports('its actions are 48 pixel targets (#2605)', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(tester, page((_) {}), size: size, scaffold: false);
+
+    await expectTapTargetsMeetGuideline(tester);
+  });
 }

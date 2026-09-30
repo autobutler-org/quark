@@ -77,9 +77,17 @@ void main() {
         );
         // Search is the row's slack: on a phone it may scale down.
         if (key == 'file_top_bar_search') continue;
+        final button = find.byKey(ValueKey(key));
         expect(
-          tester.getSize(find.byKey(ValueKey(key))),
+          tester.getSize(
+            find.descendant(of: button, matching: find.byType(Material)).first,
+          ),
           const Size.square(QuarkBarIconButton.size),
+          reason: key,
+        );
+        expect(
+          tester.getSize(button),
+          const Size.square(QuarkBarIconButton.hitSize),
           reason: key,
         );
       }

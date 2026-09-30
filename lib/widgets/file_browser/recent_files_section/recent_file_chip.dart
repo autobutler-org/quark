@@ -32,7 +32,7 @@ class RecentFileChip extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+            padding: const EdgeInsets.fromLTRB(10, 8, 0, 8),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -71,24 +71,15 @@ class RecentFileChip extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 6),
-                // Folder navigate badge
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: Tooltip(
-                    message: 'Go to folder',
-                    child: InkWell(
-                      onTap: onFolderTap,
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          QuarkIcons.folder_open_rounded,
-                          size: 14,
-                          color: colorScheme.onSurface.withValues(alpha: 0.4),
-                        ),
-                      ),
-                    ),
+                // Folder navigate badge, a full 48 pixel target (#2605).
+                IconButton(
+                  tooltip: 'Go to folder',
+                  onPressed: onFolderTap,
+                  icon: const Icon(QuarkIcons.folder_open_rounded),
+                  iconSize: 14,
+                  color: colorScheme.onSurface.withValues(alpha: 0.4),
+                  style: const ButtonStyle(
+                    tapTargetSize: MaterialTapTargetSize.padded,
                   ),
                 ),
               ],

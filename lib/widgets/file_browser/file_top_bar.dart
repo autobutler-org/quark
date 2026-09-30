@@ -197,8 +197,9 @@ class _FileTopBarState extends State<FileTopBar> {
       icon: QuarkIcons.storage_rounded,
       onRefresh: widget.onRefresh,
       isRefreshing: widget.isRefreshing,
+      // No spacing: the bar buttons' tap target margins already set them
+      // apart.
       middle: Row(
-        spacing: QuarkTokens.of(context).spacingXs,
         children: [
           FileTopBarNavButtons(
             navEnabled: !widget.disableNavigation,

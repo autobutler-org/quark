@@ -596,4 +596,23 @@ void main() {
       expect(tester.getRect(item), first);
     });
   });
+
+  testBothViewports('its buttons are 48 pixel targets (#2605)', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      QuarkMessageList(
+        messages: messages,
+        permissions: ChatPermissionPreset.member.permissions,
+        currentUserId: 'ada',
+        onDelete: (_) {},
+        onReact: (_, _) {},
+      ),
+      size: size,
+    );
+
+    await expectTapTargetsMeetGuideline(tester);
+  });
 }

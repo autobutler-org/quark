@@ -98,7 +98,6 @@ class ChatMemberRow extends StatelessWidget {
                 IconButton(
                   key: ValueKey('member_remove_${member.id}'),
                   tooltip: 'Remove ${member.name}',
-                  visualDensity: VisualDensity.compact,
                   icon: Icon(
                     QuarkIcons.close,
                     size: 18,

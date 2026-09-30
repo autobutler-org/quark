@@ -152,7 +152,9 @@ class FileSelectionBar extends StatelessWidget implements PreferredSizeWidget {
                       ? QuarkIcons.circle_outlined
                       : QuarkIcons.check_circle_rounded,
                   label: everything ? 'Deselect all' : 'Select all',
-                  keepLabel: true,
+                  // On a phone the word goes to the tooltip, as on any chip:
+                  // beside three 48 pixel buttons it would push restore and
+                  // delete off the row (#2605).
                   onPressed: everything ? onDeselectAll : onSelectAll,
                 ),
                 ...actions,

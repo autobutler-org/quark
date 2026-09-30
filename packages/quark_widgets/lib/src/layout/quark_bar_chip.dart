@@ -12,7 +12,9 @@ import 'quark_bar_icon_button.dart';
 /// the user should be able to read the state of: [active] tints it with the
 /// primary color.
 ///
-/// A null [onPressed] renders it disabled.
+/// A null [onPressed] renders it disabled. Like the icon button, it draws
+/// at [QuarkBarIconButton.size] but answers taps across
+/// [QuarkBarIconButton.hitSize].
 ///
 /// On a phone — a viewport narrower than [compactBreakpoint] — a chip gives
 /// its label up to its tooltip and renders as a [QuarkBarIconButton], so a bar
@@ -103,7 +105,7 @@ class QuarkBarChip extends StatelessWidget {
         ),
         minimumSize: const Size(0, QuarkBarIconButton.size),
         maximumSize: const Size(double.infinity, QuarkBarIconButton.size),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        tapTargetSize: MaterialTapTargetSize.padded,
         visualDensity: VisualDensity.standard,
       ),
     );

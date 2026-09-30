@@ -106,7 +106,7 @@ void main() {
     expect(events, ['menu', 'menu', 'long']);
   });
 
-  testBothViewports('gives the menu button a 40-pixel target', (
+  testBothViewports('gives the menu button a 48-pixel target', (
     tester,
     size,
   ) async {
@@ -115,8 +115,9 @@ void main() {
     final target = tester.getSize(
       find.byKey(const ValueKey('photo_tile_menu_p1')),
     );
-    expect(target.width, greaterThanOrEqualTo(40));
-    expect(target.height, greaterThanOrEqualTo(40));
+    expect(target.width, greaterThanOrEqualTo(kMinInteractiveDimension));
+    expect(target.height, greaterThanOrEqualTo(kMinInteractiveDimension));
+    await expectTapTargetsMeetGuideline(tester);
   });
 
   testBothViewports('reports a double tap when one is offered', (

@@ -142,11 +142,7 @@ class SettingsUpdatesTab extends StatelessWidget {
                     onPressed: () => onOpenReleaseNotes(installedReleaseUrl!),
                     icon: const Icon(QuarkIcons.open_in_new, size: 16),
                     label: const Text("What's in this release"),
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero),
                   ),
                 const SizedBox(height: 16),
                 if (availableVersions.isEmpty &&

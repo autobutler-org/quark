@@ -49,6 +49,21 @@ void testBothViewports(
   }
 }
 
+/// The size [button] is drawn at: its first [Material], which is the filled,
+/// bordered shape inside whatever transparent tap target surrounds it.
+Size drawnSize(WidgetTester tester, Finder button) => tester.getSize(
+  find.descendant(of: button, matching: find.byType(Material)).first,
+);
+
+/// Expects every tappable thing on screen to answer taps across at least
+/// 48x48 logical pixels: Android's guideline, and well above the 24 pixel
+/// floor of WCAG 2.5.8 (#2605).
+Future<void> expectTapTargetsMeetGuideline(WidgetTester tester) async {
+  final semantics = tester.ensureSemantics();
+  await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+  semantics.dispose();
+}
+
 /// Pumps the sheet body [body] inside a [QuarkSheet] at [size], the frame
 /// every sheet body is shown in, so a body taller than the viewport scrolls
 /// the way it does in the app.

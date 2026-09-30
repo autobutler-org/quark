@@ -47,7 +47,6 @@ class ChatReactionPicker extends StatelessWidget {
       builder: (context, controller, _) => IconButton(
         key: ValueKey('message_react_$messageId'),
         tooltip: 'Add reaction',
-        visualDensity: VisualDensity.compact,
         icon: Icon(
           QuarkIcons.add_reaction_outlined,
           size: 18,

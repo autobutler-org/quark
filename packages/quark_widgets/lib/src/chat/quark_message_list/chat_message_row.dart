@@ -176,7 +176,6 @@ class ChatMessageRow extends StatelessWidget {
             IconButton(
               key: ValueKey('message_delete_${message.id}'),
               tooltip: 'Delete message',
-              visualDensity: VisualDensity.compact,
               icon: Icon(
                 QuarkIcons.delete_outline,
                 size: 18,

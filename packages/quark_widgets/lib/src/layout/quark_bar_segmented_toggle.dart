@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/quark_tokens.dart';
 import 'quark_bar_icon_button.dart';
+import 'quark_bar_segmented_toggle/quark_bar_segment_button.dart';
 
 /// One choice in a [QuarkBarSegmentedToggle].
 @immutable
@@ -29,6 +30,11 @@ class QuarkBarSegment {
 ///
 /// The selected segment is inert: choosing what is already on is not a change
 /// worth a callback.
+///
+/// The frame is drawn at [QuarkBarIconButton.size], but each segment answers
+/// taps across [QuarkBarIconButton.hitSize], the same as every other bar
+/// button (#2605). Material's `SegmentedButton` cannot do both, which is why
+/// the segments are built here.
 ///
 /// Key prefixes: `bar_segment_<id>` on each segment's label, one per entry in
 /// [segments].
@@ -65,43 +71,47 @@ class QuarkBarSegmentedToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
-    return SegmentedButton<String>(
-      segments: [
-        for (final segment in segments)
-          ButtonSegment(
-            value: segment.id,
-            icon: Icon(segment.icon),
-            tooltip: segment.label,
-            label: Text(
-              segment.label,
-              key: ValueKey('bar_segment_${segment.id}'),
+    final radius = Radius.circular(tokens.radiusLg);
+    // The frame is drawn at a bar button's height, centered in the taller
+    // row the segments' tap targets make.
+    const margin = (QuarkBarIconButton.hitSize - QuarkBarIconButton.size) / 2;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: margin),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: tokens.input,
+                border: Border.all(color: tokens.border),
+                borderRadius: BorderRadius.all(radius),
+              ),
             ),
           ),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (i, segment) in segments.indexed) ...[
+              if (i > 0)
+                SizedBox(
+                  width: 1,
+                  height: QuarkBarIconButton.size,
+                  child: ColoredBox(color: tokens.border),
+                ),
+              QuarkBarSegmentButton(
+                segment: segment,
+                selected: segment.id == selectedId,
+                borderRadius: BorderRadius.horizontal(
+                  left: i == 0 ? radius : Radius.zero,
+                  right: i == segments.length - 1 ? radius : Radius.zero,
+                ),
+                onSelected: onSelected,
+              ),
+            ],
+          ],
+        ),
       ],
-      selected: {selectedId},
-      onSelectionChanged: (selection) => onSelected(selection.single),
-      showSelectedIcon: false,
-      style: SegmentedButton.styleFrom(
-        foregroundColor: tokens.secondaryForeground,
-        backgroundColor: tokens.input,
-        selectedForegroundColor: tokens.primary,
-        selectedBackgroundColor: tokens.primary.withValues(alpha: 0.12),
-        side: BorderSide(color: tokens.border),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(tokens.radiusLg),
-        ),
-        iconSize: QuarkBarIconButton.glyphSize,
-        textStyle: Theme.of(context).textTheme.labelLarge,
-        padding: EdgeInsets.symmetric(
-          horizontal: tokens.spacingSm + tokens.spacingXs,
-        ),
-        minimumSize: const Size(0, QuarkBarIconButton.size),
-        maximumSize: const Size(double.infinity, QuarkBarIconButton.size),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        // SegmentedButton floors its height at 40 and only density moves the
-        // floor: one step down is 36, a bar button's height.
-        visualDensity: const VisualDensity(vertical: -1),
-      ),
     );
   }
 }

@@ -26,7 +26,9 @@ class DocumentStatusBar extends StatelessWidget {
     final muted = cs.onSurface.withValues(alpha: 0.5);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      // No vertical padding: the toggle's 48 pixel tap target (#2605) sets
+      // the bar's height.
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         children: [
           // Page brightness toggle (#938) — bottom-left, near the page
@@ -41,24 +43,35 @@ class DocumentStatusBar extends StatelessWidget {
             style: IconButton.styleFrom(
               padding: EdgeInsets.zero,
               minimumSize: const Size(24, 24),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              tapTargetSize: MaterialTapTargetSize.padded,
             ),
             color: muted,
             onPressed: onToggleDarkPage,
           ),
           const SizedBox(width: 8),
-          DocumentStatusItem(
-            icon: QuarkIcons.edit_note,
-            label: '$wordCount words',
-            color: muted,
+          // Takes the width the save state leaves, and cuts its labels short
+          // on a phone rather than overflowing the bar.
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: DocumentStatusItem(
+                    icon: QuarkIcons.edit_note,
+                    label: '$wordCount words',
+                    color: muted,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Flexible(
+                  child: DocumentStatusItem(
+                    icon: QuarkIcons.lock_outline,
+                    label: 'Private',
+                    color: muted,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: 16),
-          DocumentStatusItem(
-            icon: QuarkIcons.lock_outline,
-            label: 'Private',
-            color: muted,
-          ),
-          const Spacer(),
           if (isReadOnly)
             DocumentStatusItem(
               icon: QuarkIcons.visibility_outlined,

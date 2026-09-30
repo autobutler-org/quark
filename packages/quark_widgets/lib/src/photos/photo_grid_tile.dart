@@ -153,12 +153,12 @@ class PhotoGridTile extends StatelessWidget {
                     tooltip: 'More',
                     iconSize: 18,
                     padding: EdgeInsets.zero,
-                    // A 40-pixel target around a 28-pixel disc: the disc is
+                    // A 48-pixel target around a 28-pixel disc: the disc is
                     // as small as a photo's corner can spare, but a finger
-                    // needs more than that to land on it.
+                    // needs more than that to land on it (#2605).
                     constraints: const BoxConstraints.tightFor(
-                      width: 40,
-                      height: 40,
+                      width: kMinInteractiveDimension,
+                      height: kMinInteractiveDimension,
                     ),
                     style: IconButton.styleFrom(foregroundColor: Colors.white),
                     icon: const DecoratedBox(

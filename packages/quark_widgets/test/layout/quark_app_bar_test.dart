@@ -211,7 +211,7 @@ void main() {
     ]) {
       final button = find.byKey(ValueKey(key));
       expect(
-        tester.getSize(button),
+        drawnSize(tester, button),
         const Size.square(QuarkBarIconButton.size),
         reason: key,
       );
@@ -224,6 +224,7 @@ void main() {
         reason: key,
       );
     }
+    await expectTapTargetsMeetGuideline(tester);
     expect(tester.takeException(), isNull);
   });
 

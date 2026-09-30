@@ -232,7 +232,6 @@ Widget _btn(IconData icon, String tooltip, VoidCallback? onPressed) {
       icon: Icon(icon),
       onPressed: onPressed,
       iconSize: 20,
-      visualDensity: VisualDensity.compact,
     ),
   );
 }

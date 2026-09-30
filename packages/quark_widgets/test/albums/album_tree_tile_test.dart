@@ -259,4 +259,13 @@ void main() {
     expect(find.byIcon(QuarkIcons.star_rounded), findsOneWidget);
     expect(find.byIcon(QuarkIcons.photo_album_outlined), findsNothing);
   });
+
+  testBothViewports('every row and button is a 48 pixel target (#2605)', (
+    tester,
+    size,
+  ) async {
+    await pumpTile(tester, size: size, expandedIds: const {1}, withMenu: true);
+
+    await expectTapTargetsMeetGuideline(tester);
+  });
 }

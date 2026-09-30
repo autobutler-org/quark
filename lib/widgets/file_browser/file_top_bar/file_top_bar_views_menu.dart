@@ -55,7 +55,6 @@ class FileTopBarViewsMenu extends StatelessWidget {
               dense: true,
               title: Text(label, style: const TextStyle(fontSize: 14)),
               controlAffinity: ListTileControlAffinity.leading,
-              visualDensity: VisualDensity.compact,
               onChanged: onDeviceToggled != null
                   ? (_) => onDeviceToggled!(device.devicePath)
                   : null,
@@ -91,7 +90,6 @@ class FileTopBarViewsMenu extends StatelessWidget {
         ListTile(
           key: const ValueKey('file_top_bar_views_grouping'),
           dense: true,
-          visualDensity: VisualDensity.compact,
           leading: Icon(
             isUnifiedView
                 ? QuarkIcons.folder_copy_outlined

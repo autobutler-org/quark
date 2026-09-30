@@ -48,13 +48,13 @@ class AlbumSidebarAllPhotosTile extends StatelessWidget {
               : Colors.transparent,
           borderRadius: radius,
         ),
-        padding: EdgeInsets.symmetric(
-          horizontal: tokens.spacingSm,
-          vertical: tokens.spacingXs + tokens.spacingXs / 2,
-        ),
+        // As tall as an album row, and its glyph lines up with theirs after
+        // the chevron's 48 pixel slot (#2605).
+        constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+        padding: EdgeInsets.only(right: tokens.spacingSm),
         child: Row(
           children: [
-            SizedBox(width: 16 + tokens.spacingXs),
+            const SizedBox(width: kMinInteractiveDimension),
             Icon(
               QuarkIcons.photo_library_outlined,
               size: 16,

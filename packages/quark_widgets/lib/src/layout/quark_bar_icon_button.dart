@@ -16,6 +16,10 @@ import '../theme/quark_tokens.dart';
 /// keeps its shape as an action comes and goes. [isBusy] swaps the glyph for
 /// a spinner and refuses taps, for an action that is already running.
 ///
+/// The button draws at [size] but answers taps across [hitSize]: the
+/// transparent margin around it is part of the target, so a thumb that lands
+/// just outside the border still presses it (WCAG 2.5.8, #2605).
+///
 /// Key prefixes: none of its own. Every bar action passes its own `key`, and
 /// that is the one a test or a `.probe` script reaches for.
 ///
@@ -41,8 +45,12 @@ class QuarkBarIconButton extends StatelessWidget {
   /// The glyph size every bar action shares.
   static const double glyphSize = 18;
 
-  /// The button's outer edge: the glyph, its padding, and the border.
+  /// The button's visible edge: the glyph, its padding, and the border.
   static const double size = 36;
+
+  /// The square the button takes up and answers taps in, [size] plus a
+  /// transparent margin: Material's minimum interactive dimension.
+  static const double hitSize = kMinInteractiveDimension;
 
   /// The glyph, from `QuarkIcons`.
   final IconData icon;
@@ -84,7 +92,7 @@ class QuarkBarIconButton extends StatelessWidget {
         padding: EdgeInsets.zero,
         minimumSize: const Size.square(size),
         maximumSize: const Size.square(size),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        tapTargetSize: MaterialTapTargetSize.padded,
         visualDensity: VisualDensity.standard,
       ),
       icon: isBusy ? QuarkLoader(size: glyphSize) : Icon(icon),

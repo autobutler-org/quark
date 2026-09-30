@@ -57,49 +57,67 @@ class FileTopBarBreadcrumb extends StatelessWidget {
     final canGoHome =
         navEnabled && normalizePath(currentPath) != normalizePath(rootPath);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: tokens.input,
-        border: Border.all(color: tokens.border),
-        borderRadius: BorderRadius.circular(tokens.radiusLg),
-      ),
-      // LayoutBuilder inside the Container so constraints.maxWidth already
-      // reflects the width after the Container's padding is subtracted.
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Home icon — always visible, never truncated.
-              MouseRegion(
-                cursor: canGoHome
-                    ? SystemMouseCursors.click
-                    : SystemMouseCursors.basic,
-                child: InkWell(
-                  key: const ValueKey('file_top_bar_home'),
-                  onTap: canGoHome ? onGoHome : null,
-                  borderRadius: BorderRadius.circular(4),
-                  child: Padding(
-                    padding: const EdgeInsets.all(2),
-                    child: Icon(
-                      QuarkIcons.home_rounded,
-                      size: 16,
-                      color: canGoHome
-                          ? colorScheme.onSurfaceVariant
-                          : colorScheme.onSurface.withValues(alpha: 0.4),
+    // The pill is drawn at a bar button's height, but every crumb in it
+    // answers taps across the full 48 pixel row around it (#2605).
+    const margin = (QuarkBarIconButton.hitSize - QuarkBarIconButton.size) / 2;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: margin),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: tokens.input,
+                border: Border.all(color: tokens.border),
+                borderRadius: BorderRadius.circular(tokens.radiusLg),
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(right: 10),
+          // LayoutBuilder inside the Padding so constraints.maxWidth already
+          // reflects the width after the padding is subtracted.
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Home icon — always visible, never truncated.
+                  MouseRegion(
+                    cursor: canGoHome
+                        ? SystemMouseCursors.click
+                        : SystemMouseCursors.basic,
+                    child: InkWell(
+                      key: const ValueKey('file_top_bar_home'),
+                      onTap: canGoHome ? onGoHome : null,
+                      borderRadius: BorderRadius.circular(4),
+                      child: SizedBox.square(
+                        dimension: kMinInteractiveDimension,
+                        child: Icon(
+                          QuarkIcons.home_rounded,
+                          size: 16,
+                          color: canGoHome
+                              ? colorScheme.onSurfaceVariant
+                              : colorScheme.onSurface.withValues(alpha: 0.4),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              if (segments.isNotEmpty) ...[
-                const SizedBox(width: 2),
-                ..._buildSmartCrumbs(context, segments, constraints.maxWidth),
-              ],
-            ],
-          );
-        },
-      ),
+                  if (segments.isNotEmpty) ...[
+                    const SizedBox(width: 2),
+                    ..._buildSmartCrumbs(
+                      context,
+                      segments,
+                      constraints.maxWidth,
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -123,12 +141,12 @@ class FileTopBarBreadcrumb extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     // Space occupied by the home icon + small gap before the first crumb.
-    const homeIconPx = 20.0; // Icon(16) + Padding(all(2)) = 16 + 4
+    const homeIconPx = kMinInteractiveDimension; // a full tap target
     const homeGapPx = 2.0;
     // Each separator (chevron icon + horizontal padding).
     const separatorPx = 22.0; // Icon(14) + Padding(horizontal(4)) = 14 + 8
-    // The "⋯" ellipsis prefix when ancestors are hidden (same visual budget).
-    const ellipsisPx = 22.0;
+    // The "⋯" ellipsis prefix when ancestors are hidden.
+    const ellipsisPx = kMinInteractiveDimension; // a full tap target
     // Hard cap on a single segment's rendered text width.
     const maxSegmentPx = 140.0;
     // Text style used for segment labels.
@@ -141,8 +159,11 @@ class FileTopBarBreadcrumb extends StatelessWidget {
       return math.min(_measureText(s, segStyle), maxSegmentPx);
     }).toList();
 
-    // Slot cost for a segment = separator + text + small horizontal padding.
-    List<double> slotCosts = segWidths.map((w) => separatorPx + w + 4).toList();
+    // Slot cost for a segment = separator + text + small horizontal padding,
+    // and never less than a full tap target.
+    List<double> slotCosts = segWidths
+        .map((w) => separatorPx + math.max(w + 4, kMinInteractiveDimension))
+        .toList();
 
     // Greedily add segments from right to left until the budget is exhausted.
     double accumulated = 0;
@@ -174,7 +195,6 @@ class FileTopBarBreadcrumb extends StatelessWidget {
         final targetPath = '/${segments.take(idx + 1).join('/')}';
         return ListTile(
           dense: true,
-          visualDensity: VisualDensity.compact,
           leading: Icon(
             idx == 0 ? QuarkIcons.home_rounded : QuarkIcons.folder_rounded,
             size: 18,
@@ -220,8 +240,8 @@ class FileTopBarBreadcrumb extends StatelessWidget {
                       }
                     },
               borderRadius: BorderRadius.circular(4),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: SizedBox.square(
+                dimension: kMinInteractiveDimension,
                 child: Icon(
                   QuarkIcons.more_horiz_rounded,
                   size: 14,
@@ -262,8 +282,14 @@ class FileTopBarBreadcrumb extends StatelessWidget {
           child: InkWell(
             onTap: tappable ? () => onPathSelected!(targetPath) : null,
             borderRadius: BorderRadius.circular(4),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+            // A full tap target, however short the name (#2605).
+            child: Container(
+              height: kMinInteractiveDimension,
+              constraints: const BoxConstraints(
+                minWidth: kMinInteractiveDimension,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              alignment: Alignment.center,
               child: Text(
                 label,
                 style: TextStyle(

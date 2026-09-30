@@ -116,29 +116,32 @@ class AlbumTreeTile extends StatelessWidget {
                     : Colors.transparent,
                 borderRadius: radius,
               ),
-              padding: EdgeInsets.only(
-                left: tokens.spacingSm + indent,
-                right: tokens.spacingSm,
-                top: tokens.spacingXs + tokens.spacingXs / 2,
-                bottom: tokens.spacingXs + tokens.spacingXs / 2,
+              // Every row, and the chevron and menu buttons in it, answers
+              // taps across at least 48 pixels (#2605).
+              constraints: const BoxConstraints(
+                minHeight: kMinInteractiveDimension,
               ),
+              padding: EdgeInsets.only(left: indent, right: tokens.spacingXs),
               child: Row(
                 children: [
                   if (hasChildren)
-                    GestureDetector(
+                    IconButton(
                       key: ValueKey('album_expand_${album.id}'),
-                      onTap: () => onToggleExpanded(album.id),
-                      child: Icon(
+                      tooltip: isExpanded ? 'Collapse' : 'Expand',
+                      icon: Icon(
                         isExpanded
                             ? QuarkIcons.expand_more_rounded
                             : QuarkIcons.chevron_right_rounded,
-                        size: 16,
-                        color: colorScheme.onSurfaceVariant,
                       ),
+                      iconSize: 16,
+                      color: colorScheme.onSurfaceVariant,
+                      style: const ButtonStyle(
+                        tapTargetSize: MaterialTapTargetSize.padded,
+                      ),
+                      onPressed: () => onToggleExpanded(album.id),
                     )
                   else
-                    const SizedBox(width: 16),
-                  SizedBox(width: tokens.spacingXs),
+                    const SizedBox(width: kMinInteractiveDimension),
                   Icon(
                     systemIcon ?? QuarkIcons.photo_album_outlined,
                     size: 16,
@@ -179,14 +182,10 @@ class AlbumTreeTile extends StatelessWidget {
                         tooltip: 'Actions for ${album.name}',
                         icon: const Icon(QuarkIcons.more_vert),
                         iconSize: 16,
-                        // The row is 13px text; a default 48px button would
-                        // double its height.
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(
-                          width: 24,
-                          height: 24,
-                        ),
                         color: colorScheme.onSurfaceVariant,
+                        style: const ButtonStyle(
+                          tapTargetSize: MaterialTapTargetSize.padded,
+                        ),
                         onPressed: () => openMenu(quarkMenuAnchor(context)),
                       ),
                     ),

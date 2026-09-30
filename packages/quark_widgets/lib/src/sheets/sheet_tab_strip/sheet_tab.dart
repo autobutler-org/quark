@@ -146,13 +146,10 @@ class SheetTab extends StatelessWidget {
               icon: const Icon(QuarkIcons.more_vert),
               iconSize: 16,
               color: tokens.secondaryForeground,
-              padding: EdgeInsets.zero,
-              // Long-pressing the tab also opens the menu, so the button
-              // keeps to its icon box and leaves the width to the label.
+              // A full 48 pixel target (#2605): the label gives up the width.
               style: const ButtonStyle(
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                tapTargetSize: MaterialTapTargetSize.padded,
               ),
-              constraints: const BoxConstraints.tightFor(width: 24, height: 24),
               onPressed: () => _openMenu(context),
             ),
           ],

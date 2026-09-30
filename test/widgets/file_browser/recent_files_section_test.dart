@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/widgets/file_browser/recent_files_section.dart';
 
+import '../../support/tap_targets.dart';
+
 FileNode _file(String name) => FileNode(
   name: name,
   size: 1,
@@ -78,4 +80,20 @@ void main() {
     await pumpSection(tester, 0);
     expect(fetches, hasLength(1));
   });
+
+  for (final (label, size) in [
+    ('narrow', narrowViewport),
+    ('wide', wideViewport),
+  ]) {
+    testWidgets('each chip and its folder badge are 48 pixel targets '
+        '($label, #2605)', (tester) async {
+      setViewport(tester, size);
+      await pumpSection(tester, 0);
+      fetches.single.complete([_file('a.txt'), _file('b.txt')]);
+      await tester.pump();
+
+      await expectTapTargetsMeetGuideline(tester);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

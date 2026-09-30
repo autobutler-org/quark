@@ -133,7 +133,10 @@ void main() {
 
     for (final i in [0, 1]) {
       expect(tester.getSize(tab(i)).width, 160);
-      expect(tester.getSize(menuButton(i)), const Size(24, 24));
+      expect(
+        tester.getSize(menuButton(i)),
+        const Size.square(kMinInteractiveDimension),
+      );
     }
     expect(gap(0), gap(1));
     expect(tester.takeException(), isNull);
@@ -319,4 +322,17 @@ void main() {
       expect(other.style?.color, tokens.mutedForeground);
     });
   }
+
+  testBothViewports('every tab and button is a 48 pixel target (#2605)', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      Align(alignment: Alignment.bottomCenter, child: strip(three)),
+      size: size,
+    );
+
+    await expectTapTargetsMeetGuideline(tester);
+  });
 }

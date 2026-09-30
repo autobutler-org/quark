@@ -52,8 +52,6 @@ class AlbumSidebarSortButton extends StatelessWidget {
       builder: (context, controller, _) => IconButton(
         key: const ValueKey('album_sort'),
         icon: const Icon(QuarkIcons.sort, size: 16),
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
         tooltip: 'Sort albums',
         onPressed: () =>
             controller.isOpen ? controller.close() : controller.open(),

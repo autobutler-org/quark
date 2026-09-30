@@ -218,4 +218,22 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testBothViewports('its buttons are 48 pixel targets (#2605)', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      QuarkMemberList(
+        members: members,
+        permissions: const {ChatPermission.manageMembers},
+        onAddMembers: () {},
+        onRemove: (_) {},
+      ),
+      size: size,
+    );
+
+    await expectTapTargetsMeetGuideline(tester);
+  });
 }

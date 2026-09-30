@@ -43,7 +43,17 @@ void main() {
   ) async {
     await pumpAt(tester, chip(onPressed: () {}), size: size);
 
-    expect(tester.getSize(find.byKey(key)).height, QuarkBarIconButton.size);
+    expect(drawnSize(tester, find.byKey(key)).height, QuarkBarIconButton.size);
+    expect(tester.getSize(find.byKey(key)).height, QuarkBarIconButton.hitSize);
+  });
+
+  testBothViewports('answers taps across a 48 pixel target', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(tester, chip(onPressed: () {}), size: size);
+
+    await expectTapTargetsMeetGuideline(tester);
   });
 
   testWidgets('wide: shows its label', (tester) async {
@@ -59,7 +69,7 @@ void main() {
     expect(find.text('Upload'), findsNothing);
     expect(find.byTooltip('Upload'), findsOneWidget);
     expect(
-      tester.getSize(find.byKey(key)),
+      drawnSize(tester, find.byKey(key)),
       const Size.square(QuarkBarIconButton.size),
     );
   });

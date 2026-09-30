@@ -78,4 +78,14 @@ void main() {
       lessThanOrEqualTo(QuarkBrandButton.preferredWidth),
     );
   });
+
+  testBothViewports('is a 48 pixel target (#2605)', (tester, size) async {
+    await pumpAt(
+      tester,
+      QuarkBrandButton(label: 'Files', onTap: () {}),
+      size: size,
+    );
+
+    await expectTapTargetsMeetGuideline(tester);
+  });
 }

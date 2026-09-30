@@ -295,4 +295,17 @@ void main() {
     );
     expect(labelWeight(tester, 'Trips'), FontWeight.w600);
   });
+
+  testBothViewports('every row and button is a 48 pixel target (#2605)', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      bounded(sidebar(withAllPhotos: true, withSort: true)),
+      size: size,
+    );
+
+    await expectTapTargetsMeetGuideline(tester);
+  });
 }

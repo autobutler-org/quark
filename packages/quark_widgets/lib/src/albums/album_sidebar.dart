@@ -161,10 +161,9 @@ class AlbumSidebar extends StatelessWidget {
       mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
       children: [
         Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: tokens.spacingSm + tokens.spacingXs,
-            vertical: tokens.spacingXs + tokens.spacingXs / 2,
-          ),
+          // No vertical padding: the header's 48 pixel buttons (#2605) set
+          // its height.
+          padding: EdgeInsets.only(left: tokens.spacingSm + tokens.spacingXs),
           child: Row(
             children: [
               Text(
@@ -182,8 +181,6 @@ class AlbumSidebar extends StatelessWidget {
               IconButton(
                 key: const ValueKey('album_create'),
                 icon: const Icon(QuarkIcons.add_rounded, size: 16),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
                 tooltip: 'New album',
                 onPressed: onCreateAlbum,
               ),
