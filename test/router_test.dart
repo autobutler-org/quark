@@ -936,6 +936,11 @@ void main() {
                 Text('chat ${state.pathParameters['channelId']}'),
           ),
           GoRoute(
+            path: '${AppRoutes.calendar}/:view',
+            builder: (_, state) =>
+                Text('calendar ${state.pathParameters['view']}'),
+          ),
+          GoRoute(
             path: AppRoutes.files,
             builder: (_, _) => const Text('files'),
           ),
@@ -947,7 +952,10 @@ void main() {
       return r;
     }
 
-    Future<void> signIn({required bool chatEnabled}) async {
+    Future<void> signIn({
+      required bool chatEnabled,
+      bool calendarEnabled = true,
+    }) async {
       await reset();
       await settings.addHost(
         HostEntry(name: 'Home', hostAddress: 'http://chat.local'),
@@ -961,6 +969,12 @@ void main() {
           label: 'Chat',
           description: '',
           enabled: chatEnabled,
+        ),
+        FeatureFlag(
+          key: FeatureFlag.calendar,
+          label: 'Calendar',
+          description: '',
+          enabled: calendarEnabled,
         ),
       ];
       featureFlagsProbe = () async => flags;
@@ -996,6 +1010,20 @@ void main() {
         final r = await pumpGated(tester, location);
         expect(at(r), AppRoutes.files, reason: location);
       }
+    });
+
+    testWidgets('calendar turned off sends its views to Files (#2609)', (
+      tester,
+    ) async {
+      await signIn(chatEnabled: true, calendarEnabled: false);
+      final r = await pumpGated(tester, '/calendar/week');
+      expect(at(r), AppRoutes.files);
+    });
+
+    testWidgets('calendar on keeps its views, with chat off', (tester) async {
+      await signIn(chatEnabled: false);
+      final r = await pumpGated(tester, '/calendar/week');
+      expect(at(r), '/calendar/week');
     });
 
     testWidgets('chat turned off under a signed-in member leaves /chat', (

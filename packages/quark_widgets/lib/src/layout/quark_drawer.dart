@@ -16,7 +16,7 @@ enum QuarkDrawerSection {
   /// The photo library.
   photos,
 
-  /// The household calendar.
+  /// The household calendar, a beta: its row carries a [QuarkBetaBadge].
   calendar,
 
   /// Deleted files waiting to be restored or purged.
@@ -44,6 +44,9 @@ enum QuarkDrawerSection {
   settings,
 }
 
+/// The sections still in beta, whose rows carry a [QuarkBetaBadge].
+const _betaSections = {QuarkDrawerSection.calendar, QuarkDrawerSection.chat};
+
 /// The app's navigation drawer: one row per [QuarkDrawerSection] the caller
 /// offers, with the current one marked.
 ///
@@ -62,8 +65,8 @@ enum QuarkDrawerSection {
 /// (#2230). Adding and editing Quarks stays in Settings, a row below. With
 /// one it is a plain label.
 ///
-/// A section still in beta, Chat for now, carries a [QuarkBetaBadge] beside
-/// its label.
+/// A section still in beta, Calendar and Chat for now, carries a
+/// [QuarkBetaBadge] beside its label.
 ///
 /// Key prefixes: `drawer_<section>` on each row, for example `drawer_photos`
 /// and `drawer_users`; `drawer_host` on the header when it names a Quark;
@@ -126,7 +129,8 @@ class QuarkDrawer extends StatelessWidget {
   /// Called when the Photos row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapPhotos;
 
-  /// Called when the Calendar row is tapped. Null hides the row.
+  /// Called when the Calendar row is tapped. Null hides the row, as when an
+  /// admin has turned the calendar beta off.
   final FutureOr<void> Function()? onTapCalendar;
 
   /// Called when the Trash row is tapped. Null hides the row.
@@ -229,7 +233,7 @@ class QuarkDrawer extends StatelessWidget {
               ListTile(
                 key: ValueKey('drawer_${section.name}'),
                 leading: Icon(icon),
-                title: section == QuarkDrawerSection.chat
+                title: _betaSections.contains(section)
                     ? Row(
                         children: [
                           Flexible(child: Text(label)),

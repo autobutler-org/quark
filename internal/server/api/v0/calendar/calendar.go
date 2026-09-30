@@ -3,7 +3,8 @@
 // admin-only. A repeating event is served once, as its series; the client
 // expands the occurrences. Each event names the account that created it and
 // says whether that is the caller (#2544), so a client can narrow the calendar
-// by person.
+// by person. Every route is a 404 while an admin has the calendar feature flag
+// turned off (PUT /settings/features/calendar).
 package v0_calendar
 
 import "github.com/autobutler-org/quark/pkg/util/serverutil"

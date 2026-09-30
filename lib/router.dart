@@ -777,12 +777,17 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
     return await _callerIsAdmin() ? null : AppRoutes.files;
   }
 
-  // The chat beta, which an admin can turn off (#2421). Asked of the Quark
-  // like the admin pages above: a link or a reload must not open a page
-  // whose every request would 404.
-  if (AppSettings.instance.sessionToken != null &&
-      _isUnderAny(const {AppRoutes.chat}, location)) {
-    return await _featureIsEnabled(FeatureFlag.chat) ? null : AppRoutes.files;
+  // The betas an admin can turn off (#2421, #2609). Asked of the Quark like
+  // the admin pages above: a link or a reload must not open a page whose
+  // every request would 404.
+  for (final (route, flag) in const [
+    (AppRoutes.chat, FeatureFlag.chat),
+    (AppRoutes.calendar, FeatureFlag.calendar),
+  ]) {
+    if (AppSettings.instance.sessionToken != null &&
+        _isUnderAny({route}, location)) {
+      return await _featureIsEnabled(flag) ? null : AppRoutes.files;
+    }
   }
 
   // Already authenticated.

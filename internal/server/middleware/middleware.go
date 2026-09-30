@@ -1,6 +1,6 @@
 // Package middleware is the gin middleware every request passes through — dependency injection, connected-device
 // tracking, and session auth with its short list of exempt paths — plus RequireAdmin for the admin group and
-// RequireChatEnabled for the chat routes.
+// RequireFeatureEnabled for the routes of a beta feature.
 package middleware
 
 import (
@@ -352,13 +352,14 @@ func RequireAdmin(deps deputil.Dependencies) gin.HandlerFunc {
 	}
 }
 
-// RequireChatEnabled answers 404 for every route behind it while an admin has
-// the chat feature flag turned off (#2421, #2542), as if chat were not there. Nothing stored
-// is touched, so turning it back on picks up where it left off.
-func RequireChatEnabled() gin.HandlerFunc {
+// RequireFeatureEnabled answers 404 for every route behind it while an admin
+// has the beta feature flag key turned off (#2421, #2542), as if the feature
+// were not there. Nothing stored is touched, so turning it back on picks up
+// where it left off.
+func RequireFeatureEnabled(key string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !featureflagutil.Enabled(featureflagutil.Chat) {
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "chat is turned off"})
+		if !featureflagutil.Enabled(key) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": key + " is turned off"})
 			return
 		}
 		c.Next()

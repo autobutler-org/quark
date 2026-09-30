@@ -29,18 +29,8 @@ void main() {
         .setMockMethodCallHandler(secureStorage, null);
   });
   final scaffoldKey = GlobalKey<ScaffoldState>();
-  const chatOn = FeatureFlag(
-    key: FeatureFlag.chat,
-    label: 'Chat',
-    description: '',
-    enabled: true,
-  );
-  const chatOff = FeatureFlag(
-    key: FeatureFlag.chat,
-    label: 'Chat',
-    description: '',
-    enabled: false,
-  );
+  FeatureFlag flag(String key, {required bool enabled}) =>
+      FeatureFlag(key: key, label: key, description: '', enabled: enabled);
 
   setUp(() => settings.isAdmin.value = false);
   tearDown(() {
@@ -116,21 +106,27 @@ void main() {
     expect(files.selected, isTrue);
   });
 
-  testWidgets('offers Chat, marked beta, only while the beta is on', (
-    tester,
-  ) async {
-    await pumpDrawer(tester);
-    expect(find.byKey(const ValueKey('drawer_chat')), findsNothing);
+  for (final key in [FeatureFlag.chat, FeatureFlag.calendar]) {
+    testWidgets('offers $key, marked beta, only while its beta is on', (
+      tester,
+    ) async {
+      final row = find.byKey(ValueKey('drawer_$key'));
+      await pumpDrawer(tester);
+      expect(row, findsNothing);
 
-    settings.featureFlags.value = const [chatOn];
-    await tester.pump();
-    expect(find.byKey(const ValueKey('drawer_chat')), findsOneWidget);
-    expect(find.byType(QuarkBetaBadge), findsOneWidget);
+      settings.featureFlags.value = [flag(key, enabled: true)];
+      await tester.pump();
+      expect(row, findsOneWidget);
+      expect(
+        find.descendant(of: row, matching: find.byType(QuarkBetaBadge)),
+        findsOneWidget,
+      );
 
-    settings.featureFlags.value = const [chatOff];
-    await tester.pump();
-    expect(find.byKey(const ValueKey('drawer_chat')), findsNothing);
-  });
+      settings.featureFlags.value = [flag(key, enabled: false)];
+      await tester.pump();
+      expect(row, findsNothing);
+    });
+  }
 
   testWidgets('keeps admin-only pages out of a non-admin drawer', (
     tester,

@@ -13,4 +13,13 @@ var registry = []Flag{
 		IntroducedIn: "#2414",
 		SunsetIssue:  2577,
 	},
+	{
+		Key:   Calendar,
+		Label: "Calendar",
+		Description: "The household calendar everyone on this Quark shares. Turning it off hides the " +
+			"calendar from everyone; stored events are kept, not deleted. It is not a security measure.",
+		Default:      true,
+		IntroducedIn: "#1144",
+		SunsetIssue:  2610,
+	},
 }

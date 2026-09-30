@@ -30,6 +30,7 @@ import (
 	v0_videos "github.com/autobutler-org/quark/internal/server/api/v0/videos"
 	"github.com/autobutler-org/quark/internal/server/middleware"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/featureflagutil"
 	"github.com/autobutler-org/quark/pkg/util/healthutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
@@ -51,7 +52,6 @@ func setupRouters(engine *gin.Engine, systemCollector *healthutil.Collector, dep
 		v0_access.NewRouter(),
 		v0_auth.NewRouter(),
 		v0_books.NewRouter(),
-		v0_calendar.NewRouter(),
 		v0_files.NewRouter(),
 		v0_devices.NewRouter(),
 		v0_events.NewRouter(),
@@ -72,9 +72,14 @@ func setupRouters(engine *gin.Engine, systemCollector *healthutil.Collector, dep
 		serverutil.RegisterRouterWithGroup(group, r)
 	}
 
-	// The chat beta, which an admin can turn off (#2421).
-	chatGroup := group.Group("", middleware.RequireChatEnabled())
-	serverutil.RegisterRouterWithGroup(chatGroup, v0_chat.NewRouter())
+	// Betas an admin can turn off (#2421, #2609), each behind its flag.
+	betaRouters := map[string]serverutil.Router{
+		featureflagutil.Chat:     v0_chat.NewRouter(),
+		featureflagutil.Calendar: v0_calendar.NewRouter(),
+	}
+	for key, r := range betaRouters {
+		serverutil.RegisterRouterWithGroup(group.Group("", middleware.RequireFeatureEnabled(key)), r)
+	}
 
 	// Admin-only routes — wrapped with RequireAdmin middleware.
 	adminGroup := group.Group("", middleware.RequireAdmin(deps))
