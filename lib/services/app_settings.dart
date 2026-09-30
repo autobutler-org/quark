@@ -271,20 +271,16 @@ class AppSettings {
             ? 'http://10.0.2.2:8080'
             : 'http://localhost:8080';
         _hosts = [HostEntry(name: 'Local', hostAddress: loopback)];
-        _activeIndex = 0;
-        await _saveHosts();
       } else if (kIsWeb) {
         // On the web the app is served by the Quark itself, so target it.
         _hosts = [HostEntry(name: 'Default', hostAddress: '/')];
-        _activeIndex = 0;
-        await _saveHosts();
       } else {
         // A native app is separate from the Quark it talks to, so start on
         // the hostname every device advertises — the one on the QR card.
         _hosts = [HostEntry(name: 'Quark', hostAddress: 'https://quark.local')];
-        _activeIndex = 0;
-        await _saveHosts();
       }
+      _activeIndex = 0;
+      await _saveHosts();
     }
 
     // Decode the token store now that the active host is settled. A JSON object
