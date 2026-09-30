@@ -593,6 +593,47 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkSheet',
+    group: 'Layout',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FilledButton(
+          onPressed: () async {
+            await showQuarkSheet<void>(
+              context,
+              title: 'Members',
+              builder: (_) => Column(
+                children: [
+                  for (var i = 1; i <= 30; i++)
+                    ListTile(title: Text('Member $i')),
+                ],
+              ),
+            );
+            log('showQuarkSheet closed');
+          },
+          child: const Text('Open as a modal sheet'),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: 360,
+          height: 400,
+          child: Material(
+            color: QuarkTokens.of(context).card,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: QuarkSheet(
+                title: 'Drawn in place',
+                onClose: () => log('QuarkSheet.onClose'),
+                child: const Text('Content scrolls under the header.'),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkToolbar',
     group: 'Layout',
     build: (context, log) => Column(
