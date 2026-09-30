@@ -24,7 +24,7 @@ import (
 // @Tags albums
 // @Produce json
 // @Param id path int true "Album ID"
-// @Param sort query string false "Sort field: added (date added) or name (default added)"
+// @Param sort query string false "Sort field: added (date added), taken (date taken) or name (default added)"
 // @Param order query string false "Sort order: asc or desc (default desc)"
 // @Success 200 {array} AlbumItemJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
@@ -73,6 +73,7 @@ func listAlbumItems(c *gin.Context) *serverutil.Response {
 			DeviceSerial: item.DeviceSerial,
 			RelPath:      item.RelPath,
 			AddedAt:      sqlutil.FormatTime(item.AddedAt),
+			TakenAt:      takenAt(listResult.TakenAt, item.ID),
 		})
 	}
 

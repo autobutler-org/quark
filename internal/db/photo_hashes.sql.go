@@ -131,14 +131,115 @@ func (q *Queries) ListNearDuplicates(ctx context.Context) ([]ListNearDuplicatesR
 	return items, nil
 }
 
+const listPhotoHashStates = `-- name: ListPhotoHashStates :many
+SELECT device_serial, rel_path, dhash, content_hash IS NOT NULL AS has_content_hash, taken_checked
+FROM photo_hashes
+`
+
+type ListPhotoHashStatesRow struct {
+	DeviceSerial   string
+	RelPath        string
+	Dhash          sql.NullString
+	HasContentHash bool
+	TakenChecked   bool
+}
+
+// ListPhotoHashStates reports what is stored for every photo, for the
+// backfill to find what is missing.
+func (q *Queries) ListPhotoHashStates(ctx context.Context) ([]ListPhotoHashStatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPhotoHashStates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPhotoHashStatesRow
+	for rows.Next() {
+		var i ListPhotoHashStatesRow
+		if err := rows.Scan(
+			&i.DeviceSerial,
+			&i.RelPath,
+			&i.Dhash,
+			&i.HasContentHash,
+			&i.TakenChecked,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPhotoTakenAt = `-- name: ListPhotoTakenAt :many
+SELECT device_serial, rel_path, taken_at
+FROM photo_hashes
+WHERE taken_at IS NOT NULL
+`
+
+type ListPhotoTakenAtRow struct {
+	DeviceSerial string
+	RelPath      string
+	TakenAt      sql.NullTime
+}
+
+// ListPhotoTakenAt returns every capture date known, for the date-taken sort.
+func (q *Queries) ListPhotoTakenAt(ctx context.Context) ([]ListPhotoTakenAtRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPhotoTakenAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPhotoTakenAtRow
+	for rows.Next() {
+		var i ListPhotoTakenAtRow
+		if err := rows.Scan(&i.DeviceSerial, &i.RelPath, &i.TakenAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setPhotoTakenAt = `-- name: SetPhotoTakenAt :exec
+UPDATE photo_hashes
+SET taken_at = ?, taken_checked = 1
+WHERE device_serial = ? AND rel_path = ?
+`
+
+type SetPhotoTakenAtParams struct {
+	TakenAt      sql.NullTime
+	DeviceSerial string
+	RelPath      string
+}
+
+// SetPhotoTakenAt records the capture date of a photo whose hashes are
+// already stored (#2592).
+func (q *Queries) SetPhotoTakenAt(ctx context.Context, arg SetPhotoTakenAtParams) error {
+	_, err := q.db.ExecContext(ctx, setPhotoTakenAt, arg.TakenAt, arg.DeviceSerial, arg.RelPath)
+	return err
+}
+
 const upsertPhotoHash = `-- name: UpsertPhotoHash :exec
-INSERT INTO photo_hashes (device_serial, rel_path, dhash, content_hash)
-VALUES (?, ?, ?, ?)
+INSERT INTO photo_hashes (device_serial, rel_path, dhash, content_hash, taken_at, taken_checked)
+VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT (device_serial, rel_path)
 DO UPDATE SET
-    dhash        = excluded.dhash,
-    content_hash = excluded.content_hash,
-    computed_at  = datetime('now')
+    dhash         = excluded.dhash,
+    content_hash  = excluded.content_hash,
+    taken_at      = CASE WHEN excluded.taken_checked THEN excluded.taken_at ELSE photo_hashes.taken_at END,
+    taken_checked = photo_hashes.taken_checked OR excluded.taken_checked,
+    computed_at   = datetime('now')
 `
 
 type UpsertPhotoHashParams struct {
@@ -146,14 +247,21 @@ type UpsertPhotoHashParams struct {
 	RelPath      string
 	Dhash        sql.NullString
 	ContentHash  sql.NullString
+	TakenAt      sql.NullTime
+	TakenChecked bool
 }
 
+// UpsertPhotoHash stores a photo's hashes, and its capture date when
+// taken_checked says the EXIF was read. A write that did not read it keeps
+// the date already stored.
 func (q *Queries) UpsertPhotoHash(ctx context.Context, arg UpsertPhotoHashParams) error {
 	_, err := q.db.ExecContext(ctx, upsertPhotoHash,
 		arg.DeviceSerial,
 		arg.RelPath,
 		arg.Dhash,
 		arg.ContentHash,
+		arg.TakenAt,
+		arg.TakenChecked,
 	)
 	return err
 }

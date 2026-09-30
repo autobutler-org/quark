@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
@@ -132,4 +133,14 @@ func buildTree(albums []AlbumJSON) []AlbumJSON {
 		}
 	}
 	return roots
+}
+
+// takenAt formats an item's capture date the way AddedAt is formatted, or
+// returns "" when the listing has none for it.
+func takenAt(dates map[int64]time.Time, id int64) string {
+	t, ok := dates[id]
+	if !ok {
+		return ""
+	}
+	return sqlutil.FormatTime(t)
 }

@@ -14,9 +14,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/photoutil"
 )
 
 // Sentinel errors the caller maps onto a status code. Their text is the copy a
@@ -113,8 +115,9 @@ type ListItemsParams struct {
 	// Access leaves out the items the caller cannot read (#1904).
 	Access  accessutil.Access
 	AlbumID int64
-	// Sort is photoutil.SortAdded (default) or photoutil.SortName; Order is
-	// photoutil.OrderDesc (default) or photoutil.OrderAsc (#2509).
+	// Sort is photoutil.SortAdded (default), photoutil.SortName or
+	// photoutil.SortTaken; Order is photoutil.OrderDesc (default) or
+	// photoutil.OrderAsc (#2509, #2592).
 	Sort  string
 	Order string
 }
@@ -123,12 +126,17 @@ type ListItemsParams struct {
 // order.
 type ListItemsResult struct {
 	Items []db.PhotoAlbumItem
+	// TakenAt maps an item's ID to its photo's EXIF capture date, under
+	// photoutil.SortTaken, for the items whose date is known.
+	TakenAt map[int64]time.Time
 }
 
 // ListItems returns an album's items the caller can read, sorted by Sort and
 // Order. photo_album_items has no filename column, so a name sort compares
 // each item's RelPath base name case-insensitively; an added-date sort uses
-// the SQL query's own added_at DESC order, reversed in Go for ascending.
+// the SQL query's own added_at DESC order, reversed in Go for ascending. A
+// taken-date sort orders by the photo's capture date, standing in the time it
+// joined the album for a photo without one.
 func ListItems(ctx context.Context, params ListItemsParams) (ListItemsResult, error) {
 	items, err := params.Queries.ListAlbumItems(ctx, params.AlbumID)
 	if err != nil {
@@ -140,8 +148,22 @@ func ListItems(ctx context.Context, params ListItemsParams) (ListItemsResult, er
 			visible = append(visible, item)
 		}
 	}
-	sortItems(visible, params.Sort, params.Order)
-	return ListItemsResult{Items: visible}, nil
+	var takenAt map[int64]time.Time
+	if params.Sort == photoutil.SortTaken {
+		taken, err := photoutil.TakenDates(photoutil.TakenDatesParams{Ctx: ctx, Queries: params.Queries})
+		if err != nil {
+			return ListItemsResult{}, err
+		}
+		takenAt = map[int64]time.Time{}
+		for _, item := range visible {
+			key := photoutil.DuplicatePhoto{DeviceSerial: item.DeviceSerial, RelPath: accessutil.Canonical(item.RelPath)}
+			if t, ok := taken.Dates[key]; ok {
+				takenAt[item.ID] = t
+			}
+		}
+	}
+	sortItems(visible, params.Sort, params.Order, takenAt)
+	return ListItemsResult{Items: visible, TakenAt: takenAt}, nil
 }
 
 // CreateAlbum creates an album, refusing a name with '/' or one a sibling

@@ -23,6 +23,9 @@ type AlbumItemJSON struct {
 	DeviceSerial string `json:"deviceSerial"`
 	RelPath      string `json:"relPath"`
 	AddedAt      string `json:"addedAt"`
+	// TakenAt is the photo's EXIF capture date, sent under sort=taken when
+	// it is known (#2592).
+	TakenAt string `json:"takenAt,omitempty"`
 }
 
 type addPhotoRequest struct {
