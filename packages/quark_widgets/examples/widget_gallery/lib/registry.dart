@@ -5,6 +5,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 import 'calendar_demo_data.dart';
 import 'widgets/album_sidebar_demo.dart';
 import 'widgets/album_tree_demo.dart';
+import 'widgets/calendar_event_editor_demo.dart';
 import 'widgets/chat_demo_data.dart';
 import 'widgets/chat_layout_demo.dart';
 import 'widgets/duplicate_group_list_demo.dart';
@@ -1959,6 +1960,50 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'CalendarEventEditor',
+    group: 'Calendar',
+    build: (context, log) => Wrap(
+      spacing: 24,
+      runSpacing: 24,
+      children: [
+        FramedViewport(
+          width: 480,
+          height: 700,
+          child: Material(
+            child: CalendarEventEditorDemo(
+              initial: CalendarEventDraft(
+                title: 'Vet — Biscuit',
+                start: DateTime(2026, 9, 29, 16),
+                end: DateTime(2026, 9, 29, 16, 45),
+                reminderMinutes: 30,
+                colorIndex: 2,
+                location: 'Riverside Vet Clinic',
+                notes: 'Bring the vaccination card.',
+              ),
+              log: log,
+            ),
+          ),
+        ),
+        FramedViewport(
+          width: 390,
+          height: 760,
+          child: Material(
+            child: CalendarEventEditorDemo(
+              initial: CalendarEventDraft.at(DateTime(2026, 9, 17, 16))
+                  .copyWith(
+                    title: 'Piano lesson',
+                    repeat: CalendarRepeat.weekly,
+                    reminderMinutes: 15,
+                  ),
+              isNew: true,
+              log: log,
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'CalendarMonthGrid',
     group: 'Calendar',
     build: (context, log) => Wrap(
@@ -1999,6 +2044,27 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'CalendarReminderBanner',
+    group: 'Calendar',
+    build: (context, log) => SizedBox(
+      width: 640,
+      child: Column(
+        spacing: 12,
+        children: [
+          for (final item in galleryEvents.where(
+            (e) => e.eventId == 14 || (e.eventId == 5),
+          ))
+            CalendarReminderBanner(
+              item: item,
+              now: galleryNow,
+              onOpen: () => log('onOpen ${item.key}'),
+              onDismiss: () => log('onDismiss ${item.key}'),
+            ),
+        ],
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'CalendarTimeGrid',
     group: 'Calendar',
     build: (context, log) => Wrap(
@@ -2022,6 +2088,49 @@ final List<GalleryEntry> registry = [
               onSlotTap: (start) => log('onSlotTap $start'),
               onEventTap: (item) => log('onEventTap ${item.key}'),
               onDayTap: (day) => log('onDayTap ${CalendarDates.key(day)}'),
+            ),
+          ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'CalendarUpcomingList',
+    group: 'Calendar',
+    build: (context, log) => Wrap(
+      spacing: 24,
+      runSpacing: 24,
+      children: [
+        for (final (width, empty) in const [
+          (900.0, false),
+          (390.0, false),
+          (390.0, true),
+        ])
+          FramedViewport(
+            width: width,
+            height: 620,
+            child: CalendarUpcomingList(
+              days: [
+                for (var i = 0; i < 7; i++)
+                  CalendarDayEvents(
+                    day: CalendarDates.addDays(galleryToday, i),
+                    events: empty
+                        ? const []
+                        : galleryEvents
+                              .where(
+                                (e) =>
+                                    CalendarDates.isSameDay(
+                                      e.start,
+                                      CalendarDates.addDays(galleryToday, i),
+                                    ) &&
+                                    (e.allDay || e.end.isAfter(galleryNow)),
+                              )
+                              .toList(),
+                  ),
+              ],
+              today: galleryToday,
+              now: galleryNow,
+              onEventTap: (item) => log('onEventTap ${item.key}'),
+              onAddEvent: () => log('onAddEvent'),
             ),
           ),
       ],
