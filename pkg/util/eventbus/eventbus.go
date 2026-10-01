@@ -72,6 +72,11 @@ const (
 	// EventChatReactionChanged fires when a reaction is added to or removed
 	// from a chat message (#2426). Data is a ChatReactionChanged.
 	EventChatReactionChanged EventKind = "chat_reaction_changed"
+
+	// EventCalendarChanged fires when a calendar event is created, updated
+	// or deleted. Data is the event's id; Path is empty. The calendar is
+	// shared by every account (#1144), so every client hears it.
+	EventCalendarChanged EventKind = "calendar_changed"
 )
 
 // ChatChannelChanged is the data of a chat_channel_changed, chat_key_needed or
