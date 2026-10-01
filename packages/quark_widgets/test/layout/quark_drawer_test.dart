@@ -318,7 +318,7 @@ void main() {
     expect(find.byTooltip('Switch Quark'), findsNothing);
   });
 
-  testBothViewports('marks Chat as a beta and hides it when not offered', (
+  testBothViewports('marks the betas and hides each when not offered', (
     tester,
     size,
   ) async {
@@ -327,28 +327,37 @@ void main() {
       drawerWith(QuarkDrawerSection.files, everyCallback([])),
       size: size,
     );
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('drawer_chat')),
-      50,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('drawer_chat')),
-        matching: find.byType(QuarkBetaBadge),
-      ),
-      findsOneWidget,
-    );
-    expect(find.byType(QuarkBetaBadge), findsOneWidget);
+    for (final section in [
+      QuarkDrawerSection.calendar,
+      QuarkDrawerSection.chat,
+    ]) {
+      final row = find.byKey(ValueKey('drawer_${section.name}'));
+      await tester.scrollUntilVisible(row, 50);
+      expect(
+        find.descendant(of: row, matching: find.byType(QuarkBetaBadge)),
+        findsOneWidget,
+        reason: section.name,
+      );
+    }
 
-    await pumpAt(
-      tester,
-      drawerWith(
-        QuarkDrawerSection.files,
-        everyCallback([])..remove(QuarkDrawerSection.chat),
-      ),
-      size: size,
-    );
-    expect(find.byKey(const ValueKey('drawer_chat')), findsNothing);
+    for (final section in [
+      QuarkDrawerSection.calendar,
+      QuarkDrawerSection.chat,
+    ]) {
+      await pumpAt(
+        tester,
+        drawerWith(
+          QuarkDrawerSection.files,
+          everyCallback([])..remove(section),
+        ),
+        size: size,
+      );
+      expect(
+        find.byKey(ValueKey('drawer_${section.name}'), skipOffstage: false),
+        findsNothing,
+        reason: section.name,
+      );
+    }
     expect(tester.takeException(), isNull);
   });
 }
