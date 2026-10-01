@@ -80,6 +80,25 @@ void main() {
       expect(seen, QuarkTokens.dark);
     });
 
+    test('both sets offer the same event colors, primary first', () {
+      for (final tokens in [QuarkTokens.dark, QuarkTokens.light]) {
+        expect(tokens.eventColors, hasLength(6));
+        expect(tokens.eventColors.first, tokens.primary);
+      }
+    });
+
+    test('event colors take part in equality and lerp', () {
+      final recolored = QuarkTokens.dark.copyWith(
+        eventColors: [...QuarkTokens.dark.eventColors]
+          ..[1] = const Color(0xFF123456),
+      );
+      expect(recolored, isNot(QuarkTokens.dark));
+      expect(
+        QuarkTokens.dark.lerp(QuarkTokens.light, 1).eventColors,
+        QuarkTokens.light.eventColors,
+      );
+    });
+
     test('QuarkColors still mirrors the dark tokens', () {
       expect(QuarkColors.background, QuarkTokens.dark.background);
       expect(QuarkColors.primary, QuarkTokens.dark.primary);

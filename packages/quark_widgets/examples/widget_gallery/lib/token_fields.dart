@@ -85,6 +85,12 @@ final List<ColorField> colorFields = [
     read: (t) => t.success,
     write: (t, v) => t.copyWith(success: v),
   ),
+  for (var i = 0; i < QuarkTokens.dark.eventColors.length; i++)
+    (
+      name: 'eventColors[$i]',
+      read: (t) => t.eventColors[i],
+      write: (t, v) => t.copyWith(eventColors: [...t.eventColors]..[i] = v),
+    ),
 ];
 
 /// Every radius and spacing token, in the order the theme panel shows them.

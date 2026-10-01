@@ -308,6 +308,16 @@ class QuarkIcons {
   static const IconData view_list_rounded = Icons.view_list_rounded;
   static const IconData lens_outlined = Icons.lens_outlined;
 
+  // ── Calendar ─────────────────────────────────────────────────────────────────────
+  static const IconData calendar_month_outlined = Icons.calendar_month_outlined;
+  static const IconData today_outlined = Icons.today_outlined;
+  static const IconData view_day_outlined = Icons.view_day_outlined;
+  static const IconData view_week_outlined = Icons.view_week_outlined;
+  static const IconData view_agenda_outlined = Icons.view_agenda_outlined;
+  static const IconData event_repeat_outlined = Icons.event_repeat_outlined;
+  static const IconData notifications_outlined = Icons.notifications_outlined;
+  static const IconData notes_rounded = Icons.notes_rounded;
+
   // ── Misc ─────────────────────────────────────────────────────────────────────────
   static const IconData star = Icons.star;
   static const IconData star_border = Icons.star_border;
