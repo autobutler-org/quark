@@ -21,10 +21,15 @@ type EventJSON struct {
 	// Repeat is none, daily, weekly or monthly.
 	Repeat string `json:"repeat"`
 	// ReminderMinutes counts back from Start; null is no reminder.
-	ReminderMinutes *int   `json:"reminderMinutes"`
-	ColorIndex      int    `json:"colorIndex"`
-	CreatedAt       string `json:"createdAt"`
-	UpdatedAt       string `json:"updatedAt"`
+	ReminderMinutes *int `json:"reminderMinutes"`
+	ColorIndex      int  `json:"colorIndex"`
+	// Owner is the username of the account that created the event, or empty
+	// for an event with no owner (#2544).
+	Owner string `json:"owner"`
+	// Mine is true when the caller created the event.
+	Mine      bool   `json:"mine"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 // EventListJSON is the response to a list of events.

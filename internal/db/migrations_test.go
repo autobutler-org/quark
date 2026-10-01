@@ -173,6 +173,7 @@ func TestMigrationsApplyCleanly(t *testing.T) {
 		"photo_hashes":    {"dhash", "content_hash"},
 		"photo_albums":    {"user_id"},
 		"photo_favorites": {"user_id"},
+		"calendar_events": {"created_by"},
 	}
 	for table, names := range columns {
 		for _, name := range names {
@@ -535,5 +536,47 @@ INSERT INTO photo_favorites (rel_path) VALUES ('a.jpg');
 	}
 	if err := m.Migrate(perUserPhotosVersion - 1); err != nil {
 		t.Fatalf("roll back to %d: %v", perUserPhotosVersion-1, err)
+	}
+}
+
+// calendarEventOwnerVersion is 022_calendar_event_owner, which records who
+// created each calendar event (#2544).
+const calendarEventOwnerVersion = 22
+
+// TestCalendarEventOwnerMigration checks events from before 022 keep no owner,
+// a deleted account's events stay with their owner cleared, and the rebuild
+// on the way down keeps every event.
+func TestCalendarEventOwnerMigration(t *testing.T) {
+	conn, m := migrateTo(t, calendarEventOwnerVersion-1)
+	if _, err := conn.Exec(`
+INSERT INTO users (id, username, password_hash, recovery_phrase_hash) VALUES (1, 'maya', 'h', 'r');
+INSERT INTO calendar_events (id, calendar_id, title, starts_at, ends_at) VALUES
+	(1, 1, 'Old', '2026-09-01T09:00:00Z', '2026-09-01T10:00:00Z');
+`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(calendarEventOwnerVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", calendarEventOwnerVersion, err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM calendar_events WHERE created_by IS NULL`); n != 1 {
+		t.Errorf("events with no owner after migration = %d, want the old one", n)
+	}
+	if _, err := conn.Exec(`INSERT INTO calendar_events (id, calendar_id, title, starts_at, ends_at, created_by) VALUES
+	(2, 1, 'Mine', '2026-09-02T09:00:00Z', '2026-09-02T10:00:00Z', 1)`); err != nil {
+		t.Fatalf("insert an owned event: %v", err)
+	}
+	if _, err := conn.Exec(`DELETE FROM users WHERE id = 1`); err != nil {
+		t.Fatalf("delete the owner: %v", err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM calendar_events WHERE created_by IS NULL`); n != 2 {
+		t.Errorf("events with no owner after deleting it = %d, want both kept", n)
+	}
+
+	if err := m.Migrate(calendarEventOwnerVersion - 1); err != nil {
+		t.Fatalf("migrate down: %v", err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM calendar_events`); n != 2 {
+		t.Errorf("events after the down migration = %d, want 2", n)
 	}
 }

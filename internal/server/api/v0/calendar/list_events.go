@@ -46,7 +46,7 @@ func listEvents(c *gin.Context) *serverutil.Response {
 
 	events := make([]EventJSON, 0, len(result.Events))
 	for _, e := range result.Events {
-		events = append(events, toEventJSON(e))
+		events = append(events, toEventJSON(e, callerID(c)))
 	}
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(EventListJSON{Events: events})
 }

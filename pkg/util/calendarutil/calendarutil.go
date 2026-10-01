@@ -8,6 +8,10 @@
 // occurrences in the viewer's local time, so ListEvents returns series, not
 // occurrences.
 //
+// An event belongs to the account that created it (#2544), which lets the
+// calendar be narrowed to one person. It is not privacy: every account still
+// sees and edits every event.
+//
 // A timed event's Start and End are instants. An all-day event's are dates:
 // midnight UTC standing for that calendar date in every time zone, with End
 // exclusive. HTTP concerns stay with the caller, which maps ErrInvalidEvent
@@ -90,14 +94,21 @@ type Event struct {
 	Repeat          Repeat
 	ReminderMinutes *int
 	ColorIndex      int
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	// OwnerID is the account that created the event, or 0 for an event made
+	// before owners were recorded or whose account was deleted.
+	OwnerID int64
+	// OwnerName is that account's username, or empty with no owner.
+	OwnerName string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // CreateEventParams adds an event to the default calendar.
 type CreateEventParams struct {
 	Queries *db.Queries
 	Input   EventInput
+	// CreatedBy is the account creating the event, which owns it; 0 for none.
+	CreatedBy int64
 }
 
 // CreateEventResult carries the created event.
@@ -115,12 +126,17 @@ func CreateEvent(ctx context.Context, params CreateEventParams) (CreateEventResu
 	if err != nil {
 		return CreateEventResult{}, err
 	}
-	row, err := params.Queries.CreateCalendarEvent(ctx, createParams(calendar.ID, input))
+	insert := createParams(calendar.ID, input)
+	if params.CreatedBy != 0 {
+		insert.CreatedBy = sql.NullInt64{Int64: params.CreatedBy, Valid: true}
+	}
+	row, err := params.Queries.CreateCalendarEvent(ctx, insert)
 	if err != nil {
 		return CreateEventResult{}, err
 	}
-	event, err := fromRow(row)
-	return CreateEventResult{Event: event}, err
+	// Read it back for the owner's name, which the insert cannot return.
+	got, err := GetEvent(ctx, GetEventParams{Queries: params.Queries, ID: row.ID})
+	return CreateEventResult(got), err
 }
 
 // GetEventParams reads one event.
@@ -140,7 +156,7 @@ func GetEvent(ctx context.Context, params GetEventParams) (GetEventResult, error
 	if err != nil {
 		return GetEventResult{}, err
 	}
-	event, err := fromRow(row)
+	event, err := fromRow(row.CalendarEvent, row.OwnerName)
 	return GetEventResult{Event: event}, err
 }
 
@@ -181,7 +197,7 @@ func ListEvents(ctx context.Context, params ListEventsParams) (ListEventsResult,
 	}
 	events := make([]Event, 0, len(rows))
 	for _, row := range rows {
-		event, err := fromRow(row)
+		event, err := fromRow(row.CalendarEvent, row.OwnerName)
 		if err != nil {
 			return ListEventsResult{}, err
 		}
@@ -191,7 +207,8 @@ func ListEvents(ctx context.Context, params ListEventsParams) (ListEventsResult,
 }
 
 // UpdateEventParams replaces an event's fields. For a repeating event that is
-// the whole series: the MVP has no per-occurrence edits.
+// the whole series: the MVP has no per-occurrence edits. The owner stays the
+// account that created it, whoever edits it.
 type UpdateEventParams struct {
 	Queries *db.Queries
 	ID      int64
@@ -210,12 +227,11 @@ func UpdateEvent(ctx context.Context, params UpdateEventParams) (UpdateEventResu
 	if err != nil {
 		return UpdateEventResult{}, err
 	}
-	row, err := params.Queries.UpdateCalendarEvent(ctx, updateParams(params.ID, input))
-	if err != nil {
+	if _, err := params.Queries.UpdateCalendarEvent(ctx, updateParams(params.ID, input)); err != nil {
 		return UpdateEventResult{}, err
 	}
-	event, err := fromRow(row)
-	return UpdateEventResult{Event: event}, err
+	got, err := GetEvent(ctx, GetEventParams{Queries: params.Queries, ID: params.ID})
+	return UpdateEventResult(got), err
 }
 
 // DeleteEventParams deletes an event, every occurrence of it included.

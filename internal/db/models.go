@@ -31,6 +31,7 @@ type CalendarEvent struct {
 	ColorIndex      int64
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	CreatedBy       sql.NullInt64
 }
 
 type ChatChannel struct {
