@@ -40,16 +40,11 @@ const MaxLimit = 200
 // ParseLimit reads a requested result limit, falling back to DefaultLimit for
 // anything missing or unparseable and clamping the page to MaxLimit.
 func ParseLimit(raw string) int {
-	limit := DefaultLimit
-	if raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
-			if n > MaxLimit {
-				n = MaxLimit
-			}
-			limit = n
-		}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return DefaultLimit
 	}
-	return limit
+	return clampLimit(n)
 }
 
 // BackfillResult reports what a BackfillTree pass did.
