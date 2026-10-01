@@ -82,6 +82,10 @@ join. `path_access.level` is `read`, `write` or `owner`, and each row names exac
 | `009_jobs`             | `jobs`                                                                  |
 | `010_path_access`      | `groups`, `group_members`, `path_access`                                |
 | `011_user_status`      | column change on `users`                                                |
+| `012_group_name_nocase`| case-insensitive unique `groups.name`                                   |
+| `013_job_owner`        | column change on `jobs`                                                 |
+| `014_per_user_photos`  | owner column on `photo_albums`, `photo_favorites`                       |
+| `021_calendar`         | `calendars` (one default, Personal), `calendar_events`                  |
 
 Migrations are numbered, gap-free and paired; `make check/migrations` fails a PR whose number is at or below
 `main`'s highest, because golang-migrate would silently skip it on upgraded devices.

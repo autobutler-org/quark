@@ -153,6 +153,7 @@ func TestMigrationsApplyCleanly(t *testing.T) {
 		"file_content", "file_content_fts",
 		"vfs_metadata", "vfs_db_entries",
 		"groups", "group_members", "path_access",
+		"calendars", "calendar_events",
 	}
 	for _, table := range tables {
 		var count int
@@ -194,6 +195,15 @@ func TestMigrationsApplyCleanly(t *testing.T) {
 	}
 	if located != 1 {
 		t.Errorf("vault_location seed row missing, got %d rows", located)
+	}
+
+	// So is the one calendar every account shares (#1144).
+	var calendars int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM calendars WHERE is_default = 1 AND name = 'Personal'`).Scan(&calendars); err != nil {
+		t.Fatalf("count calendars: %v", err)
+	}
+	if calendars != 1 {
+		t.Errorf("default calendar rows = %d, want 1", calendars)
 	}
 }
 
