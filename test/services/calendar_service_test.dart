@@ -42,6 +42,8 @@ void main() {
     'repeat': 'weekly',
     'reminderMinutes': 30,
     'colorIndex': 2,
+    'owner': 'maya',
+    'mine': true,
   };
 
   test('lists a range as UTC and reads the events', () async {
@@ -64,6 +66,18 @@ void main() {
     expect(event.reminderMinutes, 30);
     expect(event.start, DateTime.utc(2026, 9, 29, 23));
     expect(event.localStart, DateTime.utc(2026, 9, 29, 23).toLocal());
+    expect(event.owner, 'maya');
+    expect(event.mine, isTrue);
+  });
+
+  test('an event from before owners were recorded has none', () {
+    final old = CalendarEvent.fromJson(
+      {...vet}
+        ..remove('owner')
+        ..remove('mine'),
+    );
+    expect(old.owner, '');
+    expect(old.mine, isFalse);
   });
 
   test('an all-day event reads as local dates', () {

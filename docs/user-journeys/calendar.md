@@ -158,3 +158,28 @@ says so ("Changes apply to every repeat.").
 - The events from now to a week ahead are listed under **Today**, **Tomorrow** and each weekday.
 - Timed events already over today are left out.
 - With nothing coming up: "Nothing in the next 7 days" and an **Add an event** button.
+
+---
+
+### JN-CA-009: See only my events, or one person's
+
+**Preconditions:** On the Calendar page. Events exist that were created by more than one account.
+
+**Steps:**
+
+1. Tap **My events** in the row above the calendar.
+2. Switch view, and step forward a span.
+3. As an admin, tap **Person** and choose another account.
+4. Tap **Everyone**.
+
+**Expected result:**
+
+- **My events** shows only events this account created, in every view, in Upcoming and in the reminder bar. The
+  address bar gains `mine=true`, which survives the step, the view switch, and a reload.
+- An admin's person chip lists the Quark's active accounts; choosing one shows only that account's events and names
+  them on the chip (`person=<name>` in the address bar).
+- **Everyone** shows every event again.
+
+**Notes:** This is a filter, not privacy: every account still sees and edits every event (#2544). Only admins get
+the person chip, since only admins can list accounts. Events created before owners were recorded belong to nobody
+and show only under **Everyone**.

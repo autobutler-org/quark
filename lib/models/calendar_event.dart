@@ -20,6 +20,8 @@ class CalendarEvent {
     this.repeat = CalendarRepeat.none,
     this.reminderMinutes,
     this.colorIndex = 0,
+    this.owner = '',
+    this.mine = false,
   });
 
   factory CalendarEvent.fromJson(Map<String, dynamic> json) => CalendarEvent(
@@ -34,6 +36,8 @@ class CalendarEvent {
     repeat: repeatFromWire(json['repeat'] as String?),
     reminderMinutes: json['reminderMinutes'] as int?,
     colorIndex: json['colorIndex'] as int? ?? 0,
+    owner: json['owner'] as String? ?? '',
+    mine: json['mine'] as bool? ?? false,
   );
 
   final int id;
@@ -59,6 +63,13 @@ class CalendarEvent {
 
   /// Which of `QuarkTokens.eventColors` it is drawn in.
   final int colorIndex;
+
+  /// The username of the account that created it, or empty for an event
+  /// with no owner (#2544).
+  final String owner;
+
+  /// Whether the signed-in account created it.
+  final bool mine;
 
   /// The first occurrence's start on the local clock: midnight on its date
   /// for an all-day event, wherever the viewer is.

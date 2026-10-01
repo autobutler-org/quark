@@ -15,6 +15,8 @@ CalendarEvent _event(
   Duration length, {
   CalendarRepeat repeat = CalendarRepeat.none,
   int? reminder,
+  String owner = '',
+  bool mine = false,
 }) => CalendarEvent(
   id: id,
   title: 'Event $id',
@@ -22,6 +24,8 @@ CalendarEvent _event(
   end: localStart.add(length).toUtc(),
   repeat: repeat,
   reminderMinutes: reminder,
+  owner: owner,
+  mine: mine,
 );
 
 class _Server {
@@ -51,10 +55,12 @@ class _Server {
 
   Future<void> delete(int id) async => deleted.add(id);
 
-  CalendarController controller() => CalendarController(
+  CalendarController controller({bool admin = false}) => CalendarController(
     listEvents: list,
     saveEvent: save,
     deleteEvent: delete,
+    listPeople: () async => ['maya', 'sam'],
+    canListPeople: () => admin,
     clock: () => _now,
   );
 }
@@ -217,5 +223,97 @@ void main() {
     await c.refresh();
     expect(c.eventById(14)?.title, 'Event 14');
     expect(c.eventById(1), isNull);
+  });
+
+  group('person filter (#2544)', () {
+    final mayaVet = _event(
+      14,
+      DateTime(2026, 9, 29, 16),
+      const Duration(minutes: 45),
+      reminder: 30,
+      owner: 'maya',
+      mine: true,
+    );
+    final samLunch = _event(
+      15,
+      DateTime(2026, 9, 29, 17),
+      const Duration(hours: 1),
+      reminder: 60,
+      owner: 'sam',
+    );
+    final unowned = _event(
+      16,
+      DateTime(2026, 9, 30, 9),
+      const Duration(hours: 1),
+    );
+    final events = [mayaVet, samLunch, unowned];
+
+    Set<int> shown(CalendarController c) => {
+      for (final o in c.occurrences) o.eventId,
+    };
+    Set<int> upcoming(CalendarController c) => {
+      for (final day in c.upcoming)
+        for (final o in day.events) o.eventId,
+    };
+
+    test('everyone is the default', () async {
+      final c = _Server(events).controller();
+      await c.show(CalendarView.week, DateTime(2026, 9, 29));
+      await c.refresh();
+      expect(shown(c), {14, 15, 16});
+      expect(c.mineOnly, isFalse);
+      expect(c.person, isNull);
+    });
+
+    test('My events narrows every view, upcoming and reminders', () async {
+      final c = _Server(events).controller();
+      await c.show(CalendarView.week, DateTime(2026, 9, 29), mineOnly: true);
+      await c.refresh();
+      expect(shown(c), {14});
+      expect(upcoming(c), {14});
+      expect(c.dueReminder?.eventId, 14);
+    });
+
+    test('one person hides everyone else, and their reminders', () async {
+      final c = _Server(events).controller();
+      await c.show(CalendarView.week, DateTime(2026, 9, 29), person: 'sam');
+      await c.refresh();
+      expect(shown(c), {15});
+      expect(upcoming(c), {15});
+      // Maya's reminder is due, but Sam's calendar is on show.
+      expect(c.dueReminder, isNull);
+    });
+
+    test('changing only the filter loads nothing', () async {
+      final server = _Server(events);
+      final c = server.controller();
+      await c.show(CalendarView.week, DateTime(2026, 9, 29));
+      final loads = server.ranges.length;
+      await c.show(CalendarView.week, DateTime(2026, 9, 29), mineOnly: true);
+      expect(server.ranges.length, loads);
+      expect(shown(c), {14});
+    });
+
+    test('My events wins over a person', () async {
+      final c = _Server(events).controller();
+      await c.show(
+        CalendarView.week,
+        DateTime(2026, 9, 29),
+        mineOnly: true,
+        person: 'sam',
+      );
+      expect(c.person, isNull);
+      expect(shown(c), {14});
+    });
+
+    test('only an admin gets people to pick from', () async {
+      final member = _Server(events).controller();
+      await member.refresh();
+      expect(member.people, isEmpty);
+
+      final admin = _Server(events).controller(admin: true);
+      await admin.refresh();
+      expect(admin.people, ['maya', 'sam']);
+    });
   });
 }
