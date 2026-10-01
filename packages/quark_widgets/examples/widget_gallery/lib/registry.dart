@@ -563,6 +563,7 @@ final List<GalleryEntry> registry = [
         onSelectHost: (index) => log('QuarkDrawer.onSelectHost($index)'),
         onTapFiles: () => log('QuarkDrawer.onTapFiles'),
         onTapPhotos: () => log('QuarkDrawer.onTapPhotos'),
+        onTapCalendar: () => log('QuarkDrawer.onTapCalendar'),
         onTapTrash: () => log('QuarkDrawer.onTapTrash'),
         onTapDocs: () => log('QuarkDrawer.onTapDocs'),
         onTapSheets: () => log('QuarkDrawer.onTapSheets'),

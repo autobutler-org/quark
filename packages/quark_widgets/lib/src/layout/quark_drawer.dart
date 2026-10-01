@@ -16,6 +16,9 @@ enum QuarkDrawerSection {
   /// The photo library.
   photos,
 
+  /// The household calendar.
+  calendar,
+
   /// Deleted files waiting to be restored or purged.
   trash,
 
@@ -89,6 +92,7 @@ class QuarkDrawer extends StatelessWidget {
     this.onSelectHost,
     this.onTapFiles,
     this.onTapPhotos,
+    this.onTapCalendar,
     this.onTapTrash,
     this.onTapDocs,
     this.onTapSheets,
@@ -121,6 +125,9 @@ class QuarkDrawer extends StatelessWidget {
 
   /// Called when the Photos row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapPhotos;
+
+  /// Called when the Calendar row is tapped. Null hides the row.
+  final FutureOr<void> Function()? onTapCalendar;
 
   /// Called when the Trash row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapTrash;
@@ -162,6 +169,12 @@ class QuarkDrawer extends StatelessWidget {
         QuarkIcons.photo_library_outlined,
         'Photos',
         onTapPhotos,
+      ),
+      (
+        QuarkDrawerSection.calendar,
+        QuarkIcons.calendar_month_outlined,
+        'Calendar',
+        onTapCalendar,
       ),
       (
         QuarkDrawerSection.trash,

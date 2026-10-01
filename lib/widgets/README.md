@@ -13,6 +13,16 @@ on its page's decoupling issue (see #1600), after which it moves too.
 
 ```text
 lib/widgets/
+  calendar/
+    calendar_bar_bottom.dart    the Calendar page's second bar row: period,
+                                Today, and the view switch folding to a menu
+    calendar_body.dart          picks the view to show, with the reminder bar,
+                                load states, and swipe to step
+    calendar_event_editor_host.dart
+                                CalendarEventEditor around a
+                                CalendarEditorController; confirms delete
+    show_calendar_event_editor.dart
+                                opens that form as a sheet or a dialog
   chat/
     chat_unlock_prompt.dart     the password prompt in place of chat while it
                                 is locked (web after a reload)

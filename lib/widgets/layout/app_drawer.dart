@@ -72,6 +72,7 @@ class AppDrawer extends StatelessWidget {
         onSelectHost: selectHost,
         onTapFiles: goTo(QuarkDrawerSection.files, AppRoutes.files),
         onTapPhotos: goTo(QuarkDrawerSection.photos, AppRoutes.photos),
+        onTapCalendar: goTo(QuarkDrawerSection.calendar, AppRoutes.calendar),
         onTapTrash: goTo(QuarkDrawerSection.trash, AppRoutes.trash),
         onTapDocs: goTo(QuarkDrawerSection.docs, AppRoutes.docs),
         onTapSheets: goTo(QuarkDrawerSection.sheets, AppRoutes.sheets),

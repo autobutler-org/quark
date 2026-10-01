@@ -61,7 +61,7 @@ flowchart LR
 - Pages with a refresh action use `AutoRefreshMixin` and `RefreshIconButton`.
 - Every user-facing error string comes from `Errors` in `lib/utils/error_text.dart`.
 
-Controllers exist today for files, photos, jobs, trash, users, and account requests; the remaining pages are
+Controllers exist today for files, photos, calendar, jobs, trash, users, and account requests; the remaining pages are
 still coupled, and [`lib/widgets/README.md`](../../lib/widgets/README.md) tracks which.
 
 ## Services and the network
@@ -85,7 +85,7 @@ flowchart LR
     login --> request["/request-account"]
     redirect -- signed in --> files["/files, /files/*path"]
     files --> view["/view · /edit<br/>viewers and editors"]
-    files --- photos["/photos?album="] & docs["/docs"] & sheets["/sheets"]
+    files --- photos["/photos?album="] & calendar["/calendar/:view?date="] & docs["/docs"] & sheets["/sheets"]
     files --- trash["/trash"] & jobs["/jobs"] & devices["/devices"] & health["/health"]
     files --- vault["/vault"] & users["/users"] & settings["/settings"]
 ```
