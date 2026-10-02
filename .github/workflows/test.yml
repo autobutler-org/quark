@@ -6,7 +6,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The merge queue runs every job on the pull request combined with main and whatever
+  # is queued ahead of it, so a pull request does not have to be up to date to merge.
+  merge_group:
   workflow_dispatch:
+# Cancels only superseded runs of the same pull request. Push, merge-queue and manual
+# runs each get a group of their own, so none of them is ever canceled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 permissions:
   contents: read
 defaults:
