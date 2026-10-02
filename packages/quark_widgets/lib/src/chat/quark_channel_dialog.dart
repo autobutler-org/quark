@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'package:quark_icons/quark_icons.dart';
+
 import '../core/quark_loader.dart';
 import '../theme/quark_tokens.dart';
+import 'quark_channel_dialog/channel_privacy_option.dart';
 
 /// Asks for a channel's name and topic, to create a channel or to change
 /// one: a title, two text fields, and a submit button.
@@ -13,11 +16,17 @@ import '../theme/quark_tokens.dart';
 /// name another channel has, comes back in as [error], so the dialog stays
 /// open with what was typed.
 ///
+/// With [onPrivacyChanged] set, as for a new channel, it also asks who can
+/// see the channel, and says what each answer means: private, for only the
+/// people added from its members, or every account on the Quark (#2501).
+/// Which is picked is the caller's: [isPrivate] in, [onPrivacyChanged] out.
+///
 /// The typed text is [State] because it is the form's own transient input,
 /// thrown away when the dialog closes.
 ///
 /// Key prefixes: `channel_dialog_name`, `channel_dialog_topic`,
-/// `channel_dialog_cancel`, and `channel_dialog_submit`.
+/// `channel_dialog_private`, `channel_dialog_public`, `channel_dialog_cancel`,
+/// and `channel_dialog_submit`.
 ///
 /// ```dart
 /// showDialog<void>(
@@ -28,6 +37,8 @@ import '../theme/quark_tokens.dart';
 ///     nameMaxLength: 64,
 ///     isSubmitting: controller.isSaving,
 ///     error: saveError,
+///     isPrivate: isPrivate,
+///     onPrivacyChanged: (value) => isPrivate = value,
 ///     onSubmit: (name, topic) => create(name, topic),
 ///     onCancel: () => Navigator.of(ctx).pop(),
 ///   ),
@@ -46,6 +57,8 @@ class QuarkChannelDialog extends StatefulWidget {
     this.topicMaxLength,
     this.isSubmitting = false,
     this.error,
+    this.isPrivate = true,
+    this.onPrivacyChanged,
     super.key,
   });
 
@@ -83,6 +96,14 @@ class QuarkChannelDialog extends StatefulWidget {
   /// caller. Shown under the fields.
   final String? error;
 
+  /// Whether the channel is private rather than open to every account. Shown
+  /// only with [onPrivacyChanged].
+  final bool isPrivate;
+
+  /// Called with whether the channel should be private when the other answer
+  /// is tapped. Null offers no choice, as when editing a channel.
+  final ValueChanged<bool>? onPrivacyChanged;
+
   @override
   State<QuarkChannelDialog> createState() => _QuarkChannelDialogState();
 }
@@ -112,6 +133,7 @@ class _QuarkChannelDialogState extends State<QuarkChannelDialog> {
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final error = widget.error;
+    final onPrivacyChanged = widget.onPrivacyChanged;
 
     return AlertDialog(
       scrollable: true,
@@ -148,6 +170,34 @@ class _QuarkChannelDialogState extends State<QuarkChannelDialog> {
                 border: OutlineInputBorder(),
               ),
             ),
+            if (onPrivacyChanged != null) ...[
+              SizedBox(height: tokens.spacingSm),
+              Text(
+                'Who can see it',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              SizedBox(height: tokens.spacingXs),
+              ChannelPrivacyOption(
+                key: const ValueKey('channel_dialog_private'),
+                icon: QuarkIcons.lock_outline,
+                title: 'Private',
+                description:
+                    "Only people you add can see it. Add them from Members in "
+                    "the channel's settings.",
+                isSelected: widget.isPrivate,
+                onTap: () => onPrivacyChanged(true),
+              ),
+              SizedBox(height: tokens.spacingXs),
+              ChannelPrivacyOption(
+                key: const ValueKey('channel_dialog_public'),
+                icon: QuarkIcons.group_outlined,
+                title: 'Everyone',
+                description:
+                    'Every account on this Quark can read and post in it.',
+                isSelected: !widget.isPrivate,
+                onTap: () => onPrivacyChanged(false),
+              ),
+            ],
             if (error != null) ...[
               SizedBox(height: tokens.spacingSm),
               Text(error, style: TextStyle(color: tokens.error)),

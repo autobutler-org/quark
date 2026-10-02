@@ -408,6 +408,47 @@ void main() {
     chat.controller.dispose();
   });
 
+  // #2563: deleting an account, or changing a profile picture, publishes
+  // account_changed, which chat ignored, so the old picture stayed.
+  test('account_changed reloads the members and channels', () async {
+    final chat = FakeChat(
+      members: [
+        ChatMember(userId: 7, name: 'ada', permissions: ownerSet),
+        const ChatMember(
+          userId: 8,
+          name: 'bob',
+          permissions: memberSet,
+          avatarUpdatedAt: 5,
+        ),
+      ],
+    );
+    chat.controller.select('2');
+    await chat.controller.refresh();
+    expect(chat.controller.avatarVersionOf(8), 5);
+    final loads = chat.memberLoads;
+
+    chat.members = [ChatMember(userId: 7, name: 'ada', permissions: ownerSet)];
+    chat.channels.removeWhere((c) => c.id == 2);
+    chat.channels.add(
+      ChatChannel(
+        id: 2,
+        name: 'renamed',
+        isPrivate: true,
+        permissions: ownerSet,
+      ),
+    );
+    chat.events.add(
+      const FileEvent(kind: 'account_changed', path: '', data: {'userId': 8}),
+    );
+    await pumpEventQueue();
+
+    expect(chat.memberLoads, loads + 1);
+    expect(chat.controller.avatarVersionOf(8), isNull);
+    expect(chat.controller.nameOf(8), 'Former member');
+    expect(chat.controller.selectedChannel?.name, 'renamed');
+    chat.controller.dispose();
+  });
+
   test('members map to the list, groups with their accounts', () async {
     final chat = FakeChat(
       members: [
@@ -450,6 +491,44 @@ void main() {
       expect(chat.controller.channels.map((c) => c.name), contains('design'));
       expect(chat.controller.isSaving, isFalse);
       expect(chat.controller.saveError, isNull);
+      chat.controller.dispose();
+    });
+
+    // #2501: a new channel was always private, with no say in it.
+    test('a public channel gives everyone the Member set', () async {
+      final chat = FakeChat();
+      await chat.controller.refresh();
+
+      final created = await chat.controller.createChannel(
+        'design',
+        '',
+        isPrivate: false,
+      );
+
+      expect(created?.name, 'design');
+      expect(chat.calls, [
+        'create design ""',
+        'ensure keys 12',
+        'principals',
+        'set 12 user=null group=1 Member',
+        'sign 43 user=null $memberSet',
+      ]);
+      expect(chat.controller.saveError, isNull);
+      chat.controller.dispose();
+    });
+
+    test('a channel that could not open to everyone still opens', () async {
+      final chat = FakeChat()..setFailWith = const ApiException(500);
+      await chat.controller.refresh();
+
+      final channel = await chat.controller.createChannel(
+        'design',
+        '',
+        isPrivate: false,
+      );
+
+      expect(channel?.name, 'design', reason: 'it was created');
+      expect(chat.controller.saveError, isA<ApiException>());
       chat.controller.dispose();
     });
 
@@ -638,6 +717,78 @@ void main() {
         'remove 2 user=null group=4',
         'sign 42 user=null null',
       ]);
+      chat.controller.dispose();
+    });
+  });
+
+  // #2497: there was no way to message one person.
+  group('message someone (#2497)', () {
+    test('offers every other account, not groups or yourself', () async {
+      final chat = FakeChat();
+      await chat.controller.refresh();
+
+      await chat.controller.loadPeople();
+
+      expect(chat.controller.people.map((p) => p.name), ['bob', 'cy']);
+      expect(chat.controller.peopleError, isNull);
+      expect(chat.controller.isLoadingPeople, isFalse);
+      chat.controller.dispose();
+    });
+
+    test('people that will not load say why', () async {
+      final chat = FakeChat()..failWith = const ApiException(500);
+
+      await chat.controller.loadPeople();
+
+      expect(chat.controller.people, isEmpty);
+      expect(chat.controller.peopleError, isA<ApiException>());
+      chat.controller.dispose();
+    });
+
+    test('starts a private channel with them as a Member', () async {
+      final chat = FakeChat();
+      await chat.controller.refresh();
+      await chat.controller.loadPeople();
+      chat.calls.clear();
+
+      final channel = await chat.controller.startConversation(8);
+
+      expect(channel?.name, 'ada, bob');
+      expect(chat.calls, [
+        'create ada, bob ""',
+        'ensure keys 12',
+        'set 12 user=8 group=null Member',
+        'sign 43 user=8 $memberSet',
+      ]);
+      chat.controller.dispose();
+    });
+
+    test('opens the conversation you already have', () async {
+      final chat = FakeChat(
+        channels: [
+          ...fakeChannels,
+          ChatChannel(
+            id: 5,
+            name: 'Bob, Ada',
+            isPrivate: true,
+            permissions: ownerSet,
+          ),
+          ChatChannel(
+            id: 6,
+            name: 'ada, bob',
+            isPrivate: true,
+            permissions: ownerSet,
+          ),
+        ],
+      );
+      await chat.controller.refresh();
+      await chat.controller.loadPeople();
+      chat.calls.clear();
+
+      final channel = await chat.controller.startConversation(8);
+
+      expect(channel?.id, 6);
+      expect(chat.calls, isEmpty);
       chat.controller.dispose();
     });
   });

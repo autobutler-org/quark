@@ -1424,9 +1424,25 @@ final List<GalleryEntry> registry = [
       submitLabel: 'Create',
       nameMaxLength: 64,
       topicMaxLength: 512,
+      onPrivacyChanged: (isPrivate) =>
+          log('QuarkChannelDialog.onPrivacyChanged($isPrivate)'),
       onSubmit: (name, topic) =>
           log('QuarkChannelDialog.onSubmit($name, $topic)'),
       onCancel: () => log('QuarkChannelDialog.onCancel'),
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkStartConversationDialog',
+    group: 'Chat',
+    build: (context, log) => QuarkStartConversationDialog(
+      people: const [
+        PrincipalItem(kind: PrincipalKind.user, id: 8, name: 'bob'),
+        PrincipalItem(kind: PrincipalKind.user, id: 9, name: 'cy'),
+      ],
+      onSelected: (person) =>
+          log('QuarkStartConversationDialog.onSelected(${person.name})'),
+      onStart: () => log('QuarkStartConversationDialog.onStart'),
+      onCancel: () => log('QuarkStartConversationDialog.onCancel'),
     ),
   ),
   GalleryEntry(

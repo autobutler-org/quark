@@ -100,4 +100,78 @@ void main() {
     );
     expect(find.byType(QuarkLoader), findsOneWidget);
   });
+
+  // #2501: a new channel was private with no say in it and no word why.
+  group('who can see it', () {
+    Future<List<bool>> pumpChoice(
+      WidgetTester tester, {
+      Size size = wideViewport,
+      bool isPrivate = true,
+    }) async {
+      final changes = <bool>[];
+      await pumpAt(
+        tester,
+        QuarkChannelDialog(
+          title: 'New channel',
+          submitLabel: 'Create',
+          isPrivate: isPrivate,
+          onPrivacyChanged: changes.add,
+          onSubmit: (_, _) {},
+          onCancel: () {},
+        ),
+        size: size,
+      );
+      return changes;
+    }
+
+    testBothViewports('offers private and everyone, saying what each means', (
+      tester,
+      size,
+    ) async {
+      final changes = await pumpChoice(tester, size: size);
+
+      expect(key('channel_dialog_private'), findsOneWidget);
+      expect(key('channel_dialog_public'), findsOneWidget);
+      expect(find.textContaining('Only people you add'), findsOneWidget);
+      expect(
+        find.textContaining('Every account on this Quark'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<Semantics>(
+              find
+                  .descendant(
+                    of: key('channel_dialog_private'),
+                    matching: find.byType(Semantics),
+                  )
+                  .first,
+            )
+            .properties
+            .selected,
+        isTrue,
+      );
+
+      await tester.ensureVisible(key('channel_dialog_public'));
+      await tester.tap(key('channel_dialog_public'));
+      expect(changes, [false]);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('picks private back from everyone', (tester) async {
+      final changes = await pumpChoice(tester, isPrivate: false);
+
+      await tester.tap(key('channel_dialog_private'));
+      expect(changes, [true]);
+    });
+
+    testWidgets('an edit without the callback offers no choice', (
+      tester,
+    ) async {
+      await pumpDialog(tester, initialName: 'design');
+
+      expect(key('channel_dialog_private'), findsNothing);
+      expect(key('channel_dialog_public'), findsNothing);
+    });
+  });
 }

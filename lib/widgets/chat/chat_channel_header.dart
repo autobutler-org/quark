@@ -6,17 +6,23 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// messages, with its settings beside them (#2422).
 ///
 /// The settings button opens a menu of the actions whose callbacks are set:
-/// edit the name and topic, members, leave, and delete. With none set, as for
-/// a reader in `general`, there is no button.
+/// edit the name and topic and members, then, under a divider so they are
+/// hard to hit by mistake, leave and delete for everyone in the error color
+/// (#2498). With none set, as for a reader in `general`, there is no button.
 ///
-/// Keys: `chat_channel_settings` on the button; `chat_channel_edit`,
-/// `chat_channel_members`, `chat_channel_leave` and `chat_channel_delete` on
-/// the menu's items.
+/// A private channel carries a lock whose tooltip says what that means
+/// (#2501).
+///
+/// Keys: `chat_channel_settings` on the button; `chat_channel_private` on the
+/// lock; `chat_channel_edit`, `chat_channel_members`,
+/// `chat_channel_menu_divider`, `chat_channel_leave` and
+/// `chat_channel_delete` on the menu's items.
 class ChatChannelHeader extends StatelessWidget {
   /// Creates the header for channel [name].
   const ChatChannelHeader({
     required this.name,
     this.topic = '',
+    this.isPrivate = false,
     this.onEdit,
     this.onMembers,
     this.onDelete,
@@ -27,8 +33,15 @@ class ChatChannelHeader extends StatelessWidget {
   /// The channel's name, shown after `#`.
   final String name;
 
+  /// What the lock beside a private channel's name says.
+  static const privateTooltip =
+      'Private: only its members can see it. Add people from Members.';
+
   /// What the channel is for; empty shows nothing.
   final String topic;
+
+  /// Whether only the channel's members can see it, marked with a lock.
+  final bool isPrivate;
 
   /// Opens the name and topic editor; null leaves it out of the menu.
   final VoidCallback? onEdit;
@@ -45,7 +58,7 @@ class ChatChannelHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
-    final items = [
+    final routine = [
       if (onEdit case final onEdit?)
         MenuItemButton(
           key: const ValueKey('chat_channel_edit'),
@@ -60,12 +73,15 @@ class ChatChannelHeader extends StatelessWidget {
           onPressed: onMembers,
           child: const Text('Members'),
         ),
+    ];
+    final danger = TextStyle(color: tokens.error);
+    final destructive = [
       if (onLeave case final onLeave?)
         MenuItemButton(
           key: const ValueKey('chat_channel_leave'),
-          leadingIcon: const Icon(QuarkIcons.logout, size: 18),
+          leadingIcon: Icon(QuarkIcons.logout, size: 18, color: tokens.error),
           onPressed: onLeave,
-          child: const Text('Leave channel'),
+          child: Text('Leave channel', style: danger),
         ),
       if (onDelete case final onDelete?)
         MenuItemButton(
@@ -76,8 +92,14 @@ class ChatChannelHeader extends StatelessWidget {
             color: tokens.error,
           ),
           onPressed: onDelete,
-          child: Text('Delete channel', style: TextStyle(color: tokens.error)),
+          child: Text('Delete channel for everyone', style: danger),
         ),
+    ];
+    final items = [
+      ...routine,
+      if (routine.isNotEmpty && destructive.isNotEmpty)
+        const Divider(key: ValueKey('chat_channel_menu_divider')),
+      ...destructive,
     ];
     return Row(
       children: [
@@ -86,11 +108,29 @@ class ChatChannelHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                '# $name',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      '# $name',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  if (isPrivate) ...[
+                    SizedBox(width: tokens.spacingXs),
+                    Tooltip(
+                      key: const ValueKey('chat_channel_private'),
+                      message: privateTooltip,
+                      child: Icon(
+                        QuarkIcons.lock_outline,
+                        size: 14,
+                        color: tokens.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ],
               ),
               if (topic.isNotEmpty)
                 Text(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/chat_channel_share_target.dart';
@@ -41,8 +43,13 @@ import 'package:url_launcher/url_launcher.dart';
 /// the "(?)" on each encryption line, explain encryption in a dialog
 /// (#2496).
 ///
-/// "New channel" creates a channel and goes to it. The channel header's
-/// settings (#2422) edit the name and topic and delete, for holders of
+/// "New channel" creates a channel and goes to it, asking whether it is
+/// private or open to every account and saying what each means (#2501).
+/// "Message someone" picks an account and goes to a private channel with
+/// them, made the first time (#2497). A private channel's header carries a
+/// lock that says the same. The channel header's settings (#2422), with
+/// leave and delete set apart below a divider (#2498), edit the name and
+/// topic and delete, for holders of
 /// `manage_channel` and admins, and open the members in the share sheet, for
 /// holders of `manage_members` and admins, who also get add and remove in
 /// the member list. Any member with a row of their own may leave, except in
@@ -166,10 +173,13 @@ class _ChatPageState extends State<ChatPage>
 
   Future<void> _createChannel() async {
     _controller.clearSaveError();
+    // Not disposed: the dialog still rebuilds from it while it animates out
+    // after showDialog returns, and once it's gone nothing listens.
+    final isPrivate = ValueNotifier(true);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => ListenableBuilder(
-        listenable: _controller,
+        listenable: Listenable.merge([_controller, isPrivate]),
         builder: (dialogContext, _) => QuarkChannelDialog(
           title: 'New channel',
           submitLabel: 'Create',
@@ -177,16 +187,68 @@ class _ChatPageState extends State<ChatPage>
           topicMaxLength: ChatController.maxTopicLength,
           isSubmitting: _controller.isSaving,
           error: _saveError('create the channel'),
+          isPrivate: isPrivate.value,
+          onPrivacyChanged: (value) => isPrivate.value = value,
           onSubmit: (name, topic) async {
-            final channel = await _controller.createChannel(name, topic);
+            final channel = await _controller.createChannel(
+              name,
+              topic,
+              isPrivate: isPrivate.value,
+            );
             if (channel == null || !dialogContext.mounted) return;
             Navigator.of(dialogContext).pop();
-            if (mounted) context.go(AppRoutes.chatChannel('${channel.id}'));
+            _goToCreated(channel.id, 'open the channel to everyone');
           },
           onCancel: () => Navigator.of(dialogContext).pop(),
         ),
       ),
     );
+  }
+
+  Future<void> _messageSomeone() async {
+    _controller.clearSaveError();
+    unawaited(_controller.loadPeople());
+    // Not disposed, for the same reason as in _createChannel.
+    final picked = ValueNotifier<PrincipalItem?>(null);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => ListenableBuilder(
+        listenable: Listenable.merge([_controller, picked]),
+        builder: (dialogContext, _) => QuarkStartConversationDialog(
+          people: _controller.people,
+          selected: picked.value,
+          isLoading: _controller.isLoadingPeople,
+          loadError: _controller.peopleError == null
+              ? null
+              : Errors.message(_controller.peopleError, 'load the people'),
+          isSubmitting: _controller.isSaving,
+          error: _saveError('start the conversation'),
+          onSelected: (person) => picked.value = person,
+          onStart: () async {
+            final person = picked.value;
+            if (person == null) return;
+            final channel = await _controller.startConversation(person.id);
+            if (channel == null || !dialogContext.mounted) return;
+            Navigator.of(dialogContext).pop();
+            _goToCreated(channel.id, 'add ${person.name}');
+          },
+          onCancel: () => Navigator.of(dialogContext).pop(),
+        ),
+      ),
+    );
+  }
+
+  /// Goes to channel [id] just made, saying so when the step after making it,
+  /// [action], failed.
+  void _goToCreated(int id, String action) {
+    if (!mounted) return;
+    final error = _controller.saveError;
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(Errors.message(error, action))));
+    }
+    context.go(AppRoutes.chatChannel('$id'));
   }
 
   Future<void> _editChannel() async {
@@ -332,9 +394,17 @@ class _ChatPageState extends State<ChatPage>
           icon: QuarkIcons.forum_outlined,
           actions: [
             QuarkBarChip(
+              key: const ValueKey('chat_message_someone'),
+              icon: QuarkIcons.person_add_outlined,
+              label: 'Message someone',
+              tooltip: 'Start a private channel with one person',
+              onPressed: c.isLocked ? null : _messageSomeone,
+            ),
+            QuarkBarChip(
               key: const ValueKey('chat_new_channel'),
               icon: QuarkIcons.add,
               label: 'New channel',
+              tooltip: 'Create a channel, private or for everyone',
               onPressed: c.isLocked ? null : _createChannel,
             ),
             const AppThemeToggle(),
@@ -356,6 +426,7 @@ class _ChatPageState extends State<ChatPage>
                       : ChatChannelHeader(
                           name: channel.name,
                           topic: channel.topic,
+                          isPrivate: channel.isPrivate,
                           onEdit: c.canManageSelected ? _editChannel : null,
                           onMembers: c.canManageMembers ? _openMembers : null,
                           onDelete: c.canManageSelected && !channel.isDefault
