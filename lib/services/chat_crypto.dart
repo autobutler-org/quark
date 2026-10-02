@@ -12,7 +12,8 @@ import 'package:sodium/sodium_sumo.dart';
 /// sumo-only there. The Quark never runs any of this: it stores what [wrap]
 /// produces and hands it back.
 ///
-/// - Identity: [generateIdentity], [wrap] and [unwrap].
+/// - Identity: [generateIdentity], [wrap] and [unwrap], and for the password
+///   wrap [deriveAuthKeys], [wrapWithKey] and [unwrapWithKey] (#2430).
 /// - Key grants (#2417): [seal] and [openSealed] for `crypto_box_seal` to a
 ///   member's X25519 key, and [sign] and [verify] for Ed25519.
 /// - Messages (#2418): [newChannelKey], [channelKeyFromBytes], [encrypt] and
@@ -76,27 +77,84 @@ class ChatCrypto {
     }
   }
 
+  /// Derives the two keys a password stands for (#2430), so the Quark is sent
+  /// one and can open nothing with it.
+  ///
+  /// The construction is permanent once accounts exist:
+  ///
+  /// ```text
+  /// master  = Argon2id13(password, salt, params.opsLimit, params.memLimit), 32 bytes
+  /// authKey = HKDF-SHA256(ikm = master, salt = none, info = "auth"), 32 bytes
+  /// wrapKey = HKDF-SHA256(ikm = master, salt = none, info = "chat-wrap"), 32 bytes
+  /// ```
+  ///
+  /// HKDF is RFC 5869 extract-then-expand, with the empty salt the RFC reads
+  /// as 32 zero bytes. [salt] is the account's 16-byte auth salt from
+  /// `GET /auth/salt`. The caller disposes the result.
+  AuthKeys deriveAuthKeys(String password, Uint8List salt, KdfParams params) {
+    final hkdf = sodium.crypto.kdfHkdfSha256;
+    final master = _derive(password, salt, params);
+    try {
+      final prk = master.runUnlockedSync((ikm) => hkdf.extract(ikm: ikm));
+      try {
+        final authKey = hkdf.expand(
+          masterKey: prk,
+          context: 'auth',
+          outLen: 32,
+        );
+        try {
+          return AuthKeys(
+            authKey: base64Encode(authKey.extractBytes()),
+            wrapKey: hkdf.expand(
+              masterKey: prk,
+              context: 'chat-wrap',
+              outLen: _aead.keyBytes,
+            ),
+          );
+        } finally {
+          authKey.dispose();
+        }
+      } finally {
+        prk.dispose();
+      }
+    } finally {
+      master.dispose();
+    }
+  }
+
   /// Encrypts [identity]'s seeds under Argon2id([secret], a fresh salt).
   ///
-  /// The result is `nonce || XChaCha20-Poly1305(seeds)`. [secret] is the login
-  /// password or the recovery phrase; the caller normalizes a phrase first.
+  /// The result is `nonce || XChaCha20-Poly1305(seeds)`. [secret] is the
+  /// recovery phrase, which the caller normalizes first, or the login password
+  /// of an account still on the first scheme ([KdfParams.algorithm]).
   WrappedSecret wrap(ChatIdentity identity, String secret, KdfParams params) {
     final salt = sodium.randombytes.buf(sodium.crypto.pwhash.saltBytes);
     final key = _derive(secret, salt, params);
     try {
-      final nonce = sodium.randombytes.buf(_aead.nonceBytes);
-      final cipherText = _aead.encrypt(
-        message: identity.seeds,
-        nonce: nonce,
-        key: key,
-      );
-      return WrappedSecret(
-        wrapped: Uint8List.fromList([...nonce, ...cipherText]),
-        salt: salt,
-      );
+      return wrapWithKey(identity, key, salt);
     } finally {
       key.dispose();
     }
+  }
+
+  /// Encrypts [identity]'s seeds directly under [key], with no Argon2id of its
+  /// own: `nonce || XChaCha20-Poly1305(seeds)`. [salt] is recorded beside the
+  /// wrap, for whoever re-derives [key]. The caller disposes [key].
+  WrappedSecret wrapWithKey(
+    ChatIdentity identity,
+    SecureKey key,
+    Uint8List salt,
+  ) {
+    final nonce = sodium.randombytes.buf(_aead.nonceBytes);
+    final cipherText = _aead.encrypt(
+      message: identity.seeds,
+      nonce: nonce,
+      key: key,
+    );
+    return WrappedSecret(
+      wrapped: Uint8List.fromList([...nonce, ...cipherText]),
+      salt: salt,
+    );
   }
 
   /// Opens what [wrap] produced.
@@ -111,24 +169,34 @@ class ChatCrypto {
   }) {
     final key = _derive(secret, wrapped.salt, params);
     try {
-      final nonceBytes = _aead.nonceBytes;
-      if (wrapped.wrapped.length <= nonceBytes) {
-        throw MessageException(wrongSecret);
-      }
-      final Uint8List seeds;
-      try {
-        seeds = _aead.decrypt(
-          cipherText: Uint8List.sublistView(wrapped.wrapped, nonceBytes),
-          nonce: Uint8List.sublistView(wrapped.wrapped, 0, nonceBytes),
-          key: key,
-        );
-      } on SodiumException {
-        throw MessageException(wrongSecret);
-      }
-      return identityFromSeeds(seeds);
+      return unwrapWithKey(wrapped, key, wrongSecret: wrongSecret);
     } finally {
       key.dispose();
     }
+  }
+
+  /// Opens what [wrapWithKey] produced. A wrong [key] throws a
+  /// [MessageException] carrying [wrongSecret]. The caller disposes [key].
+  ChatIdentity unwrapWithKey(
+    WrappedSecret wrapped,
+    SecureKey key, {
+    String wrongSecret = Errors.chatKeysWrongPassword,
+  }) {
+    final nonceBytes = _aead.nonceBytes;
+    if (wrapped.wrapped.length <= nonceBytes) {
+      throw MessageException(wrongSecret);
+    }
+    final Uint8List seeds;
+    try {
+      seeds = _aead.decrypt(
+        cipherText: Uint8List.sublistView(wrapped.wrapped, nonceBytes),
+        nonce: Uint8List.sublistView(wrapped.wrapped, 0, nonceBytes),
+        key: key,
+      );
+    } on SodiumException {
+      throw MessageException(wrongSecret);
+    }
+    return identityFromSeeds(seeds);
   }
 
   SecureKey _derive(String secret, Uint8List salt, KdfParams params) =>
@@ -365,4 +433,24 @@ class ChatIdentity {
     sign.dispose();
     seeds.fillRange(0, seeds.length, 0);
   }
+}
+
+/// What [ChatCrypto.deriveAuthKeys] makes of a password (#2430): the key the
+/// Quark is sent in the password's place, and the key that wraps the chat
+/// identity and never leaves the client.
+///
+/// Neither is to be logged or kept past the request it was derived for.
+/// [dispose] it once both have been used.
+class AuthKeys {
+  /// Pairs the two keys.
+  AuthKeys({required this.authKey, required this.wrapKey});
+
+  /// The standard padded base64 of 32 bytes: `authKey` on the wire.
+  final String authKey;
+
+  /// The XChaCha20-Poly1305 key of the chat identity's password wrap.
+  final SecureKey wrapKey;
+
+  /// Frees the wrap key.
+  void dispose() => wrapKey.dispose();
 }

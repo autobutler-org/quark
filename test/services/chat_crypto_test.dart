@@ -45,6 +45,69 @@ void main() {
     );
   });
 
+  group('the auth key and the wrap key (#2430)', () {
+    final salt = Uint8List.fromList(List.generate(16, (i) => i));
+
+    // Computed outside this codebase, with Go's x/crypto argon2.IDKey (3
+    // passes, 64 MiB, 1 lane, 32 bytes) and hkdf.New(sha256, master, nil,
+    // info). Accounts depend on this never changing.
+    test('the construction is pinned by a fixed vector', () {
+      final keys = crypto.deriveAuthKeys(
+        'correct horse battery staple',
+        salt,
+        KdfParams.standard,
+      );
+      addTearDown(keys.dispose);
+
+      expect(keys.authKey, 'zNR6rA8kTcAq8wwj0fjQh9lSZ0A3+VNjah0pZEMf7XU=');
+      expect(
+        base64Encode(keys.wrapKey.extractBytes()),
+        '86clZ5J4USYne0XSCwtbUF08VSvRFsNNoWs83OX+5i4=',
+      );
+    });
+
+    test('is deterministic, and the two keys differ', () {
+      final a = crypto.deriveAuthKeys('one-password', salt, _cheap);
+      final b = crypto.deriveAuthKeys('one-password', salt, _cheap);
+      addTearDown(a.dispose);
+      addTearDown(b.dispose);
+
+      expect(a.authKey, b.authKey);
+      expect(a.wrapKey.extractBytes(), b.wrapKey.extractBytes());
+      expect(base64Decode(a.authKey), hasLength(32));
+      expect(base64Decode(a.authKey), isNot(a.wrapKey.extractBytes()));
+    });
+
+    test('another password or another salt gives other keys', () {
+      final a = crypto.deriveAuthKeys('one-password', salt, _cheap);
+      final b = crypto.deriveAuthKeys('two-password', salt, _cheap);
+      final c = crypto.deriveAuthKeys('one-password', Uint8List(16), _cheap);
+      addTearDown(a.dispose);
+      addTearDown(b.dispose);
+      addTearDown(c.dispose);
+
+      expect(b.authKey, isNot(a.authKey));
+      expect(c.authKey, isNot(a.authKey));
+    });
+
+    test('the wrap key opens its wrap, and the auth key does not', () {
+      final identity = crypto.generateIdentity();
+      final keys = crypto.deriveAuthKeys('one-password', salt, _cheap);
+      addTearDown(keys.dispose);
+      final wrapped = crypto.wrapWithKey(identity, keys.wrapKey, salt);
+
+      expect(wrapped.salt, salt);
+      expect(crypto.unwrapWithKey(wrapped, keys.wrapKey).seeds, identity.seeds);
+
+      final authKey = crypto.channelKeyFromBytes(base64Decode(keys.authKey));
+      addTearDown(authKey.dispose);
+      expect(
+        () => crypto.unwrapWithKey(wrapped, authKey),
+        throwsA(isA<MessageException>()),
+      );
+    });
+  });
+
   test('each wrap draws a fresh salt and nonce', () {
     final identity = crypto.generateIdentity();
     final a = crypto.wrap(identity, 'same', _cheap);

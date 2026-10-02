@@ -11,6 +11,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/auth_salt.dart';
+
 /// A Quark that answers every request with one canned response, and remembers
 /// what it was asked.
 class _RecordingClient extends http.BaseClient {
@@ -90,13 +92,23 @@ void main() {
     rewraps.clear();
     unlocks.clear();
     chatKeysForRecovery =
-        ({required username, required recoveryPhrase, required newPassword}) {
-          rewraps.add('$username/$recoveryPhrase/$newPassword');
+        ({
+          required username,
+          required recoveryPhrase,
+          required newPassword,
+          authSalt,
+        }) {
+          rewraps.add('$username/$recoveryPhrase/$newPassword/$authSalt');
           return Future.value(rewrapped);
         };
     chatKeysOnSignIn =
-        ({required password, recoveryPhrase, required sessionToken}) async {
-          unlocks.add('$password/$sessionToken');
+        ({
+          required password,
+          recoveryPhrase,
+          required sessionToken,
+          authSalt,
+        }) async {
+          unlocks.add('$password/$sessionToken/$authSalt');
         };
   });
 
@@ -104,7 +116,8 @@ void main() {
 
   test('recovery names the account the phrase belongs to', () async {
     final client = _RecordingClient();
-    authHttpClientFactory = () => client;
+    final salts = AuthSaltClient(client);
+    authHttpClientFactory = () => salts;
 
     await AuthService.recover(
       username: 'grace',
@@ -117,31 +130,37 @@ void main() {
     expect(jsonDecode(request.body), {
       'username': 'grace',
       'recoveryPhrase': 'apple-bread-cloud-delta-eagle-flame',
-      'newPassword': 'brand-new-password',
+      // #2430: the key derived from the new password, never the password.
+      'newAuthKey': await testAuthKey('brand-new-password'),
       'chatKeys': rewrapped.toJson(),
     });
+    expect(salts.asked, ['grace']);
+    expect(AppSettings.instance.signsInWithAuthKey('grace'), isTrue);
     expect(AppSettings.instance.sessionToken, 'new-token');
     // Recovery now names the account, so the app knows who is signed in.
     expect(AppSettings.instance.username, 'grace');
     // #2416: the keys were re-wrapped under the new password before the reset,
     // and chat unlocks with it afterwards.
+    // #2430: both under the salt the new auth key was derived with.
     expect(rewraps, [
-      'grace/apple-bread-cloud-delta-eagle-flame/brand-new-password',
+      'grace/apple-bread-cloud-delta-eagle-flame/brand-new-password/'
+          '$testAuthSalt',
     ]);
     await pumpEventQueue();
-    expect(unlocks, ['brand-new-password/new-token']);
+    expect(unlocks, ['brand-new-password/new-token/$testAuthSalt']);
   });
 
   test(
     'a phrase that opens no keys stops before the password changes',
     () async {
       final client = _RecordingClient();
-      authHttpClientFactory = () => client;
+      authHttpClientFactory = () => AuthSaltClient(client);
       chatKeysForRecovery =
           ({
             required username,
             required recoveryPhrase,
             required newPassword,
+            authSalt,
           }) => Future.error(const MessageException('invalid recovery phrase'));
 
       await expectLater(
