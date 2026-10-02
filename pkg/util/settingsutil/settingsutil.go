@@ -3,6 +3,8 @@
 package settingsutil
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +15,9 @@ import (
 )
 
 const settingsFileName = "settings.json"
+
+// authSaltSecretSize is the salt secret's length in bytes.
+const authSaltSecretSize = 32
 
 // Settings holds application-level user-configurable settings.
 type Settings struct {
@@ -45,6 +50,11 @@ type Settings struct {
 	// ThemeColor is the theme color an admin chose for the whole Quark (#2740),
 	// in the form ValidateThemeColor accepts. Empty means the client's default.
 	ThemeColor string `json:"themeColor,omitempty"`
+	// AuthSaltSecret is the hex of the 32 random bytes that key the salt
+	// /auth/salt answers with for an account that has none stored (#2430).
+	// AuthSaltSecret makes it on first use and Save never drops it. The file
+	// is written 0600.
+	AuthSaltSecret string `json:"authSaltSecret,omitempty"`
 }
 
 // ErrInvalidThemeColor reports a theme color that is neither empty, a preset name,
@@ -70,6 +80,8 @@ func ValidateThemeColor(themeColor string) error {
 }
 
 var (
+	// secretMu keeps two first calls of AuthSaltSecret from each making one.
+	secretMu     sync.Mutex
 	mu           sync.Mutex
 	cached       *Settings
 	pathOverride string // set by ResetForTesting only
@@ -127,6 +139,12 @@ func Save(s *Settings) error {
 
 	snapshot := snapshotOf(s)
 	snapshot.SettingsVersion = len(migrations)
+	// The salt secret is written once and never cleared. A caller holding
+	// settings read before it existed would otherwise save it away, and the
+	// next one made would not match the salts already handed out (#2430).
+	if snapshot.AuthSaltSecret == "" && cached != nil {
+		snapshot.AuthSaltSecret = cached.AuthSaltSecret
+	}
 	data, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal settings: %w", err)
@@ -345,6 +363,32 @@ func SetActiveBranch(branch string) error {
 	}
 	s.ActiveBranch = branch
 	return Save(s)
+}
+
+// AuthSaltSecret returns this install's salt secret, making and persisting it
+// on first use. Losing it locks nobody out: an account's real salt is stored
+// with the account, and the secret only decides the salt offered for a
+// username that has none.
+func AuthSaltSecret() ([]byte, error) {
+	secretMu.Lock()
+	defer secretMu.Unlock()
+
+	s, err := Load()
+	if err != nil {
+		return nil, err
+	}
+	if secret, err := hex.DecodeString(s.AuthSaltSecret); err == nil && len(secret) == authSaltSecretSize {
+		return secret, nil
+	}
+	secret := make([]byte, authSaltSecretSize)
+	if _, err := rand.Read(secret); err != nil {
+		return nil, fmt.Errorf("failed to generate the salt secret: %w", err)
+	}
+	s.AuthSaltSecret = hex.EncodeToString(secret)
+	if err := Save(s); err != nil {
+		return nil, err
+	}
+	return secret, nil
 }
 
 // ResetForTesting resets in-memory state and redirects the settings file to

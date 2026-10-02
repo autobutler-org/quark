@@ -83,6 +83,15 @@ var (
 	// ErrIncorrectPassword refuses a destructive action whose password is not
 	// the caller's (#2346).
 	ErrIncorrectPassword = errors.New("incorrect password")
+	// ErrInvalidAuthKey refuses an auth key that is not the standard base64
+	// of exactly 32 bytes (#2430).
+	ErrInvalidAuthKey = errors.New("authKey must be the base64 of 32 bytes")
+	// ErrCredentialRequired refuses a request that carries neither a password
+	// nor an auth key.
+	ErrCredentialRequired = errors.New("a password or an authKey is required")
+	// ErrCredentialConflict refuses a new credential given as both a password
+	// and an auth key, since only one of them is stored.
+	ErrCredentialConflict = errors.New("send a password or an authKey, not both")
 )
 
 // DisableUserParams names the account an admin turns off.
@@ -131,6 +140,12 @@ type CreateUserParams struct {
 	Database *db.DatabaseSqlc
 	Username string
 	Password string
+	// AuthKey takes Password's place: the key the client derived from the
+	// password and the account's salt (#2430). Exactly one of the two is set.
+	AuthKey string
+	// SaltSecret returns the install's salt secret. It is called only when
+	// AuthKey is set, to store the salt the key was derived with.
+	SaltSecret func() ([]byte, error)
 	// FilesDir is the internal device's files directory, where the account's
 	// home is made.
 	FilesDir string
@@ -148,6 +163,12 @@ type CreateUserResult struct {
 type RequestAccountParams struct {
 	Username string
 	Password string
+	// AuthKey takes Password's place: the key the client derived from the
+	// password and the account's salt (#2430). Exactly one of the two is set.
+	AuthKey string
+	// SaltSecret returns the install's salt secret. It is called only when
+	// AuthKey is set, to store the salt the key was derived with.
+	SaltSecret func() ([]byte, error)
 	// RequestsEnabled is the admin's access-request setting.
 	RequestsEnabled bool
 }
@@ -185,6 +206,12 @@ type SetupParams struct {
 	Database *db.DatabaseSqlc
 	Username string
 	Password string
+	// AuthKey takes Password's place: the key the client derived from the
+	// password and the account's salt (#2430). Exactly one of the two is set.
+	AuthKey string
+	// SaltSecret returns the install's salt secret. It is called only when
+	// AuthKey is set, to store the salt the key was derived with.
+	SaltSecret func() ([]byte, error)
 	// FilesDir is the internal device's files directory, where the founding
 	// admin's home is made.
 	FilesDir string
@@ -196,10 +223,32 @@ type SetupResult struct {
 	RecoveryPhrase string // shown once — caller must surface to user
 }
 
-// LoginParams contains parameters for login.
+// LoginParams contains parameters for login. Password alone is the legacy
+// sign-in, AuthKey alone signs in with the key the client derived (#2430), and
+// both together upgrade an account that has no auth key yet.
 type LoginParams struct {
 	Username string
 	Password string
+	AuthKey  string
+	// SaltSecret returns the install's salt secret. It is called only for an
+	// upgrade, to store the salt the key was derived with.
+	SaltSecret func() ([]byte, error)
+}
+
+// GetSaltParams names the account whose key-derivation salt is asked for.
+type GetSaltParams struct {
+	Username string
+	// SaltSecret returns the install's salt secret.
+	SaltSecret func() ([]byte, error)
+}
+
+// GetSaltResult is the salt a client derives its auth key with.
+type GetSaltResult struct {
+	// Salt is the standard base64 of 16 bytes.
+	Salt string
+	// Legacy is true for an account that still signs in with its password
+	// alone, which the client upgrades by sending both.
+	Legacy bool
 }
 
 // LoginResult contains the result of a successful login.
@@ -234,6 +283,12 @@ type RecoverParams struct {
 	Username       string
 	RecoveryPhrase string
 	NewPassword    string
+	// NewAuthKey takes NewPassword's place: the key the client derived from
+	// the new password (#2430). Exactly one of the two is set.
+	NewAuthKey string
+	// SaltSecret returns the install's salt secret. It is called only when
+	// NewAuthKey is set.
+	SaltSecret func() ([]byte, error)
 	// AfterReset, when set, runs in the transaction that resets the password,
 	// with that transaction's queries and the account's id. An error rolls the
 	// reset back. Chat uses it to store keys re-wrapped under the new password
@@ -276,12 +331,14 @@ func HashPassword(password string) (string, error) {
 	return string(hash), nil
 }
 
-// CheckPassword verifies a plaintext password against a bcrypt hash.
+// CheckPassword verifies a plaintext password against a bcrypt hash. An empty
+// hash, which is how an unset password or auth key is stored, matches nothing.
 func CheckPassword(password, hash string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 
 // VerifyPasswordParams names the signed-in account and the password it gave.
+// Password may instead hold the account's auth key (#2430).
 type VerifyPasswordParams struct {
 	Queries  *db.Queries
 	Username string
@@ -291,7 +348,7 @@ type VerifyPasswordParams struct {
 // VerifyPasswordResult is empty; a correct password has nothing to report.
 type VerifyPasswordResult struct{}
 
-// VerifyPassword checks that Password is the stored password of Username, so a
+// VerifyPassword checks that Password is the stored password or auth key of Username, so a
 // session on its own is not enough to delete an account or reset the Quark
 // (#2346). It returns ErrIncorrectPassword for a wrong password,
 // ErrUserNotFound when no account has the username, and any other error for a
@@ -304,7 +361,7 @@ func VerifyPassword(ctx context.Context, params VerifyPasswordParams) (VerifyPas
 	if err != nil {
 		return VerifyPasswordResult{}, fmt.Errorf("look up the account: %w", err)
 	}
-	if !CheckPassword(params.Password, user.PasswordHash) {
+	if !matchesCredential(user, params.Password) {
 		return VerifyPasswordResult{}, ErrIncorrectPassword
 	}
 	return VerifyPasswordResult{}, nil
@@ -399,9 +456,6 @@ func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
 	if err := validateUsername(params.Username); err != nil {
 		return nil, err
 	}
-	if len(params.Password) < 8 {
-		return nil, ErrPasswordTooShort
-	}
 	if params.Database == nil {
 		return nil, errors.New("database not initialized")
 	}
@@ -415,7 +469,7 @@ func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
 		return nil, fmt.Errorf("setup already complete")
 	}
 
-	passwordHash, err := HashPassword(params.Password)
+	passwordHash, authKeyHash, authSalt, err := newCredentials(params.Username, params.Password, params.AuthKey, params.SaltSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -437,6 +491,8 @@ func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
 			Username:           params.Username,
 			PasswordHash:       passwordHash,
 			RecoveryPhraseHash: recoveryHash,
+			AuthKeyHash:        authKeyHash,
+			AuthSalt:           authSalt,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
@@ -478,7 +534,8 @@ func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
 // RequestAccount creates a pending account that can sign in once an admin
 // approves it, and returns its recovery phrase. It returns
 // ErrAccessRequestsOff while requests are off or before setup, and
-// ErrInvalidUsername, ErrPasswordTooShort or ErrUsernameTaken for a request
+// ErrInvalidUsername, ErrPasswordTooShort, ErrInvalidAuthKey,
+// ErrCredentialRequired, ErrCredentialConflict or ErrUsernameTaken for a request
 // that cannot be taken. A pending request holds its username until it is
 // denied.
 func RequestAccount(ctx context.Context, queries *db.Queries, params RequestAccountParams) (RequestAccountResult, error) {
@@ -495,11 +552,7 @@ func RequestAccount(ctx context.Context, queries *db.Queries, params RequestAcco
 	if err := validateUsername(params.Username); err != nil {
 		return RequestAccountResult{}, err
 	}
-	if len(params.Password) < 8 {
-		return RequestAccountResult{}, ErrPasswordTooShort
-	}
-
-	passwordHash, err := HashPassword(params.Password)
+	passwordHash, authKeyHash, authSalt, err := newCredentials(params.Username, params.Password, params.AuthKey, params.SaltSecret)
 	if err != nil {
 		return RequestAccountResult{}, err
 	}
@@ -515,6 +568,8 @@ func RequestAccount(ctx context.Context, queries *db.Queries, params RequestAcco
 		Username:           params.Username,
 		PasswordHash:       passwordHash,
 		RecoveryPhraseHash: recoveryHash,
+		AuthKeyHash:        authKeyHash,
+		AuthSalt:           authSalt,
 	}); err != nil {
 		if sqlutil.IsUniqueConstraintErr(err) {
 			return RequestAccountResult{}, ErrUsernameTaken
@@ -585,22 +640,72 @@ func DenyRequest(ctx context.Context, queries *db.Queries, params DenyRequestPar
 	return DenyRequestResult{}, nil
 }
 
+// GetSalt returns the salt a client derives Username's auth key with (#2430).
+// An account that has a stored salt gets it. Any other username, whether it
+// names a legacy account or none, gets the install's deterministic salt for
+// that name, so the answer does not say whether the account exists. The
+// deterministic salt is computed on every path so they take the same work.
+func GetSalt(ctx context.Context, queries *db.Queries, params GetSaltParams) (GetSaltResult, error) {
+	salt, err := deterministicSalt(params.SaltSecret, params.Username)
+	if err != nil {
+		return GetSaltResult{}, err
+	}
+	result := GetSaltResult{Salt: salt}
+	user, err := queries.GetUserByUsername(ctx, params.Username)
+	if errors.Is(err, sql.ErrNoRows) {
+		return result, nil
+	}
+	if err != nil {
+		return GetSaltResult{}, fmt.Errorf("look up the account: %w", err)
+	}
+	if user.AuthSalt != "" {
+		result.Salt = user.AuthSalt
+	}
+	result.Legacy = user.AuthKeyHash == ""
+	return result, nil
+}
+
 // Login validates credentials and returns a session token. The password is
 // checked before the account's status, so ErrAccountPending and
 // ErrAccountDisabled reach only someone who knows the password, and a wrong
 // password reveals nothing about which usernames exist.
+//
+// A password is checked against the password hash and, when there is no
+// password, an auth key against the auth key hash; an account with no auth key
+// refuses every key. A sign-in carrying both is checked by its password and
+// gives an account with no auth key that one, keeping its password hash so
+// clients that still send the password keep working (#2430).
 func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*LoginResult, error) {
+	if params.Password == "" && params.AuthKey == "" {
+		return nil, ErrCredentialRequired
+	}
+	if params.AuthKey != "" {
+		if err := validateAuthKey(params.AuthKey); err != nil {
+			return nil, err
+		}
+	}
 	user, err := queries.GetUserByUsername(ctx, params.Username)
 	if err != nil {
 		// Don't leak whether the username exists
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
-	if !CheckPassword(params.Password, user.PasswordHash) {
+	secret, hash := params.Password, user.PasswordHash
+	if params.Password == "" {
+		secret, hash = params.AuthKey, user.AuthKeyHash
+	}
+	if !CheckPassword(secret, hash) {
 		return nil, fmt.Errorf("invalid credentials")
 	}
 	if err := statusError(user.Status); err != nil {
 		return nil, err
+	}
+	if params.Password != "" && params.AuthKey != "" && user.AuthKeyHash == "" {
+		// The password was right, so a failed upgrade does not refuse the
+		// sign-in: the account still reads as legacy and the next one retries.
+		if err := upgradeToAuthKey(ctx, queries, user, params.AuthKey, params.SaltSecret); err != nil {
+			slog.Warn("auth key upgrade failed", "username", user.Username, "error", err)
+		}
 	}
 	recoveryPhrase, err := firstRecoveryPhrase(ctx, queries, user)
 	if err != nil {
@@ -620,20 +725,18 @@ func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*Login
 // (#2016). Homes live under users/ so that a username and a top-level folder
 // name are different namespaces: a Quark with a family/ folder can still have
 // an account named family. It returns ErrInvalidUsername, ErrPasswordTooShort,
-// or ErrUsernameTaken; a folder already at users/<username> becomes the
+// ErrInvalidAuthKey, ErrCredentialRequired, ErrCredentialConflict or
+// ErrUsernameTaken; a folder already at users/<username> becomes the
 // account's home. A refused account leaves no row behind, and no folder
 // except the shared users parent.
 func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult, error) {
 	if err := validateUsername(params.Username); err != nil {
 		return CreateUserResult{}, err
 	}
-	if len(params.Password) < 8 {
-		return CreateUserResult{}, ErrPasswordTooShort
-	}
 	if params.Database == nil {
 		return CreateUserResult{}, errors.New("database not initialized")
 	}
-	passwordHash, err := HashPassword(params.Password)
+	passwordHash, authKeyHash, authSalt, err := newCredentials(params.Username, params.Password, params.AuthKey, params.SaltSecret)
 	if err != nil {
 		return CreateUserResult{}, err
 	}
@@ -646,6 +749,8 @@ func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult,
 		user, err := q.CreateUser(ctx, db.CreateUserParams{
 			Username:     params.Username,
 			PasswordHash: passwordHash,
+			AuthKeyHash:  authKeyHash,
+			AuthSalt:     authSalt,
 		})
 		if sqlutil.IsUniqueConstraintErr(err) {
 			return ErrUsernameTaken
@@ -749,6 +854,7 @@ func ValidateSession(ctx context.Context, queries *db.Queries, token string) (st
 }
 
 // ValidateBasicAuth checks a username/password pair against the user database.
+// The password may instead be the account's auth key (#2430).
 // Returns the username and user id if valid, or an error if not. Unlike Login,
 // this does not create a session — each request authenticates independently.
 func ValidateBasicAuth(ctx context.Context, queries *db.Queries, username, password string) (string, int64, error) {
@@ -756,7 +862,7 @@ func ValidateBasicAuth(ctx context.Context, queries *db.Queries, username, passw
 	if err != nil {
 		return "", 0, fmt.Errorf("invalid credentials")
 	}
-	if !CheckPassword(password, user.PasswordHash) {
+	if !matchesCredential(user, password) {
 		return "", 0, fmt.Errorf("invalid credentials")
 	}
 	if err := statusError(user.Status); err != nil {
@@ -792,25 +898,36 @@ func CheckRecoveryPhrase(ctx context.Context, queries *db.Queries, username, phr
 // Recover resets a user's password using their recovery phrase. The new
 // password, the ended sessions, the new session and params.AfterReset commit
 // together or not at all.
+//
+// The reset replaces both ways of signing in (#2430). A new password clears
+// the auth key and its salt, because that key was derived from the old
+// password and would otherwise still sign in. A new auth key clears the
+// password hash, and keeps the salt the account already had.
 func Recover(ctx context.Context, database *db.DatabaseSqlc, params RecoverParams) (*LoginResult, error) {
-	if len(params.NewPassword) < 8 {
-		return nil, ErrPasswordTooShort
+	passwordHash, authKeyHash, authSalt, err := newCredentials(params.Username, params.NewPassword, params.NewAuthKey, params.SaltSecret)
+	if err != nil {
+		return nil, err
 	}
 	userID, err := CheckRecoveryPhrase(ctx, database.Queries, params.Username, params.RecoveryPhrase)
 	if err != nil {
 		return nil, err
 	}
 
-	newHash, err := HashPassword(params.NewPassword)
-	if err != nil {
-		return nil, err
-	}
-
 	var token string
 	err = inTx(ctx, database, func(q *db.Queries) error {
-		if err := q.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+		user, err := q.GetUserByID(ctx, userID)
+		if err != nil {
+			return fmt.Errorf("look up the account: %w", err)
+		}
+		if authKeyHash != "" && user.AuthSalt != "" {
+			// The salt the client was given, and so derived the new key with.
+			authSalt = user.AuthSalt
+		}
+		if err := q.SetUserCredentials(ctx, db.SetUserCredentialsParams{
 			ID:           userID,
-			PasswordHash: newHash,
+			PasswordHash: passwordHash,
+			AuthKeyHash:  authKeyHash,
+			AuthSalt:     authSalt,
 		}); err != nil {
 			return fmt.Errorf("failed to update password: %w", err)
 		}

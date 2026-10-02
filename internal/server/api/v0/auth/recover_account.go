@@ -8,17 +8,18 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 
 	"github.com/gin-gonic/gin"
 )
 
 // recoverAccount godoc
 // @Summary Recover account
-// @Description Resets the named account's password using its recovery phrase. chatKeys, when sent, replaces the account's chat identity in the same transaction: the client fetched it from /auth/recover/keys, opened it with the phrase and re-wrapped it under the new password (#2416). The body is at most 8 KiB.
+// @Description Resets the named account's password using its recovery phrase. The body carries exactly one of newPassword and newAuthKey, the standard base64 of the 32-byte key the client derived from the new password and the salt GET /auth/salt returned. Either one replaces both ways of signing in: a new password clears the account's auth key, and a new auth key clears its password. chatKeys, when sent, replaces the account's chat identity in the same transaction: the client fetched it from /auth/recover/keys, opened it with the phrase and re-wrapped it under the new password (#2416). The body is at most 8 KiB.
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param body body recoverAccountBody true "The account, its recovery phrase, the new password and optionally its re-wrapped chat keys"
+// @Param body body recoverAccountBody true "The account, its recovery phrase, the new password or auth key and optionally its re-wrapped chat keys"
 // @Success 200 {object} object
 // @Failure 400 {object} serverutil.Response
 // @Failure 403 {object} accountRefusal "status is pending or disabled"
@@ -54,6 +55,8 @@ func recoverAccount(c *gin.Context) *serverutil.Response {
 		Username:       req.Username,
 		RecoveryPhrase: req.RecoveryPhrase,
 		NewPassword:    req.NewPassword,
+		NewAuthKey:     req.NewAuthKey,
+		SaltSecret:     settingsutil.AuthSaltSecret,
 		AfterReset:     afterReset,
 	})
 	if refusal := accountRefusalResponse(err); refusal != nil {

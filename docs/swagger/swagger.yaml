@@ -835,12 +835,16 @@ definitions:
     type: object
   v0_admin.createUserBody:
     properties:
+      authKey:
+        type: string
       password:
+        description: |-
+          Exactly one of Password and AuthKey is sent. AuthKey is the standard
+          base64 of the 32-byte key derived from the password (#2430).
         type: string
       username:
         type: string
     required:
-    - password
     - username
     type: object
   v0_admin.deleteUserResponse:
@@ -952,6 +956,20 @@ definitions:
         description: Status is pending or disabled.
         type: string
     type: object
+  v0_auth.credentialsBody:
+    properties:
+      authKey:
+        description: |-
+          AuthKey is the standard base64 of the 32-byte key the client derived
+          from the password and the salt GET /auth/salt returned.
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - username
+    type: object
   v0_auth.deleteAccountBody:
     properties:
       password:
@@ -978,14 +996,19 @@ definitions:
           ChatKeys is the account's chat identity re-wrapped under NewPassword,
           stored in the same transaction as the reset (#2416). Absent leaves the
           stored keys as they are.
+      newAuthKey:
+        type: string
       newPassword:
+        description: |-
+          Exactly one of NewPassword and NewAuthKey is sent. NewAuthKey is the
+          standard base64 of the 32-byte key derived from the new password and the
+          salt GET /auth/salt returned (#2430).
         type: string
       recoveryPhrase:
         type: string
       username:
         type: string
     required:
-    - newPassword
     - recoveryPhrase
     - username
     type: object
@@ -1001,17 +1024,32 @@ definitions:
     type: object
   v0_auth.requestAccountBody:
     properties:
+      authKey:
+        description: |-
+          AuthKey is the standard base64 of the 32-byte key the client derived
+          from the password and the salt GET /auth/salt returned.
+        type: string
       password:
         type: string
       username:
         type: string
     required:
-    - password
     - username
     type: object
   v0_auth.requestAccountResponse:
     properties:
       recoveryPhrase:
+        type: string
+    type: object
+  v0_auth.saltResponse:
+    properties:
+      legacy:
+        description: |-
+          Legacy is true for an account that has no auth key yet: the client signs
+          in with both password and authKey to give it one.
+        type: boolean
+      salt:
+        description: Salt is the standard base64 of 16 bytes.
         type: string
     type: object
   v0_books.BookJSON:
@@ -2855,11 +2893,14 @@ paths:
     post:
       consumes:
       - application/json
-      description: 'Creates an active account with the given password. The admin never
-        sees its recovery phrase: the account gets one on its first sign-in. The account''s
-        home is made under users/ on the internal device, named after the account,
-        and the account owns it. An existing folder of that name under users/ becomes
-        the home, and a top-level folder of that name does not collide. Admin-only.'
+      description: 'Creates an active account with the given password, or with authKey
+        in its place: the standard base64 of the 32-byte key the admin''s client derived
+        from the password and the salt GET /auth/salt returned for the new username.
+        Exactly one of the two is sent. The admin never sees its recovery phrase:
+        the account gets one on its first sign-in. The account''s home is made under
+        users/ on the internal device, named after the account, and the account owns
+        it. An existing folder of that name under users/ becomes the home, and a top-level
+        folder of that name does not collide. Admin-only.'
       parameters:
       - description: The account to add
         in: body
@@ -2875,7 +2916,7 @@ paths:
           schema:
             $ref: '#/definitions/v0_admin.userSummary'
         "400":
-          description: invalid username or password
+          description: invalid username, password or authKey
           schema:
             $ref: '#/definitions/serverutil.Response'
         "401":
@@ -3432,18 +3473,23 @@ paths:
     post:
       consumes:
       - application/json
-      description: Authenticates with username and password, returns a session token.
+      description: 'Authenticates and returns a session token. The body takes one
+        of three shapes: {username, password} checks the password; {username, authKey}
+        checks the key the client derived from the password and the salt GET /auth/salt
+        returned, and is a 401 for an account that has no auth key yet; {username,
+        password, authKey} checks the password and gives an account with no auth key
+        that one, keeping its password. authKey is the standard base64 of 32 bytes.
         On the first sign-in of an account an admin created, the response also carries
         recoveryPhrase, which is never returned again. A pending or disabled account
         with the right password gets 403 with its status, so the app can tell it from
-        a wrong password.
+        a wrong password.'
       parameters:
-      - description: '{username, password}'
+      - description: The username with a password, an authKey, or both
         in: body
         name: body
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/v0_auth.credentialsBody'
       produces:
       - application/json
       responses:
@@ -3451,6 +3497,10 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/v0_auth.loginResponse'
+        "400":
+          description: no password or authKey, or a malformed authKey
+          schema:
+            $ref: '#/definitions/serverutil.Response'
         "401":
           description: Unauthorized
           schema:
@@ -3482,12 +3532,16 @@ paths:
       consumes:
       - application/json
       description: 'Resets the named account''s password using its recovery phrase.
-        chatKeys, when sent, replaces the account''s chat identity in the same transaction:
+        The body carries exactly one of newPassword and newAuthKey, the standard base64
+        of the 32-byte key the client derived from the new password and the salt GET
+        /auth/salt returned. Either one replaces both ways of signing in: a new password
+        clears the account''s auth key, and a new auth key clears its password. chatKeys,
+        when sent, replaces the account''s chat identity in the same transaction:
         the client fetched it from /auth/recover/keys, opened it with the phrase and
         re-wrapped it under the new password (#2416). The body is at most 8 KiB.'
       parameters:
-      - description: The account, its recovery phrase, the new password and optionally
-          its re-wrapped chat keys
+      - description: The account, its recovery phrase, the new password or auth key
+          and optionally its re-wrapped chat keys
         in: body
         name: body
         required: true
@@ -3564,9 +3618,12 @@ paths:
       - application/json
       description: Creates a pending account that can sign in once an admin approves
         it, and returns its recovery phrase this once. Needs no session and is rate-limited
-        per IP. A pending request keeps its username taken until it is denied.
+        per IP. A pending request keeps its username taken until it is denied. The
+        body carries exactly one of password and authKey, the standard base64 of the
+        32-byte key the client derived from the password and the salt GET /auth/salt
+        returned.
       parameters:
-      - description: The username and password to request
+      - description: The username with a password or an authKey
         in: body
         name: body
         required: true
@@ -3580,7 +3637,7 @@ paths:
           schema:
             $ref: '#/definitions/v0_auth.requestAccountResponse'
         "400":
-          description: invalid username or password
+          description: invalid username, password or authKey
           schema:
             $ref: '#/definitions/serverutil.Response'
         "404":
@@ -3600,6 +3657,42 @@ paths:
           schema:
             $ref: '#/definitions/serverutil.Response'
       summary: Request an account
+      tags:
+      - auth
+  /auth/salt:
+    get:
+      description: 'Returns the salt a client derives the named account''s auth key
+        with, as the standard base64 of 16 bytes. Needs no session and is rate-limited
+        per IP. A username with no account gets a salt too, the same one every time,
+        so the answer does not say whether the account exists. legacy is true for
+        an account that has no auth key yet: the client signs in with both password
+        and authKey to give it one.'
+      parameters:
+      - description: The account's username
+        in: query
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_auth.saltResponse'
+        "400":
+          description: no username
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      summary: Get the salt for an auth key
       tags:
       - auth
   /auth/sessions:
@@ -3703,14 +3796,16 @@ paths:
       - application/json
       description: Creates the owner account, with a home under users/ on the internal
         device that it owns; an existing folder of that name under users/ becomes
-        the home. Can only be called once.
+        the home. Can only be called once. The body carries exactly one of password
+        and authKey, the standard base64 of the 32-byte key the client derived from
+        the password and the salt GET /auth/salt returned.
       parameters:
-      - description: '{username, password}'
+      - description: The username with a password or an authKey
         in: body
         name: body
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/v0_auth.credentialsBody'
       produces:
       - application/json
       responses:
