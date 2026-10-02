@@ -18,7 +18,7 @@ test: test/unit ## Run tests
 
 .PHONY: test/unit
 test/unit: ## Run unit tests
-	dart test
+	dart test $(if $(FLUTTER_TEST_CONCURRENCY),--concurrency=$(FLUTTER_TEST_CONCURRENCY))
 
 .PHONY: tidy
 tidy: tidy/dart ## Tidy dependencies

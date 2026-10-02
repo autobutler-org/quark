@@ -61,10 +61,14 @@ commands. `make help` lists everything; these are the ones that matter day to da
 | `make test`                     | unit tests only — **not** the API integration tests                          |
 | `make test/unit/backend`        | Go unit tests: everything except `internal/server/api/v0/…`                  |
 | `make test/integration/backend` | the API handler tests (real filesystem, real gin engine)                     |
-| `make test/unit/frontend`       | root `flutter test`, then `make -C packages/<pkg> test/unit` for each package |
+| `make test/unit/frontend`       | the app suite and every `packages/<pkg>` suite, side by side                 |
 | `make watch/backend`            | backend with hot reload, plain HTTP on `:8080`                               |
 | `make watch/backend/secure`     | backend with hot reload, HTTPS on `:443`, self-signed                        |
 | `make serve/frontend`           | Flutter web dev server                                                       |
+
+`test/unit/frontend` takes three optional variables, all empty by default: `FLUTTER_TEST_CONCURRENCY=<n>` for
+every suite, and `TOTAL_SHARDS=<n> SHARD_INDEX=<i>` to run one slice of the app suite. Its halves are also
+targets of their own: `test/unit/frontend/app` and `test/unit/frontend/packages`.
 
 GNU make is required. On macOS the system `make` is BSD make and cannot read this Makefile — use `gmake`, which
 is what `git/hooks/pre-commit` does.
