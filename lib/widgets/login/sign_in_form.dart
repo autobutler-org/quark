@@ -55,6 +55,15 @@ class SignInForm extends StatelessWidget {
   /// still need setting up".
   final bool? setupComplete;
 
+  /// Marks Sign in and the links under it, so the page can keep them in view
+  /// above the keyboard (#2068).
+  final Key? actionsKey;
+
+  /// A tap on either field, focused or not: the keyboard may already be up
+  /// over actions that something above has since pushed down, such as the
+  /// host list opening (#2068).
+  final VoidCallback? onFieldTap;
+
   const SignInForm({
     super.key,
     required this.formKey,
@@ -77,6 +86,8 @@ class SignInForm extends StatelessWidget {
     required this.onSetUpQuark,
     this.onRequestAccess,
     this.setupComplete,
+    this.actionsKey,
+    this.onFieldTap,
   });
 
   @override
@@ -146,6 +157,7 @@ class SignInForm extends StatelessWidget {
               border: OutlineInputBorder(),
               prefixIcon: Icon(QuarkIcons.person_outline),
             ),
+            onTap: onFieldTap,
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.username],
             autocorrect: false,
@@ -180,6 +192,7 @@ class SignInForm extends StatelessWidget {
                 onPressed: onTogglePassword,
               ),
             ),
+            onTap: onFieldTap,
             textInputAction: TextInputAction.done,
             autofillHints: const [AutofillHints.password],
             onFieldSubmitted: (_) => loading ? null : onSubmit(),
@@ -189,38 +202,48 @@ class SignInForm extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // Sign in button
-          FilledButton(
-            key: const ValueKey('login_submit'),
-            onPressed: loading ? null : onSubmit,
-            child: loading
-                ? const QuarkLoader(size: 20)
-                : const Text('Sign in'),
+          // One subtree, so focusing a field can scroll all of it into view
+          // rather than only the field, which left these under the keyboard
+          // (#2068).
+          Column(
+            key: actionsKey,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Sign in button
+              FilledButton(
+                key: const ValueKey('login_submit'),
+                onPressed: loading ? null : onSubmit,
+                child: loading
+                    ? const QuarkLoader(size: 20)
+                    : const Text('Sign in'),
+              ),
+              const SizedBox(height: 12),
+
+              // Forgot password
+              TextButton(
+                onPressed: loading ? null : onForgotPassword,
+                child: const Text('Forgot password?'),
+              ),
+
+              // A second person asks this Quark for an account (#1908).
+              if (onRequestAccess != null)
+                TextButton(
+                  key: const ValueKey('sign_in_request_access'),
+                  onPressed: loading ? null : onRequestAccess,
+                  child: const Text('Need an account? Request one'),
+                ),
+
+              // Escape hatch to the setup wizard for an unclaimed Quark
+              // (#1827), hidden once the Quark has said it has an owner
+              // (#2030).
+              if (setupComplete != true)
+                TextButton(
+                  key: const ValueKey('login_set_up_quark'),
+                  onPressed: loading ? null : onSetUpQuark,
+                  child: const Text('First time here? Set up this Quark'),
+                ),
+            ],
           ),
-          const SizedBox(height: 12),
-
-          // Forgot password
-          TextButton(
-            onPressed: loading ? null : onForgotPassword,
-            child: const Text('Forgot password?'),
-          ),
-
-          // A second person asks this Quark for an account (#1908).
-          if (onRequestAccess != null)
-            TextButton(
-              key: const ValueKey('sign_in_request_access'),
-              onPressed: loading ? null : onRequestAccess,
-              child: const Text('Need an account? Request one'),
-            ),
-
-          // Escape hatch to the setup wizard for an unclaimed Quark (#1827),
-          // hidden once the Quark has said it has an owner (#2030).
-          if (setupComplete != true)
-            TextButton(
-              key: const ValueKey('login_set_up_quark'),
-              onPressed: loading ? null : onSetUpQuark,
-              child: const Text('First time here? Set up this Quark'),
-            ),
         ],
       ),
     );

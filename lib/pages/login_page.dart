@@ -43,7 +43,7 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   late final _usernameController = TextEditingController(
     text: widget.initialUsername ?? '',
@@ -51,6 +51,9 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   final _usernameFocus = FocusNode();
   final _passwordFocus = FocusNode();
+
+  /// Sign in and the links under it, kept in view while typing (#2068).
+  final _actionsKey = GlobalKey();
 
   bool _loading = false;
   bool _obscurePassword = true;
@@ -98,6 +101,9 @@ class _LoginPageState extends State<LoginPage> {
   void initState() {
     super.initState();
     AppSettings.instance.activeHostNotifier.addListener(_onActiveHostChanged);
+    WidgetsBinding.instance.addObserver(this);
+    _usernameFocus.addListener(_revealActions);
+    _passwordFocus.addListener(_revealActions);
     _checkAccessRequests();
     _checkSetupState();
   }
@@ -142,11 +148,38 @@ class _LoginPageState extends State<LoginPage> {
     _checkSetupState();
   }
 
+  /// The keyboard opening, closing or resizing.
+  @override
+  void didChangeMetrics() => _revealActions();
+
+  /// Scrolls Sign in and the links under it into view while a field has
+  /// focus (#2068).
+  ///
+  /// The field only reveals itself, so with the keyboard up everything below
+  /// the password — the button the user is about to press included — sat
+  /// under it. Runs after the next frame, once the scroll view has been laid
+  /// out in the space the keyboard left.
+  void _revealActions() {
+    if (!_usernameFocus.hasFocus && !_passwordFocus.hasFocus) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final actions = _actionsKey.currentContext;
+      if (!mounted || actions == null) return;
+      Scrollable.ensureVisible(
+        actions,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+    });
+    // A tap on a field that already has focus changes nothing on screen, so
+    // without this no frame comes along to run the callback.
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
   @override
   void dispose() {
     AppSettings.instance.activeHostNotifier.removeListener(
       _onActiveHostChanged,
     );
+    WidgetsBinding.instance.removeObserver(this);
     _usernameController.dispose();
     _passwordController.dispose();
     _usernameFocus.dispose();
@@ -334,6 +367,8 @@ class _LoginPageState extends State<LoginPage> {
                             ? _goToRequestAccount
                             : null,
                         setupComplete: _setupComplete,
+                        actionsKey: _actionsKey,
+                        onFieldTap: _revealActions,
                       ),
               ),
             ),

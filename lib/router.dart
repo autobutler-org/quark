@@ -28,6 +28,7 @@ import 'package:quark/pages/vault_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/feature_flags_service.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark_widgets/quark_widgets.dart' show CalendarDates;
 
@@ -794,7 +795,21 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
   // counts as no: the page could only render refusals.
   if (AppSettings.instance.sessionToken != null &&
       _isUnderAny(adminRoutes, location)) {
-    return await _callerIsAdmin() ? null : AppRoutes.files;
+    if (await _callerIsAdmin()) return null;
+    // Said, not just done: someone following an admin's link otherwise
+    // lands in Files with no idea why (#2477). Shown after the frame that
+    // builds Files: on a cold deep link there is no Scaffold to show it in
+    // until then.
+    final messenger = context.mounted
+        ? ScaffoldMessenger.maybeOf(context)
+        : null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (messenger == null || !messenger.mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text(Errors.adminOnly)));
+    });
+    return AppRoutes.files;
   }
 
   // The betas an admin can turn off (#2421, #2609). Asked of the Quark like

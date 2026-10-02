@@ -6,6 +6,7 @@ import 'package:quark/pages/terms_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
+import 'package:quark/utils/error_text.dart';
 
 /// #1624: accepting terms navigated to /files and left it to [authRedirect] to
 /// move the user on to login. That redirect swallowed every failure of the
@@ -412,6 +413,28 @@ void main() {
       expect(find.text('vault'), findsNothing);
     });
 
+    // #2477: the redirect was silent, so someone following an admin's link
+    // just found themselves in Files with no idea why.
+    testWidgets('tells a non-admin why they landed on files', (tester) async {
+      authStatusProbe = () async =>
+          const AuthStatus(setupComplete: true, username: 'bob');
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.users);
+
+      expect(find.text('files'), findsOneWidget);
+      expect(find.text(Errors.adminOnly), findsOneWidget);
+    });
+
+    testWidgets('says nothing to an admin', (tester) async {
+      authStatusProbe = () async =>
+          const AuthStatus(setupComplete: true, username: 'ada', isAdmin: true);
+
+      await pumpGatedRouter(tester, initialLocation: AppRoutes.users);
+
+      expect(find.text('users'), findsOneWidget);
+      expect(find.text(Errors.adminOnly), findsNothing);
+    });
+
     testWidgets('sends the user to files when the Quark cannot say', (
       tester,
     ) async {
@@ -482,6 +505,7 @@ void main() {
 
       expect(find.text('files'), findsOneWidget);
       expect(find.text('users'), findsNothing);
+      expect(find.text(Errors.adminOnly), findsOneWidget);
     });
 
     testWidgets('opens for an admin', (tester) async {
