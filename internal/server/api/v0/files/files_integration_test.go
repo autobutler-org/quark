@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/gin-gonic/gin"
 )
@@ -389,5 +391,63 @@ func TestFileSize(t *testing.T) {
 	}
 	if int(size) != len(content) {
 		t.Errorf("expected size %d, got %d", len(content), int(size))
+	}
+}
+
+// A path that climbs out of the files directory is the caller's mistake, so
+// it is refused with 400 rather than the 500 it used to get (#2573).
+func TestDeleteEscapingPathIsBadRequest(t *testing.T) {
+	engine, _ := newTestEngine(t)
+
+	for _, query := range []string{
+		"filePaths=..",
+		"filePaths=../../etc/passwd",
+		"rootDir=photos&filePaths=../../etc/passwd",
+		"rootDir=../..&filePaths=etc/passwd",
+	} {
+		w := doRequest(engine, http.MethodDelete, "/api/v0/files?"+query, nil, "")
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d: %s", query, w.Code, w.Body.String())
+		}
+	}
+}
+
+// A batch over fileutil.MaxDeleteFiles is refused with 400 before any path
+// is checked or trashed (#2574).
+func TestDeleteOversizedBatchIsBadRequest(t *testing.T) {
+	engine, filesDir := newTestEngine(t)
+
+	if err := os.WriteFile(filepath.Join(filesDir, "keep.txt"), []byte("keep"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	query := url.Values{}
+	query.Add("filePaths", "keep.txt")
+	for i := range fileutil.MaxDeleteFiles {
+		query.Add("filePaths", fmt.Sprintf("missing-%d.txt", i))
+	}
+
+	w := doRequest(engine, http.MethodDelete, "/api/v0/files?"+query.Encode(), nil, "")
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !contains(fileNames(listFiles(t, engine, "")), "keep.txt") {
+		t.Error("a refused batch trashed keep.txt")
+	}
+}
+
+// Listing and moving refuse a path that climbs out of the files directory
+// with 400 too, the same defect as the delete in #2573.
+func TestEscapingPathIsBadRequestOnListAndMove(t *testing.T) {
+	engine, _ := newTestEngine(t)
+
+	for _, r := range []struct{ method, path, body string }{
+		{http.MethodGet, "/api/v0/files?rootDir=../..", ""},
+		{http.MethodPut, "/api/v0/files", `{"oldFilePath":"../../etc/passwd","newFilePath":"x"}`},
+		{http.MethodPut, "/api/v0/files", `{"oldFilePath":"x","newFilePath":"../../x"}`},
+	} {
+		w := doRequest(engine, r.method, r.path, strings.NewReader(r.body), "application/json")
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s %s %s: expected 400, got %d: %s", r.method, r.path, r.body, w.Code, w.Body.String())
+		}
 	}
 }

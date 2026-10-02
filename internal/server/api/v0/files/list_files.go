@@ -17,6 +17,7 @@ import (
 // @Tags files
 // @Produce json
 // @Success 200 {array} FileNodeJSON
+// @Failure 400 {object} serverutil.Response "Bad Request: a rootDir outside the files directory"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Param rootDir query string false "File dir to list"

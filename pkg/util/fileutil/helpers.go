@@ -51,6 +51,19 @@ func movePhotoRows(ctx context.Context, q *db.Queries, oldSerial, oldPath, newSe
 	return q.DeletePhotoHashesUnder(ctx, db.DeletePhotoHashesUnderParams{DeviceSerial: oldSerial, RelPath: oldPath})
 }
 
+// climbsOut reports whether the parts, joined, leave the directory they are
+// relative to. Joining onto "." makes a leading slash relative, the way the
+// storage layer joins a path onto the files directory.
+func climbsOut(parts ...string) bool {
+	rel := filepath.Join(append([]string{"."}, parts...)...)
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// invalidPath marks a path the caller should never have sent as a 400.
+func invalidPath(p string) error {
+	return &InvalidRequestError{Err: fmt.Errorf("invalid file path: %q", p)}
+}
+
 // notFound marks an error as a 404 for the handler.
 func notFound(err error) error { return &NotFoundError{Err: err} }
 

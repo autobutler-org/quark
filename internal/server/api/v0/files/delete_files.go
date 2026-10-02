@@ -19,10 +19,10 @@ import (
 // @Tags files
 // @Produce json
 // @Param rootDir query string false "Root directory"
-// @Param filePaths query []string true "Array of file paths to delete"
+// @Param filePaths query []string true "Array of file paths to delete, at most 1000 (fileutil.MaxDeleteFiles)"
 // @Param serial query string false "Device serial number to filter by"
 // @Success 202 {object} serverutil.Response "Accepted"
-// @Failure 400 {object} serverutil.Response "Bad Request"
+// @Failure 400 {object} serverutil.Response "Bad Request: no paths, more than 1000, or a path outside the files directory"
 // @Failure 403 {object} serverutil.Response "Forbidden"
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
@@ -33,8 +33,15 @@ func deleteFiles(c *gin.Context) *serverutil.Response {
 	if len(filePaths) == 0 {
 		return serverutil.BadRequest(errors.New("filePaths query parameter is required and must contain at least one file path"))
 	}
-	rootDir := c.Query("rootDir")
-	serial := c.Query("serial")
+	params := fileutil.DeleteFilesParams{
+		RootDir:   c.Query("rootDir"),
+		FilePaths: filePaths,
+		Serial:    c.Query("serial"),
+	}
+	// A batch that could never succeed is refused before any path is checked.
+	if err := fileutil.ValidateDeleteFiles(params); err != nil {
+		return fileError(err)
+	}
 
 	deps, ok := ctxutil.Get[deputil.Dependencies](c, "deps")
 	if !ok {
@@ -47,10 +54,10 @@ func deleteFiles(c *gin.Context) *serverutil.Response {
 	// Every path is checked before any is trashed, so a batch the caller may
 	// only partly change changes nothing.
 	for _, p := range filePaths {
-		if refused := refuseHomeRoot(access, serial, path.Join(rootDir, p)); refused != nil {
+		if refused := refuseHomeRoot(access, params.Serial, path.Join(params.RootDir, p)); refused != nil {
 			return refused
 		}
-		check := access.Check(serial, path.Join(rootDir, p), accessutil.Write)
+		check := access.Check(params.Serial, path.Join(params.RootDir, p), accessutil.Write)
 		if !check.Readable {
 			return serverutil.NotFound(errNoAccess)
 		}
@@ -59,15 +66,11 @@ func deleteFiles(c *gin.Context) *serverutil.Response {
 		}
 	}
 
-	if _, err := fileutil.DeleteFiles(fileutil.DeleteFilesParams{
-		Storage:   deps.StorageService(),
-		EventBus:  deps.EventBus(),
-		Database:  deps.Database(),
-		RootDir:   rootDir,
-		FilePaths: filePaths,
-		Serial:    serial,
-		TrashedBy: access.Principal().UserID,
-	}); err != nil {
+	params.Storage = deps.StorageService()
+	params.EventBus = deps.EventBus()
+	params.Database = deps.Database()
+	params.TrashedBy = access.Principal().UserID
+	if _, err := fileutil.DeleteFiles(params); err != nil {
 		return fileError(err)
 	}
 	return serverutil.Ok()

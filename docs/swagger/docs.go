@@ -4300,6 +4300,12 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "400": {
+                        "description": "Bad Request: a rootDir outside the files directory",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -4402,7 +4408,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "Array of file paths to delete",
+                        "description": "Array of file paths to delete, at most 1000 (fileutil.MaxDeleteFiles)",
                         "name": "filePaths",
                         "in": "query",
                         "required": true
@@ -4422,7 +4428,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad Request: no paths, more than 1000, or a path outside the files directory",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
