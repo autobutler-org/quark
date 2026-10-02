@@ -17,7 +17,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 class GenericFileViewerPage extends StatefulWidget {
   final FileNode node;
 
-  const GenericFileViewerPage({super.key, required this.node});
+  /// Closes the viewer from its back button. Null leaves the app bar's own,
+  /// which pops the route this viewer was pushed on.
+  final VoidCallback? onClose;
+
+  const GenericFileViewerPage({super.key, required this.node, this.onClose});
 
   @override
   State<GenericFileViewerPage> createState() => _GenericFileViewerPageState();
@@ -112,6 +116,9 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
 
     return Scaffold(
       appBar: ChromeAppBar(
+        leading: widget.onClose == null
+            ? null
+            : BackButton(onPressed: widget.onClose),
         title: Text(widget.node.name),
         actions: const [AppThemeToggle()],
       ),

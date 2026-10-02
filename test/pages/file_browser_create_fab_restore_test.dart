@@ -13,8 +13,7 @@ import 'package:quark/widgets/file_browser/file_browser_create_fab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Answers every call with just enough of a backend for the listing to render:
-/// a folder of PDFs, which is a type with no in-app viewer, so tapping one
-/// pushes the generic file viewer over the browser — the flow #1811 is about.
+/// a folder of PDFs, long enough to scroll.
 class _ListingClient implements HttpClient {
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async =>
@@ -168,13 +167,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(fabVisible(tester), isFalse, reason: 'scrolling down hides it');
 
-      // Open a PDF — no in-app viewer, so the page pushes the generic viewer
-      // over itself and its own State is never disposed.
-      await tester.tap(find.text('file15.pdf'));
-      await tester.pumpAndSettle();
-
+      // A page pushed over the browser, as an archive entry's preview is,
+      // never disposes the browser's own State — the flow #1811 is about.
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
-      expect(navigator.canPop(), isTrue, reason: 'a viewer must be on top');
+      unawaited(
+        navigator.push(
+          MaterialPageRoute<void>(builder: (_) => const Scaffold()),
+        ),
+      );
+      await tester.pumpAndSettle();
       navigator.pop();
       await tester.pumpAndSettle();
 
