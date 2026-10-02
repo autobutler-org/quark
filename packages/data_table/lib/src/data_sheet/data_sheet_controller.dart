@@ -325,11 +325,17 @@ class DataSheetController extends ChangeNotifier {
       ];
 
   /// Writes [values] with its top-left corner at [top]/[left] as one undo
-  /// step. Whatever falls outside the sheet is dropped; the sheet never grows.
-  void _setCells(int top, int left, List<List<String>> values) {
+  /// step, or as part of the caller's when [snapshot] is false. Whatever falls
+  /// outside the sheet is dropped; the sheet never grows.
+  void _setCells(
+    int top,
+    int left,
+    List<List<String>> values, {
+    bool snapshot = true,
+  }) {
     final bottom = min(top + values.length, rowCount);
     if (top < 0 || left < 0 || top >= bottom || left >= colCount) return;
-    _pushSnapshot();
+    if (snapshot) _pushSnapshot();
     for (var r = top; r < bottom; r++) {
       final row = values[r - top];
       final updated = List<DataCell>.from(_rows[r].value);
@@ -357,21 +363,42 @@ class DataSheetController extends ChangeNotifier {
         List.generate(range.rowCount, (_) => List.filled(range.colCount, '')),
       );
 
-  /// Paste [values] into [target] as one undo step. A single value fills the
-  /// whole target; a block lands with its top-left at the target's top-left
-  /// and is clipped at the sheet edge.
+  /// Paste [values] into [target] as one undo step, then select what was
+  /// written.
+  ///
+  /// The block lands at the target's top-left corner. When the target is a
+  /// whole number of blocks tall and wide the block repeats to fill it, so a
+  /// single value fills the whole target; otherwise it is pasted once at its
+  /// own size, adding rows and columns if it runs past the sheet's edge.
   void pasteValues(CellRange target, List<List<String>> values) {
     if (values.isEmpty || values.first.isEmpty) return;
-    final single = values.length == 1 && values.first.length == 1;
+    if (target.top < 0 || target.left < 0) return;
+    final blockRows = values.length;
+    final blockCols = values.first.length;
+    final tiles =
+        target.rowCount % blockRows == 0 && target.colCount % blockCols == 0;
+    final rows = tiles ? target.rowCount : blockRows;
+    final cols = tiles ? target.colCount : blockCols;
+    _pushSnapshot();
+    _growTo(target.top + rows, target.left + cols);
     _setCells(
       target.top,
       target.left,
-      single
-          ? List.generate(
-              target.rowCount,
-              (_) => List.filled(target.colCount, values.first.first),
-            )
-          : values,
+      List.generate(
+        rows,
+        (r) => List.generate(cols, (c) {
+          final row = values[r % blockRows];
+          final i = c % blockCols;
+          return i < row.length ? row[i] : '';
+        }),
+      ),
+      snapshot: false,
+    );
+    selection.selectRange(
+      target.top,
+      target.left,
+      target.top + rows - 1,
+      target.left + cols - 1,
     );
   }
 
@@ -720,6 +747,122 @@ class DataSheetController extends ChangeNotifier {
       for (var r = range.top; r <= min(range.bottom, rowCount - 1); r++)
         List.filled(last - range.left, cellAt(r, range.left).value.toString()),
     ]);
+  }
+
+  // -------------------------------------------------------------------------
+  // TSV: the clipboard format Google Sheets and Excel share
+  // -------------------------------------------------------------------------
+
+  /// [range], or the selected range when omitted, as tab-separated text.
+  ///
+  /// Cells keep their raw text, so formulas copy as formulas. A value holding
+  /// a tab, newline or double quote is wrapped in quotes with its quotes
+  /// doubled, which is what Google Sheets and Excel write and read. Returns an
+  /// empty string when there is no range.
+  String rangeToTsv([CellRange? range]) {
+    range ??= selection.range;
+    if (range == null ||
+        !_inSheet(range) ||
+        range.bottom >= rowCount ||
+        range.right >= colCount) {
+      return '';
+    }
+    return valuesIn(range)
+        .map((row) => row.map(_tsvField).join('\t'))
+        .join('\n');
+  }
+
+  static String _tsvField(String v) =>
+      v.contains(RegExp('[\t\n\r"]')) ? '"${v.replaceAll('"', '""')}"' : v;
+
+  /// Parses tab-separated text, as Google Sheets and Excel put it on the
+  /// clipboard, into rows of equal length.
+  ///
+  /// A field that starts with a double quote is quoted: it runs to the next
+  /// lone quote and may hold tabs and newlines, and `""` inside it is one
+  /// quote. A quote anywhere else is literal. LF and CRLF both end a row, one
+  /// trailing line ending is dropped, and short rows are padded with empty
+  /// strings.
+  static List<List<String>> parseTsv(String tsv) {
+    final rows = <List<String>>[];
+    var fields = <String>[];
+    final field = StringBuffer();
+    var i = 0;
+    final n = tsv.length;
+    var atFieldStart = true;
+    while (i < n) {
+      final ch = tsv[i];
+      if (atFieldStart && ch == '"') {
+        i++;
+        while (i < n) {
+          if (tsv[i] == '"') {
+            if (i + 1 < n && tsv[i + 1] == '"') {
+              field.write('"');
+              i += 2;
+              continue;
+            }
+            i++;
+            break;
+          }
+          field.write(tsv[i++]);
+        }
+        atFieldStart = false;
+      } else if (ch == '\t') {
+        fields.add(field.toString());
+        field.clear();
+        atFieldStart = true;
+        i++;
+      } else if (ch == '\n' ||
+          (ch == '\r' && i + 1 < n && tsv[i + 1] == '\n')) {
+        fields.add(field.toString());
+        field.clear();
+        rows.add(fields);
+        fields = [];
+        atFieldStart = true;
+        i += ch == '\r' ? 2 : 1;
+      } else {
+        field.write(ch);
+        atFieldStart = false;
+        i++;
+      }
+    }
+    // Text that does not end with a line ending still has a last row.
+    if (!atFieldStart || fields.isNotEmpty) {
+      fields.add(field.toString());
+      rows.add(fields);
+    }
+    final width = rows.fold(0, (w, r) => r.length > w ? r.length : w);
+    return [
+      for (final r in rows) [...r, ...List.filled(width - r.length, '')],
+    ];
+  }
+
+  /// Pastes tab-separated text into [target], or the selected range when
+  /// omitted, through [pasteValues].
+  void pasteTsv(String tsv, [CellRange? target]) {
+    target ??= selection.range;
+    if (target != null) pasteValues(target, parseTsv(tsv));
+  }
+
+  /// Adds empty rows and columns until the sheet is at least [rows] by
+  /// [cols]. Records no undo history.
+  void _growTo(int rows, int cols) {
+    final addCols = cols - colCount;
+    if (addCols > 0) {
+      for (var r = 0; r < rowCount; r++) {
+        final extra = List.generate(addCols, (_) => DataCell(''));
+        table.rows[r].cells.addAll(extra);
+        _rows[r].value = [..._rows[r].value, ...extra];
+      }
+      columnWidths.addAll(List.filled(addCols, kDefaultColumnWidth));
+    }
+    final width = max(cols, colCount);
+    while (rowCount < rows) {
+      final cells = List.generate(width, (_) => DataCell(''));
+      table.rows.add(DataRow(List<DataCell>.from(cells)));
+      _rows.add(ValueNotifier<List<DataCell>>(cells));
+      rowHeights.add(kDefaultRowHeight);
+    }
   }
 
   // -------------------------------------------------------------------------

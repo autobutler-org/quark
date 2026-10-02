@@ -1,10 +1,11 @@
-/// The spreadsheet widget: `DataSheet` and its controller, selection and `CellRange`, control scheme, control bar, freeze menu and formula
+/// The spreadsheet widget: `DataSheet` and its controller, selection and `CellRange`, control scheme, clipboard, control bar, freeze menu and formula
 /// bar.
 library;
 
 export 'src/data_sheet/cell_range.dart';
 export 'src/data_sheet/control_bar.dart';
 export 'src/data_sheet/data_sheet.dart';
+export 'src/data_sheet/data_sheet_clipboard.dart';
 export 'src/data_sheet/data_sheet_control_scheme.dart';
 export 'src/data_sheet/data_sheet_controller.dart';
 export 'src/data_sheet/data_sheet_selection.dart';
