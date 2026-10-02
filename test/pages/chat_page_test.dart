@@ -276,6 +276,46 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('an address in a message is a link ($label)', (tester) async {
+      final fake = FakeChat();
+      fake.entries[1] = [
+        ChatTimelineMessage(
+          message: ChatMessage(
+            id: 12,
+            channelId: 1,
+            authorId: 8,
+            keyVersion: 1,
+            ciphertext: null,
+            createdAt: DateTime.utc(2026, 9, 25, 10),
+          ),
+          state: ChatMessageState.ready,
+          text: 'see https://example.com/a',
+        ),
+      ];
+      await pumpChat(tester, size, chat: fake);
+
+      // Opening it is url_launcher's, so this stops at the page handing the
+      // list an opener and the list drawing the link.
+      expect(
+        tester
+            .widget<QuarkMessageList>(find.byType(QuarkMessageList))
+            .onOpenLink,
+        isNotNull,
+      );
+      expect(
+        find.textRange.ofSubstring('https://example.com/a'),
+        findsOneWidget,
+      );
+      final body = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(const ValueKey('message_body_12')),
+          matching: find.byType(Text),
+        ),
+      );
+      expect(body.textSpan, isNotNull);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('waiting for a key closes the composer ($label)', (
       tester,
     ) async {
