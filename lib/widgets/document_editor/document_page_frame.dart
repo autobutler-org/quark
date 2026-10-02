@@ -77,6 +77,7 @@ DefaultStyles _quillStyles(ColorScheme cs) {
       VerticalSpacing.zero,
       null,
       null,
+      indentWidthBuilder: _indentWidth,
     ),
     leading: DefaultTextBlockStyle(
       base(),
@@ -117,6 +118,32 @@ DefaultStyles _quillStyles(ColorScheme cs) {
     ),
     color: fg,
   );
+}
+
+/// How far a block sits from the page's left edge.
+///
+/// flutter_quill reads this from `lists` for every block, not only lists. Its
+/// default steps one font size per indent level, 14px here, which put a nested
+/// list item barely right of its parent so it read as a sibling. This adds a
+/// second font size per level, so each level steps as far as the bullet
+/// gutter is wide (#2464).
+HorizontalSpacing _indentWidth(
+  Block block,
+  BuildContext context,
+  int count,
+  LeadingBlockNumberPointWidth numberPointWidth,
+) {
+  final spacing = TextBlockUtils.defaultIndentWidthBuilder(
+    block,
+    context,
+    count,
+    numberPointWidth,
+  );
+  final level = block.style.attributes[Attribute.indent.key]?.value as int?;
+  if (level == null) return spacing;
+  final fontSize =
+      QuillStyles.getStyles(context, false)?.paragraph?.style.fontSize ?? 16;
+  return HorizontalSpacing(spacing.left + fontSize * level, spacing.right);
 }
 
 /// The page-shaped card the document is written on, and the editor inside it.
