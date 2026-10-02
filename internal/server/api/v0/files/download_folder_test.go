@@ -1,6 +1,8 @@
 package v0_files_test
 
 import (
+	"archive/zip"
+	"bytes"
 	"crypto/rand"
 	"errors"
 	"net/http"
@@ -13,6 +15,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -132,5 +135,44 @@ func TestDownloadFolder_MarksAnInterruptedZip(t *testing.T) {
 	engine.ServeHTTP(httptest.NewRecorder(), request())
 	if interrupted {
 		t.Error("complete zip: downloadInterrupted set")
+	}
+}
+
+// TestDownloadFolder_InternalDriveOnly verifies a folder download with no
+// serial holds the internal drive's files and nothing else. The listing used
+// to walk every device while each entry was opened on the internal one, so a
+// file only on a USB drive truncated the archive and a file on both drives
+// went in twice, both times with the internal bytes (#2638).
+func TestDownloadFolder_InternalDriveOnly(t *testing.T) {
+	usbMount := t.TempDir()
+	h := newAccessHarness(t, true, storageutil.Device{
+		Name: "USB", MountPoint: usbMount, UsbInfo: fakeUsb{serial: "USB1"},
+	})
+	usbFiles := filepath.Join(usbMount, "quark", "data", "files")
+	writeFixture(t, h.filesDir, "Photos/both.txt")
+	writeFixture(t, h.filesDir, "Photos/internal.txt")
+	writeFixture(t, usbFiles, "Photos/both.txt")
+	writeFixture(t, usbFiles, "Photos/usb.txt")
+
+	w := h.get("/api/v0/files/download?filePath=Photos")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200", w.Code)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
+	if err != nil {
+		t.Fatalf("the zip is unreadable: %v", err)
+	}
+	got := map[string]int{}
+	for _, f := range zr.File {
+		got[f.Name]++
+	}
+	want := map[string]int{"Photos/both.txt": 1, "Photos/internal.txt": 1}
+	if len(got) != len(want) {
+		t.Errorf("entries: got %v, want %v", got, want)
+	}
+	for name, n := range want {
+		if got[name] != n {
+			t.Errorf("entry %q: got %d, want %d (all entries: %v)", name, got[name], n, got)
+		}
 	}
 }
