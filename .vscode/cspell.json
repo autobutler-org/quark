@@ -313,6 +313,7 @@
     "linenum",
     "loadedmetadata",
     "loadtest",
+    "localdomain",
     "loglevel",
     "lsusb",
     "luma",

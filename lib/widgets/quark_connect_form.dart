@@ -13,7 +13,9 @@ import 'package:quark/utils/error_text.dart';
 /// (#1639) and the file browser's first-run state.
 ///
 /// On iOS and Android it also lists the Quarks found on the local network
-/// (#2312); tapping one fills in its address. Typing one stays the fallback.
+/// (#2312); tapping one fills in its address. Typing one stays the fallback,
+/// and a typed local name that does not answer is retried as `.local`, `.lan`
+/// and bare before the form gives up (#2518).
 class QuarkConnectForm extends StatefulWidget {
   const QuarkConnectForm({
     super.key,
@@ -68,7 +70,16 @@ class _QuarkConnectFormState extends State<QuarkConnectForm> {
       // answer — it just never asked. Saving first meant a typo became the
       // active host and the user met terms and a sign-in form instead of
       // this field.
-      if (!await hostReachabilityProbe(address)) {
+      //
+      // A local name that does not answer is retried under its sibling names
+      // (#2518): a router that appends `.lan` may answer for `quark.lan` when
+      // the phone cannot resolve the `quark.local` the hint suggests. The name
+      // that answered is the one saved.
+      final reachable = await firstReachableAddress(
+        address,
+        hostReachabilityProbe,
+      );
+      if (reachable == null) {
         if (mounted) {
           setState(() {
             _saving = false;
@@ -78,7 +89,7 @@ class _QuarkConnectFormState extends State<QuarkConnectForm> {
         return;
       }
       await AppSettings.instance.addHost(
-        HostEntry(name: 'My Quark', hostAddress: address),
+        HostEntry(name: 'My Quark', hostAddress: reachable),
       );
       if (mounted) widget.onConnected();
     } catch (e) {

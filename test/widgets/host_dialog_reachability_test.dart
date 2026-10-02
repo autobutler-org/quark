@@ -90,6 +90,23 @@ void main() {
     expect(saved.single.hostAddress, 'http://cabin.local');
   });
 
+  // #2518: the router answers for cabin.lan, the user typed cabin.local.
+  testWidgets('a .local that does not answer saves the .lan that does', (
+    tester,
+  ) async {
+    hostReachabilityProbe = (address) async {
+      probed.add(address);
+      return address == 'https://cabin.lan';
+    };
+    await openDialog(tester);
+    await fillIn(tester, 'cabin.local');
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(saved.single.hostAddress, 'https://cabin.lan');
+  });
+
   testWidgets('an unreachable address stays in the dialog, unsaved', (
     tester,
   ) async {
