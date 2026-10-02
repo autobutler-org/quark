@@ -2468,7 +2468,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Lists the household calendar's one-off events that overlap [from, to) and every repeating event whose series starts before to, by start. A repeating event is listed once, as its first occurrence and preset; the client expands the occurrences. The range is widened by a day each way so all-day events are not missed at its edges, and can span at most 400 days.",
+                "description": "Lists the household calendar's one-off events that overlap [from, to) and every repeating event with an occurrence there, by start. A repeating event is listed once, as its first occurrence and preset; the client expands the occurrences. The range is widened by a day each way so all-day events are not missed at its edges, and can span at most 400 days.",
                 "produces": [
                     "application/json"
                 ],

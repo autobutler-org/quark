@@ -178,6 +178,60 @@ func TestListEvents(t *testing.T) {
 	}
 }
 
+// TestListEventsSkipsSeriesOutsideRange checks a repeating series is listed
+// only when one of its occurrences can fall in the range, however long ago it
+// began (#2535).
+func TestListEventsSkipsSeriesOutsideRange(t *testing.T) {
+	q := dbtest.NewDB(t).Queries
+	series := func(title, start, end string, repeat calendarutil.Repeat) calendarutil.Event {
+		return create(t, q, calendarutil.EventInput{Title: title, Start: at(start), End: at(end), Repeat: repeat})
+	}
+	daily := series("Daily walk", "2020-01-01T07:00:00Z", "2020-01-01T07:30:00Z", calendarutil.RepeatDaily)
+	wednesdays := series("Wednesday choir", "2025-01-01T18:00:00Z", "2025-01-01T19:00:00Z", calendarutil.RepeatWeekly)
+	mondays := series("Monday trash", "2026-08-03T19:00:00Z", "2026-08-03T19:15:00Z", calendarutil.RepeatWeekly)
+	twentieth := series("Rent on the 20th", "2024-01-20T10:00:00Z", "2024-01-20T11:00:00Z", calendarutil.RepeatMonthly)
+	// The 1st at 5 AM in UTC+10 is the 31st in UTC: September has no 31st,
+	// but its viewer's October 1st still has the occurrence.
+	firstLocal := series("Bills on the 1st", "2026-01-31T19:00:00Z", "2026-01-31T20:00:00Z", calendarutil.RepeatMonthly)
+	sunday := series("Sunday brunch", "2026-01-04T11:00:00Z", "2026-01-04T12:00:00Z", calendarutil.RepeatWeekly)
+
+	list := func(from, to string) map[int64]bool {
+		t.Helper()
+		result, err := calendarutil.ListEvents(context.Background(), calendarutil.ListEventsParams{Queries: q, From: at(from), To: at(to)})
+		if err != nil {
+			t.Fatalf("ListEvents: %v", err)
+		}
+		got := map[int64]bool{}
+		for _, e := range result.Events {
+			got[e.ID] = true
+		}
+		return got
+	}
+	check := func(view string, got map[int64]bool, want, unwanted []calendarutil.Event) {
+		t.Helper()
+		for _, e := range want {
+			if !got[e.ID] {
+				t.Errorf("%s: %q missing", view, e.Title)
+			}
+		}
+		for _, e := range unwanted {
+			if got[e.ID] {
+				t.Errorf("%s: %q listed, but no occurrence falls in it", view, e.Title)
+			}
+		}
+	}
+
+	// Wednesday Oct 7 2026, as seen from UTC-7.
+	check("a Wednesday", list("2026-10-07T07:00:00Z", "2026-10-08T07:00:00Z"),
+		[]calendarutil.Event{daily, wednesdays}, []calendarutil.Event{mondays, twentieth, firstLocal, sunday})
+	// Thursday Oct 1 2026, as seen from UTC+10.
+	check("the 1st", list("2026-09-30T14:00:00Z", "2026-10-01T14:00:00Z"),
+		[]calendarutil.Event{daily, firstLocal}, []calendarutil.Event{mondays, twentieth, sunday})
+	// A week far in the future still holds every weekly series.
+	check("a week in 2099", list("2099-01-05T00:00:00Z", "2099-01-12T00:00:00Z"),
+		[]calendarutil.Event{daily, wednesdays, mondays, sunday}, []calendarutil.Event{twentieth, firstLocal})
+}
+
 func TestListEventsRange(t *testing.T) {
 	q := dbtest.NewDB(t).Queries
 	from := at("2026-09-01T00:00:00Z")

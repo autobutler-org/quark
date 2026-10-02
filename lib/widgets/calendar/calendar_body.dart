@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/models/calendar_view.dart';
+import 'package:quark/widgets/error_banner.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -10,8 +11,13 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// the phone's stand-in for the arrows. Upcoming shows due reminders in its
 /// own rows, so it has no reminder bar.
 ///
-/// Key prefixes: `calendar_retry` on the first load's retry button, and the
-/// keys of the package widget on show.
+/// A load that fails before anything has shown fills the body with a retry;
+/// one that fails later keeps the last view on show under an [ErrorBanner]
+/// with its own Try again (#2540).
+///
+/// Key prefixes: `calendar_retry` on the first load's retry button,
+/// `calendar_error_retry` on a later failed load's, and the keys of the
+/// package widget on show.
 class CalendarBody extends StatelessWidget {
   /// Creates the body for [view].
   const CalendarBody({
@@ -160,10 +166,16 @@ class CalendarBody extends StatelessWidget {
         if (error != null && view != CalendarView.upcoming)
           Padding(
             padding: EdgeInsets.all(tokens.spacingSm),
-            child: Text(
-              error,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: tokens.error),
+            child: Row(
+              children: [
+                Expanded(child: ErrorBanner(message: error)),
+                SizedBox(width: tokens.spacingSm),
+                FilledButton(
+                  key: const ValueKey('calendar_error_retry'),
+                  onPressed: onRetry,
+                  child: const Text('Try again'),
+                ),
+              ],
             ),
           ),
         Expanded(
