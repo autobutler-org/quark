@@ -2,9 +2,36 @@ name: Setup flutter
 runs:
   using: composite
   steps:
+    # Installs nothing: it only works out the SDK's cache key and path for the steps below.
+    - name: Resolve flutter SDK
+      id: resolve
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
+        flutter-version-file: pubspec.yaml
+        dry-run: true
+    # Not flutter-action's own `cache: true`, which saves on every ref that misses. A
+    # cache saved on a pull request or merge-queue ref can be restored by that ref alone,
+    # and each copy is 1.6 GB on Linux or 2.1 GB on macOS against the repository's 10 GB
+    # cap, so a handful of misses evicts the copies on main and every job misses again
+    # (#2677). Restore on every ref, save on main only.
+    - name: Restore flutter SDK
+      id: sdk
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ steps.resolve.outputs.CACHE-PATH }}
+        key: ${{ steps.resolve.outputs.CACHE-KEY }}
+    # Skips the download when the restore above put the SDK in place. The pub cache is
+    # small enough to keep saving on every ref.
     - name: Install flutter SDK
       uses: subosito/flutter-action@v2
       with:
         channel: stable
         flutter-version-file: pubspec.yaml
-        cache: true
+        pub-cache: true
+    - name: Save flutter SDK
+      if: github.ref == 'refs/heads/main' && steps.sdk.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ steps.resolve.outputs.CACHE-PATH }}
+        key: ${{ steps.resolve.outputs.CACHE-KEY }}
