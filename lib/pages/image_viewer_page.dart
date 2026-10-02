@@ -80,6 +80,11 @@ class ImageViewerPage extends StatefulWidget {
   /// "Remove from [Album]" instead of "Add to Album."
   final PhotoAlbum? sourceAlbum;
 
+  /// Closes the viewer: its close button, Escape, a system back, and a
+  /// delete. Null pops the route this viewer was pushed on with whether the
+  /// list behind it changed.
+  final VoidCallback? onClose;
+
   const ImageViewerPage({
     super.key,
     this.bytes,
@@ -92,6 +97,7 @@ class ImageViewerPage extends StatefulWidget {
     this.relPath,
     this.serial,
     this.sourceAlbum,
+    this.onClose,
   });
 
   @override
@@ -689,13 +695,22 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       );
       if (!mounted) return;
       _listChanged = true;
-      Navigator.of(context).pop(_listChanged);
+      _close();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(Errors.message(e, 'delete the photo'))),
         );
       }
+    }
+  }
+
+  void _close() {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose();
+    } else {
+      Navigator.of(context).pop(_listChanged);
     }
   }
 
@@ -711,7 +726,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
         _goToPage(1);
         return KeyEventResult.handled;
       case LogicalKeyboardKey.escape:
-        Navigator.of(context).pop(_listChanged);
+        _close();
         return KeyEventResult.handled;
       case LogicalKeyboardKey.keyI:
         _toggleSidebar();
@@ -806,14 +821,14 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     // `canPop: false` reports `RoutePopDisposition.doNotPop`, which is what
     // turns off the iOS left-edge back-swipe on this route. Without it that
     // edge gesture beats the photo page view near the bezel and drops the
-    // user out of the viewer mid-swipe (#1707). Every other exit still calls
-    // `Navigator.pop` directly, which never consults this scope, so only a
-    // system back arrives here and it is popped by hand.
+    // user out of the viewer mid-swipe (#1707). Every other exit calls
+    // `_close` directly, which never consults this scope, so only a system
+    // back arrives here and it is closed by hand.
     return PopScope<bool>(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        Navigator.of(context).pop(_listChanged);
+        _close();
       },
       child: KeyboardListener(
         focusNode: _focusNode,
@@ -832,7 +847,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
             isFavorite: _isFavorite,
             sidebarOpen: _sidebarOpen,
             relPath: _currentRelPath,
-            onClose: () => Navigator.of(context).pop(_listChanged),
+            onClose: _close,
             onToggleFavorite: _toggleFavorite,
             onRotate: _rotate,
             onDownload: _download,
