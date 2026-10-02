@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:quark_widgets/src/chat/quark_message_list/chat_message_row/chat_message_body.dart';
 
 import '../support/pump.dart';
 
@@ -594,6 +595,264 @@ void main() {
       final first = tester.getRect(item);
       await tester.pumpAndSettle();
       expect(tester.getRect(item), first);
+    });
+  });
+
+  group('links (#2630)', () {
+    List<String> urls(String text) => [
+      for (final link in ChatMessageBody.linksIn(text)) link.uri.toString(),
+    ];
+    List<String> shown(String text) => [
+      for (final link in ChatMessageBody.linksIn(text))
+        text.substring(link.start, link.end),
+    ];
+
+    test('finds http, https and www addresses', () {
+      expect(urls('see http://a.com/x'), ['http://a.com/x']);
+      expect(urls('HTTPS://A.com/Path?q=1#f'), ['https://a.com/Path?q=1#f']);
+      expect(urls('http://localhost:8080/files'), [
+        'http://localhost:8080/files',
+      ]);
+
+      // www. opens as https, and is shown as written.
+      expect(urls('go to www.example.org now'), ['https://www.example.org']);
+      expect(shown('go to www.example.org now'), ['www.example.org']);
+    });
+
+    test('finds every address in one message', () {
+      const text = 'first https://a.com then www.b.org\nand http://c.net/x';
+      expect(urls(text), [
+        'https://a.com',
+        'https://www.b.org',
+        'http://c.net/x',
+      ]);
+      expect(shown(text), ['https://a.com', 'www.b.org', 'http://c.net/x']);
+    });
+
+    test('leaves sentence punctuation and wrapping brackets out', () {
+      expect(shown('Read https://a.com/x.'), ['https://a.com/x']);
+      expect(shown('https://a.com/x, then lunch'), ['https://a.com/x']);
+      expect(shown('really https://a.com/x?!'), ['https://a.com/x']);
+      expect(shown('"https://a.com/x"'), ['https://a.com/x']);
+      expect(shown('(see https://a.com/x)'), ['https://a.com/x']);
+      expect(shown('(see https://a.com/x).'), ['https://a.com/x']);
+      expect(shown('[https://a.com/x]'), ['https://a.com/x']);
+      expect(shown('https://en.wikipedia.org/wiki/Foo_(bar)'), [
+        'https://en.wikipedia.org/wiki/Foo_(bar)',
+      ]);
+      expect(shown('(https://en.wikipedia.org/wiki/Foo_(bar))'), [
+        'https://en.wikipedia.org/wiki/Foo_(bar)',
+      ]);
+    });
+
+    test('everything else is not a link', () {
+      for (final text in [
+        '',
+        'no address here',
+        'v1.2.3',
+        'report.pdf',
+        'foo.com',
+        'mailto:ada@example.com',
+        'ada@www.example.com',
+        'javascript:alert(1)',
+        'ftp://a.com/x',
+        'file:///etc/passwd',
+        'http://',
+        'https://.',
+        'www.',
+        'www',
+        '3www.example.com',
+        'xhttp://a.com',
+      ]) {
+        expect(ChatMessageBody.linksIn(text), isEmpty, reason: text);
+      }
+    });
+
+    const first = 'https://a.com/x';
+    const second = 'www.b.org';
+    final linked = [
+      msg('l1', day1, body: 'see $first, or $second.\nsecond line'),
+    ];
+
+    TextSpan spanOf(WidgetTester tester, String text) {
+      final rich = tester.widget<RichText>(
+        find.descendant(
+          of: find.byKey(const ValueKey('message_body_l1')),
+          matching: find.byType(RichText),
+        ),
+      );
+      TextSpan? found;
+      rich.text.visitChildren((span) {
+        if (span is TextSpan && span.text == text) found = span;
+        return found == null;
+      });
+      return found!;
+    }
+
+    for (final (label, brightness, tokens) in [
+      ('dark', Brightness.dark, QuarkTokens.dark),
+      ('light', Brightness.light, QuarkTokens.light),
+    ]) {
+      testWidgets('$label: a link takes the primary color and an underline', (
+        tester,
+      ) async {
+        await pumpAt(
+          tester,
+          QuarkMessageList(messages: linked, onOpenLink: (_) {}),
+          brightness: brightness,
+        );
+
+        for (final url in [first, second]) {
+          final span = spanOf(tester, url);
+          expect(span.style?.color, tokens.primary);
+          expect(span.style?.decoration, TextDecoration.underline);
+          expect(span.recognizer, isNotNull);
+        }
+        // The words around a link stay as written, in the body's own style.
+        expect(spanOf(tester, 'see ').style, isNull);
+        expect(spanOf(tester, 'see ').recognizer, isNull);
+        expect(
+          find.text('see $first, or $second.\nsecond line'),
+          findsOneWidget,
+        );
+      });
+    }
+
+    testBothViewports('tapping a link fires onOpenLink with its address', (
+      tester,
+      size,
+    ) async {
+      final opened = <Uri>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(messages: linked, onOpenLink: opened.add),
+        size: size,
+      );
+
+      await tester.tapOnText(find.textRange.ofSubstring(first));
+      await tester.pump();
+      expect(opened, [Uri.parse('https://a.com/x')]);
+
+      await tester.tapOnText(find.textRange.ofSubstring(second));
+      await tester.pump();
+      expect(opened, [
+        Uri.parse('https://a.com/x'),
+        Uri.parse('https://www.b.org'),
+      ]);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a link follows the message when its text changes', (
+      tester,
+    ) async {
+      final opened = <Uri>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(messages: linked, onOpenLink: opened.add),
+      );
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: [msg('l1', day1, body: 'now http://c.net')],
+          onOpenLink: opened.add,
+        ),
+      );
+
+      await tester.tapOnText(find.textRange.ofSubstring('http://c.net'));
+      await tester.pump();
+      expect(opened, [Uri.parse('http://c.net')]);
+    });
+
+    testBothViewports('draws no link the caller cannot open', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(tester, QuarkMessageList(messages: linked), size: size);
+
+      final body = find.byKey(const ValueKey('message_body_l1'));
+      final rich = tester.widget<RichText>(
+        find.descendant(of: body, matching: find.byType(RichText)),
+      );
+      rich.text.visitChildren((span) {
+        expect((span as TextSpan).recognizer, isNull);
+        expect(span.style?.decoration, isNot(TextDecoration.underline));
+        return true;
+      });
+      expect(find.text('see $first, or $second.\nsecond line'), findsOneWidget);
+    });
+
+    testBothViewports('an unverified message keeps its address plain', (
+      tester,
+      size,
+    ) async {
+      final opened = <Uri>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: [msg('l1', day1, body: 'see $first', isUnverified: true)],
+          onOpenLink: opened.add,
+        ),
+        size: size,
+      );
+
+      final text = tester.widget<Text>(find.text('see $first'));
+      expect(text.textSpan, isNull);
+      expect(text.style?.color, QuarkTokens.dark.warning);
+      await tester.tap(find.byKey(const ValueKey('message_body_l1')));
+      await tester.pump();
+      expect(opened, isEmpty);
+    });
+
+    testBothViewports('a system line keeps its address plain', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: [
+            msg('l1', day1, body: 'see $first', kind: ChatMessageKind.system),
+          ],
+          onOpenLink: (_) {},
+        ),
+        size: size,
+      );
+
+      expect(find.byKey(const ValueKey('message_body_l1')), findsNothing);
+      expect(tester.widget<Text>(find.text('see $first')).textSpan, isNull);
+    });
+
+    testBothViewports('long lines and an unbroken address still fit', (
+      tester,
+      size,
+    ) async {
+      final long = 'https://a.com/${'segment-' * 80}end';
+      final opened = <Uri>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: [
+            msg('l2', day1.add(const Duration(minutes: 1)), body: long),
+            msg(
+              'l1',
+              day1,
+              body: 'one\ntwo $first\n\nthree ${'word ' * 60}$second',
+            ),
+          ],
+          permissions: ChatPermissionPreset.owner.permissions,
+          onDelete: (_) {},
+          onReact: (_, _) {},
+          onOpenLink: opened.add,
+        ),
+        size: size,
+      );
+
+      expect(tester.takeException(), isNull);
+      // The address wrapped rather than ran off the side.
+      final body = find.byKey(const ValueKey('message_body_l2'));
+      expect(tester.getSize(body).width, lessThan(size.width));
+      expect(tester.getSize(body).height, greaterThan(40));
+      expect(ChatMessageBody.linksIn(long).single.end, long.length);
     });
   });
 }

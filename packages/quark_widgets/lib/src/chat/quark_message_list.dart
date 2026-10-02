@@ -48,13 +48,19 @@ import 'quark_message_list/chat_system_line.dart';
 /// whether that adds the user's reaction or takes it back. Waiting, deleted
 /// and system lines draw no reactions.
 ///
+/// With [onOpenLink] set, each `http://`, `https://` or `www.` address in a
+/// text message is drawn as a link, and a tap fires [onOpenLink] with its
+/// [Uri]; the caller opens it. An unverified sender's message, and every
+/// system line, stays plain text.
+///
 /// [permissions] without [ChatPermission.readMessages] is someone who manages
 /// the channel without being in the conversation. They get [notMemberText]
 /// in place of the list: no messages, no spinner and no waiting for a key,
 /// because no key is coming.
 ///
-/// Key prefixes: `message_<id>` on each message, `message_delete_<id>` on its
-/// delete button, `message_react_<id>` on its add-reaction button,
+/// Key prefixes: `message_<id>` on each message, `message_body_<id>` on a
+/// text message's body (a link is reached by its text inside it),
+/// `message_delete_<id>` on its delete button, `message_react_<id>` on its add-reaction button,
 /// `message_react_<id>_<emoji>` on each emoji that button offers,
 /// `message_reaction_<id>_<emoji>` on each reaction chip,
 /// `message_list_load_older` on the load button,
@@ -72,6 +78,7 @@ import 'quark_message_list/chat_system_line.dart';
 ///   currentUserId: controller.userId,
 ///   onDelete: controller.deleteMessage,
 ///   onReact: controller.toggleReaction,
+///   onOpenLink: (uri) => launchUrl(uri),
 ///   avatarBuilder: (context, userId) => AppAvatar(userId: userId),
 /// );
 /// ```
@@ -87,6 +94,7 @@ class QuarkMessageList extends StatelessWidget {
     this.currentUserId,
     this.onDelete,
     this.onReact,
+    this.onOpenLink,
     this.avatarBuilder,
     this.controller,
     super.key,
@@ -140,6 +148,10 @@ class QuarkMessageList extends StatelessWidget {
   /// or taps its chip. Null, or [permissions] without
   /// [ChatPermission.addReactions], only shows reactions.
   final void Function(String messageId, String emoji)? onReact;
+
+  /// Called with a web address in a text message when it is tapped, for the
+  /// caller to open. Null draws every message as plain text.
+  final ValueChanged<Uri>? onOpenLink;
 
   /// Builds the avatar for an author's id, [avatarSize] across. Null draws
   /// a [QuarkAvatar] with the author's initials.
@@ -265,6 +277,7 @@ class QuarkMessageList extends StatelessWidget {
                   onReact: onReact == null
                       ? null
                       : (emoji) => onReact(message.id, emoji),
+                  onOpenLink: onOpenLink,
                   avatar: !startsGroup(message, older)
                       ? null
                       : avatarBuilder != null

@@ -64,7 +64,9 @@ final List<ChatMessageItem> galleryChatMessages = [
     authorId: 'bob',
     authorName: 'Bob Byron',
     sentAt: DateTime(2026, 9, 24, 9, 10),
-    body: 'Morning! Is anyone bringing the projector?',
+    body:
+        'Morning! Is anyone bringing the projector? The manual is at '
+        'https://example.com/projector/manual (page 4), or www.example.org.',
   ),
   ChatMessageItem(
     id: 'm5',

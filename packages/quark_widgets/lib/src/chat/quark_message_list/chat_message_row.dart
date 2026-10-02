@@ -3,6 +3,7 @@ import 'package:quark_icons/quark_icons.dart';
 
 import '../../models/chat_message_item.dart';
 import '../../theme/quark_tokens.dart';
+import 'chat_message_row/chat_message_body.dart';
 import 'chat_message_row/chat_reaction_bar.dart';
 import 'chat_message_row/chat_reaction_picker.dart';
 
@@ -16,9 +17,15 @@ import 'chat_message_row/chat_reaction_picker.dart';
 /// its body as a `ChatReactionBar`, and [onReact] adds a `ChatReactionPicker`
 /// beside the delete button.
 ///
+/// With [onOpenLink] set, the web addresses in a text message are links (see
+/// `ChatMessageBody`), except in a message whose sender is unverified: an
+/// address from someone who may not be who they claim is not put one tap
+/// away.
+///
 /// A part of `QuarkMessageList`, tested through it.
 ///
-/// Key prefixes: `message_delete_<id>` on the delete button, and those of
+/// Key prefixes: `message_body_<id>` on a text message's body,
+/// `message_delete_<id>` on the delete button, and those of
 /// `ChatReactionBar` and `ChatReactionPicker`.
 class ChatMessageRow extends StatelessWidget {
   /// Creates the row for [message].
@@ -28,6 +35,7 @@ class ChatMessageRow extends StatelessWidget {
     this.avatarSize = 32,
     this.onDelete,
     this.onReact,
+    this.onOpenLink,
     super.key,
   });
 
@@ -48,6 +56,10 @@ class ChatMessageRow extends StatelessWidget {
   /// Adds or takes back a reaction, with its emoji, from the picker or a
   /// reaction chip. Null leaves the picker out and the chips inert.
   final ValueChanged<String>? onReact;
+
+  /// Called with a web address in the message's text when it is tapped. Null
+  /// draws the text with no links, as an unverified message always is.
+  final ValueChanged<Uri>? onOpenLink;
 
   /// The time drawn beside the author's name, as `HH:mm`.
   static String timeOf(DateTime at) =>
@@ -94,11 +106,13 @@ class ChatMessageRow extends StatelessWidget {
           Flexible(child: Text('This message was deleted', style: muted)),
         ],
       ),
-      ChatMessageKind.text || ChatMessageKind.system => Text(
-        message.body,
+      ChatMessageKind.text || ChatMessageKind.system => ChatMessageBody(
+        key: ValueKey('message_body_${message.id}'),
+        text: message.body,
         style: TextStyle(
           color: message.isUnverified ? tokens.warning : tokens.foreground,
         ),
+        onOpenLink: reacts && !message.isUnverified ? onOpenLink : null,
       ),
     };
 
