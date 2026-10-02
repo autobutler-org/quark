@@ -7,8 +7,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/pages/file_browser_page.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/services/events_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -184,6 +189,178 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
   }
+
+  group('the welcome (#2022)', () {
+    const card = ValueKey('files_welcome');
+    const upload = ValueKey('welcome_upload');
+    const newFolder = ValueKey('welcome_new_folder');
+    const vault = ValueKey('welcome_vault');
+
+    testWidgets('a launch on a stored session is not greeted', (tester) async {
+      await HttpOverrides.runZoned(() async {
+        await pumpBrowser(tester);
+
+        expect(find.byKey(card), findsNothing);
+        expect(find.textContaining('Welcome'), findsNothing);
+      }, createHttpClient: overrides.createHttpClient);
+    });
+
+    testWidgets('a new owner gets the start-here card until they dismiss it', (
+      tester,
+    ) async {
+      AppSettings.instance.isAdmin.value = true;
+      await AppSettings.instance.welcomeNewOwner();
+
+      await HttpOverrides.runZoned(() async {
+        await pumpBrowser(tester);
+
+        expect(find.text('Welcome, alice'), findsOne);
+        expect(find.byKey(upload), findsOne);
+        expect(find.byKey(newFolder), findsOne);
+        expect(find.byKey(vault), findsOne);
+
+        await tester.tap(find.byKey(const ValueKey('welcome_card_dismiss')));
+        await tester.pump();
+
+        expect(find.byKey(card), findsNothing);
+      }, createHttpClient: overrides.createHttpClient);
+
+      // Dismissed for good: the next launch does not bring it back.
+      await AppSettings.instance.load();
+      expect(AppSettings.instance.filesWelcome.value, FilesWelcome.none);
+    });
+
+    testWidgets('finishing setup lands the owner on the card', (tester) async {
+      // The real router, so the wizard's last button runs the real
+      // onSetupComplete.
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await AppSettings.instance.setUsername(null);
+      await AppSettings.instance.acceptTerms();
+      authStatusProbe = () async => const AuthStatus(setupComplete: false);
+      authHttpClientFactory = () => MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'token': 'owner-token',
+            'recoveryPhrase': 'apple banana cherry',
+          }),
+          200,
+        ),
+      );
+      addTearDown(() async {
+        authStatusProbe = AuthService.checkStatus;
+        authHttpClientFactory = () => sharedHttpClient;
+        await AppSettings.instance.setSessionToken(null);
+      });
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+        await tester.pumpAndSettle();
+
+        final fields = find.byType(TextFormField);
+        await tester.enterText(fields.at(0), 'ada');
+        await tester.enterText(fields.at(1), 'correct-horse-battery');
+        await tester.enterText(fields.at(2), 'correct-horse-battery');
+        await tester.tap(find.text('Create account'));
+        await tester.pumpAndSettle();
+
+        // Mid-wizard: the account exists, but nothing is owed yet.
+        expect(AppSettings.instance.filesWelcome.value, FilesWelcome.none);
+
+        await tester.tap(find.byType(CheckboxListTile));
+        await tester.pump();
+        await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Get started'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(find.byType(FileBrowserPage), findsOne);
+        expect(find.text('Welcome, ada'), findsOne);
+        expect(find.byKey(upload), findsOne);
+
+        // A session exists now, so the events stream has a reconnect timer
+        // going; stop it before the binding counts timers.
+        EventsService.instance.stop();
+      }, createHttpClient: overrides.createHttpClient);
+    });
+
+    testWidgets('the card fits a phone, labels and all', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      AppSettings.instance.isAdmin.value = true;
+      await AppSettings.instance.welcomeNewOwner();
+
+      await HttpOverrides.runZoned(() async {
+        await pumpBrowser(tester);
+
+        expect(find.byKey(card), findsOne);
+        expect(find.text('Upload'), findsOne);
+        expect(find.text('New folder'), findsOne);
+        expect(find.text('Open Vault'), findsOne);
+        expect(tester.takeException(), isNull);
+      }, createHttpClient: overrides.createHttpClient);
+    });
+
+    testWidgets('Vault is offered only once the admin flag says so', (
+      tester,
+    ) async {
+      await AppSettings.instance.welcomeNewOwner();
+
+      await HttpOverrides.runZoned(() async {
+        await pumpBrowser(tester);
+
+        expect(find.byKey(upload), findsOne);
+        expect(find.byKey(vault), findsNothing);
+
+        AppSettings.instance.isAdmin.value = true;
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(find.byKey(vault), findsOne);
+      }, createHttpClient: overrides.createHttpClient);
+    });
+
+    testWidgets('a sign-in gets one line and no actions', (tester) async {
+      AppSettings.instance.greetSignIn();
+
+      await HttpOverrides.runZoned(() async {
+        await pumpBrowser(tester);
+
+        expect(find.text('Welcome back, alice'), findsOne);
+        expect(find.byKey(upload), findsNothing);
+        expect(find.byKey(newFolder), findsNothing);
+        expect(find.byKey(vault), findsNothing);
+      }, createHttpClient: overrides.createHttpClient);
+    });
+
+    testWidgets('a session with no stored name is greeted without one', (
+      tester,
+    ) async {
+      await AppSettings.instance.setUsername(null);
+      AppSettings.instance.isAdmin.value = true;
+      AppSettings.instance.greetSignIn();
+
+      await HttpOverrides.runZoned(() async {
+        await pumpBrowser(tester);
+
+        expect(find.text('Welcome back'), findsOne);
+        expect(find.textContaining('null'), findsNothing);
+      }, createHttpClient: overrides.createHttpClient);
+    });
+
+    testWidgets('a folder opened by its URL is not greeted', (tester) async {
+      AppSettings.instance.greetSignIn();
+
+      await HttpOverrides.runZoned(() async {
+        await pumpBrowser(tester, initialPath: '/users/bob/shared');
+
+        expect(find.byKey(card), findsNothing);
+      }, createHttpClient: overrides.createHttpClient);
+    });
+  });
 
   testWidgets('a member lands in their own files', (tester) async {
     await HttpOverrides.runZoned(() async {

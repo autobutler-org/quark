@@ -49,6 +49,7 @@ import 'package:quark/widgets/file_browser/upload_conflict_prompt.dart';
 import 'package:quark/widgets/file_browser/file_route_error_state.dart';
 import 'package:quark/widgets/file_browser/file_storage_footer.dart';
 import 'package:quark/widgets/file_browser/file_top_bar.dart';
+import 'package:quark/widgets/file_browser/files_welcome_card.dart';
 import 'package:quark/widgets/file_browser/folder_route_error_state.dart';
 import 'package:quark/widgets/file_browser/new_file_dialog.dart';
 import 'package:quark/widgets/file_browser/recent_files_section.dart';
@@ -2405,6 +2406,15 @@ class _FileBrowserPageState extends State<FileBrowserPage>
               );
             },
           ),
+
+          // The greeting after setup or an explicit sign-in (#2022). Unlike
+          // Recent Files it shows at every width.
+          if (!searchActive && _currentPath == _landingPath && !_noHostSelected)
+            FilesWelcomeCard(
+              onUpload: _handleUploadPressed,
+              onCreateFolder: _handleCreateFolderPressed,
+              onOpenVault: () => context.go(AppRoutes.vault),
+            ),
 
           // Hide Recent Files on mobile — show only on tablet/desktop (#959).
           if (!searchActive &&

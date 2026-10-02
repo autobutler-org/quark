@@ -36,6 +36,8 @@ lib/widgets/
                                 state and takes the app's StorageDevice
     file_top_bar/               its parts, on the package bar buttons
     file_storage_footer.dart    capacity row, takes the app's HealthStatus
+    files_welcome_card.dart     WelcomeCard wired to AppSettings: the greeting
+                                on the Files landing after setup or sign-in
     recent_files_section.dart   calls FilesService
     new_file_dialog.dart        one-line wrapper that pops NewFileDialog
     upload_conflict_prompt.dart pops UploadConflictDialog and holds the

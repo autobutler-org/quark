@@ -619,8 +619,14 @@ final router = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.setup,
-      builder: (context, state) =>
-          SetupPage(onSetupComplete: () => context.go(AppRoutes.files)),
+      builder: (context, state) => SetupPage(
+        onSetupComplete: () {
+          // Finishing the wizard is what earns the welcome card (#2022). The
+          // flag is set before the await inside, so Files sees it at once.
+          AppSettings.instance.welcomeNewOwner();
+          context.go(AppRoutes.files);
+        },
+      ),
     ),
     GoRoute(
       path: AppRoutes.login,
