@@ -25,6 +25,9 @@ import 'package:quark/widgets/nearby_quarks.dart';
 /// because a typo is the likeliest reason; the second press saves it anyway,
 /// for the Quark that is simply switched off right now.
 ///
+/// A typed local name that does not answer is retried as `.local`, `.lan` and
+/// bare, and the name that answered is the one saved (#2518).
+///
 /// On iOS and Android it also lists the Quarks found on the local network
 /// (#2312); tapping one fills in its address, and its name when the nickname
 /// is still empty.
@@ -78,35 +81,41 @@ class _HostDialogState extends State<HostDialog> {
 
   Future<void> _submit() async {
     final name = _name.text.trim();
-    final address = _normalizedAddress;
-    if (name.isEmpty || address.isEmpty || _checking) return;
+    final typed = _normalizedAddress;
+    if (name.isEmpty || typed.isEmpty || _checking) return;
+
+    var address = typed;
+    if (!_offersSaveAnyway) {
+      setState(() => _checking = true);
+      // A local name that does not answer is retried under its sibling names
+      // (#2518), and the one that answered is saved.
+      final reachable = await firstReachableAddress(
+        typed,
+        hostReachabilityProbe,
+      );
+      if (!mounted) return;
+      if (reachable == null) {
+        setState(() {
+          _checking = false;
+          _unreachableAddress = typed;
+        });
+        return;
+      }
+      address = reachable;
+    }
 
     // A rename keeps the learned remote address; a new address may be a
     // different Quark, so it starts without one and learns its own (#1880).
     final initial = widget.initial;
-    final entry = HostEntry(
-      name: name,
-      hostAddress: address,
-      remoteAddress: address == initial?.hostAddress
-          ? initial?.remoteAddress
-          : null,
+    Navigator.of(context).pop(
+      HostEntry(
+        name: name,
+        hostAddress: address,
+        remoteAddress: address == initial?.hostAddress
+            ? initial?.remoteAddress
+            : null,
+      ),
     );
-    if (_offersSaveAnyway) {
-      Navigator.of(context).pop(entry);
-      return;
-    }
-
-    setState(() => _checking = true);
-    final reachable = await hostReachabilityProbe(address);
-    if (!mounted) return;
-    if (!reachable) {
-      setState(() {
-        _checking = false;
-        _unreachableAddress = address;
-      });
-      return;
-    }
-    Navigator.of(context).pop(entry);
   }
 
   /// Fills the form from a Quark found on the network. A nickname already

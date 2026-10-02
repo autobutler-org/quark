@@ -524,3 +524,24 @@ The Quark has at least one feature in beta, such as Chat.
 - After step 4 only **This session** is left, and **Sign out everywhere else** is disabled.
 - Step 5 signs out the same way **Sign out** does (JN-ST-022): the session is cleared and the app goes to `/login`.
 - A failure shows a "Couldn't ..." sentence in the card and leaves the list as it was.
+
+---
+
+### JN-ST-030: Add a Quark by name on a router that appends `.lan`
+
+**Preconditions:** The Quark is on the same Wi-Fi as the phone. The router registers it in its own DNS as
+`quark.lan`, and the phone cannot resolve `quark.local` (Android before 12, for one).
+
+**Steps:**
+
+1. Open **Add host** (JN-ST-002), or the first-run **Connect to your Quark** form on the login page.
+2. Type `quark.local`, `quark.lan`, `quark.local.lan` or plain `quark`, and save.
+
+**Expected result:**
+
+- The Quark is added whichever of those forms was typed, as long as one of `quark.local`, `quark.lan` or `quark`
+  answers. The address saved is the one that answered, so a typed `quark.local` is stored as `https://quark.lan`.
+- The typed address is tried first; the other names are only tried when it does not answer (#2518).
+- An IP address, a public name and `localhost` are tried exactly as typed.
+- When no name answers, the form says it couldn't connect and keeps what was typed, so the user can enter the IP
+  address shown on the device instead.
