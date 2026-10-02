@@ -63,6 +63,9 @@ lib/widgets/
     repair_installation_section.dart
                                 hosts RepairController: the repair button and
                                 its confirmation, or the one-time install step
+    sessions_section.dart       hosts SessionsController: the account's sessions,
+                                signing one out or all the others, each
+                                behind a confirmation
     ssh_access_section.dart     hosts SshAccessPanel around SshAccessController,
                                 with its confirmation, key and password dialogs
   sharing/
@@ -128,7 +131,8 @@ Settings is split into tabs (#2350), one widget each under `settings/`:
 `FeatureFlag` model, with the Network tab's `remote_access_card.dart` and
 `connected_devices_card.dart`. The page still loads everything and hands each
 tab its values and callbacks; the tabs stay app-side because they take the
-app's service models and host `HostManager`, `SshAccessSection` and
+app's service models and host `HostManager`, `SessionsSection`,
+`SshAccessSection` and
 `RepairInstallationSection`.
 
 ## Adding a widget

@@ -8,7 +8,7 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 | Tab | URL | Holds |
 | --- | --- | --- |
 | **General** | `/settings/general` | Backend hosts, theme, auto-refresh interval, demo mode, a link to the drives |
-| **Account** | `/settings/account` | Sign out, then an **Account and data** row at the bottom that leads to Delete account and (admins) Reset this Quark |
+| **Account** | `/settings/account` | Sign out, your sessions, then an **Account and data** row at the bottom that leads to Delete account and (admins) Reset this Quark |
 | **Network** | `/settings/network` | Remote access, connected devices, SSH access (admins) |
 | **Updates** | `/settings/updates` | The Quark's version, updates and automatic updates (admins), Repair installation (admins) |
 | **About** | `/settings/about` | The app's version, Help & Support, Terms of Service, the software bill of materials |
@@ -498,3 +498,26 @@ The Quark has at least one feature in beta, such as Chat.
 - Non-admins get no Features tab, and `/settings/features` sends them to Files. With no feature in beta, admins get no
   Features tab either.
 - A refused change says so ("Couldn't change the feature…") and leaves the switch where it was.
+
+---
+
+### JN-ST-029: See and sign out your sessions
+
+**Preconditions:** User is logged in.
+
+**Steps:**
+
+1. Navigate to `/settings/account`.
+2. Find the **Sessions** card under **Sign out**.
+3. Tap the sign-out button on a session other than **This session** and confirm.
+4. Tap **Sign out everywhere else** and confirm.
+5. Tap the sign-out button on **This session** and confirm.
+
+**Expected result:**
+
+- The card lists every session of the account with when it signed in and when it was last used, and marks the one
+  in use as **This session**.
+- After step 3 that session is gone from the list, and whoever was using it has to sign in again.
+- After step 4 only **This session** is left, and **Sign out everywhere else** is disabled.
+- Step 5 signs out the same way **Sign out** does (JN-ST-022): the session is cleared and the app goes to `/login`.
+- A failure shows a "Couldn't ..." sentence in the card and leaves the list as it was.
