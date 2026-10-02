@@ -5,11 +5,13 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/content_search_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
+import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/utils/safe_set_state_mixin.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -145,9 +147,19 @@ class _DocsPageState extends State<DocsPage>
         bytes,
         filename: fileName,
       );
-      await FilesService.uploadFilesFromFormData('', [file]);
+      // A member cannot write the device root, only their home (#2139).
+      final dir = landingPath(
+        isAdmin: AppSettings.instance.isAdmin.value,
+        username: AppSettings.instance.username,
+      );
+      final landed = await FilesService.uploadFilesFromFormData(dir, [file]);
       if (!mounted) return;
-      context.go(AppRoutes.docFile(fileName), extra: true);
+      context.go(
+        AppRoutes.docFile(
+          landed.firstOrNull ?? (dir.isEmpty ? fileName : '$dir/$fileName'),
+        ),
+        extra: true,
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
