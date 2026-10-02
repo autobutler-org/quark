@@ -77,7 +77,7 @@ void main() {
       expect(find.byKey(ValueKey('user_row_${user.username}')), findsOneWidget);
     }
     expect(find.text('You · Admin'), findsOneWidget);
-    expect(find.text('Turned off'), findsOneWidget);
+    expect(find.text('Disabled'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -150,7 +150,7 @@ void main() {
     expect(find.byType(PopupMenuButton<VoidCallback>), findsNothing);
   });
 
-  testBothViewports('turns off an active account and on a turned-off one', (
+  testBothViewports('disables an active account and enables a disabled one', (
     tester,
     size,
   ) async {
@@ -167,11 +167,13 @@ void main() {
 
     await openMenu(tester, 'bob');
     expect(find.byKey(const ValueKey('user_action_enable_bob')), findsNothing);
+    expect(find.text('Disable'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('user_action_disable_bob')));
     await tester.pumpAndSettle();
 
     await openMenu(tester, 'cy');
     expect(find.byKey(const ValueKey('user_action_disable_cy')), findsNothing);
+    expect(find.text('Enable'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('user_action_enable_cy')));
     await tester.pumpAndSettle();
 

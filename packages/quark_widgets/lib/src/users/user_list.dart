@@ -79,11 +79,11 @@ class UserList extends StatelessWidget {
   /// leaves the entry out.
   final ValueChanged<String>? onDemote;
 
-  /// Called with the username to turn off. Offered on active accounts. Null
+  /// Called with the username to disable. Offered on active accounts. Null
   /// leaves the entry out.
   final ValueChanged<String>? onDisable;
 
-  /// Called with the username to turn back on. Offered on turned-off
+  /// Called with the username to enable again. Offered on disabled
   /// accounts. Null leaves the entry out.
   final ValueChanged<String>? onEnable;
 

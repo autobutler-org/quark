@@ -45,10 +45,10 @@ class UserRow extends StatelessWidget {
   /// Stops the account being an admin. Offered on admins; null leaves it out.
   final VoidCallback? onDemote;
 
-  /// Turns the account off. Offered on active accounts; null leaves it out.
+  /// Disables the account. Offered on active accounts; null leaves it out.
   final VoidCallback? onDisable;
 
-  /// Turns the account back on. Offered on turned-off accounts; null leaves
+  /// Enables the account again. Offered on disabled accounts; null leaves
   /// it out.
   final VoidCallback? onEnable;
 
@@ -70,16 +70,15 @@ class UserRow extends StatelessWidget {
             if (user.isAdmin && onDemote != null)
               ('demote', 'Remove admin', onDemote!),
             if (isActive && onDisable != null)
-              ('disable', 'Turn off', onDisable!),
-            if (isDisabled && onEnable != null)
-              ('enable', 'Turn on', onEnable!),
+              ('disable', 'Disable', onDisable!),
+            if (isDisabled && onEnable != null) ('enable', 'Enable', onEnable!),
             if (onDelete != null) ('delete', 'Delete', onDelete!),
           ];
 
     final details = [
       if (isSelf) 'You',
       if (user.isAdmin) 'Admin',
-      if (isDisabled) 'Turned off',
+      if (isDisabled) 'Disabled',
       if (user.status == UserAccountStatus.pending) 'Waiting for approval',
     ];
 
