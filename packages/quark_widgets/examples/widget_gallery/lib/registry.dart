@@ -741,6 +741,39 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'WelcomeCard',
+    group: 'Layout',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 16,
+      children: [
+        WelcomeCard(
+          headline: 'Welcome, ada',
+          message: 'Start by adding something.',
+          actions: [
+            QuarkBarChip(
+              icon: QuarkIcons.upload_rounded,
+              label: 'Upload',
+              keepLabel: true,
+              onPressed: () => log('WelcomeCard action: Upload'),
+            ),
+            QuarkBarChip(
+              icon: QuarkIcons.create_new_folder_outlined,
+              label: 'New folder',
+              keepLabel: true,
+              onPressed: () => log('WelcomeCard action: New folder'),
+            ),
+          ],
+          onDismiss: () => log('WelcomeCard.onDismiss'),
+        ),
+        WelcomeCard(
+          headline: 'Welcome back, ada',
+          onDismiss: () => log('WelcomeCard.onDismiss'),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkTabView',
     group: 'Layout',
     build: (context, log) => SizedBox(

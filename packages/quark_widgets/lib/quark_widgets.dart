@@ -72,6 +72,7 @@ export 'src/layout/quark_tab_view.dart';
 export 'src/layout/quark_toolbar.dart';
 export 'src/layout/refresh_icon_button.dart';
 export 'src/layout/theme_toggle_button.dart';
+export 'src/layout/welcome_card.dart';
 export 'src/models/access_level.dart';
 export 'src/models/album_item.dart';
 export 'src/models/album_sort.dart';
