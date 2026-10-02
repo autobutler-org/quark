@@ -8,6 +8,7 @@ import 'package:quark/pages/account_and_data_page.dart';
 import 'package:quark/pages/settings_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/widgets/settings/reset_quark_dialog.dart';
 
 import '../support/unreachable_quark.dart';
 
@@ -193,6 +194,45 @@ void main() {
       );
     });
   }
+
+  // #2479: each entry says how far it reaches before it is tapped, and the
+  // reset names the control that decides about attached drives rather than
+  // leaving it at "unless you say otherwise".
+  testWidgets('each entry names its scope, and the reset its drives control', (
+    tester,
+  ) async {
+    await signIn();
+
+    await pumpAccountAndData(tester);
+
+    expect(
+      find.descendant(
+        of: entry,
+        matching: find.textContaining('Removes only your account'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: resetEntry,
+        matching: find.textContaining('“$kResetQuarkDevicesLabel”'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('say otherwise'), findsNothing);
+
+    // The name the page points at is the name on the box in the dialog.
+    await tester.tap(resetEntry);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('reset_quark_devices')),
+        matching: find.text(kResetQuarkDevicesLabel),
+      ),
+      findsOneWidget,
+    );
+  });
 
   // #1899: resetting the appliance is admin-only on the Quark, so a member
   // keeps their own account deletion and never sees the reset.

@@ -465,6 +465,9 @@ The password travels in the request body, never the URL, and attempts share the 
 **Expected result:**
 
 - The **Reset** section sits below **Delete account**, under its own heading. Other accounts don't see it.
+- Each entry says how far it reaches before it is tapped: **Delete account** removes only your account and leaves
+  your files and other accounts; **Reset this Quark** erases every account, and names the **Quark data on attached
+  drives** box as where attached drives are included.
 - Step 2 offers **Accounts and settings** and **Stored files** checked, and **Quark data on attached drives**
   unchecked, and reads back what the reset erases and keeps. Nothing can be sent without a password and at least
   one box.
