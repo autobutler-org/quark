@@ -45,6 +45,9 @@ type ListFilesResult struct {
 // them deeper down. A folder they can see none of is reported as not found,
 // the same as one that does not exist.
 func ListFiles(params ListFilesParams) (ListFilesResult, error) {
+	if climbsOut(params.RootDir) {
+		return ListFilesResult{}, invalidPath(params.RootDir)
+	}
 	if accessutil.Canonical(params.RootDir) != "" && !params.Access.VisibleOnAny(params.Serials, params.RootDir) {
 		return ListFilesResult{}, notFoundf("folder not found: %s", params.RootDir)
 	}

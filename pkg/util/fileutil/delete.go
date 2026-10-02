@@ -3,6 +3,7 @@ package fileutil
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"path/filepath"
 
@@ -11,6 +12,11 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
+
+// MaxDeleteFiles is the most paths one DeleteFiles call takes. Each path is
+// access-checked and trashed in turn, so an unbounded batch is an unbounded
+// amount of work for one request (#2574).
+const MaxDeleteFiles = 1000
 
 // DeleteFilesParams moves a batch of files to the device's trash. The
 // filesystem half returns in under a second even for a large batch; the
@@ -39,12 +45,35 @@ type DeleteFilesParams struct {
 // started may still be running.
 type DeleteFilesResult struct{}
 
+// ValidateDeleteFiles refuses a batch DeleteFiles could never carry out: one
+// over MaxDeleteFiles, or one with a path that is empty, names the files
+// directory itself, climbs out of it, or reaches into the trash. It needs
+// neither storage nor a database, so a handler can call it before it checks
+// access to every path. The error is an [InvalidRequestError].
+func ValidateDeleteFiles(params DeleteFilesParams) error {
+	if len(params.FilePaths) > MaxDeleteFiles {
+		return &InvalidRequestError{Err: fmt.Errorf(
+			"too many file paths: %d, at most %d per request", len(params.FilePaths), MaxDeleteFiles)}
+	}
+	for _, p := range params.FilePaths {
+		rel := filepath.Join(".", params.RootDir, p)
+		if rel == "." || climbsOut(rel) || storageutil.IsTrashPath(rel) {
+			return invalidPath(p)
+		}
+	}
+	return nil
+}
+
 // DeleteFiles moves files to the trash and starts the cleanup their absence
 // implies. Every device trashes, the internal one included: the "files" VFS
 // namespace is the internal device's files directory, so trashing through the
 // StorageService with the empty serial lands where a VFS delete used to remove
 // files for good (#1814).
 func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
+	if err := ValidateDeleteFiles(params); err != nil {
+		return DeleteFilesResult{}, err
+	}
+
 	// ── Phase 1: fast filesystem op (returns in < 1 s even for large batches) ─
 
 	// A rename into the trash is a metadata-only op, microseconds on an SD card.

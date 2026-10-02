@@ -117,7 +117,8 @@ func fileError(err error) *serverutil.Response {
 		return serverutil.NotFound(err)
 	}
 	var unsupported *fileutil.UnsupportedError
-	if errors.As(err, &unsupported) {
+	var invalid *fileutil.InvalidRequestError
+	if errors.As(err, &unsupported) || errors.As(err, &invalid) {
 		return serverutil.BadRequest(err)
 	}
 	return serverutil.InternalServerError(err)

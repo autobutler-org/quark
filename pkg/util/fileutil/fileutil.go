@@ -76,6 +76,17 @@ func (e *UnsupportedError) Error() string { return e.Err.Error() }
 
 func (e *UnsupportedError) Unwrap() error { return e.Err }
 
+// InvalidRequestError reports a request that can never succeed as written —
+// a path that climbs out of the files directory, say, or a batch over its
+// limit. The caller is at fault, so the handler answers it with 400 (#2573).
+type InvalidRequestError struct {
+	Err error
+}
+
+func (e *InvalidRequestError) Error() string { return e.Err.Error() }
+
+func (e *InvalidRequestError) Unwrap() error { return e.Err }
+
 // FilesVFS returns the VFS backing the local files namespace, or nil when
 // there is none to route to and the StorageService has to serve the request.
 func FilesVFS(registry vfs.Registry) vfs.VFS {

@@ -39,6 +39,11 @@ type MoveFileResult struct{}
 
 // MoveFile moves a file and announces where it went.
 func MoveFile(params MoveFileParams) (MoveFileResult, error) {
+	for _, p := range []string{params.OldFilePath, params.NewFilePath} {
+		if climbsOut(p) {
+			return MoveFileResult{}, invalidPath(p)
+		}
+	}
 	// Use VFS.Move for same-device renames (no serials); fall through to StorageService for cross-device ops.
 	moved := false
 	if params.OldDeviceSerial == "" && params.NewDeviceSerial == "" {
