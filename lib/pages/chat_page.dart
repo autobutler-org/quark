@@ -5,6 +5,7 @@ import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
+import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/chat/chat_channel_header.dart';
 import 'package:quark/widgets/chat/chat_failed_send_bar.dart';
@@ -118,6 +119,12 @@ class _ChatPageState extends State<ChatPage>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(Errors.message(error, 'delete the message'))),
     );
+  }
+
+  void _copyMessage(String id) {
+    for (final message in _controller.messageItems) {
+      if (message.id == id) copyToClipboard(context, message.body);
+    }
   }
 
   Future<void> _react(String id, String emoji) async {
@@ -368,6 +375,7 @@ class _ChatPageState extends State<ChatPage>
                               ? null
                               : c.selectedPermissions,
                           currentUserId: c.currentUserKey,
+                          onCopy: _copyMessage,
                           onDelete: _deleteMessage,
                           onReact: _react,
                           onOpenLink: (uri) => launchUrl(

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/models/chat_channel.dart';
@@ -230,6 +231,54 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fake.opened[1]!.deleted, [12]);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a member copies a message from its menu ($label)', (
+      tester,
+    ) async {
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied.add((call.arguments as Map)['text'] as String);
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final fake = FakeChat();
+      fake.entries[1] = [
+        ChatTimelineMessage(
+          message: ChatMessage(
+            id: 12,
+            channelId: 1,
+            authorId: 8,
+            keyVersion: 1,
+            ciphertext: null,
+            createdAt: DateTime.utc(2026, 9, 25, 10),
+          ),
+          state: ChatMessageState.ready,
+          text: 'the door code is 4471',
+        ),
+      ];
+      await pumpChat(tester, size, chat: fake);
+
+      await tester.longPress(find.byKey(const ValueKey('message_body_12')));
+      await tester.pumpAndSettle();
+      // Someone else's message: a member may copy and react, not delete.
+      expect(find.byKey(const ValueKey('message_delete_12')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('message_copy_12')));
+      await tester.pumpAndSettle();
+
+      expect(copied, ['the door code is 4471']);
+      expect(find.text('Copied to clipboard'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

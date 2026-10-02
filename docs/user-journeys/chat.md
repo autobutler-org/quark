@@ -3,8 +3,8 @@
 Covers the chat beta (#2414): opening a channel, sending and receiving
 end-to-end encrypted messages, unlocking chat on web after a reload, waiting
 for a channel key, an admin turning the beta off, and creating, sharing,
-renaming, leaving and deleting channels (#2422), and reacting to messages
-(#2426).
+renaming, leaving and deleting channels (#2422), reacting to messages
+(#2426), and a message's menu (#2631).
 
 ---
 
@@ -49,7 +49,7 @@ renaming, leaving and deleting channels (#2422), and reacting to messages
 
 - A channel where the account can read but not send shows "You can read this channel but not send messages in it" in place of the composer.
 - A channel the account only manages, holding `manage_members` or `manage_channel` without `read_messages`, shows "You are not a member of this conversation" in place of the messages and the composer. Its members are still listed.
-- The author of a message, or a member with `delete_messages`, can delete it from the trash button on the message after confirming.
+- The author of a message, or a member with `delete_messages`, can delete it from the message's menu after confirming (JN-CHAT-017).
 - The Quark stores ciphertext only; the text is encrypted on the device.
 
 ---
@@ -209,7 +209,7 @@ renaming, leaving and deleting channels (#2422), and reacting to messages
 
 1. Open the channel's settings, then **Members**.
 2. On `bob`'s row, choose **Moderator**.
-3. As `bob`, open the channel and tap the trash button on `carol`'s message, then **Delete**.
+3. As `bob`, open the channel, open the menu on `carol`'s message (JN-CHAT-017), choose **Delete**, and confirm.
 
 **Expected result:**
 
@@ -218,7 +218,7 @@ renaming, leaving and deleting channels (#2422), and reacting to messages
 
 **Notes:**
 
-- Anyone can delete their own messages while they can read the channel. Without **Delete messages**, other people's messages have no trash button.
+- Anyone can delete their own messages while they can read the channel. Without **Delete messages**, the menu on other people's messages has no **Delete**.
 
 ---
 
@@ -337,3 +337,30 @@ Both have the channel open.
   ([`docs/chat-security.md`](../chat-security.md)).
 - A **Viewer**, without **Add reactions**, sees the chips but gets no add-reaction button, and tapping a chip does
   nothing.
+- **Add reaction** in the message's menu (JN-CHAT-017) offers the same emoji as the add-reaction button.
+
+---
+
+### JN-CHAT-017: Copy a message from its menu
+
+**Preconditions:** A channel open (JN-CHAT-001) with a text message in it.
+
+**Steps:**
+
+1. Open the message's menu: long-press the message on a phone or tablet, right-click it on a computer, or use the
+   three-dot button at its end, which the Tab key reaches.
+2. Choose **Copy text**.
+
+**Expected result:**
+
+- The menu opens beside the message with **Copy text**, **Add reaction** and, on a message you may delete
+  (JN-CHAT-010), **Delete**.
+- After step 2, "Copied to clipboard" shows and the message's text is on the clipboard.
+
+**Notes:**
+
+- **Add reaction** opens the emoji in the same place (JN-CHAT-016). A **Viewer**, without **Add reactions**, does not
+  get it.
+- On a computer, dragging across messages selects their text, and the copy shortcut copies the selection. On a phone
+  or tablet a long press opens the menu instead, so **Copy text** is how a message is copied.
+- A deleted message, a message waiting for its key, and a system line have no menu.
