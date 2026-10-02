@@ -36,6 +36,7 @@ class ChatMessageItem {
     this.body = '',
     this.kind = ChatMessageKind.text,
     this.isUnverified = false,
+    this.isEncryptionEvent = false,
     this.reactions = const [],
   });
 
@@ -62,6 +63,11 @@ class ChatMessageItem {
   /// membership change nobody vouched for. Drawn in the warning color.
   final bool isUnverified;
 
+  /// Whether this [ChatMessageKind.system] line is about the channel's
+  /// encryption, such as a new key. Such a line, like an unverified one,
+  /// offers an explanation in `QuarkMessageList`.
+  final bool isEncryptionEvent;
+
   /// The message's reactions, one per emoji, in the order to draw them.
   /// Only a [ChatMessageKind.text] message draws them.
   final List<ChatReactionItem> reactions;
@@ -77,6 +83,7 @@ class ChatMessageItem {
           other.body == body &&
           other.kind == kind &&
           other.isUnverified == isUnverified &&
+          other.isEncryptionEvent == isEncryptionEvent &&
           listEquals(other.reactions, reactions);
 
   @override
@@ -88,6 +95,7 @@ class ChatMessageItem {
     body,
     kind,
     isUnverified,
+    isEncryptionEvent,
     Object.hashAll(reactions),
   );
 }

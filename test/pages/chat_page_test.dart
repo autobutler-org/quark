@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/models/chat_channel.dart';
+import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
 import 'package:quark/pages/chat_page.dart';
 import 'package:quark/router.dart';
@@ -419,6 +420,63 @@ void main() {
         find.byKey(const ValueKey('message_composer_disabled')),
         findsOneWidget,
       );
+      expect(tester.takeException(), isNull);
+    });
+
+    // #2495: waiting says what's going on and what to do, and checks again.
+    testWidgets('waiting for a key explains the next step ($label)', (
+      tester,
+    ) async {
+      final fake = FakeChat()..waiting.add(1);
+      await pumpChat(tester, size, chat: fake);
+      fake.calls.clear();
+
+      expect(
+        find.text(
+          QuarkEncryptionNotice.titleOf(ChatEncryptionStatus.waitingForKey),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('encryption_notice_check_again')),
+      );
+      await tester.pumpAndSettle();
+      expect(fake.calls, ['ensure keys 1']);
+
+      await tester.tap(
+        find.byKey(const ValueKey('encryption_notice_learn_more')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(QuarkEncryptionHelpDialog), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // #2496: an encryption line's "(?)" opens the explainer.
+    testWidgets('an encryption line explains itself ($label)', (tester) async {
+      final fake = FakeChat();
+      fake.entries[1] = [
+        ChatTimelineSystem(
+          event: ChatChannelEvent(
+            id: 5,
+            channelId: 1,
+            kind: ChatChannelEvent.keyCreated,
+            actorId: 7,
+            payload: '{"version":1}',
+            createdAt: DateTime.utc(2026, 9, 25, 10),
+          ),
+          isVerified: true,
+        ),
+      ];
+      await pumpChat(tester, size, chat: fake);
+
+      expect(find.byType(QuarkEncryptionNotice), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('message_help_event_5')));
+      await tester.pumpAndSettle();
+      expect(find.byType(QuarkEncryptionHelpDialog), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('encryption_help_close')));
+      await tester.pumpAndSettle();
+      expect(find.byType(QuarkEncryptionHelpDialog), findsNothing);
       expect(tester.takeException(), isNull);
     });
   }

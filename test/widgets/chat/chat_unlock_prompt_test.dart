@@ -62,4 +62,33 @@ void main() {
       findsOneWidget,
     );
   });
+
+  // #2494: the prompt says why it asks, which password, where keys live, and
+  // that a wrong try is harmless, before and after a failure.
+  for (final size in const [Size(360, 640), Size(1280, 800)]) {
+    testWidgets('explains the unlock at $size', (tester) async {
+      await pumpPrompt(tester, size);
+      for (final (_, line) in ChatUnlockPrompt.explanation) {
+        expect(find.text(line), findsOneWidget);
+      }
+      expect(find.text(ChatUnlockPrompt.failureHint), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('a failure says what to try next', (tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatUnlockPrompt(onUnlock: (_) {}, error: 'Nope.'),
+        ),
+      ),
+    );
+    expect(find.text('Nope.'), findsOneWidget);
+    expect(find.text(ChatUnlockPrompt.failureHint), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

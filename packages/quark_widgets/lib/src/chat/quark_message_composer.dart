@@ -24,7 +24,8 @@ import '../theme/quark_tokens.dart';
 /// - [permissions] lacks [ChatPermission.sendMessages]: [noSendReason], which
 ///   lasts until someone changes the user's permissions.
 /// - [isWaitingForKey]: [waitingForKeyReason], which resolves itself once a
-///   member shares the channel key.
+///   member shares the channel key. The caller explains the wait, and what
+///   to do about it, with a `QuarkEncryptionNotice` above.
 /// - [disabledReason], any other sentence the caller composes.
 ///
 /// The text controller and focus node are [State] because Flutter needs them
@@ -85,7 +86,7 @@ class QuarkMessageComposer extends StatefulWidget {
 
   /// Shown while the user waits for the channel key.
   static const String waitingForKeyReason =
-      'Waiting for a member to share the key to this channel';
+      "You can write here once a member shares this channel's key with you";
 
   /// How many lines the field grows to before it scrolls.
   final int maxLines;

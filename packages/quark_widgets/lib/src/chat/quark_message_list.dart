@@ -62,6 +62,12 @@ import 'quark_message_list/chat_system_line.dart';
 /// [Uri]; the caller opens it. An unverified sender's message, and every
 /// system line, stays plain text.
 ///
+/// With [onEncryptionHelp] set, each system line about encryption
+/// ([ChatMessageItem.isEncryptionEvent]) and each unverified system line ends
+/// in a "(?)" button with [encryptionHelpTooltip]; a tap fires
+/// [onEncryptionHelp], and the caller explains, usually with a
+/// `QuarkEncryptionHelpDialog`.
+///
 /// [permissions] without [ChatPermission.readMessages] is someone who manages
 /// the channel without being in the conversation. They get [notMemberText]
 /// in place of the list: no messages, no spinner and no waiting for a key,
@@ -75,6 +81,7 @@ import 'quark_message_list/chat_system_line.dart';
 /// `message_react_<id>` on its add-reaction button,
 /// `message_react_<id>_<emoji>` on each emoji that button offers,
 /// `message_reaction_<id>_<emoji>` on each reaction chip,
+/// `message_help_<id>` on a system line's "(?)",
 /// `message_list_load_older` on the load button,
 /// `message_list_retry` on the retry button, and `message_list_not_member`
 /// on the not-a-member pane.
@@ -109,10 +116,14 @@ class QuarkMessageList extends StatelessWidget {
     this.onDelete,
     this.onReact,
     this.onOpenLink,
+    this.onEncryptionHelp,
     this.avatarBuilder,
     this.controller,
     super.key,
   });
+
+  /// The tooltip on an encryption line's "(?)".
+  static const String encryptionHelpTooltip = 'What does this mean?';
 
   /// How close together one author's messages have to be to share a header.
   static const Duration groupWindow = Duration(minutes: 5);
@@ -170,6 +181,10 @@ class QuarkMessageList extends StatelessWidget {
   /// Called with a web address in a text message when it is tapped, for the
   /// caller to open. Null draws every message as plain text.
   final ValueChanged<Uri>? onOpenLink;
+
+  /// Called when an encryption or unverified system line's "(?)" is tapped,
+  /// for the caller to explain. Null draws no "(?)".
+  final VoidCallback? onEncryptionHelp;
 
   /// Builds the avatar for an author's id, [avatarSize] across. Null draws
   /// a [QuarkAvatar] with the author's initials.
@@ -291,7 +306,7 @@ class QuarkMessageList extends StatelessWidget {
             children: [
               if (startsDay) ChatDaySeparator(date: message.sentAt),
               if (message.kind == ChatMessageKind.system)
-                ChatSystemLine(message: message)
+                ChatSystemLine(message: message, onHelp: onEncryptionHelp)
               else
                 ChatMessageRow(
                   message: message,

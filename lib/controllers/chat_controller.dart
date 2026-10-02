@@ -213,6 +213,7 @@ class ChatController extends ChangeNotifier {
   bool _wasUnlocked = false;
   bool _isUnlocking = false;
   Object? _unlockError;
+  bool _isCheckingKey = false;
   bool _isSaving = false;
   Object? _saveError;
   bool _disposed = false;
@@ -334,6 +335,50 @@ class ChatController extends ChangeNotifier {
   bool get isWaitingForKey {
     final channel = _selected;
     return channel != null && channel.canRead && _isWaitingForKey(channel.id);
+  }
+
+  /// Whether [checkKey] is running.
+  bool get isCheckingKey => _isCheckingKey;
+
+  /// Where the open channel's encryption stands, for `QuarkEncryptionNotice`
+  /// (#2495), most urgent first: [isWaitingForKey]; the newest key event
+  /// unverified; or older messages waiting on a key this account was never
+  /// given. Null when there is nothing to say, and for a channel it only
+  /// manages, which has no timeline.
+  ChatEncryptionStatus? get encryptionStatus {
+    if (isWaitingForKey) return ChatEncryptionStatus.waitingForKey;
+    final entries = _messages?.entries ?? const <ChatTimelineEntry>[];
+    final newestKey = entries
+        .whereType<ChatTimelineSystem>()
+        .where((e) => e.event.kind == ChatChannelEvent.keyCreated)
+        .lastOrNull;
+    if (newestKey != null && newestKey.isUnverified) {
+      return ChatEncryptionStatus.unverifiedKey;
+    }
+    return entries.any(
+          (e) =>
+              e is ChatTimelineMessage && e.state == ChatMessageState.waiting,
+        )
+        ? ChatEncryptionStatus.unreadableHistory
+        : null;
+  }
+
+  /// Looks for the open channel's key now, rather than waiting for a member
+  /// to share it, through [isCheckingKey]. A failure leaves the channel
+  /// waiting, as it was.
+  Future<void> checkKey() async {
+    final channel = _selected;
+    if (channel == null || _isCheckingKey) return;
+    _isCheckingKey = true;
+    _notify();
+    try {
+      await _ensureKeys(channel.id);
+    } catch (e) {
+      debugPrint('chat: no key yet for channel ${channel.id}: $e');
+    } finally {
+      _isCheckingKey = false;
+      _notify();
+    }
   }
 
   /// What this account may do in the open channel, empty with none open.
@@ -732,6 +777,7 @@ class ChatController extends ChangeNotifier {
       body: systemSentence(event, nameOf),
       kind: ChatMessageKind.system,
       isUnverified: isUnverified,
+      isEncryptionEvent: event.kind == ChatChannelEvent.keyCreated,
     ),
   };
 
