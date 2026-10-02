@@ -9,6 +9,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/auth_salt.dart';
+
 /// A Quark that answers every request with one canned response, and remembers
 /// what it was asked.
 class _RecordingClient extends http.BaseClient {
@@ -86,9 +88,12 @@ void main() {
 
   tearDown(() => authHttpClientFactory = () => sharedHttpClient);
 
+  late AuthSaltClient salts;
+
   _RecordingClient serve({int statusCode = 200, String body = '{}'}) {
     final client = _RecordingClient(statusCode: statusCode, body: body);
-    authHttpClientFactory = () => client;
+    salts = AuthSaltClient(client);
+    authHttpClientFactory = () => salts;
     return client;
   }
 
@@ -115,7 +120,22 @@ void main() {
     final request = client.requests.single as http.Request;
     expect(request.url.toString(), isNot(contains('hunter2')));
     expect(request.headers['Content-Type'], startsWith('application/json'));
-    expect(jsonDecode(request.body), {'password': 'hunter2hunter2'});
+    // #2430: the auth key stands in for the password it was derived from.
+    expect(salts.asked, ['ada']);
+    expect(jsonDecode(request.body), {
+      'password': await testAuthKey('hunter2hunter2'),
+    });
+  });
+
+  test('an account with no auth key yet confirms with its password', () async {
+    final client = serve();
+    salts.legacy = true;
+
+    await AuthService.deleteAccount(password: 'hunter2hunter2');
+
+    expect(jsonDecode((client.requests.single as http.Request).body), {
+      'password': 'hunter2hunter2',
+    });
   });
 
   test('resetting selects the appliance and never the account', () async {
@@ -134,7 +154,7 @@ void main() {
       'devices': 'false',
     });
     expect(jsonDecode((client.requests.single as http.Request).body), {
-      'password': 'pw',
+      'password': await testAuthKey('pw'),
     });
   });
 

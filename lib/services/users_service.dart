@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:quark/models/user_account.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/auth_secret.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
@@ -119,7 +120,7 @@ class UsersService with AuthenticatedService {
   }
 
   /// Creates an active account named [username] with the initial [password]
-  /// (#1873), and a home at `users/<username>` that only it and the admins
+  /// (#1873), sent as the auth key derived from it ([AuthSecret]), and a home at `users/<username>` that only it and the admins
   /// can open. Returns the new account.
   ///
   /// The account has no recovery phrase until its first sign-in, which is
@@ -129,10 +130,15 @@ class UsersService with AuthenticatedService {
     required String username,
     required String password,
   }) async {
+    final secret = await AuthSecret.resolve(
+      username: username,
+      password: password,
+      use: AuthSecretUse.newCredential,
+    );
     final response = await instance.authenticatedPost(
       apiBaseUri.resolve('/api/v0/admin/users'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'password': password}),
+      body: jsonEncode({'username': username, ...secret.fields()}),
     );
     _check(response, 'create $username');
     return UserAccount.fromJson(

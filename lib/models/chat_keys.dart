@@ -5,7 +5,11 @@ import 'dart:typed_data';
 /// `kdfParams` so the cost can rise later without breaking older wraps.
 class KdfParams {
   /// Builds explicit parameters. [memLimit] is in bytes.
-  const KdfParams({required this.opsLimit, required this.memLimit});
+  const KdfParams({
+    required this.opsLimit,
+    required this.memLimit,
+    this.alg = algorithm,
+  });
 
   /// Argon2id passes.
   final int opsLimit;
@@ -21,31 +25,50 @@ class KdfParams {
   /// 220 ms and 256 MiB 456 ms on the same machine.
   static const standard = KdfParams(opsLimit: 3, memLimit: 64 << 20);
 
-  /// The only algorithm written or read.
+  /// How the wraps' keys come out of Argon2id: [algorithm] or
+  /// [splitAlgorithm].
+  final String alg;
+
+  /// The first scheme (#2416): each wrap's key is Argon2id of its secret and
+  /// its own random salt, used directly.
   static const algorithm = 'argon2id13';
 
-  /// Reads `kdfParams`. Anything but [algorithm] is refused rather than
-  /// guessed at.
+  /// The split-key scheme (#2430). The phrase wrap is as in [algorithm]. The
+  /// password wrap's key is the `wrapKey` of `ChatCrypto.deriveAuthKeys`, and
+  /// its salt is the account's auth salt, so the password alone re-derives it.
+  static const splitAlgorithm = 'argon2id13+hkdf-sha256';
+
+  /// Whether the password wrap is under the split-key scheme's `wrapKey`.
+  bool get isSplit => alg == splitAlgorithm;
+
+  /// The same cost under [splitAlgorithm].
+  KdfParams get split =>
+      KdfParams(opsLimit: opsLimit, memLimit: memLimit, alg: splitAlgorithm);
+
+  /// Reads `kdfParams`. Anything but [algorithm] or [splitAlgorithm] is
+  /// refused rather than guessed at.
   factory KdfParams.fromJson(Map<String, dynamic> json) {
-    if (json['alg'] != algorithm) {
-      throw FormatException('unsupported chat key KDF: ${json['alg']}');
+    final alg = json['alg'];
+    if (alg != algorithm && alg != splitAlgorithm) {
+      throw FormatException('unsupported chat key KDF: $alg');
     }
     return KdfParams(
       opsLimit: (json['opsLimit'] as num).toInt(),
       memLimit: (json['memLimit'] as num).toInt(),
+      alg: alg as String,
     );
   }
 
   /// The `kdfParams` object.
   Map<String, dynamic> toJson() => {
-    'alg': algorithm,
+    'alg': alg,
     'opsLimit': opsLimit,
     'memLimit': memLimit,
   };
 }
 
 /// One wrap of a chat identity: `nonce || ciphertext` and the Argon2id salt
-/// it was derived with.
+/// its key was derived with.
 class WrappedSecret {
   /// Pairs a wrap with its salt.
   const WrappedSecret({required this.wrapped, required this.salt});
@@ -93,14 +116,15 @@ class WrappedChatKeys {
   /// The public halves.
   final ChatPublicKeys publicKeys;
 
-  /// Wrapped under the login password.
+  /// Wrapped under the login password: directly under its Argon2id, or under
+  /// the `wrapKey` derived from it when [kdfParams] is [KdfParams.isSplit].
   final WrappedSecret byPassword;
 
   /// Wrapped under the recovery phrase; null for keys made at a sign-in that
   /// had no phrase to hand, which recovery cannot open.
   final WrappedSecret? byPhrase;
 
-  /// The Argon2id cost both wraps used.
+  /// The Argon2id cost both wraps used, and the scheme of the password wrap.
   final KdfParams kdfParams;
 
   /// Reads `GET /api/v0/chat/keys/me`.

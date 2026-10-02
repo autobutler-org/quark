@@ -236,6 +236,7 @@
     "Headscale",
     "HEADSCALE",
     "healthutil",
+    "hkdf",
     "honnef",
     "hostnames",
     "Hostnames",
