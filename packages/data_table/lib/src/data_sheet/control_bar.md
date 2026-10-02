@@ -26,6 +26,9 @@ Legend: ✅ implemented · 🔜 planned · ❌ out of scope for this package
   to the bottom of the sheet
 - ✅ Fill Right — `fillRightRange(range)` copies the selection's left column through the rest of it; a one-column
   selection fills to the right edge
+- ✅ Copy / Cut / Paste — `data_sheet_copy`, `data_sheet_cut`, `data_sheet_paste`; act on the selection through the
+  bar's `clipboard` (see Clipboard below)
+- ✅ Clear selected cells — `data_sheet_clear_range`, `clearRange(range)`, one undo step
 - ✅ Bulk Edit — paste one value over a range (`pasteValues(range, [[value]])`) to fill it
 
 ## Selection & Navigation
@@ -39,6 +42,21 @@ Legend: ✅ implemented · 🔜 planned · ❌ out of scope for this package
 - ✅ Range operations — copy, cut, paste, clear, fill, and row/column delete and clear act on the whole selection
   (`selection.contextRange`), each as one undo step. Insert, duplicate, and sort still anchor to the highlighted cell.
 - 🔜 Find (highlight results) — `findCells()` exists on controller; UI highlight not yet wired
+
+## Clipboard
+
+The package never touches the platform clipboard. `DataSheet` and `DataSheetControlBar` both take a
+`DataSheetClipboard` — a `read` and a `write` the app supplies — and default to the shared in-app
+`DataSheetClipboard.memory`. Quark's `SheetTabView` passes one backed by `lib/utils/clipboard_utils.dart`, falling back
+to memory where the browser blocks the clipboard.
+
+- `rangeToTsv(range)` — the range's raw text (formulas copy as formulas; their references do not shift), tab-separated. A value
+  holding a tab, newline or `"` is quoted with its quotes doubled, as Google Sheets and Excel write it.
+- `DataSheetController.parseTsv(text)` — reads that format back: quoted fields may hold tabs and newlines, LF and CRLF
+  both end a row, one trailing line ending is dropped, and ragged rows are padded.
+- `pasteTsv(text, range)` — parses, then `pasteValues(range, rows)`: one undo step, then selects what it wrote. The block lands at the range's top-left. When
+  the range is a whole number of blocks tall and wide the block tiles it (so one value fills the range); otherwise it
+  pastes once at its own size, adding rows and columns past the sheet's edge.
 
 ## Sort, Filter & Transform
 

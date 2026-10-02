@@ -17,6 +17,16 @@ bool get isClipboardAvailable => isClipboardAvailablePlatform;
 String? get clipboardUnavailableReason =>
     isClipboardAvailable ? null : 'Clipboard unavailable — use HTTPS to enable';
 
+/// The clipboard's plain text, or null when it holds none.
+///
+/// On web the browser may ask the user for permission first.
+Future<String?> readClipboardText() async =>
+    (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+
+/// Replaces the clipboard's text with [text], without a confirmation.
+Future<void> writeClipboardText(String text) =>
+    Clipboard.setData(ClipboardData(text: text));
+
 /// Copies [text] and confirms it with a snack bar reading [message].
 ///
 /// The clipboard is a platform channel, so it stays app-side; `CopyButton`
@@ -26,7 +36,7 @@ Future<void> copyToClipboard(
   String text, {
   String message = 'Copied to clipboard',
 }) async {
-  await Clipboard.setData(ClipboardData(text: text));
+  await writeClipboardText(text);
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(content: Text(message), duration: const Duration(seconds: 2)),

@@ -1,6 +1,7 @@
 import 'package:quark_icons/quark_icons.dart';
 import 'package:flutter/material.dart' hide Icons;
 
+import 'data_sheet_clipboard.dart';
 import 'data_sheet_controller.dart';
 import 'freeze_menu_button.dart';
 
@@ -25,10 +26,22 @@ import 'freeze_menu_button.dart';
 ///
 /// Users who want a fully custom toolbar should build their own widget and
 /// call methods on [DataSheetController] directly.
+///
+/// The clipboard buttons act on the selected range and are keyed
+/// `data_sheet_copy`, `data_sheet_cut`, `data_sheet_paste` and
+/// `data_sheet_clear_range`.
 class DataSheetControlBar extends StatelessWidget {
   final DataSheetController controller;
 
-  const DataSheetControlBar({super.key, required this.controller});
+  /// Where Copy and Cut write and Paste reads; pass the same one as the
+  /// `DataSheet`. Defaults to [DataSheetClipboard.memory].
+  final DataSheetClipboard? clipboard;
+
+  const DataSheetControlBar({
+    super.key,
+    required this.controller,
+    this.clipboard,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -39,8 +52,10 @@ class DataSheetControlBar extends StatelessWidget {
         final hasRow = sel.contextRow >= 0;
         final hasCol = sel.contextCol >= 0;
         final hasData = controller.rowCount > 0;
-        // Row, column, clear and fill actions cover every selected cell.
+        // Row, column, clipboard, clear and fill actions cover every
+        // selected cell.
         final range = sel.contextRange;
+        final board = clipboard ?? DataSheetClipboard.memory;
 
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -120,6 +135,40 @@ class DataSheetControlBar extends StatelessWidget {
                     hasCol
                         ? () => controller.duplicateColumn(sel.contextCol)
                         : null,
+                  ),
+                ]),
+                const _Divider(),
+                // ── Clipboard ──────────────────────────────────────────────
+                _group([
+                  _btn(
+                    QuarkIcons.content_copy,
+                    'Copy',
+                    range != null
+                        ? () => board.copySelection(controller, range)
+                        : null,
+                    key: 'data_sheet_copy',
+                  ),
+                  _btn(
+                    QuarkIcons.content_cut,
+                    'Cut',
+                    range != null
+                        ? () => board.cutSelection(controller, range)
+                        : null,
+                    key: 'data_sheet_cut',
+                  ),
+                  _btn(
+                    QuarkIcons.content_paste,
+                    'Paste',
+                    range != null
+                        ? () => board.pasteIntoSelection(controller, range)
+                        : null,
+                    key: 'data_sheet_paste',
+                  ),
+                  _btn(
+                    QuarkIcons.clear_range,
+                    'Clear selected cells',
+                    range != null ? () => controller.clearRange(range) : null,
+                    key: 'data_sheet_clear_range',
                   ),
                 ]),
                 const _Divider(),
@@ -238,10 +287,16 @@ Widget _group(List<Widget> children) {
   return Row(mainAxisSize: MainAxisSize.min, children: children);
 }
 
-Widget _btn(IconData icon, String tooltip, VoidCallback? onPressed) {
+Widget _btn(
+  IconData icon,
+  String tooltip,
+  VoidCallback? onPressed, {
+  String? key,
+}) {
   return Tooltip(
     message: tooltip,
     child: IconButton(
+      key: key == null ? null : ValueKey(key),
       icon: Icon(icon),
       onPressed: onPressed,
       iconSize: 20,

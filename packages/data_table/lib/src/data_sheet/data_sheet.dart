@@ -19,6 +19,7 @@ import 'cell/heading/heading_cells.dart'
         kHeaderHeight,
         kMaxFrozenFraction;
 import 'cell/heading/util.dart';
+import 'data_sheet_clipboard.dart';
 import 'data_sheet_control_scheme.dart';
 import 'data_sheet_controller.dart';
 import 'formula_bar.dart';
@@ -39,6 +40,10 @@ import 'view/linked_scroll_controllers.dart';
 /// it, and double-click the edge to fit the content. A selected header's edge
 /// grows a touch-sized grip, so on a phone: tap the header, then drag the
 /// grip. Every resize is one undo step.
+///
+/// Copy, cut, paste, Delete and fill act on the whole selected range, each as
+/// one undo step. Copied cells go to [clipboard] as tab-separated text, the
+/// format Google Sheets and Excel use, so cells paste between them.
 ///
 /// The controller's `frozenRows` and `frozenColumns` pin that many rows and
 /// columns, with the column headers and row numbers, while the rest scrolls;
@@ -86,6 +91,11 @@ class DataSheet extends StatelessWidget {
   /// Defaults to `true`.
   final bool showFormulaBar;
 
+  /// Where copy and cut write and paste reads. Defaults to
+  /// [DataSheetClipboard.memory], which stays inside the app; pass one backed
+  /// by the system clipboard to paste to and from other apps.
+  final DataSheetClipboard? clipboard;
+
   const DataSheet({
     super.key,
     required this.table,
@@ -96,6 +106,7 @@ class DataSheet extends StatelessWidget {
     this.controlScheme,
     this.showHeadings = true,
     this.showFormulaBar = true,
+    this.clipboard,
   });
 
   DataSheet.unnamed({super.key})
@@ -106,7 +117,8 @@ class DataSheet extends StatelessWidget {
         columnWidths = null,
         controlScheme = null,
         showHeadings = true,
-        showFormulaBar = true;
+        showFormulaBar = true,
+        clipboard = null;
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +131,7 @@ class DataSheet extends StatelessWidget {
       controlScheme: controlScheme,
       showHeadings: showHeadings,
       showFormulaBar: showFormulaBar,
+      clipboard: clipboard,
     );
   }
 }
@@ -132,6 +145,7 @@ class _DataSheetView extends StatefulWidget {
   final DataSheetControlScheme? controlScheme;
   final bool showHeadings;
   final bool showFormulaBar;
+  final DataSheetClipboard? clipboard;
 
   const _DataSheetView({
     required this.table,
@@ -142,6 +156,7 @@ class _DataSheetView extends StatefulWidget {
     this.controlScheme,
     this.showHeadings = true,
     this.showFormulaBar = true,
+    this.clipboard,
   });
 
   @override
@@ -162,7 +177,6 @@ class _DataSheetViewState extends State<_DataSheetView> {
   final LinkedScrollControllers _verticalScroll = LinkedScrollControllers();
   final GlobalKey _gridBodyKey = GlobalKey();
   String _priorCellValue = '';
-  List<List<String>>? _clipboard;
 
   int get activeRow => controller.selection.activeRow;
   int get activeCol => controller.selection.activeCol;
@@ -250,15 +264,15 @@ class _DataSheetViewState extends State<_DataSheetView> {
           return KeyEventResult.handled;
         }
         if (m(scheme.copy)) {
-          _copyCell();
+          _clipboard.copySelection(controller);
           return KeyEventResult.handled;
         }
         if (m(scheme.cut)) {
-          _cutCell();
+          _clipboard.cutSelection(controller);
           return KeyEventResult.handled;
         }
         if (m(scheme.paste)) {
-          _pasteCell();
+          _clipboard.pasteIntoSelection(controller);
           return KeyEventResult.handled;
         }
         if (m(scheme.fillDown)) {
@@ -913,24 +927,8 @@ class _DataSheetViewState extends State<_DataSheetView> {
   // Shortcut action helpers
   // ---------------------------------------------------------------------------
 
-  void _copyCell() {
-    final range = controller.selection.contextRange;
-    if (range != null) _clipboard = controller.valuesIn(range);
-  }
-
-  void _cutCell() {
-    final range = controller.selection.contextRange;
-    if (range == null) return;
-    _clipboard = controller.valuesIn(range);
-    controller.clearRange(range);
-  }
-
-  void _pasteCell() {
-    final range = controller.selection.contextRange;
-    final clipboard = _clipboard;
-    if (range == null || clipboard == null) return;
-    controller.pasteValues(range, clipboard);
-  }
+  DataSheetClipboard get _clipboard =>
+      widget.clipboard ?? DataSheetClipboard.memory;
 
   void _fillDown() {
     final range = controller.selection.contextRange;
