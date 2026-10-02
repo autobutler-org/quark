@@ -17,9 +17,19 @@ import 'cell/heading/util.dart';
 import 'data_sheet_control_scheme.dart';
 import 'data_sheet_controller.dart';
 import 'formula_bar.dart';
+import 'selection_gestures.dart';
 
 /// A spreadsheet grid over a `DataSheetController`: scrolling, selection, inline editing, and resizable rows and
 /// columns.
+///
+/// Selection is a rectangle anchored at the highlighted cell: Shift+arrows,
+/// Shift+click, a mouse drag, or a long-press drag on touch grows it, and a
+/// column or row header click selects that whole column or row. Range cells
+/// are tinted from the theme's primary color (which `QuarkTheme` derives from
+/// `QuarkTokens.primary`), and the anchor keeps the strong outline.
+///
+/// Keys: cells are `r<row>c<col>`, column headers `col_header_<col>`, and row
+/// numbers `row_num_<row>`.
 class DataSheet extends StatelessWidget {
   final DataTable table;
 
@@ -124,8 +134,10 @@ class _DataSheetViewState extends State<_DataSheetView> {
   late final DataSheetController controller;
   late final bool _ownsController;
   final ScrollController _horizontalScrollController = ScrollController();
+  final ScrollController _verticalScrollController = ScrollController();
+  final GlobalKey _gridBodyKey = GlobalKey();
   String _priorCellValue = '';
-  String? _internalClipboard;
+  List<List<String>>? _clipboard;
 
   int get activeRow => controller.selection.activeRow;
   int get activeCol => controller.selection.activeCol;
@@ -153,6 +165,7 @@ class _DataSheetViewState extends State<_DataSheetView> {
   void dispose() {
     keyboardFocus.dispose();
     _horizontalScrollController.dispose();
+    _verticalScrollController.dispose();
     controller.removeListener(_onControllerChanged);
     if (_ownsController) controller.dispose();
     super.dispose();
@@ -256,6 +269,29 @@ class _DataSheetViewState extends State<_DataSheetView> {
           return KeyEventResult.handled;
         }
 
+        if (m(scheme.selectAll)) {
+          _selectAll();
+          return KeyEventResult.handled;
+        }
+
+        // Shift+arrow range extension, checked before the plain arrows.
+        if (m(scheme.extendUp)) {
+          _extendBy(-1, 0);
+          return KeyEventResult.handled;
+        }
+        if (m(scheme.extendDown)) {
+          _extendBy(1, 0);
+          return KeyEventResult.handled;
+        }
+        if (m(scheme.extendLeft)) {
+          _extendBy(0, -1);
+          return KeyEventResult.handled;
+        }
+        if (m(scheme.extendRight)) {
+          _extendBy(0, 1);
+          return KeyEventResult.handled;
+        }
+
         // Plain / shift shortcuts.
         if (m(scheme.moveUp)) {
           _moveUp();
@@ -344,9 +380,8 @@ class _DataSheetViewState extends State<_DataSheetView> {
           return KeyEventResult.handled;
         }
         if (m(scheme.clearCell)) {
-          if (highlightedRow >= 0 && highlightedCol >= 0) {
-            controller.clearCell(highlightedRow, highlightedCol);
-          }
+          final range = controller.selection.range;
+          if (range != null) controller.clearRange(range);
           return KeyEventResult.handled;
         }
         if (m(scheme.jumpRowStart)) {
@@ -443,18 +478,26 @@ class _DataSheetViewState extends State<_DataSheetView> {
                               if (widget.showHeadings) _buildHeaderRow(),
                               // ── Data rows ─────────────────────────────
                               Expanded(
-                                child: ListView.builder(
-                                  itemCount: controller.rowCount,
-                                  itemBuilder: (context, r) {
-                                    return ValueListenableBuilder<
-                                        List<DataCell>>(
-                                      valueListenable: controller.rowNotifier(
-                                        r,
-                                      ),
-                                      builder: (context, rowCells, _) =>
-                                          _buildDataRow(context, r, rowCells),
-                                    );
-                                  },
+                                child: DataSheetSelectionGestures(
+                                  enabled: activeRow < 0,
+                                  cellAt: _cellAtGlobal,
+                                  onRangeStart: _startRange,
+                                  onRangeExtend: _extendRangeTo,
+                                  child: ListView.builder(
+                                    key: _gridBodyKey,
+                                    controller: _verticalScrollController,
+                                    itemCount: controller.rowCount,
+                                    itemBuilder: (context, r) {
+                                      return ValueListenableBuilder<
+                                          List<DataCell>>(
+                                        valueListenable: controller.rowNotifier(
+                                          r,
+                                        ),
+                                        builder: (context, rowCells, _) =>
+                                            _buildDataRow(context, r, rowCells),
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
                             ],
@@ -476,6 +519,41 @@ class _DataSheetViewState extends State<_DataSheetView> {
   // Layout helpers
   // ---------------------------------------------------------------------------
 
+  double _colWidth(int c) => c < controller.columnWidths.length
+      ? controller.columnWidths[c]
+      : kDefaultColumnWidth;
+
+  double _rowHeight(int r) => r < controller.rowHeights.length
+      ? controller.rowHeights[r]
+      : kDefaultRowHeight;
+
+  /// The cell under [global], clamped to the sheet's edges so a drag past
+  /// the last row or column selects up to it.
+  ({int row, int col})? _cellAtGlobal(Offset global) {
+    final box = _gridBodyKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || controller.rowCount == 0 || controller.colCount == 0) {
+      return null;
+    }
+    final local = box.globalToLocal(global);
+    final scrollY = _verticalScrollController.hasClients
+        ? _verticalScrollController.offset
+        : 0.0;
+    int indexAt(double pos, int count, double Function(int) size) {
+      var edge = 0.0;
+      for (var i = 0; i < count; i++) {
+        edge += size(i);
+        if (pos < edge) return i;
+      }
+      return count - 1;
+    }
+
+    final gutterW = widget.showHeadings ? kGutterWidth : 0.0;
+    return (
+      row: indexAt(local.dy + scrollY, controller.rowCount, _rowHeight),
+      col: indexAt(local.dx - gutterW, controller.colCount, _colWidth),
+    );
+  }
+
   double _totalContentWidth() {
     final gutterW = widget.showHeadings ? kGutterWidth : 0.0;
     return gutterW + controller.columnWidths.fold(0.0, (acc, w) => acc + w);
@@ -486,19 +564,15 @@ class _DataSheetViewState extends State<_DataSheetView> {
       children: [
         HeaderCornerCell(),
         ...List.generate(controller.colCount, (c) {
-          final width = c < controller.columnWidths.length
-              ? controller.columnWidths[c]
-              : kDefaultColumnWidth;
           return SizedBox(
-            width: width,
+            width: _colWidth(c),
             child: ColumnHeaderCell(
               key: ValueKey('col_header_$c'),
               label: columnLabel(c),
+              isSelected: controller.selection.range?.containsCol(c) ?? false,
+              onSelect: () => _selectColumn(c),
               onResizeDelta: (delta) {
-                final cur = c < controller.columnWidths.length
-                    ? controller.columnWidths[c]
-                    : kDefaultColumnWidth;
-                controller.setColumnWidth(c, cur + delta);
+                controller.setColumnWidth(c, _colWidth(c) + delta);
               },
               onAutoSize: () => controller.autoSizeColumn(
                 c,
@@ -512,9 +586,7 @@ class _DataSheetViewState extends State<_DataSheetView> {
   }
 
   Widget _buildDataRow(BuildContext context, int r, List<DataCell> rowCells) {
-    final rowHeight = r < controller.rowHeights.length
-        ? controller.rowHeights[r]
-        : kDefaultRowHeight;
+    final rowHeight = _rowHeight(r);
     return Row(
       children: [
         if (widget.showHeadings)
@@ -522,11 +594,10 @@ class _DataSheetViewState extends State<_DataSheetView> {
             key: ValueKey('row_num_$r'),
             number: r + 1,
             height: rowHeight,
+            isSelected: controller.selection.range?.containsRow(r) ?? false,
+            onSelect: () => _selectRow(r),
             onResizeDelta: (delta) {
-              final cur = r < controller.rowHeights.length
-                  ? controller.rowHeights[r]
-                  : kDefaultRowHeight;
-              controller.setRowHeight(r, cur + delta);
+              controller.setRowHeight(r, rowHeight + delta);
             },
             onAutoSize: () => controller.autoSizeRow(
               r,
@@ -537,9 +608,7 @@ class _DataSheetViewState extends State<_DataSheetView> {
           final isActiveCell = (r == activeRow && c == activeCol);
           final isHighlightedCell =
               (r == highlightedRow && c == highlightedCol);
-          final colWidth = c < controller.columnWidths.length
-              ? controller.columnWidths[c]
-              : kDefaultColumnWidth;
+          final colWidth = _colWidth(c);
 
           final cellChild = isActiveCell
               ? EditableCell(
@@ -580,6 +649,7 @@ class _DataSheetViewState extends State<_DataSheetView> {
             key: ValueKey('r${r}c$c'),
             isActive: isActiveCell,
             isHighlighted: isHighlightedCell,
+            isInRange: controller.selection.isInRange(r, c),
             cursor: isActiveCell
                 ? SystemMouseCursors.text
                 : SystemMouseCursors.cell,
@@ -599,6 +669,9 @@ class _DataSheetViewState extends State<_DataSheetView> {
                         _storeCellValue(
                           controller.activeCellEditingController.text,
                         );
+                      } else if (_shiftExtends) {
+                        controller.selection.extendTo(r, c);
+                        keyboardFocus.requestFocus();
                       } else {
                         if (highlightedRow == r && highlightedCol == c) {
                           _activateCell(rowCells[c], r, c);
@@ -656,40 +729,32 @@ class _DataSheetViewState extends State<_DataSheetView> {
   // ---------------------------------------------------------------------------
 
   void _copyCell() {
-    final row = controller.selection.contextRow;
-    final col = controller.selection.contextCol;
-    if (row < 0 || col < 0) return;
-    _internalClipboard = controller.cellAt(row, col).value;
+    final range = controller.selection.contextRange;
+    if (range != null) _clipboard = controller.valuesIn(range);
   }
 
   void _cutCell() {
-    final row = controller.selection.contextRow;
-    final col = controller.selection.contextCol;
-    if (row < 0 || col < 0) return;
-    _internalClipboard = controller.cellAt(row, col).value;
-    controller.clearCell(row, col);
+    final range = controller.selection.contextRange;
+    if (range == null) return;
+    _clipboard = controller.valuesIn(range);
+    controller.clearRange(range);
   }
 
   void _pasteCell() {
-    final row = controller.selection.contextRow;
-    final col = controller.selection.contextCol;
-    if (row < 0 || col < 0) return;
-    if (_internalClipboard == null) return;
-    controller.updateCell(row, col, DataCell(_internalClipboard!));
+    final range = controller.selection.contextRange;
+    final clipboard = _clipboard;
+    if (range == null || clipboard == null) return;
+    controller.pasteValues(range, clipboard);
   }
 
   void _fillDown() {
-    final row = controller.selection.contextRow;
-    final col = controller.selection.contextCol;
-    if (row < 0 || col < 0) return;
-    controller.fillDown(row, col);
+    final range = controller.selection.contextRange;
+    if (range != null) controller.fillDownRange(range);
   }
 
   void _fillRight() {
-    final row = controller.selection.contextRow;
-    final col = controller.selection.contextCol;
-    if (row < 0 || col < 0) return;
-    controller.fillRight(row, col);
+    final range = controller.selection.contextRange;
+    if (range != null) controller.fillRightRange(range);
   }
 
   void _jumpToFirst() {
@@ -709,9 +774,9 @@ class _DataSheetViewState extends State<_DataSheetView> {
   }
 
   void _deleteRow() {
-    final row = controller.selection.contextRow;
-    if (row < 0) return;
-    controller.deleteRowAt(row);
+    final range = controller.selection.contextRange;
+    if (range == null) return;
+    controller.deleteRowAt(range.top, count: range.rowCount);
   }
 
   void _insertColumn() {
@@ -721,9 +786,75 @@ class _DataSheetViewState extends State<_DataSheetView> {
   }
 
   void _deleteColumn() {
-    final col = controller.selection.contextCol;
-    if (col < 0) return;
-    controller.deleteColumnAt(col);
+    final range = controller.selection.contextRange;
+    if (range == null) return;
+    controller.deleteColumnAt(range.left, count: range.colCount);
+  }
+
+  /// True when Shift is held and there is an anchor to extend from.
+  bool get _shiftExtends =>
+      HardwareKeyboard.instance.isShiftPressed &&
+      controller.selection.hasHighlight;
+
+  void _startRange(int r, int c) {
+    if (_shiftExtends) {
+      controller.selection.extendTo(r, c);
+    } else {
+      controller.selection.setHighlighted(r, c);
+    }
+    keyboardFocus.requestFocus();
+  }
+
+  void _extendRangeTo(int r, int c) {
+    final sel = controller.selection;
+    if (sel.extentRow == r && sel.extentCol == c) return;
+    sel.extendTo(r, c);
+  }
+
+  void _extendBy(int dRow, int dCol) {
+    final sel = controller.selection;
+    if (!sel.hasHighlight) return;
+    sel.extendTo(
+      (sel.extentRow + dRow).clamp(0, controller.rowCount - 1),
+      (sel.extentCol + dCol).clamp(0, controller.colCount - 1),
+    );
+  }
+
+  void _selectAll() {
+    if (controller.rowCount == 0 || controller.colCount == 0) return;
+    controller.selection.selectRange(
+      0,
+      0,
+      controller.rowCount - 1,
+      controller.colCount - 1,
+    );
+  }
+
+  /// Commits any edit in progress before a header click changes selection.
+  void _commitEdit() {
+    if (activeRow >= 0 && activeCol >= 0) {
+      _storeCellValue(controller.activeCellEditingController.text);
+    }
+  }
+
+  /// Selects column [c] top to bottom; with Shift, every column from the
+  /// anchor's to [c].
+  void _selectColumn(int c) {
+    if (controller.rowCount == 0) return;
+    _commitEdit();
+    final anchorCol = _shiftExtends ? highlightedCol : c;
+    controller.selection.selectRange(0, anchorCol, controller.rowCount - 1, c);
+    keyboardFocus.requestFocus();
+  }
+
+  /// Selects row [r] end to end; with Shift, every row from the anchor's to
+  /// [r].
+  void _selectRow(int r) {
+    if (controller.colCount == 0) return;
+    _commitEdit();
+    final anchorRow = _shiftExtends ? highlightedRow : r;
+    controller.selection.selectRange(anchorRow, 0, r, controller.colCount - 1);
+    keyboardFocus.requestFocus();
   }
 
   void _moveUp() {

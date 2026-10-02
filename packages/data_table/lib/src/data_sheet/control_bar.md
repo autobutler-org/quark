@@ -11,26 +11,33 @@ Legend: ✅ implemented · 🔜 planned · ❌ out of scope for this package
 - ✅ Insert Column Before / After — `insertColumnAt(index)`
   - With no selection these anchor to the sheet edges — "before" targets the top/left, "after" appends — so the bar needs
     no separate append button. Column inserts are disabled while the sheet has no rows, since columns live inside rows.
-- ✅ Delete Row — `deleteRowAt(index)`
-- ✅ Delete Column — `deleteColumnAt(index)`
+- ✅ Delete Row — `deleteRowAt(index, count:)`, every row the selection covers
+- ✅ Delete Column — `deleteColumnAt(index, count:)`, every column the selection covers
 
 ## Editing & Bulk Operations
 
 - ✅ Undo / Redo — snapshot-based, 100-step depth
 - ✅ Duplicate Row — `duplicateRow(index)`
 - ✅ Duplicate Column — `duplicateColumn(index)`
-- ✅ Clear Row — `clearRow(index)` (empties all values)
-- ✅ Clear Column — `clearColumn(index)`
-- ✅ Clear Cell — `clearCell(row, col)`
-- ✅ Fill Down — copies selected cell value to all rows below in the same column
-- ✅ Fill Right — copies selected cell value to all columns to the right in the same row
-- 🔜 Bulk Edit — apply a value to a rectangular range (needs multi-cell selection)
+- ✅ Clear Row — `clearRow(index, count:)` (empties all values in every selected row)
+- ✅ Clear Column — `clearColumn(index, count:)`
+- ✅ Clear Cell / Range — `clearCell(row, col)`, `clearRange(range)`
+- ✅ Fill Down — `fillDownRange(range)` copies the selection's top row through the rest of it; a one-row selection fills
+  to the bottom of the sheet
+- ✅ Fill Right — `fillRightRange(range)` copies the selection's left column through the rest of it; a one-column
+  selection fills to the right edge
+- ✅ Bulk Edit — paste one value over a range (`pasteValues(range, [[value]])`) to fill it
 
 ## Selection & Navigation
 
 - ✅ Go To Cell — dialog, sets selection via `DataSheetSelectionModel.goTo(row, col)`
-- 🔜 Select All / Clear Selection — needs multi-cell selection model
-- 🔜 Multi-select / rectangular selection — future work
+- ✅ Select All — Ctrl/Cmd+A, `selection.selectRange(...)`; Escape clears the selection
+- ✅ Rectangular selection — `DataSheetSelectionModel` keeps an anchor (the highlighted cell) and an extent; `range`
+  returns the normalized `CellRange` and `extendTo` / `selectRange` move it. Drag (mouse), long-press drag (touch),
+  Shift+click, Shift+arrows, and column/row header clicks all drive it, and the formula bar's name box shows `B2:D9`.
+  Range cells and their headers are tinted from the theme's primary color.
+- ✅ Range operations — copy, cut, paste, clear, fill, and row/column delete and clear act on the whole selection
+  (`selection.contextRange`), each as one undo step. Insert, duplicate, and sort still anchor to the highlighted cell.
 - 🔜 Find (highlight results) — `findCells()` exists on controller; UI highlight not yet wired
 
 ## Sort, Filter & Transform

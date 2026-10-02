@@ -36,7 +36,7 @@ The entire key binding map is customizable — developers can supply their own
 | Any printable key              | Open cell for editing (start typing)       | ✅     |
 | F2                             | Enter edit mode for the highlighted cell   | ✅     |
 | Escape                         | Cancel active edit, restore previous value | ✅     |
-| Delete / Backspace             | Clear the highlighted cell's value         | ✅     |
+| Delete / Backspace             | Clear every cell in the selection          | ✅     |
 | Ctrl/Cmd+Z                     | Undo last action                           | ✅     |
 | Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z | Redo                                       | ✅     |
 
@@ -44,11 +44,16 @@ The entire key binding map is customizable — developers can supply their own
 
 ## Clipboard
 
-| Keys       | Action                                          | Status |
-| ---------- | ----------------------------------------------- | ------ |
-| Ctrl/Cmd+C | Copy highlighted cell value to system clipboard | ✅     |
-| Ctrl/Cmd+X | Cut — copy then clear highlighted cell          | ✅     |
-| Ctrl/Cmd+V | Paste clipboard text into highlighted cell      | ✅     |
+| Keys       | Action                                                    | Status |
+| ---------- | --------------------------------------------------------- | ------ |
+| Ctrl/Cmd+C | Copy the selection                                        | ✅     |
+| Ctrl/Cmd+X | Cut — copy then clear the selection                       | ✅     |
+| Ctrl/Cmd+V | Paste at the selection's top-left; one value fills it all | ✅     |
+
+The clipboard is the sheet's own, not the system clipboard: a copy keeps the
+selection's raw values (formulas as written) and a paste writes them back
+unchanged, clipped at the sheet edge. Each cut, paste and clear is one undo
+step.
 
 ---
 
@@ -56,9 +61,24 @@ The entire key binding map is customizable — developers can supply their own
 
 | Keys               | Action                                          | Status |
 | ------------------ | ----------------------------------------------- | ------ |
-| Shift+Arrow        | Extend selection by one cell in arrow direction | 🔜     |
-| Ctrl/Cmd+A         | Select all cells                                | 🔜     |
+| Shift+Arrow        | Extend selection by one cell in arrow direction | ✅     |
+| Ctrl/Cmd+A         | Select all cells                                | ✅     |
 | Ctrl/Cmd+Shift+End | Extend selection to last used cell              | 🔜     |
+
+The selection is a rectangle anchored at the highlighted cell, which keeps its
+outline and is the cell typing edits. Shift+Arrow moves the opposite corner and
+stops at the sheet edge; a plain arrow collapses the range and moves the
+anchor. The name box in the formula bar shows the range, e.g. `B2:D9`.
+
+Pointer selection, for reference alongside the keys:
+
+| Pointer                           | Action                                      |
+| --------------------------------- | ------------------------------------------- |
+| Shift+click a cell                | Extend the range from the anchor to it      |
+| Mouse drag                        | Select the cells the drag crosses           |
+| Long-press, then drag (touch)     | Select a range; a quick swipe still scrolls |
+| Click a column / row header       | Select the whole column / row               |
+| Shift+click a column / row header | Extend to every column / row in between     |
 
 ---
 
@@ -66,10 +86,13 @@ The entire key binding map is customizable — developers can supply their own
 
 | Keys       | Action                                                            | Status |
 | ---------- | ----------------------------------------------------------------- | ------ |
-| Ctrl/Cmd+D | Fill down — copy value of cell above into highlighted cell        | ✅     |
-| Ctrl/Cmd+R | Fill right — copy value of cell to the left into highlighted cell | ✅     |
+| Ctrl/Cmd+D | Fill down — copy the selection's top row through the rest of it   | ✅     |
+| Ctrl/Cmd+R | Fill right — copy the selection's left column through the rest    | ✅     |
 | Ctrl/Cmd+F | Open Find & Replace dialog                                        | 🔜     |
 | Ctrl/Cmd+G | Open Go To Cell dialog                                            | 🔜     |
+
+A selection one row tall fills down to the bottom of the sheet, and one column
+wide fills right to its edge, so a single highlighted cell behaves as before.
 
 ---
 
@@ -78,9 +101,9 @@ The entire key binding map is customizable — developers can supply their own
 | Keys                 | Action                                | Status |
 | -------------------- | ------------------------------------- | ------ |
 | Ctrl/Cmd+Plus        | Insert row above highlighted cell     | ✅     |
-| Ctrl/Cmd+Minus       | Delete row of highlighted cell        | ✅     |
+| Ctrl/Cmd+Minus       | Delete every row the selection covers | ✅     |
 | Ctrl/Cmd+Shift+Plus  | Insert column before highlighted cell | ✅     |
-| Ctrl/Cmd+Shift+Minus | Delete column of highlighted cell     | ✅     |
+| Ctrl/Cmd+Shift+Minus | Delete every column it covers         | ✅     |
 
 ---
 
@@ -90,9 +113,9 @@ The entire key binding map is customizable — developers can supply their own
   scheme is resolved each key event via `widget.controlScheme ?? DataSheetControlScheme.defaults()`.
 - `KeyboardShortcut.matches` checks `HardwareKeyboard.instance.isControlPressed || isMetaPressed`
   for the `ctrl` flag, so the same scheme works on Windows/Linux and macOS.
-- Clipboard operations use the `flutter/services.dart` `Clipboard` API — no
-  extra packages required. `_pasteCell` is async; the cell update is scheduled
-  after the future resolves and guarded by a `mounted` check.
+- Clipboard operations keep the copied cells in the `DataSheet`'s own state and
+  write them through `DataSheetController.pasteValues`; the system clipboard is
+  not involved.
 - `_priorCellValue` is captured in `_activateCell` so that pressing Escape can
   restore the original value without touching undo history.
 - Structural shortcuts delegate to `DataSheetController` methods that push an
@@ -197,6 +220,10 @@ document. The full set of action names (each takes `List<KeyboardShortcut>`):
 | `fillRight`        | Ctrl+R                |
 | `findReplace`      | Ctrl+F                |
 | `goToCell`         | Ctrl+G                |
+| `extendUp`         | Shift+Arrow Up        |
+| `extendDown`       | Shift+Arrow Down      |
+| `extendLeft`       | Shift+Arrow Left      |
+| `extendRight`      | Shift+Arrow Right     |
 | `jumpToFirst`      | Ctrl+Home             |
 | `jumpToLast`       | Ctrl+End              |
 | `jumpRowStart`     | Home                  |
@@ -217,6 +244,10 @@ Serialization is left to the caller. `DataSheetControlScheme` should implement
   database.
 - Ship pre-built scheme files (JSON) and load them at startup.
 - Let users import/export schemes through their own settings UI.
+
+`fromJson` fills an action missing from the JSON with its default binding, so
+a scheme saved before an action existed picks it up; an action saved as an
+empty list stays disabled.
 
 The package does not bundle any particular persistence mechanism — keeping the
 model serializable is enough.
