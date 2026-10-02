@@ -172,7 +172,13 @@ class _HostManagerState extends State<HostManager> {
           ),
         ),
         const SizedBox(height: 8),
-        ElevatedButton.icon(
+        // Filled, so it takes the theme's primary colors: an ElevatedButton has
+        // no theme here and fell back to Material's pale default, easy to miss
+        // beside the host rows (#2072). 48dp is the minimum touch target.
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(kMinInteractiveDimension),
+          ),
           onPressed: () => _addOrEdit(),
           icon: const Icon(QuarkIcons.add),
           label: const Text('Add Quark'),

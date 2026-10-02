@@ -172,7 +172,7 @@ class SettingsUpdatesTab extends StatelessWidget {
                   const SizedBox(height: 12),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
+                    child: FilledButton.icon(
                       onPressed: (selectedVersion == null || isUpdating)
                           ? null
                           : onUpdate,
