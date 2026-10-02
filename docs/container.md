@@ -208,6 +208,32 @@ sudo chown -R 999:999 /absolute/path/to/quark
 On Docker Desktop for macOS this does not come up — virtiofs maps ownership, so the writes just
 work.
 
+## USB drives
+
+Mounting a USB drive from the Devices page needs a privileged container:
+
+```bash
+docker run -d --name quark --restart unless-stopped --privileged \
+  -p 8080:8080 -v quark-data:/var/lib/quark ghcr.io/autobutler-org/quark:latest
+```
+
+Quark mounts a drive the way it does on a device, with `sudo mount` onto
+`/var/lib/quark/data/mounts/<serial>`. The image carries `sudo` and the same one-line sudoers rule
+`quark install` writes, which allows `mount` and `umount` under that directory and nothing else.
+Without `--privileged` the container has no `CAP_SYS_ADMIN` and no `/dev/sdX` nodes, so the mount
+fails with `permission denied`. Everything else in Quark works without it.
+
+`--privileged` gives the container root's power over the host's devices, so the container stops
+isolating Quark from the machine it runs on. Leave it off if you do not need USB drives.
+
+The `quark` user is in the image's `disk` group (gid 6), so `blkid` can read a drive's filesystem
+type and an exFAT or NTFS drive is mounted writable by Quark. Debian and Ubuntu hosts own `/dev/sd*`
+as gid 6 too. On a host where `disk` has a different gid, add it with `--group-add <gid>`.
+
+Docker copies `/dev` when the container starts, so a drive plugged in afterwards does not appear
+until `docker restart quark`. A mount lives in the container's own mount namespace: the host does
+not see it, and a restart drops it until Quark mounts the drive again.
+
 ## TLS
 
 The image sets `QUARK_INSECURE=true`, so it serves plain HTTP on `$PORT` (8080). This is the right
