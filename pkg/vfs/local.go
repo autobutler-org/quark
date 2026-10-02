@@ -213,7 +213,7 @@ func (v *LocalVFS) Write(ctx context.Context, path string, r io.Reader, opts Wri
 		}
 	}
 
-	return writeAtomic(absPath, r)
+	return storageutil.WriteFileAtomic(absPath, r)
 }
 
 // MoveFileIn places the host file at srcAbs at path, renaming it rather than
