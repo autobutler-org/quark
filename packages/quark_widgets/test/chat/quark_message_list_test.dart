@@ -1159,4 +1159,57 @@ void main() {
       expect(ChatMessageBody.linksIn(long).single.end, long.length);
     });
   });
+
+  // #2496: encryption lines and unverified lines offer a "(?)" that explains
+  // them; other system lines don't.
+  testBothViewports('encryption and unverified lines offer help', (
+    tester,
+    size,
+  ) async {
+    final asked = <String>[];
+    await pumpAt(
+      tester,
+      QuarkMessageList(
+        messages: [
+          msg('u', day2, kind: ChatMessageKind.system, isUnverified: true),
+          ChatMessageItem(
+            id: 'k',
+            authorId: 'ada',
+            authorName: 'Ada',
+            sentAt: day1.add(const Duration(minutes: 1)),
+            body: 'Ada set up encryption for this channel',
+            kind: ChatMessageKind.system,
+            isEncryptionEvent: true,
+          ),
+          msg('j', day1, kind: ChatMessageKind.system, body: 'Bob joined'),
+        ],
+        onEncryptionHelp: () => asked.add('help'),
+      ),
+      size: size,
+    );
+
+    expect(find.byKey(const ValueKey('message_help_j')), findsNothing);
+    final help = find.byKey(const ValueKey('message_help_k'));
+    expect(
+      tester.widget<IconButton>(help).tooltip,
+      QuarkMessageList.encryptionHelpTooltip,
+    );
+    await tester.tap(help);
+    await tester.tap(find.byKey(const ValueKey('message_help_u')));
+    expect(asked, ['help', 'help']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('without onEncryptionHelp no line offers help', (tester) async {
+    await pumpAt(
+      tester,
+      QuarkMessageList(
+        messages: [
+          msg('u', day2, kind: ChatMessageKind.system, isUnverified: true),
+        ],
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('message_help_u')), findsNothing);
+  });
 }

@@ -83,7 +83,8 @@ final List<ChatMessageItem> galleryChatMessages = [
     authorName: 'Ada Lovelace',
     sentAt: DateTime(2026, 9, 24, 9),
     kind: ChatMessageKind.system,
-    body: 'The channel key was rotated',
+    body: 'Ada made a new key for this channel',
+    isEncryptionEvent: true,
   ),
   ChatMessageItem(
     id: 'm3',

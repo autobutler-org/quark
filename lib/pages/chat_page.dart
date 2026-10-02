@@ -33,7 +33,13 @@ import 'package:url_launcher/url_launcher.dart';
 /// send past it (#2503).
 ///
 /// While chat is locked, on web after a reload, the page asks for the
-/// password before it shows anything else.
+/// password before it shows anything else, saying why (#2494).
+///
+/// Above the composer, a notice says where the open channel's encryption
+/// stands when it needs saying — waiting for the key, an unverified key, or
+/// older messages that stay hidden — and what to do next (#2495). It, and
+/// the "(?)" on each encryption line, explain encryption in a dialog
+/// (#2496).
 ///
 /// "New channel" creates a channel and goes to it. The channel header's
 /// settings (#2422) edit the name and topic and delete, for holders of
@@ -126,6 +132,13 @@ class _ChatPageState extends State<ChatPage>
       SnackBar(content: Text(Errors.message(error, 'delete the message'))),
     );
   }
+
+  Future<void> _explainEncryption() => showDialog<void>(
+    context: context,
+    builder: (dialogContext) => QuarkEncryptionHelpDialog(
+      onClose: () => Navigator.of(dialogContext).pop(),
+    ),
+  );
 
   void _copyMessage(String id) {
     for (final message in _controller.messageItems) {
@@ -313,6 +326,7 @@ class _ChatPageState extends State<ChatPage>
         final messagesError = channel == null
             ? c.channelsError
             : c.messagesError;
+        final encryption = c.encryptionStatus;
         return QuarkPageScaffold(
           title: 'Chat',
           icon: QuarkIcons.forum_outlined,
@@ -390,6 +404,7 @@ class _ChatPageState extends State<ChatPage>
                                 onCopy: _copyMessage,
                                 onDelete: _deleteMessage,
                                 onReact: _react,
+                                onEncryptionHelp: _explainEncryption,
                                 onOpenLink: (uri) => launchUrl(
                                   uri,
                                   mode: LaunchMode.externalApplication,
@@ -405,6 +420,13 @@ class _ChatPageState extends State<ChatPage>
                                 },
                               ),
                       ),
+                      if (encryption != null)
+                        QuarkEncryptionNotice(
+                          status: encryption,
+                          isChecking: c.isCheckingKey,
+                          onCheckAgain: c.checkKey,
+                          onLearnMore: _explainEncryption,
+                        ),
                       if (failed != null)
                         ChatFailedSendBar(
                           text: failed.text,

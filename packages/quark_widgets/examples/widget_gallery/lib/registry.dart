@@ -1439,6 +1439,33 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkEncryptionNotice',
+    group: 'Chat',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final status in ChatEncryptionStatus.values)
+          QuarkEncryptionNotice(
+            status: status,
+            onCheckAgain: () => log('QuarkEncryptionNotice.onCheckAgain'),
+            onLearnMore: () => log('QuarkEncryptionNotice.onLearnMore'),
+          ),
+        QuarkEncryptionNotice(
+          status: ChatEncryptionStatus.waitingForKey,
+          isChecking: true,
+          onCheckAgain: () => log('QuarkEncryptionNotice.onCheckAgain'),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkEncryptionHelpDialog',
+    group: 'Chat',
+    build: (context, log) => QuarkEncryptionHelpDialog(
+      onClose: () => log('QuarkEncryptionHelpDialog.onClose'),
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkMessageList',
     group: 'Chat',
     build: (context, log) => Wrap(
@@ -1459,6 +1486,7 @@ final List<GalleryEntry> registry = [
             onReact: (id, emoji) =>
                 log('QuarkMessageList.onReact($id, $emoji)'),
             onOpenLink: (uri) => log('QuarkMessageList.onOpenLink($uri)'),
+            onEncryptionHelp: () => log('QuarkMessageList.onEncryptionHelp'),
           ),
         ),
         SizedBox(

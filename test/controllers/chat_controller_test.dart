@@ -641,4 +641,136 @@ void main() {
       chat.controller.dispose();
     });
   });
+
+  group('encryption status (#2495)', () {
+    ChatTimelineSystem key(int version, {bool verified = true, int id = 3}) =>
+        ChatTimelineSystem(
+          event: ChatChannelEvent(
+            id: id,
+            channelId: 1,
+            kind: ChatChannelEvent.keyCreated,
+            actorId: 7,
+            payload: jsonEncode({'version': version}),
+            createdAt: DateTime.utc(2026, 9, 25, 9, id),
+          ),
+          isVerified: verified,
+        );
+
+    Future<FakeChat> open(List<ChatTimelineEntry> entries) async {
+      final chat = FakeChat()..entries[1] = entries;
+      chat.controller.select('general');
+      await chat.controller.refresh();
+      return chat;
+    }
+
+    test('a healthy channel has nothing to say', () async {
+      final chat = await open([
+        key(1),
+        ChatTimelineMessage(
+          message: message(1),
+          state: ChatMessageState.ready,
+          text: 'hi',
+        ),
+      ]);
+      expect(chat.controller.encryptionStatus, isNull);
+      chat.controller.dispose();
+    });
+
+    test('waiting for the key comes first', () async {
+      final chat = FakeChat()
+        ..waiting.add(1)
+        ..entries[1] = [key(1, verified: false)];
+      chat.controller.select('general');
+      await chat.controller.refresh();
+      expect(
+        chat.controller.encryptionStatus,
+        ChatEncryptionStatus.waitingForKey,
+      );
+      chat.controller.dispose();
+    });
+
+    test(
+      'an unverified current key says so; a later good one clears it',
+      () async {
+        final chat = await open([key(1), key(2, verified: false, id: 4)]);
+        expect(
+          chat.controller.encryptionStatus,
+          ChatEncryptionStatus.unverifiedKey,
+        );
+
+        chat.opened[1]!.fakeEntries = [
+          key(1),
+          key(2, verified: false, id: 4),
+          key(3, id: 5),
+        ];
+        expect(chat.controller.encryptionStatus, isNull);
+        chat.controller.dispose();
+      },
+    );
+
+    test('older messages without a key read as hidden history', () async {
+      final chat = await open([
+        ChatTimelineMessage(
+          message: message(1),
+          state: ChatMessageState.waiting,
+        ),
+        ChatTimelineMessage(
+          message: message(2),
+          state: ChatMessageState.ready,
+          text: 'new',
+        ),
+      ]);
+      expect(
+        chat.controller.encryptionStatus,
+        ChatEncryptionStatus.unreadableHistory,
+      );
+      chat.controller.dispose();
+    });
+
+    test('a manage-only channel never waits or warns', () async {
+      final chat =
+          FakeChat(
+              channels: const [
+                ChatChannel(
+                  id: 3,
+                  name: 'ops',
+                  permissions: {ChatPermission.manageMembers},
+                ),
+              ],
+            )
+            ..waiting.add(3)
+            ..entries[3] = [key(1, verified: false)];
+      chat.controller.select('3');
+      await chat.controller.refresh();
+      expect(chat.controller.encryptionStatus, isNull);
+      chat.controller.dispose();
+    });
+
+    test('key lines are marked as encryption events', () async {
+      final chat = await open([
+        key(1),
+        ChatTimelineSystem(
+          event: event(ChatChannelEvent.memberRemoved, {'name': 'bob'}),
+          isVerified: true,
+        ),
+      ]);
+      final items = chat.controller.messageItems;
+      expect(items.map((i) => i.isEncryptionEvent), [false, true]);
+      chat.controller.dispose();
+    });
+
+    test('check again asks for the key and reports while it runs', () async {
+      final chat = FakeChat()..waiting.add(1);
+      chat.controller.select('general');
+      await chat.controller.refresh();
+      chat.calls.clear();
+
+      final checking = chat.controller.checkKey();
+      expect(chat.controller.isCheckingKey, isTrue);
+      await checking;
+      expect(chat.controller.isCheckingKey, isFalse);
+      expect(chat.calls, ['ensure keys 1']);
+      chat.controller.dispose();
+    });
+  });
 }
