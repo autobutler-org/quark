@@ -22,21 +22,29 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 }
 
 const createPendingUser = `-- name: CreatePendingUser :one
-INSERT INTO users (username, password_hash, recovery_phrase_hash, status)
-VALUES (?, ?, ?, 'pending')
-RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status
+INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, status)
+VALUES (?, ?, ?, ?, ?, 'pending')
+RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash
 `
 
 type CreatePendingUserParams struct {
 	Username           string
 	PasswordHash       string
 	RecoveryPhraseHash string
+	AuthKeyHash        string
+	AuthSalt           string
 }
 
 // CreatePendingUser records an account request from the sign-in page (#1908).
 // It cannot sign in until an admin approves it.
 func (q *Queries) CreatePendingUser(ctx context.Context, arg CreatePendingUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, createPendingUser, arg.Username, arg.PasswordHash, arg.RecoveryPhraseHash)
+	row := q.db.QueryRowContext(ctx, createPendingUser,
+		arg.Username,
+		arg.PasswordHash,
+		arg.RecoveryPhraseHash,
+		arg.AuthKeyHash,
+		arg.AuthSalt,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -46,6 +54,8 @@ func (q *Queries) CreatePendingUser(ctx context.Context, arg CreatePendingUserPa
 		&i.CreatedAt,
 		&i.IsAdmin,
 		&i.Status,
+		&i.AuthSalt,
+		&i.AuthKeyHash,
 	)
 	return i, err
 }
@@ -82,19 +92,27 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (username, password_hash, recovery_phrase_hash)
-VALUES (?, ?, ?)
-RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status
+INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash
 `
 
 type CreateUserParams struct {
 	Username           string
 	PasswordHash       string
 	RecoveryPhraseHash string
+	AuthKeyHash        string
+	AuthSalt           string
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser, arg.Username, arg.PasswordHash, arg.RecoveryPhraseHash)
+	row := q.db.QueryRowContext(ctx, createUser,
+		arg.Username,
+		arg.PasswordHash,
+		arg.RecoveryPhraseHash,
+		arg.AuthKeyHash,
+		arg.AuthSalt,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -104,6 +122,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.IsAdmin,
 		&i.Status,
+		&i.AuthSalt,
+		&i.AuthKeyHash,
 	)
 	return i, err
 }
@@ -210,7 +230,7 @@ func (q *Queries) GetSession(ctx context.Context, token string) (GetSessionRow, 
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status FROM users WHERE id = ? LIMIT 1
+SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash FROM users WHERE id = ? LIMIT 1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -224,12 +244,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.CreatedAt,
 		&i.IsAdmin,
 		&i.Status,
+		&i.AuthSalt,
+		&i.AuthKeyHash,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status FROM users WHERE username = ? LIMIT 1
+SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash FROM users WHERE username = ? LIMIT 1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -243,6 +265,8 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.CreatedAt,
 		&i.IsAdmin,
 		&i.Status,
+		&i.AuthSalt,
+		&i.AuthKeyHash,
 	)
 	return i, err
 }
@@ -336,6 +360,26 @@ func (q *Queries) RenewSession(ctx context.Context, arg RenewSessionParams) erro
 	return err
 }
 
+const setAuthKeyIfUnset = `-- name: SetAuthKeyIfUnset :exec
+UPDATE users
+SET auth_key_hash = ?, auth_salt = ?
+WHERE id = ? AND auth_key_hash = ''
+`
+
+type SetAuthKeyIfUnsetParams struct {
+	AuthKeyHash string
+	AuthSalt    string
+	ID          int64
+}
+
+// SetAuthKeyIfUnset upgrades an account to an auth key on a sign-in that
+// carried both the password and the key (#2430). Only an empty hash matches,
+// so an upgraded account's key is never overwritten.
+func (q *Queries) SetAuthKeyIfUnset(ctx context.Context, arg SetAuthKeyIfUnsetParams) error {
+	_, err := q.db.ExecContext(ctx, setAuthKeyIfUnset, arg.AuthKeyHash, arg.AuthSalt, arg.ID)
+	return err
+}
+
 const setRecoveryPhraseIfUnset = `-- name: SetRecoveryPhraseIfUnset :execrows
 UPDATE users
 SET recovery_phrase_hash = ?
@@ -358,6 +402,32 @@ func (q *Queries) SetRecoveryPhraseIfUnset(ctx context.Context, arg SetRecoveryP
 	return result.RowsAffected()
 }
 
+const setUserCredentials = `-- name: SetUserCredentials :exec
+UPDATE users
+SET password_hash = ?, auth_key_hash = ?, auth_salt = ?
+WHERE id = ?
+`
+
+type SetUserCredentialsParams struct {
+	PasswordHash string
+	AuthKeyHash  string
+	AuthSalt     string
+	ID           int64
+}
+
+// SetUserCredentials replaces everything an account signs in with (#2430). A
+// recovery writes all three so that whichever of the password and the auth
+// key it did not set is cleared, and the old one stops signing in.
+func (q *Queries) SetUserCredentials(ctx context.Context, arg SetUserCredentialsParams) error {
+	_, err := q.db.ExecContext(ctx, setUserCredentials,
+		arg.PasswordHash,
+		arg.AuthKeyHash,
+		arg.AuthSalt,
+		arg.ID,
+	)
+	return err
+}
+
 const setUserStatus = `-- name: SetUserStatus :execrows
 UPDATE users
 SET status = ?1
@@ -378,20 +448,4 @@ func (q *Queries) SetUserStatus(ctx context.Context, arg SetUserStatusParams) (i
 		return 0, err
 	}
 	return result.RowsAffected()
-}
-
-const updateUserPassword = `-- name: UpdateUserPassword :exec
-UPDATE users
-SET password_hash = ?
-WHERE id = ?
-`
-
-type UpdateUserPasswordParams struct {
-	PasswordHash string
-	ID           int64
-}
-
-func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
-	return err
 }

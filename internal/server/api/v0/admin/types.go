@@ -42,7 +42,10 @@ type deleteUserResponse struct {
 // after it, so there is nothing to ask for here (#1908).
 type createUserBody struct {
 	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	// Exactly one of Password and AuthKey is sent. AuthKey is the standard
+	// base64 of the 32-byte key derived from the password (#2430).
+	Password string `json:"password,omitempty"`
+	AuthKey  string `json:"authKey,omitempty"`
 }
 
 type userSummary struct {

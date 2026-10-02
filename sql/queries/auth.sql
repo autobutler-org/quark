@@ -1,13 +1,13 @@
 -- name: CreateUser :one
-INSERT INTO users (username, password_hash, recovery_phrase_hash)
-VALUES (?, ?, ?)
+INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt)
+VALUES (?, ?, ?, ?, ?)
 RETURNING *;
 
 -- CreatePendingUser records an account request from the sign-in page (#1908).
 -- It cannot sign in until an admin approves it.
 -- name: CreatePendingUser :one
-INSERT INTO users (username, password_hash, recovery_phrase_hash, status)
-VALUES (?, ?, ?, 'pending')
+INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, status)
+VALUES (?, ?, ?, ?, ?, 'pending')
 RETURNING *;
 
 -- DeletePendingUser denies an account request. Only a pending row matches, so
@@ -39,10 +39,21 @@ UPDATE users
 SET recovery_phrase_hash = ?
 WHERE id = ? AND recovery_phrase_hash = '';
 
--- name: UpdateUserPassword :exec
+-- SetUserCredentials replaces everything an account signs in with (#2430). A
+-- recovery writes all three so that whichever of the password and the auth
+-- key it did not set is cleared, and the old one stops signing in.
+-- name: SetUserCredentials :exec
 UPDATE users
-SET password_hash = ?
+SET password_hash = ?, auth_key_hash = ?, auth_salt = ?
 WHERE id = ?;
+
+-- SetAuthKeyIfUnset upgrades an account to an auth key on a sign-in that
+-- carried both the password and the key (#2430). Only an empty hash matches,
+-- so an upgraded account's key is never overwritten.
+-- name: SetAuthKeyIfUnset :exec
+UPDATE users
+SET auth_key_hash = ?, auth_salt = ?
+WHERE id = ? AND auth_key_hash = '';
 
 -- name: CreateSession :one
 INSERT INTO sessions (token, user_id, expires_at, last_used_at)

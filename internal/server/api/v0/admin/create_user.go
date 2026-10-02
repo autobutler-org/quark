@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
@@ -17,13 +18,13 @@ import (
 
 // createUser godoc
 // @Summary Add an account
-// @Description Creates an active account with the given password. The admin never sees its recovery phrase: the account gets one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it. An existing folder of that name under users/ becomes the home, and a top-level folder of that name does not collide. Admin-only.
+// @Description Creates an active account with the given password, or with authKey in its place: the standard base64 of the 32-byte key the admin's client derived from the password and the salt GET /auth/salt returned for the new username. Exactly one of the two is sent. The admin never sees its recovery phrase: the account gets one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it. An existing folder of that name under users/ becomes the home, and a top-level folder of that name does not collide. Admin-only.
 // @Tags admin
 // @Accept json
 // @Produce json
 // @Param body body createUserBody true "The account to add"
 // @Success 201 {object} userSummary
-// @Failure 400 {object} serverutil.Response "invalid username or password"
+// @Failure 400 {object} serverutil.Response "invalid username, password or authKey"
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} serverutil.Response
 // @Failure 409 {object} serverutil.Response "that username is taken"
@@ -50,10 +51,12 @@ func createUser(c *gin.Context) *serverutil.Response {
 	}
 
 	result, err := authutil.CreateUser(c.Request.Context(), authutil.CreateUserParams{
-		Database: database,
-		Username: req.Username,
-		Password: req.Password,
-		FilesDir: filesDir,
+		Database:   database,
+		Username:   req.Username,
+		Password:   req.Password,
+		AuthKey:    req.AuthKey,
+		SaltSecret: settingsutil.AuthSaltSecret,
+		FilesDir:   filesDir,
 	})
 	if err != nil {
 		return accountErrorResponse(err)
