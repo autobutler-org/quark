@@ -56,8 +56,9 @@ LABEL org.opencontainers.image.title="Quark" \
 # and it ships whether or not the deployment ever touches video -- see docs/container.md.
 # dcraw, libimage-exiftool-perl: photoutil reads a RAW photo's embedded preview with `dcraw`, then
 # `exiftool`, and only falls back to ffmpeg when neither is installed.
+# sudo: storageutil mounts a USB drive with `sudo mount`, as it does on a device (#2515).
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates dcraw ffmpeg libimage-exiftool-perl tzdata \
+ && apt-get install -y --no-install-recommends ca-certificates dcraw ffmpeg libimage-exiftool-perl sudo tzdata \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=fetch /fetch/quark /usr/local/bin/quark
@@ -65,9 +66,17 @@ COPY --from=fetch /fetch/quark /usr/local/bin/quark
 # The user has to be named "quark": storageutil.GetDataDir() resolves to /var/lib/quark/data only
 # when user.Current().Username == "quark" (pkg/util/storageutil/dir.go). Under any other name the
 # state lands in $HOME/quark/data instead, which is not the volume declared below.
-RUN useradd --system --user-group --home-dir /var/lib/quark --shell /usr/sbin/nologin quark \
+#
+# USB drives (#2515), which only mount in a --privileged container -- see docs/container.md. The
+# sudoers rule is the mount line `quark install` writes (sudoersContent in
+# internal/install/ssh_access.go), and nothing else. The disk group lets blkid read a drive's
+# filesystem type: without it blkid prints nothing, and an exFAT drive mounts owned by root.
+RUN useradd --system --user-group --groups disk --home-dir /var/lib/quark --shell /usr/sbin/nologin quark \
  && mkdir -p /var/lib/quark/data \
- && chown -R quark:quark /var/lib/quark
+ && chown -R quark:quark /var/lib/quark \
+ && echo 'quark ALL=(root) NOPASSWD: /bin/mount * /var/lib/quark/data/mounts/*, /bin/umount /var/lib/quark/data/mounts/*' \
+      > /etc/sudoers.d/quark \
+ && chmod 0440 /etc/sudoers.d/quark
 USER quark
 
 # QUARK_INSECURE: TLS terminates at the ingress in every deployment this image targets. Unset it
