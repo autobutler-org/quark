@@ -119,7 +119,8 @@ jobs:
       - name: Setup Node
         uses: ./.github/actions/setup-node
       - name: Restore Gradle caches
-        uses: actions/cache@v6
+        id: gradle
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.gradle/caches
@@ -133,6 +134,16 @@ jobs:
       - name: Build [android]
         run: |
           make build/frontend/android
+      # Saved on main only, like the Flutter SDK in .github/actions/setup-flutter: this
+      # cache is 3 GB, and a copy saved on any other ref is one only that ref can restore.
+      - name: Save Gradle caches
+        if: github.ref == 'refs/heads/main' && steps.gradle.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ steps.gradle.outputs.cache-primary-key }}
   build-ios:
     # macOS runners bill at a multiple of Linux minutes, so this job is deliberately
     # narrow: build the App Store IPA and let check/frontend/ios/ipa verify it is a real
@@ -160,15 +171,6 @@ jobs:
         uses: ./.github/actions/setup-flutter
       - name: Setup GNU make
         uses: ./.github/actions/setup-gnu-make
-      - name: Restore CocoaPods cache
-        uses: actions/cache@v6
-        with:
-          path: |
-            ios/Pods
-            ~/Library/Caches/CocoaPods
-          key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock', 'pubspec.lock') }}
-          restore-keys: |
-            pods-${{ runner.os }}-
       # Dependabot pull requests run with the secrets withheld, so the signing material
       # is empty and a signed build is impossible however correct the branch is. The
       # job-level `if` above cannot see that: dependabot's branches live in this
