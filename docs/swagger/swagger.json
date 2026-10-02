@@ -2225,7 +2225,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns all non-expired sessions for the authenticated user. Each session is identified by the SHA-256 hash of its token — pass this ID to DELETE /auth/sessions/{id} to revoke a specific session.",
+                "description": "Returns all non-expired sessions for the authenticated user. Each session is identified by the SHA-256 hash of its token — pass this ID to DELETE /auth/sessions/{id} to revoke a specific session. The session the request was authenticated with has current=true.",
                 "produces": [
                     "application/json"
                 ],
@@ -2268,14 +2268,14 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deletes all active sessions for the authenticated user.",
+                "description": "Deletes every session of the authenticated user except the one the request was authenticated with. A request authenticated without a session (HTTP Basic) has none to keep, so every session is deleted.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "auth"
                 ],
-                "summary": "Revoke all sessions (log out everywhere)",
+                "summary": "Revoke all other sessions (sign out everywhere else)",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -9604,10 +9604,18 @@
                 "createdAt": {
                     "type": "string"
                 },
+                "current": {
+                    "description": "Current marks the session the request was authenticated with.",
+                    "type": "boolean"
+                },
                 "expiresAt": {
                     "type": "string"
                 },
                 "id": {
+                    "type": "string"
+                },
+                "lastUsedAt": {
+                    "description": "LastUsedAt is when the session last renewed itself; renewal is\ndebounced, so it can trail the newest request.",
                     "type": "string"
                 }
             }

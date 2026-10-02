@@ -117,6 +117,22 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
 	return err
 }
 
+const deleteOtherUserSessions = `-- name: DeleteOtherUserSessions :exec
+DELETE FROM sessions WHERE user_id = ? AND token != ?
+`
+
+type DeleteOtherUserSessionsParams struct {
+	UserID int64
+	Token  string
+}
+
+// "Sign out everywhere else" (#1663): every session of the user but the one
+// the request came in on.
+func (q *Queries) DeleteOtherUserSessions(ctx context.Context, arg DeleteOtherUserSessionsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteOtherUserSessions, arg.UserID, arg.Token)
+	return err
+}
+
 const deletePendingUser = `-- name: DeletePendingUser :execrows
 DELETE FROM users WHERE username = ? AND status = 'pending'
 `
@@ -232,33 +248,27 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 }
 
 const listActiveSessionsForUser = `-- name: ListActiveSessionsForUser :many
-SELECT token, user_id, expires_at, created_at
+SELECT token, user_id, expires_at, created_at, last_used_at
 FROM sessions
 WHERE user_id = ? AND expires_at > datetime('now')
 ORDER BY created_at DESC
 `
 
-type ListActiveSessionsForUserRow struct {
-	Token     string
-	UserID    int64
-	ExpiresAt time.Time
-	CreatedAt time.Time
-}
-
-func (q *Queries) ListActiveSessionsForUser(ctx context.Context, userID int64) ([]ListActiveSessionsForUserRow, error) {
+func (q *Queries) ListActiveSessionsForUser(ctx context.Context, userID int64) ([]Session, error) {
 	rows, err := q.db.QueryContext(ctx, listActiveSessionsForUser, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListActiveSessionsForUserRow
+	var items []Session
 	for rows.Next() {
-		var i ListActiveSessionsForUserRow
+		var i Session
 		if err := rows.Scan(
 			&i.Token,
 			&i.UserID,
 			&i.ExpiresAt,
 			&i.CreatedAt,
+			&i.LastUsedAt,
 		); err != nil {
 			return nil, err
 		}

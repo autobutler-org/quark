@@ -367,33 +367,39 @@ func TestRequireAuth_SetsUserIDOnContext(t *testing.T) {
 	engine := gin.New()
 	middleware.Use(engine, deps)
 	var (
-		gotID     int64
-		gotOK     bool
-		gotUser   string
-		gotUserOK bool
+		gotID      int64
+		gotOK      bool
+		gotUser    string
+		gotUserOK  bool
+		gotSession string
 	)
 	engine.GET("/api/v0/protected", func(c *gin.Context) {
 		gotID, gotOK = ctxutil.Get[int64](c, "userID")
 		gotUser, gotUserOK = ctxutil.Get[string](c, "username")
+		gotSession, _ = ctxutil.Get[string](c, "sessionID")
 		c.Status(http.StatusOK)
 	})
 
+	// A session request names its own session for the session-management
+	// handlers (#1663); Basic auth has no session to name.
+	sessionID := authutil.SessionID(result.SessionToken)
 	for _, tc := range []struct {
-		name    string
-		prepare func(*http.Request)
+		name        string
+		prepare     func(*http.Request)
+		wantSession string
 	}{
 		{"bearer token", func(r *http.Request) {
 			r.Header.Set("Authorization", "Bearer "+result.SessionToken)
-		}},
+		}, sessionID},
 		{"session cookie", func(r *http.Request) {
 			r.AddCookie(&http.Cookie{Name: "session", Value: result.SessionToken})
-		}},
+		}, sessionID},
 		{"basic auth", func(r *http.Request) {
 			r.SetBasicAuth("admin", "SecurePass1!")
-		}},
+		}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			gotID, gotOK, gotUser, gotUserOK = 0, false, "", false
+			gotID, gotOK, gotUser, gotUserOK, gotSession = 0, false, "", false, ""
 			req := httptest.NewRequest(http.MethodGet, "/api/v0/protected", nil)
 			tc.prepare(req)
 			if w := doMiddlewareReq(engine, req); w.Code != http.StatusOK {
@@ -407,6 +413,9 @@ func TestRequireAuth_SetsUserIDOnContext(t *testing.T) {
 			}
 			if !gotUserOK || gotUser != "admin" {
 				t.Errorf(`username = %q (ok=%v), want "admin"`, gotUser, gotUserOK)
+			}
+			if gotSession != tc.wantSession {
+				t.Errorf("sessionID = %q, want %q", gotSession, tc.wantSession)
 			}
 		})
 	}

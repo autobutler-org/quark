@@ -11,7 +11,7 @@ import (
 
 // listSessions godoc
 // @Summary List active sessions
-// @Description Returns all non-expired sessions for the authenticated user. Each session is identified by the SHA-256 hash of its token — pass this ID to DELETE /auth/sessions/{id} to revoke a specific session.
+// @Description Returns all non-expired sessions for the authenticated user. Each session is identified by the SHA-256 hash of its token — pass this ID to DELETE /auth/sessions/{id} to revoke a specific session. The session the request was authenticated with has current=true.
 // @Tags auth
 // @Produce json
 // @Success 200 {object} object{sessions=[]authutil.SessionInfo}
@@ -30,7 +30,10 @@ func listSessions(c *gin.Context) *serverutil.Response {
 		return serverutil.Unauthorized(fmt.Errorf("not authenticated"))
 	}
 
-	sessions, err := authutil.ListActiveSessions(c.Request.Context(), (*deps).Database().Queries, userID)
+	// Absent under HTTP Basic auth, which has no session: nothing is current.
+	sessionID, _ := ctxutil.Get[string](c, "sessionID")
+
+	sessions, err := authutil.ListActiveSessions(c.Request.Context(), (*deps).Database().Queries, userID, sessionID)
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}

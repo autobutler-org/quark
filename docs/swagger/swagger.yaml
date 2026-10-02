@@ -102,9 +102,17 @@ definitions:
     properties:
       createdAt:
         type: string
+      current:
+        description: Current marks the session the request was authenticated with.
+        type: boolean
       expiresAt:
         type: string
       id:
+        type: string
+      lastUsedAt:
+        description: |-
+          LastUsedAt is when the session last renewed itself; renewal is
+          debounced, so it can trail the newest request.
         type: string
     type: object
   chatutil.Channel:
@@ -3574,7 +3582,9 @@ paths:
       - auth
   /auth/sessions:
     delete:
-      description: Deletes all active sessions for the authenticated user.
+      description: Deletes every session of the authenticated user except the one
+        the request was authenticated with. A request authenticated without a session
+        (HTTP Basic) has none to keep, so every session is deleted.
       produces:
       - application/json
       responses:
@@ -3595,13 +3605,14 @@ paths:
             $ref: '#/definitions/serverutil.Response'
       security:
       - BearerAuth: []
-      summary: Revoke all sessions (log out everywhere)
+      summary: Revoke all other sessions (sign out everywhere else)
       tags:
       - auth
     get:
       description: Returns all non-expired sessions for the authenticated user. Each
         session is identified by the SHA-256 hash of its token — pass this ID to DELETE
-        /auth/sessions/{id} to revoke a specific session.
+        /auth/sessions/{id} to revoke a specific session. The session the request
+        was authenticated with has current=true.
       produces:
       - application/json
       responses:
