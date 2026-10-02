@@ -222,6 +222,8 @@ void main() {
       ];
       await pumpChat(tester, size, chat: fake);
 
+      await tester.tap(find.byKey(const ValueKey('message_menu_12')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('message_delete_12')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('delete_message_confirm')));

@@ -23,6 +23,7 @@ class QuarkMenuButton extends StatelessWidget {
     required this.entries,
     this.tooltip = 'More',
     this.iconSize,
+    this.visualDensity,
     super.key,
   });
 
@@ -35,12 +36,18 @@ class QuarkMenuButton extends StatelessWidget {
   /// The glyph's size, or null for the theme's.
   final double? iconSize;
 
+  /// How tightly the button is packed, or null for the standard 48 pixel
+  /// target. Material 3's `IconButton` ignores `ThemeData.visualDensity`, so a
+  /// caller that wants a compact button has to pass it here.
+  final VisualDensity? visualDensity;
+
   @override
   Widget build(BuildContext context) {
     final enabled = entries.any((e) => !e.isDivider);
     return IconButton(
       icon: const Icon(QuarkIcons.more_vert),
       iconSize: iconSize,
+      visualDensity: visualDensity,
       tooltip: tooltip,
       onPressed: enabled
           ? () => showQuarkMenu(
