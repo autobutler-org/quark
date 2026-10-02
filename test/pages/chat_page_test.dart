@@ -7,6 +7,7 @@ import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_message.dart';
 import 'package:quark/pages/chat_page.dart';
 import 'package:quark/router.dart';
+import 'package:quark/utils/chat_config.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -60,6 +61,47 @@ void main() {
         find.byKey(const ValueKey('message_composer_field')),
         findsOneWidget,
       );
+      expect(tester.takeException(), isNull);
+    });
+
+    // #2499: the pane says the channel can't be opened, at both sizes.
+    testWidgets('a link to a missing channel says so ($label)', (tester) async {
+      final (r, _) = await pumpChat(tester, size, location: '/chat/999');
+
+      expect(at(r), '/chat/999');
+      expect(find.text(Errors.chatChannelNotFound), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('message_composer_disabled')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    // #2503: the composer refuses what the Quark would refuse once
+    // encrypted.
+    testWidgets('a message past the length limit does not send ($label)', (
+      tester,
+    ) async {
+      final (_, fake) = await pumpChat(tester, size);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('message_composer_field')),
+        'x' * (ChatConfig.maxMessageLength + 1),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('message_composer_too_long')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('message_composer_send')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(fake.opened[1]!.sent, isEmpty);
       expect(tester.takeException(), isNull);
     });
 

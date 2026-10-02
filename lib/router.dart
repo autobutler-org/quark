@@ -158,6 +158,16 @@ class AppRoutes {
   static String settingsTab(SettingsTab tab) => '$settings/${tab.slug}';
   static const setup = '/setup';
   static const login = '/login';
+
+  /// The query parameter on [login] carrying the location a signed-out
+  /// visitor asked for, so signing in finishes the trip (#2500).
+  static const loginFromParam = 'from';
+
+  /// [login] remembering [from], the location a signed-out visitor asked
+  /// for. Files is where signing in lands anyway, so it isn't remembered.
+  static String loginFrom(String from) => from == files
+      ? login
+      : Uri(path: login, queryParameters: {loginFromParam: from}).toString();
   static const recover = '/recover';
 
   /// Alias for [recover]: the address people guess for password recovery
@@ -633,7 +643,9 @@ final router = GoRouter(
       builder: (context, state) {
         final params = state.uri.queryParameters;
         return LoginPage(
-          onLoginSuccess: () => context.go(AppRoutes.files),
+          onLoginSuccess: () => context.go(
+            destinationAfterSignIn(params[AppRoutes.loginFromParam]),
+          ),
           initialUsername: params['username'],
           // A password reset lands here and used to say nothing at all
           // (#2029). The query carries it rather than `extra` so the news
@@ -754,7 +766,9 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
   // and the gate re-runs and lands the user back on login.
   if (location == AppRoutes.login &&
       AppSettings.instance.sessionToken != null) {
-    return AppRoutes.files;
+    return destinationAfterSignIn(
+      state.uri.queryParameters[AppRoutes.loginFromParam],
+    );
   }
 
   // Routes reachable without a session.
@@ -802,7 +816,27 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
   final destination = await destinationForSignedOutUser();
   // /login is public, so "stay put" is a real answer here — returning the
   // location we are already at would be a redirect loop.
-  return destination == location ? null : destination;
+  if (destination == location) return null;
+  // The link they followed rides along, so signing in returns to it (#2500).
+  return destination == AppRoutes.login
+      ? AppRoutes.loginFrom(state.uri.toString())
+      : destination;
+}
+
+/// Where signing in lands: [from], the location a signed-out visitor asked
+/// for, when it is a path inside the app (#2500), and Files otherwise. Another
+/// site, a `//host` link or the login page itself all mean Files, so a crafted
+/// link can't send a fresh sign-in anywhere else.
+String destinationAfterSignIn(String? from) {
+  final uri = Uri.tryParse(from ?? '');
+  if (uri == null ||
+      uri.hasScheme ||
+      uri.hasAuthority ||
+      !uri.path.startsWith('/') ||
+      _isUnderAny({AppRoutes.login}, uri.path)) {
+    return AppRoutes.files;
+  }
+  return uri.toString();
 }
 
 /// Where a user who has accepted terms but holds no session belongs:

@@ -248,6 +248,12 @@ abstract final class Errors {
   static const String chatWaitingForKey =
       'Waiting for a member to share the key. Try again once they have.';
 
+  /// A chat link to a channel that doesn't exist, or that this account isn't
+  /// in (#2499). The Quark lists only the channels an account may open, so
+  /// the two can't be told apart.
+  static const String chatChannelNotFound =
+      "That channel doesn't exist, or you aren't in it.";
+
   /// A chat channel name another channel already has, ignoring case — what
   /// the Quark's 409 means for creating or renaming a channel (#2422).
   static const String chatChannelNameTaken =

@@ -5,9 +5,11 @@ import 'package:quark/controllers/chat_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
+import 'package:quark/utils/chat_config.dart';
 import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/chat/chat_channel_header.dart';
+import 'package:quark/widgets/chat/chat_channel_not_found.dart';
 import 'package:quark/widgets/chat/chat_failed_send_bar.dart';
 import 'package:quark/widgets/chat/chat_unlock_prompt.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
@@ -21,10 +23,14 @@ import 'package:url_launcher/url_launcher.dart';
 /// Chat, a beta (#2421): the channels the account belongs to, the open
 /// channel's messages and composer, and its members.
 ///
-/// [channelId] comes from `/chat/:channelId`. An id the account can't open,
-/// and `general`, open the default channel, and the URL follows the channel
-/// actually open, so a reload or a shared link lands on it. Picking a channel
-/// moves with `context.go`.
+/// [channelId] comes from `/chat/:channelId`. `general` opens the default
+/// channel, and the URL follows the channel actually open, so a reload or a
+/// shared link lands on it. An id the account can't open says so in place of
+/// the messages and keeps its URL (#2499). Picking a channel moves with
+/// `context.go`.
+///
+/// The composer counts down near [ChatConfig.maxMessageLength] and won't
+/// send past it (#2503).
 ///
 /// While chat is locked, on web after a reload, the page asks for the
 /// password before it shows anything else.
@@ -358,40 +364,46 @@ class _ChatPageState extends State<ChatPage>
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
-                        child: QuarkMessageList(
-                          messages: c.messageItems,
-                          isLoading:
-                              c.isLoadingMessages ||
-                              (channel == null && c.isLoadingChannels),
-                          error: messagesError == null
-                              ? null
-                              : Errors.message(
-                                  messagesError,
-                                  'load the channel',
+                        child: c.isChannelMissing
+                            ? ChatChannelNotFound(
+                                onOpenGeneral: () => _openChannel(
+                                  ChatController.defaultChannelSlug,
                                 ),
-                          hasMore: c.hasOlderMessages,
-                          onLoadOlder: c.loadOlder,
-                          permissions: channel == null
-                              ? null
-                              : c.selectedPermissions,
-                          currentUserId: c.currentUserKey,
-                          onCopy: _copyMessage,
-                          onDelete: _deleteMessage,
-                          onReact: _react,
-                          onOpenLink: (uri) => launchUrl(
-                            uri,
-                            mode: LaunchMode.externalApplication,
-                          ),
-                          avatarBuilder: (context, userId) {
-                            final id = int.tryParse(userId) ?? 0;
-                            return UserAvatar(
-                              userId: id,
-                              name: c.nameOf(id),
-                              version: c.avatarVersionOf(id),
-                              size: QuarkMessageList.avatarSize,
-                            );
-                          },
-                        ),
+                              )
+                            : QuarkMessageList(
+                                messages: c.messageItems,
+                                isLoading:
+                                    c.isLoadingMessages ||
+                                    (channel == null && c.isLoadingChannels),
+                                error: messagesError == null
+                                    ? null
+                                    : Errors.message(
+                                        messagesError,
+                                        'load the channel',
+                                      ),
+                                hasMore: c.hasOlderMessages,
+                                onLoadOlder: c.loadOlder,
+                                permissions: channel == null
+                                    ? null
+                                    : c.selectedPermissions,
+                                currentUserId: c.currentUserKey,
+                                onCopy: _copyMessage,
+                                onDelete: _deleteMessage,
+                                onReact: _react,
+                                onOpenLink: (uri) => launchUrl(
+                                  uri,
+                                  mode: LaunchMode.externalApplication,
+                                ),
+                                avatarBuilder: (context, userId) {
+                                  final id = int.tryParse(userId) ?? 0;
+                                  return UserAvatar(
+                                    userId: id,
+                                    name: c.nameOf(id),
+                                    version: c.avatarVersionOf(id),
+                                    size: QuarkMessageList.avatarSize,
+                                  );
+                                },
+                              ),
                       ),
                       if (failed != null)
                         ChatFailedSendBar(
@@ -414,6 +426,7 @@ class _ChatPageState extends State<ChatPage>
                             : c.selectedPermissions,
                         isWaitingForKey: c.isWaitingForKey,
                         disabledReason: c.composerDisabledReason,
+                        maxLength: ChatConfig.maxMessageLength,
                         onSend: c.send,
                       ),
                     ],
