@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide DataTable, DataRow, DataCell;
 import 'package:flutter/services.dart';
@@ -12,12 +14,17 @@ import 'cell/heading/heading_cells.dart'
         RowNumberCell,
         kDefaultColumnWidth,
         kDefaultRowHeight,
-        kGutterWidth;
+        kFrozenDividerThickness,
+        kGutterWidth,
+        kHeaderHeight,
+        kMaxFrozenFraction;
 import 'cell/heading/util.dart';
 import 'data_sheet_control_scheme.dart';
 import 'data_sheet_controller.dart';
 import 'formula_bar.dart';
 import 'selection_gestures.dart';
+import 'view/frozen_pane_divider.dart';
+import 'view/linked_scroll_controllers.dart';
 
 /// A spreadsheet grid over a `DataSheetController`: scrolling, selection, inline editing, and resizable rows and
 /// columns.
@@ -28,8 +35,20 @@ import 'selection_gestures.dart';
 /// are tinted from the theme's primary color (which `QuarkTheme` derives from
 /// `QuarkTokens.primary`), and the anchor keeps the strong outline.
 ///
-/// Keys: cells are `r<row>c<col>`, column headers `col_header_<col>`, and row
-/// numbers `row_num_<row>`.
+/// Drag a column header's right edge or a row number's bottom edge to resize
+/// it, and double-click the edge to fit the content. A selected header's edge
+/// grows a touch-sized grip, so on a phone: tap the header, then drag the
+/// grip. Every resize is one undo step.
+///
+/// The controller's `frozenRows` and `frozenColumns` pin that many rows and
+/// columns, with the column headers and row numbers, while the rest scrolls;
+/// a divider in the theme's outline color marks the edge. Frozen panes never
+/// cover more than [kMaxFrozenFraction] of the grid.
+///
+/// Keys: cells are `r<row>c<col>`, column headers `col_header_<col>`, row
+/// numbers `row_num_<row>`, resize handles `col_resize_<col>` and
+/// `row_resize_<row>`, and the freeze dividers `frozen_rows_divider` and
+/// `frozen_columns_divider`.
 class DataSheet extends StatelessWidget {
   final DataTable table;
 
@@ -133,8 +152,14 @@ class _DataSheetViewState extends State<_DataSheetView> {
   late final FocusNode keyboardFocus;
   late final DataSheetController controller;
   late final bool _ownsController;
-  final ScrollController _horizontalScrollController = ScrollController();
-  final ScrollController _verticalScrollController = ScrollController();
+
+  /// The header strip (first) and the body (second), scrolled sideways
+  /// together.
+  final LinkedScrollControllers _horizontalScroll = LinkedScrollControllers();
+
+  /// The frozen columns (first) and the body (second), scrolled up and down
+  /// together.
+  final LinkedScrollControllers _verticalScroll = LinkedScrollControllers();
   final GlobalKey _gridBodyKey = GlobalKey();
   String _priorCellValue = '';
   List<List<String>>? _clipboard;
@@ -164,8 +189,8 @@ class _DataSheetViewState extends State<_DataSheetView> {
   @override
   void dispose() {
     keyboardFocus.dispose();
-    _horizontalScrollController.dispose();
-    _verticalScrollController.dispose();
+    _horizontalScroll.dispose();
+    _verticalScroll.dispose();
     controller.removeListener(_onControllerChanged);
     if (_ownsController) controller.dispose();
     super.dispose();
@@ -429,88 +454,184 @@ class _DataSheetViewState extends State<_DataSheetView> {
         }
         return KeyEventResult.ignored;
       },
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return ListenableBuilder(
-            listenable: controller,
-            builder: (context, _) {
-              final totalW = _totalContentWidth();
-              final scrollW =
-                  totalW < constraints.maxWidth ? constraints.maxWidth : totalW;
-              return Column(
-                children: [
-                  // ── Formula bar ─────────────────────────────────────
-                  if (widget.showFormulaBar)
-                    DataSheetFormulaBar(controller: controller),
-                  // ── Scrollable grid ─────────────────────────────────
-                  Expanded(
-                    child: Listener(
-                      // Intercept horizontal pointer scroll events and
-                      // consume them via the PointerSignalResolver so the
-                      // browser never sees them as back/forward navigation
-                      // gestures (macOS trackpad two-finger swipe).
-                      onPointerSignal: (PointerSignalEvent event) {
-                        if (event is PointerScrollEvent &&
-                            event.scrollDelta.dx != 0) {
-                          GestureBinding.instance.pointerSignalResolver
-                              .register(event, (PointerSignalEvent e) {
-                            final dx = (e as PointerScrollEvent).scrollDelta.dx;
-                            if (!_horizontalScrollController.hasClients) {
-                              return;
-                            }
-                            final pos = _horizontalScrollController.position;
-                            final next = (pos.pixels + dx).clamp(
-                              0.0,
-                              pos.maxScrollExtent,
-                            );
-                            _horizontalScrollController.jumpTo(next);
-                          });
-                        }
-                      },
-                      child: SingleChildScrollView(
-                        controller: _horizontalScrollController,
-                        scrollDirection: Axis.horizontal,
-                        child: SizedBox(
-                          width: scrollW,
-                          child: Column(
-                            children: [
-                              // ── Column header row ─────────────────────
-                              if (widget.showHeadings) _buildHeaderRow(),
-                              // ── Data rows ─────────────────────────────
-                              Expanded(
-                                child: DataSheetSelectionGestures(
-                                  enabled: activeRow < 0,
-                                  cellAt: _cellAtGlobal,
-                                  onRangeStart: _startRange,
-                                  onRangeExtend: _extendRangeTo,
-                                  child: ListView.builder(
-                                    key: _gridBodyKey,
-                                    controller: _verticalScrollController,
-                                    itemCount: controller.rowCount,
-                                    itemBuilder: (context, r) {
-                                      return ValueListenableBuilder<
-                                          List<DataCell>>(
-                                        valueListenable: controller.rowNotifier(
-                                          r,
-                                        ),
-                                        builder: (context, rowCells, _) =>
-                                            _buildDataRow(context, r, rowCells),
-                                      );
-                                    },
-                                  ),
+      child: ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) {
+          return Column(
+            children: [
+              // ── Formula bar ─────────────────────────────────────────
+              if (widget.showFormulaBar)
+                DataSheetFormulaBar(controller: controller),
+              // ── Grid ────────────────────────────────────────────────
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) =>
+                      _buildGrid(context, constraints.biggest),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// The grid in four panes: frozen corner, frozen rows, frozen columns, and
+  /// the body, which scrolls both ways and carries the frozen rows sideways
+  /// and the frozen columns up and down with it.
+  Widget _buildGrid(BuildContext context, Size size) {
+    final fr = controller.frozenRows;
+    final fc = controller.frozenColumns;
+    final rows = controller.rowCount;
+    final cols = controller.colCount;
+    final fullLeft = _gutterWidth + _span(0, fc, _colWidth);
+    final fullTop = _headerHeight + _span(0, fr, _rowHeight);
+    final (:left, :top) = _frozenExtent(size);
+    final rightWidth = math.max(_span(fc, cols, _colWidth), size.width - left);
+
+    // A frozen pane wider or taller than its share of the grid is clipped.
+    Widget clipWidth(Widget child) => SizedBox(
+          width: left,
+          child: ClipRect(
+            child: OverflowBox(
+              alignment: Alignment.topLeft,
+              minWidth: fullLeft,
+              maxWidth: fullLeft,
+              child: child,
+            ),
+          ),
+        );
+
+    Widget row(int r, {required bool frozenSide}) =>
+        ValueListenableBuilder<List<DataCell>>(
+          valueListenable: controller.rowNotifier(r),
+          builder: (context, rowCells, _) => frozenSide
+              ? _buildDataRow(context, r, rowCells, 0, fc, gutter: true)
+              : _buildDataRow(context, r, rowCells, fc, cols),
+        );
+
+    return Listener(
+      // Intercept horizontal pointer scroll events and consume them via the
+      // PointerSignalResolver so the browser never sees them as back/forward
+      // navigation gestures (macOS trackpad two-finger swipe).
+      onPointerSignal: (PointerSignalEvent event) {
+        if (event is PointerScrollEvent && event.scrollDelta.dx != 0) {
+          GestureBinding.instance.pointerSignalResolver.register(event, (
+            PointerSignalEvent e,
+          ) {
+            final dx = (e as PointerScrollEvent).scrollDelta.dx;
+            final body = _horizontalScroll.second;
+            if (!body.hasClients) return;
+            final pos = body.position;
+            body.jumpTo((pos.pixels + dx).clamp(0.0, pos.maxScrollExtent));
+          });
+        }
+      },
+      child: Stack(
+        children: [
+          DataSheetSelectionGestures(
+            enabled: activeRow < 0,
+            cellAt: _cellAtGlobal,
+            onRangeStart: _startRange,
+            onRangeExtend: _extendRangeTo,
+            child: Column(
+              key: _gridBodyKey,
+              children: [
+                // ── Column headers and frozen rows ──────────────────
+                SizedBox(
+                  height: top,
+                  child: ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.topLeft,
+                      minHeight: fullTop,
+                      maxHeight: fullTop,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          clipWidth(
+                            Column(
+                              children: [
+                                if (widget.showHeadings)
+                                  _buildHeaderRow(0, fc, corner: true),
+                                for (var r = 0; r < fr; r++)
+                                  row(r, frozenSide: true),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              controller: _horizontalScroll.first,
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: rightWidth,
+                                child: Column(
+                                  children: [
+                                    if (widget.showHeadings)
+                                      _buildHeaderRow(fc, cols),
+                                    for (var r = 0; r < fr; r++)
+                                      row(r, frozenSide: false),
+                                  ],
                                 ),
                               ),
-                            ],
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
-                ],
-              );
-            },
-          );
-        },
+                ),
+                // ── Row numbers, frozen columns, and the body ───────
+                Expanded(
+                  child: Row(
+                    children: [
+                      clipWidth(
+                        ListView.builder(
+                          controller: _verticalScroll.first,
+                          itemCount: rows - fr,
+                          itemBuilder: (context, i) =>
+                              row(fr + i, frozenSide: true),
+                        ),
+                      ),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          controller: _horizontalScroll.second,
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: rightWidth,
+                            child: ListView.builder(
+                              controller: _verticalScroll.second,
+                              itemCount: rows - fr,
+                              itemBuilder: (context, i) =>
+                                  row(fr + i, frozenSide: false),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (fr > 0)
+            Positioned(
+              key: const ValueKey('frozen_rows_divider'),
+              left: 0,
+              right: 0,
+              top: top - kFrozenDividerThickness / 2,
+              height: kFrozenDividerThickness,
+              child: const FrozenPaneDivider(axis: Axis.horizontal),
+            ),
+          if (fc > 0)
+            Positioned(
+              key: const ValueKey('frozen_columns_divider'),
+              top: 0,
+              bottom: 0,
+              left: left - kFrozenDividerThickness / 2,
+              width: kFrozenDividerThickness,
+              child: const FrozenPaneDivider(axis: Axis.vertical),
+            ),
+        ],
       ),
     );
   }
@@ -527,6 +648,32 @@ class _DataSheetViewState extends State<_DataSheetView> {
       ? controller.rowHeights[r]
       : kDefaultRowHeight;
 
+  double get _gutterWidth => widget.showHeadings ? kGutterWidth : 0.0;
+
+  double get _headerHeight => widget.showHeadings ? kHeaderHeight : 0.0;
+
+  /// The total of [size] over indexes [from] (inclusive) to [to] (exclusive).
+  double _span(int from, int to, double Function(int) size) {
+    var total = 0.0;
+    for (var i = from; i < to; i++) {
+      total += size(i);
+    }
+    return total;
+  }
+
+  /// How far the frozen panes reach into a grid of [size]: the left edge of
+  /// the scrolling columns and the top edge of the scrolling rows.
+  ({double left, double top}) _frozenExtent(Size size) => (
+        left: math.min(
+          _gutterWidth + _span(0, controller.frozenColumns, _colWidth),
+          size.width * kMaxFrozenFraction,
+        ),
+        top: math.min(
+          _headerHeight + _span(0, controller.frozenRows, _rowHeight),
+          size.height * kMaxFrozenFraction,
+        ),
+      );
+
   /// The cell under [global], clamped to the sheet's edges so a drag past
   /// the last row or column selects up to it.
   ({int row, int col})? _cellAtGlobal(Offset global) {
@@ -535,42 +682,69 @@ class _DataSheetViewState extends State<_DataSheetView> {
       return null;
     }
     final local = box.globalToLocal(global);
-    final scrollY = _verticalScrollController.hasClients
-        ? _verticalScrollController.offset
-        : 0.0;
-    int indexAt(double pos, int count, double Function(int) size) {
-      var edge = 0.0;
-      for (var i = 0; i < count; i++) {
+    final (:left, :top) = _frozenExtent(box.size);
+    double offset(ScrollController c) => c.hasClients ? c.offset : 0.0;
+
+    // Before [paneEnd] a position falls in the frozen pane, measured from
+    // [lead]; past it, in the scrolling pane, shifted by [scroll].
+    int indexAt(
+      double pos, {
+      required double paneEnd,
+      required double lead,
+      required int frozen,
+      required int count,
+      required double scroll,
+      required double Function(int) size,
+    }) {
+      final inFrozen = frozen > 0 && pos < paneEnd || frozen == count;
+      final from = inFrozen ? 0 : frozen;
+      final to = inFrozen ? frozen : count;
+      var edge = inFrozen ? lead : paneEnd - scroll;
+      for (var i = from; i < to; i++) {
         edge += size(i);
         if (pos < edge) return i;
       }
-      return count - 1;
+      return to - 1;
     }
 
-    final gutterW = widget.showHeadings ? kGutterWidth : 0.0;
     return (
-      row: indexAt(local.dy + scrollY, controller.rowCount, _rowHeight),
-      col: indexAt(local.dx - gutterW, controller.colCount, _colWidth),
+      row: indexAt(
+        local.dy,
+        paneEnd: top,
+        lead: _headerHeight,
+        frozen: controller.frozenRows,
+        count: controller.rowCount,
+        scroll: offset(_verticalScroll.second),
+        size: _rowHeight,
+      ),
+      col: indexAt(
+        local.dx,
+        paneEnd: left,
+        lead: _gutterWidth,
+        frozen: controller.frozenColumns,
+        count: controller.colCount,
+        scroll: offset(_horizontalScroll.second),
+        size: _colWidth,
+      ),
     );
   }
 
-  double _totalContentWidth() {
-    final gutterW = widget.showHeadings ? kGutterWidth : 0.0;
-    return gutterW + controller.columnWidths.fold(0.0, (acc, w) => acc + w);
-  }
-
-  Widget _buildHeaderRow() {
+  /// Column headers [from] (inclusive) to [to] (exclusive), led by the corner
+  /// cell when [corner].
+  Widget _buildHeaderRow(int from, int to, {bool corner = false}) {
     return Row(
       children: [
-        HeaderCornerCell(),
-        ...List.generate(controller.colCount, (c) {
-          return SizedBox(
+        if (corner) const HeaderCornerCell(),
+        for (var c = from; c < to; c++)
+          SizedBox(
             width: _colWidth(c),
             child: ColumnHeaderCell(
               key: ValueKey('col_header_$c'),
+              resizeHandleKey: ValueKey('col_resize_$c'),
               label: columnLabel(c),
               isSelected: controller.selection.range?.containsCol(c) ?? false,
               onSelect: () => _selectColumn(c),
+              onResizeStart: controller.beginResize,
               onResizeDelta: (delta) {
                 controller.setColumnWidth(c, _colWidth(c) + delta);
               },
@@ -579,23 +753,33 @@ class _DataSheetViewState extends State<_DataSheetView> {
                 textStyle: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
-          );
-        }),
+          ),
       ],
     );
   }
 
-  Widget _buildDataRow(BuildContext context, int r, List<DataCell> rowCells) {
+  /// Row [r]'s cells [from] (inclusive) to [to] (exclusive), led by its row
+  /// number when [gutter] and headings are shown.
+  Widget _buildDataRow(
+    BuildContext context,
+    int r,
+    List<DataCell> rowCells,
+    int from,
+    int to, {
+    bool gutter = false,
+  }) {
     final rowHeight = _rowHeight(r);
     return Row(
       children: [
-        if (widget.showHeadings)
+        if (gutter && widget.showHeadings)
           RowNumberCell(
             key: ValueKey('row_num_$r'),
+            resizeHandleKey: ValueKey('row_resize_$r'),
             number: r + 1,
             height: rowHeight,
             isSelected: controller.selection.range?.containsRow(r) ?? false,
             onSelect: () => _selectRow(r),
+            onResizeStart: controller.beginResize,
             onResizeDelta: (delta) {
               controller.setRowHeight(r, rowHeight + delta);
             },
@@ -604,7 +788,8 @@ class _DataSheetViewState extends State<_DataSheetView> {
               textStyle: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
-        ...List.generate(rowCells.length, (c) {
+        ...List.generate(math.min(to, rowCells.length) - from, (i) {
+          final c = from + i;
           final isActiveCell = (r == activeRow && c == activeCol);
           final isHighlightedCell =
               (r == highlightedRow && c == highlightedCol);

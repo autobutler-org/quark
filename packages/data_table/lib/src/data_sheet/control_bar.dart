@@ -2,6 +2,7 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:flutter/material.dart' hide Icons;
 
 import 'data_sheet_controller.dart';
+import 'freeze_menu_button.dart';
 
 // ---------------------------------------------------------------------------
 // Public widget
@@ -201,6 +202,9 @@ class DataSheetControlBar extends StatelessWidget {
                         : null,
                   ),
                 ]),
+                const _Divider(),
+                // ── View ───────────────────────────────────────────────────
+                DataSheetFreezeMenuButton(controller: controller),
                 const _Divider(),
                 // ── Import / Export ────────────────────────────────────────
                 _group([

@@ -126,6 +126,10 @@ class QuarkIcons {
   /// Navigate to a specific cell — input/submit arrow reads as 'go to'.
   static const IconData go_to_cell = Icons.input;
 
+  // ── View ─────────────────────────────────────────────────────────────────────────
+  /// Freeze header rows and columns — a snowflake reads as "frozen".
+  static const IconData freeze_panes = Icons.ac_unit;
+
   // ── Import / Export ────────────────────────────────────────────────────────────────
   /// Export data as a CSV file.
   static const IconData export_csv = Icons.file_download;

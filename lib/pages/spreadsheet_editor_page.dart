@@ -42,8 +42,7 @@ class _SheetTab {
   Map<String, dynamic> toJson() => {
     'name': name,
     'data': table.toJson(),
-    'columnWidths': controller.columnWidths,
-    'rowHeights': controller.rowHeights,
+    ...controller.layoutToJson(),
   };
 }
 
@@ -170,17 +169,9 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     if (table.rows.isEmpty) {
       table.rows.add(DataRow([DataCell('')]));
     }
-    final columnWidths = (tabMap['columnWidths'] as List<dynamic>?)
-        ?.map((v) => (v as num).toDouble())
-        .toList();
-    final rowHeights = (tabMap['rowHeights'] as List<dynamic>?)
-        ?.map((v) => (v as num).toDouble())
-        .toList();
-    final controller = DataSheetController.fromTable(
-      table,
-      columnWidths: columnWidths,
-      rowHeights: rowHeights,
-    );
+    // Sizes and freeze sit beside the data; older sheets without them load
+    // with the defaults.
+    final controller = DataSheetController.fromLayoutJson(table, tabMap);
     return _SheetTab(name: name, table: table, controller: controller);
   }
 
