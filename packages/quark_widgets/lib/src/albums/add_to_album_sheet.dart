@@ -17,8 +17,14 @@ import '../theme/quark_tokens.dart';
 /// With no albums to list, the sheet offers to make one rather than telling
 /// the user to go and do it somewhere else (#2041) — pass [onCreateAlbum].
 ///
+/// A tap adds or removes at once and the sheet stays open, so the list ends
+/// in a labeled Done for the user to say they are finished (#2590) — pass
+/// [onDone], which usually pops the sheet. The header's close button stays as
+/// the way to dismiss it.
+///
 /// Key prefix: `add_to_album_<id>` on each album row, plus
-/// `add_to_album_create` on the create action.
+/// `add_to_album_create` on the create action and `add_to_album_done` on
+/// Done.
 ///
 /// ```dart
 /// showQuarkSheet<void>(
@@ -28,6 +34,7 @@ import '../theme/quark_tokens.dart';
 ///     albums: albums,
 ///     memberAlbumIds: memberIds,
 ///     onToggle: toggleMembership,
+///     onDone: () => Navigator.of(context).pop(),
 ///   ),
 /// );
 /// ```
@@ -40,6 +47,7 @@ class AddToAlbumSheet extends StatelessWidget {
     this.isLoading = false,
     this.error,
     this.onCreateAlbum,
+    this.onDone,
     super.key,
   });
 
@@ -61,6 +69,10 @@ class AddToAlbumSheet extends StatelessWidget {
   /// Makes a new album to add this photo to. Null leaves the empty state as
   /// copy, for a caller that cannot create one.
   final VoidCallback? onCreateAlbum;
+
+  /// Called when the user taps Done, having finished choosing. Null leaves
+  /// the button out.
+  final VoidCallback? onDone;
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +134,15 @@ class AddToAlbumSheet extends StatelessWidget {
             subtitle: Text(album.photoCountLabel),
             onTap: () => onToggle(album),
           ),
+        if (onDone != null) ...[
+          SizedBox(height: tokens.spacingMd),
+          FilledButton.icon(
+            key: const ValueKey('add_to_album_done'),
+            onPressed: onDone,
+            icon: const Icon(QuarkIcons.check_rounded, size: 18),
+            label: const Text('Done'),
+          ),
+        ],
       ],
     );
   }

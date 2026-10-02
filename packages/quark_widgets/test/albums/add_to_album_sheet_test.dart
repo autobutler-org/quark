@@ -118,4 +118,48 @@ void main() {
     expect(find.text('1 photo'), findsOneWidget);
     expect(find.text('4 photos'), findsOneWidget);
   });
+
+  /// #2590: a tap adds or removes at once and the sheet stays open, so with
+  /// only a close X and the scrim there was no clear way to say "finished".
+  testBothViewports('ends with a labeled Done', (tester, size) async {
+    var done = 0;
+    await pumpInSheet(
+      tester,
+      AddToAlbumSheet(
+        albums: _albums,
+        memberAlbumIds: const {2},
+        onToggle: (_) {},
+        onDone: () => done++,
+      ),
+      size: size,
+    );
+
+    final button = find.byKey(const ValueKey('add_to_album_done'));
+    expect(tester.takeException(), isNull);
+    expect(
+      find.descendant(of: button, matching: find.text('Done')),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    expect(done, 1);
+  });
+
+  testWidgets('no Done while loading, or without onDone', (tester) async {
+    await pumpInSheet(
+      tester,
+      AddToAlbumSheet(
+        albums: _albums,
+        memberAlbumIds: const {},
+        onToggle: (_) {},
+        onDone: () {},
+        isLoading: true,
+      ),
+      size: narrowViewport,
+    );
+    expect(find.byKey(const ValueKey('add_to_album_done')), findsNothing);
+
+    await pumpSheet(tester, size: narrowViewport);
+    expect(find.byKey(const ValueKey('add_to_album_done')), findsNothing);
+  });
 }

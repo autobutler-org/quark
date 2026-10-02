@@ -515,6 +515,17 @@ class PhotosController extends ChangeNotifier {
     return id == null ? null : albumById(id);
   }
 
+  /// The showing album's own sub-albums in [albums] order, for the top of
+  /// its view (#2591), or none for All photos.
+  List<AlbumItem> get subAlbums {
+    final id = selectedAlbumId;
+    if (id == null) return const [];
+    for (final (album, _) in AlbumItem.depthFirst(albums)) {
+      if (album.id == id) return album.children;
+    }
+    return const [];
+  }
+
   /// Whether the showing album's items are on their way.
   bool get albumLoading =>
       _showsAlbum && _albumItems == null && _albumError == null;

@@ -12,6 +12,7 @@ export 'src/albums/add_to_album_sheet.dart';
 export 'src/albums/album_picker_sheet.dart';
 export 'src/albums/album_sidebar.dart';
 export 'src/albums/album_tree_tile.dart';
+export 'src/albums/sub_album_strip.dart';
 export 'src/calendar/calendar_dates.dart';
 export 'src/calendar/calendar_event_chip.dart';
 export 'src/calendar/calendar_event_editor.dart';

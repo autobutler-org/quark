@@ -786,6 +786,10 @@ class PhotosPageState extends State<PhotosPage>
                             ),
                           ),
                           slivers: [
+                            SubAlbumStrip(
+                              albums: c.subAlbums,
+                              onSelected: (item) => _showAlbum(item.id),
+                            ),
                             PhotoGrid(
                               photos: photos,
                               sections: c.photoSections,
