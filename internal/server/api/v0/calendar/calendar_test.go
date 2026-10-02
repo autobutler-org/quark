@@ -165,6 +165,40 @@ func TestEventRequestErrors(t *testing.T) {
 	}
 }
 
+// TestEventBindErrors checks a body that cannot be read says why, rather than
+// always blaming missing times (#2537).
+func TestEventBindErrors(t *testing.T) {
+	engine, _ := newCalendarEngine(t)
+	const times = `"title":"x","start":"2026-09-29T12:00:00Z","end":"2026-09-29T13:00:00Z"`
+	tests := []struct{ name, body, want string }{
+		{"a string color", `{` + times + `,"colorIndex":"2"}`, "colorIndex must be a whole number"},
+		{"a fractional color", `{` + times + `,"colorIndex":2.5}`, "colorIndex must be a whole number"},
+		{"a boolean color", `{` + times + `,"colorIndex":true}`, "colorIndex must be a whole number"},
+		{"a fractional reminder", `{` + times + `,"reminderMinutes":30.7}`, "reminderMinutes must be a whole number"},
+		{"a string all-day flag", `{` + times + `,"allDay":"true"}`, "allDay must be true or false"},
+		{"a numeric title", `{"title":7,"start":"2026-09-29T12:00:00Z","end":"2026-09-29T13:00:00Z"}`, "title must be a string"},
+		{"not JSON", `{"title":`, "the body must be a JSON event"},
+		{"no end", `{"title":"x","start":"2026-09-29T12:00:00Z"}`, "start and end are required"},
+	}
+	for _, tt := range tests {
+		for _, method := range []string{http.MethodPost, http.MethodPut} {
+			t.Run(method+" "+tt.name, func(t *testing.T) {
+				path := "/api/v0/calendar/events"
+				if method == http.MethodPut {
+					path += "/1"
+				}
+				w := do(engine, method, path, tt.body)
+				if w.Code != http.StatusBadRequest {
+					t.Fatalf("%s = %d %s, want 400", method, w.Code, w.Body.String())
+				}
+				if got := decode[map[string]any](t, w)["error"]; got != tt.want {
+					t.Errorf("error = %q, want %q", got, tt.want)
+				}
+			})
+		}
+	}
+}
+
 func TestEventOwnerFields(t *testing.T) {
 	database := dbtest.NewDB(t)
 	ctx := context.Background()

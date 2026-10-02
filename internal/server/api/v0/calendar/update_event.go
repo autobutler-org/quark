@@ -1,8 +1,6 @@
 package v0_calendar
 
 import (
-	"errors"
-
 	"github.com/autobutler-org/quark/pkg/util/calendarutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
@@ -31,7 +29,7 @@ func updateEvent(c *gin.Context) *serverutil.Response {
 	}
 	var req eventRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		return serverutil.BadRequest(errors.New("start and end are required"))
+		return serverutil.BadRequest(bindError(err))
 	}
 	input, err := toInput(req)
 	if err != nil {

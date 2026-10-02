@@ -173,9 +173,11 @@ type ListEventsResult struct {
 }
 
 // ListEvents lists the one-off events overlapping [From, To) and every
-// repeating event whose series starts before To. The range is widened by a
-// day each way so an all-day event, whose date means midnight wherever it is
-// read, is not missed at the edges; the app narrows it again.
+// repeating event with an occurrence there, however long ago its series began
+// (#2535). The range is widened by a day each way so an all-day event, whose
+// date means midnight wherever it is read, is not missed at the edges, and so
+// a series the app expands in local time is not missed either; the app
+// narrows it again.
 func ListEvents(ctx context.Context, params ListEventsParams) (ListEventsResult, error) {
 	if !params.To.After(params.From) {
 		return ListEventsResult{}, invalid("the range must end after it starts")
@@ -187,10 +189,11 @@ func ListEvents(ctx context.Context, params ListEventsParams) (ListEventsResult,
 	if err != nil {
 		return ListEventsResult{}, err
 	}
+	from, to := params.From.Add(-24*time.Hour), params.To.Add(24*time.Hour)
 	rows, err := params.Queries.ListCalendarEventsInRange(ctx, db.ListCalendarEventsInRangeParams{
 		CalendarID: calendar.ID,
-		RangeStart: formatTime(params.From.Add(-24 * time.Hour)),
-		RangeEnd:   formatTime(params.To.Add(24 * time.Hour)),
+		RangeStart: formatTime(from),
+		RangeEnd:   formatTime(to),
 	})
 	if err != nil {
 		return ListEventsResult{}, err
@@ -200,6 +203,9 @@ func ListEvents(ctx context.Context, params ListEventsParams) (ListEventsResult,
 		event, err := fromRow(row.CalendarEvent, row.OwnerName)
 		if err != nil {
 			return ListEventsResult{}, err
+		}
+		if !occursIn(event, from, to) {
+			continue
 		}
 		events = append(events, event)
 	}

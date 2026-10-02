@@ -95,6 +95,60 @@ func repeatInterval(repeat Repeat) (time.Duration, bool) {
 	}
 }
 
+// occursIn reports whether an occurrence of e overlaps [from, to). The
+// occurrences are stepped in UTC, where the app steps them in local time: a
+// daylight saving change moves one by an hour or two, which the caller's
+// day of padding absorbs. A one-off event is its own only occurrence.
+func occursIn(e Event, from, to time.Time) bool {
+	length := e.End.Sub(e.Start)
+	overlaps := func(start time.Time) bool {
+		return start.Before(to) && start.Add(length).After(from)
+	}
+	switch e.Repeat {
+	case RepeatDaily, RepeatWeekly:
+		step, _ := repeatInterval(e.Repeat)
+		// Skip whole steps that end before from; an occurrence is never
+		// longer than its step, so the next two decide it.
+		k := time.Duration(0)
+		if behind := from.Sub(e.Start) - length; behind > 0 {
+			k = behind / step
+		}
+		start := e.Start.Add(k * step)
+		return overlaps(start) || overlaps(start.Add(step))
+	case RepeatMonthly:
+		// Start a month before from's: an occurrence is shorter than a month,
+		// so none earlier reaches it.
+		for k := max(monthsBetween(e.Start, from)-1, 0); ; k++ {
+			start := monthlyOccurrence(e.Start, k)
+			if !start.Before(to) {
+				return false
+			}
+			if overlaps(start) {
+				return true
+			}
+		}
+	default:
+		return overlaps(e.Start)
+	}
+}
+
+// monthsBetween counts the calendar months from a's to b's, in UTC.
+func monthsBetween(a, b time.Time) int {
+	return (b.Year()-a.Year())*12 + int(b.Month()) - int(a.Month())
+}
+
+// monthlyOccurrence is the start of the occurrence k months after first. A
+// month without first's day takes its last day instead of being skipped as
+// the app skips it: the app counts days in local time, where the UTC 31st may
+// be the 1st, so the UTC month's end stands in for an occurrence that may
+// exist there.
+func monthlyOccurrence(first time.Time, k int) time.Time {
+	month := time.Date(first.Year(), first.Month()+time.Month(k), 1,
+		first.Hour(), first.Minute(), first.Second(), 0, time.UTC)
+	day := min(first.Day(), month.AddDate(0, 1, -1).Day())
+	return month.AddDate(0, 0, day-1)
+}
+
 // formatTime writes t as calendar_events stores it.
 func formatTime(t time.Time) string {
 	return t.UTC().Format(storedTimeLayout)

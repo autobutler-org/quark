@@ -2,7 +2,9 @@ package v0_calendar
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
 // errEventNotFound is what a caller hears about an event that does not exist.
@@ -35,6 +38,36 @@ func parseInstant(field, value string) (time.Time, error) {
 		return time.Time{}, errors.New(field + " must be an RFC 3339 time")
 	}
 	return t, nil
+}
+
+// bindError says why an event body could not be read (#2537): a field of the
+// wrong JSON type is named with the type it needs, a missing start or end is
+// reported as such, and anything else is a malformed body.
+func bindError(err error) error {
+	var typeErr *json.UnmarshalTypeError
+	var missing validator.ValidationErrors
+	switch {
+	case errors.As(err, &typeErr) && typeErr.Field != "":
+		return errors.New(typeErr.Field + " must be " + jsonKind(typeErr.Type))
+	case errors.As(err, &missing):
+		return errors.New("start and end are required")
+	default:
+		return errors.New("the body must be a JSON event")
+	}
+}
+
+// jsonKind names, for a client, the JSON value a Go field of type t takes.
+func jsonKind(t reflect.Type) string {
+	switch t.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return "a whole number"
+	case reflect.Bool:
+		return "true or false"
+	case reflect.String:
+		return "a string"
+	default:
+		return "a " + t.Kind().String()
+	}
 }
 
 // toInput converts a request body into the service's input.
