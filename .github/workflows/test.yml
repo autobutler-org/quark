@@ -2,7 +2,9 @@ name: Test
 on:
   # Also on push to main so the badges have a run attributed to the branch. Without it
   # every run belongs to a pull request's head ref and a ?branch=main badge reads
-  # "no status".
+  # "no status". These runs also save the caches pull requests restore: a pull request
+  # can read a cache only from its own branch or from main, and a merge-queue run saves
+  # its caches under a temporary ref nothing else can read.
   push:
     branches: [main]
   pull_request:
@@ -10,11 +12,12 @@ on:
   # is queued ahead of it, so a pull request does not have to be up to date to merge.
   merge_group:
   workflow_dispatch:
-# Cancels only superseded runs of the same pull request. Push, merge-queue and manual
-# runs each get a group of their own, so none of them is ever canceled.
+# Superseded runs of the same pull request are canceled. Pushes to main share one group
+# and are not canceled, so they run one at a time and a newer push replaces any older
+# one still waiting. Merge-queue and manual runs each get a group of their own.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.ref) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
 defaults:
