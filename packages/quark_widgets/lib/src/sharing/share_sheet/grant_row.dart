@@ -10,7 +10,8 @@ import '../../theme/quark_tokens.dart';
 /// One account or group with access in a [ShareSheet]: its name and level,
 /// and for access set on the item, a level menu and a remove button.
 ///
-/// An inherited grant is read-only and names the folder it is set on.
+/// An inherited grant is read-only and names the folder it is set on. Each
+/// entry of the level menu carries [AccessLevel.description] under its label.
 ///
 /// A part of [ShareSheet], tested through it.
 ///
@@ -106,7 +107,19 @@ class GrantRow extends StatelessWidget {
                         PopupMenuItem(
                           key: ValueKey('share_level_${suffix}_${level.name}'),
                           value: level,
-                          child: Text(level.label),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(level.label),
+                              Text(
+                                level.description,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.merge(muted),
+                              ),
+                            ],
+                          ),
                         ),
                   ],
                   child: Padding(

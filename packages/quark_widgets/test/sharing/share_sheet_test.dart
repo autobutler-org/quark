@@ -331,6 +331,118 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  group('helper copy (#2475)', () {
+    String textOf(WidgetTester tester, String value) =>
+        tester.widget<Text>(key(value)).data!;
+
+    testBothViewports('the form explains the chosen level', (
+      tester,
+      size,
+    ) async {
+      await pumpInSheet(tester, sheet(), size: size);
+
+      expect(
+        textOf(tester, 'share_add_level_help'),
+        AccessLevel.read.description,
+      );
+      for (final level in [AccessLevel.write, AccessLevel.owner]) {
+        await tapKey(tester, 'share_add_level_${level.name}');
+        expect(textOf(tester, 'share_add_level_help'), level.description);
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    testBothViewports('the form explains a built-in group only when picked', (
+      tester,
+      size,
+    ) async {
+      await pumpInSheet(tester, sheet(), size: size);
+
+      expect(key('share_add_everyone_help'), findsNothing);
+      await tapKey(tester, 'principal_option_group_1');
+      expect(
+        textOf(tester, 'share_add_everyone_help'),
+        allOf(contains('everyone'), contains('every account')),
+      );
+      await tapKey(tester, 'principal_option_group_2');
+      expect(key('share_add_everyone_help'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testBothViewports('inherited access says where to change it', (
+      tester,
+      size,
+    ) async {
+      await pumpInSheet(tester, sheet(), size: size);
+
+      expect(textOf(tester, 'share_inherited_help'), contains('folder'));
+      expect(
+        tester.getTopLeft(key('share_inherited_help')).dy,
+        greaterThan(tester.getTopLeft(find.text('Inherited access')).dy),
+      );
+      expect(
+        tester.getTopLeft(key('share_inherited_help')).dy,
+        lessThan(tester.getTopLeft(key('share_inherited_group_2')).dy),
+      );
+
+      await pumpInSheet(
+        tester,
+        sheet(
+          grants: const [GrantItem(principal: ada, level: AccessLevel.owner)],
+        ),
+        size: size,
+      );
+
+      expect(key('share_inherited_help'), findsNothing);
+    });
+
+    testBothViewports('each level menu entry says what the level allows', (
+      tester,
+      size,
+    ) async {
+      await pumpInSheet(tester, sheet(), size: size);
+      await tapKey(tester, 'share_level_user_2');
+
+      for (final level in AccessLevel.values) {
+        final entry = key('share_level_user_2_${level.name}');
+        expect(
+          find.descendant(of: entry, matching: find.text(level.label)),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: entry, matching: find.text(level.description)),
+          findsOneWidget,
+        );
+        final rect = tester.getRect(entry);
+        expect(rect.left, greaterThanOrEqualTo(0), reason: level.name);
+        expect(rect.right, lessThanOrEqualTo(size.width), reason: level.name);
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final (label, brightness, tokens) in [
+      ('dark', Brightness.dark, QuarkTokens.dark),
+      ('light', Brightness.light, QuarkTokens.light),
+    ]) {
+      testWidgets('$label: the helper copy is muted', (tester) async {
+        await pumpInSheet(tester, sheet(), brightness: brightness);
+        await tapKey(tester, 'principal_option_group_1');
+
+        for (final help in [
+          'share_add_level_help',
+          'share_add_everyone_help',
+          'share_inherited_help',
+        ]) {
+          expect(
+            tester.widget<Text>(key(help)).style?.color,
+            tokens.mutedForeground,
+            reason: help,
+          );
+        }
+      });
+    }
+  });
+
   for (final (label, brightness, tokens) in [
     ('dark', Brightness.dark, QuarkTokens.dark),
     ('light', Brightness.light, QuarkTokens.light),
