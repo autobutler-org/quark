@@ -9,6 +9,9 @@ import '../theme/quark_tokens.dart';
 /// and names the keys with [keyPrefix], so the same dialog confirms deleting
 /// an account, a group, or anything else.
 ///
+/// The copy scrolls when the window is too short for it, so the buttons stay
+/// reachable however long the copy or large the text (#2483).
+///
 /// It does not close itself: [onConfirm] and [onCancel] fire, and the caller
 /// that pushed the dialog pops it.
 ///
@@ -63,6 +66,7 @@ class ConfirmDeleteDialog extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
 
     return AlertDialog(
+      scrollable: true,
       title: Text(title),
       content: Text(body),
       actions: [

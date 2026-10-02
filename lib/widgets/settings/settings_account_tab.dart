@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 /// The Account tab of Settings (#2350): the [profile] card (#2419), sign
-/// out, the [sessions] card (#1663), with an Account and data
-/// row at the bottom that leads to Delete account and, for an admin, Reset
+/// out, the [sessions] card (#1663), who manages accounts (#2474), with an
+/// Account and data row at the bottom that leads to Delete account and, for an admin, Reset
 /// this Quark (#2346).
 ///
 /// Account deletion has to be initiated in the app and has to be findable,
@@ -12,7 +12,12 @@ import 'package:quark_icons/quark_icons.dart';
 /// accepted pattern. The row sits below Sign out, set apart from it, and
 /// nothing destructive is on this tab itself.
 ///
-/// Keys: `settings_account_and_data`.
+/// Accounts and groups are an admin's to manage, so a member is told so
+/// rather than left to wonder where account management went, and an admin
+/// gets a row to the Users page where it happens (#2474).
+///
+/// Keys: `settings_account_users`, `settings_account_admin_note` and
+/// `settings_account_and_data`.
 class SettingsAccountTab extends StatelessWidget {
   /// Creates the tab.
   const SettingsAccountTab({
@@ -20,6 +25,7 @@ class SettingsAccountTab extends StatelessWidget {
     required this.isAdmin,
     required this.onSignOut,
     required this.onOpenAccountAndData,
+    required this.onOpenUsers,
     this.header,
     this.profile,
     this.sessions,
@@ -30,7 +36,8 @@ class SettingsAccountTab extends StatelessWidget {
   final bool signedIn;
 
   /// Whether the Quark says this user is an admin, which adds Reset this
-  /// Quark to what the Account and data row names (#1899).
+  /// Quark to what the Account and data row names (#1899), and swaps the
+  /// note on who manages accounts for a row to Users.
   final bool isAdmin;
 
   /// Called when the user taps Sign out.
@@ -38,6 +45,9 @@ class SettingsAccountTab extends StatelessWidget {
 
   /// Called when the user taps Account and data.
   final VoidCallback onOpenAccountAndData;
+
+  /// Called when an admin taps Users and groups.
+  final VoidCallback onOpenUsers;
 
   /// Shown above the tab's content and scrolled with it, such as the
   /// page's disconnected banner; null shows nothing.
@@ -67,6 +77,30 @@ class SettingsAccountTab extends StatelessWidget {
             ),
           ),
           if (sessions != null) ...[const SizedBox(height: 16), sessions!],
+          const SizedBox(height: 16),
+          Card(
+            child: isAdmin
+                ? ListTile(
+                    key: const ValueKey('settings_account_users'),
+                    leading: const Icon(QuarkIcons.group_outlined),
+                    title: const Text('Users and groups'),
+                    subtitle: const Text(
+                      'Add accounts, approve requests and manage groups',
+                    ),
+                    trailing: const Icon(QuarkIcons.chevron_right),
+                    onTap: onOpenUsers,
+                  )
+                : const ListTile(
+                    key: ValueKey('settings_account_admin_note'),
+                    leading: Icon(QuarkIcons.info_outline),
+                    title: Text('Accounts are managed by an admin'),
+                    subtitle: Text(
+                      'An admin of this Quark adds accounts and groups and '
+                      'decides who else is an admin. Ask one for a new '
+                      'account or a change to yours.',
+                    ),
+                  ),
+          ),
           // Kept well clear of Sign out, so a mis-tap cannot reach it.
           const SizedBox(height: 32),
           const Divider(),

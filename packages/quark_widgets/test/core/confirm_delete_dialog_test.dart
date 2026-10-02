@@ -65,6 +65,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // #2483: on a short window or with larger text, the copy pushed the
+  // buttons off the bottom, so Delete could not be reached without zooming.
+  testBothViewports('keeps its buttons reachable at large text', (
+    tester,
+    size,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final events = <String>[];
+    await pumpAt(
+      tester,
+      ConfirmDeleteDialog(
+        title: 'Delete margaret_hamilton_of_the_lab?',
+        body:
+            "margaret_hamilton_of_the_lab won't be able to sign in again. The "
+            'files they own stay on this Quark and become yours.',
+        keyPrefix: 'delete_user',
+        onConfirm: () => events.add('confirm'),
+        onCancel: () {},
+      ),
+      size: Size(size.width, size.height / 2),
+    );
+
+    expect(tester.takeException(), isNull);
+    final confirm = find.byKey(const ValueKey('delete_user_confirm'));
+    await tester.ensureVisible(confirm);
+    await tester.pumpAndSettle();
+    await tester.tap(confirm);
+    expect(events, ['confirm']);
+  });
+
   for (final (label, brightness, tokens) in [
     ('dark', Brightness.dark, QuarkTokens.dark),
     ('light', Brightness.light, QuarkTokens.light),
