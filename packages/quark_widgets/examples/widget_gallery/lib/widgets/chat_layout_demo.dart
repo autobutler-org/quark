@@ -57,6 +57,8 @@ class _ChatLayoutDemoState extends State<ChatLayoutDemo> {
               permissions: ChatPermissionPreset.moderator.permissions,
               currentUserId: galleryChatUserId,
               onDelete: (id) => widget.log('QuarkMessageList.onDelete($id)'),
+              onOpenLink: (uri) =>
+                  widget.log('QuarkMessageList.onOpenLink($uri)'),
             ),
           ),
           QuarkMessageComposer(

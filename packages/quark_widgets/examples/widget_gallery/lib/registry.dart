@@ -1441,6 +1441,7 @@ final List<GalleryEntry> registry = [
             onDelete: (id) => log('QuarkMessageList.onDelete($id)'),
             onReact: (id, emoji) =>
                 log('QuarkMessageList.onReact($id, $emoji)'),
+            onOpenLink: (uri) => log('QuarkMessageList.onOpenLink($uri)'),
           ),
         ),
         SizedBox(
