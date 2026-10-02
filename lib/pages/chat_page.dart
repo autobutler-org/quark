@@ -15,6 +15,7 @@ import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/widgets/users/user_avatar.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Chat, a beta (#2421): the channels the account belongs to, the open
 /// channel's messages and composer, and its members.
@@ -369,6 +370,10 @@ class _ChatPageState extends State<ChatPage>
                           currentUserId: c.currentUserKey,
                           onDelete: _deleteMessage,
                           onReact: _react,
+                          onOpenLink: (uri) => launchUrl(
+                            uri,
+                            mode: LaunchMode.externalApplication,
+                          ),
                           avatarBuilder: (context, userId) {
                             final id = int.tryParse(userId) ?? 0;
                             return UserAvatar(
