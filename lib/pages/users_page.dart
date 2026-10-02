@@ -329,9 +329,9 @@ class _UsersPageState extends State<UsersPage>
                           'remove $username as an admin',
                         ),
                         onDisable: (username) =>
-                            _report(c.disable(username), 'turn off $username'),
+                            _report(c.disable(username), 'disable $username'),
                         onEnable: (username) =>
-                            _report(c.enable(username), 'turn on $username'),
+                            _report(c.enable(username), 'enable $username'),
                         onDelete: _confirmDelete,
                       ),
                     ),

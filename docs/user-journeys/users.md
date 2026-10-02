@@ -18,8 +18,8 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 **Expected result:**
 
 - App navigates to `/users`, open on the **Accounts** tab. The **Groups** tab is beside it (JN-USR-015).
-- The **Accounts** section lists every account on the Quark. Admins are marked **Admin**, and turned-off accounts
-  **Turned off**.
+- The **Accounts** section lists every account on the Quark. Admins are marked **Admin**, and disabled accounts
+  **Disabled**.
 - The signed-in account is marked **You** and has no actions menu.
 
 **Notes:**
@@ -212,7 +212,7 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 ---
 
-### JN-USR-011: Turn an account off
+### JN-USR-011: Disable an account
 
 **Preconditions:** Another active account exists.
 
@@ -220,30 +220,30 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 1. Navigate to `/users`.
 2. Tap the actions menu on that account's row.
-3. Tap **Turn off**.
+3. Tap **Disable**.
 
 **Expected result:**
 
-- The row is marked **Turned off**.
+- The row is marked **Disabled**.
 - That person is signed out everywhere, and signing in shows "This account is turned off. Ask an admin of this
   Quark." (JN-AUTH-014).
 - Their files and shares stay as they were.
 
 ---
 
-### JN-USR-012: Turn an account back on
+### JN-USR-012: Enable an account again
 
 **Preconditions:** JN-USR-011 complete.
 
 **Steps:**
 
 1. Navigate to `/users`.
-2. Tap the actions menu on the turned-off account's row.
-3. Tap **Turn on**.
+2. Tap the actions menu on the disabled account's row.
+3. Tap **Enable**.
 
 **Expected result:**
 
-- The row is no longer marked **Turned off**.
+- The row is no longer marked **Disabled**.
 - That person can sign in again, with everything they had.
 
 ---
@@ -357,7 +357,7 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 ### JN-USR-018: Add and remove group members
 
-**Preconditions:** A group named `Family` exists, along with an active account `bob` and a turned-off account `cy`.
+**Preconditions:** A group named `Family` exists, along with an active account `bob` and a disabled account `cy`.
 
 **Steps:**
 
@@ -376,7 +376,7 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 - If the account stops being able to sign in before it is added, the sheet reads "That account can't join a group.
   Only accounts that can sign in can be added."
-- A turned-off account that was already a member stays one.
+- A disabled account that was already a member stays one.
 
 ---
 
