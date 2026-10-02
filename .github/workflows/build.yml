@@ -36,7 +36,6 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       web: ${{ steps.filter.outputs.web }}
       android: ${{ steps.filter.outputs.android }}
-      ios: ${{ steps.filter.outputs.ios }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -136,15 +135,12 @@ jobs:
     # release build. No upload -- nothing here consumes an App Store build number.
     runs-on: macos-26
     timeout-minutes: 45
-    # Fork pull requests are skipped outright rather than built unsigned: a macOS runner
-    # is the most expensive thing in this repository to start, and a fork's head is code
-    # nobody here has reviewed yet. Runs that do start but have no signing material --
-    # dependabot's -- fall back to an unsigned build in the steps below.
-    needs: changes
-    if: >-
-      github.event_name != 'pull_request'
-      || (needs.changes.outputs.ios == 'true'
-        && github.event.pull_request.head.repo.full_name == github.repository)
+    # Never on a pull request: a macOS runner is the scarcest thing in this repository,
+    # and the merge queue builds every pull request before it reaches main, so an iOS
+    # break is caught there rather than on the pull request. Skipped with a job-level
+    # `if:` so the required check still reports. A run that starts with no signing
+    # material falls back to an unsigned build in the steps below.
+    if: github.event_name != 'pull_request'
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -167,10 +163,10 @@ jobs:
           restore-keys: |
             pods-${{ runner.os }}-
       # Dependabot pull requests run with the secrets withheld, so the signing material
-      # is empty and a signed build is impossible however correct the branch is. The
-      # job-level `if` above cannot see that: dependabot's branches live in this
-      # repository, so head.repo matches. Decide here instead, and build unsigned when
-      # there is nothing to sign with -- a bump that breaks the iOS build still fails,
+      # is empty and a signed build is impossible however correct the branch is. This
+      # job skips pull requests, but a run dependabot triggers some other way may get
+      # the same empty secrets. Decide here, and build unsigned when there is nothing
+      # to sign with -- a bump that breaks the iOS build still fails,
       # and build-ios stops reporting a red X nobody can clear.
       - name: Check for signing secrets
         id: signing
