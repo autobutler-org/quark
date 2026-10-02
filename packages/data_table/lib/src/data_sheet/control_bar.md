@@ -61,10 +61,20 @@ Legend: ✅ implemented · 🔜 planned · ❌ out of scope for this package
 
 ## View & Layout
 
-- ✅ Column flex configuration — `setColumnFlex`, `updateColumnFlexAt`
-- 🔜 Freeze rows / columns (sticky header)
+- ✅ Pixel column widths and row heights — `columnWidths` / `rowHeights`, `setColumnWidth`, `setRowHeight`. These
+  replaced flex factors: `fromTable(columnFlex:)` and a saved `columnFlex` key still load, each factor becoming that
+  many default widths, and saved lists of the wrong length or with bad values are fitted to the sheet.
+- ✅ Drag-to-resize columns and rows — drag a column header's right edge or a row number's bottom edge
+  (`col_resize_<c>`, `row_resize_<r>`). `beginResize()` makes each drag one undo step. A selected header's edge grows
+  a 24px grip so a phone can reach it: tap the header, then drag the grip.
+- ✅ Auto-fit — double-click (or double-tap) a resize edge; `autoSizeColumn` / `autoSizeRow`, each one undo step
+- ✅ Freeze rows / columns — the Freeze menu (`data_sheet_freeze`): none, 1, 2, or up to the selected row or column;
+  `setFrozenRows` / `setFrozenColumns`, each one undo step. Frozen rows and columns stay put, with the column headers and row
+  numbers, while the rest scrolls; a divider marks the edge, and frozen panes never cover more than 75% of the grid.
+  Inserting or deleting inside the frozen band moves its edge.
+- ✅ Layout persistence — `layoutToJson()` / `DataSheetController.fromLayoutJson()`: `columnWidths`, `rowHeights`,
+  `frozenRows`, `frozenColumns`, saved beside the data in each `.qsheet` tab. Missing keys load as defaults.
 - 🔜 Toggle gridlines visibility
-- 🔜 Drag-to-resize columns
 - 🔜 Column type / format metadata (text, number, date)
 
 ## Advanced Data Features
