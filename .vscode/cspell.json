@@ -36,7 +36,8 @@
     "test/performance/generate_files.sh",
     "tmp",
     "web/sodium.js",
-    "**/testdata/**"
+    "**/testdata/**",
+    "test/chaos/powercut/lazyfs.patch"
   ],
   "ignoreRandomStrings": true,
   "gitignoreRoot": ".gitignore",
@@ -595,7 +596,15 @@
     "zoneinfo",
     "zoomable",
     "Zstandard",
-    "zzznomatch"
+    "zzznomatch",
+    "fusermount",
+    "lazyfs",
+    "libfmt",
+    "libfuse",
+    "libpcache",
+    "libspdlog",
+    "logfile",
+    "powercut"
   ],
   "flagWords": []
 }

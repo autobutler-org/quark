@@ -1100,6 +1100,18 @@ test/chaos/local: build/backend ## Run the API stress suite against a temporary 
 		$(PERF_BASE_URL)/api/v0/auth/setup
 	QUARK_BASE_URL=$(PERF_BASE_URL) $(MAKE) test/chaos
 
+.PHONY: test/chaos/powercut
+test/chaos/powercut: check/docker ## Cut the power under the upload and vault write paths on LazyFS (see test/chaos/powercut/README.md)
+	mkdir -p build test-results
+	CGO_ENABLED=0 GOOS=linux $(GO) build -o build/powercut ./test/chaos/powercut
+	docker build -t quark-powercut test/chaos/powercut
+	docker run --rm --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined \
+		-v "$(PWD)/build/powercut:/usr/local/bin/powercut:ro" \
+		-v "$(PWD)/test/chaos/powercut/run.bash:/usr/local/bin/run-powercut:ro" \
+		-v "$(PWD)/test-results:/results" \
+		-e POWERCUT_ROUNDS -e WORK_DIR=/results/powercut \
+		quark-powercut run-powercut
+
 .PHONY: test/integration
 test/integration: test/integration/backend ## Run integration tests
 
