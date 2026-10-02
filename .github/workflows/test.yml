@@ -103,22 +103,47 @@ jobs:
           name: power-cut-results
           path: test-results/powercut/
           if-no-files-found: warn
-  test-frontend:
+  test-frontend-suite:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    name: test-frontend (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: app 1/3
+            suite: test/unit/frontend/app TOTAL_SHARDS=3 SHARD_INDEX=0
+          - name: app 2/3
+            suite: test/unit/frontend/app TOTAL_SHARDS=3 SHARD_INDEX=1
+          - name: app 3/3
+            suite: test/unit/frontend/app TOTAL_SHARDS=3 SHARD_INDEX=2
+          - name: packages
+            suite: test/unit/frontend/packages
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
       - name: Setup Flutter
         uses: ./.github/actions/setup-flutter
-      # test/unit/frontend depends on generate/frontend, whose quark-icons step runs
-      # `npx fantasticon`.
+      # generate/frontend's quark-icons step runs `npx fantasticon`.
       - name: Setup Node
         uses: ./.github/actions/setup-node
       - name: Tidy
         run: |
           make tidy/flutter
+      - name: Generate
+        run: |
+          make generate/frontend
       - name: Run unit tests
         run: |
-          make test/unit/frontend
+          make ${{ matrix.suite }}
+  # The ruleset requires a check named test-frontend, and a matrix leg is named
+  # after its suite, so this job carries the name and fails when any leg did.
+  test-frontend:
+    needs: test-frontend-suite
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check every suite passed
+        run: |
+          [[ "${{ needs.test-frontend-suite.result }}" =~ ^(success|skipped)$ ]]
