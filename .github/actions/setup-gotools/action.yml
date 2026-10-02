@@ -1,11 +1,11 @@
-name: Setup golangci-lint
+name: Setup gotools
 runs:
   using: "composite"
   steps:
-    - name: Install golangci-lint
+    - name: Install gotools
       shell: bash
       run: |
-        make setup/golangci-lint
+        make setup/gotools
 
     - name: Fix PATH
       shell: bash

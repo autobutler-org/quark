@@ -21,8 +21,8 @@ jobs:
         uses: ./.github/actions/setup-sqlc
       - name: Setup swag
         uses: ./.github/actions/setup-swag
-      - name: Setup golangci-lint
-        uses: ./.github/actions/setup-golangci-lint
+      - name: Setup gotools
+        uses: ./.github/actions/setup-gotools
       - name: Generate code
         run: |
           make generate/backend
