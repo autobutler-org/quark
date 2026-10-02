@@ -1049,16 +1049,34 @@ test/unit/backend: internal/server/public/stub.txt ## Run unit tests for backend
 			-func=coverage.out.ignored
 	fi
 
+# Optional test tuning. Empty leaves the runner's default: one test file per core,
+# no sharding. TOTAL_SHARDS and SHARD_INDEX (0-based) split the app suite only.
+FLUTTER_TEST_CONCURRENCY ?=
+TOTAL_SHARDS ?=
+SHARD_INDEX ?=
+# Every package with a test/ directory, so a new package is picked up on its own.
+FRONTEND_PACKAGE_TESTS := $(patsubst packages/%/test,test/unit/frontend/packages/%,$(wildcard packages/*/test))
+
 .PHONY: test/unit/frontend
-test/unit/frontend: generate/frontend ## Run unit tests for frontend
+test/unit/frontend: generate/frontend ## Run unit tests for frontend (optional FLUTTER_TEST_CONCURRENCY=<n>)
+	# generate/frontend finishes first; the suites then run side by side whether or
+	# not the caller passed -j. --output-sync keeps each suite's output in one block.
+	$(MAKE) -j --output-sync=target test/unit/frontend/app test/unit/frontend/packages
+
+.PHONY: test/unit/frontend/app
+test/unit/frontend/app: ## Run the app's unit tests (optional TOTAL_SHARDS=<n> SHARD_INDEX=<i>)
 	echo "Testing Quark frontend..."
-	flutter test
-	for pkg in packages/*/; do
-		if [ -f "$$pkg/pubspec.yaml" ] && [ -d "$$pkg/test" ]; then
-			echo "Testing $$pkg..."
-			$(MAKE) -C "$$pkg" test/unit || exit 1
-		fi
-	done
+	flutter test \
+		$(if $(FLUTTER_TEST_CONCURRENCY),--concurrency=$(FLUTTER_TEST_CONCURRENCY)) \
+		$(if $(TOTAL_SHARDS),--total-shards=$(TOTAL_SHARDS) --shard-index=$(SHARD_INDEX))
+
+.PHONY: test/unit/frontend/packages
+test/unit/frontend/packages: $(FRONTEND_PACKAGE_TESTS) ## Run unit tests for every package under packages/
+
+.PHONY: $(FRONTEND_PACKAGE_TESTS)
+$(FRONTEND_PACKAGE_TESTS): test/unit/frontend/packages/%:
+	echo "Testing packages/$*..."
+	$(MAKE) -C packages/$* test/unit FLUTTER_TEST_CONCURRENCY=$(FLUTTER_TEST_CONCURRENCY)
 
 .PHONY: test/chaos
 test/chaos: ## Run API stress/chaos suite against a running backend (QUARK_BASE_URL)

@@ -59,12 +59,12 @@ test: test/unit ## Run tests
 .PHONY: test/unit
 test/unit: ## Run unit tests
 	echo "Testing data table package..."
-	flutter test
+	flutter test $(if $(FLUTTER_TEST_CONCURRENCY),--concurrency=$(FLUTTER_TEST_CONCURRENCY))
 	for example in examples/*/; do
 		if [ -f "$$example/pubspec.yaml" ] && [ -d "$$example/test" ]; then
 			echo "Testing $$example..."
 			cd "$$example"
-			flutter test
+			flutter test $(if $(FLUTTER_TEST_CONCURRENCY),--concurrency=$(FLUTTER_TEST_CONCURRENCY))
 			cd ../..
 		fi
 	done

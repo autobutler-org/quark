@@ -85,7 +85,7 @@ test: test/unit ## Run tests
 
 .PHONY: test/unit
 test/unit: ## Run unit tests
-	flutter test
+	flutter test $(if $(FLUTTER_TEST_CONCURRENCY),--concurrency=$(FLUTTER_TEST_CONCURRENCY))
 
 ##@ Dependencies
 
