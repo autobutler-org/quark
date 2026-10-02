@@ -1,4 +1,7 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -362,70 +365,371 @@ void main() {
     expect(asked, greaterThan(0));
   });
 
-  testBothViewports('a member with the full set may delete any text message', (
-    tester,
-    size,
-  ) async {
-    final deleted = <String>[];
-    await pumpAt(
+  group('message menu (#2631)', () {
+    Finder key(String value) => find.byKey(ValueKey(value));
+
+    /// Opens [id]'s menu from its button, says whether it offers Delete, and
+    /// closes it again.
+    Future<bool> offersDelete(WidgetTester tester, String id) async {
+      if (key('message_menu_$id').evaluate().isEmpty) return false;
+      await tester.tap(key('message_menu_$id'));
+      await tester.pumpAndSettle();
+      final offered = key('message_delete_$id').evaluate().isNotEmpty;
+      await tester.tapAt(const Offset(1, 1));
+      await tester.pumpAndSettle();
+      return offered;
+    }
+
+    testBothViewports('a long press opens the menu and Copy calls back', (
       tester,
-      QuarkMessageList(
-        messages: messages,
-        permissions: ChatPermissionPreset.owner.permissions,
-        currentUserId: 'ada',
-        onDelete: deleted.add,
-      ),
-      size: size,
-    );
+      size,
+    ) async {
+      final copied = <String>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(messages: messages, onCopy: copied.add),
+        size: size,
+      );
+      expect(find.byType(SelectionArea), findsNothing);
 
-    expect(find.byKey(const ValueKey('message_delete_m4')), findsOneWidget);
-    expect(find.byKey(const ValueKey('message_delete_m2')), findsOneWidget);
-    // Nothing to delete on a system line, a tombstone, or a locked message.
-    expect(find.byKey(const ValueKey('message_delete_m3')), findsNothing);
-    expect(find.byKey(const ValueKey('message_delete_m6')), findsNothing);
-    expect(find.byKey(const ValueKey('message_delete_m5')), findsNothing);
+      await tester.longPress(key('message_body_m4'));
+      await tester.pumpAndSettle();
+      expect(find.text('Copy text'), findsOneWidget);
+      // Nobody passed onReact or onDelete.
+      expect(find.text('Add reaction'), findsNothing);
+      expect(find.text('Delete'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('message_delete_m4')));
-    await tester.pump();
-    expect(deleted, ['m4']);
-  });
+      await tester.tap(key('message_copy_m4'));
+      await tester.pumpAndSettle();
+      expect(copied, ['m4']);
+      expect(find.text('Copy text'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
 
-  testBothViewports('without delete_messages only the author may delete', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
+    testBothViewports('a right-click opens the menu at the pointer', (
       tester,
-      QuarkMessageList(
-        messages: messages,
-        permissions: ChatPermissionPreset.member.permissions,
-        currentUserId: 'ada',
-        onDelete: (_) {},
-      ),
-      size: size,
-    );
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkMessageList(messages: messages, onCopy: (_) {}),
+        size: size,
+      );
 
-    expect(find.byKey(const ValueKey('message_delete_m2')), findsOneWidget);
-    expect(find.byKey(const ValueKey('message_delete_m4')), findsNothing);
-  });
+      final at = tester.getCenter(key('message_body_m2'));
+      await tester.tapAt(at, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
 
-  testBothViewports('a viewer sees no delete on anyone else\'s message', (
-    tester,
-    size,
-  ) async {
-    await pumpAt(
+      final entry = tester.getRect(key('message_copy_m2'));
+      expect(entry.top, lessThan(at.dy + 40));
+      expect(entry.bottom, greaterThan(at.dy - 40));
+      expect(tester.takeException(), isNull);
+    });
+
+    testBothViewports('the menu button opens it from the keyboard', (
       tester,
-      QuarkMessageList(
-        messages: messages,
-        permissions: ChatPermissionPreset.viewer.permissions,
-        currentUserId: 'cy',
-        onDelete: (_) {},
-      ),
-      size: size,
-    );
+      size,
+    ) async {
+      final copied = <String>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(messages: messages, onCopy: copied.add),
+        size: size,
+      );
 
-    expect(find.byKey(const ValueKey('message_delete_m4')), findsNothing);
-    expect(find.byKey(const ValueKey('message_delete_m2')), findsNothing);
+      Focus.of(
+        tester.element(find.byIcon(QuarkIcons.more_vert).first),
+      ).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.text('Copy text'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(copied, hasLength(1));
+    });
+
+    testBothViewports('the menu and add-reaction glyphs share a center line', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: messages,
+          permissions: ChatPermissionPreset.member.permissions,
+          onReact: (_, _) {},
+        ),
+        size: size,
+      );
+      Finder glyph(String id) =>
+          find.descendant(of: key(id), matching: find.byType(Icon));
+
+      expect(
+        tester.getSize(key('message_menu_m4')),
+        tester.getSize(key('message_react_m4')),
+      );
+      expect(
+        tester.getCenter(glyph('message_menu_m4')).dy,
+        tester.getCenter(glyph('message_react_m4')).dy,
+      );
+    });
+
+    testBothViewports('Add reaction offers the emoji and fires onReact', (
+      tester,
+      size,
+    ) async {
+      final events = <String>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: messages,
+          permissions: ChatPermissionPreset.member.permissions,
+          onReact: (id, emoji) => events.add('$id $emoji'),
+        ),
+        size: size,
+      );
+
+      await tester.tap(key('message_menu_m4'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('message_menu_react_m4'));
+      await tester.pumpAndSettle();
+      for (final emoji in ['👍', '❤️', '😂', '😮', '😢', '🎉']) {
+        expect(key('message_menu_react_m4_$emoji'), findsOneWidget);
+      }
+      await tester.tap(key('message_menu_react_m4_🎉'));
+      await tester.pumpAndSettle();
+
+      expect(events, ['m4 🎉']);
+      expect(tester.takeException(), isNull);
+    });
+
+    testBothViewports('a viewer without add_reactions gets no Add reaction', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: messages,
+          permissions: ChatPermissionPreset.viewer.permissions,
+          onCopy: (_) {},
+          onReact: (_, _) {},
+        ),
+        size: size,
+      );
+
+      await tester.tap(key('message_menu_m4'));
+      await tester.pumpAndSettle();
+      expect(find.text('Copy text'), findsOneWidget);
+      expect(find.text('Add reaction'), findsNothing);
+    });
+
+    testBothViewports('a moderator may delete any text message', (
+      tester,
+      size,
+    ) async {
+      final deleted = <String>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: messages,
+          permissions: ChatPermissionPreset.moderator.permissions,
+          currentUserId: 'ada',
+          onDelete: deleted.add,
+        ),
+        size: size,
+      );
+
+      expect(await offersDelete(tester, 'm2'), isTrue);
+      expect(await offersDelete(tester, 'm4'), isTrue);
+
+      await tester.tap(key('message_menu_m4'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.text('Delete')).style?.color,
+        QuarkTokens.dark.error,
+      );
+      await tester.tap(key('message_delete_m4'));
+      await tester.pumpAndSettle();
+      expect(deleted, ['m4']);
+    });
+
+    testBothViewports('without delete_messages only the author may delete', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: messages,
+          permissions: ChatPermissionPreset.member.permissions,
+          currentUserId: 'ada',
+          onCopy: (_) {},
+          onDelete: (_) {},
+        ),
+        size: size,
+      );
+
+      expect(await offersDelete(tester, 'm2'), isTrue);
+      expect(await offersDelete(tester, 'm4'), isFalse);
+    });
+
+    testBothViewports('a viewer sees no delete on anyone else\'s message', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: messages,
+          permissions: ChatPermissionPreset.viewer.permissions,
+          currentUserId: 'cy',
+          onCopy: (_) {},
+          onDelete: (_) {},
+        ),
+        size: size,
+      );
+
+      expect(await offersDelete(tester, 'm2'), isFalse);
+      expect(await offersDelete(tester, 'm4'), isFalse);
+    });
+
+    testBothViewports('deleted, waiting and system lines have no menu', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: messages,
+          permissions: ChatPermissionPreset.owner.permissions,
+          currentUserId: 'ada',
+          onCopy: (_) {},
+          onDelete: (_) {},
+          onReact: (_, _) {},
+        ),
+        size: size,
+      );
+
+      for (final id in ['m3', 'm5', 'm6']) {
+        expect(key('message_menu_$id'), findsNothing);
+        final at = tester.getCenter(key('message_$id'));
+        await tester.longPressAt(at);
+        await tester.pumpAndSettle();
+        await tester.tapAt(at, buttons: kSecondaryButton);
+        await tester.pumpAndSettle();
+        expect(find.byType(PopupMenuItem<int>), findsNothing);
+      }
+      expect(key('message_menu_m4'), findsOneWidget);
+    });
+
+    group('on a desktop platform', () {
+      const desktop = TargetPlatformVariant({
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+        TargetPlatform.linux,
+      });
+      final linked = [
+        msg('m1', day1, body: 'some words to select https://a.com/x'),
+      ];
+
+      Iterable<RenderParagraph> selected(WidgetTester tester) => tester
+          .renderObjectList<RenderParagraph>(
+            find.descendant(
+              of: key('message_body_m1'),
+              matching: find.byType(RichText),
+            ),
+          )
+          .where((paragraph) => paragraph.selections.isNotEmpty);
+
+      for (final size in [narrowViewport, wideViewport]) {
+        testWidgets('dragging the mouse selects message text ($size)', (
+          tester,
+        ) async {
+          await pumpAt(
+            tester,
+            QuarkMessageList(messages: linked, onCopy: (_) {}),
+            size: size,
+          );
+          expect(selected(tester), isEmpty);
+
+          final body = tester.getRect(key('message_body_m1'));
+          final gesture = await tester.startGesture(
+            body.centerLeft + const Offset(2, 0),
+            kind: PointerDeviceKind.mouse,
+          );
+          await tester.pump();
+          await gesture.moveTo(body.centerLeft + const Offset(90, 0));
+          await tester.pump();
+          await gesture.up();
+          await tester.pumpAndSettle();
+
+          final selection = selected(tester).single.selections.single;
+          printOnFailure('$selection');
+          expect(selection.isCollapsed, isFalse);
+          // The drag was the selection's: it opened nothing.
+          expect(find.byType(PopupMenuItem<int>), findsNothing);
+        }, variant: desktop);
+
+        testWidgets('a right-click opens the menu, not a toolbar ($size)', (
+          tester,
+        ) async {
+          final copied = <String>[];
+          await pumpAt(
+            tester,
+            QuarkMessageList(messages: linked, onCopy: copied.add),
+            size: size,
+          );
+
+          await tester.tap(
+            key('message_body_m1'),
+            buttons: kSecondaryButton,
+            kind: PointerDeviceKind.mouse,
+          );
+          await tester.pumpAndSettle();
+          expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
+
+          await tester.tap(key('message_copy_m1'));
+          await tester.pumpAndSettle();
+          expect(copied, ['m1']);
+        }, variant: desktop);
+
+        testWidgets('a long press is not the menu\'s ($size)', (tester) async {
+          await pumpAt(
+            tester,
+            QuarkMessageList(messages: linked, onCopy: (_) {}),
+            size: size,
+          );
+
+          await tester.longPress(key('message_body_m1'));
+          await tester.pumpAndSettle();
+
+          expect(find.byType(PopupMenuItem<int>), findsNothing);
+          expect(key('message_menu_m1'), findsOneWidget);
+        }, variant: desktop);
+
+        testWidgets('a link still opens inside the selection area ($size)', (
+          tester,
+        ) async {
+          final opened = <Uri>[];
+          await pumpAt(
+            tester,
+            QuarkMessageList(messages: linked, onOpenLink: opened.add),
+            size: size,
+          );
+          expect(find.byType(SelectionArea), findsOneWidget);
+
+          await tester.tapOnText(find.textRange.ofSubstring('https://a.com/x'));
+          await tester.pump();
+
+          expect(opened, [Uri.parse('https://a.com/x')]);
+        }, variant: desktop);
+      }
+    });
   });
 
   testBothViewports('a delegated manager gets the not-a-member pane', (

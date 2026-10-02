@@ -35,10 +35,19 @@ import 'quark_message_list/chat_system_line.dart';
 /// caller that scrolls to the newest message with [controller] checks
 /// reduced motion itself and jumps rather than animates when it is on.
 ///
-/// A delete button sits on each text message the user may delete: their own,
-/// which authorship allows, or anyone's when [permissions] holds
-/// [ChatPermission.deleteMessages]. It fires [onDelete]; the caller asks for
-/// confirmation if it wants one.
+/// Each text message has a menu, opened by a long press on a touch platform,
+/// a right-click, or the three-dot button at its end, which the keyboard
+/// reaches. "Copy text" fires [onCopy], "Add reaction" offers the emoji and
+/// fires [onReact], and "Delete" fires [onDelete]; the caller asks for
+/// confirmation if it wants one. "Delete" is on each message the user may
+/// delete: their own, which authorship allows, or anyone's when [permissions]
+/// holds [ChatPermission.deleteMessages].
+///
+/// On macOS, Windows and Linux, in a browser or not, the list is a
+/// `SelectionArea`: dragging selects message text, across messages, and the
+/// platform's copy shortcut copies it. There a long press is the selection's,
+/// not the menu's. On Android and iOS a long press opens the menu, nothing is
+/// selectable, and "Copy text" is how text is copied.
 ///
 /// A text message's reactions show under it as chips, one per emoji with its
 /// count, highlighted where the user reacted. When [onReact] is set and
@@ -60,7 +69,10 @@ import 'quark_message_list/chat_system_line.dart';
 ///
 /// Key prefixes: `message_<id>` on each message, `message_body_<id>` on a
 /// text message's body (a link is reached by its text inside it),
-/// `message_delete_<id>` on its delete button, `message_react_<id>` on its add-reaction button,
+/// `message_menu_<id>` on its menu button, `message_copy_<id>`,
+/// `message_menu_react_<id>` and `message_delete_<id>` on the menu's entries,
+/// `message_menu_react_<id>_<emoji>` on each emoji the menu offers,
+/// `message_react_<id>` on its add-reaction button,
 /// `message_react_<id>_<emoji>` on each emoji that button offers,
 /// `message_reaction_<id>_<emoji>` on each reaction chip,
 /// `message_list_load_older` on the load button,
@@ -76,6 +88,7 @@ import 'quark_message_list/chat_system_line.dart';
 ///   onLoadOlder: controller.loadOlder,
 ///   permissions: controller.selectedPermissions,
 ///   currentUserId: controller.userId,
+///   onCopy: (id) => copy(controller.textOf(id)),
 ///   onDelete: controller.deleteMessage,
 ///   onReact: controller.toggleReaction,
 ///   onOpenLink: (uri) => launchUrl(uri),
@@ -92,6 +105,7 @@ class QuarkMessageList extends StatelessWidget {
     this.onLoadOlder,
     this.permissions,
     this.currentUserId,
+    this.onCopy,
     this.onDelete,
     this.onReact,
     this.onOpenLink,
@@ -130,18 +144,22 @@ class QuarkMessageList extends StatelessWidget {
   final VoidCallback? onLoadOlder;
 
   /// What the signed-in account may do in the channel.
-  /// [ChatPermission.deleteMessages] puts a delete button on everyone's
+  /// [ChatPermission.deleteMessages] puts "Delete" in the menu of everyone's
   /// messages, and a set without [ChatPermission.readMessages] shows
   /// [notMemberText] instead of the list. Null checks nothing and offers
   /// delete on the user's own messages only.
   final Set<ChatPermission>? permissions;
 
-  /// The signed-in account's id, whose own messages always carry a delete
-  /// button. Null matches no author.
+  /// The signed-in account's id, whose own messages always offer "Delete".
+  /// Null matches no author.
   final String? currentUserId;
 
-  /// Called with a message's id to delete it. Null leaves every delete
-  /// button out.
+  /// Called with a text message's id to copy its text; the clipboard is the
+  /// caller's. Null leaves "Copy text" out of every menu.
+  final ValueChanged<String>? onCopy;
+
+  /// Called with a message's id to delete it. Null leaves "Delete" out of
+  /// every menu.
   final ValueChanged<String>? onDelete;
 
   /// Called with a message's id and an emoji when the user picks that emoji
@@ -186,6 +204,7 @@ class QuarkMessageList extends StatelessWidget {
     final error = this.error;
     final onLoadOlder = this.onLoadOlder;
     final avatarBuilder = this.avatarBuilder;
+    final onCopy = this.onCopy;
     final onDelete = this.onDelete;
     final permissions = this.permissions;
     final deletesAny =
@@ -225,7 +244,16 @@ class QuarkMessageList extends StatelessWidget {
       );
     }
 
-    return NotificationListener<ScrollNotification>(
+    final selectable = switch (Theme.of(context).platform) {
+      TargetPlatform.macOS ||
+      TargetPlatform.windows ||
+      TargetPlatform.linux => true,
+      TargetPlatform.android ||
+      TargetPlatform.iOS ||
+      TargetPlatform.fuchsia => false,
+    };
+
+    final list = NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (hasMore &&
             !isLoading &&
@@ -268,6 +296,10 @@ class QuarkMessageList extends StatelessWidget {
                 ChatMessageRow(
                   message: message,
                   avatarSize: avatarSize,
+                  longPressOpensMenu: !selectable,
+                  onCopy: onCopy == null || message.kind != ChatMessageKind.text
+                      ? null
+                      : () => onCopy(message.id),
                   onDelete:
                       onDelete == null ||
                           message.kind != ChatMessageKind.text ||
@@ -296,5 +328,14 @@ class QuarkMessageList extends StatelessWidget {
         },
       ),
     );
+    // An empty selection toolbar: a right-click belongs to the message's
+    // menu, and the copy shortcut works without one. The builder cannot be
+    // null, which a touch long press on a desktop platform dereferences.
+    return selectable
+        ? SelectionArea(
+            contextMenuBuilder: (_, _) => const SizedBox.shrink(),
+            child: list,
+          )
+        : list;
   }
 }

@@ -1438,6 +1438,7 @@ final List<GalleryEntry> registry = [
             onLoadOlder: () => log('QuarkMessageList.onLoadOlder'),
             permissions: ChatPermissionPreset.moderator.permissions,
             currentUserId: galleryChatUserId,
+            onCopy: (id) => log('QuarkMessageList.onCopy($id)'),
             onDelete: (id) => log('QuarkMessageList.onDelete($id)'),
             onReact: (id, emoji) =>
                 log('QuarkMessageList.onReact($id, $emoji)'),
