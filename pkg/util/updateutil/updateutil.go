@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	github "github.com/autobutler-org/quark/pkg/util/githubutil"
@@ -433,6 +434,29 @@ const (
 	SelfUpdatableBinDir = "/opt/quark/bin"
 	LegacyBinPath       = "/usr/local/bin/quark"
 )
+
+// UpdateDirEnv names a directory that self-update installs into, in place of
+// the running binary. The container image sets it to /var/lib/quark/bin, in
+// its data volume (#2663). The image's own binary sits in /usr/local/bin,
+// which is root's and part of the image, so an update could not be written
+// there, and one written into the container's layer would be lost when the
+// container was recreated. RunInstalledUpdate is the other half.
+const UpdateDirEnv = "QUARK_UPDATE_DIR"
+
+// RunInstalledUpdate replaces this process with the quark binary in
+// $QUARK_UPDATE_DIR when that binary reports a newer version than this one.
+// When it hands off it does not return. Otherwise it returns nil and the
+// caller carries on with the binary it has. Because only a newer binary takes
+// over, pulling an image newer than the last self-update runs the image's
+// binary.
+func RunInstalledUpdate() error {
+	target := newerInstalledUpdate()
+	if target == "" {
+		return nil
+	}
+	fmt.Println("Running the update installed at", target)
+	return syscall.Exec(target, os.Args, os.Environ())
+}
 
 // ExitForRestart exits the process after a short pause, so the process manager
 // (systemd's Restart=always, or launchd) starts Quark again. The pause lets the

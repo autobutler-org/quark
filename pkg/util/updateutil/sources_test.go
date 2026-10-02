@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/autobutler-org/quark/pkg/util/versionutil"
 )
 
 // Every default source must be able to serve the archive this build asks for.
@@ -261,5 +263,90 @@ func TestSelfUpdateLayoutConstants(t *testing.T) {
 	}
 	if filepath.Dir(LegacyBinPath) == SelfUpdatableBinDir {
 		t.Error("the legacy path must not live in the self-updatable directory; it is a symlink into it")
+	}
+}
+
+// ── Updates installed into $QUARK_UPDATE_DIR (#2663) ────────────────────────
+
+// installFakeQuark writes a quark in dir that prints the given `quark version`
+// output, or fails when output is empty.
+func installFakeQuark(t *testing.T, dir, output string) string {
+	t.Helper()
+	script := "#!/bin/sh\nexit 1\n"
+	if output != "" {
+		script = fmt.Sprintf("#!/bin/sh\necho '%s'\n", output)
+	}
+	path := filepath.Join(dir, binaryName)
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake quark: %v", err)
+	}
+	return path
+}
+
+func withCurrentSemver(t *testing.T, semver string) {
+	t.Helper()
+	previous := versionutil.Semver
+	versionutil.Semver = semver
+	t.Cleanup(func() { versionutil.Semver = previous })
+}
+
+// The container's binary dir is root's, so an update has to land in the
+// volume instead, and the preflight has to check the volume.
+func TestUpdateTarget_UsesUpdateDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "bin")
+	t.Setenv(UpdateDirEnv, dir)
+
+	target, err := updateTarget()
+	if err != nil {
+		t.Fatalf("updateTarget: %v", err)
+	}
+	if want := filepath.Join(dir, binaryName); target != want {
+		t.Errorf("updateTarget = %q, want %q", target, want)
+	}
+	if err := CanSelfUpdate(); err != nil {
+		t.Errorf("CanSelfUpdate should check the update dir, which is writable: %v", err)
+	}
+}
+
+func TestNewerInstalledUpdate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake binary is a shell script")
+	}
+	tests := []struct {
+		name    string
+		current string
+		output  string
+		want    bool
+	}{
+		{name: "newer release takes over", current: "0.43.1", output: "0.44.0", want: true},
+		{name: "commit and date are ignored", current: "v0.43.1", output: "v0.44.0@abc123 from 2026-10-02", want: true},
+		{name: "older update loses to a newer image", current: "0.45.0", output: "0.44.0"},
+		{name: "same version stays put", current: "0.44.0", output: "0.44.0"},
+		{name: "binary that cannot run is ignored", current: "0.43.1", output: ""},
+		{name: "unparseable version is ignored", current: "0.43.1", output: "1.2"},
+		{name: "development build never hands off", current: versionutil.NoSemver, output: "0.44.0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv(UpdateDirEnv, dir)
+			withCurrentSemver(t, tt.current)
+			path := installFakeQuark(t, dir, tt.output)
+
+			got := newerInstalledUpdate()
+			if tt.want && got != path {
+				t.Errorf("newerInstalledUpdate = %q, want %q", got, path)
+			}
+			if !tt.want && got != "" {
+				t.Errorf("newerInstalledUpdate = %q, want no hand-off", got)
+			}
+		})
+	}
+}
+
+func TestNewerInstalledUpdate_NothingInstalled(t *testing.T) {
+	t.Setenv(UpdateDirEnv, t.TempDir())
+	if got := newerInstalledUpdate(); got != "" {
+		t.Errorf("newerInstalledUpdate = %q with no binary installed, want \"\"", got)
 	}
 }

@@ -38,7 +38,8 @@ quark-data` starts over. Port 8080 is the one `make serve/backend` uses too, so 
 `DOCKER_PORT=9000` to run both at once. Without a checkout, the same thing by hand:
 
 ```bash
-docker run -p 8080:8080 -v quark-data:/var/lib/quark ghcr.io/autobutler-org/quark:latest
+docker run -d --name quark --restart unless-stopped -p 8080:8080 \
+  -v quark-data:/var/lib/quark ghcr.io/autobutler-org/quark:latest
 ```
 
 Everything Quark keeps — the SQLite database and every uploaded
@@ -77,6 +78,27 @@ with your fresh backend.
 
 This is a released image running an unreleased binary. If your working tree carries a migration the
 release does not, it runs against whatever is in the mounted volume and does not roll back.
+
+## Updating
+
+Two ways, and they mix:
+
+- **Settings → Updates.** Quark downloads the release, checks its checksum, writes the binary to
+  `/var/lib/quark/bin/quark` in the volume, and exits. `quark serve` checks that directory on every
+  start and runs the binary there when it reports a newer version than the one in the image. The
+  update survives the container being recreated, because it lives in the volume.
+- **A new image.** `docker pull` and recreate the container. An image newer than the last update
+  from Settings runs its own binary, and the older copy in the volume is ignored.
+
+`QUARK_UPDATE_DIR` names the directory, and the image sets it. The image's own binary in
+`/usr/local/bin` belongs to root, and anything written into the container's layer would vanish on
+the next `docker run`. A copy there would also leave the image's older binary running against a
+database the update had already migrated.
+
+Quark exits to finish an update, so something has to start it again. Run the container with
+`--restart unless-stopped` (or `always`). A Kubernetes Deployment restarts it on its own.
+`make serve/docker` runs with `--rm`, so after an update the container is gone, and the next
+`make serve/docker` starts the updated binary from the volume.
 
 ## Kubernetes
 
@@ -150,7 +172,7 @@ The mount point is `/var/lib/quark`, the whole Quark root rather than just the `
 Two things live under it: `data/` (the SQLite database and every uploaded file) and `tsnet/`, where
 [`remoteutil.stateDir()`](../pkg/util/remoteutil/helpers.go) keeps tailnet enrollment. `tsnet/` is a
 sibling of `data/`, so mounting only `data/` would throw away the tailnet identity every time the
-container was recreated. The root is also the `quark` user's home directory, so a stray `.cache/`
+container was recreated. An update installed from Settings adds `bin/` (see Updating above). The root is also the `quark` user's home directory, so a stray `.cache/`
 may appear beside them.
 
 Pointing it at a directory on the host instead of a named volume:

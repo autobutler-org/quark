@@ -11,9 +11,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strings"
+
+	"github.com/autobutler-org/quark/pkg/util/versionutil"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 )
@@ -210,7 +214,7 @@ func isStaleBackupName(name string) bool {
 // Extraction only begins after verify returns, so an archive that fails the
 // check never reaches the executable.
 func replaceSelf(body io.Reader, verify func(sum []byte) error) error {
-	execPath, err := resolvedExecutable()
+	execPath, err := updateTarget()
 	if err != nil {
 		return err
 	}
@@ -329,19 +333,71 @@ func replaceSelf(body io.Reader, verify func(sum []byte) error) error {
 	return nil
 }
 
-// selfUpdateDir returns the directory holding the running executable — the
-// directory replaceSelf must be able to write to.
+// selfUpdateDir returns the directory replaceSelf must be able to write to:
+// the one holding the running executable, or $QUARK_UPDATE_DIR.
 //
 // Symlinks are resolved so that the answer is the directory the atomic rename
 // actually lands in. With the binary installed at serviceBinaryPath and
 // /usr/local/bin/quark kept as a symlink, the resolved directory is the
 // group-writable one, not the root-owned one the symlink lives in.
 func selfUpdateDir() (string, error) {
-	execPath, err := resolvedExecutable()
+	target, err := updateTarget()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Dir(execPath), nil
+	return filepath.Dir(target), nil
+}
+
+// updateTarget is the path an update is written to: quark in
+// $QUARK_UPDATE_DIR when that is set, and the running binary otherwise.
+func updateTarget() (string, error) {
+	dir := os.Getenv(UpdateDirEnv)
+	if dir == "" {
+		return resolvedExecutable()
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create %s: %w", dir, err)
+	}
+	return filepath.Join(dir, binaryName), nil
+}
+
+// releaseSemver matches the version a release build prints, with or without
+// the leading "v". CompareVersions indexes three parts without checking, so
+// anything else must not reach it.
+var releaseSemver = regexp.MustCompile(`^v?\d+\.\d+\.\d+$`)
+
+// newerInstalledUpdate returns the quark binary in $QUARK_UPDATE_DIR when it is
+// not the running one and reports a newer release than this binary, and ""
+// otherwise. Its version comes from running it, so a binary that cannot run (a
+// truncated file, another architecture) is never handed off to.
+func newerInstalledUpdate() string {
+	dir := os.Getenv(UpdateDirEnv)
+	if dir == "" {
+		return ""
+	}
+	target, err := filepath.EvalSymlinks(filepath.Join(dir, binaryName))
+	if err != nil {
+		return ""
+	}
+	if self, err := resolvedExecutable(); err != nil || self == target {
+		return ""
+	}
+	out, err := exec.Command(target, "version").Output()
+	if err != nil {
+		fmt.Printf("Warning: ignoring %s, which failed to report its version: %v\n", target, err)
+		return ""
+	}
+	// `quark version` prints "<semver>[@<commit>][ from <date>]".
+	installed, _, _ := strings.Cut(strings.TrimSpace(string(out)), " ")
+	installed, _, _ = strings.Cut(installed, "@")
+	current := versionutil.GetVersion()
+	if !releaseSemver.MatchString(installed) || !releaseSemver.MatchString(current.Semver) {
+		return ""
+	}
+	if versionutil.CompareVersions(versionutil.Version{Semver: installed}, *current) != 1 {
+		return ""
+	}
+	return target
 }
 
 // resolvedExecutable returns the path of the running binary with symlinks

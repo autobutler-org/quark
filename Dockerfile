@@ -72,8 +72,12 @@ USER quark
 
 # QUARK_INSECURE: TLS terminates at the ingress in every deployment this image targets. Unset it
 # and set HTTPS_PORT to use Quark's own self-signed certificate instead.
+# QUARK_UPDATE_DIR: self-update writes the new binary into the volume, and `quark serve` runs it
+# on the next start when it is newer than the one in /usr/local/bin (#2663). The image's binary is
+# root's, and a copy in the container's own layer would vanish when the container is recreated.
 ENV PORT=8080 \
     QUARK_INSECURE=true \
+    QUARK_UPDATE_DIR=/var/lib/quark/bin \
     GIN_MODE=release
 EXPOSE 8080
 # The whole root, not just data/: remoteutil.stateDir() puts tsnet state in the sibling
