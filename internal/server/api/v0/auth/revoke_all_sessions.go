@@ -10,8 +10,8 @@ import (
 )
 
 // revokeAllSessions godoc
-// @Summary Revoke all sessions (log out everywhere)
-// @Description Deletes all active sessions for the authenticated user.
+// @Summary Revoke all other sessions (sign out everywhere else)
+// @Description Deletes every session of the authenticated user except the one the request was authenticated with. A request authenticated without a session (HTTP Basic) has none to keep, so every session is deleted.
 // @Tags auth
 // @Produce json
 // @Success 200 {object} object{revoked=bool}
@@ -30,7 +30,10 @@ func revokeAllSessions(c *gin.Context) *serverutil.Response {
 		return serverutil.Unauthorized(fmt.Errorf("not authenticated"))
 	}
 
-	if err := authutil.RevokeAllSessions(c.Request.Context(), (*deps).Database().Queries, userID); err != nil {
+	// Absent under HTTP Basic auth, which has no session to keep.
+	sessionID, _ := ctxutil.Get[string](c, "sessionID")
+
+	if err := authutil.RevokeOtherSessions(c.Request.Context(), (*deps).Database().Queries, userID, sessionID); err != nil {
 		return serverutil.InternalServerError(err)
 	}
 	return serverutil.Ok().WithData(gin.H{"revoked": true})

@@ -234,6 +234,9 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 		for _, t := range tokens {
 			username, userID, err := authutil.ValidateSession(ctx, db.Queries, t)
 			if err == nil {
+				// Which session this is, so the session routes can mark it
+				// current and spare it from "sign out everywhere else" (#1663).
+				c = ctxutil.With(c, "sessionID", authutil.SessionID(t))
 				authenticated(c, db.Queries, username, userID)
 				return
 			}

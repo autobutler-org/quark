@@ -248,6 +248,17 @@ type SessionInfo struct {
 	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"createdAt"`
 	ExpiresAt time.Time `json:"expiresAt"`
+	// LastUsedAt is when the session last renewed itself; renewal is
+	// debounced, so it can trail the newest request.
+	LastUsedAt time.Time `json:"lastUsedAt"`
+	// Current marks the session the request was authenticated with.
+	Current bool `json:"current"`
+}
+
+// SessionID returns the id a session token is listed and revoked under: the
+// digest it is stored as.
+func SessionID(token string) string {
+	return hashToken(token)
 }
 
 // HashPassword hashes a plaintext password using bcrypt. Test binaries hash
@@ -823,8 +834,10 @@ func Recover(ctx context.Context, database *db.DatabaseSqlc, params RecoverParam
 
 // ListActiveSessions returns all non-expired sessions for the given user.
 // Because tokens are stored as SHA-256 digests, the digest itself is used
-// as the opaque session ID exposed to clients.
-func ListActiveSessions(ctx context.Context, queries *db.Queries, userID int64) ([]SessionInfo, error) {
+// as the opaque session ID exposed to clients. currentID is the id of the
+// session the caller is using, which is marked Current; pass "" when the
+// caller has none.
+func ListActiveSessions(ctx context.Context, queries *db.Queries, userID int64, currentID string) ([]SessionInfo, error) {
 	rows, err := queries.ListActiveSessionsForUser(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
@@ -833,9 +846,11 @@ func ListActiveSessions(ctx context.Context, queries *db.Queries, userID int64) 
 	for _, s := range rows {
 		out = append(out, SessionInfo{
 			// s.Token is already the SHA-256 digest (stored that way in newSession).
-			ID:        s.Token,
-			CreatedAt: s.CreatedAt,
-			ExpiresAt: s.ExpiresAt,
+			ID:         s.Token,
+			CreatedAt:  s.CreatedAt,
+			ExpiresAt:  s.ExpiresAt,
+			LastUsedAt: s.LastUsedAt,
+			Current:    s.Token == currentID,
 		})
 	}
 	return out, nil
@@ -864,6 +879,16 @@ func RevokeSession(ctx context.Context, queries *db.Queries, userID int64, id st
 // RevokeAllSessions deletes all sessions for the given user.
 func RevokeAllSessions(ctx context.Context, queries *db.Queries, userID int64) error {
 	if err := queries.DeleteUserSessions(ctx, userID); err != nil {
+		return fmt.Errorf("failed to revoke sessions: %w", err)
+	}
+	return nil
+}
+
+// RevokeOtherSessions deletes every session of the given user except keepID,
+// the id of the session the caller is using. With keepID "" there is nothing
+// to keep and every session goes.
+func RevokeOtherSessions(ctx context.Context, queries *db.Queries, userID int64, keepID string) error {
+	if err := queries.DeleteOtherUserSessions(ctx, db.DeleteOtherUserSessionsParams{UserID: userID, Token: keepID}); err != nil {
 		return fmt.Errorf("failed to revoke sessions: %w", err)
 	}
 	return nil

@@ -74,8 +74,13 @@ DELETE FROM sessions WHERE expires_at <= datetime('now');
 -- name: DeleteUserSessions :exec
 DELETE FROM sessions WHERE user_id = ?;
 
+-- "Sign out everywhere else" (#1663): every session of the user but the one
+-- the request came in on.
+-- name: DeleteOtherUserSessions :exec
+DELETE FROM sessions WHERE user_id = ? AND token != ?;
+
 -- name: ListActiveSessionsForUser :many
-SELECT token, user_id, expires_at, created_at
+SELECT token, user_id, expires_at, created_at, last_used_at
 FROM sessions
 WHERE user_id = ? AND expires_at > datetime('now')
 ORDER BY created_at DESC;

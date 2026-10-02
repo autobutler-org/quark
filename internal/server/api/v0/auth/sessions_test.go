@@ -28,14 +28,16 @@ func newAuthTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 }
 
 // newSessionsTestEngine creates a gin engine with auth routes and a test user+session.
-// Returns the engine, the db queries handle, and the userID of the created test user.
+// The session Setup created is put on the context as the caller's own, the way
+// requireAuth does. Returns the engine, the db queries handle, and the userID
+// of the created test user.
 func newSessionsTestEngine(t *testing.T) (*gin.Engine, *db.Queries, int64) {
 	t.Helper()
 	sqlDB, queries := newAuthTestDB(t)
 
 	// Setup a test user via authutil so password hashing is correct.
 	ctx := context.Background()
-	_, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
+	setup, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "testuser",
 		Password: "TestPassword123!",
 	})
@@ -49,6 +51,7 @@ func newSessionsTestEngine(t *testing.T) (*gin.Engine, *db.Queries, int64) {
 		t.Fatalf("GetUserByUsername: %v", err)
 	}
 	userID := user.ID
+	sessionID := authutil.SessionID(setup.SessionToken)
 
 	// Inject deps into gin context.
 	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{
@@ -61,6 +64,7 @@ func newSessionsTestEngine(t *testing.T) (*gin.Engine, *db.Queries, int64) {
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
 		c = ctxutil.With(c, "userID", userID)
+		c = ctxutil.With(c, "sessionID", sessionID)
 		c.Next()
 	})
 	group := engine.Group("/api/v0")
@@ -82,10 +86,12 @@ func TestListSessions_ReturnsSessions(t *testing.T) {
 
 	// Add a second session manually.
 	ctx := context.Background()
+	lastUsed := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
 	_, err := queries.CreateSession(ctx, db.CreateSessionParams{
-		Token:     "extra-token-xyz",
-		UserID:    userID,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+		Token:      "extra-token-xyz",
+		UserID:     userID,
+		ExpiresAt:  time.Now().Add(24 * time.Hour),
+		LastUsedAt: lastUsed,
 	})
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
@@ -105,6 +111,15 @@ func TestListSessions_ReturnsSessions(t *testing.T) {
 	// Setup created 1 session; we added 1 more = 2 total.
 	if len(body.Sessions) < 2 {
 		t.Errorf("expected >= 2 sessions, got %d; body: %s", len(body.Sessions), w.Body.String())
+	}
+	// Only the session the request came in on is marked current.
+	for _, s := range body.Sessions {
+		if s.Current == (s.ID == "extra-token-xyz") {
+			t.Errorf("session %q: current = %v", s.ID, s.Current)
+		}
+		if s.ID == "extra-token-xyz" && !s.LastUsedAt.Equal(lastUsed) {
+			t.Errorf("lastUsedAt = %v, want %v", s.LastUsedAt, lastUsed)
+		}
 	}
 }
 
@@ -146,9 +161,9 @@ func TestListSessions_EmptyWhenNoActiveSessions(t *testing.T) {
 	}
 }
 
-// TestRevokeAllSessions_RemovesAll verifies DELETE /auth/sessions removes all
-// sessions for the user and subsequent list returns empty.
-func TestRevokeAllSessions_RemovesAll(t *testing.T) {
+// TestRevokeAllSessions_KeepsCaller verifies DELETE /auth/sessions removes
+// every session for the user except the one the request came in on.
+func TestRevokeAllSessions_KeepsCaller(t *testing.T) {
 	engine, queries, userID := newSessionsTestEngine(t)
 	ctx := context.Background()
 
@@ -176,6 +191,14 @@ func TestRevokeAllSessions_RemovesAll(t *testing.T) {
 	if !body.Revoked {
 		t.Error("expected revoked=true")
 	}
+
+	remaining, err := queries.ListActiveSessionsForUser(ctx, userID)
+	if err != nil {
+		t.Fatalf("ListActiveSessionsForUser: %v", err)
+	}
+	if len(remaining) != 1 || remaining[0].Token == "second-token" {
+		t.Errorf("expected only the caller's session to remain, got %+v", remaining)
+	}
 }
 
 // TestRevokeSession_ByID revokes a specific session and confirms it disappears
@@ -195,7 +218,7 @@ func TestRevokeSession_ByID(t *testing.T) {
 	}
 
 	// Get session list to find the ID of the session we just added.
-	sessions, err := authutil.ListActiveSessions(ctx, queries, userID)
+	sessions, err := authutil.ListActiveSessions(ctx, queries, userID, "")
 	if err != nil {
 		t.Fatalf("ListActiveSessions: %v", err)
 	}
