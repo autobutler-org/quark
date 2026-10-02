@@ -8,9 +8,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/pages/file_browser_page.dart';
+import 'package:quark/pages/generic_file_viewer_page.dart';
 import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
+import 'package:quark/router.dart' as app;
+import 'package:quark/router.dart' show AppRoutes;
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -92,6 +95,13 @@ class _RecordingClient implements HttpClient {
           'isDir': false,
           'dirPath': '${url.queryParameters['rootDir'] ?? ''}/song.mp3',
           'fileType': 'audio',
+        },
+        {
+          'name': 'report.pdf',
+          'size': 12,
+          'isDir': false,
+          'dirPath': '${url.queryParameters['rootDir'] ?? ''}/report.pdf',
+          'fileType': 'pdf',
         },
         {
           'name': 'clip.mp4',
@@ -233,33 +243,50 @@ void main() {
       )
       .toList();
 
-  testWidgets('a route pointing at an open file is never listed', (
+  /// Pumps the browser at [location] under a router nested like
+  /// lib/router.dart, with the app's real `/view` route beside it.
+  Future<GoRouter> pumpRouted(WidgetTester tester, String location) async {
+    final router = GoRouter(
+      initialLocation: location,
+      routes: [
+        app.router.configuration.routes.whereType<GoRoute>().firstWhere(
+          (route) => route.path == '${AppRoutes.viewFile}/:path(.*)',
+        ),
+        GoRoute(
+          path: '/files',
+          builder: (_, _) => const FileBrowserPage(),
+          routes: [
+            GoRoute(
+              path: ':path(.*)',
+              builder: (_, state) =>
+                  FileBrowserPage(initialPath: state.pathParameters['path']),
+            ),
+          ],
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    return router;
+  }
+
+  testWidgets('a route pointing at a file opens it at its own URL', (
     tester,
   ) async {
-    const filePath = '/report.pdf';
-
     await HttpOverrides.runZoned(() async {
-      await tester.pumpWidget(
-        const MaterialApp(home: FileBrowserPage(initialPath: filePath)),
-      );
-      // Let the deep link resolve: stat names a file, and the page marks it
-      // open and pushes its viewer over itself. Any viewer reaches the same
-      // state the bug needs — the browser mounted underneath with
-      // `_currentPath` still on the file — so this uses the one that does not
-      // also need a GoRouter in the tree.
+      final router = await pumpRouted(tester, '/files/report.pdf');
+      // Let the deep link resolve: stat names a file, and the browser hands
+      // it to its viewer's URL (#2328).
       await tester.pump();
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 500));
 
-      expect(
-        FileBrowserCache.instance.isFileOpen(filePath),
-        isTrue,
-        reason: 'the viewer must actually be open for this to test anything',
-      );
+      expect(router.state.uri.path, '/view/report.pdf');
+      expect(find.byType(GenericFileViewerPage), findsOneWidget);
+      expect(find.byType(FileBrowserPage), findsNothing);
 
-      // The browser stays mounted underneath with `_currentPath` still on the
-      // file, and AutoRefreshMixin's timer used to reissue the doomed listing
-      // every interval for the whole session in the sheet.
+      // AutoRefreshMixin's timer used to reissue the doomed listing every
+      // interval while the browser sat under the viewer on the file's path.
       await tester.pump(const Duration(seconds: 60));
       await tester.pump(const Duration(seconds: 60));
 
@@ -303,9 +330,7 @@ void main() {
     // `isInitialLoad` before `statFile` has answered — so the browser rendered
     // "No files yet" until the viewer took over.
     await HttpOverrides.runZoned(() async {
-      await tester.pumpWidget(
-        const MaterialApp(home: FileBrowserPage(initialPath: '/report.pdf')),
-      );
+      await pumpRouted(tester, '/files/report.pdf');
       for (var i = 0; i < 8; i++) {
         expect(
           find.text('No files yet'),
@@ -358,32 +383,13 @@ void main() {
     }, createHttpClient: overrides.createHttpClient);
   });
 
-  /// Pumps the browser at [location] under a router nested like
-  /// lib/router.dart, taps [name], and returns the router once the push
-  /// animation — and the URL sync that follows it — is over.
+  /// [pumpRouted] at [location], then taps [name] once it is listed.
   Future<GoRouter> clickFile(
     WidgetTester tester,
     String location,
     String name,
   ) async {
-    final router = GoRouter(
-      initialLocation: location,
-      routes: [
-        GoRoute(
-          path: '/files',
-          builder: (_, _) => const FileBrowserPage(),
-          routes: [
-            GoRoute(
-              path: ':path(.*)',
-              builder: (_, state) =>
-                  FileBrowserPage(initialPath: state.pathParameters['path']),
-            ),
-          ],
-        ),
-      ],
-    );
-    addTearDown(router.dispose);
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    final router = await pumpRouted(tester, location);
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
@@ -399,8 +405,7 @@ void main() {
     // whole before the viewer appeared. The listing already knows the type, so
     // the viewer is built within a frame of the tap (offstage only while the
     // route sets up its hero flight) and it is the viewer that asks for the
-    // bytes. From the home folder that one frame builds the file's own page,
-    // which the viewer lands on (#2002).
+    // bytes.
     await tester.pump();
     expect(find.byType(ImageViewerPage, skipOffstage: false), findsOneWidget);
 
@@ -419,23 +424,33 @@ void main() {
     return router;
   }
 
-  testWidgets('clicking a photo opens its viewer, then its URL follows', (
-    tester,
-  ) async {
+  testWidgets('clicking a photo opens it at its own URL', (tester) async {
     await HttpOverrides.runZoned(() async {
       final router = await clickPhoto(tester, '/files/photos');
-      expect(router.state.uri.path, '/files/photos/beach.jpg');
+      expect(router.state.uri.path, '/view/photos/beach.jpg');
     }, createHttpClient: overrides.createHttpClient);
   });
 
   testWidgets('clicking a photo in the home folder shows its URL', (
     tester,
   ) async {
-    // /files/beach.jpg is a nested page under /files. Going to it used to
-    // stack a second browser over the viewer, so the URL stayed on /files.
+    // #2002: /files/beach.jpg was a nested page under /files, and going to it
+    // stacked a second browser over the viewer.
     await HttpOverrides.runZoned(() async {
       final router = await clickPhoto(tester, '/files');
-      expect(router.state.uri.path, '/files/beach.jpg');
+      expect(router.state.uri.path, '/view/beach.jpg');
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  testWidgets('clicking a pdf opens it at its own URL', (tester) async {
+    // #2328: the generic viewer was pushed and never touched the URL, so it
+    // could not be reloaded, shared or closed with browser back.
+    await HttpOverrides.runZoned(() async {
+      final router = await clickFile(tester, '/files/papers', 'report.pdf');
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(router.state.uri.path, '/view/papers/report.pdf');
+      expect(find.byType(GenericFileViewerPage), findsOneWidget);
     }, createHttpClient: overrides.createHttpClient);
   });
 
@@ -452,12 +467,17 @@ void main() {
       return router;
     }
 
-    /// Unmounts the viewer so the player's timers do not outlive the test.
-    Future<void> unmount(WidgetTester tester) =>
-        tester.pumpWidget(const SizedBox());
+    /// Unmounts the page so the player's timers, and a folder listing still
+    /// in flight, do not outlive the test.
+    Future<void> unmount(WidgetTester tester) async {
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpWidget(const SizedBox());
+    }
 
     for (final folder in ['/files', '/files/movies']) {
-      final clip = folder == '/files' ? '/files/clip.mp4' : '$folder/clip.mp4';
+      final clip = folder == '/files'
+          ? '/view/clip.mp4'
+          : '/view/${folder.substring(7)}/clip.mp4';
 
       testWidgets('in $folder shows the video at $clip', (tester) async {
         // #2002: from the home folder the URL stayed on /files.
@@ -482,10 +502,6 @@ void main() {
           expect(router.state.uri.path, folder);
           expect(find.byType(VideoViewerPage), findsNothing);
           expect(find.byType(FileBrowserPage), findsOneWidget);
-          expect(
-            FileBrowserCache.instance.isFileOpen(clip.substring(7)),
-            isFalse,
-          );
           await unmount(tester);
         }, createHttpClient: overrides.createHttpClient);
       });
@@ -495,7 +511,7 @@ void main() {
       ) async {
         await HttpOverrides.runZoned(() async {
           final router = await clickVideo(tester, folder);
-          Navigator.of(tester.element(find.byType(VideoViewerPage))).pop();
+          await tester.tap(find.byType(BackButton));
           await tester.pump();
           await tester.pump(const Duration(seconds: 1));
 

@@ -10,6 +10,7 @@ import 'package:quark/pages/chat_page.dart';
 import 'package:quark/pages/docs_page.dart';
 import 'package:quark/pages/document_editor_page.dart';
 import 'package:quark/pages/file_browser_page.dart';
+import 'package:quark/pages/file_viewer_page.dart';
 import 'package:quark/pages/login_page.dart';
 import 'package:quark/pages/photo_duplicates_page.dart';
 import 'package:quark/pages/photos_page.dart';
@@ -30,6 +31,8 @@ import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/feature_flags_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
+import 'package:quark/utils/file_kind.dart';
+import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark_widgets/quark_widgets.dart' show CalendarDates;
 
 // Route paths — use these constants everywhere instead of string literals.
@@ -43,8 +46,8 @@ class AppRoutes {
   // that redirect to /files.
   static const legacyCirrus = '/cirrus';
 
-  /// Deep-link pattern for opening a specific file in the correct viewer.
-  /// e.g. /view/photos/2024/beach.jpg resolves the type and opens the viewer.
+  /// A file's own viewer, for every kind without an editor of its own.
+  /// e.g. /view/photos/2024/beach.jpg opens the photo viewer (#2328).
   static const viewFile = '/view';
 
   /// Deep-link pattern for a specific path inside the file browser.
@@ -306,12 +309,8 @@ class AppRoutes {
   ///
   /// [serial] names the device the file is on, carried as a query param when
   /// non-empty the way the editor routes carry it.
-  static String containingFolder(String filePath, {String serial = ''}) {
-    final folder = filesPath(parentPath(filePath));
-    return serial.isEmpty
-        ? folder
-        : '$folder?serial=${Uri.encodeQueryComponent(serial)}';
-  }
+  static String containingFolder(String filePath, {String serial = ''}) =>
+      _withSerial(filesPath(parentPath(filePath)), serial);
 }
 
 /// A tab of a page whose tabs have their own URLs, `/<page>/<slug>`. Each such
@@ -461,30 +460,29 @@ final router = GoRouter(
       ],
     ),
     GoRoute(
-      // /view/:path redirects to /files/:path for backward compatibility.
+      // Matches /view/<anything including slashes>: the file's own viewer, so
+      // a reload or a shared link reopens it and browser back closes it
+      // (#2328). Kinds with an editor, folders and archives go where they
+      // open instead.
       path: '${AppRoutes.viewFile}/:path(.*)',
-      redirect: (context, state) {
-        final raw = state.pathParameters['path'] ?? '';
-        final serial = state.uri.queryParameters['serial'];
-        final base = AppRoutes.filesPath(raw);
-        return serial != null && serial.isNotEmpty
-            ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
-            : base;
-      },
+      redirect: (context, state) => viewFileRedirect(
+        state.pathParameters['path'] ?? '',
+        state.uri.queryParameters['serial'],
+      ),
+      builder: (context, state) => FileViewerPage(
+        filePath: state.pathParameters['path'] ?? '',
+        serial: state.uri.queryParameters['serial'] ?? '',
+      ),
     ),
     GoRoute(
       // TODO(pre-v1.0.0, #1601): delete this route with the /cirrus alias.
       // /cirrus/:path redirects to /files/:path. The browser lived at /cirrus
       // before the rename, so old links and bookmarks must keep resolving.
       path: '${AppRoutes.legacyCirrus}/:path(.*)',
-      redirect: (context, state) {
-        final raw = state.pathParameters['path'] ?? '';
-        final serial = state.uri.queryParameters['serial'];
-        final base = AppRoutes.filesPath(raw);
-        return serial != null && serial.isNotEmpty
-            ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
-            : base;
-      },
+      redirect: (context, state) => _withSerial(
+        AppRoutes.filesPath(state.pathParameters['path'] ?? ''),
+        state.uri.queryParameters['serial'],
+      ),
     ),
     GoRoute(
       // TODO(pre-v1.0.0, #1601): delete this route with the /cirrus alias.
@@ -685,6 +683,27 @@ final router = GoRouter(
   errorBuilder: (context, state) =>
       Scaffold(body: Center(child: Text('Page not found: ${state.uri}'))),
 );
+
+/// Where `/view/[path]` belongs instead, or null when [FileViewerPage] shows
+/// it. Docs, sheets and text have editors at their own URLs; a folder or an
+/// archive is browsed in Files. [serial] rides along to whichever it is.
+String? viewFileRedirect(String path, String? serial) {
+  final folder = AppRoutes.filesPath(path);
+  if (!isLikelyFilePath(path)) return _withSerial(folder, serial);
+  return switch (fileKindForName(path)) {
+    FileKind.qdoc => AppRoutes.docFile(path, serial: serial),
+    FileKind.qsheet => AppRoutes.sheetFile(path, serial: serial),
+    FileKind.text ||
+    FileKind.code => AppRoutes.plaintextEditorPath(path, serial: serial),
+    FileKind.archive => _withSerial(folder, serial),
+    _ => null,
+  };
+}
+
+String _withSerial(String base, String? serial) =>
+    serial != null && serial.isNotEmpty
+    ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
+    : base;
 
 /// How the app asks the Quark whether it has been set up yet.
 ///
