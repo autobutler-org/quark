@@ -695,6 +695,9 @@ widgets and reads in one screen.
   pins the shapes and status codes
   [quark-browser-extensions](https://github.com/autobutler-org/quark-browser-extensions) reads from `/auth/login`,
   `/auth/logout` and `/vault/*`. A change that breaks it also needs a quark-browser-extensions PR
+- **PRs merge through the merge queue.** The queue re-runs the full check, build and test set on the PR
+  combined with `main` and everything queued ahead of it, so a PR or a stack does not need rebasing just to
+  be up to date with `main`. Rebase when there is a real conflict, or when the queue rejects the PR
 - Run `make check` before pushing; the pre-commit hook runs it too, once `make setup/hooks` has
 
 ### Platform and generated code
