@@ -400,4 +400,44 @@ void main() {
       expect(find.byType(PopupMenuItem<int>), findsNothing);
     });
   });
+
+  // #2483: a menu opened from the last row on screen must show every action
+  // inside the window, not run off the bottom of it.
+  testBothViewports('keeps a bottom row menu on screen', (tester, size) async {
+    final many = [
+      for (var i = 0; i < 40; i++) UserAccountItem(username: 'u$i'),
+    ];
+    await pumpAt(
+      tester,
+      scrolling(
+        UserList(
+          users: many,
+          onPromote: (_) {},
+          onDisable: (_) {},
+          onDelete: (_) {},
+        ),
+      ),
+      size: size,
+    );
+    final screen = Offset.zero & size;
+    // The last row whose menu button is wholly inside the window.
+    final lowest = many.map((user) => user.username).lastWhere((name) {
+      final button = find.byKey(ValueKey('user_menu_$name'));
+      return button.evaluate().isNotEmpty &&
+          screen.contains(tester.getBottomLeft(button));
+    });
+
+    await openMenu(tester, lowest);
+
+    for (final action in ['promote', 'disable', 'delete']) {
+      final entry = tester.getRect(
+        find.byKey(ValueKey('user_action_${action}_$lowest')),
+      );
+      expect(
+        screen.contains(entry.topLeft) && screen.contains(entry.bottomRight),
+        isTrue,
+        reason: '$action at $entry is outside $screen',
+      );
+    }
+  });
 }

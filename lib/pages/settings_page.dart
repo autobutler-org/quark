@@ -697,6 +697,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               onOpenAccountAndData: () =>
                   context.push(AppRoutes.accountAndData),
+              onOpenUsers: () => context.go(AppRoutes.users),
             ),
           ),
           QuarkTab(
