@@ -9,6 +9,8 @@ import '../theme/quark_tokens.dart';
 /// empty. It is not a failure state — a page that could not load composes its
 /// own sentence and renders a disconnected or error widget instead.
 ///
+/// In a space too short for it, the block scrolls instead of overflowing.
+///
 /// Emits no `ValueKey`s of its own; the widget passed as [action] carries its
 /// own key.
 ///
@@ -48,7 +50,11 @@ class EmptyStateWidget extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
 
     return Center(
-      child: Padding(
+      // Scrolls rather than overflows when whatever sits around it leaves less
+      // height than the block needs, as a phone with a card over the listing
+      // does (#2022). With room to spare it is as tall as its content, so the
+      // Center still centers it.
+      child: SingleChildScrollView(
         padding: EdgeInsets.symmetric(
           horizontal: tokens.spacingXl,
           vertical: tokens.spacingLg,

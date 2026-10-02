@@ -26,7 +26,7 @@ Covers first-boot setup, login, logout, and password recovery.
 
 **Expected result:**
 
-- App navigates to `/files` (file browser).
+- App navigates to `/files` (file browser), which greets the new owner with the welcome card (JN-FB-041).
 - The username is accepted and the account is live on the quark.
 - The theme chosen is applied immediately.
 
@@ -51,7 +51,7 @@ Covers first-boot setup, login, logout, and password recovery.
 
 **Expected result:**
 
-- App navigates to `/files`.
+- App navigates to `/files`, which says "Welcome back" once (JN-FB-042).
 - Session token is stored; subsequent navigation does not require re-login.
   Quark
 
@@ -274,7 +274,7 @@ account on this Quark.
 
 **Expected result:**
 
-- App navigates to `/files`.
+- App navigates to `/files`, which says "Welcome back" once (JN-FB-042).
 - Signing in again later goes straight to `/files`, with no phrase.
 
 **Notes:**

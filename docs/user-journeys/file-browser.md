@@ -765,3 +765,57 @@ group the user is in, publishes `access_changed`.
   not code, `.log` or `.env`.
 - On web and desktop nothing is underlined in either file, because those platforms give Flutter no spell
   checker. The Docs editor is not covered yet (#2210).
+
+---
+
+### JN-FB-041: A new owner is welcomed on Files
+
+**Preconditions:** First-boot setup has just been finished with **Get started** (JN-AUTH-001), as `alice`.
+
+**Steps:**
+
+1. Read the welcome card.
+2. Reload the app.
+3. Open a folder, then go back to where Files opened.
+4. Tap **Dismiss** on the card.
+5. Reload the app.
+
+**Expected result:**
+
+- The card reads "Welcome, alice" and "Your files stay on your Quark. Start by adding something.", and offers
+  **Upload**, **New folder** and **Open Vault**. Each does what the same action does elsewhere: the first two act on
+  the folder on screen, and **Open Vault** goes to `/vault`.
+- The card is still there after the reload: it stays until it is dismissed.
+- It shows only where Files opens, not inside other folders or over search results, and at every width.
+- Once dismissed it does not come back, on this device, for this Quark.
+
+**Notes:**
+
+- **Open Vault** is offered only to an admin, and appears once the app has heard from the Quark that the account is
+  one.
+- The card is owed from **Get started**. Leaving the wizard before that, by reloading on the recovery phrase or theme
+  step, lands on Files without it.
+- What is remembered is per device and per Quark, so another browser signed in to the same Quark shows no card.
+
+---
+
+### JN-FB-042: Signing in says welcome back
+
+**Preconditions:** Quark is set up. Signed out.
+
+**Steps:**
+
+1. Sign in as `bob` (JN-AUTH-002).
+2. Read the greeting.
+3. Reload the app.
+
+**Expected result:**
+
+- One line reads "Welcome back, bob", with a **Dismiss** button and no other actions.
+- After the reload there is no greeting: a session the app already held is not a sign-in.
+
+**Notes:**
+
+- A session old enough to have no stored username is greeted with "Welcome back" alone.
+- An owner who has not dismissed their card (JN-FB-041) sees that card after signing in, not this line.
+

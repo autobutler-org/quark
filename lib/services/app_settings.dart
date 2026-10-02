@@ -117,6 +117,18 @@ class HostEntry {
 
 /// The app's saved state: the known Quarks and which one is active, each one's session token and username, the
 /// theme, demo mode, and accepted terms. Tokens go to secure storage, except on web.
+/// What the Files landing greets the user with (#2022).
+enum FilesWelcome {
+  /// Nothing: a stored session, a reload, or a greeting already dismissed.
+  none,
+
+  /// A one-line "welcome back", after an explicit sign-in.
+  signedIn,
+
+  /// The start-here card for an owner who has just finished setup.
+  newOwner,
+}
+
 class AppSettings {
   AppSettings._();
   static final AppSettings instance = AppSettings._();
@@ -202,6 +214,24 @@ class AppSettings {
   /// Hosts the user has accepted the terms for, keyed by [_hostKey].
   Set<String> _acceptedTermsHosts = {};
 
+  /// What the Files landing greets the user with on the current [activeHost]
+  /// (#2022).
+  ///
+  /// Derived state, recomputed by [_publishActiveHost] like
+  /// [hasAcceptedTerms]. Change it with [welcomeNewOwner], [greetSignIn] and
+  /// [dismissFilesWelcome].
+  final ValueNotifier<FilesWelcome> filesWelcome = ValueNotifier(
+    FilesWelcome.none,
+  );
+
+  /// Hosts whose new owner has not dismissed the welcome card yet, keyed by
+  /// [_hostKey]. Persisted, so the card survives a reload.
+  Set<String> _ownerWelcomeHosts = {};
+
+  /// The host an explicit sign-in just happened on, keyed by [_hostKey].
+  /// Memory only: a reload or a launch on a stored session greets nobody.
+  String? _signInGreetingHost;
+
   /// Notifies listeners whenever [activeHost] changes — a host added, edited,
   /// removed, or selected.
   ///
@@ -215,6 +245,7 @@ class AppSettings {
   /// token string here instead; [load] migrates that onto the active host.
   static const _sessionTokenKey = 'session_token';
   static const _acceptedTermsHostsKey = 'acceptedTermsHosts';
+  static const _ownerWelcomeHostsKey = 'ownerWelcomeHosts';
   static const _demoModeKey = 'demoMode';
   static const _photoSortFieldKey = 'photoSortField';
   static const _photoSortOrderKey = 'photoSortOrder';
@@ -287,6 +318,9 @@ class AppSettings {
 
     final storedTermsHosts = _prefs!.getStringList(_acceptedTermsHostsKey);
     _acceptedTermsHosts = storedTermsHosts?.toSet() ?? {};
+    _ownerWelcomeHosts =
+        _prefs!.getStringList(_ownerWelcomeHostsKey)?.toSet() ?? {};
+    _signInGreetingHost = null;
 
     _usernames = _decodeUsernames(_prefs!.getString(_usernamesKey));
 
@@ -485,6 +519,12 @@ class AppSettings {
     final host = activeHost;
     hasAcceptedTerms.value =
         host != null && _acceptedTermsHosts.contains(_hostKey(host));
+    final key = host == null ? null : _hostKey(host);
+    filesWelcome.value = _ownerWelcomeHosts.contains(key)
+        ? FilesWelcome.newOwner
+        : key != null && key == _signInGreetingHost
+        ? FilesWelcome.signedIn
+        : FilesWelcome.none;
     // Tokens are per-host, so switching Quarks changes what [sessionToken]
     // reports; republish so no listener is left holding the old host's.
     sessionTokenNotifier.value = sessionToken;
@@ -556,6 +596,9 @@ class AppSettings {
       if (_usernames.remove(_hostKey(_hosts[idx].hostAddress)) != null) {
         await _prefs?.setString(_usernamesKey, jsonEncode(_usernames));
       }
+      if (_ownerWelcomeHosts.remove(_hostKey(_hosts[idx].hostAddress))) {
+        await _persistOwnerWelcomeHosts();
+      }
       _hosts.removeAt(idx);
       if (_activeIndex >= _hosts.length) {
         _activeIndex = _hosts.length - 1;
@@ -616,6 +659,44 @@ class AppSettings {
     _acceptedTermsHosts.add(_hostKey(host));
     await _persistAcceptedTermsHosts();
     _publishActiveHost();
+  }
+
+  Future<void> _persistOwnerWelcomeHosts() async {
+    await _prefs?.setStringList(
+      _ownerWelcomeHostsKey,
+      _ownerWelcomeHosts.toList(),
+    );
+  }
+
+  /// Marks the current [activeHost] as owing its new owner the welcome card,
+  /// and persists it so the card survives a reload until
+  /// [dismissFilesWelcome]. Called when first-run setup finishes (#2022).
+  Future<void> welcomeNewOwner() async {
+    final host = activeHost;
+    if (host == null) return;
+    _ownerWelcomeHosts.add(_hostKey(host));
+    _publishActiveHost();
+    await _persistOwnerWelcomeHosts();
+  }
+
+  /// Marks an explicit sign-in on the current [activeHost], so Files says
+  /// "welcome back" once. Not persisted: a reload forgets it (#2022).
+  void greetSignIn() {
+    final host = activeHost;
+    if (host == null) return;
+    _signInGreetingHost = _hostKey(host);
+    _publishActiveHost();
+  }
+
+  /// Dismisses whatever [filesWelcome] shows for the current [activeHost].
+  /// An owner's card stays dismissed across reloads.
+  Future<void> dismissFilesWelcome() async {
+    final host = activeHost;
+    if (host == null) return;
+    if (_signInGreetingHost == _hostKey(host)) _signInGreetingHost = null;
+    final wasOwner = _ownerWelcomeHosts.remove(_hostKey(host));
+    _publishActiveHost();
+    if (wasOwner) await _persistOwnerWelcomeHosts();
   }
 
   /// Auto-refresh interval in seconds. 0 = disabled.

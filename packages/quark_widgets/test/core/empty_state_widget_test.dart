@@ -64,4 +64,30 @@ void main() {
     expect(find.byType(Text), findsOneWidget);
     expect(find.byType(FilledButton), findsNothing);
   });
+
+  testBothViewports('scrolls instead of overflowing a short space', (
+    tester,
+    size,
+  ) async {
+    // #2022: a card over a phone's listing left the empty state less height
+    // than it needs, and its column overflowed.
+    await pumpAt(
+      tester,
+      Align(
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          height: 120,
+          child: EmptyStateWidget(
+            icon: Icons.folder,
+            headline: 'Nothing here',
+            subtext: 'Upload a file to get started.',
+            action: FilledButton(onPressed: () {}, child: const Text('Upload')),
+          ),
+        ),
+      ),
+      size: size,
+    );
+
+    expect(tester.takeException(), isNull);
+  });
 }

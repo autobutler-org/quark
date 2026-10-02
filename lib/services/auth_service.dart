@@ -372,9 +372,16 @@ class AuthService {
   /// Stores [result]'s session and username, which is what signs the app in.
   ///
   /// [login] does this itself unless the result carries a recovery phrase.
+  /// Every explicit sign-in ends here and a launch on a stored session never
+  /// does, so this is also where Files is told to say "welcome back".
   static Future<void> acceptSession(LoginResult result) async {
     await AppSettings.instance.setSessionToken(result.sessionToken);
     await AppSettings.instance.setUsername(result.username);
+    // Last, so the greeting is published with the name already stored. Here
+    // rather than in the login page's success callback: storing the token
+    // above lets the router leave /login, and a page that has been unmounted
+    // by then never runs its callback (#2022).
+    AppSettings.instance.greetSignIn();
   }
 
   /// Resets [username]'s password using that account's recovery phrase and
