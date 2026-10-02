@@ -22,9 +22,9 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 }
 
 const createPendingUser = `-- name: CreatePendingUser :one
-INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, status)
-VALUES (?, ?, ?, ?, ?, 'pending')
-RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash
+INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, recovery_key_hash, status)
+VALUES (?, ?, ?, ?, ?, ?, 'pending')
+RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash
 `
 
 type CreatePendingUserParams struct {
@@ -33,6 +33,7 @@ type CreatePendingUserParams struct {
 	RecoveryPhraseHash string
 	AuthKeyHash        string
 	AuthSalt           string
+	RecoveryKeyHash    string
 }
 
 // CreatePendingUser records an account request from the sign-in page (#1908).
@@ -44,6 +45,7 @@ func (q *Queries) CreatePendingUser(ctx context.Context, arg CreatePendingUserPa
 		arg.RecoveryPhraseHash,
 		arg.AuthKeyHash,
 		arg.AuthSalt,
+		arg.RecoveryKeyHash,
 	)
 	var i User
 	err := row.Scan(
@@ -56,6 +58,7 @@ func (q *Queries) CreatePendingUser(ctx context.Context, arg CreatePendingUserPa
 		&i.Status,
 		&i.AuthSalt,
 		&i.AuthKeyHash,
+		&i.RecoveryKeyHash,
 	)
 	return i, err
 }
@@ -92,9 +95,9 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash
+INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, recovery_key_hash)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash
 `
 
 type CreateUserParams struct {
@@ -103,6 +106,7 @@ type CreateUserParams struct {
 	RecoveryPhraseHash string
 	AuthKeyHash        string
 	AuthSalt           string
+	RecoveryKeyHash    string
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -112,6 +116,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.RecoveryPhraseHash,
 		arg.AuthKeyHash,
 		arg.AuthSalt,
+		arg.RecoveryKeyHash,
 	)
 	var i User
 	err := row.Scan(
@@ -124,6 +129,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Status,
 		&i.AuthSalt,
 		&i.AuthKeyHash,
+		&i.RecoveryKeyHash,
 	)
 	return i, err
 }
@@ -230,7 +236,7 @@ func (q *Queries) GetSession(ctx context.Context, token string) (GetSessionRow, 
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash FROM users WHERE id = ? LIMIT 1
+SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash FROM users WHERE id = ? LIMIT 1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -246,12 +252,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.Status,
 		&i.AuthSalt,
 		&i.AuthKeyHash,
+		&i.RecoveryKeyHash,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash FROM users WHERE username = ? LIMIT 1
+SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash FROM users WHERE username = ? LIMIT 1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -267,6 +274,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Status,
 		&i.AuthSalt,
 		&i.AuthKeyHash,
+		&i.RecoveryKeyHash,
 	)
 	return i, err
 }
@@ -380,10 +388,29 @@ func (q *Queries) SetAuthKeyIfUnset(ctx context.Context, arg SetAuthKeyIfUnsetPa
 	return err
 }
 
+const setRecoveryKey = `-- name: SetRecoveryKey :exec
+UPDATE users
+SET recovery_key_hash = ?, recovery_phrase_hash = ''
+WHERE id = ?
+`
+
+type SetRecoveryKeyParams struct {
+	RecoveryKeyHash string
+	ID              int64
+}
+
+// SetRecoveryKey gives an account the recovery key its client derived from a
+// phrase it generated (#2430), and clears the phrase hash so the old phrase,
+// which the Quark saw, stops recovering the account.
+func (q *Queries) SetRecoveryKey(ctx context.Context, arg SetRecoveryKeyParams) error {
+	_, err := q.db.ExecContext(ctx, setRecoveryKey, arg.RecoveryKeyHash, arg.ID)
+	return err
+}
+
 const setRecoveryPhraseIfUnset = `-- name: SetRecoveryPhraseIfUnset :execrows
 UPDATE users
 SET recovery_phrase_hash = ?
-WHERE id = ? AND recovery_phrase_hash = ''
+WHERE id = ? AND recovery_phrase_hash = '' AND recovery_key_hash = ''
 `
 
 type SetRecoveryPhraseIfUnsetParams struct {
@@ -392,8 +419,9 @@ type SetRecoveryPhraseIfUnsetParams struct {
 }
 
 // SetRecoveryPhraseIfUnset gives an admin-created account its recovery phrase
-// on its first sign-in (#1873). Only an empty hash matches, so two sign-ins at
-// once cannot both hand out a phrase.
+// on its first sign-in (#1873). Only an account with neither a phrase nor a
+// recovery key matches, so two sign-ins at once cannot both hand out a phrase,
+// and one racing a recovery-key rotation cannot undo it (#2430).
 func (q *Queries) SetRecoveryPhraseIfUnset(ctx context.Context, arg SetRecoveryPhraseIfUnsetParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, setRecoveryPhraseIfUnset, arg.RecoveryPhraseHash, arg.ID)
 	if err != nil {

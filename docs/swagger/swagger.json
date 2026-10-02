@@ -1975,7 +1975,7 @@
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticates and returns a session token. The body takes one of three shapes: {username, password} checks the password; {username, authKey} checks the key the client derived from the password and the salt GET /auth/salt returned, and is a 401 for an account that has no auth key yet; {username, password, authKey} checks the password and gives an account with no auth key that one, keeping its password. authKey is the standard base64 of 32 bytes. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.",
+                "description": "Authenticates and returns a session token. The body takes one of three shapes: {username, password} checks the password; {username, authKey} checks the key the client derived from the password and the salt GET /auth/salt returned, and is a 401 for an account that has no auth key yet; {username, password, authKey} checks the password and gives an account with no auth key that one, keeping its password. authKey is the standard base64 of 32 bytes. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. legacyRecovery is true for an account that has no recovery key yet: an updated client generates a phrase and sends its key to PUT /auth/recovery-key (#2430). A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2052,7 +2052,7 @@
         },
         "/auth/recover": {
             "post": {
-                "description": "Resets the named account's password using its recovery phrase. The body carries exactly one of newPassword and newAuthKey, the standard base64 of the 32-byte key the client derived from the new password and the salt GET /auth/salt returned. Either one replaces both ways of signing in: a new password clears the account's auth key, and a new auth key clears its password. chatKeys, when sent, replaces the account's chat identity in the same transaction: the client fetched it from /auth/recover/keys, opened it with the phrase and re-wrapped it under the new password (#2416). The body is at most 8 KiB.",
+                "description": "Resets the named account's password using its recovery secret: exactly one of recoveryPhrase, the raw phrase of an account that has no recovery key yet, and recoveryKey, the standard base64 of the 32-byte key the client derived from the phrase and the salt GET /auth/salt returned. A wrong key reads exactly like a wrong phrase, and an account with a recovery key refuses every raw phrase. newRecoveryKey, sent only with newAuthKey, gives the account the key of a phrase the client just generated in the same transaction and clears the old phrase, so a legacy recovery is also the account's move to a recovery key (#2430). The body carries exactly one of newPassword and newAuthKey, the standard base64 of the 32-byte key the client derived from the new password and the salt GET /auth/salt returned. Either one replaces both ways of signing in: a new password clears the account's auth key, and a new auth key clears its password. chatKeys, when sent, replaces the account's chat identity in the same transaction: the client fetched it from /auth/recover/keys, opened it with the phrase and re-wrapped it under the new password (#2416). The body is at most 8 KiB.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2065,7 +2065,7 @@
                 "summary": "Recover account",
                 "parameters": [
                     {
-                        "description": "The account, its recovery phrase, the new password or auth key and optionally its re-wrapped chat keys",
+                        "description": "The account, its recovery phrase or key, the new password or auth key, and optionally a new recovery key and its re-wrapped chat keys",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2098,7 +2098,7 @@
         },
         "/auth/recover/keys": {
             "post": {
-                "description": "The first step of recovering an account that has chat keys (#2416). Checks the recovery phrase exactly as /auth/recover does, changes nothing, and returns the account's wrapped chat identity so the client can open it with the phrase and send it back re-wrapped under the new password in /auth/recover. Needs no session and shares the sign-in rate limit. An unknown username reads as a wrong phrase.",
+                "description": "The first step of recovering an account that has chat keys (#2416). Checks the recovery phrase or recovery key exactly as /auth/recover does, changes nothing, and returns the account's wrapped chat identity so the client can open it with the phrase wrap key and send it back re-wrapped under the new password in /auth/recover. Needs no session and shares the sign-in rate limit. The body carries exactly one of recoveryPhrase and recoveryKey (#2430). An unknown username or a wrong key reads as a wrong phrase.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2111,7 +2111,7 @@
                 "summary": "Fetch chat keys for account recovery",
                 "parameters": [
                     {
-                        "description": "The account and its recovery phrase",
+                        "description": "The account and its recovery phrase or recovery key",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2128,7 +2128,7 @@
                         }
                     },
                     "400": {
-                        "description": "a wrong phrase or unknown username",
+                        "description": "a wrong phrase or key, an unknown username, a malformed key, or neither or both secrets",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2160,9 +2160,81 @@
                 }
             }
         },
+        "/auth/recovery-key": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Re-confirms the caller with password, which carries the auth key for a client that signs in with one, exactly as DELETE /auth/account takes it; a wrong or missing password is a 403 and nothing is written. Then gives the signed-in account the recovery key its client derived from a recovery phrase the client generated, and clears the account's recovery phrase, so the old phrase stops recovering it (#2430). recoveryKey is the standard base64 of the 32-byte key derived from the phrase and the salt GET /auth/salt returned. chatKeys, when sent, replaces the account's chat identity in the same transaction, re-wrapped under the new phrase, exactly as /auth/recover stores it; nothing changes if any part fails. The client calls this after a sign-in whose response says legacyRecovery, after the first sign-in of an account an admin created, and after setup. Shares the sign-in rate limit, and the body is at most 8 KiB.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Set the caller's recovery key",
+                "parameters": [
+                    {
+                        "description": "The caller's password or auth key, the new recovery key and optionally the re-wrapped chat keys",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_auth.setRecoveryKeyBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "a malformed recoveryKey or chatKeys",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "no session, or the session's account no longer exists",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "the password or auth key is wrong or missing",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "the account has no auth key yet, so no salt to derive the key with",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/request-account": {
             "post": {
-                "description": "Creates a pending account that can sign in once an admin approves it, and returns its recovery phrase this once. Needs no session and is rate-limited per IP. A pending request keeps its username taken until it is denied. The body carries exactly one of password and authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned.",
+                "description": "Creates a pending account that can sign in once an admin approves it, and returns its recovery phrase this once, unless the body carried recoveryKey. Needs no session and is rate-limited per IP. A pending request keeps its username taken until it is denied. The body carries exactly one of password and authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned. recoveryKey, sent only with authKey, is the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt: the Quark then stores that key, makes no phrase, and the response has no recoveryPhrase (#2430).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2175,12 +2247,12 @@
                 "summary": "Request an account",
                 "parameters": [
                     {
-                        "description": "The username with a password or an authKey",
+                        "description": "The username with a password or an authKey, and optionally a recoveryKey",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/v0_auth.requestAccountBody"
+                            "$ref": "#/definitions/v0_auth.newAccountBody"
                         }
                     }
                 ],
@@ -2192,7 +2264,7 @@
                         }
                     },
                     "400": {
-                        "description": "invalid username, password or authKey",
+                        "description": "invalid username, password, authKey or recoveryKey, or a recoveryKey without an authKey",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2226,7 +2298,7 @@
         },
         "/auth/salt": {
             "get": {
-                "description": "Returns the salt a client derives the named account's auth key with, as the standard base64 of 16 bytes. Needs no session and is rate-limited per IP. A username with no account gets a salt too, the same one every time, so the answer does not say whether the account exists. legacy is true for an account that has no auth key yet: the client signs in with both password and authKey to give it one.",
+                "description": "Returns the salt a client derives the named account's auth key with, as the standard base64 of 16 bytes. Needs no session and is rate-limited per IP. A username with no account gets a salt too, the same one every time, so the answer does not say whether the account exists. legacy is true for an account that has no auth key yet: the client signs in with both password and authKey to give it one. legacyRecovery is true for an account that has no recovery key yet, which recovers with its raw phrase; an unknown username reads false for both, like an account that has moved to keys.",
                 "produces": [
                     "application/json"
                 ],
@@ -2415,7 +2487,7 @@
         },
         "/auth/setup": {
             "post": {
-                "description": "Creates the owner account, with a home under users/ on the internal device that it owns; an existing folder of that name under users/ becomes the home. Can only be called once. The body carries exactly one of password and authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned.",
+                "description": "Creates the owner account, with a home under users/ on the internal device that it owns; an existing folder of that name under users/ becomes the home. Can only be called once. The body carries exactly one of password and authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned. The response carries token and, unless the body carried recoveryKey, recoveryPhrase, shown this once. recoveryKey, sent only with authKey, is the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt: the Quark stores that key and makes no phrase (#2430).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2428,12 +2500,12 @@
                 "summary": "First-boot user setup",
                 "parameters": [
                     {
-                        "description": "The username with a password or an authKey",
+                        "description": "The username with a password or an authKey, and optionally a recoveryKey",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/v0_auth.credentialsBody"
+                            "$ref": "#/definitions/v0_auth.newAccountBody"
                         }
                     }
                 ],
@@ -11031,6 +11103,10 @@
         "v0_auth.loginResponse": {
             "type": "object",
             "properties": {
+                "legacyRecovery": {
+                    "description": "LegacyRecovery is true for an account that has no recovery key yet: the\nclient generates a phrase and sends its key to PUT /auth/recovery-key.",
+                    "type": "boolean"
+                },
                 "recoveryPhrase": {
                     "description": "RecoveryPhrase is present only on the first sign-in of an account an\nadmin created.",
                     "type": "string"
@@ -11040,10 +11116,31 @@
                 }
             }
         },
+        "v0_auth.newAccountBody": {
+            "type": "object",
+            "required": [
+                "username"
+            ],
+            "properties": {
+                "authKey": {
+                    "description": "AuthKey is the standard base64 of the 32-byte key the client derived\nfrom the password and the salt GET /auth/salt returned.",
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "recoveryKey": {
+                    "description": "RecoveryKey is the standard base64 of the 32-byte key the client derived\nfrom its recovery phrase and the same salt. With it the Quark makes no\nphrase (#2430).",
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "v0_auth.recoverAccountBody": {
             "type": "object",
             "required": [
-                "recoveryPhrase",
                 "username"
             ],
             "properties": {
@@ -11062,7 +11159,15 @@
                     "description": "Exactly one of NewPassword and NewAuthKey is sent. NewAuthKey is the\nstandard base64 of the 32-byte key derived from the new password and the\nsalt GET /auth/salt returned (#2430).",
                     "type": "string"
                 },
+                "newRecoveryKey": {
+                    "description": "NewRecoveryKey, sent only with NewAuthKey, replaces the recovery\ncredential in the same transaction and clears the old phrase.",
+                    "type": "string"
+                },
+                "recoveryKey": {
+                    "type": "string"
+                },
                 "recoveryPhrase": {
+                    "description": "Exactly one of RecoveryPhrase and RecoveryKey is sent. RecoveryKey is\nthe standard base64 of the 32-byte key derived from the phrase and the\nsalt GET /auth/salt returned (#2430).",
                     "type": "string"
                 },
                 "username": {
@@ -11073,29 +11178,13 @@
         "v0_auth.recoverChatKeysBody": {
             "type": "object",
             "required": [
-                "recoveryPhrase",
                 "username"
             ],
             "properties": {
+                "recoveryKey": {
+                    "type": "string"
+                },
                 "recoveryPhrase": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "v0_auth.requestAccountBody": {
-            "type": "object",
-            "required": [
-                "username"
-            ],
-            "properties": {
-                "authKey": {
-                    "description": "AuthKey is the standard base64 of the 32-byte key the client derived\nfrom the password and the salt GET /auth/salt returned.",
-                    "type": "string"
-                },
-                "password": {
                     "type": "string"
                 },
                 "username": {
@@ -11118,8 +11207,36 @@
                     "description": "Legacy is true for an account that has no auth key yet: the client signs\nin with both password and authKey to give it one.",
                     "type": "boolean"
                 },
+                "legacyRecovery": {
+                    "description": "LegacyRecovery is true for an account that has no recovery key yet: it\nrecovers with its raw phrase, and the client gives it a new phrase.",
+                    "type": "boolean"
+                },
                 "salt": {
                     "description": "Salt is the standard base64 of 16 bytes.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_auth.setRecoveryKeyBody": {
+            "type": "object",
+            "required": [
+                "recoveryKey"
+            ],
+            "properties": {
+                "chatKeys": {
+                    "description": "ChatKeys is the account's chat identity re-wrapped under the new\nphrase, stored in the same transaction. Absent leaves the stored keys as\nthey are.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/chatutil.Keys"
+                        }
+                    ]
+                },
+                "password": {
+                    "description": "Password re-confirms the caller, so a session alone cannot replace the\nrecovery credential. A client that signs in with an auth key sends that\nkey here, as delete-account takes it.",
+                    "type": "string"
+                },
+                "recoveryKey": {
+                    "description": "RecoveryKey is the standard base64 of the 32-byte key the client derived\nfrom the phrase it generated and the account's auth salt.",
                     "type": "string"
                 }
             }

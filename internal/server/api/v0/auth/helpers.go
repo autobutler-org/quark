@@ -1,12 +1,16 @@
 package v0_auth
 
 import (
+	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
@@ -31,6 +35,34 @@ func accountRefusalResponse(err error) *serverutil.Response {
 		Error:  err.Error(),
 		Status: status,
 	})
+}
+
+// storeChatKeys validates chat keys a credential change carries and returns
+// the step that stores them inside that change's transaction, nil when the
+// body carried none. Recovery and a recovery-key rotation both hand the
+// account's chat identity back re-wrapped (#2416, #2430).
+func storeChatKeys(ctx context.Context, keys *chatutil.Keys) (func(*db.Queries, int64) error, error) {
+	if keys == nil {
+		return nil, nil
+	}
+	if err := chatutil.ValidateKeys(*keys); err != nil {
+		return nil, err
+	}
+	return func(q *db.Queries, userID int64) error {
+		_, err := chatutil.PutKeys(chatutil.PutKeysParams{Ctx: ctx, Queries: q, UserID: userID, Keys: *keys})
+		return err
+	}, nil
+}
+
+// notifyChatKeyNeeded asks channel members to refill key grants after an
+// account's chat keys were stored, as PUT /chat/keys/me does. Best-effort:
+// clients also check when they open a channel.
+func notifyChatKeyNeeded(ctx context.Context, deps deputil.Dependencies) {
+	if _, err := chatutil.NotifyKeyNeeded(chatutil.NotifyKeyNeededParams{
+		Ctx: ctx, Database: deps.Database(), EventBus: deps.EventBus(),
+	}); err != nil {
+		log.Printf("[auth] chat key needs after new keys: %v", err)
+	}
 }
 
 const sessionCookieName = "session"

@@ -39,7 +39,7 @@ func TestLoginUser_FirstLoginPhrase(t *testing.T) {
 	if second := login("bob", "initial-password"); second["recoveryPhrase"] != nil {
 		t.Errorf("second login body = %v, want no recovery phrase", second)
 	}
-	if founder := login("admin", "admin-password"); founder["recoveryPhrase"] != nil || len(founder) != 1 {
-		t.Errorf("founder login body = %v, want only a token", founder)
+	if founder := login("admin", "admin-password"); founder["recoveryPhrase"] != nil || len(founder) != 2 {
+		t.Errorf("founder login body = %v, want only a token and legacyRecovery", founder)
 	}
 }

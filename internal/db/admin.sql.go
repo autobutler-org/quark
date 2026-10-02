@@ -83,7 +83,7 @@ func (q *Queries) DemoteFromAdmin(ctx context.Context, username string) (DemoteF
 }
 
 const getOldestActiveAdmin = `-- name: GetOldestActiveAdmin :one
-SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash FROM users
+SELECT id, username, password_hash, recovery_phrase_hash, created_at, is_admin, status, auth_salt, auth_key_hash, recovery_key_hash FROM users
 WHERE is_admin = 1 AND status = 'active' AND id != ?
 ORDER BY created_at, id
 LIMIT 1
@@ -104,6 +104,7 @@ func (q *Queries) GetOldestActiveAdmin(ctx context.Context, id int64) (User, err
 		&i.Status,
 		&i.AuthSalt,
 		&i.AuthKeyHash,
+		&i.RecoveryKeyHash,
 	)
 	return i, err
 }

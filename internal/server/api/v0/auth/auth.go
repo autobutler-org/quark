@@ -1,6 +1,6 @@
 // Package v0_auth serves /api/v0/auth: first-boot setup, login and logout, account recovery, requests for an
-// account, the salt a client derives its auth key with, and the caller's sessions and account. Setup, login, salt,
-// recover, recover/keys, request-account and status are exempt from the session check.
+// account, the salt a client derives its auth key with, the caller's recovery key, and the caller's sessions and
+// account. Setup, login, salt, recover, recover/keys, request-account and status are exempt from the session check.
 package v0_auth
 
 import "github.com/autobutler-org/quark/pkg/util/serverutil"

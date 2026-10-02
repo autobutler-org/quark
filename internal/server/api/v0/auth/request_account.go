@@ -14,13 +14,13 @@ import (
 
 // requestAccount godoc
 // @Summary Request an account
-// @Description Creates a pending account that can sign in once an admin approves it, and returns its recovery phrase this once. Needs no session and is rate-limited per IP. A pending request keeps its username taken until it is denied. The body carries exactly one of password and authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned.
+// @Description Creates a pending account that can sign in once an admin approves it, and returns its recovery phrase this once, unless the body carried recoveryKey. Needs no session and is rate-limited per IP. A pending request keeps its username taken until it is denied. The body carries exactly one of password and authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned. recoveryKey, sent only with authKey, is the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt: the Quark then stores that key, makes no phrase, and the response has no recoveryPhrase (#2430).
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param body body requestAccountBody true "The username with a password or an authKey"
+// @Param body body newAccountBody true "The username with a password or an authKey, and optionally a recoveryKey"
 // @Success 201 {object} requestAccountResponse
-// @Failure 400 {object} serverutil.Response "invalid username, password or authKey"
+// @Failure 400 {object} serverutil.Response "invalid username, password, authKey or recoveryKey, or a recoveryKey without an authKey"
 // @Failure 404 {object} serverutil.Response "requests are turned off, or the Quark is not set up"
 // @Failure 409 {object} serverutil.Response "that username is taken"
 // @Failure 429 {object} serverutil.Response
@@ -32,7 +32,7 @@ func requestAccount(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
-	var req requestAccountBody
+	var req newAccountBody
 	if err := c.ShouldBindJSON(&req); err != nil {
 		return serverutil.BadRequest(err)
 	}
@@ -41,6 +41,7 @@ func requestAccount(c *gin.Context) *serverutil.Response {
 		Username:        req.Username,
 		Password:        req.Password,
 		AuthKey:         req.AuthKey,
+		RecoveryKey:     req.RecoveryKey,
 		SaltSecret:      settingsutil.AuthSaltSecret,
 		RequestsEnabled: settingsutil.GetAccessRequestsEnabled(),
 	})
@@ -50,7 +51,8 @@ func requestAccount(c *gin.Context) *serverutil.Response {
 	case errors.Is(err, authutil.ErrUsernameTaken):
 		return serverutil.Conflict(err)
 	case errors.Is(err, authutil.ErrInvalidUsername), errors.Is(err, authutil.ErrPasswordTooShort),
-		errors.Is(err, authutil.ErrInvalidAuthKey), errors.Is(err, authutil.ErrCredentialRequired), errors.Is(err, authutil.ErrCredentialConflict):
+		errors.Is(err, authutil.ErrInvalidAuthKey), errors.Is(err, authutil.ErrCredentialRequired), errors.Is(err, authutil.ErrCredentialConflict),
+		errors.Is(err, authutil.ErrInvalidRecoveryKey), errors.Is(err, authutil.ErrRecoveryKeyNeedsAuthKey):
 		return serverutil.BadRequest(err)
 	case err != nil:
 		return serverutil.InternalServerError(err)
