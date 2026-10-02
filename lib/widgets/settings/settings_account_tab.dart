@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 /// The Account tab of Settings (#2350): the [profile] card (#2419), sign
-/// out, with an Account and data
+/// out, the [sessions] card (#1663), with an Account and data
 /// row at the bottom that leads to Delete account and, for an admin, Reset
 /// this Quark (#2346).
 ///
@@ -22,6 +22,7 @@ class SettingsAccountTab extends StatelessWidget {
     required this.onOpenAccountAndData,
     this.header,
     this.profile,
+    this.sessions,
     super.key,
   });
 
@@ -45,6 +46,9 @@ class SettingsAccountTab extends StatelessWidget {
   /// The Profile card, shown first while signed in; null shows nothing.
   final Widget? profile;
 
+  /// The Sessions card, shown under Sign out; null shows nothing.
+  final Widget? sessions;
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -62,6 +66,7 @@ class SettingsAccountTab extends StatelessWidget {
               onTap: onSignOut,
             ),
           ),
+          if (sessions != null) ...[const SizedBox(height: 16), sessions!],
           // Kept well clear of Sign out, so a mis-tap cannot reach it.
           const SizedBox(height: 32),
           const Divider(),

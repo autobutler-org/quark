@@ -25,6 +25,7 @@ import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/settings/connected_devices_card.dart';
 import 'package:quark/widgets/settings/remote_access_card.dart';
 import 'package:quark/widgets/settings/settings_about_tab.dart';
+import 'package:quark/widgets/settings/sessions_section.dart';
 import 'package:quark/widgets/settings/settings_account_tab.dart';
 import 'package:quark/widgets/settings/settings_features_tab.dart';
 import 'package:quark/widgets/settings/settings_general_tab.dart';
@@ -691,6 +692,9 @@ class _SettingsPageState extends State<SettingsPage> {
               signedIn: AppSettings.instance.sessionToken != null,
               isAdmin: isAdmin,
               onSignOut: _signOut,
+              sessions: SessionsSection(
+                onSignedOut: () => context.go(AppRoutes.files),
+              ),
               onOpenAccountAndData: () =>
                   context.push(AppRoutes.accountAndData),
             ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark/services/connected_devices_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/relative_time.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -106,7 +107,7 @@ class ConnectedDevicesCard extends StatelessWidget {
                         style: const TextStyle(fontSize: 12),
                       ),
                     Text(
-                      '${device.requestCount} request${device.requestCount == 1 ? '' : 's'} · last seen ${_formatRelative(device.lastSeenAt)}',
+                      '${device.requestCount} request${device.requestCount == 1 ? '' : 's'} · last seen ${formatRelative(device.lastSeenAt)}',
                       style: const TextStyle(fontSize: 12),
                     ),
                   ],
@@ -124,13 +125,4 @@ class ConnectedDevicesCard extends StatelessWidget {
       ),
     );
   }
-}
-
-/// How long ago [dt] was, in the shortest unit that reads naturally.
-String _formatRelative(DateTime dt) {
-  final diff = DateTime.now().difference(dt);
-  if (diff.inSeconds < 60) return 'just now';
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-  if (diff.inHours < 24) return '${diff.inHours}h ago';
-  return '${diff.inDays}d ago';
 }
