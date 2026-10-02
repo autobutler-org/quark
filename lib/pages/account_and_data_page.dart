@@ -67,8 +67,11 @@ class _AccountAndDataPageState extends State<AccountAndDataPage> {
                     color: error,
                   ),
                   title: Text('Delete account', style: TextStyle(color: error)),
+                  // Names what it leaves alone, so it cannot be read as the
+                  // wider action a section below (#2479).
                   subtitle: const Text(
-                    'Permanently deletes your account on this Quark',
+                    'Removes only your account, permanently. Your files and '
+                    'other accounts stay on this Quark',
                   ),
                   onTap: _accountActions.isWorking ? null : _deleteAccount,
                 ),
@@ -95,11 +98,13 @@ class _AccountAndDataPageState extends State<AccountAndDataPage> {
                     ),
                     // Says what the dialog will ask rather than promising the
                     // widest possible wipe: attached drives are left alone
-                    // unless the user asks for them (#2052).
+                    // unless the user asks for them (#2052), and the box that
+                    // asks is named so they know where to look (#2479).
                     subtitle: const Text(
-                      'Returns this Quark to first-boot setup. You choose what '
-                      'it erases; attached drives are left alone unless you '
-                      'say otherwise',
+                      'Erases every account, not just yours, and returns this '
+                      'Quark to first-boot setup. The next step lists what it '
+                      'erases; attached drives are left alone unless you '
+                      'check “$kResetQuarkDevicesLabel” there',
                     ),
                     onTap: _accountActions.isWorking ? null : _resetQuark,
                   ),

@@ -45,7 +45,7 @@ class QuarkResetSelection {
     final parts = [
       if (database) 'accounts and settings',
       if (files) 'stored files',
-      if (devices) 'Quark data on attached drives',
+      if (devices) kResetQuarkDevicesLabel,
     ];
     return parts.isEmpty ? 'nothing yet' : _list(parts);
   }
@@ -78,6 +78,13 @@ class QuarkResetSelection {
         devices: devices ?? this.devices,
       );
 }
+
+/// The name of the one control that lets a reset reach an attached drive.
+///
+/// A constant because the account and data page points at this box by name
+/// before the dialog opens (#2479), and a name that drifted from the box it
+/// names would send the reader looking for a control that is not there.
+const String kResetQuarkDevicesLabel = 'Quark data on attached drives';
 
 /// What the user reads when a reset would leave data on the appliance.
 const String kResetQuarkPartialWarning =
@@ -222,7 +229,7 @@ class _ResetQuarkDialogState extends State<ResetQuarkDialog> {
             ),
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
-            title: const Text('Quark data on attached drives'),
+            title: const Text(kResetQuarkDevicesLabel),
             subtitle: const Text(
               'Off by default. Only the Quark data directory on drives '
               'attached right now; anything else on them is left alone.',
