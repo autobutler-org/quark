@@ -32,8 +32,12 @@ import 'share_sheet/permission_grant_row.dart';
 /// Access set on the item itself is listed first, each row with a level menu
 /// and a remove button. Access inherited from a folder the item is in is
 /// listed under **Inherited access**, read-only and naming that folder,
-/// because it can only be changed there. The same account or group can
-/// appear in both lists.
+/// because it can only be changed there, which a line under the heading
+/// says. The same account or group can appear in both lists.
+///
+/// The sheet explains its own words: the form says what the chosen level
+/// allows and what a built-in group covers, and each level menu entry
+/// carries the same sentence, [AccessLevel.description].
 ///
 /// Only a caller who manages sharing, [canManage], gets the form and working
 /// controls. The owner level, and changing an owner row, also needs
@@ -51,8 +55,12 @@ import 'share_sheet/permission_grant_row.dart';
 /// `share_level_<kind>_<id>_<level>` on the menu entries,
 /// `share_revoke_<kind>_<id>` on its remove button,
 /// `share_inherited_<kind>_<id>` on each inherited row,
-/// `share_add_level_<level>` on the form's level choices, `share_add_submit`
-/// on its share button, and the principal picker's `principal_search` and
+/// `share_inherited_help` on the line under the inherited heading,
+/// `share_add_level_<level>` on the form's level choices,
+/// `share_add_level_help` on the line explaining the chosen one,
+/// `share_add_everyone_help` on the line explaining a picked built-in group,
+/// `share_add_submit` on the share button, and the principal picker's
+/// `principal_search` and
 /// `principal_option_<kind>_<id>`. Sharing permission sets, each row's picker
 /// keys start `share_perms_<kind>_<id>` and the form's `share_add_perms`.
 ///
@@ -253,6 +261,11 @@ class ShareSheet extends StatelessWidget {
           if (inherited.isNotEmpty) ...[
             SizedBox(height: tokens.spacingMd),
             Text('Inherited access', style: heading),
+            Text(
+              'From a folder this is in. Change it on that folder.',
+              key: const ValueKey('share_inherited_help'),
+              style: TextStyle(color: tokens.mutedForeground),
+            ),
             SizedBox(height: tokens.spacingXs),
             for (final grant in inherited) GrantRow(grant: grant),
           ],

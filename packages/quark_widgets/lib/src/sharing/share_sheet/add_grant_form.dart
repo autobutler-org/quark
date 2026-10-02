@@ -13,9 +13,14 @@ import '../../users/principal_picker.dart';
 /// the form's own transient input; the outcome leaves through [onAdd]. The
 /// owner level is only on offer with [canGrantOwner].
 ///
+/// Under the level choices a muted line says what the chosen level allows,
+/// [AccessLevel.description]. While a built-in group is picked, a second
+/// line says it covers every account, those added later included.
+///
 /// A part of [ShareSheet], tested through it.
 ///
-/// Key prefixes: `share_add_level_<level>`, `share_add_submit`, and the
+/// Key prefixes: `share_add_level_<level>`, `share_add_submit`,
+/// `share_add_level_help`, `share_add_everyone_help`, and the
 /// [PrincipalPicker] keys.
 class AddGrantForm extends StatefulWidget {
   /// Creates the form offering [principals].
@@ -58,6 +63,7 @@ class _AddGrantFormState extends State<AddGrantForm> {
         ? AccessLevel.read
         : _level;
     final isBusy = picked != null && widget.busyKeys.contains(picked.keySuffix);
+    final muted = TextStyle(color: tokens.mutedForeground);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -99,6 +105,21 @@ class _AddGrantFormState extends State<AddGrantForm> {
             ),
           ],
         ),
+        SizedBox(height: tokens.spacingSm),
+        Text(
+          level.description,
+          key: const ValueKey('share_add_level_help'),
+          style: muted,
+        ),
+        if (picked != null && picked.isBuiltin) ...[
+          SizedBox(height: tokens.spacingXs),
+          Text(
+            '${picked.name} is every account on this Quark, '
+            'including accounts added later.',
+            key: const ValueKey('share_add_everyone_help'),
+            style: muted,
+          ),
+        ],
       ],
     );
   }

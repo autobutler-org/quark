@@ -40,4 +40,13 @@ void main() {
       'Owner',
     ]);
   });
+
+  test('each level says what it lets someone do (#2475)', () {
+    for (final level in AccessLevel.values) {
+      expect(level.description, endsWith('.'), reason: level.name);
+    }
+    expect(AccessLevel.read.description, 'Can open and download it.');
+    expect(AccessLevel.owner.description, contains('change who has access'));
+    expect(AccessLevel.owner.description, contains('trust'));
+  });
 }

@@ -15,4 +15,15 @@ enum AccessLevel {
     AccessLevel.write => 'Can edit',
     AccessLevel.owner => 'Owner',
   };
+
+  /// One sentence saying what this level lets someone do, shown under the
+  /// [label] wherever a level is chosen. The owner's also says who to give
+  /// it to, because an owner can change everyone else's access.
+  String get description => switch (this) {
+    AccessLevel.read => 'Can open and download it.',
+    AccessLevel.write => 'Can also upload, rename, move and delete.',
+    AccessLevel.owner =>
+      'Can do everything, including change who has access. '
+          'Give this only to someone you trust with it.',
+  };
 }
