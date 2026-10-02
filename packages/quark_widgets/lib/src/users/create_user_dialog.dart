@@ -123,7 +123,9 @@ class _CreateUserDialogState extends State<CreateUserDialog> {
         child: SingleChildScrollView(
           child: Form(
             key: _formKey,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
+            // The mode sits on each field, not here: on the Form it
+            // validates every field the moment one is touched, so the
+            // password errors showed before those fields were used (#2481).
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -143,6 +145,7 @@ class _CreateUserDialogState extends State<CreateUserDialog> {
                     border: OutlineInputBorder(),
                   ),
                   textInputAction: TextInputAction.next,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   validator: _validateUsername,
                 ),
                 SizedBox(height: tokens.spacingMd),
@@ -156,6 +159,7 @@ class _CreateUserDialogState extends State<CreateUserDialog> {
                     border: OutlineInputBorder(),
                   ),
                   textInputAction: TextInputAction.next,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   validator: _validatePassword,
                 ),
                 SizedBox(height: tokens.spacingSm),
@@ -175,6 +179,7 @@ class _CreateUserDialogState extends State<CreateUserDialog> {
                   ),
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _submit(),
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   validator: _validateConfirm,
                 ),
                 if (error != null) ...[

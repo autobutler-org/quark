@@ -112,6 +112,48 @@ void main() {
     expect(find.text('Passwords do not match'), findsOneWidget);
   });
 
+  // A Form-level onUserInteraction validated every field as soon as one was
+  // typed in, so the password errors appeared under fields nobody had
+  // reached yet (#2481).
+  testWidgets('a field stays silent until it has been used', (tester) async {
+    await pumpDialog(tester);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('create_user_username')),
+      'bob',
+    );
+    await tester.pump();
+    expect(find.text('Password is required'), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('create_user_password')),
+      'correct horse',
+    );
+    await tester.pump();
+    expect(find.text('Passwords do not match'), findsNothing);
+
+    final confirm = find.byKey(const ValueKey('create_user_confirm'));
+    await tester.enterText(confirm, 'correct');
+    await tester.pump();
+    expect(find.text('Passwords do not match'), findsOneWidget);
+
+    await tester.enterText(confirm, 'correct horse');
+    await tester.pump();
+    expect(find.text('Passwords do not match'), findsNothing);
+  });
+
+  testWidgets('submitting an untouched form names every empty field', (
+    tester,
+  ) async {
+    final submitted = await pumpDialog(tester);
+
+    await submit(tester);
+
+    expect(submitted, isEmpty);
+    expect(find.text('Username is required'), findsOneWidget);
+    expect(find.text('Password is required'), findsOneWidget);
+  });
+
   testBothViewports('cancels through its key', (tester, size) async {
     final events = <String>[];
     await pumpDialog(tester, size: size, events: events);
