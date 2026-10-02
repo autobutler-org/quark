@@ -8,6 +8,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/server"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/updateutil"
 
 	"github.com/spf13/cobra"
 )
@@ -24,6 +25,11 @@ func Cmd() *cobra.Command {
 			// Makefile targets and CI without modifying command-line args.
 			if !insecure && os.Getenv("QUARK_INSECURE") == "true" {
 				insecure = true
+			}
+			// A newer binary installed by self-update takes over before anything
+			// starts. Failing that is no reason not to serve with this one.
+			if err := updateutil.RunInstalledUpdate(); err != nil {
+				fmt.Printf("Warning: failed to run the installed update: %v\n", err)
 			}
 			fmt.Println("Starting Quark server...")
 			deps, err := deputil.DefaultDependencies()
