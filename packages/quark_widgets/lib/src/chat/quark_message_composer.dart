@@ -51,6 +51,7 @@ class QuarkMessageComposer extends StatefulWidget {
     this.isWaitingForKey = false,
     this.disabledReason,
     this.maxLines = 6,
+    this.maxLength,
     super.key,
   });
 
@@ -89,6 +90,29 @@ class QuarkMessageComposer extends StatefulWidget {
   /// How many lines the field grows to before it scrolls.
   final int maxLines;
 
+  /// The longest message that sends, in UTF-16 code units as
+  /// [String.length] counts them, measured on the trimmed text. Null has no
+  /// limit.
+  ///
+  /// Within a tenth of it, a counter under the field says how much is left,
+  /// key `message_composer_counter`. Past it, the counter gives way to
+  /// [overLimitText], key `message_composer_too_long`, the send button turns
+  /// off with [tooLongText] as its tooltip, and Enter keeps the draft rather
+  /// than sending it.
+  final int? maxLength;
+
+  /// Said when Enter is pressed on a blank message, under the field with key
+  /// `message_composer_hint`, and as the turned-off send button's tooltip.
+  static const String blankHint = 'Type a message to send';
+
+  /// The send button's tooltip when the message is longer than [maxLength].
+  static const String tooLongText = 'This message is too long to send';
+
+  /// Said under the field when the message is [count] code units longer than
+  /// [maxLength].
+  static String overLimitText(int count) =>
+      '$count characters over the limit. Shorten it to send.';
+
   /// Whether Enter sends on the current platform: on a desktop, not on a
   /// phone, where the keyboard's return key has to start new lines. On the
   /// web [defaultTargetPlatform] reports the browser's OS, so a phone browser
@@ -110,6 +134,28 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
   final TextEditingController _text = TextEditingController();
   final FocusNode _focus = FocusNode();
 
+  /// Whether Enter was pressed on a blank message; typing anything clears it.
+  bool _showBlankHint = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _text.addListener(_clearBlankHint);
+  }
+
+  void _clearBlankHint() {
+    if (_showBlankHint && _text.text.trim().isNotEmpty) {
+      setState(() => _showBlankHint = false);
+    }
+  }
+
+  /// How many code units the trimmed text is over [maxLength], negative
+  /// when under, and null with no limit.
+  int? _overBy(String message) {
+    final max = widget.maxLength;
+    return max == null ? null : message.length - max;
+  }
+
   @override
   void dispose() {
     _text.dispose();
@@ -127,7 +173,12 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
 
   void _send() {
     final message = _text.text.trim();
-    if (message.isEmpty) return;
+    if (message.isEmpty) {
+      // Enter on a blank message used to do nothing at all (#2502).
+      setState(() => _showBlankHint = true);
+      return;
+    }
+    if ((_overBy(message) ?? 0) > 0) return;
     widget.onSend(message);
     _text.clear();
     _focus.requestFocus();
@@ -173,15 +224,48 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
       );
     }
 
-    final field = TextField(
-      key: const ValueKey('message_composer_field'),
-      controller: _text,
-      focusNode: _focus,
-      minLines: 1,
-      maxLines: widget.maxLines,
-      keyboardType: TextInputType.multiline,
-      textInputAction: TextInputAction.newline,
-      decoration: InputDecoration(hintText: widget.hintText),
+    final field = ListenableBuilder(
+      listenable: _text,
+      builder: (context, _) {
+        final overBy = _overBy(_text.text.trim());
+        final max = widget.maxLength;
+        // One line under the field: on a phone, an error beside a counter
+        // squeezes the error into a column a word wide.
+        final over = overBy != null && overBy > 0;
+        final counter = over || max == null || -overBy! > max ~/ 10
+            ? null
+            : '${-overBy} characters left';
+        return TextField(
+          key: const ValueKey('message_composer_field'),
+          controller: _text,
+          focusNode: _focus,
+          minLines: 1,
+          maxLines: widget.maxLines,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          decoration: InputDecoration(
+            hintText: widget.hintText,
+            helper: _showBlankHint
+                ? const Text(
+                    QuarkMessageComposer.blankHint,
+                    key: ValueKey('message_composer_hint'),
+                  )
+                : null,
+            error: over
+                ? Text(
+                    QuarkMessageComposer.overLimitText(overBy),
+                    key: const ValueKey('message_composer_too_long'),
+                  )
+                : null,
+            counter: counter == null
+                ? null
+                : Text(
+                    counter,
+                    key: const ValueKey('message_composer_counter'),
+                  ),
+          ),
+        );
+      },
     );
 
     return Padding(
@@ -205,12 +289,20 @@ class _QuarkMessageComposerState extends State<QuarkMessageComposer> {
           SizedBox(width: tokens.spacingSm),
           ListenableBuilder(
             listenable: _text,
-            builder: (context, _) => IconButton.filled(
-              key: const ValueKey('message_composer_send'),
-              tooltip: 'Send',
-              icon: const Icon(QuarkIcons.send_rounded),
-              onPressed: _text.text.trim().isEmpty ? null : _send,
-            ),
+            builder: (context, _) {
+              final message = _text.text.trim();
+              final reason = message.isEmpty
+                  ? QuarkMessageComposer.blankHint
+                  : (_overBy(message) ?? 0) > 0
+                  ? QuarkMessageComposer.tooLongText
+                  : null;
+              return IconButton.filled(
+                key: const ValueKey('message_composer_send'),
+                tooltip: reason ?? 'Send',
+                icon: const Icon(QuarkIcons.send_rounded),
+                onPressed: reason == null ? _send : null,
+              );
+            },
           ),
         ],
       ),

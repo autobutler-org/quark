@@ -944,6 +944,10 @@ void main() {
             path: AppRoutes.files,
             builder: (_, _) => const Text('files'),
           ),
+          GoRoute(
+            path: AppRoutes.login,
+            builder: (_, _) => const Text('login'),
+          ),
         ],
       );
       addTearDown(r.dispose);
@@ -1054,7 +1058,73 @@ void main() {
       expect(at(r), '/settings/features');
     });
 
-    testWidgets('an unknown channel falls back to general, not an error', (
+    // #2500: signing in from a chat link used to land on Files.
+    testWidgets('a signed-out chat link comes back after signing in', (
+      tester,
+    ) async {
+      await signIn(chatEnabled: true);
+      await settings.setSessionToken(null);
+      final r = await pumpGated(tester, '/chat/12?x=1');
+      expect(at(r), '/login?from=${Uri.encodeComponent('/chat/12?x=1')}');
+
+      await settings.setSessionToken('token');
+      await tester.pumpAndSettle();
+      expect(at(r), '/chat/12?x=1');
+    });
+
+    testWidgets('a signed-out Files visit keeps the login URL bare', (
+      tester,
+    ) async {
+      await signIn(chatEnabled: true);
+      await settings.setSessionToken(null);
+      final r = await pumpGated(tester, AppRoutes.files);
+      expect(at(r), AppRoutes.login);
+    });
+
+    test('signing in only returns somewhere inside the app', () {
+      expect(destinationAfterSignIn('/chat/12'), '/chat/12');
+      expect(destinationAfterSignIn('/files/a%20b?x=1'), '/files/a%20b?x=1');
+      for (final from in [
+        null,
+        '',
+        'chat/12',
+        '//evil.example/chat',
+        'https://evil.example/',
+        'javascript:alert(1)',
+        '/login',
+        '/login?from=${Uri.encodeComponent('/chat/12')}',
+      ]) {
+        expect(destinationAfterSignIn(from), AppRoutes.files, reason: from);
+      }
+    });
+
+    testWidgets('the login route sends a fresh sign-in back to its link', (
+      tester,
+    ) async {
+      final login = router.configuration.routes.whereType<GoRoute>().firstWhere(
+        (route) => route.path == AppRoutes.login,
+      );
+      final r = GoRouter(
+        initialLocation: '/login?from=${Uri.encodeComponent('/chat/12')}',
+        routes: [
+          login,
+          GoRoute(
+            path: '${AppRoutes.chat}/:channelId',
+            builder: (_, state) =>
+                Text('chat ${state.pathParameters['channelId']}'),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pump();
+
+      tester.widget<LoginPage>(find.byType(LoginPage)).onLoginSuccess();
+      await tester.pumpAndSettle();
+      expect(at(r), '/chat/12');
+    });
+
+    testWidgets('an unknown channel says so and keeps its URL (#2499)', (
       tester,
     ) async {
       final chat = FakeChat();
@@ -1074,6 +1144,13 @@ void main() {
       await tester.pumpWidget(MaterialApp.router(routerConfig: r));
       await tester.pumpAndSettle();
 
+      expect(at(r), '/chat/999');
+      expect(find.byKey(const ValueKey('chat_channel_not_found')), findsOne);
+
+      await tester.tap(
+        find.byKey(const ValueKey('chat_channel_not_found_open_general')),
+      );
+      await tester.pumpAndSettle();
       expect(at(r), '/chat/1');
       expect(find.text('# general'), findsOneWidget);
     });

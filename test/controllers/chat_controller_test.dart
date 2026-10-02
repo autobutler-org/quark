@@ -35,19 +35,41 @@ ChatMessage message(int id, {int author = 7}) => ChatMessage(
 );
 
 void main() {
-  test(
-    'opens general for the bare path, an unknown id, and a stale link',
-    () async {
-      for (final requested in ['general', '999', 'nonsense']) {
-        final chat = FakeChat();
-        chat.controller.select(requested);
-        await chat.controller.refresh();
-        expect(chat.controller.selectedChannel?.id, 1, reason: requested);
-        expect(chat.opened[1]!.opens, 1);
-        chat.controller.dispose();
-      }
-    },
-  );
+  test('opens general for the bare path and the general slug', () async {
+    for (final requested in [null, 'general']) {
+      final chat = FakeChat();
+      chat.controller.select(requested);
+      await chat.controller.refresh();
+      expect(chat.controller.selectedChannel?.id, 1, reason: requested);
+      expect(chat.controller.isChannelMissing, isFalse);
+      expect(chat.opened[1]!.opens, 1);
+      chat.controller.dispose();
+    }
+  });
+
+  // #2499: a link to a channel that doesn't exist, or that this account
+  // isn't in, used to open general without a word.
+  test('a link to a channel it cannot open says so, not general', () async {
+    for (final requested in ['999', 'nonsense']) {
+      final chat = FakeChat();
+      chat.controller.select(requested);
+      expect(
+        chat.controller.isChannelMissing,
+        isFalse,
+        reason: 'not before the channels load',
+      );
+      await chat.controller.refresh();
+      expect(chat.controller.selectedChannel, isNull, reason: requested);
+      expect(chat.controller.isChannelMissing, isTrue, reason: requested);
+      expect(chat.opened, isEmpty);
+      expect(chat.controller.composerDisabledReason, isNotNull);
+
+      chat.controller.select('general');
+      expect(chat.controller.isChannelMissing, isFalse);
+      expect(chat.controller.selectedChannel?.id, 1);
+      chat.controller.dispose();
+    }
+  });
 
   test('switching channels disposes the old timeline', () async {
     final chat = FakeChat();

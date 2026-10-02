@@ -30,6 +30,8 @@ lib/widgets/
                                 send; the package list has no failed row
     chat_channel_header.dart    the open channel's name and topic, and its
                                 settings menu
+    chat_channel_not_found.dart a link to a channel the account can't open,
+                                in place of the messages; reads Errors
   file_browser/
     file_browser_view.dart      lists files, calls FilesService
     file_top_bar.dart           Files' QuarkAppBar: holds the inline search

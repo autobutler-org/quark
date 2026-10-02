@@ -246,6 +246,8 @@ void main() {
 
   testWidgets('the send button carries a tooltip', (tester) async {
     await pumpAt(tester, QuarkMessageComposer(onSend: (_) {}));
+    await tester.enterText(find.byKey(field), 'hi');
+    await tester.pump();
     expect(tester.widget<IconButton>(find.byKey(send)).tooltip, 'Send');
   });
 
@@ -254,5 +256,81 @@ void main() {
     await tester.enterText(find.byKey(field), 'x' * 2000);
     await tester.pump();
     expect(tester.takeException(), isNull);
+  });
+
+  // #2502: Enter on a blank message did nothing, with nothing to say why.
+  testBothViewports('Enter on a blank message says what is missing', (
+    tester,
+    size,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final sent = <String>[];
+    await pumpAt(tester, QuarkMessageComposer(onSend: sent.add), size: size);
+
+    expect(
+      tester.widget<IconButton>(find.byKey(send)).tooltip,
+      QuarkMessageComposer.blankHint,
+    );
+    await tester.enterText(find.byKey(field), '   ');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(sent, isEmpty);
+    expect(find.byKey(const ValueKey('message_composer_hint')), findsOne);
+    expect(find.text(QuarkMessageComposer.blankHint), findsOne);
+
+    await tester.enterText(find.byKey(field), 'hi');
+    await tester.pump();
+    expect(find.byKey(const ValueKey('message_composer_hint')), findsNothing);
+    expect(tester.widget<IconButton>(find.byKey(send)).tooltip, 'Send');
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  // #2503: a message of any length went out with no word about a limit.
+  testBothViewports('counts down near maxLength and refuses past it', (
+    tester,
+    size,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    const counter = ValueKey('message_composer_counter');
+    final sent = <String>[];
+    await pumpAt(
+      tester,
+      QuarkMessageComposer(onSend: sent.add, maxLength: 100),
+      size: size,
+    );
+
+    await tester.enterText(find.byKey(field), 'x' * 50);
+    await tester.pump();
+    expect(find.byKey(counter), findsNothing);
+
+    await tester.enterText(find.byKey(field), 'x' * 95);
+    await tester.pump();
+    expect(find.byKey(counter), findsOne);
+    expect(find.text('5 characters left'), findsOne);
+
+    await tester.enterText(find.byKey(field), 'x' * 103);
+    await tester.pump();
+    expect(find.text(QuarkMessageComposer.overLimitText(3)), findsOne);
+    expect(find.byKey(counter), findsNothing);
+    expect(tester.widget<IconButton>(find.byKey(send)).onPressed, isNull);
+    expect(
+      tester.widget<IconButton>(find.byKey(send)).tooltip,
+      QuarkMessageComposer.tooLongText,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(sent, isEmpty);
+    expect(find.byKey(field), findsOne, reason: 'the draft is kept');
+
+    await tester.enterText(find.byKey(field), 'x' * 100);
+    await tester.pump();
+    await tester.tap(find.byKey(send));
+    await tester.pump();
+    expect(sent, ['x' * 100]);
+    expect(tester.takeException(), isNull);
+    debugDefaultTargetPlatformOverride = null;
   });
 }

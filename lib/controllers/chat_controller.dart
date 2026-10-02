@@ -198,6 +198,8 @@ class ChatController extends ChangeNotifier {
   bool _isLoadingChannels = false;
   Object? _channelsError;
   ChatChannel? _selected;
+  bool _isChannelMissing = false;
+  bool _channelsLoaded = false;
   ChatMessagesController? _messages;
   bool _isLoadingOlder = false;
   List<ChatMember> _members = const [];
@@ -224,8 +226,16 @@ class ChatController extends ChangeNotifier {
   /// Why the channel list didn't load, for `Errors.message`.
   Object? get channelsError => _channelsError;
 
-  /// The open channel, null until the list loads or when there are none.
+  /// The open channel, null until the list loads, when there are none, or
+  /// when [isChannelMissing].
   ChatChannel? get selectedChannel => _selected;
+
+  /// Whether the channel the URL asked for isn't one this account can open:
+  /// no such channel, or one it isn't in (#2499). Nothing opens in its place,
+  /// so a shared link never lands on the wrong channel unannounced. False
+  /// until the channels load, and for a channel that was open and went away,
+  /// such as one just deleted or left, which falls back to the default.
+  bool get isChannelMissing => _isChannelMissing;
 
   /// The open channel's timeline, null with no channel open. Tests read it.
   ChatMessagesController? get messages => _messages;
@@ -435,7 +445,8 @@ class ChatController extends ChangeNotifier {
   }
 
   /// Opens channel [channelId] from the URL: an id, [defaultChannelSlug], or
-  /// null. One that isn't listed opens the default channel.
+  /// null for the default channel. One that isn't listed opens nothing and
+  /// sets [isChannelMissing].
   void select(String? channelId) {
     _requested = channelId;
     _applySelection();
@@ -821,6 +832,7 @@ class ChatController extends ChangeNotifier {
       final channels = await (_isAdmin() ? _listAllChannels : _listChannels)();
       if (_disposed) return;
       _channels = channels;
+      _channelsLoaded = true;
       _channelsError = null;
       _applySelection();
     } catch (e) {
@@ -849,14 +861,25 @@ class ChatController extends ChangeNotifier {
     }
   }
 
-  /// Points [_selected] at the channel [_requested] names, or the default,
-  /// and swaps the timeline when that is a different channel.
+  /// Points [_selected] at the channel [_requested] names, or the default
+  /// when it names none, and swaps the timeline when that is a different
+  /// channel. A name that matches no listed channel opens nothing, unless it
+  /// was the one open, which falls back to the default.
   void _applySelection() {
-    final id = int.tryParse(_requested ?? '');
-    final next =
-        _channels.where((c) => c.id == id).firstOrNull ??
-        _channels.where((c) => c.isDefault).firstOrNull ??
-        _channels.firstOrNull;
+    final requested = _requested;
+    final named = requested != null && requested != defaultChannelSlug;
+    final id = int.tryParse(requested ?? '');
+    final match = _channels.where((c) => c.id == id).firstOrNull;
+    _isChannelMissing =
+        named &&
+        match == null &&
+        _channelsLoaded &&
+        (id == null || _selected?.id != id);
+    final next = _isChannelMissing
+        ? null
+        : match ??
+              _channels.where((c) => c.isDefault).firstOrNull ??
+              _channels.firstOrNull;
     final changed = next?.id != _selected?.id;
     _selected = next;
     if (!changed) {
