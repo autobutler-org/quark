@@ -6,7 +6,7 @@ import 'package:quark/widgets/photos/album_name_dialog.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Opens the package's [AddToAlbumSheet] for one photo, and adds it to or
-/// takes it out of whichever album is tapped.
+/// takes it out of whichever album is tapped, until Done closes it.
 ///
 /// Still service-coupled: it calls [AlbumService] itself. Moving that into a
 /// controller is still to do; the album page it served is gone (#1916), and
@@ -139,6 +139,7 @@ class _AddToAlbumSheetHostState extends State<AddToAlbumSheetHost> {
       isLoading: _loading,
       onToggle: _toggle,
       onCreateAlbum: _createAndAdd,
+      onDone: () => Navigator.of(context).pop(),
     );
   }
 }

@@ -854,6 +854,23 @@ void main() {
         expect(again.children.map((a) => a.name), ['Zoe', 'amy']);
       });
 
+      /// #2591: a sub-album showed only as a row nested in the sidebar, so the
+      /// album's own view gave no sign it held one.
+      test('the showing album offers its sub-albums, in order', () async {
+        final controller = quark().controller();
+        await controller.loadAlbums();
+        expect(controller.subAlbums, isEmpty, reason: 'All photos');
+
+        await controller.showAlbum(4);
+        expect(controller.subAlbums.map((a) => a.name), ['amy', 'Zoe']);
+
+        await controller.setAlbumSort(AlbumSort.nameDesc);
+        expect(controller.subAlbums.map((a) => a.name), ['Zoe', 'amy']);
+
+        await controller.showAlbum(5);
+        expect(controller.subAlbums, isEmpty, reason: 'a leaf album');
+      });
+
       test('persists the choice and reorders without refetching', () async {
         final fake = quark();
         final controller = fake.controller();

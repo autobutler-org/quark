@@ -1339,7 +1339,23 @@ final List<GalleryEntry> registry = [
           albums: _galleryAlbumList,
           memberAlbumIds: const {4},
           onToggle: (a) => log('AddToAlbumSheet.onToggle(${a.name})'),
+          onDone: () => log('AddToAlbumSheet.onDone'),
         ),
+      ),
+    ),
+  ),
+  GalleryEntry(
+    name: 'SubAlbumStrip',
+    group: 'Albums',
+    build: (context, log) => SizedBox(
+      height: 240,
+      child: CustomScrollView(
+        slivers: [
+          SubAlbumStrip(
+            albums: _galleryAlbumList.last.children,
+            onSelected: (a) => log('SubAlbumStrip.onSelected(${a.name})'),
+          ),
+        ],
       ),
     ),
   ),
