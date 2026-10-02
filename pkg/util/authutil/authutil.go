@@ -92,6 +92,19 @@ var (
 	// ErrCredentialConflict refuses a new credential given as both a password
 	// and an auth key, since only one of them is stored.
 	ErrCredentialConflict = errors.New("send a password or an authKey, not both")
+	// ErrInvalidRecoveryKey refuses a recovery key that is not the standard
+	// base64 of exactly 32 bytes (#2430).
+	ErrInvalidRecoveryKey = errors.New("a recovery key must be the base64 of 32 bytes")
+	// ErrRecoverySecretRequired refuses a recovery that carries neither or both
+	// of a recovery phrase and a recovery key.
+	ErrRecoverySecretRequired = errors.New("send a recoveryPhrase or a recoveryKey, not both")
+	// ErrRecoveryKeyNeedsAuthKey refuses a new recovery key given with a
+	// password: the key is derived with the auth salt, which only an auth key
+	// account keeps.
+	ErrRecoveryKeyNeedsAuthKey = errors.New("a recovery key is sent only with an authKey")
+	// ErrNoAuthSalt refuses a recovery key for an account that has no auth salt
+	// to derive it with, one that has never signed in with an auth key.
+	ErrNoAuthSalt = errors.New("this account has no auth key yet: sign in with an authKey first")
 )
 
 // DisableUserParams names the account an admin turns off.
@@ -169,11 +182,15 @@ type RequestAccountParams struct {
 	// SaltSecret returns the install's salt secret. It is called only when
 	// AuthKey is set, to store the salt the key was derived with.
 	SaltSecret func() ([]byte, error)
+	// RecoveryKey, sent only with AuthKey, is the key the client derived from
+	// a recovery phrase it generated (#2430). With it the Quark makes no phrase.
+	RecoveryKey string
 	// RequestsEnabled is the admin's access-request setting.
 	RequestsEnabled bool
 }
 
 // RequestAccountResult carries the requester's recovery phrase, shown once.
+// It is empty when the request carried a RecoveryKey.
 type RequestAccountResult struct {
 	RecoveryPhrase string
 }
@@ -212,6 +229,9 @@ type SetupParams struct {
 	// SaltSecret returns the install's salt secret. It is called only when
 	// AuthKey is set, to store the salt the key was derived with.
 	SaltSecret func() ([]byte, error)
+	// RecoveryKey, sent only with AuthKey, is the key the client derived from
+	// a recovery phrase it generated (#2430). With it the Quark makes no phrase.
+	RecoveryKey string
 	// FilesDir is the internal device's files directory, where the founding
 	// admin's home is made.
 	FilesDir string
@@ -219,8 +239,10 @@ type SetupParams struct {
 
 // SetupResult contains the result of first-boot setup.
 type SetupResult struct {
-	SessionToken   string
-	RecoveryPhrase string // shown once — caller must surface to user
+	SessionToken string
+	// RecoveryPhrase is shown once, and the caller must surface it. It is
+	// empty when setup carried a RecoveryKey.
+	RecoveryPhrase string
 }
 
 // LoginParams contains parameters for login. Password alone is the legacy
@@ -249,6 +271,9 @@ type GetSaltResult struct {
 	// Legacy is true for an account that still signs in with its password
 	// alone, which the client upgrades by sending both.
 	Legacy bool
+	// LegacyRecovery is true for an account that has no recovery key, whose
+	// client gives it a new phrase and that phrase's key (#2430).
+	LegacyRecovery bool
 }
 
 // LoginResult contains the result of a successful login.
@@ -258,7 +283,39 @@ type LoginResult struct {
 	// created, which had no phrase until now. It is not stored anywhere the
 	// caller can ask for it again.
 	RecoveryPhrase string
+	// LegacyRecovery is true for an account that has no recovery key yet, so
+	// the client rotates it to one with SetRecoveryKey (#2430).
+	LegacyRecovery bool
 }
+
+// CheckRecoveryParams names an account and the one recovery secret it gave:
+// the raw phrase of an account that has no recovery key yet, or the key the
+// client derived from the phrase and the auth salt (#2430).
+type CheckRecoveryParams struct {
+	Username       string
+	RecoveryPhrase string
+	RecoveryKey    string
+}
+
+// CheckRecoveryResult is the account the secret recovers.
+type CheckRecoveryResult struct {
+	UserID int64
+}
+
+// SetRecoveryKeyParams gives the signed-in account a recovery key.
+type SetRecoveryKeyParams struct {
+	UserID int64
+	// RecoveryKey is the standard base64 of the 32-byte key the client derived
+	// from the phrase it generated and the account's auth salt.
+	RecoveryKey string
+	// AfterSet, when set, runs in the transaction that stores the key, with
+	// that transaction's queries and the account's id. An error rolls the key
+	// back. Chat uses it to store the identity re-wrapped under the new phrase.
+	AfterSet func(queries *db.Queries, userID int64) error
+}
+
+// SetRecoveryKeyResult is empty; a stored key has nothing to report.
+type SetRecoveryKeyResult struct{}
 
 // GetAuthStatusParams contains parameters for GetAuthStatus.
 type GetAuthStatusParams struct {
@@ -278,10 +335,16 @@ type GetAuthStatusResult struct {
 	IsAdmin bool
 }
 
-// RecoverParams contains parameters for password recovery.
+// RecoverParams contains parameters for password recovery. Exactly one of
+// RecoveryPhrase and RecoveryKey is set.
 type RecoverParams struct {
 	Username       string
 	RecoveryPhrase string
+	RecoveryKey    string
+	// NewRecoveryKey, sent only with NewAuthKey, replaces the recovery
+	// credential in the same transaction: a legacy phrase recovery hands the
+	// account the key of a phrase its client just generated (#2430).
+	NewRecoveryKey string
 	NewPassword    string
 	// NewAuthKey takes NewPassword's place: the key the client derived from
 	// the new password (#2430). Exactly one of the two is set.
@@ -444,8 +507,9 @@ func GetAuthStatus(ctx context.Context, queries *db.Queries, params GetAuthStatu
 	return result, nil
 }
 
-// Setup creates the first user and returns a session token + recovery phrase.
-// Returns an error if setup has already been completed.
+// Setup creates the first user and returns a session token and, unless setup
+// carried a recovery key, a recovery phrase. Returns an error if setup has
+// already been completed.
 //
 // The founding admin gets a home at users/<username> like every other account
 // (#1908). An admin bypasses the access table only while they are an admin,
@@ -473,13 +537,7 @@ func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	recoveryPhrase, err := GenerateRecoveryPhrase()
-	if err != nil {
-		return nil, err
-	}
-
-	recoveryHash, err := HashPassword(recoveryPhrase)
+	recoveryPhrase, recoveryHash, recoveryKeyHash, err := newRecovery(params.AuthKey, params.RecoveryKey)
 	if err != nil {
 		return nil, err
 	}
@@ -493,6 +551,7 @@ func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
 			RecoveryPhraseHash: recoveryHash,
 			AuthKeyHash:        authKeyHash,
 			AuthSalt:           authSalt,
+			RecoveryKeyHash:    recoveryKeyHash,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
@@ -532,10 +591,11 @@ func Setup(ctx context.Context, params SetupParams) (*SetupResult, error) {
 }
 
 // RequestAccount creates a pending account that can sign in once an admin
-// approves it, and returns its recovery phrase. It returns
-// ErrAccessRequestsOff while requests are off or before setup, and
-// ErrInvalidUsername, ErrPasswordTooShort, ErrInvalidAuthKey,
-// ErrCredentialRequired, ErrCredentialConflict or ErrUsernameTaken for a request
+// approves it, and returns its recovery phrase unless the request carried a
+// recovery key. It returns ErrAccessRequestsOff while requests are off or
+// before setup, and ErrInvalidUsername, ErrPasswordTooShort, ErrInvalidAuthKey,
+// ErrCredentialRequired, ErrCredentialConflict, ErrInvalidRecoveryKey,
+// ErrRecoveryKeyNeedsAuthKey or ErrUsernameTaken for a request
 // that cannot be taken. A pending request holds its username until it is
 // denied.
 func RequestAccount(ctx context.Context, queries *db.Queries, params RequestAccountParams) (RequestAccountResult, error) {
@@ -556,11 +616,7 @@ func RequestAccount(ctx context.Context, queries *db.Queries, params RequestAcco
 	if err != nil {
 		return RequestAccountResult{}, err
 	}
-	recoveryPhrase, err := GenerateRecoveryPhrase()
-	if err != nil {
-		return RequestAccountResult{}, err
-	}
-	recoveryHash, err := HashPassword(recoveryPhrase)
+	recoveryPhrase, recoveryHash, recoveryKeyHash, err := newRecovery(params.AuthKey, params.RecoveryKey)
 	if err != nil {
 		return RequestAccountResult{}, err
 	}
@@ -570,6 +626,7 @@ func RequestAccount(ctx context.Context, queries *db.Queries, params RequestAcco
 		RecoveryPhraseHash: recoveryHash,
 		AuthKeyHash:        authKeyHash,
 		AuthSalt:           authSalt,
+		RecoveryKeyHash:    recoveryKeyHash,
 	}); err != nil {
 		if sqlutil.IsUniqueConstraintErr(err) {
 			return RequestAccountResult{}, ErrUsernameTaken
@@ -645,6 +702,8 @@ func DenyRequest(ctx context.Context, queries *db.Queries, params DenyRequestPar
 // names a legacy account or none, gets the install's deterministic salt for
 // that name, so the answer does not say whether the account exists. The
 // deterministic salt is computed on every path so they take the same work.
+// LegacyRecovery follows the same rule as Legacy: an unknown username reads as
+// an account that has already moved to a recovery key.
 func GetSalt(ctx context.Context, queries *db.Queries, params GetSaltParams) (GetSaltResult, error) {
 	salt, err := deterministicSalt(params.SaltSecret, params.Username)
 	if err != nil {
@@ -662,6 +721,7 @@ func GetSalt(ctx context.Context, queries *db.Queries, params GetSaltParams) (Ge
 		result.Salt = user.AuthSalt
 	}
 	result.Legacy = user.AuthKeyHash == ""
+	result.LegacyRecovery = user.RecoveryKeyHash == ""
 	return result, nil
 }
 
@@ -717,11 +777,16 @@ func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*Login
 		return nil, err
 	}
 
-	return &LoginResult{SessionToken: token, RecoveryPhrase: recoveryPhrase}, nil
+	return &LoginResult{
+		SessionToken:   token,
+		RecoveryPhrase: recoveryPhrase,
+		LegacyRecovery: user.RecoveryKeyHash == "",
+	}, nil
 }
 
 // CreateUser adds an active account for an admin, with no recovery phrase
-// until its first sign-in, and a home at users/<username> that it owns
+// until its first sign-in (which an updated client then rotates to a recovery
+// key), and a home at users/<username> that it owns
 // (#2016). Homes live under users/ so that a username and a top-level folder
 // name are different namespaces: a Quark with a family/ folder can still have
 // an account named family. It returns ErrInvalidUsername, ErrPasswordTooShort,
@@ -876,28 +941,87 @@ func Logout(ctx context.Context, queries *db.Queries, token string) error {
 	return queries.DeleteSession(ctx, hashToken(token))
 }
 
-// CheckRecoveryPhrase returns the id of the account the phrase belongs to.
-// An unknown username gets the same error as a wrong phrase, so a caller
-// can't learn which usernames exist; a pending or disabled account is refused
-// after the phrase, for the same reason Login checks status after the
-// password.
-func CheckRecoveryPhrase(ctx context.Context, queries *db.Queries, username, phrase string) (int64, error) {
-	user, err := queries.GetUserByUsername(ctx, username)
-	if err != nil {
-		return 0, ErrInvalidRecoveryPhrase
+// CheckRecovery returns the id of the account the recovery secret belongs to.
+// A recovery key is checked against the recovery key hash. A raw phrase is
+// checked against the phrase hash, and only for an account that has no
+// recovery key: once it has one, every phrase is refused (#2430).
+//
+// It returns ErrRecoverySecretRequired unless exactly one secret is given and
+// ErrInvalidRecoveryKey for a malformed key. An unknown username and a wrong
+// key get the same error as a wrong phrase, so a caller can't learn which
+// usernames exist or which secret an account takes; a pending or disabled
+// account is refused after the secret, for the same reason Login checks
+// status after the password.
+func CheckRecovery(ctx context.Context, queries *db.Queries, params CheckRecoveryParams) (CheckRecoveryResult, error) {
+	if (params.RecoveryPhrase == "") == (params.RecoveryKey == "") {
+		return CheckRecoveryResult{}, ErrRecoverySecretRequired
 	}
-	if !CheckPassword(NormalizeRecoveryPhrase(phrase), user.RecoveryPhraseHash) {
-		return 0, ErrInvalidRecoveryPhrase
+	if params.RecoveryKey != "" {
+		if err := validateKey(params.RecoveryKey, ErrInvalidRecoveryKey); err != nil {
+			return CheckRecoveryResult{}, err
+		}
+	}
+	user, err := queries.GetUserByUsername(ctx, params.Username)
+	if err != nil {
+		return CheckRecoveryResult{}, ErrInvalidRecoveryPhrase
+	}
+	secret, hash := params.RecoveryKey, user.RecoveryKeyHash
+	if params.RecoveryKey == "" {
+		secret, hash = NormalizeRecoveryPhrase(params.RecoveryPhrase), user.RecoveryPhraseHash
+		if user.RecoveryKeyHash != "" {
+			hash = ""
+		}
+	}
+	if !CheckPassword(secret, hash) {
+		return CheckRecoveryResult{}, ErrInvalidRecoveryPhrase
 	}
 	if err := statusError(user.Status); err != nil {
-		return 0, err
+		return CheckRecoveryResult{}, err
 	}
-	return user.ID, nil
+	return CheckRecoveryResult{UserID: user.ID}, nil
 }
 
-// Recover resets a user's password using their recovery phrase. The new
-// password, the ended sessions, the new session and params.AfterReset commit
-// together or not at all.
+// SetRecoveryKey stores the signed-in account's recovery key and clears its
+// recovery phrase hash, so the phrase the Quark generated or saw stops
+// recovering the account (#2430). The key, the cleared phrase and
+// params.AfterSet commit together or not at all. It returns
+// ErrInvalidRecoveryKey for a malformed key, ErrUserNotFound when the account
+// is gone, and ErrNoAuthSalt for an account with no auth salt, since the key
+// is derived with it.
+func SetRecoveryKey(ctx context.Context, database *db.DatabaseSqlc, params SetRecoveryKeyParams) (SetRecoveryKeyResult, error) {
+	if err := validateKey(params.RecoveryKey, ErrInvalidRecoveryKey); err != nil {
+		return SetRecoveryKeyResult{}, err
+	}
+	hash, err := HashPassword(params.RecoveryKey)
+	if err != nil {
+		return SetRecoveryKeyResult{}, err
+	}
+	err = inTx(ctx, database, func(q *db.Queries) error {
+		user, err := q.GetUserByID(ctx, params.UserID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrUserNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("look up the account: %w", err)
+		}
+		if user.AuthSalt == "" {
+			return ErrNoAuthSalt
+		}
+		if err := q.SetRecoveryKey(ctx, db.SetRecoveryKeyParams{RecoveryKeyHash: hash, ID: user.ID}); err != nil {
+			return fmt.Errorf("store the recovery key: %w", err)
+		}
+		if params.AfterSet != nil {
+			return params.AfterSet(q, user.ID)
+		}
+		return nil
+	})
+	return SetRecoveryKeyResult{}, err
+}
+
+// Recover resets a user's password using their recovery phrase or recovery
+// key, checked as CheckRecovery does. The new password, the new recovery key
+// when one is given, the ended sessions, the new session and params.AfterReset
+// commit together or not at all.
 //
 // The reset replaces both ways of signing in (#2430). A new password clears
 // the auth key and its salt, because that key was derived from the old
@@ -908,10 +1032,19 @@ func Recover(ctx context.Context, database *db.DatabaseSqlc, params RecoverParam
 	if err != nil {
 		return nil, err
 	}
-	userID, err := CheckRecoveryPhrase(ctx, database.Queries, params.Username, params.RecoveryPhrase)
+	recoveryKeyHash, err := recoveryKeyHashFor(params.NewAuthKey, params.NewRecoveryKey)
 	if err != nil {
 		return nil, err
 	}
+	checked, err := CheckRecovery(ctx, database.Queries, CheckRecoveryParams{
+		Username:       params.Username,
+		RecoveryPhrase: params.RecoveryPhrase,
+		RecoveryKey:    params.RecoveryKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	userID := checked.UserID
 
 	var token string
 	err = inTx(ctx, database, func(q *db.Queries) error {
@@ -930,6 +1063,11 @@ func Recover(ctx context.Context, database *db.DatabaseSqlc, params RecoverParam
 			AuthSalt:     authSalt,
 		}); err != nil {
 			return fmt.Errorf("failed to update password: %w", err)
+		}
+		if recoveryKeyHash != "" {
+			if err := q.SetRecoveryKey(ctx, db.SetRecoveryKeyParams{RecoveryKeyHash: recoveryKeyHash, ID: userID}); err != nil {
+				return fmt.Errorf("store the recovery key: %w", err)
+			}
 		}
 		// Invalidate all existing sessions for this user
 		if err := q.DeleteUserSessions(ctx, userID); err != nil {

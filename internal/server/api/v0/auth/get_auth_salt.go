@@ -12,7 +12,7 @@ import (
 
 // getAuthSalt godoc
 // @Summary Get the salt for an auth key
-// @Description Returns the salt a client derives the named account's auth key with, as the standard base64 of 16 bytes. Needs no session and is rate-limited per IP. A username with no account gets a salt too, the same one every time, so the answer does not say whether the account exists. legacy is true for an account that has no auth key yet: the client signs in with both password and authKey to give it one.
+// @Description Returns the salt a client derives the named account's auth key with, as the standard base64 of 16 bytes. Needs no session and is rate-limited per IP. A username with no account gets a salt too, the same one every time, so the answer does not say whether the account exists. legacy is true for an account that has no auth key yet: the client signs in with both password and authKey to give it one. legacyRecovery is true for an account that has no recovery key yet, which recovers with its raw phrase; an unknown username reads false for both, like an account that has moved to keys.
 // @Tags auth
 // @Produce json
 // @Param username query string true "The account's username"
@@ -38,7 +38,7 @@ func getAuthSalt(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
-	return serverutil.Ok().WithData(saltResponse{Salt: result.Salt, Legacy: result.Legacy})
+	return serverutil.Ok().WithData(saltResponse{Salt: result.Salt, Legacy: result.Legacy, LegacyRecovery: result.LegacyRecovery})
 }
 
 var getAuthSaltRoute = serverutil.ApiRoute("GET", "/auth/salt", getAuthSalt)

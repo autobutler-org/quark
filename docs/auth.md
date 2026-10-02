@@ -46,11 +46,13 @@ curl 'http://localhost:8080/api/v0/auth/salt?username=you'
 ```
 
 ```json
-{ "salt": "3q2+7wAAAAAAAAAAAAAAAA==", "legacy": true }
+{ "salt": "3q2+7wAAAAAAAAAAAAAAAA==", "legacy": true, "legacyRecovery": true }
 ```
 
 `salt` is the standard base64 of 16 bytes. A username with no account gets a salt too, the same one every time, so
-the answer does not say whether the account exists. `legacy` is `true` for an account that has no auth key yet.
+the answer does not say whether the account exists. `legacy` is `true` for an account that has no auth key yet, and
+`legacyRecovery` for one that has no recovery key yet (see [Recovery keys](#recovery-keys)). An unknown username reads
+`false` for both.
 
 `POST /api/v0/auth/login` then takes one of three bodies. `authKey` is the standard base64 of exactly 32 bytes;
 anything else is a 400.
@@ -109,6 +111,27 @@ This resets your password, invalidates all existing sessions, and gives you a fr
 
 A recovery replaces both ways of signing in. `newPassword` clears the account's auth key, which was derived from the
 old password; `newAuthKey` clears its password.
+
+### Recovery keys
+
+As with the password, a client does not have to send the recovery phrase. It generates the phrase itself and derives
+a 32-byte **recovery key** from the phrase and the account's salt, the same salt `/auth/salt` returns, and the Quark
+stores only the key's hash. The client sends the key, as standard base64, wherever a phrase went:
+`/auth/recover/keys` and `/auth/recover` take exactly one of `recoveryPhrase` and `recoveryKey`. A wrong key gets the
+same 400 as a wrong phrase. Once an account has a recovery key it refuses every raw phrase.
+
+- **New accounts.** `/auth/setup` and `/auth/request-account` take an optional `recoveryKey` beside `authKey` (a 400
+  beside `password`). With it the Quark makes no phrase, and the response has no `recoveryPhrase`.
+- **Rotation.** `PUT /api/v0/auth/recovery-key` with a session, body `{password, recoveryKey, chatKeys?}`, stores the
+  key and clears the old phrase, and answers 204. `password` re-confirms the caller (an auth key client sends its key
+  there, as for deleting the account), so a stolen session cannot replace the recovery credential; a wrong or missing
+  one is a 403 and nothing is written. `chatKeys` is the chat identity re-wrapped under the new phrase, stored in
+  the same transaction, as `/auth/recover` takes it. An account with no auth salt yet is a 409. The login response
+  carries `legacyRecovery: true` for an account with no recovery key, which tells the client to rotate; an account an
+  admin created rotates the same way after its first sign-in hands it a phrase.
+- **A legacy recovery.** An account that never rotated recovers once with its raw `recoveryPhrase`. With
+  `newAuthKey`, the same request may carry `newRecoveryKey`, which stores that key and clears the old phrase in the
+  recovery's transaction.
 
 ## Check setup status
 
