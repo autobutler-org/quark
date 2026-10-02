@@ -119,7 +119,7 @@ clean/docker: ## Remove the $(DOCKER_CONTAINER) container (keeps the $(DOCKER_VO
 	docker rm -f $(DOCKER_CONTAINER) >/dev/null 2>&1 || true
 
 .PHONY: setup
-setup: setup/gotools setup/golangci-lint setup/probe setup/air setup/sqlc setup/swag setup/flutter setup/skills setup/hooks ## Setup development environment
+setup: setup/gotools setup/probe setup/air setup/sqlc setup/swag setup/flutter setup/skills setup/hooks ## Setup development environment
 
 .PHONY: setup/skills
 setup/skills: ## Install the pub package skills bundled with our packages
@@ -218,13 +218,12 @@ endif
 .PHONY: setup/gotools
 setup/gotools: ## Install go tools
 	$(GO) install golang.org/x/tools/gopls@latest
-	$(GO) install github.com/cweill/gotests/gotests@v1.6.0
-	$(GO) install github.com/josharian/impl@v1.4.0
-	$(GO) install github.com/haya14busa/goplay/cmd/goplay@v1.0.0
+	$(GO) install github.com/cweill/gotests/gotests@latest
+	$(GO) install github.com/josharian/impl@latest
+	$(GO) install github.com/haya14busa/goplay/cmd/goplay@latest
 	$(GO) install github.com/go-delve/delve/cmd/dlv@latest
 	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
-	# staticcheck is not installed on its own -- golangci-lint runs it as one of its
-	# linters, and two copies at different versions disagree about what is a warning.
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 
 .PHONY: setup/ios
 setup/ios: setup/cocoapods ## Setup iOS development environment
@@ -240,10 +239,6 @@ endif
 .PHONY: setup/sqlc
 setup/sqlc: ## Install sqlc tool
 	$(GO) install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0
-
-.PHONY: setup/golangci-lint
-setup/golangci-lint: ## Install golangci-lint
-	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2
 
 .PHONY: setup/probe
 setup/probe: ## Install the Flutter Probe e2e CLI and its MCP server (probe, probe-mcp)
