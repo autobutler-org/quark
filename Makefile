@@ -795,7 +795,10 @@ generate/frontend/widget-docs: ## Regenerate the widget gallery's docs from /// 
 
 .PHONY: generate/frontend/sbom
 generate/frontend/sbom: generate/frontend/pub-get ## Generate Flutter SBOM asset from pubspec.lock
-	dart run scripts/generate_flutter_sbom.dart
+	# Plain `dart`, not `dart run`: `dart run` first runs every dependency's native
+	# build hooks (sodium, objective_c), which this script never loads -- it imports
+	# only dart:convert and dart:io. That took 77s on a clean macOS runner.
+	dart scripts/generate_flutter_sbom.dart
 
 # The graph is a build output, not a committed artifact: it regenerates from the tree
 # in a couple of seconds, so there is nothing to keep in sync or diff in CI.

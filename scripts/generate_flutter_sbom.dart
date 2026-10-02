@@ -1,5 +1,5 @@
 // Generates assets/sbom_flutter.json from pubspec.lock.
-// Run via: dart run scripts/generate_flutter_sbom.dart
+// Run via: make generate/frontend/sbom
 import 'dart:convert';
 import 'dart:io';
 
