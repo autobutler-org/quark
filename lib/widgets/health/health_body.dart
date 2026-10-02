@@ -79,7 +79,7 @@ class HealthBody extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              ElevatedButton.icon(
+              FilledButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(QuarkIcons.refresh),
                 label: const Text('Retry'),

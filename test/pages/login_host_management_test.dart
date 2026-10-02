@@ -221,6 +221,23 @@ void main() {
       expect(find.text('Done'), findsOneWidget);
     });
 
+    testWidgets('Add Quark is a filled button at least 48dp tall (#2072)', (
+      tester,
+    ) async {
+      await addAccepted('Home', 'http://quark.local');
+      await pumpLogin(tester);
+
+      await tester.tap(find.text('Change'));
+      await tester.pumpAndSettle();
+
+      final button = find.ancestor(
+        of: find.text('Add Quark'),
+        matching: find.bySubtype<FilledButton>(),
+      );
+      expect(button, findsOneWidget);
+      expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
+    });
+
     testWidgets('a second Quark can be switched to without signing in', (
       tester,
     ) async {
