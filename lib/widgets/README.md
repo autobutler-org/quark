@@ -40,6 +40,8 @@ lib/widgets/
     file_storage_footer.dart    capacity row, takes the app's HealthStatus
     files_welcome_card.dart     WelcomeCard wired to AppSettings: the greeting
                                 on the Files landing after setup or sign-in
+    folder_explainer.dart       WelcomeCard saying what users, groups and
+                                groups/everyone are for; reads the path utils
     recent_files_section.dart   calls FilesService
     new_file_dialog.dart        one-line wrapper that pops NewFileDialog
     upload_conflict_prompt.dart pops UploadConflictDialog and holds the

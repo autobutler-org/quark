@@ -407,6 +407,21 @@ void main() {
     }, createHttpClient: overrides.createHttpClient);
   });
 
+  testWidgets('users and groups say what they are for (#2476)', (tester) async {
+    const note = ValueKey('folder_explainer');
+    await HttpOverrides.runZoned(() async {
+      await pumpBrowser(tester, initialPath: '/groups');
+      expect(find.byKey(note), findsOne);
+      expect(find.text('Group folders'), findsOne);
+
+      await pumpBrowser(tester, initialPath: '/users');
+      expect(find.text('Home folders'), findsOne);
+
+      await pumpBrowser(tester);
+      expect(find.byKey(note), findsNothing, reason: 'a home needs no note');
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
   testWidgets('a folder whose stat fails is still listed at once', (
     tester,
   ) async {

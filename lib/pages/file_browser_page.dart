@@ -50,6 +50,7 @@ import 'package:quark/widgets/file_browser/file_route_error_state.dart';
 import 'package:quark/widgets/file_browser/file_storage_footer.dart';
 import 'package:quark/widgets/file_browser/file_top_bar.dart';
 import 'package:quark/widgets/file_browser/files_welcome_card.dart';
+import 'package:quark/widgets/file_browser/folder_explainer.dart';
 import 'package:quark/widgets/file_browser/folder_route_error_state.dart';
 import 'package:quark/widgets/file_browser/new_file_dialog.dart';
 import 'package:quark/widgets/file_browser/recent_files_section.dart';
@@ -2414,6 +2415,13 @@ class _FileBrowserPageState extends State<FileBrowserPage>
               onUpload: _handleUploadPressed,
               onCreateFolder: _handleCreateFolderPressed,
               onOpenVault: () => context.go(AppRoutes.vault),
+            ),
+
+          // What users, groups and groups/everyone are for (#2476).
+          if (!searchActive && _archiveContext == null && !_noHostSelected)
+            FolderExplainer(
+              serial: _serialsForActiveDevices().firstOrNull ?? '',
+              path: _currentPath,
             ),
 
           // Hide Recent Files on mobile — show only on tablet/desktop (#959).
