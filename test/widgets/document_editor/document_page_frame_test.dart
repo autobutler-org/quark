@@ -202,6 +202,64 @@ void main() {
     ]);
   });
 
+  /// The left edge of the line whose text is exactly [text].
+  double lineLeft(WidgetTester tester, String text) => tester
+      .getTopLeft(
+        find.byWidgetPredicate(
+          (w) => w is RichText && w.text.toPlainText() == text,
+        ),
+      )
+      .dx;
+
+  // One nesting level moved an item right by one font size, 14px, which reads
+  // as a sibling rather than a child. Each level now steps by two (#2464).
+  for (final list in ['bullet', 'ordered', 'unchecked']) {
+    testWidgets('a nested $list item steps 28px right per level', (
+      WidgetTester tester,
+    ) async {
+      controller.document = Document.fromJson([
+        {'insert': 'one'},
+        {
+          'insert': '\n',
+          'attributes': {'list': list},
+        },
+        {'insert': 'two'},
+        {
+          'insert': '\n',
+          'attributes': {'list': list, 'indent': 1},
+        },
+        {'insert': 'six'},
+        {
+          'insert': '\n',
+          'attributes': {'list': list, 'indent': 2},
+        },
+      ]);
+      await pumpFrame(tester, isReadOnly: true);
+
+      final one = lineLeft(tester, 'one');
+      final two = lineLeft(tester, 'two');
+      final six = lineLeft(tester, 'six');
+
+      expect(two - one, 28);
+      expect(six - two, 28);
+    });
+  }
+
+  testWidgets('an indented paragraph steps the same 28px per level', (
+    WidgetTester tester,
+  ) async {
+    controller.document = Document.fromJson([
+      {'insert': 'one\ntwo'},
+      {
+        'insert': '\n',
+        'attributes': {'indent': 1},
+      },
+    ]);
+    await pumpFrame(tester, isReadOnly: true);
+
+    expect(lineLeft(tester, 'two') - lineLeft(tester, 'one'), 28);
+  });
+
   testWidgets('reports a tap on the page so the caller can start editing', (
     WidgetTester tester,
   ) async {
