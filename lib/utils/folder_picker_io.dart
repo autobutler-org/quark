@@ -111,10 +111,7 @@ String _basename(String relativePath) {
 ///
 /// Nothing here reads a file at pick time: every native picker hands back a
 /// real path, and pulling the bytes as well would put the whole file in memory
-/// for nothing — the same waste #1629 removed from the web side. A picker that
-/// somehow returns no path still works: that file falls back to the picker's
-/// own byte stream, which is read lazily at upload time and takes the
-/// single-request path.
+/// for nothing — the same waste #1629 removed from the web side.
 Future<List<PendingUpload>> pickFileUploadsPlatform() async {
   return _pendingUploadsFromPicker(await FilePicker.pickFiles());
 }
@@ -141,27 +138,17 @@ List<PendingUpload> _pendingUploadsFromPicker(List<PlatformFile> result) {
       continue;
     }
 
+    // A pathless pick cannot happen on a platform this file compiles for
+    // (#1787). file_picker derives `path` from a `file:` URI, and every native
+    // implementation builds that URI from a filesystem path: Android copies
+    // each pick, SAF `content://` ones included, into the app cache and
+    // reports the copy; iOS and macOS report `URL.path`; Linux and Windows
+    // construct the file from a path. An empty path throws inside the plugin
+    // before a `PlatformFile` exists. The check only satisfies the nullable
+    // type and says so if a future plugin version breaks that.
     final path = picked.path;
     if (path == null || path.isEmpty) {
-      uploads.add(
-        PendingUpload(
-          relativeDir: '',
-          name: name,
-          build: () async {
-            final length = await picked.length();
-            if (length == null) {
-              debugPrint('[folder_picker_io.dart] Failed to size $name');
-              return null;
-            }
-            return http.MultipartFile(
-              'files',
-              picked.readAsByteStream(),
-              length,
-              filename: name,
-            );
-          },
-        ),
-      );
+      debugPrint('[folder_picker_io.dart] Skipped $name: picker gave no path');
       continue;
     }
 
