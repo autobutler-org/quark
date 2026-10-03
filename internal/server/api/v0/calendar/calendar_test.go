@@ -135,6 +135,8 @@ func TestEventRoundTrip(t *testing.T) {
 
 func TestEventRequestErrors(t *testing.T) {
 	engine, events := newCalendarEngine(t)
+	const timed = `"title":"x","start":"2026-09-29T12:00:00Z","end":"2026-09-29T13:00:00Z"`
+	const allDay = `"title":"x","start":"2026-09-29T00:00:00Z","end":"2026-09-30T00:00:00Z","allDay":true`
 	tests := []struct {
 		name, method, path, body string
 		want                     int
@@ -150,6 +152,15 @@ func TestEventRequestErrors(t *testing.T) {
 		{"get a missing event", http.MethodGet, "/api/v0/calendar/events/99", "", http.StatusNotFound},
 		{"update a missing event", http.MethodPut, "/api/v0/calendar/events/99", `{"title":"x","start":"2026-09-29T12:00:00Z","end":"2026-09-29T13:00:00Z"}`, http.StatusNotFound},
 		{"delete a non-number", http.MethodDelete, "/api/v0/calendar/events/abc", "", http.StatusBadRequest},
+		// Out-of-range colors and reminders are a 400 from the app's rules,
+		// never a 500 from the schema's CHECKs (#2536).
+		{"create a negative color", http.MethodPost, "/api/v0/calendar/events", `{` + timed + `,"colorIndex":-1}`, http.StatusBadRequest},
+		{"create a color past the last", http.MethodPost, "/api/v0/calendar/events", `{` + timed + `,"colorIndex":6}`, http.StatusBadRequest},
+		{"create a timed reminder after the start", http.MethodPost, "/api/v0/calendar/events", `{` + timed + `,"reminderMinutes":-1}`, http.StatusBadRequest},
+		{"create a reminder past a week", http.MethodPost, "/api/v0/calendar/events", `{` + timed + `,"reminderMinutes":10081}`, http.StatusBadRequest},
+		{"create an all-day reminder past its day", http.MethodPost, "/api/v0/calendar/events", `{` + allDay + `,"reminderMinutes":-1440}`, http.StatusBadRequest},
+		{"update to a color past the last", http.MethodPut, "/api/v0/calendar/events/99", `{` + timed + `,"colorIndex":99}`, http.StatusBadRequest},
+		{"update to a reminder past a week", http.MethodPut, "/api/v0/calendar/events/99", `{` + timed + `,"reminderMinutes":999999}`, http.StatusBadRequest},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
