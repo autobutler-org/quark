@@ -78,13 +78,19 @@ class _UsersPageState extends State<UsersPage>
   }
 
   /// Waits for [action] and says why it failed, if it did. [failure] is the
-  /// action phrase for [Errors.message].
-  Future<void> _report(Future<Object?> action, String failure) async {
+  /// action phrase for [Errors.message]. Given [success], it also says what
+  /// worked, for an action whose row leaves the screen (#2482).
+  Future<void> _report(
+    Future<Object?> action,
+    String failure, {
+    String? success,
+  }) async {
     final error = await action;
-    if (error == null || !mounted) return;
+    final message = error == null ? success : Errors.message(error, failure);
+    if (message == null || !mounted) return;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(Errors.message(error, failure))));
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// Opens the add-account dialog. It rebuilds with the controller, so a
@@ -285,10 +291,12 @@ class _UsersPageState extends State<UsersPage>
                         onApprove: (username) => _report(
                           c.approve(username),
                           "approve $username's request",
+                          success: 'Approved $username. They can sign in now.',
                         ),
                         onDeny: (username) => _report(
                           c.deny(username),
                           "deny $username's request",
+                          success: "Denied $username's request.",
                         ),
                       ),
                     ),

@@ -27,10 +27,13 @@ class AccessRequestsTile extends StatelessWidget {
     super.key,
   });
 
-  /// Whether the sign-in page offers to request an account.
+  /// Whether the sign-in page offers to request an account. Written out as
+  /// On or Off ahead of the subtitle, so the state never rests on the
+  /// switch's color alone (#2482).
   final bool enabled;
 
-  /// Whether a change is being saved. Disables the switch.
+  /// Whether a change is being saved. Disables the switch, and the subtitle
+  /// says so.
   final bool isBusy;
 
   /// Called with the new setting. Null disables the switch.
@@ -39,14 +42,31 @@ class AccessRequestsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
+    final detail = isBusy
+        ? 'Saving...'
+        : enabled
+        ? 'People can ask for an account from the sign-in page. An admin '
+              'approves each one.'
+        : "The sign-in page doesn't offer to request an account. Only an "
+              'admin can add one.';
 
     return SwitchListTile(
       key: const ValueKey('access_requests_toggle'),
       contentPadding: EdgeInsets.zero,
       title: const Text('Allow account requests'),
-      subtitle: Text(
-        'People can ask for an account from the sign-in page. An admin '
-        'approves each one.',
+      subtitle: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: enabled ? 'On' : 'Off',
+              style: TextStyle(
+                color: tokens.foreground,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            TextSpan(text: ' · $detail'),
+          ],
+        ),
         style: TextStyle(color: tokens.mutedForeground),
       ),
       value: enabled,
