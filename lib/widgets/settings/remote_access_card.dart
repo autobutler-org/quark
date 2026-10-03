@@ -122,10 +122,12 @@ class RemoteAccessCard extends StatelessWidget {
                       children: [
                         Icon(QuarkIcons.cloud_sync_outlined, size: 16),
                         SizedBox(width: 6),
-                        Text(
-                          'Connecting…',
-                          key: ValueKey('settings_remote_access_connecting'),
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                        Expanded(
+                          child: Text(
+                            'Connecting…',
+                            key: ValueKey('settings_remote_access_connecting'),
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ],
                     )
@@ -138,9 +140,11 @@ class RemoteAccessCard extends StatelessWidget {
                           color: Colors.green,
                         ),
                         SizedBox(width: 6),
-                        Text(
-                          'Connected via Tailscale',
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                        Expanded(
+                          child: Text(
+                            'Connected via Tailscale',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ],
                     ),

@@ -6,6 +6,9 @@ import 'package:quark/pages/login_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
+import 'package:quark_widgets/quark_widgets.dart';
+
+import '../support/text_scale.dart';
 
 /// #2068: with the keyboard open on a phone, focusing a field scrolled only
 /// that field into view, so Sign in, Forgot password and the setup link sat
@@ -111,4 +114,33 @@ void main() {
     expectAboveKeyboard(tester, password);
     expectAboveKeyboard(tester, signIn);
   });
+  // #2606, #2603, #2605: the form, with the host list open or shut, survives
+  // 200% text on a phone and a desktop, and every control on it is labeled
+  // and big enough to hit.
+  for (final hostsOpen in [false, true]) {
+    testLargeText(
+      'the form lays out with the host list ${hostsOpen ? 'open' : 'shut'}',
+      (tester, _) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),
+            home: LoginPage(
+              onLoginSuccess: () {},
+              notice: 'Your session ended. Sign in again to carry on.',
+              checkStatus: () async => const AuthStatus(setupComplete: false),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (hostsOpen) {
+          await tester.ensureVisible(find.text('Change'));
+          await tester.tap(find.text('Change'));
+          await tester.pumpAndSettle();
+        }
+
+        expect(tester.takeException(), isNull);
+        await expectTapTargetGuidelines(tester);
+      },
+    );
+  }
 }

@@ -47,6 +47,9 @@ class UserAvatar extends StatelessWidget {
               width: size,
               height: size,
               fit: BoxFit.cover,
+              // The name always sits beside the avatar, so the picture is
+              // decoration to a screen reader (#2603).
+              excludeFromSemantics: true,
               errorBuilder: (context, error, stackTrace) =>
                   QuarkAvatar(id: id, name: name, size: size),
             ),

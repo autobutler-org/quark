@@ -149,22 +149,32 @@ class _HostManagerState extends State<HostManager> {
               // (#2276).
               return GestureDetector(
                 key: ValueKey('host_row_$idx'),
+                // A pointer shortcut for the menu button, which is what a
+                // screen reader gets; left in, it reads as an unnamed tap.
+                excludeFromSemantics: true,
                 onSecondaryTapUp: (details) => showQuarkMenu(
                   context,
                   position: details.globalPosition,
                   entries: _hostMenu(idx),
                 ),
                 child: Card(
-                  child: ListTile(
-                    leading: Radio<int>(value: idx),
-                    title: Text(host.name),
-                    subtitle: Text(host.hostAddress),
-                    trailing: QuarkMenuButton(
-                      key: ValueKey('host_menu_$idx'),
-                      tooltip: 'Actions for ${host.name}',
-                      entries: _hostMenu(idx),
+                  // The row is the radio to a screen reader, named by the
+                  // Quark it picks; the drawn radio would be a second,
+                  // unnamed target for the same tap (#2603).
+                  child: Semantics(
+                    checked: idx == active,
+                    inMutuallyExclusiveGroup: true,
+                    child: ListTile(
+                      leading: ExcludeSemantics(child: Radio<int>(value: idx)),
+                      title: Text(host.name),
+                      subtitle: Text(host.hostAddress),
+                      trailing: QuarkMenuButton(
+                        key: ValueKey('host_menu_$idx'),
+                        tooltip: 'Actions for ${host.name}',
+                        entries: _hostMenu(idx),
+                      ),
+                      onTap: () => _setActive(idx),
                     ),
-                    onTap: () => _setActive(idx),
                   ),
                 ),
               );

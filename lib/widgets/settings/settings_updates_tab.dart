@@ -142,11 +142,9 @@ class SettingsUpdatesTab extends StatelessWidget {
                     onPressed: () => onOpenReleaseNotes(installedReleaseUrl!),
                     icon: const Icon(QuarkIcons.open_in_new, size: 16),
                     label: const Text("What's in this release"),
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
+                    // Flush with the version above it, but still a 48dp
+                    // target (#2605).
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero),
                   ),
                 const SizedBox(height: 16),
                 if (availableVersions.isEmpty &&
@@ -157,6 +155,8 @@ class SettingsUpdatesTab extends StatelessWidget {
                 else if (availableVersions.isNotEmpty && isAdmin) ...[
                   DropdownButtonFormField<String>(
                     initialValue: selectedVersion,
+                    isExpanded: true,
+                    itemHeight: null,
                     items: [
                       for (final v in availableVersions)
                         DropdownMenuItem<String>(value: v, child: Text(v)),

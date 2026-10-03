@@ -91,6 +91,10 @@ class SettingsGeneralTab extends StatelessWidget {
         const SizedBox(height: 8),
         DropdownButtonFormField<int>(
           initialValue: refreshIntervalSeconds,
+          // Full width and as tall as its text, so the choice still fits at
+          // large text sizes (#2606).
+          isExpanded: true,
+          itemHeight: null,
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
             contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
