@@ -1,11 +1,11 @@
 import 'dart:math' show max, min;
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart' show ChangeNotifier, ValueNotifier;
+import 'package:flutter/foundation.dart'
+    show ChangeNotifier, ValueNotifier, mapEquals;
 import 'package:flutter/material.dart' show Color;
 import 'package:flutter/painting.dart'
     show FontStyle, FontWeight, TextPainter, TextSpan, TextStyle;
-import 'package:flutter/widgets.dart' show TextEditingController;
 import 'package:quark_formula/evaluation/evaluation.dart';
 
 import '../../data_table.dart';
@@ -15,6 +15,8 @@ import 'cell_range.dart';
 import 'column_filter.dart';
 import 'data_sheet_selection.dart';
 import 'format/format_cell_value.dart';
+import 'formula/formula_references.dart';
+import 'formula/formula_text_editing_controller.dart';
 
 // ---------------------------------------------------------------------------
 // Internal snapshot used for undo / redo.
@@ -143,16 +145,18 @@ class DataSheetController extends ChangeNotifier {
   /// Only formula cells appear here; literal cells are absent.
   Map<(int, int), FormulaValue> _computedValues = {};
 
-  /// Color assignments for cells referenced by the formula currently being
-  /// edited. Set by [DataSheetFormulaBar] while a formula is active;
-  /// cleared when editing commits or cancels.
-  Map<(int, int), Color> activeRefColors = {};
+  /// The color of each cell the formula being edited, or the selected
+  /// formula cell, refers to. Kept current by [notifyListeners] and by edits
+  /// to [activeCellEditingController].
+  Map<(int, int), Color> _refColors = const {};
 
   /// Shared [TextEditingController] for the currently active (in-edit) cell.
   /// Both the [DataSheet] cell editor and [DataSheetFormulaBar] use this
   /// single controller so they remain in sync without extra bridging logic.
-  final TextEditingController activeCellEditingController =
-      TextEditingController();
+  /// It colors a formula's references the way [activeRefColors] outlines
+  /// their cells.
+  final FormulaTextEditingController activeCellEditingController =
+      FormulaTextEditingController();
 
   final List<_TableSnapshot> _undoStack = [];
   final List<_TableSnapshot> _redoStack = [];
@@ -170,7 +174,9 @@ class DataSheetController extends ChangeNotifier {
     this._formats,
   ) {
     selection.addListener(_onSelectionChanged);
+    activeCellEditingController.addListener(_onEditingTextChanged);
     _recompute();
+    _refColors = _computeRefColors();
     _applyFilters();
   }
 
@@ -205,18 +211,47 @@ class DataSheetController extends ChangeNotifier {
   bool isCellError(int row, int col) =>
       _computedValues[(row, col)] is ErrorValue;
 
-  /// Sets the active reference color map and notifies listeners so the grid
-  /// redraws the reference borders.
-  void setActiveRefColors(Map<(int, int), Color> colors) {
-    activeRefColors = colors;
-    notifyListeners();
+  /// The error the formula at [row],[col] evaluated to, with its code
+  /// (`#DIV/0!`) and the message saying why, or null when it is not one.
+  ErrorValue? errorAt(int row, int col) =>
+      switch (_computedValues[(row, col)]) {
+        final ErrorValue error => error,
+        _ => null,
+      };
+
+  /// The color of each cell referenced by the formula being edited, keyed by
+  /// (row, col). With no edit in progress, the references of the selected
+  /// cell's formula. Each color matches the reference's text in the editor:
+  /// both come from [formulaReferences].
+  Map<(int, int), Color> get activeRefColors => _refColors;
+
+  Map<(int, int), Color> _computeRefColors() {
+    final r = selection.contextRow;
+    final c = selection.contextCol;
+    final formula = selection.hasActiveCell
+        ? activeCellEditingController.text
+        : r >= 0 && c >= 0 && r < rowCount && c < colCount
+            ? cellAt(r, c).value.toString()
+            : '';
+    return formulaReferenceCellColors(
+      formula,
+      rowCount: rowCount,
+      colCount: colCount,
+    );
   }
 
-  /// Clears the active reference color map.
-  void clearActiveRefColors() {
-    if (activeRefColors.isEmpty) return;
-    activeRefColors = {};
-    notifyListeners();
+  void _onEditingTextChanged() {
+    final colors = _computeRefColors();
+    if (mapEquals(colors, _refColors)) return;
+    _refColors = colors;
+    super.notifyListeners();
+  }
+
+  /// Notifies listeners after bringing [activeRefColors] up to date.
+  @override
+  void notifyListeners() {
+    _refColors = _computeRefColors();
+    super.notifyListeners();
   }
 
   static String _formatFormulaValue(FormulaValue v) => switch (v) {

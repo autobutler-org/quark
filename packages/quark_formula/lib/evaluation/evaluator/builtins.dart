@@ -1,73 +1,211 @@
 import 'dart:math' as math;
 
+import 'builtin_function.dart';
 import 'values.dart';
 
-/// A built-in spreadsheet function, called with its arguments already resolved to values or ranges. This file
-/// holds the table of built-ins by name.
-typedef BuiltinFn = FormulaValue Function(List<ResolvedArgument> arguments);
+export 'builtin_function.dart';
+
 typedef _NumberResult = ({double? value, ErrorValue? error});
 typedef _StringResult = ({String? value, ErrorValue? error});
 typedef _BoolResult = ({bool? value, ErrorValue? error});
 typedef _NumbersResult = ({List<double>? values, ErrorValue? error});
 
-sealed class ResolvedArgument {
-  const ResolvedArgument();
+/// Every built-in function, with the signature and description an editor shows. This file holds the table and the
+/// implementations; [builtinFunctions] and [builtinsMatching] are read from it.
+final List<BuiltinFunction> builtinRegistry =
+    List.unmodifiable(<BuiltinFunction>[
+  BuiltinFunction(
+    'SUM',
+    'SUM(value1, [value2, ...])',
+    'Adds numbers and ranges.',
+    _sum,
+  ),
+  BuiltinFunction(
+    'AVERAGE',
+    'AVERAGE(value1, [value2, ...])',
+    'The mean of numbers and ranges.',
+    _average,
+  ),
+  BuiltinFunction(
+    'MIN',
+    'MIN(value1, [value2, ...])',
+    'The smallest of numbers and ranges.',
+    _min,
+  ),
+  BuiltinFunction(
+    'MAX',
+    'MAX(value1, [value2, ...])',
+    'The largest of numbers and ranges.',
+    _max,
+  ),
+  BuiltinFunction('ABS', 'ABS(value)', 'A number without its sign.', _abs),
+  BuiltinFunction(
+    'ROUND',
+    'ROUND(value, [places])',
+    'Rounds a number to a number of decimal places.',
+    _round,
+  ),
+  BuiltinFunction(
+    'FLOOR',
+    'FLOOR(value)',
+    'Rounds a number down to a whole number.',
+    _floor,
+  ),
+  BuiltinFunction(
+    'CEILING',
+    'CEILING(value)',
+    'Rounds a number up to a whole number.',
+    _ceiling,
+  ),
+  BuiltinFunction(
+    'MOD',
+    'MOD(dividend, divisor)',
+    'The remainder after division.',
+    _mod,
+  ),
+  BuiltinFunction(
+    'POWER',
+    'POWER(base, exponent)',
+    'A number raised to a power.',
+    _power,
+  ),
+  BuiltinFunction(
+    'SQRT',
+    'SQRT(value)',
+    'The square root of a number.',
+    _sqrt,
+  ),
+  BuiltinFunction(
+    'CONCAT',
+    'CONCAT(value1, [value2, ...])',
+    'Joins values into one piece of text.',
+    _concat,
+  ),
+  BuiltinFunction(
+    'LEN',
+    'LEN(text)',
+    'The number of characters in text.',
+    _len,
+  ),
+  BuiltinFunction('UPPER', 'UPPER(text)', 'Text in upper case.', _upper),
+  BuiltinFunction('LOWER', 'LOWER(text)', 'Text in lower case.', _lower),
+  BuiltinFunction(
+    'TRIM',
+    'TRIM(text)',
+    'Text without leading and trailing spaces.',
+    _trim,
+  ),
+  BuiltinFunction(
+    'LEFT',
+    'LEFT(text, [count])',
+    'The first characters of text.',
+    _left,
+  ),
+  BuiltinFunction(
+    'RIGHT',
+    'RIGHT(text, [count])',
+    'The last characters of text.',
+    _right,
+  ),
+  BuiltinFunction(
+    'MID',
+    'MID(text, start, count)',
+    'Characters from the middle of text.',
+    _mid,
+  ),
+  BuiltinFunction(
+    'FIND',
+    'FIND(search_for, text, [start])',
+    'Where text first appears in other text.',
+    _find,
+  ),
+  BuiltinFunction(
+    'SUBSTITUTE',
+    'SUBSTITUTE(text, search_for, replace_with, [occurrence])',
+    'Replaces text with other text.',
+    _substitute,
+  ),
+  BuiltinFunction(
+    'IF',
+    'IF(condition, value_if_true, value_if_false)',
+    'One value when a condition holds, another when it does not.',
+    _ifFn,
+  ),
+  BuiltinFunction(
+    'AND',
+    'AND(value1, [value2, ...])',
+    'TRUE when every value is true.',
+    _and,
+  ),
+  BuiltinFunction(
+    'OR',
+    'OR(value1, [value2, ...])',
+    'TRUE when any value is true.',
+    _or,
+  ),
+  BuiltinFunction(
+    'NOT',
+    'NOT(value)',
+    'The opposite of a logical value.',
+    _not,
+  ),
+  BuiltinFunction(
+    'IFERROR',
+    'IFERROR(value, value_if_error)',
+    'A value, or a fallback when it is an error.',
+    _ifError,
+  ),
+  BuiltinFunction(
+    'ISBLANK',
+    'ISBLANK(value)',
+    'TRUE when a cell is empty.',
+    _isBlank,
+  ),
+  BuiltinFunction(
+    'ISNUMBER',
+    'ISNUMBER(value)',
+    'TRUE when a value is a number.',
+    _isNumber,
+  ),
+  BuiltinFunction(
+    'ISTEXT',
+    'ISTEXT(value)',
+    'TRUE when a value is text.',
+    _isText,
+  ),
+  BuiltinFunction(
+    'COUNT',
+    'COUNT(value1, [value2, ...])',
+    'How many values are numbers.',
+    _count,
+  ),
+  BuiltinFunction(
+    'COUNTA',
+    'COUNTA(value1, [value2, ...])',
+    'How many values are not empty.',
+    _countA,
+  ),
+  BuiltinFunction(
+    'COUNTIF',
+    'COUNTIF(range, criterion)',
+    'How many cells in a range meet a condition.',
+    _countIf,
+  ),
+]);
 
-  Iterable<FormulaValue> get values;
+/// The built-ins by name, as the evaluator calls them.
+final Map<String, BuiltinFn> builtinFunctions = Map.unmodifiable({
+  for (final builtin in builtinRegistry) builtin.name: builtin.function,
+});
+
+/// The built-ins whose names start with [prefix], ignoring case, in alphabetical order; none for an empty
+/// [prefix].
+List<BuiltinFunction> builtinsMatching(String prefix) {
+  if (prefix.isEmpty) return const [];
+  final upper = prefix.toUpperCase();
+  return builtinRegistry.where((f) => f.name.startsWith(upper)).toList()
+    ..sort((a, b) => a.name.compareTo(b.name));
 }
-
-final class ScalarArgument extends ResolvedArgument {
-  final FormulaValue value;
-
-  const ScalarArgument(this.value);
-
-  @override
-  Iterable<FormulaValue> get values => [value];
-}
-
-final class RangeArgument extends ResolvedArgument {
-  final List<FormulaValue> cells;
-
-  const RangeArgument(this.cells);
-
-  @override
-  Iterable<FormulaValue> get values => cells;
-}
-
-final Map<String, BuiltinFn> builtinFunctions = <String, BuiltinFn>{
-  'SUM': _sum,
-  'AVERAGE': _average,
-  'MIN': _min,
-  'MAX': _max,
-  'ABS': _abs,
-  'ROUND': _round,
-  'FLOOR': _floor,
-  'CEILING': _ceiling,
-  'MOD': _mod,
-  'POWER': _power,
-  'SQRT': _sqrt,
-  'CONCAT': _concat,
-  'LEN': _len,
-  'UPPER': _upper,
-  'LOWER': _lower,
-  'TRIM': _trim,
-  'LEFT': _left,
-  'RIGHT': _right,
-  'MID': _mid,
-  'FIND': _find,
-  'SUBSTITUTE': _substitute,
-  'IF': _ifFn,
-  'AND': _and,
-  'OR': _or,
-  'NOT': _not,
-  'IFERROR': _ifError,
-  'ISBLANK': _isBlank,
-  'ISNUMBER': _isNumber,
-  'ISTEXT': _isText,
-  'COUNT': _count,
-  'COUNTA': _countA,
-  'COUNTIF': _countIf,
-};
 
 FormulaValue _sum(List<ResolvedArgument> arguments) {
   final result = _collectNumbers(arguments, allowEmpty: true);
@@ -171,7 +309,8 @@ FormulaValue _power(List<ResolvedArgument> arguments) {
     return rightResult.error!;
   }
   return NumberValue(
-      math.pow(leftResult.value!, rightResult.value!).toDouble());
+    math.pow(leftResult.value!, rightResult.value!).toDouble(),
+  );
 }
 
 FormulaValue _sqrt(List<ResolvedArgument> arguments) {
@@ -279,10 +418,7 @@ FormulaValue _mid(List<ResolvedArgument> arguments) {
   final text = textResult.value!;
   final startIndex = math.max(0, startResult.value!.toInt() - 1);
   final endIndex = math
-      .min(
-        text.length,
-        startIndex + math.max(0, countResult.value!.toInt()),
-      )
+      .min(text.length, startIndex + math.max(0, countResult.value!.toInt()))
       .toInt();
   if (startIndex >= text.length) {
     return const StringValue('');
@@ -295,8 +431,12 @@ FormulaValue _find(List<ResolvedArgument> arguments) {
   if (needleResult.error != null) {
     return needleResult.error!;
   }
-  final haystackResult =
-      _expectStringArg(arguments, 1, minCount: 2, maxCount: 3);
+  final haystackResult = _expectStringArg(
+    arguments,
+    1,
+    minCount: 2,
+    maxCount: 3,
+  );
   if (haystackResult.error != null) {
     return haystackResult.error!;
   }
@@ -321,13 +461,21 @@ FormulaValue _substitute(List<ResolvedArgument> arguments) {
   if (textResult.error != null) {
     return textResult.error!;
   }
-  final oldTextResult =
-      _expectStringArg(arguments, 1, minCount: 3, maxCount: 4);
+  final oldTextResult = _expectStringArg(
+    arguments,
+    1,
+    minCount: 3,
+    maxCount: 4,
+  );
   if (oldTextResult.error != null) {
     return oldTextResult.error!;
   }
-  final newTextResult =
-      _expectStringArg(arguments, 2, minCount: 3, maxCount: 4);
+  final newTextResult = _expectStringArg(
+    arguments,
+    2,
+    minCount: 3,
+    maxCount: 4,
+  );
   if (newTextResult.error != null) {
     return newTextResult.error!;
   }
@@ -337,8 +485,12 @@ FormulaValue _substitute(List<ResolvedArgument> arguments) {
   if (arguments.length == 3) {
     return StringValue(text.replaceAll(oldText, newText));
   }
-  final instanceResult =
-      _expectNumberArg(arguments, 3, minCount: 3, maxCount: 4);
+  final instanceResult = _expectNumberArg(
+    arguments,
+    3,
+    minCount: 3,
+    maxCount: 4,
+  );
   if (instanceResult.error != null) {
     return instanceResult.error!;
   }

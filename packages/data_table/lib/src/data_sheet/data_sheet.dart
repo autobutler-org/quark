@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../data_table.dart';
 import 'cell/cell.dart';
 import 'cell/editable_cell.dart';
+import 'cell/formula_error_chip.dart';
 import 'cell/formatted_cell_text.dart';
 import 'cell/heading/heading_cells.dart'
     show
@@ -21,10 +22,12 @@ import 'cell/heading/heading_cells.dart'
         kMaxFrozenFraction,
         kMinFilterButtonColumnWidth;
 import 'cell/heading/util.dart';
+import 'cell_range.dart';
 import 'data_sheet_clipboard.dart';
 import 'data_sheet_control_scheme.dart';
 import 'data_sheet_controller.dart';
 import 'filter/column_filter_popover.dart';
+import 'formula/formula_editing.dart';
 import 'formula_bar.dart';
 import 'selection_gestures.dart';
 import 'view/frozen_pane_divider.dart';
@@ -60,10 +63,20 @@ import 'view/linked_scroll_controllers.dart';
 ///
 /// Each cell draws its `CellFormat`: bold, italic, text color, fill,
 /// alignment, and its number format, which changes only the text shown.
+/// A formula that failed shows its error code (`#DIV/0!`) as a chip whose
+/// tooltip and semantics label carry the reason.
+///
+/// While a cell holds a formula being edited, in the cell or the formula bar,
+/// typing a function name offers matching built-ins, and clicking a cell or
+/// dragging across a range (long-pressing first on touch) writes its
+/// reference (`B2`, `B2:D9`) at the caret instead of moving the selection;
+/// another click or drag straight after replaces it. Each reference's text
+/// and the outline of its cells share a color.
 ///
 /// Keys: cells are `r<row>c<col>`, column headers `col_header_<col>`, their
 /// filter buttons `col_filter_<col>`, row
-/// numbers `row_num_<row>`, resize handles `col_resize_<col>` and
+/// numbers `row_num_<row>`, error chips `r<row>c<col>_error`, function
+/// suggestions `formula_suggestion_<NAME>`, resize handles `col_resize_<col>` and
 /// `row_resize_<row>`, and the freeze dividers `frozen_rows_divider` and
 /// `frozen_columns_divider`.
 class DataSheet extends StatelessWidget {
@@ -190,6 +203,16 @@ class _DataSheetViewState extends State<_DataSheetView> {
   final GlobalKey _gridBodyKey = GlobalKey();
   String _priorCellValue = '';
 
+  /// Where the last reference picked from the grid landed in the formula
+  /// being edited, so the next pick replaces it.
+  TextRange? _pickedRef;
+
+  /// The cell a reference-picking drag started on.
+  (int, int)? _pickAnchor;
+
+  /// [_editingFormula] as of the last build.
+  bool _wasEditingFormula = false;
+
   int get activeRow => controller.selection.activeRow;
   int get activeCol => controller.selection.activeCol;
   int get highlightedRow => controller.selection.highlightedRow;
@@ -210,6 +233,7 @@ class _DataSheetViewState extends State<_DataSheetView> {
       _ownsController = true;
     }
     controller.addListener(_onControllerChanged);
+    controller.activeCellEditingController.addListener(_onEditingTextChanged);
   }
 
   @override
@@ -218,12 +242,39 @@ class _DataSheetViewState extends State<_DataSheetView> {
     _horizontalScroll.dispose();
     _verticalScroll.dispose();
     controller.removeListener(_onControllerChanged);
+    controller.activeCellEditingController
+        .removeListener(_onEditingTextChanged);
     if (_ownsController) controller.dispose();
     super.dispose();
   }
 
   void _onControllerChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// Rebuilds when the edit starts or stops being a formula, which switches
+  /// grid clicks and drags between moving the selection and picking
+  /// references.
+  void _onEditingTextChanged() {
+    if (_editingFormula != _wasEditingFormula && mounted) setState(() {});
+  }
+
+  /// Whether the cell being edited holds a formula, so clicks and drags on
+  /// the grid pick references into it.
+  bool get _editingFormula =>
+      activeRow >= 0 &&
+      controller.activeCellEditingController.text.startsWith('=');
+
+  /// Writes [range]'s reference into the formula being edited, replacing the
+  /// previous pick when the caret is still at its end. False when no
+  /// reference fits at the caret.
+  bool _pick(CellRange range) {
+    final editor = controller.activeCellEditingController;
+    final pick = pickReference(editor.value, range.label, pending: _pickedRef);
+    if (pick == null) return false;
+    _pickedRef = pick.inserted;
+    editor.value = pick.value;
+    return true;
   }
 
   @override
@@ -506,6 +557,7 @@ class _DataSheetViewState extends State<_DataSheetView> {
   /// the body, which scrolls both ways and carries the frozen rows sideways
   /// and the frozen columns up and down with it.
   Widget _buildGrid(BuildContext context, Size size) {
+    _wasEditingFormula = _editingFormula;
     final fr = controller.frozenRows;
     final fc = controller.frozenColumns;
     final cols = controller.colCount;
@@ -559,88 +611,93 @@ class _DataSheetViewState extends State<_DataSheetView> {
       },
       child: Stack(
         children: [
-          DataSheetSelectionGestures(
-            enabled: activeRow < 0,
-            cellAt: _cellAtGlobal,
-            onRangeStart: _startRange,
-            onRangeExtend: _extendRangeTo,
-            child: Column(
-              key: _gridBodyKey,
-              children: [
-                // ── Column headers and frozen rows ──────────────────
-                SizedBox(
-                  height: top,
-                  child: ClipRect(
-                    child: OverflowBox(
-                      alignment: Alignment.topLeft,
-                      minHeight: fullTop,
-                      maxHeight: fullTop,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          clipWidth(
-                            Column(
-                              children: [
-                                if (widget.showHeadings)
-                                  _buildHeaderRow(0, fc, corner: true),
-                                for (var r = 0; r < fr; r++)
-                                  row(r, frozenSide: true),
-                              ],
+          // While a formula is edited, a tap on the grid is part of editing
+          // (it picks a reference), so the editor keeps focus.
+          TextFieldTapRegion(
+            enabled: _wasEditingFormula,
+            child: DataSheetSelectionGestures(
+              enabled: activeRow < 0 || _wasEditingFormula,
+              cellAt: _cellAtGlobal,
+              onRangeStart: _startRange,
+              onRangeExtend: _extendRangeTo,
+              child: Column(
+                key: _gridBodyKey,
+                children: [
+                  // ── Column headers and frozen rows ──────────────────
+                  SizedBox(
+                    height: top,
+                    child: ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.topLeft,
+                        minHeight: fullTop,
+                        maxHeight: fullTop,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            clipWidth(
+                              Column(
+                                children: [
+                                  if (widget.showHeadings)
+                                    _buildHeaderRow(0, fc, corner: true),
+                                  for (var r = 0; r < fr; r++)
+                                    row(r, frozenSide: true),
+                                ],
+                              ),
                             ),
-                          ),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              controller: _horizontalScroll.first,
-                              scrollDirection: Axis.horizontal,
-                              child: SizedBox(
-                                width: rightWidth,
-                                child: Column(
-                                  children: [
-                                    if (widget.showHeadings)
-                                      _buildHeaderRow(fc, cols),
-                                    for (var r = 0; r < fr; r++)
-                                      row(r, frozenSide: false),
-                                  ],
+                            Expanded(
+                              child: SingleChildScrollView(
+                                controller: _horizontalScroll.first,
+                                scrollDirection: Axis.horizontal,
+                                child: SizedBox(
+                                  width: rightWidth,
+                                  child: Column(
+                                    children: [
+                                      if (widget.showHeadings)
+                                        _buildHeaderRow(fc, cols),
+                                      for (var r = 0; r < fr; r++)
+                                        row(r, frozenSide: false),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                // ── Row numbers, frozen columns, and the body ───────
-                Expanded(
-                  child: Row(
-                    children: [
-                      clipWidth(
-                        ListView.builder(
-                          controller: _verticalScroll.first,
-                          itemCount: body.length,
-                          itemBuilder: (context, i) =>
-                              row(body[i], frozenSide: true),
+                  // ── Row numbers, frozen columns, and the body ───────
+                  Expanded(
+                    child: Row(
+                      children: [
+                        clipWidth(
+                          ListView.builder(
+                            controller: _verticalScroll.first,
+                            itemCount: body.length,
+                            itemBuilder: (context, i) =>
+                                row(body[i], frozenSide: true),
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          controller: _horizontalScroll.second,
-                          scrollDirection: Axis.horizontal,
-                          child: SizedBox(
-                            width: rightWidth,
-                            child: ListView.builder(
-                              controller: _verticalScroll.second,
-                              itemCount: body.length,
-                              itemBuilder: (context, i) =>
-                                  row(body[i], frozenSide: false),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            controller: _horizontalScroll.second,
+                            scrollDirection: Axis.horizontal,
+                            child: SizedBox(
+                              width: rightWidth,
+                              child: ListView.builder(
+                                controller: _verticalScroll.second,
+                                itemCount: body.length,
+                                itemBuilder: (context, i) =>
+                                    row(body[i], frozenSide: false),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           if (fr > 0)
@@ -838,6 +895,7 @@ class _DataSheetViewState extends State<_DataSheetView> {
               (r == highlightedRow && c == highlightedCol);
           final colWidth = _colWidth(c);
           final format = controller.formatAt(r, c);
+          final error = isActiveCell ? null : controller.errorAt(r, c);
 
           final cellChild = isActiveCell
               ? EditableCell(
@@ -858,11 +916,22 @@ class _DataSheetViewState extends State<_DataSheetView> {
                     keyboardFocus.requestFocus();
                   },
                 )
-              : FormattedCellText(
-                  text: controller.formattedValueAt(r, c),
-                  format: format,
-                  isError: controller.isCellError(r, c),
-                );
+              : error != null
+                  ? Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: FormulaErrorChip(
+                          key: ValueKey('r${r}c${c}_error'),
+                          code: error.code,
+                          message: error.message,
+                        ),
+                      ),
+                    )
+                  : FormattedCellText(
+                      text: controller.formattedValueAt(r, c),
+                      format: format,
+                    );
 
           final cell = Cell(
             key: ValueKey('r${r}c$c'),
@@ -887,9 +956,18 @@ class _DataSheetViewState extends State<_DataSheetView> {
                     behavior: HitTestBehavior.opaque,
                     onTap: () {
                       if (activeRow >= 0 && activeCol >= 0) {
+                        // Only a formula edit sees this tap: any other edit
+                        // was committed when the tap left its field.
+                        if (_editingFormula &&
+                            _pick(CellRange.fromCorners(r, c, r, c))) {
+                          return;
+                        }
                         _storeCellValue(
                           controller.activeCellEditingController.text,
+                          highlightRow: r,
+                          highlightCol: c,
                         );
+                        keyboardFocus.requestFocus();
                       } else if (_shiftExtends) {
                         controller.selection.extendTo(r, c);
                         keyboardFocus.requestFocus();
@@ -918,6 +996,7 @@ class _DataSheetViewState extends State<_DataSheetView> {
     final changedRow = activeRow;
     final changedCol = activeCol;
     if (changedRow < 0 || changedCol < 0) return;
+    _pickedRef = null;
     final isChangeAccepted =
         widget.beforeCellValueChanged?.call(value, changedRow, changedCol) ??
             true;
@@ -939,6 +1018,7 @@ class _DataSheetViewState extends State<_DataSheetView> {
   }
 
   void _activateCell(DataCell cell, int row, int col) {
+    _pickedRef = null;
     _priorCellValue = cell.value.toString();
     controller.activeCellEditingController.text = _priorCellValue;
     keyboardFocus.unfocus();
@@ -1016,6 +1096,10 @@ class _DataSheetViewState extends State<_DataSheetView> {
       controller.selection.hasHighlight;
 
   void _startRange(int r, int c) {
+    if (activeRow >= 0) {
+      _pickAnchor = _pick(CellRange.fromCorners(r, c, r, c)) ? (r, c) : null;
+      return;
+    }
     if (_shiftExtends) {
       controller.selection.extendTo(r, c);
     } else {
@@ -1025,6 +1109,13 @@ class _DataSheetViewState extends State<_DataSheetView> {
   }
 
   void _extendRangeTo(int r, int c) {
+    if (activeRow >= 0) {
+      final anchor = _pickAnchor;
+      if (anchor != null) {
+        _pick(CellRange.fromCorners(anchor.$1, anchor.$2, r, c));
+      }
+      return;
+    }
     final sel = controller.selection;
     if (sel.extentRow == r && sel.extentCol == c) return;
     sel.extendTo(r, c);
