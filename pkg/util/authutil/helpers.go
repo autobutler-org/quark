@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 )
 
@@ -297,4 +298,14 @@ func newCredentials(username, authKey string, saltSecret func() ([]byte, error))
 	}
 	authKeyHash, err = HashPassword(authKey)
 	return authKeyHash, authSalt, err
+}
+
+// loginFailed counts a wrong username or password toward guard's lockouts and
+// logs it in one fixed shape, so a host-side fail2ban jail can match it too.
+// The error is the same for both, so it does not reveal which was wrong. The
+// username is left out of the log: people type passwords into that field.
+func loginFailed(guard *ratelimitutil.LoginGuard, attempt ratelimitutil.LoginAttempt) error {
+	guard.RecordFailure(attempt)
+	slog.Warn("sign-in failed", "ip", attempt.IP)
+	return fmt.Errorf("invalid credentials")
 }

@@ -1994,7 +1994,7 @@ const docTemplate = `{
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticates with {username, authKey} and returns a session token. authKey is the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned. {username, password, authKey} is the one-time upgrade of an account GET /auth/salt calls legacy: the password is checked against the stored one, and the key, its salt and a cleared password hash are stored in one write, so the password never signs in again; a failed write refuses the sign-in with 500. An account that already has an auth key is checked by the key, and the password beside it is ignored. A body carrying password with no authKey, which only an app from before auth keys sends, is refused with 426 before anything is checked (#2430). legacyRecovery is true for an account that has no recovery key yet, such as one an admin created: the client generates a phrase and sends its key to PUT /auth/recovery-key. A pending or disabled account with the right key gets 403 with its status, so the app can tell it from a wrong password.",
+                "description": "Authenticates with {username, authKey} and returns a session token. authKey is the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned. {username, password, authKey} is the one-time upgrade of an account GET /auth/salt calls legacy: the password is checked against the stored one, and the key, its salt and a cleared password hash are stored in one write, so the password never signs in again; a failed write refuses the sign-in with 500. An account that already has an auth key is checked by the key, and the password beside it is ignored. A body carrying password with no authKey, which only an app from before auth keys sends, is refused with 426 before anything is checked (#2430). legacyRecovery is true for an account that has no recovery key yet, such as one an admin created: the client generates a phrase and sends its key to PUT /auth/recovery-key. A pending or disabled account with the right key gets 403 with its status, so the app can tell it from a wrong password. Repeated failures lock out the client address, the account at that address, or the account from new addresses for a while: the answer is 429 with Retry-After in seconds, whether or not the username exists.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2045,6 +2045,18 @@ const docTemplate = `{
                         "description": "the body carried a password with no authKey: the app is too old",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "locked out after repeated failures; see Retry-After",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "type": "integer",
+                                "description": "seconds until the lockout lifts"
+                            }
                         }
                     },
                     "500": {
