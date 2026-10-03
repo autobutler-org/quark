@@ -123,7 +123,9 @@ class _SheetTabStripState extends State<SheetTabStrip> {
     final last = names.length - 1;
 
     return Container(
-      height: 40,
+      // A tab's touch target is the strip's height under its hairline, so
+      // that is the 48dp minimum (#2605).
+      height: kMinInteractiveDimension + 1,
       decoration: BoxDecoration(
         color: tokens.sidebar,
         border: Border(top: BorderSide(color: tokens.border)),

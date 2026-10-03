@@ -54,4 +54,16 @@ void main() {
 
     expect(chosen, [ThemeMode.light]);
   });
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(
+      tester,
+      Center(
+        child: ThemeToggleButton(mode: ThemeMode.light, onChanged: (_) {}),
+      ),
+      size: size,
+    );
+
+    await expectTapTargetGuidelines(tester);
+  });
 }

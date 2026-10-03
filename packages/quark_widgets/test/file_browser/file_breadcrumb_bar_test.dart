@@ -136,4 +136,47 @@ void main() {
     expect(events, ['home']);
     expect(find.byTooltip('Go to the top folder'), findsOneWidget);
   });
+
+  testBothViewports('home and every ancestor are 48dp buttons', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpBar(tester, path: '/photos/2024', size: size, events: events);
+    final handle = tester.ensureSemantics();
+
+    for (final key in const ['breadcrumb_home', 'breadcrumb_segment_0']) {
+      final target = find.byKey(ValueKey(key));
+      final box = tester.getSize(target);
+      expect(box.width, greaterThanOrEqualTo(48), reason: key);
+      expect(box.height, greaterThanOrEqualTo(48), reason: key);
+      expect(
+        tester.getSemantics(target).flagsCollection.isButton,
+        isTrue,
+        reason: key,
+      );
+    }
+    // A tap in the home target's margin, clear of the glyph, still lands.
+    await tester.tapAt(
+      tester.getTopLeft(find.byKey(const ValueKey('breadcrumb_home'))) +
+          const Offset(2, 2),
+    );
+    expect(events, ['home']);
+    handle.dispose();
+    await expectTapTargetGuidelines(tester);
+  });
+
+  testWidgets('home is no button at the top folder', (tester) async {
+    await pumpBar(tester, path: '');
+    final handle = tester.ensureSemantics();
+
+    expect(
+      tester
+          .getSemantics(find.byKey(const ValueKey('breadcrumb_home')))
+          .flagsCollection
+          .isButton,
+      isFalse,
+    );
+    handle.dispose();
+  });
 }

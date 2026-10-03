@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -193,5 +195,24 @@ void main() {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testBothViewports('every date can be pressed by a screen reader', (
+    tester,
+    size,
+  ) async {
+    final tapped = <DateTime>[];
+    await pumpAt(tester, _grid(onDayTap: tapped.add), size: size);
+    final handle = tester.ensureSemantics();
+
+    final day = tester.getSemantics(
+      find.byKey(const ValueKey('calendar_day_2026-09-29')),
+    );
+    day.owner!.performAction(day.id, SemanticsAction.tap);
+    expect(tapped, [DateTime(2026, 9, 29)]);
+    handle.dispose();
+    // Its event chips are drawn to a month cell's scale, which #2605 leaves
+    // open, so only the size check is off.
+    await expectTapTargetGuidelines(tester, checkSize: false);
   });
 }

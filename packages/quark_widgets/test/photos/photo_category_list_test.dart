@@ -82,4 +82,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('photo_category_favorites')));
     expect(events, ['select:favorites']);
   });
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpList(tester, size: size, expanded: true);
+
+    for (final element in find.byType(ListTile).evaluate()) {
+      expect(
+        tester.getSize(find.byWidget(element.widget)).height,
+        greaterThanOrEqualTo(48),
+      );
+    }
+    await expectTapTargetGuidelines(tester);
+  });
 }

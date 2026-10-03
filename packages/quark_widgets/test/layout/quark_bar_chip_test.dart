@@ -43,7 +43,22 @@ void main() {
   ) async {
     await pumpAt(tester, chip(onPressed: () {}), size: size);
 
-    expect(tester.getSize(find.byKey(key)).height, QuarkBarIconButton.size);
+    expect(
+      tester
+          .getSize(
+            find.descendant(
+              of: find.byKey(key),
+              matching: find.byType(Material),
+            ),
+          )
+          .height,
+      QuarkBarIconButton.size,
+    );
+    expect(
+      tester.getSize(find.byKey(key)).height,
+      QuarkBarIconButton.tapTargetSize,
+    );
+    await expectTapTargetGuidelines(tester);
   });
 
   testWidgets('wide: shows its label', (tester) async {
@@ -60,7 +75,7 @@ void main() {
     expect(find.byTooltip('Upload'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(key)),
-      const Size.square(QuarkBarIconButton.size),
+      const Size.square(QuarkBarIconButton.tapTargetSize),
     );
   });
 

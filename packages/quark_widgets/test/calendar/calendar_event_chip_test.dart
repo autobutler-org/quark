@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -76,5 +78,22 @@ void main() {
       QuarkTokens.dark.eventColors.first,
     );
     expect(eventColor(QuarkTokens.dark, 3), QuarkTokens.dark.eventColors[3]);
+  });
+
+  testBothViewports('can be pressed by a screen reader', (tester, size) async {
+    var taps = 0;
+    await pumpAt(
+      tester,
+      Center(child: _chip(_timed, onTap: () => taps++)),
+      size: size,
+    );
+    final handle = tester.ensureSemantics();
+
+    final chip = tester.getSemantics(find.byType(CalendarEventChip));
+    chip.owner!.performAction(chip.id, SemanticsAction.tap);
+    expect(taps, 1);
+    handle.dispose();
+    // Drawn to a month cell's scale, which #2605 leaves open.
+    await expectTapTargetGuidelines(tester, checkSize: false);
   });
 }

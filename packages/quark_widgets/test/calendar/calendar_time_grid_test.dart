@@ -195,4 +195,21 @@ void main() {
     expect(find.text('12:30 – 1:30 PM'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testBothViewports('its slots, events and dates can be pressed by a screen '
+      'reader', (tester, size) async {
+    await pumpAt(
+      tester,
+      _grid(
+        days: CalendarDates.weekOf(_today),
+        onSlotTap: (_) {},
+        onEventTap: (_) {},
+        onDayTap: (_) {},
+      ),
+      size: size,
+    );
+
+    // Event blocks are as tall as their events last, which #2605 leaves open.
+    await expectTapTargetGuidelines(tester, checkSize: false);
+  });
 }

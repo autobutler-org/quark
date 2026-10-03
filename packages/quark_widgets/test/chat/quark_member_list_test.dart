@@ -218,4 +218,26 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(
+      tester,
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: QuarkMemberList(
+          members: members,
+          permissions: ChatPermissionPreset.moderator.permissions,
+          onAddMembers: () {},
+          onRemove: (_) {},
+        ),
+      ),
+      size: size,
+    );
+
+    for (final key in const ['member_list_add', 'member_remove_dee']) {
+      final box = tester.getSize(find.byKey(ValueKey(key)));
+      expect(box.shortestSide, greaterThanOrEqualTo(48), reason: key);
+    }
+    await expectTapTargetGuidelines(tester);
+  });
 }

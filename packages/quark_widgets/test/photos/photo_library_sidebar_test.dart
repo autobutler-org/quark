@@ -68,4 +68,10 @@ void main() {
     expect(button('photo_columns_less').onPressed, isNull);
     expect(button('photo_columns_more').onPressed, isNull);
   });
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(tester, inSplitView(sidebar()), size: size);
+
+    await expectTapTargetGuidelines(tester);
+  });
 }

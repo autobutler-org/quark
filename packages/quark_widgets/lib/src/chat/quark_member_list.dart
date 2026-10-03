@@ -122,7 +122,6 @@ class QuarkMemberList extends StatelessWidget {
                 IconButton(
                   key: const ValueKey('member_list_add'),
                   tooltip: 'Add members',
-                  visualDensity: VisualDensity.compact,
                   icon: const Icon(QuarkIcons.person_add_outlined, size: 20),
                   onPressed: onAddMembers,
                 ),

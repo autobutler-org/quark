@@ -77,8 +77,21 @@ void main() {
         );
         // Search is the row's slack: on a phone it may scale down.
         if (key == 'file_top_bar_search') continue;
+        // A 36px button in a 48dp touch target (#2605).
         expect(
           tester.getSize(find.byKey(ValueKey(key))),
+          const Size.square(QuarkBarIconButton.tapTargetSize),
+          reason: key,
+        );
+        expect(
+          tester.getSize(
+            find
+                .descendant(
+                  of: find.byKey(ValueKey(key)),
+                  matching: find.byType(Material),
+                )
+                .first,
+          ),
           const Size.square(QuarkBarIconButton.size),
           reason: key,
         );

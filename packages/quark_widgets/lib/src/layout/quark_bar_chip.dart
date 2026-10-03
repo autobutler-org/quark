@@ -12,6 +12,11 @@ import 'quark_bar_icon_button.dart';
 /// the user should be able to read the state of: [active] tints it with the
 /// primary color.
 ///
+/// Like the icon button, the visual is [QuarkBarIconButton.size] tall inside a
+/// [QuarkBarIconButton.tapTargetSize] touch target, with
+/// [QuarkBarIconButton.tapTargetMargin] of space on either side, so chips and
+/// icon buttons sit the same distance apart in a bar (#2605).
+///
 /// A null [onPressed] renders it disabled.
 ///
 /// On a phone — a viewport narrower than [compactBreakpoint] — a chip gives
@@ -103,11 +108,16 @@ class QuarkBarChip extends StatelessWidget {
         ),
         minimumSize: const Size(0, QuarkBarIconButton.size),
         maximumSize: const Size(double.infinity, QuarkBarIconButton.size),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        tapTargetSize: MaterialTapTargetSize.padded,
         visualDensity: VisualDensity.standard,
       ),
     );
     final message = tooltip;
-    return message == null ? chip : Tooltip(message: message, child: chip);
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: QuarkBarIconButton.tapTargetMargin,
+      ),
+      child: message == null ? chip : Tooltip(message: message, child: chip),
+    );
   }
 }

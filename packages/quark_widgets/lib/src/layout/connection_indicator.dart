@@ -54,6 +54,9 @@ class ConnectionIndicator extends StatelessWidget {
           key: const ValueKey('connection_indicator'),
           width: QuarkBarIconButton.size,
           height: QuarkBarIconButton.size,
+          // The margin every bar control keeps, so the indicator sits as far
+          // from its neighbors as two bar buttons do.
+          margin: const EdgeInsets.all(QuarkBarIconButton.tapTargetMargin),
           decoration: BoxDecoration(
             color: tokens.input,
             border: Border.all(color: tokens.border),

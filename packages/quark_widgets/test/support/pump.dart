@@ -1,4 +1,7 @@
+import 'dart:ui' show SemanticsAction, Tristate;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsNode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -66,3 +69,79 @@ Future<void> pumpInSheet(
   size: size,
   brightness: brightness,
 );
+
+/// Expects everything on screen to meet the accessibility guidelines every
+/// widget in this package is held to (#2603, #2605): every tappable node is at
+/// least 48x48 ([androidTapTargetGuideline]), has a label a screen reader can
+/// read ([labeledTapTargetGuideline]), and every button can be pressed by one
+/// ([buttonTapActionGuideline]).
+///
+/// Call it after [pumpAt], at both viewports: a target that grows into its
+/// 48dp at one width can still be squeezed below it at the other. The size
+/// check skips a target touching the edge of the screen or of a scrollable, so
+/// pump the widget inset from both — a [Center] or a [Padding] is enough.
+///
+/// [checkSize] false skips the 48x48 check, for a widget that draws its
+/// targets to a scale of its own and says why where it is called.
+Future<void> expectTapTargetGuidelines(
+  WidgetTester tester, {
+  bool checkSize = true,
+}) async {
+  final handle = tester.ensureSemantics();
+  await tester.pump();
+  if (checkSize) {
+    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+  }
+  await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+  await expectLater(tester, meetsGuideline(buttonTapActionGuideline));
+  handle.dispose();
+}
+
+/// Fails on a node a screen reader announces as an enabled button but cannot
+/// press, because it has no tap action.
+///
+/// `Semantics(button: true, excludeSemantics: true)` around an `InkWell` does
+/// exactly that: excluding the child's semantics drops its tap action along
+/// with its label, so the button reads correctly and does nothing. Neither
+/// stock guideline sees it, since both skip a node with no actions.
+const AccessibilityGuideline buttonTapActionGuideline =
+    ButtonTapActionGuideline();
+
+/// The guideline behind [buttonTapActionGuideline].
+class ButtonTapActionGuideline extends AccessibilityGuideline {
+  /// Creates the guideline.
+  const ButtonTapActionGuideline();
+
+  @override
+  String get description => 'Every enabled button has a tap action';
+
+  @override
+  Evaluation evaluate(WidgetTester tester) {
+    var result = const Evaluation.pass();
+    for (final view in tester.binding.renderViews) {
+      result += _traverse(view.owner!.semanticsOwner!.rootSemanticsNode!);
+    }
+    return result;
+  }
+
+  Evaluation _traverse(SemanticsNode node) {
+    var result = const Evaluation.pass();
+    node.visitChildren((child) {
+      result += _traverse(child);
+      return true;
+    });
+    if (node.isMergedIntoParent) return result;
+    final data = node.getSemanticsData();
+    final flags = data.flagsCollection;
+    if (flags.isButton &&
+        flags.isEnabled != Tristate.isFalse &&
+        !flags.isHidden &&
+        !data.hasAction(SemanticsAction.tap)) {
+      result += Evaluation.fail(
+        '$node: announced as a button but has no tap action, so a screen '
+        'reader cannot press it.',
+      );
+    }
+    return result;
+  }
+}

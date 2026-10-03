@@ -106,4 +106,14 @@ void main() {
     expect(inBar.fontSize, inBody.fontSize);
     expect(inBar.color, inBody.color);
   });
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(
+      tester,
+      Center(child: RefreshIconButton(isRefreshing: false, onPressed: () {})),
+      size: size,
+    );
+
+    await expectTapTargetGuidelines(tester);
+  });
 }

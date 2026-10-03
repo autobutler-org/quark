@@ -1,3 +1,5 @@
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -146,4 +148,28 @@ void main() {
 
     expect(events, ['cancel']);
   });
+
+  testBothViewports(
+    'announces each type as a choice, the picked one selected',
+    (tester, size) async {
+      await pumpDialog(tester, size: size);
+      final handle = tester.ensureSemantics();
+      await tester.tap(find.byKey(const ValueKey('new_file_type_qsheet')));
+      await tester.pump();
+
+      for (final (slug, selected) in const [
+        ('qsheet', true),
+        ('qdoc', false),
+      ]) {
+        final flags = tester
+            .getSemantics(find.byKey(ValueKey('new_file_type_$slug')))
+            .flagsCollection;
+        expect(flags.isButton, isTrue, reason: slug);
+        expect(flags.isInMutuallyExclusiveGroup, isTrue, reason: slug);
+        expect(flags.isSelected, selected ? Tristate.isTrue : Tristate.isFalse);
+      }
+      handle.dispose();
+      await expectTapTargetGuidelines(tester);
+    },
+  );
 }

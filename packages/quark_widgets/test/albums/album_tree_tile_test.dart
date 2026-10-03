@@ -259,4 +259,41 @@ void main() {
     expect(find.byIcon(QuarkIcons.star_rounded), findsOneWidget);
     expect(find.byIcon(QuarkIcons.photo_album_outlined), findsNothing);
   });
+
+  testBothViewports(
+    'rows and the chevron are 48dp targets, the chevron named',
+    (tester, size) async {
+      final events = <String>[];
+      await pumpTile(tester, size: size, withMenu: true, events: events);
+
+      final chevron = find.byKey(const ValueKey('album_expand_1'));
+      expect(tester.getSize(chevron), const Size.square(48));
+      expect(find.byTooltip('Expand ${_tree.name}'), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('album_tile_1'))).height,
+        greaterThanOrEqualTo(48),
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('album_menu_1'))),
+        const Size.square(48),
+      );
+      // A tap at the chevron target's edge, clear of the 16px glyph, toggles.
+      await tester.tapAt(tester.getTopLeft(chevron) + const Offset(4, 4));
+      expect(events, ['toggle:1']);
+    },
+  );
+
+  testBothViewports('names the chevron for collapsing once expanded', (
+    tester,
+    size,
+  ) async {
+    await pumpTile(tester, size: size, expandedIds: const {1});
+
+    expect(find.byTooltip('Collapse ${_tree.name}'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('album_tile_2'))).height,
+      greaterThanOrEqualTo(48),
+    );
+    await expectTapTargetGuidelines(tester);
+  });
 }

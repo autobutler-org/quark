@@ -115,8 +115,10 @@ class SheetTab extends StatelessWidget {
           left: tokens.spacingMd,
           right: tokens.spacingXs,
         ),
-        decoration: BoxDecoration(
-          color: isSelected ? tokens.card : null,
+        color: isSelected ? tokens.card : null,
+        // Painted over the tab rather than inset from it, so the borders
+        // take nothing from the menu button's 48dp touch target (#2605).
+        foregroundDecoration: BoxDecoration(
           border: Border(
             top: BorderSide(
               color: isSelected ? tokens.primary : tokens.border,
@@ -147,11 +149,8 @@ class SheetTab extends StatelessWidget {
               iconSize: 16,
               color: tokens.secondaryForeground,
               padding: EdgeInsets.zero,
-              // Long-pressing the tab also opens the menu, so the button
-              // keeps to its icon box and leaves the width to the label.
-              style: const ButtonStyle(
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
+              // A 24px glyph box inside the 48dp touch target Material pads
+              // it to (#2605).
               constraints: const BoxConstraints.tightFor(width: 24, height: 24),
               onPressed: () => _openMenu(context),
             ),
