@@ -33,6 +33,7 @@ Covers first-boot setup, login, logout, and password recovery.
 **Notes:**
 
 - Recovery phrase is shown exactly once and is not recoverable from the UI after dismissal.
+- The app makes the phrase, not the Quark, and sends the Quark only a key derived from it (#2430).
 - Weak password or mismatched confirm should show inline validation errors before submit.
 - Username uniqueness is enforced server-side; duplicate should surface an error on step 6.
 
@@ -115,6 +116,13 @@ Covers first-boot setup, login, logout, and password recovery.
 - That account's old password no longer works.
 - Every other account's password is unchanged.
 - Before step 8, browser Back or **Back to sign in** returns to `/login`.
+
+**Notes:**
+
+- An account whose phrase the Quark made, and that has not yet signed in from an updated app (JN-AUTH-016), is
+  shown a new recovery phrase after step 8, with the same acknowledgment checkbox and **Continue**. The old phrase
+  stops working.
+- Once an account has a phrase the app made, recovering it never sends the phrase itself to the Quark (#2430).
 
 ---
 
@@ -201,7 +209,7 @@ account on this Quark.
   number. The form says so before sending, and does not lowercase what was typed. The same rule applies on
   `/setup`.
 - A username already taken, including by another pending request, is refused with "That username is taken."
-- The admin never sees the recovery phrase.
+- The admin never sees the recovery phrase, and nor does the Quark: the app makes it (#2430).
 
 ---
 
@@ -276,6 +284,7 @@ account on this Quark.
 
 - App navigates to `/files`, which says "Welcome back" once (JN-FB-042).
 - Signing in again later goes straight to `/files`, with no phrase.
+- The phrase shown is one the app made at this sign-in, not one the Quark made when the account was added (#2430).
 
 **Notes:**
 
@@ -323,3 +332,31 @@ account on this Quark.
 
 - When the only other accounts are pending requests, the deletion goes ahead: the requests are deleted with it, the
   Quark returns to setup, and the files are kept.
+
+---
+
+### JN-AUTH-016: New recovery phrase at the next sign-in
+
+**Preconditions:** An account whose recovery phrase the Quark made: one set up, requested or added before #2430.
+It has not signed in from an updated app yet.
+
+**Steps:**
+
+1. Navigate to `/login`.
+2. Enter the username and password.
+3. Tap **Sign in**.
+4. A new recovery phrase is displayed.
+5. Check the acknowledgment checkbox.
+6. Tap **Continue**.
+
+**Expected result:**
+
+- App navigates to `/files`.
+- The new phrase resets the password (JN-AUTH-005), and the old phrase no longer does.
+- Signing in again later goes straight to `/files`, with no phrase.
+
+**Notes:**
+
+- If the Quark does not take the new phrase, nothing is shown, the sign-in goes ahead, and the old phrase keeps
+  working. The next sign-in tries again.
+- A Quark that has not been updated keeps the old phrase, and shows nothing.

@@ -247,6 +247,13 @@ abstract final class Errors {
       'sends. Update the Quark, or reset your password with your recovery '
       'phrase.';
 
+  /// A Quark asking for the raw recovery phrase of an account it has already
+  /// registered a derived recovery key for (#2430). Refused for the same
+  /// reason as [passwordDowngradeRefused]: the phrase opens the chat keys.
+  static const String recoveryPhraseDowngradeRefused =
+      'This Quark asked for your recovery phrase in a form this app no longer '
+      'sends. Update the Quark, then try again.';
+
   /// Unlocking chat with a password that doesn't open the account's chat
   /// keys (#2416). Nothing is sent to the Quark to check it; the keys simply
   /// don't decrypt.
