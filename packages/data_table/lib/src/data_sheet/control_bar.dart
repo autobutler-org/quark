@@ -2,7 +2,9 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:flutter/material.dart' hide Icons;
 
 import 'data_sheet_clipboard.dart';
+import 'cell/heading/util.dart';
 import 'data_sheet_controller.dart';
+import 'filter/column_filter_popover.dart';
 import 'freeze_menu_button.dart';
 
 // ---------------------------------------------------------------------------
@@ -30,6 +32,12 @@ import 'freeze_menu_button.dart';
 /// The clipboard buttons act on the selected range and are keyed
 /// `data_sheet_copy`, `data_sheet_cut`, `data_sheet_paste` and
 /// `data_sheet_clear_range`.
+///
+/// `data_sheet_filter` opens the selected column's filter popover, the way
+/// to reach it on a phone where the header funnels are small, and
+/// `data_sheet_clear_filters` removes every filter. While filters are set,
+/// Clear filters carries a badge counting the filtered columns, and its
+/// tooltip says how many rows are shown.
 class DataSheetControlBar extends StatelessWidget {
   final DataSheetController controller;
 
@@ -249,6 +257,45 @@ class DataSheetControlBar extends StatelessWidget {
                     hasData
                         ? () => _showGoToCellDialog(context, controller)
                         : null,
+                  ),
+                ]),
+                const _Divider(),
+                // ── Filter ─────────────────────────────────────────────────
+                _group([
+                  Builder(
+                    builder: (context) => _btn(
+                      QuarkIcons.filter_column,
+                      hasCol
+                          ? 'Filter column ${columnLabel(sel.contextCol)}…'
+                          : 'Filter column…',
+                      hasCol && hasData
+                          ? () {
+                              final box =
+                                  context.findRenderObject() as RenderBox;
+                              showColumnFilterPopover(
+                                context: context,
+                                controller: controller,
+                                column: sel.contextCol,
+                                anchor:
+                                    box.localToGlobal(Offset.zero) & box.size,
+                              );
+                            }
+                          : null,
+                      key: 'data_sheet_filter',
+                    ),
+                  ),
+                  Badge(
+                    isLabelVisible: controller.hasFilters,
+                    label: Text('${controller.filters.length}'),
+                    child: _btn(
+                      QuarkIcons.clear_filters,
+                      controller.hasFilters
+                          ? 'Clear filters (${controller.visibleRows.length} '
+                              'of ${controller.rowCount} rows shown)'
+                          : 'Clear filters',
+                      controller.hasFilters ? controller.clearFilters : null,
+                      key: 'data_sheet_clear_filters',
+                    ),
                   ),
                 ]),
                 const _Divider(),

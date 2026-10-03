@@ -62,7 +62,21 @@ to memory where the browser blocks the clipboard.
 
 - ✅ Sort by column — `sortByColumn(col, ascending)` with dialog
 - ✅ Remove Duplicate Rows — `removeDuplicateRows()`
-- 🔜 Filter by column value / predicate
+- ✅ Column filters — a funnel on each column header (`col_filter_<c>`) and the bar's Filter button
+  (`data_sheet_filter`, the selected column) open a popover: a value checklist with search and "Select all" (which
+  acts on the values the search matches), blanks listed as "(Blanks)", and one optional condition (text contains /
+  does not contain, equals, greater than, less than). `setColumnFilter(col, ColumnFilter(...))`, one undo step. Values
+  are what a cell displays, so formulas filter by result.
+  - Filtering hides rows without deleting them: row numbers keep their original indices, and `visibleRows` /
+    `isRowHidden(r)` map between the two. Frozen rows are headers and are never hidden or listed.
+  - Copy, cut, clear, fill and Delete Row act on the visible rows of the selection only; paste runs down visible rows,
+    skipping hidden ones, and the arrow keys step over hidden rows.
+  - Filters apply when set: a row edited to a value the filter excludes stays visible until the filters next change.
+    Inserted rows are visible; sort carries hidden rows with their data; inserting or deleting a column moves its
+    filter with it; importing CSV clears every filter.
+  - A filtered column's header is tinted from the theme's tertiary color and its funnel filled; its tooltip says how
+    many rows are shown.
+- ✅ Clear filters — `data_sheet_clear_filters`, `clearFilters()`, one undo step. A badge counts the filtered columns.
 - 🔜 Apply column transformations (trim, case, parse)
 
 ## Find & Replace
@@ -91,7 +105,8 @@ to memory where the browser blocks the clipboard.
   numbers, while the rest scrolls; a divider marks the edge, and frozen panes never cover more than 75% of the grid.
   Inserting or deleting inside the frozen band moves its edge.
 - ✅ Layout persistence — `layoutToJson()` / `DataSheetController.fromLayoutJson()`: `columnWidths`, `rowHeights`,
-  `frozenRows`, `frozenColumns`, saved beside the data in each `.qsheet` tab. Missing keys load as defaults.
+  `frozenRows`, `frozenColumns` and `filters` (a list of `{column, hidden, condition}`), saved beside the data in each
+  `.qsheet` tab. Missing keys load as defaults, so older sheets load unfiltered; unreadable filter entries are skipped.
 - 🔜 Toggle gridlines visibility
 - 🔜 Column type / format metadata (text, number, date)
 

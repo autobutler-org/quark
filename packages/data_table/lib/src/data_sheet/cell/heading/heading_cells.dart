@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../filter/column_filter_button.dart';
 import '../cell.dart' show kRangeTintAlpha;
 import 'header_resize_handle.dart';
 
@@ -23,14 +24,29 @@ const double kFrozenDividerThickness = 2.0;
 /// they are clipped so the scrolling pane always keeps some room.
 const double kMaxFrozenFraction = 0.75;
 
-/// The fill of a column or row header: tinted with the primary color while
-/// its column or row is selected.
-Color headerColor(ColorScheme cs, bool isSelected) => isSelected
-    ? Color.alphaBlend(
-        cs.primary.withValues(alpha: kRangeTintAlpha),
-        cs.surfaceContainerHighest,
-      )
-    : cs.surfaceContainerHighest;
+/// A column header narrower than this hides its filter button unless the
+/// column is filtered, so the letter keeps its room.
+const double kMinFilterButtonColumnWidth = 48.0;
+
+/// The fill of a column or row header: tinted with the tertiary color while
+/// its column is filtered, and with the primary color while its column or row
+/// is selected.
+Color headerColor(ColorScheme cs, bool isSelected, {bool isFiltered = false}) {
+  var color = cs.surfaceContainerHighest;
+  if (isFiltered) {
+    color = Color.alphaBlend(
+      cs.tertiary.withValues(alpha: kRangeTintAlpha),
+      color,
+    );
+  }
+  if (isSelected) {
+    color = Color.alphaBlend(
+      cs.primary.withValues(alpha: kRangeTintAlpha),
+      color,
+    );
+  }
+  return color;
+}
 
 /// The blank cell where the column header row meets the row-number gutter. This file also holds the column header
 /// and row number cells.
@@ -55,7 +71,10 @@ class HeaderCornerCell extends StatelessWidget {
 // Column header cell with right-edge resize handle
 // ---------------------------------------------------------------------------
 
-/// A column's letter header, with a [HeaderResizeHandle] on its right edge.
+/// A column's letter header, with a [HeaderResizeHandle] on its right edge
+/// and, when [onFilter] is set, a [ColumnFilterButton] beside it.
+///
+/// A filtered column's header is tinted and its funnel filled.
 class ColumnHeaderCell extends StatelessWidget {
   final String label;
 
@@ -73,6 +92,19 @@ class ColumnHeaderCell extends StatelessWidget {
   /// Called when the header is clicked, to select its whole column.
   final VoidCallback? onSelect;
 
+  /// Whether a filter on this column is hiding rows.
+  final bool isFiltered;
+
+  /// The key for the filter button, such as `ValueKey('col_filter_0')`.
+  final Key? filterButtonKey;
+
+  /// The filter button's tooltip.
+  final String filterTooltip;
+
+  /// Called with the filter button's global bounds when it is pressed; no
+  /// filter button is shown when null.
+  final ValueChanged<Rect>? onFilter;
+
   const ColumnHeaderCell({
     super.key,
     required this.label,
@@ -82,11 +114,16 @@ class ColumnHeaderCell extends StatelessWidget {
     this.resizeHandleKey,
     this.isSelected = false,
     this.onSelect,
+    this.isFiltered = false,
+    this.filterButtonKey,
+    this.filterTooltip = 'Filter',
+    this.onFilter,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final onFilter = this.onFilter;
     return Stack(
       children: [
         GestureDetector(
@@ -95,7 +132,7 @@ class ColumnHeaderCell extends StatelessWidget {
           child: Container(
             height: kHeaderHeight,
             decoration: BoxDecoration(
-              color: headerColor(cs, isSelected),
+              color: headerColor(cs, isSelected, isFiltered: isFiltered),
               border: Border.all(color: cs.onSurface.withValues(alpha: 0.2)),
             ),
             alignment: Alignment.center,
@@ -110,6 +147,21 @@ class ColumnHeaderCell extends StatelessWidget {
             ),
           ),
         ),
+        if (onFilter != null)
+          Positioned(
+            right: HeaderResizeHandle.thickness(expanded: isSelected),
+            top: 0,
+            bottom: 0,
+            width: ColumnFilterButton.size,
+            child: Center(
+              child: ColumnFilterButton(
+                key: filterButtonKey,
+                isActive: isFiltered,
+                tooltip: filterTooltip,
+                onPressed: onFilter,
+              ),
+            ),
+          ),
         Positioned(
           right: 0,
           top: 0,
