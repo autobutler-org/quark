@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 )
 
 // inTx runs fn against queries bound to one transaction, committing only if fn
@@ -203,4 +205,14 @@ func pruneMountPoints(dataDir string) error {
 		_ = os.Remove(filepath.Join(mountsDir, entry.Name()))
 	}
 	return nil
+}
+
+// loginFailed counts a wrong username or password toward guard's lockouts and
+// logs it in one fixed shape, so a host-side fail2ban jail can match it too.
+// The error is the same for both, so it does not reveal which was wrong. The
+// username is left out of the log: people type passwords into that field.
+func loginFailed(guard *ratelimitutil.LoginGuard, attempt ratelimitutil.LoginAttempt) error {
+	guard.RecordFailure(attempt)
+	slog.Warn("sign-in failed", "ip", attempt.IP)
+	return fmt.Errorf("invalid credentials")
 }

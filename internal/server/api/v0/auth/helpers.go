@@ -33,6 +33,18 @@ func accountRefusalResponse(err error) *serverutil.Response {
 	})
 }
 
+// lockoutResponse answers a sign-in the login guard refused with 429 and
+// Retry-After in whole seconds, rounded up so a client that waits exactly that
+// long is let in, and returns nil for any other error.
+func lockoutResponse(c *gin.Context, err error) *serverutil.Response {
+	var locked *authutil.TooManyAttemptsError
+	if !errors.As(err, &locked) {
+		return nil
+	}
+	c.Header("Retry-After", strconv.Itoa(int((locked.RetryAfter+time.Second-1)/time.Second)))
+	return serverutil.NewResponse().WithStatusCode(http.StatusTooManyRequests).WithError(err)
+}
+
 const sessionCookieName = "session"
 const sessionCookieMaxAge = int(30 * 24 * time.Hour / time.Second)
 

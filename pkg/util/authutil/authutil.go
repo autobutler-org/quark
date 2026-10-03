@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/sqlutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
@@ -200,6 +201,23 @@ type SetupResult struct {
 type LoginParams struct {
 	Username string
 	Password string
+	// Guard locks out an address or account after repeated failures (#1861);
+	// nil checks nothing.
+	Guard *ratelimitutil.LoginGuard
+	// ClientIP is the address the attempt came from, which Guard keys on.
+	ClientIP string
+}
+
+// TooManyAttemptsError refuses a sign-in while Guard has its address or
+// account locked out, before the password is checked. It reads the same
+// whether or not the username exists.
+type TooManyAttemptsError struct {
+	// RetryAfter is how long until the lockout lifts.
+	RetryAfter time.Duration
+}
+
+func (e *TooManyAttemptsError) Error() string {
+	return "too many failed sign-in attempts, try again later"
 }
 
 // LoginResult contains the result of a successful login.
@@ -589,15 +607,19 @@ func DenyRequest(ctx context.Context, queries *db.Queries, params DenyRequestPar
 // checked before the account's status, so ErrAccountPending and
 // ErrAccountDisabled reach only someone who knows the password, and a wrong
 // password reveals nothing about which usernames exist.
+//
+// With a Guard, a locked-out attempt gets *TooManyAttemptsError without its
+// password being checked, and every wrong username or password is counted
+// toward a lockout and logged with its address.
 func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*LoginResult, error) {
-	user, err := queries.GetUserByUsername(ctx, params.Username)
-	if err != nil {
-		// Don't leak whether the username exists
-		return nil, fmt.Errorf("invalid credentials")
+	attempt := ratelimitutil.LoginAttempt{Account: params.Username, IP: params.ClientIP}
+	if wait := params.Guard.Check(attempt).RetryAfter; wait > 0 {
+		return nil, &TooManyAttemptsError{RetryAfter: wait}
 	}
-
-	if !CheckPassword(params.Password, user.PasswordHash) {
-		return nil, fmt.Errorf("invalid credentials")
+	user, err := queries.GetUserByUsername(ctx, params.Username)
+	// Don't leak whether the username exists
+	if err != nil || !CheckPassword(params.Password, user.PasswordHash) {
+		return nil, loginFailed(params.Guard, attempt)
 	}
 	if err := statusError(user.Status); err != nil {
 		return nil, err
@@ -611,6 +633,7 @@ func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*Login
 	if err != nil {
 		return nil, err
 	}
+	params.Guard.RecordSuccess(attempt)
 
 	return &LoginResult{SessionToken: token, RecoveryPhrase: recoveryPhrase}, nil
 }

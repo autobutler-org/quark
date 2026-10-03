@@ -1,0 +1,206 @@
+package ratelimitutil_test
+
+import (
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
+)
+
+// fakeClock is a clock a test moves by hand.
+type fakeClock struct{ now time.Time }
+
+func (c *fakeClock) Now() time.Time          { return c.now }
+func (c *fakeClock) Advance(d time.Duration) { c.now = c.now.Add(d) }
+
+func newGuard(clock *fakeClock) *ratelimitutil.LoginGuard {
+	return ratelimitutil.NewLoginGuard(ratelimitutil.LoginGuardParams{
+		Now:              clock.Now,
+		PairThreshold:    3,
+		IPThreshold:      6,
+		AccountThreshold: 10,
+		BaseLockout:      time.Minute,
+		MaxLockout:       8 * time.Minute,
+		FailureReset:     time.Hour,
+	})
+}
+
+func fail(g *ratelimitutil.LoginGuard, a ratelimitutil.LoginAttempt, n int) {
+	for range n {
+		g.RecordFailure(a)
+	}
+}
+
+// TestLoginGuard_LocksPairAfterThreshold: the failure that reaches the
+// threshold starts a lockout, and failures under it do not.
+func TestLoginGuard_LocksPairAfterThreshold(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+	a := ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}
+
+	fail(g, a, 2)
+	if got := g.Check(a).RetryAfter; got != 0 {
+		t.Fatalf("locked after 2 failures, retry after %v", got)
+	}
+	fail(g, a, 1)
+	if got := g.Check(a).RetryAfter; got != time.Minute {
+		t.Fatalf("retry after = %v, want 1m", got)
+	}
+}
+
+// TestLoginGuard_LockoutExpires: a lockout is temporary.
+func TestLoginGuard_LockoutExpires(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+	a := ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}
+
+	fail(g, a, 3)
+	clock.Advance(30 * time.Second)
+	if got := g.Check(a).RetryAfter; got != 30*time.Second {
+		t.Fatalf("retry after = %v, want 30s", got)
+	}
+	clock.Advance(30 * time.Second)
+	if got := g.Check(a).RetryAfter; got != 0 {
+		t.Fatalf("still locked after the lockout ran out: %v", got)
+	}
+}
+
+// TestLoginGuard_BackoffDoublesAndCaps: each failure past the threshold
+// doubles the lockout, up to MaxLockout.
+func TestLoginGuard_BackoffDoublesAndCaps(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+	a := ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}
+
+	fail(g, a, 3)
+	for _, want := range []time.Duration{2 * time.Minute, 4 * time.Minute, 8 * time.Minute, 8 * time.Minute} {
+		clock.Advance(g.Check(a).RetryAfter)
+		fail(g, a, 1)
+		if got := g.Check(a).RetryAfter; got != want {
+			t.Fatalf("retry after = %v, want %v", got, want)
+		}
+	}
+}
+
+// TestLoginGuard_SuccessClearsPair: signing in forgets the pair's failures.
+func TestLoginGuard_SuccessClearsPair(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+	a := ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}
+
+	fail(g, a, 2)
+	g.RecordSuccess(a)
+	fail(g, a, 2)
+	if got := g.Check(a).RetryAfter; got != 0 {
+		t.Fatalf("success did not clear the count: %v", got)
+	}
+}
+
+// TestLoginGuard_FailuresDecay: failures older than FailureReset no longer
+// count toward a lockout.
+func TestLoginGuard_FailuresDecay(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+	a := ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}
+
+	fail(g, a, 2)
+	clock.Advance(time.Hour + time.Second)
+	fail(g, a, 2)
+	if got := g.Check(a).RetryAfter; got != 0 {
+		t.Fatalf("stale failures still counted: %v", got)
+	}
+}
+
+// TestLoginGuard_PairLockoutSparesOtherIPs: one address guessing at an
+// account does not lock the owner out from theirs.
+func TestLoginGuard_PairLockoutSparesOtherIPs(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+
+	fail(g, ratelimitutil.LoginAttempt{Account: "admin", IP: "6.6.6.6"}, 3)
+	if got := g.Check(ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}).RetryAfter; got != 0 {
+		t.Fatalf("owner's address locked by another address's failures: %v", got)
+	}
+}
+
+// TestLoginGuard_IPLockoutSpansAccounts: one address spraying many usernames
+// is locked out once its total crosses IPThreshold, whichever account it
+// tries next — including one that does not exist.
+func TestLoginGuard_IPLockoutSpansAccounts(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+
+	for i := range 6 {
+		g.RecordFailure(ratelimitutil.LoginAttempt{Account: fmt.Sprintf("user%d", i), IP: "6.6.6.6"})
+	}
+	if got := g.Check(ratelimitutil.LoginAttempt{Account: "nobody", IP: "6.6.6.6"}).RetryAfter; got != time.Minute {
+		t.Fatalf("retry after = %v, want 1m", got)
+	}
+	if got := g.Check(ratelimitutil.LoginAttempt{Account: "nobody", IP: "1.2.3.4"}).RetryAfter; got != 0 {
+		t.Fatalf("another address locked: %v", got)
+	}
+}
+
+// TestLoginGuard_IPv6KeyedByPrefix: an attacker cannot dodge the address
+// lockout by walking the addresses of their own /64.
+func TestLoginGuard_IPv6KeyedByPrefix(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+
+	for i := range 6 {
+		g.RecordFailure(ratelimitutil.LoginAttempt{Account: fmt.Sprintf("user%d", i), IP: fmt.Sprintf("2001:db8::%x", i+1)})
+	}
+	if got := g.Check(ratelimitutil.LoginAttempt{Account: "admin", IP: "2001:db8::ffff"}).RetryAfter; got == 0 {
+		t.Fatal("a fresh address in the same /64 was not locked")
+	}
+	if got := g.Check(ratelimitutil.LoginAttempt{Account: "admin", IP: "2001:db8:0:1::1"}).RetryAfter; got != 0 {
+		t.Fatalf("another /64 was locked: %v", got)
+	}
+}
+
+// TestLoginGuard_AccountLockoutSparesKnownAddresses: a distributed attack
+// on one account locks that account from new addresses, but an address the
+// owner has signed in from still gets through, so the attacker cannot keep
+// the owner out.
+func TestLoginGuard_AccountLockoutSparesKnownAddresses(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+	owner := ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}
+	g.RecordSuccess(owner)
+
+	for i := range 10 {
+		g.RecordFailure(ratelimitutil.LoginAttempt{Account: "admin", IP: fmt.Sprintf("10.0.0.%d", i)})
+	}
+	if got := g.Check(ratelimitutil.LoginAttempt{Account: "admin", IP: "10.0.1.1"}).RetryAfter; got != time.Minute {
+		t.Fatalf("new address retry after = %v, want 1m", got)
+	}
+	if got := g.Check(owner).RetryAfter; got != 0 {
+		t.Fatalf("owner's known address locked out: %v", got)
+	}
+}
+
+// TestLoginGuard_AccountKeyIgnoresCase: "Admin" and "admin" share a count.
+func TestLoginGuard_AccountKeyIgnoresCase(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+
+	g.RecordFailure(ratelimitutil.LoginAttempt{Account: "Admin", IP: "1.2.3.4"})
+	g.RecordFailure(ratelimitutil.LoginAttempt{Account: "ADMIN", IP: "1.2.3.4"})
+	g.RecordFailure(ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"})
+	if got := g.Check(ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}).RetryAfter; got == 0 {
+		t.Fatal("case variants counted separately")
+	}
+}
+
+// TestLoginGuard_NilIsOpen: a nil guard checks nothing and records nothing,
+// so callers without one need no branch.
+func TestLoginGuard_NilIsOpen(t *testing.T) {
+	var g *ratelimitutil.LoginGuard
+	a := ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}
+	g.RecordFailure(a)
+	g.RecordSuccess(a)
+	if got := g.Check(a).RetryAfter; got != 0 {
+		t.Fatalf("nil guard locked: %v", got)
+	}
+}

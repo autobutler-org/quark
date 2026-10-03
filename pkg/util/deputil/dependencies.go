@@ -23,6 +23,7 @@ type dependencies struct {
 	authRateLimiter  *ratelimitutil.Limiter
 	backupJobStore   backup.BackupJobStore
 	chatRateLimiter  *ratelimitutil.Limiter
+	loginGuard       *ratelimitutil.LoginGuard
 	vaultRateLimiter *ratelimitutil.Limiter
 
 	database       *db.DatabaseSqlc
@@ -115,6 +116,15 @@ func (d *dependencies) ChatRateLimiter() *ratelimitutil.Limiter {
 
 func (d *dependencies) WithChatRateLimiter(limiter *ratelimitutil.Limiter) Dependencies {
 	d.chatRateLimiter = limiter
+	return d
+}
+
+func (d *dependencies) LoginGuard() *ratelimitutil.LoginGuard {
+	return d.loginGuard
+}
+
+func (d *dependencies) WithLoginGuard(guard *ratelimitutil.LoginGuard) Dependencies {
+	d.loginGuard = guard
 	return d
 }
 

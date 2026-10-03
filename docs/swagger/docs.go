@@ -1982,7 +1982,7 @@ const docTemplate = `{
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticates with username and password, returns a session token. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.",
+                "description": "Authenticates with username and password, returns a session token. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password. Repeated failures lock out the client address, the account at that address, or the account from new addresses for a while: the answer is 429 with Retry-After in seconds, whether or not the username exists.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2021,6 +2021,18 @@ const docTemplate = `{
                         "description": "status is pending or disabled",
                         "schema": {
                             "$ref": "#/definitions/v0_auth.accountRefusal"
+                        }
+                    },
+                    "429": {
+                        "description": "locked out after repeated failures; see Retry-After",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "type": "integer",
+                                "description": "seconds until the lockout lifts"
+                            }
                         }
                     }
                 }
