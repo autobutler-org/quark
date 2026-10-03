@@ -525,6 +525,13 @@ func TestRunPicksAFreeNameWhenOneAppearsMidRun(t *testing.T) {
 func TestValidate(t *testing.T) {
 	h := newHarness(t)
 	h.write(t, "clip.mov")
+	outside := filepath.Join(t.TempDir(), "outside.mov")
+	if err := os.WriteFile(outside, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(h.filesDir, "escape.mov")); err != nil {
+		t.Fatal(err)
+	}
 	validate := h.handler(nil).Validate
 
 	cases := []struct {
@@ -536,6 +543,7 @@ func TestValidate(t *testing.T) {
 		{"original quality", paramsAt(t, "clip.mov", "mp4", QualityOriginal), nil},
 		{"source gone", params(t, "gone.mov", "mp4"), ErrSourceNotFound},
 		{"path traversal", params(t, "../../../etc/passwd", "mp4"), ErrInvalidPath},
+		{"symlink out of the files dir", params(t, "escape.mov", "mp4"), ErrInvalidPath},
 		{"unknown format", params(t, "clip.mov", "h264"), ErrInvalidFormat},
 		{"small quality, which only a re-encode offered", paramsAt(t, "clip.mov", "mp4", "small"), ErrInvalidQuality},
 		{"same format", params(t, "clip.mp4", "mp4"), ErrInvalidFormat},

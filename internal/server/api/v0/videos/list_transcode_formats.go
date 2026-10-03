@@ -3,7 +3,6 @@ package v0_videos
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
@@ -50,8 +49,8 @@ func listTranscodeFormats(c *gin.Context) *serverutil.Response {
 			filesDir = deviceDir
 		}
 		cleanFilesDir := filepath.Clean(filesDir)
-		fullPath := filepath.Join(cleanFilesDir, relPath)
-		if !strings.HasPrefix(fullPath, cleanFilesDir+string(filepath.Separator)) {
+		fullPath, err := storageutil.SafeJoin(cleanFilesDir, relPath)
+		if err != nil || fullPath == cleanFilesDir {
 			return serverutil.BadRequest(fmt.Errorf("invalid relPath"))
 		}
 		if formats, err = videoutil.Targets(fullPath); err != nil {

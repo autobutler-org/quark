@@ -61,8 +61,8 @@ func resolveSource(storage *storageutil.StorageService, p Params) (source, error
 	}
 
 	cleanFilesDir := filepath.Clean(filesDir)
-	fullPath := filepath.Join(cleanFilesDir, p.RelPath)
-	if !strings.HasPrefix(fullPath, cleanFilesDir+string(filepath.Separator)) {
+	fullPath, err := storageutil.SafeJoin(cleanFilesDir, p.RelPath)
+	if err != nil || fullPath == cleanFilesDir {
 		return source{}, ErrInvalidPath
 	}
 	return source{filesDir: cleanFilesDir, fullPath: fullPath, relPath: relPath(cleanFilesDir, fullPath)}, nil
