@@ -190,6 +190,8 @@ class _VaultPageState extends State<VaultPage>
       body: _buildBody(),
       floatingActionButton: showFab
           ? FloatingActionButton(
+              key: const ValueKey('vault_new_entry_fab'),
+              tooltip: 'New entry',
               onPressed: () => _showEntryEditor(context),
               child: const Icon(QuarkIcons.add),
             )

@@ -75,6 +75,7 @@ class EntryEditForm extends StatelessWidget {
                         ? QuarkIcons.visibility_off
                         : QuarkIcons.visibility,
                   ),
+                  tooltip: showPassword ? 'Hide password' : 'Show password',
                   onPressed: onToggleShowPassword,
                 ),
                 IconButton(

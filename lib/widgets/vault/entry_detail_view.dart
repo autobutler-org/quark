@@ -31,6 +31,7 @@ class EntryDetailView extends StatelessWidget {
             icon: Icon(
               showPassword ? QuarkIcons.visibility_off : QuarkIcons.visibility,
             ),
+            tooltip: showPassword ? 'Hide password' : 'Show password',
             onPressed: onToggleShowPassword,
           ),
         ),

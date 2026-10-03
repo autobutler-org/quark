@@ -8,6 +8,8 @@ import 'package:quark/pages/users_page.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/text_scale.dart';
+
 /// The Users page in two tabs (#1910): the accounts, and the groups.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -75,4 +77,24 @@ void main() {
     // Disposing the page stops its refresh timer.
     await tester.pumpWidget(const SizedBox());
   });
+  // #2606, #2603, #2605: both tabs survive 200% text on a phone and a
+  // desktop, and every control on them is labeled and big enough to hit.
+  for (final tab in ['accounts', 'groups']) {
+    testLargeText('the $tab tab lays out', (tester, _) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),
+          home: const UsersPage(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('tab_$tab')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      await expectTapTargetGuidelines(tester);
+
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
 }

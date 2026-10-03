@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -7,8 +9,11 @@ import 'package:quark/pages/system_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/system/health_tab.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+
+import '../support/text_scale.dart';
 
 /// The System page (#2351): Health, Storage and Jobs as tabs of one page, each
 /// at its own URL.
@@ -18,6 +23,9 @@ void main() {
   /// The paths the page asked the Quark for, in order.
   final requests = <String>[];
 
+  /// What the Quark answers, by path. Anything missing is a 404.
+  final responses = <String, Object>{};
+
   Future<void> clearHosts() async {
     while (settings.hosts.isNotEmpty) {
       await settings.removeHost(settings.hosts.length - 1);
@@ -26,10 +34,15 @@ void main() {
 
   setUp(() async {
     requests.clear();
+    responses.clear();
+    StorageService.invalidateDeviceCache();
     resetSharedHttpClient();
     sharedHttpClientFactory = () => MockClient((request) async {
       requests.add(request.url.path);
-      return http.Response('', 404);
+      final body = responses[request.url.path];
+      return body == null
+          ? http.Response('', 404)
+          : http.Response(jsonEncode(body), 200);
     });
     await clearHosts();
     await settings.addHost(
@@ -160,4 +173,68 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
   });
+  // #2606, #2603, #2605: every tab survives 200% text on a phone and a
+  // desktop, loaded or failed, and every control on it is labeled and big
+  // enough to hit.
+  const loaded = {
+    '/api/v0/health': {
+      'healthy': false,
+      'alerts': ['Disk is almost full'],
+      'cpuPercent': 42.5,
+      'cpuCorePercents': [40, 45, 50, 35],
+      'memPercent': 61,
+      'memUsedBytes': 2500000000,
+      'memTotalBytes': 4000000000,
+      'diskPercent': 93,
+      'diskUsedBytes': 110000000000,
+      'diskTotalBytes': 120000000000,
+      'temperatureCelsius': 58,
+      'hostname': 'quark',
+    },
+    '/api/v0/storage/devices/status': {
+      'devices': [
+        {
+          'name': 'Internal storage',
+          'devicePath': '/dev/mmcblk0',
+          'mountPoint': '/',
+          'fileSystem': 'ext4',
+          'totalBytes': 120000000000,
+          'usedBytes': 110000000000,
+          'availableBytes': 10000000000,
+          'isInternal': true,
+          'isEnabled': true,
+          'role': 'primary',
+        },
+      ],
+    },
+    '/api/v0/jobs': [
+      {
+        'id': 1,
+        'kind': 'convert',
+        'name': 'Converting holiday-video-from-the-beach.mov',
+        'status': 'failed',
+        'createdAt': '2026-10-01T10:00:00Z',
+      },
+    ],
+  };
+
+  for (final tab in SystemTab.values) {
+    for (final (state, served) in [
+      ('loaded', loaded),
+      ('failed', const <String, Object>{}),
+    ]) {
+      testLargeText('the ${tab.slug} tab lays out $state', (
+        tester,
+        size,
+      ) async {
+        responses.addAll(served);
+        await pumpSystem(tester, AppRoutes.systemTab(tab), size);
+
+        expect(tester.takeException(), isNull);
+        await expectTapTargetGuidelines(tester);
+
+        await tester.pumpWidget(const SizedBox());
+      });
+    }
+  }
 }

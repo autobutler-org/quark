@@ -8,6 +8,8 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/text_scale.dart';
+
 /// #2276: a right-click on a saved Quark in Settings opens the menu its
 /// three-dot button does.
 void main() {
@@ -70,6 +72,46 @@ void main() {
       find.byKey(const ValueKey('host_action_remove_1')),
       findsOneWidget,
       reason: 'the menu is for the row that was clicked',
+    );
+  });
+  // #2603, #2605, #2606: each saved Quark is a radio a screen reader names,
+  // and the list survives 200% text.
+  testLargeText('every Quark is a labeled radio', (tester, _) async {
+    SharedPreferences.setMockInitialValues({
+      'hosts': jsonEncode([
+        {'name': 'Home', 'hostAddress': 'https://home.local'},
+        {'name': 'Cabin', 'hostAddress': 'https://cabin.local'},
+      ]),
+    });
+    await AppSettings.instance.load();
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            padding: EdgeInsets.all(16),
+            child: HostManager(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    await expectTapTargetGuidelines(tester);
+    expect(
+      tester.getSemantics(
+        find.descendant(
+          of: find.byKey(const ValueKey('host_row_1')),
+          matching: find.byType(ListTile),
+        ),
+      ),
+      isSemantics(
+        label: 'Cabin\nhttps://cabin.local',
+        isInMutuallyExclusiveGroup: true,
+        hasCheckedState: true,
+        isChecked: false,
+        hasTapAction: true,
+      ),
     );
   });
 }

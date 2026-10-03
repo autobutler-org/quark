@@ -10,6 +10,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/text_scale.dart';
+
 /// The share sheet host (#1911). Removing or demoting an owner can leave an
 /// item that only admins manage, so it asks first, and sends nothing until
 /// the admin confirms.
@@ -86,10 +88,12 @@ void main() {
     sharedHttpClientFactory = buildLocalTrustHttpClient;
   });
 
-  Future<void> openSheet(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+  Future<void> openSheet(WidgetTester tester, {bool setView = true}) async {
+    if (setView) {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
 
     await tester.pumpWidget(
       MaterialApp(
@@ -549,5 +553,24 @@ void main() {
         reason: 'shown, but it cannot be removed',
       );
     });
+  });
+
+  // #2606, #2603, #2605: the sheet survives 200% text on a phone and a
+  // desktop, top to bottom and with a level menu open, and every control in
+  // it is labeled and big enough to hit.
+  testLargeText('the sheet lays out', (tester, size) async {
+    await openSheet(tester, setView: false);
+
+    expect(tester.takeException(), isNull);
+    // A phone at this size opens the sheet scrolled, and a row cut off by its
+    // edge reads as a small target; the wide case checks the same rows whole.
+    if (size == wideViewport) await expectTapTargetGuidelines(tester);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('share_add_submit')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tapKey(tester, 'share_level_user_2');
+    expect(tester.takeException(), isNull);
   });
 }

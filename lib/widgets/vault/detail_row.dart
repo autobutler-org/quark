@@ -35,10 +35,20 @@ class DetailRow extends StatelessWidget {
           const SizedBox(height: 4),
           Row(
             children: [
-              Expanded(child: SelectableText(value)),
+              // Long-press selects, so the text is a target like the
+              // buttons beside it and gets the same 48dp height.
+              Expanded(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minHeight: kMinInteractiveDimension,
+                  ),
+                  child: SelectableText(value),
+                ),
+              ),
               if (copiable)
                 IconButton(
                   icon: const Icon(QuarkIcons.copy, size: 18),
+                  tooltip: 'Copy $label',
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: copyValue ?? value));
                     ScaffoldMessenger.of(context).showSnackBar(

@@ -69,7 +69,7 @@ class StorageDevicesBody extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           child: Text(
             Errors.message(error, 'load your drives'),
-            style: const TextStyle(color: Colors.red),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ),
       );
