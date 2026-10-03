@@ -93,32 +93,37 @@ class _RecentFilesSectionState extends State<RecentFilesSection> {
                     color: colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    'Recently uploaded',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+                  Flexible(
+                    child: Text(
+                      'Recently uploaded',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: colorScheme.onSurface.withValues(alpha: 0.4),
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              SizedBox(
-                height: 72,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: files.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final file = files[index];
-                    return RecentFileChip(
-                      file: file,
-                      onTap: () => widget.onOpenFile(file),
-                      onFolderTap: () =>
-                          widget.onNavigateToFolder(_parentPath(file)),
-                    );
-                  },
+              // A row in a scroll view rather than a sized ListView, so the
+              // strip is as tall as its chips are at the current text size
+              // instead of a fixed 72 that clipped them at 200% (#2606). The
+              // list is capped at 20, so building it whole costs little.
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: 8,
+                  children: [
+                    for (final file in files)
+                      RecentFileChip(
+                        file: file,
+                        onTap: () => widget.onOpenFile(file),
+                        onFolderTap: () =>
+                            widget.onNavigateToFolder(_parentPath(file)),
+                      ),
+                  ],
                 ),
               ),
             ],

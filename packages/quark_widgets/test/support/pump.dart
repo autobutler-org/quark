@@ -1,6 +1,7 @@
 import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/semantics.dart' show SemanticsNode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -49,6 +50,49 @@ void testBothViewports(
   for (final size in [narrowViewport, wideViewport]) {
     final label = size == narrowViewport ? 'narrow' : 'wide';
     testWidgets('$description ($label)', (tester) => body(tester, size));
+  }
+}
+
+/// The text scale WCAG 1.4.4 asks every widget to survive (#2606).
+const double largeTextScale = 2.0;
+
+/// Runs [body] at [largeTextScale] against both [narrowViewport] and
+/// [wideViewport].
+///
+/// The scale goes through the platform dispatcher, the way a phone's font
+/// size setting does, so [pumpAt]'s `MaterialApp` picks it up without the
+/// test wrapping anything in a `MediaQuery`.
+void testLargeText(
+  String description,
+  Future<void> Function(WidgetTester tester, Size size) body,
+) {
+  for (final size in [narrowViewport, wideViewport]) {
+    final label = size == narrowViewport ? 'narrow' : 'wide';
+    testWidgets('$description at 200% text ($label)', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = largeTextScale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await body(tester, size);
+    });
+  }
+}
+
+/// Expects no text on screen to be cut short by a box too small for it.
+///
+/// A fixed-height parent does not throw an overflow when its text grows: the
+/// paragraph is squeezed to the parent's height and paints its lower half
+/// over, or under, whatever is beside it. So this compares each paragraph's
+/// laid-out height with the height its lines need at its width. Text that
+/// gives up a line to an ellipsis is fine; text whose one line is taller than
+/// its box is not.
+void expectNoClippedText(WidgetTester tester) {
+  for (final paragraph
+      in tester.allRenderObjects.whereType<RenderParagraph>()) {
+    final needed = paragraph.getMaxIntrinsicHeight(paragraph.size.width);
+    expect(
+      paragraph.size.height,
+      greaterThanOrEqualTo(needed - 0.5),
+      reason: '"${paragraph.text.toPlainText()}" needs $needed tall',
+    );
   }
 }
 
