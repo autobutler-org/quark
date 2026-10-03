@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
@@ -78,8 +77,8 @@ func getMetadata(c *gin.Context) *serverutil.Response {
 	}
 
 	cleanFilesDir := filepath.Clean(filesDir)
-	fullPath := filepath.Join(cleanFilesDir, relPath)
-	if !strings.HasPrefix(fullPath, cleanFilesDir+string(filepath.Separator)) {
+	fullPath, err := storageutil.SafeJoin(cleanFilesDir, relPath)
+	if err != nil || fullPath == cleanFilesDir {
 		return serverutil.BadRequest(fmt.Errorf("invalid relPath"))
 	}
 
