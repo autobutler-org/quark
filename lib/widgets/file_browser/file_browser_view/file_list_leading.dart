@@ -10,6 +10,10 @@ import 'package:shimmer/shimmer.dart';
 /// Every row reserves the same leading slot so titles line up whether the
 /// row ends up showing a thumbnail or a file-type icon.
 ///
+/// The thumbnail is excluded from semantics: the row or tile around it
+/// already reads the file's name, and an unlabeled image would only add
+/// noise to a screen reader (#2603).
+///
 /// The thumbnail, and the icon when the file has none, are keyed by
 /// [FileNode.apiPath]. A list reuses the element in a slot; without that key
 /// the slot keeps painting the previous file's image until the new URL
@@ -49,7 +53,11 @@ class FileListLeading extends StatelessWidget {
                 // and error states fall back to it so nothing shifts.
                 imageBuilder: (context, imageProvider) => ClipRRect(
                   borderRadius: BorderRadius.circular(4),
-                  child: Image(image: imageProvider, fit: BoxFit.cover),
+                  child: Image(
+                    image: imageProvider,
+                    fit: BoxFit.cover,
+                    excludeFromSemantics: true,
+                  ),
                 ),
                 placeholder: (context, url) => Shimmer.fromColors(
                   baseColor: Colors.grey[800]!,

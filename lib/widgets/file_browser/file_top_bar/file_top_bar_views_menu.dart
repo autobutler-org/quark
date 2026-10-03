@@ -10,6 +10,8 @@ import 'package:quark_icons/quark_icons.dart';
 /// The menu itself, and the chip that opens it, belong to the bar's
 /// `QuarkAppBarBottom`.
 ///
+/// Every row is at least 48dp tall: no compact density (#2605).
+///
 /// Probe keys: `file_top_bar_views_list`, `file_top_bar_views_grid` and
 /// `file_top_bar_views_grouping`.
 class FileTopBarViewsMenu extends StatelessWidget {
@@ -55,7 +57,6 @@ class FileTopBarViewsMenu extends StatelessWidget {
               dense: true,
               title: Text(label, style: const TextStyle(fontSize: 14)),
               controlAffinity: ListTileControlAffinity.leading,
-              visualDensity: VisualDensity.compact,
               onChanged: onDeviceToggled != null
                   ? (_) => onDeviceToggled!(device.devicePath)
                   : null,
@@ -88,11 +89,12 @@ class FileTopBarViewsMenu extends StatelessWidget {
 
         // ── Device grouping section ──
         const TopBarMenuSectionHeader(title: 'Grouping'),
-        ListTile(
+        // One toggle with the row's text as its label, rather than a row and
+        // an unlabeled switch inside it (#2603).
+        SwitchListTile.adaptive(
           key: const ValueKey('file_top_bar_views_grouping'),
           dense: true,
-          visualDensity: VisualDensity.compact,
-          leading: Icon(
+          secondary: Icon(
             isUnifiedView
                 ? QuarkIcons.folder_copy_outlined
                 : QuarkIcons.device_hub_outlined,
@@ -107,11 +109,8 @@ class FileTopBarViewsMenu extends StatelessWidget {
             ViewGroupingCopy.forMode(isUnified: isUnifiedView),
             style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
           ),
-          trailing: Switch.adaptive(
-            value: isUnifiedView,
-            onChanged: (_) => onToggleUnifiedView(),
-          ),
-          onTap: onToggleUnifiedView,
+          value: isUnifiedView,
+          onChanged: (_) => onToggleUnifiedView(),
         ),
       ],
     );

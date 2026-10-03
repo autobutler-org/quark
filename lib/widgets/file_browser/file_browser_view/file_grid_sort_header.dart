@@ -21,7 +21,8 @@ class FileGridSortHeader extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       color: colorScheme.secondary,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      // No vertical padding: each cell is a 48dp tap target on its own.
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
           FileSortHeaderCell(
