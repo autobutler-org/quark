@@ -3,7 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show ChangeNotifier, ValueNotifier;
 import 'package:flutter/material.dart' show Color;
-import 'package:flutter/painting.dart' show TextPainter, TextSpan, TextStyle;
+import 'package:flutter/painting.dart'
+    show FontStyle, FontWeight, TextPainter, TextSpan, TextStyle;
 import 'package:flutter/widgets.dart' show TextEditingController;
 import 'package:quark_formula/evaluation/evaluation.dart';
 
@@ -13,6 +14,7 @@ import 'cell/heading/heading_cells.dart'
 import 'cell_range.dart';
 import 'column_filter.dart';
 import 'data_sheet_selection.dart';
+import 'format/format_cell_value.dart';
 
 // ---------------------------------------------------------------------------
 // Internal snapshot used for undo / redo.
@@ -26,6 +28,7 @@ class _TableSnapshot {
   final int frozenColumns;
   final Map<int, ColumnFilter> filters;
   final List<bool> hidden;
+  final Map<(int, int), CellFormat> formats;
 
   _TableSnapshot(
     this.cells,
@@ -35,6 +38,7 @@ class _TableSnapshot {
     this.frozenColumns,
     this.filters,
     this.hidden,
+    this.formats,
   );
 
   factory _TableSnapshot.capture(DataSheetController c) {
@@ -49,6 +53,7 @@ class _TableSnapshot {
       c._frozenColumns,
       Map<int, ColumnFilter>.from(c._filters),
       List<bool>.from(c._hidden),
+      Map<(int, int), CellFormat>.from(c._formats),
     );
   }
 
@@ -71,6 +76,7 @@ class _TableSnapshot {
     c._frozenColumns = frozenColumns;
     c._filters = Map<int, ColumnFilter>.from(filters);
     c._hidden = List<bool>.from(hidden);
+    c._formats = Map<(int, int), CellFormat>.from(formats);
   }
 }
 
@@ -88,6 +94,11 @@ class _TableSnapshot {
 /// Filters hide rows without deleting them: row indexes never change, and range operations (copy, clear, paste,
 /// fill, delete row) skip hidden rows. Frozen rows are headers and are never hidden. Filters apply when they are
 /// set, so a row edited to a value the filter excludes stays visible until the filters next change.
+///
+/// Cell formats ([formatAt], [applyFormat]) are kept sparsely, by cell, and follow their cells: inserting, deleting,
+/// duplicating and sorting rows and columns move them, filters leave them alone, and a copy pasted back into the same
+/// sheet carries them. A number format changes only [formattedValueAt]; the stored value, [displayValueAt], formulas,
+/// sorting and filters all read the raw value.
 class DataSheetController extends ChangeNotifier {
   final DataTable table;
   final List<ValueNotifier<List<DataCell>>> _rows;
@@ -110,6 +121,13 @@ class DataSheetController extends ChangeNotifier {
 
   /// [visibleRows], built on first read after a change.
   List<int>? _visibleRows;
+
+  /// Every cell's format that is not [CellFormat.plain], by (row, col).
+  Map<(int, int), CellFormat> _formats;
+
+  /// The text the last [copyRange] produced and the formats of the cells it
+  /// came from, so pasting that same text back carries them.
+  ({String tsv, List<List<CellFormat>> formats})? _copied;
 
   /// How many rows, from the top, stay put while the grid scrolls vertically.
   int get frozenRows => _frozenRows;
@@ -149,6 +167,7 @@ class DataSheetController extends ChangeNotifier {
     this._frozenRows,
     this._frozenColumns,
     this._filters,
+    this._formats,
   ) {
     selection.addListener(_onSelectionChanged);
     _recompute();
@@ -218,7 +237,9 @@ class DataSheetController extends ChangeNotifier {
   /// each factor becomes that many default widths, and only when
   /// [columnWidths] is absent. [frozenRows] and [frozenColumns] are clamped to
   /// the table. [filters] maps a column index to its filter; entries for
-  /// columns the table lacks, and inactive filters, are dropped.
+  /// columns the table lacks, and inactive filters, are dropped. [formats]
+  /// maps a (row, col) to its format; cells outside the table and plain
+  /// formats are dropped.
   factory DataSheetController.fromTable(
     DataTable table, {
     List<double>? columnWidths,
@@ -227,6 +248,7 @@ class DataSheetController extends ChangeNotifier {
     int frozenRows = 0,
     int frozenColumns = 0,
     Map<int, ColumnFilter> filters = const {},
+    Map<(int, int), CellFormat> formats = const {},
   }) {
     final rows = table.rows
         .map((r) => ValueNotifier<List<DataCell>>(List<DataCell>.from(r.cells)))
@@ -246,6 +268,11 @@ class DataSheetController extends ChangeNotifier {
         for (final MapEntry(key: col, value: filter) in filters.entries)
           if (col >= 0 && col < colCount && filter.isActive) col: filter,
       },
+      {
+        for (final MapEntry(key: (r, c), value: format) in formats.entries)
+          if (r >= 0 && r < rowCount && c >= 0 && c < colCount)
+            if (!format.isPlain) (r, c): format,
+      },
     );
   }
 
@@ -263,6 +290,7 @@ class DataSheetController extends ChangeNotifier {
         : null;
     int count(Object? value) => value is int ? value : 0;
     final filters = json?['filters'];
+    final formats = json?['formats'];
     return DataSheetController.fromTable(
       table,
       columnWidths: numbers(json?['columnWidths']),
@@ -276,11 +304,19 @@ class DataSheetController extends ChangeNotifier {
             if (entry is Map && entry['column'] is int)
               entry['column'] as int: ColumnFilter.fromJson(entry)!,
       },
+      formats: {
+        if (formats is List)
+          for (final entry in formats)
+            if (entry is Map && entry['row'] is int && entry['col'] is int)
+              (entry['row'] as int, entry['col'] as int):
+                  CellFormat.fromJson(entry),
+      },
     );
   }
 
   /// The sheet's layout in the form [DataSheetController.fromLayoutJson]
-  /// reads: pixel sizes, the frozen counts, and the column filters.
+  /// reads: pixel sizes, the frozen counts, the column filters, and the cell
+  /// formats (a list of `{row, col, ...format}`, one per formatted cell).
   Map<String, Object> layoutToJson() => {
         'columnWidths': List<double>.from(columnWidths),
         'rowHeights': List<double>.from(rowHeights),
@@ -289,6 +325,10 @@ class DataSheetController extends ChangeNotifier {
         'filters': [
           for (final MapEntry(key: col, value: filter) in _filters.entries)
             {'column': col, ...filter.toJson()},
+        ],
+        'formats': [
+          for (final MapEntry(key: (r, c), value: format) in _formats.entries)
+            {'row': r, 'col': c, ...format.toJson()},
         ],
       };
 
@@ -410,15 +450,25 @@ class DataSheetController extends ChangeNotifier {
       range.top < rowCount &&
       range.left < colCount;
 
-  /// Clear every visible cell value in [range] as one undo step.
-  void clearRange(CellRange range) {
+  /// Clear every visible cell value in [range] as one undo step, and their
+  /// formats too when [formats] is true. Formats stay by default, as they do
+  /// when Delete empties a cell in Google Sheets.
+  void clearRange(CellRange range, {bool formats = false}) {
     final rows = _visibleIn(range);
+    if (rows.isEmpty || range.left < 0 || range.left >= colCount) return;
+    _pushSnapshot();
+    if (formats) _formats.removeWhere((k, _) => _covers(range, rows, k));
     _setCells(
       rows,
       range.left,
       List.generate(rows.length, (_) => List.filled(range.colCount, '')),
+      snapshot: false,
     );
   }
+
+  /// True when [cell] lies in [range]'s columns on one of [rows].
+  static bool _covers(CellRange range, List<int> rows, (int, int) cell) =>
+      range.containsCol(cell.$2) && rows.contains(cell.$1);
 
   /// Paste [values] into [target] as one undo step, then select what was
   /// written.
@@ -428,7 +478,14 @@ class DataSheetController extends ChangeNotifier {
   /// its columns are a whole number of blocks the block repeats to fill them,
   /// so a single value fills the whole target; otherwise it is pasted once at
   /// its own size, adding rows and columns if it runs past the sheet's edge.
-  void pasteValues(CellRange target, List<List<String>> values) {
+  ///
+  /// [formats], when given, is the block's formats, row for row; they land
+  /// with the values and replace the formats of the cells they cover.
+  void pasteValues(
+    CellRange target,
+    List<List<String>> values, {
+    List<List<CellFormat>>? formats,
+  }) {
     if (values.isEmpty || values.first.isEmpty) return;
     if (target.top < 0 || target.left < 0) return;
     final blockRows = values.length;
@@ -448,6 +505,19 @@ class DataSheetController extends ChangeNotifier {
     _pushSnapshot();
     _growTo(start + missing, target.left + cols);
     dest.addAll([for (var i = 0; i < missing; i++) start + i]);
+    if (formats != null && formats.isNotEmpty) {
+      for (var r = 0; r < rows; r++) {
+        final row = formats[r % formats.length];
+        for (var c = 0; c < cols; c++) {
+          final i = c % blockCols;
+          _setFormat(
+            dest[r],
+            target.left + c,
+            i < row.length ? row[i] : CellFormat.plain,
+          );
+        }
+      }
+    }
     _setCells(
       dest,
       target.left,
@@ -540,6 +610,7 @@ class DataSheetController extends ChangeNotifier {
     );
     rowHeights.insert(clamped, kDefaultRowHeight);
     if (clamped < _hidden.length) _hidden.insert(clamped, false);
+    _remapFormats(row: (r) => r >= clamped ? r + 1 : r);
     if (clamped < _frozenRows) _frozenRows++;
     _recompute();
     notifyListeners();
@@ -571,6 +642,7 @@ class DataSheetController extends ChangeNotifier {
     _rows.removeAt(i);
     if (i < rowHeights.length) rowHeights.removeAt(i);
     if (i < _hidden.length) _hidden.removeAt(i);
+    _remapFormats(row: (r) => r == i ? null : (r > i ? r - 1 : r));
   }
 
   /// Duplicate the row at [index], inserting the copy immediately after.
@@ -588,6 +660,10 @@ class DataSheetController extends ChangeNotifier {
         index < rowHeights.length ? rowHeights[index] : kDefaultRowHeight;
     rowHeights.insert(index + 1, srcH);
     if (index < _hidden.length) _hidden.insert(index + 1, false);
+    _remapFormats(row: (r) => r > index ? r + 1 : r);
+    for (final MapEntry(key: (r, c), value: format) in [..._formats.entries]) {
+      if (r == index) _formats[(index + 1, c)] = format;
+    }
     if (index < _frozenRows) _frozenRows++;
     _recompute();
     notifyListeners();
@@ -638,6 +714,7 @@ class DataSheetController extends ChangeNotifier {
     }
     if (clamped < _frozenColumns) _frozenColumns++;
     _shiftFilters(clamped, 1);
+    _remapFormats(col: (c) => c >= clamped ? c + 1 : c);
     _recompute();
     notifyListeners();
   }
@@ -659,6 +736,9 @@ class DataSheetController extends ChangeNotifier {
     final hadFilters = _filters.length;
     _filters.removeWhere((col, _) => col >= index && col < end);
     _shiftFilters(end, index - end);
+    _remapFormats(
+      col: (c) => c < index ? c : (c >= end ? c - (end - index) : null),
+    );
     _recompute();
     if (_filters.length != hadFilters) _applyFilters();
     _collapseSelectionTo(selection.highlightedRow, index);
@@ -685,6 +765,10 @@ class DataSheetController extends ChangeNotifier {
     }
     if (index < _frozenColumns) _frozenColumns++;
     _shiftFilters(index + 1, 1);
+    _remapFormats(col: (c) => c > index ? c + 1 : c);
+    for (final MapEntry(key: (r, c), value: format) in [..._formats.entries]) {
+      if (c == index) _formats[(r, index + 1)] = format;
+    }
     _recompute();
     notifyListeners();
   }
@@ -729,10 +813,17 @@ class DataSheetController extends ChangeNotifier {
     final style = textStyle ?? const TextStyle(fontSize: 14.0);
     var maxW = kMinColumnWidth;
     for (var r = 0; r < rowCount; r++) {
-      final text = _rows[r].value[col].value.toString();
+      final text = formattedValueAt(r, col);
       if (text.isEmpty) continue;
+      final format = formatAt(r, col);
       final tp = TextPainter(
-        text: TextSpan(text: text, style: style),
+        text: TextSpan(
+          text: text,
+          style: style.copyWith(
+            fontWeight: format.bold ? FontWeight.bold : null,
+            fontStyle: format.italic ? FontStyle.italic : null,
+          ),
+        ),
         textDirection: ui.TextDirection.ltr,
       )..layout();
       final w = tp.width + horizontalOverhead;
@@ -984,6 +1075,27 @@ class DataSheetController extends ChangeNotifier {
     ).map((row) => row.map(_tsvField).join('\t')).join('\n');
   }
 
+  /// [rangeToTsv], remembering the formats of the cells it copied so that
+  /// [pasteTsv] carries them when the same text is pasted back into this
+  /// sheet. Text from anywhere else pastes values only.
+  String copyRange([CellRange? range]) {
+    range ??= selection.range;
+    final tsv = rangeToTsv(range);
+    _copied = tsv.isEmpty
+        ? null
+        : (
+            tsv: tsv,
+            formats: [
+              for (final r in _visibleIn(range!))
+                [
+                  for (var c = range.left; c <= range.right; c++)
+                    formatAt(r, c),
+                ],
+            ],
+          );
+    return tsv;
+  }
+
   static String _tsvField(String v) =>
       v.contains(RegExp('[\t\n\r"]')) ? '"${v.replaceAll('"', '""')}"' : v;
 
@@ -1050,10 +1162,17 @@ class DataSheetController extends ChangeNotifier {
   }
 
   /// Pastes tab-separated text into [target], or the selected range when
-  /// omitted, through [pasteValues].
+  /// omitted, through [pasteValues]. Text this sheet's [copyRange] produced
+  /// last brings its cells' formats with it.
   void pasteTsv(String tsv, [CellRange? target]) {
     target ??= selection.range;
-    if (target != null) pasteValues(target, parseTsv(tsv));
+    final copied = _copied;
+    if (target == null) return;
+    pasteValues(
+      target,
+      parseTsv(tsv),
+      formats: copied != null && copied.tsv == tsv ? copied.formats : null,
+    );
   }
 
   /// Adds empty rows and columns until the sheet is at least [rows] by
@@ -1076,6 +1195,78 @@ class DataSheetController extends ChangeNotifier {
       rowHeights.add(kDefaultRowHeight);
     }
   }
+
+  // -------------------------------------------------------------------------
+  // Cell formats
+  // -------------------------------------------------------------------------
+
+  /// Every formatted cell's format, by (row, col). Cells absent from it are
+  /// [CellFormat.plain].
+  Map<(int, int), CellFormat> get formats => Map.unmodifiable(_formats);
+
+  /// The format of the cell at [row], [col].
+  CellFormat formatAt(int row, int col) =>
+      _formats[(row, col)] ?? CellFormat.plain;
+
+  /// The text the cell at [row], [col] shows: [displayValueAt] in the cell's
+  /// number format.
+  String formattedValueAt(int row, int col) =>
+      formatCellValue(displayValueAt(row, col), formatAt(row, col));
+
+  /// Replaces the format of every visible cell in [range] with [change]
+  /// applied to it, as one undo step. Hidden rows are skipped, as every range
+  /// operation skips them. Does nothing, and records no undo step, when no
+  /// format would change.
+  ///
+  /// ```dart
+  /// controller.applyFormat(range, (f) => f.withBold(true));
+  /// ```
+  void applyFormat(
+    CellRange range,
+    CellFormat Function(CellFormat format) change,
+  ) {
+    final updates = <(int, int), CellFormat>{
+      for (final r in _visibleIn(range))
+        for (var c = max(range.left, 0);
+            c <= min(range.right, colCount - 1);
+            c++)
+          (r, c): change(formatAt(r, c)),
+    }..removeWhere((cell, format) => format == formatAt(cell.$1, cell.$2));
+    if (updates.isEmpty) return;
+    _pushSnapshot();
+    for (final MapEntry(key: (r, c), value: format) in updates.entries) {
+      _setFormat(r, c, format);
+    }
+    notifyListeners();
+  }
+
+  /// Removes every format from the visible cells of [range], keeping their
+  /// values, as one undo step.
+  void clearFormats(CellRange range) =>
+      applyFormat(range, (_) => CellFormat.plain);
+
+  /// Stores [format] for the cell, dropping the entry when it is plain.
+  void _setFormat(int row, int col, CellFormat format) {
+    if (format.isPlain) {
+      _formats.remove((row, col));
+    } else {
+      _formats[(row, col)] = format;
+    }
+  }
+
+  /// Moves every format to the cell [row] and [col] map its row and column
+  /// to; a null drops it. Either defaults to leaving the index alone.
+  void _remapFormats({
+    int? Function(int) row = _same,
+    int? Function(int) col = _same,
+  }) {
+    _formats = {
+      for (final MapEntry(key: (r, c), value: format) in _formats.entries)
+        if ((row(r), col(c)) case (final r2?, final c2?)) (r2, c2): format,
+    };
+  }
+
+  static int? _same(int index) => index;
 
   // -------------------------------------------------------------------------
   // Sort / deduplication
@@ -1102,6 +1293,11 @@ class DataSheetController extends ChangeNotifier {
         .map((i) => i < rowHeights.length ? rowHeights[i] : kDefaultRowHeight)
         .toList();
     _hidden = [for (final i in indices) isRowHidden(i)];
+    final sortedTo = List<int>.filled(indices.length, 0);
+    for (var i = 0; i < indices.length; i++) {
+      sortedTo[indices[i]] = i;
+    }
+    _remapFormats(row: (r) => sortedTo[r]);
     table.rows
       ..clear()
       ..addAll(sortedTableRows);
@@ -1244,6 +1440,7 @@ class DataSheetController extends ChangeNotifier {
     _frozenColumns = _frozenColumns.clamp(0, newColCount);
     _filters.clear();
     _hidden = [];
+    _formats = {};
     _recompute();
     notifyListeners();
   }

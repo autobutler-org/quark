@@ -148,6 +148,43 @@ class QuarkIcons {
   /// Freeze header rows and columns — a snowflake reads as "frozen".
   static const IconData freeze_panes = Icons.ac_unit;
 
+  // ── Cell formatting ──────────────────────────────────────────────────────────────
+  /// Bold the selected cells' text.
+  static const IconData format_bold = Icons.format_bold;
+
+  /// Italicize the selected cells' text.
+  static const IconData format_italic = Icons.format_italic;
+
+  /// Color the selected cells' text.
+  static const IconData format_text_color = Icons.format_color_text;
+
+  /// Fill the selected cells' background.
+  static const IconData format_fill = Icons.format_color_fill;
+
+  /// Align the selected cells' text to the left edge.
+  static const IconData format_align_left = Icons.format_align_left;
+
+  /// Center the selected cells' text.
+  static const IconData format_align_center = Icons.format_align_center;
+
+  /// Align the selected cells' text to the right edge.
+  static const IconData format_align_right = Icons.format_align_right;
+
+  /// Choose how the selected cells display numbers: currency, percent, date.
+  static const IconData format_number = Icons.attach_money;
+
+  /// Show one fewer decimal place.
+  static const IconData decimal_decrease = Icons.remove;
+
+  /// Show one more decimal place.
+  static const IconData decimal_increase = Icons.add;
+
+  /// Remove every format from the selected cells, keeping their values.
+  static const IconData format_clear = Icons.format_clear;
+
+  /// The phone menu that holds every formatting action.
+  static const IconData format_menu = Icons.text_format;
+
   // ── Import / Export ────────────────────────────────────────────────────────────────
   /// Export data as a CSV file.
   static const IconData export_csv = Icons.file_download;

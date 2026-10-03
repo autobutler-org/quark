@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../data_table.dart';
 import 'cell/cell.dart';
 import 'cell/editable_cell.dart';
+import 'cell/formatted_cell_text.dart';
 import 'cell/heading/heading_cells.dart'
     show
         ColumnHeaderCell,
@@ -56,6 +57,9 @@ import 'view/linked_scroll_controllers.dart';
 /// columns, with the column headers and row numbers, while the rest scrolls;
 /// a divider in the theme's outline color marks the edge. Frozen panes never
 /// cover more than [kMaxFrozenFraction] of the grid.
+///
+/// Each cell draws its `CellFormat`: bold, italic, text color, fill,
+/// alignment, and its number format, which changes only the text shown.
 ///
 /// Keys: cells are `r<row>c<col>`, column headers `col_header_<col>`, their
 /// filter buttons `col_filter_<col>`, row
@@ -833,6 +837,7 @@ class _DataSheetViewState extends State<_DataSheetView> {
           final isHighlightedCell =
               (r == highlightedRow && c == highlightedCol);
           final colWidth = _colWidth(c);
+          final format = controller.formatAt(r, c);
 
           final cellChild = isActiveCell
               ? EditableCell(
@@ -853,20 +858,10 @@ class _DataSheetViewState extends State<_DataSheetView> {
                     keyboardFocus.requestFocus();
                   },
                 )
-              : Builder(
-                  builder: (context) {
-                    final display = controller.displayValueAt(r, c);
-                    final isError = controller.isCellError(r, c);
-                    return Text(
-                      display,
-                      style: isError
-                          ? TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                              fontWeight: FontWeight.w500,
-                            )
-                          : null,
-                    );
-                  },
+              : FormattedCellText(
+                  text: controller.formattedValueAt(r, c),
+                  format: format,
+                  isError: controller.isCellError(r, c),
                 );
 
           final cell = Cell(
@@ -879,6 +874,8 @@ class _DataSheetViewState extends State<_DataSheetView> {
                 : SystemMouseCursors.cell,
             height: rowHeight,
             referenceColor: controller.activeRefColors[(r, c)],
+            fillColor:
+                format.fillColor == null ? null : Color(format.fillColor!),
             child: cellChild,
           );
 
