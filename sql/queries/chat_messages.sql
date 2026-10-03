@@ -1,9 +1,15 @@
 -- Chat messages (#2418). The Quark stores ciphertext and never opens it.
 
+-- CreateChatMessage stores a message. nonce is the ciphertext's first 24
+-- bytes, unique per channel and key version (#2487).
 -- name: CreateChatMessage :one
-INSERT INTO chat_messages (channel_id, author_id, key_version, ciphertext)
-VALUES (?, ?, ?, ?)
+INSERT INTO chat_messages (channel_id, author_id, key_version, ciphertext, nonce)
+VALUES (?, ?, ?, ?, ?)
 RETURNING *;
+
+-- GetChatMessageByNonce finds the message a post's nonce already names.
+-- name: GetChatMessageByNonce :one
+SELECT * FROM chat_messages WHERE channel_id = ? AND key_version = ? AND nonce = ?;
 
 -- ListChatMessagesBefore pages a channel backward from an id, newest first.
 -- name: ListChatMessagesBefore :many
