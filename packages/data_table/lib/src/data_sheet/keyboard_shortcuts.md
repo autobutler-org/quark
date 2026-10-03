@@ -46,14 +46,15 @@ The entire key binding map is customizable — developers can supply their own
 
 | Keys       | Action                                                    | Status |
 | ---------- | --------------------------------------------------------- | ------ |
-| Ctrl/Cmd+C | Copy the selection                                        | ✅     |
-| Ctrl/Cmd+X | Cut — copy then clear the selection                       | ✅     |
-| Ctrl/Cmd+V | Paste at the selection's top-left; one value fills it all | ✅     |
+| Ctrl/Cmd+C | Copy the selected range to the clipboard as TSV           | ✅     |
+| Ctrl/Cmd+X | Cut — copy the range, then clear it (one undo step)       | ✅     |
+| Ctrl/Cmd+V | Paste TSV at the range's top-left, growing the sheet      | ✅     |
 
-The clipboard is the sheet's own, not the system clipboard: a copy keeps the
-selection's raw values (formulas as written) and a paste writes them back
-unchanged, clipped at the sheet edge. Each cut, paste and clear is one undo
-step.
+The clipboard is the `DataSheetClipboard` passed to `DataSheet`, so pasting to
+and from Google Sheets and Excel works when the app backs it with the system
+clipboard. A single copied value pasted into a range fills the range, and a
+block tiles a range that is a whole number of blocks in size. While a cell is
+being edited these keys go to its text field instead.
 
 ---
 
@@ -113,9 +114,8 @@ wide fills right to its edge, so a single highlighted cell behaves as before.
   scheme is resolved each key event via `widget.controlScheme ?? DataSheetControlScheme.defaults()`.
 - `KeyboardShortcut.matches` checks `HardwareKeyboard.instance.isControlPressed || isMetaPressed`
   for the `ctrl` flag, so the same scheme works on Windows/Linux and macOS.
-- Clipboard operations keep the copied cells in the `DataSheet`'s own state and
-  write them through `DataSheetController.pasteValues`; the system clipboard is
-  not involved.
+- Clipboard operations go through `DataSheetClipboard`; the package never
+  calls the platform clipboard itself.
 - `_priorCellValue` is captured in `_activateCell` so that pressing Escape can
   restore the original value without touching undo history.
 - Structural shortcuts delegate to `DataSheetController` methods that push an

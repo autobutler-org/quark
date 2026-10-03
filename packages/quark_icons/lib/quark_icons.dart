@@ -115,6 +115,15 @@ class QuarkIcons {
   /// Fill cells rightward from the current cell.
   static const IconData fill_right = Icons.east; // clear directional arrow
 
+  /// Cut the selected cells to the clipboard.
+  static const IconData content_cut = Icons.content_cut;
+
+  /// Paste the clipboard into the selected cells.
+  static const IconData content_paste = Icons.content_paste;
+
+  /// Empty the selected cells, keeping the cells themselves.
+  static const IconData clear_range = Icons.backspace_outlined;
+
   // ── Data operations ───────────────────────────────────────────────────────────────
   static const IconData sort = Icons.sort;
   static const IconData sort_by_alpha = Icons.sort_by_alpha;
@@ -125,6 +134,10 @@ class QuarkIcons {
 
   /// Navigate to a specific cell — input/submit arrow reads as 'go to'.
   static const IconData go_to_cell = Icons.input;
+
+  // ── View ─────────────────────────────────────────────────────────────────────────
+  /// Freeze header rows and columns — a snowflake reads as "frozen".
+  static const IconData freeze_panes = Icons.ac_unit;
 
   // ── Import / Export ────────────────────────────────────────────────────────────────
   /// Export data as a CSV file.
