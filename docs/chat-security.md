@@ -188,8 +188,14 @@ it as unreadable rather than as a message. The message id and author aren't boun
 encryption, and binding the author would make a deleted account's history unreadable once its `authorId` is
 cleared.
 
-The additional data doesn't stop the Quark replaying a ciphertext within the same channel and version, reordering
-messages, or claiming a different author. Any member holding the key could also write a message that looks like
+A ciphertext's nonce is taken once per channel and key version (#2487). The Quark stores it beside the message,
+keeps it when the message is deleted, and holds it to a unique index, so a member who re-posts a ciphertext they
+have seen, deleted messages included, gets 409, however many race. The one exception is a retry: the author
+repeating their own live post byte for byte gets the stored message back with 200, and nothing new is stored or
+announced. The app encrypts each send afresh, with a new nonce, so a message typed twice is two messages.
+
+That index is the Quark's to keep, though. The additional data still doesn't stop the Quark itself replaying a
+ciphertext within the same channel and version, reordering messages, or claiming a different author. Any member holding the key could also write a message that looks like
 it came from someone else, since the key is shared. Per-message signatures would close both gaps, and are left
 for later.
 
