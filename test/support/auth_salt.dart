@@ -20,20 +20,42 @@ Future<String> testAuthKey(String password) async {
   return keys.authKey;
 }
 
+/// The recovery key the app derives from [phrase] and [testAuthSalt], as it
+/// goes on the wire.
+Future<String> testRecoveryKey(String phrase) async {
+  final keys = (await ChatCrypto.load()).deriveRecoveryKeys(
+    phrase,
+    testAuthSalt,
+    KdfParams.standard,
+  );
+  keys.dispose();
+  return keys.authKey;
+}
+
 /// A Quark's `GET /api/v0/auth/salt` (#2430) in front of [inner], which gets
 /// every other request and so records none of the salt lookups.
 ///
 /// [status] other than 200 is a Quark that has not updated: 404, or the 401
-/// it gives an unknown API path. [legacy] is an account with no auth key yet.
+/// it gives an unknown API path. [legacy] is an account with no auth key yet,
+/// and [legacyRecovery] one with no recovery key yet; null leaves the field
+/// out, as a Quark from before recovery keys does.
 class AuthSaltClient extends http.BaseClient {
   /// Fronts [inner].
-  AuthSaltClient(this.inner, {this.legacy = false, this.status = 200});
+  AuthSaltClient(
+    this.inner, {
+    this.legacy = false,
+    this.legacyRecovery,
+    this.status = 200,
+  });
 
   /// Answers everything but the salt.
   final http.Client inner;
 
   /// Whether the account is reported as having no auth key yet.
   bool legacy;
+
+  /// Whether the account is reported as having no recovery key yet.
+  bool? legacyRecovery;
 
   /// The salt endpoint's status.
   int status;
@@ -46,7 +68,11 @@ class AuthSaltClient extends http.BaseClient {
     if (request.url.path != '/api/v0/auth/salt') return inner.send(request);
     asked.add(request.url.queryParameters['username']!);
     final body = status == 200
-        ? jsonEncode({'salt': base64Encode(testAuthSalt), 'legacy': legacy})
+        ? jsonEncode({
+            'salt': base64Encode(testAuthSalt),
+            'legacy': legacy,
+            'legacyRecovery': ?legacyRecovery,
+          })
         : '{"error":"not found"}';
     return http.StreamedResponse(
       Stream.value(utf8.encode(body)),

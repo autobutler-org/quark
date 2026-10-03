@@ -11,6 +11,7 @@ import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/widgets/setup/recovery_phrase_step.dart';
 
 import '../support/auth_salt.dart';
@@ -27,7 +28,17 @@ void main() {
   );
   final stored = <String, String>{};
 
-  setUpAll(() {
+  setUpAll(() async {
+    // Loaded once outside the fake clock, so a sign-in can derive keys.
+    await ChatCrypto.load();
+    chatKeysOnSignIn =
+        ({
+          required password,
+          recoveryPhrase,
+          phraseWrapKey,
+          required sessionToken,
+          authSalt,
+        }) async => null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(secureStorage, (call) async {
           final key = call.arguments['key'] as String?;
@@ -76,16 +87,25 @@ void main() {
     authHttpClientFactory = () => sharedHttpClient;
   });
 
+  /// Signs in against a Quark that answers the sign-in with [loginBody].
+  /// With [rotation], it has a salt endpoint and answers
+  /// `PUT /auth/recovery-key` with that status; without, it is a Quark from
+  /// before #2430.
   Future<void> pumpLoginAndSignIn(
     WidgetTester tester,
-    Map<String, Object?> loginBody,
-  ) async {
+    Map<String, Object?> loginBody, {
+    int? rotation,
+  }) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     authHttpClientFactory = () => AuthSaltClient(
-      MockClient((_) async => http.Response(jsonEncode(loginBody), 200)),
-      status: 404,
+      MockClient(
+        (request) async => request.url.path == '/api/v0/auth/recovery-key'
+            ? http.Response('', rotation!)
+            : http.Response(jsonEncode(loginBody), 200),
+      ),
+      status: rotation == null ? 404 : 200,
     );
 
     final router = GoRouter(
@@ -118,6 +138,13 @@ void main() {
       'hunter2hunter2',
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    // Deriving keys needs the real event loop as well as the fake clock.
+    for (var i = 0; rotation != null && i < 20; i++) {
+      await tester.runAsync(
+        () => Future.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     await tester.pumpAndSettle();
   }
 
@@ -159,5 +186,48 @@ void main() {
     expect(find.byType(RecoveryPhraseStep), findsNothing);
     expect(settings.sessionToken, 'plain-token');
     expect(find.text('files'), findsOneWidget);
+  });
+
+  group('a phrase the Quark made is replaced (#2430):', () {
+    const serverPhrase = 'server-made-phrase';
+
+    testWidgets('the new one is shown once the Quark has taken it, and the '
+        "Quark's never is", (tester) async {
+      await pumpLoginAndSignIn(tester, {
+        'token': 'first-token',
+        'recoveryPhrase': serverPhrase,
+        'legacyRecovery': true,
+      }, rotation: 204);
+
+      final step = tester.widget<RecoveryPhraseStep>(
+        find.byType(RecoveryPhraseStep),
+      );
+      expect(step.phrase.split('-'), hasLength(6));
+      expect(step.phrase, isNot(serverPhrase));
+      expect(find.textContaining(serverPhrase), findsNothing);
+      expect(settings.sessionToken, isNull);
+
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+      await tester.pumpAndSettle();
+      expect(settings.sessionToken, 'first-token');
+      expect(find.text('files'), findsOneWidget);
+    });
+
+    for (final serverMade in [true, false]) {
+      testWidgets('a rotation the Quark refused shows nothing and signs in'
+          '${serverMade ? ', even on a first sign-in' : ''}', (tester) async {
+        await pumpLoginAndSignIn(tester, {
+          'token': 'plain-token',
+          if (serverMade) 'recoveryPhrase': serverPhrase,
+          'legacyRecovery': true,
+        }, rotation: 403);
+
+        expect(find.byType(RecoveryPhraseStep), findsNothing);
+        expect(settings.sessionToken, 'plain-token');
+        expect(find.text('files'), findsOneWidget);
+      });
+    }
   });
 }

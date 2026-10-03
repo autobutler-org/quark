@@ -44,7 +44,12 @@ enum AuthSecretUse {
 /// password: they throw [Errors.passwordDowngradeRefused], since a Quark that
 /// was tampered with could claim either to collect it.
 class AuthSecret {
-  const AuthSecret._({this.password, this.authKey, this.salt});
+  const AuthSecret._({
+    this.password,
+    this.authKey,
+    this.salt,
+    this.legacyRecovery,
+  });
 
   /// The raw password, when this request still has to carry it.
   final String? password;
@@ -55,6 +60,11 @@ class AuthSecret {
   /// The salt [authKey] was derived with, which the chat keys' password wrap
   /// is derived with too. Null when the Quark has no salt endpoint.
   final Uint8List? salt;
+
+  /// What the salt endpoint said of the account's recovery phrase: true for
+  /// no recovery key yet, false for one, null when it did not say, as a Quark
+  /// from before recovery keys does not (#2430).
+  final bool? legacyRecovery;
 
   /// What goes in a re-confirmation's `password` field, which takes either.
   String get confirmation => password ?? authKey!;
@@ -96,6 +106,7 @@ class AuthSecret {
       password: sendsPassword ? password : null,
       authKey: keys.authKey,
       salt: answer.salt,
+      legacyRecovery: answer.legacyRecovery,
     );
   }
 

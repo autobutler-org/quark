@@ -25,10 +25,17 @@ class _FakeQuark {
     stored = keys;
   }
 
+  /// The recovery key the last recovery fetch carried, if any.
+  String? recoveryKey;
+
   Future<WrappedChatKeys?> fetchForRecovery({
     required String username,
-    required String recoveryPhrase,
-  }) async => stored;
+    String? recoveryPhrase,
+    String? recoveryKey,
+  }) async {
+    this.recoveryKey = recoveryKey;
+    return stored;
+  }
 
   /// What `/auth/recover` does with the keys it was sent.
   void recover(WrappedChatKeys keys) => stored = keys;
@@ -307,6 +314,148 @@ void main() {
 
       expect(quark.puts, 1);
       expect(quark.stored!.kdfParams.alg, KdfParams.algorithm);
+    });
+
+    group('a phrase the app generated', () {
+      late AuthKeys phrase;
+      setUp(() {
+        phrase = crypto.deriveRecoveryKeys('apple-bread-cloud', salt, _cheap);
+      });
+      tearDown(() => phrase.dispose());
+
+      test('new keys are uploaded with their phrase wrap under it', () async {
+        final keys = controller();
+        final sent = await keys.signedIn(
+          password: 'pw-one',
+          phraseWrapKey: phrase.wrapKey,
+          authSalt: salt,
+        );
+
+        final stored = quark.stored!;
+        expect(sent!.toJson(), stored.toJson());
+        expect(stored.kdfParams.alg, KdfParams.phraseSplitAlgorithm);
+        expect(stored.kdfParams.isSplit, isTrue);
+        expect(stored.byPhrase!.salt, salt);
+        expect(
+          crypto.unwrapWithKey(stored.byPhrase!, phrase.wrapKey).seeds,
+          keys.identity!.seeds,
+        );
+        // Not Argon2id of the phrase used directly.
+        expect(
+          () => crypto.unwrap(
+            stored.byPhrase!,
+            'apple-bread-cloud',
+            stored.kdfParams,
+          ),
+          throwsA(isA<MessageException>()),
+        );
+        // The password wrap still opens through the local unlock.
+        await controller(persist: false).unlock('pw-one');
+      });
+
+      test('stored keys come back re-wrapped under it, and are not '
+          'uploaded', () async {
+        await controller().signedIn(
+          password: 'pw-one',
+          recoveryPhrase: 'old phrase',
+          authSalt: salt,
+        );
+        final before = quark.stored!;
+        final puts = quark.puts;
+
+        final keys = controller();
+        final sent = await keys.signedIn(
+          password: 'pw-one',
+          phraseWrapKey: phrase.wrapKey,
+          authSalt: salt,
+        );
+
+        expect(quark.puts, puts);
+        expect(quark.stored!.toJson(), before.toJson());
+        expect(sent!.kdfParams.alg, KdfParams.phraseSplitAlgorithm);
+        expect(sent.byPassword.wrapped, before.byPassword.wrapped);
+        expect(sent.publicKeys.boxPublicKey, keys.identity!.box.publicKey);
+        expect(
+          crypto.unwrapWithKey(sent.byPhrase!, phrase.wrapKey).seeds,
+          keys.identity!.seeds,
+        );
+      });
+
+      test('without it a sign-in returns nothing to send', () async {
+        expect(
+          await controller().signedIn(password: 'pw-one', authSalt: salt),
+          isNull,
+        );
+      });
+
+      test('recovery fetches by key, opens under it, and keeps it', () async {
+        final first = controller();
+        await first.signedIn(
+          password: 'pw-one',
+          phraseWrapKey: phrase.wrapKey,
+          authSalt: salt,
+        );
+        final box = first.identity!.box.publicKey;
+
+        final rewrapped = await controller().keysForRecovery(
+          username: 'grace',
+          recoveryPhrase: 'Apple-Bread-Cloud',
+          recoveryKeys: phrase,
+          newPassword: 'pw-two',
+          authSalt: salt,
+        );
+
+        expect(quark.recoveryKey, phrase.authKey);
+        expect(rewrapped.publicKeys.boxPublicKey, box);
+        expect(rewrapped.kdfParams.alg, KdfParams.phraseSplitAlgorithm);
+        expect(
+          crypto
+              .unwrapWithKey(rewrapped.byPhrase!, phrase.wrapKey)
+              .box
+              .publicKey,
+          box,
+        );
+        // Without the keys handed in, the phrase derives them itself.
+        quark.recover(rewrapped);
+        final again = await controller().keysForRecovery(
+          username: 'grace',
+          recoveryPhrase: 'apple-bread-cloud',
+          newPassword: 'pw-three',
+          authSalt: salt,
+        );
+        expect(quark.recoveryKey, isNull);
+        expect(again.publicKeys.boxPublicKey, box);
+      });
+
+      test('an old-scheme phrase wrap still opens, and moves to a new '
+          'phrase', () async {
+        final first = controller();
+        await first.signedIn(
+          password: 'pw-one',
+          recoveryPhrase: 'old phrase',
+          authSalt: salt,
+        );
+        expect(quark.stored!.kdfParams.isPhraseSplit, isFalse);
+        final box = first.identity!.box.publicKey;
+
+        final rewrapped = await controller().keysForRecovery(
+          username: 'grace',
+          recoveryPhrase: 'Old Phrase',
+          newPhraseWrapKey: phrase.wrapKey,
+          newPassword: 'pw-two',
+          authSalt: salt,
+        );
+
+        expect(rewrapped.publicKeys.boxPublicKey, box);
+        expect(rewrapped.kdfParams.alg, KdfParams.phraseSplitAlgorithm);
+        expect(
+          crypto
+              .unwrapWithKey(rewrapped.byPhrase!, phrase.wrapKey)
+              .box
+              .publicKey,
+          box,
+        );
+      });
     });
 
     test('an unknown scheme is refused, not guessed at', () {

@@ -135,25 +135,41 @@ void main() {
 
   group('requesting an account', () {
     test('sends the request and returns the recovery phrase', () async {
-      final client = serve(201, {'recoveryPhrase': 'apple banana cherry'});
+      final client = serve(201, <String, Object>{});
 
       final phrase = await AuthService.requestAccount(
         username: 'bob',
         password: 'hunter2hunter2',
       );
 
-      expect(phrase, 'apple banana cherry');
       final request = client.requests.single;
       expect(request.method, 'POST');
       expect(request.url.path, '/api/v0/auth/request-account');
-      // #2430: the auth key derived from the password, never the password.
+      // #2430: the auth key derived from the password, never the password,
+      // and the recovery key of a phrase the app made, never the phrase.
+      expect(phrase.split('-'), hasLength(6));
       expect(jsonDecode(request.body), {
         'username': 'bob',
         'authKey': await testAuthKey('hunter2hunter2'),
+        'recoveryKey': await testRecoveryKey(phrase),
       });
       // An admin approves the account before it can sign in.
       expect(settings.sessionToken, isNull);
     });
+
+    test(
+      'a Quark that makes its own phrase anyway has that one shown',
+      () async {
+        serve(201, {'recoveryPhrase': 'apple banana cherry'});
+
+        final phrase = await AuthService.requestAccount(
+          username: 'bob',
+          password: 'hunter2hunter2',
+        );
+
+        expect(phrase, 'apple banana cherry');
+      },
+    );
 
     test('a Quark not taking requests says so', () async {
       serve(404, {'error': "this Quark isn't taking account requests"});
