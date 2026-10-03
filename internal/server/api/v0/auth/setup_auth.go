@@ -3,6 +3,7 @@ package v0_auth
 import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
@@ -10,11 +11,11 @@ import (
 
 // setupAuth godoc
 // @Summary First-boot user setup
-// @Description Creates the owner account, with a home under users/ on the internal device that it owns; an existing folder of that name under users/ becomes the home. Can only be called once.
+// @Description Creates the owner account, with a home under users/ on the internal device that it owns; an existing folder of that name under users/ becomes the home. Can only be called once. The body carries exactly one of password and authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned.
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param body body object true "{username, password}"
+// @Param body body credentialsBody true "The username with a password or an authKey"
 // @Success 200 {object} object
 // @Failure 400 {object} serverutil.Response
 // @Router /auth/setup [post]
@@ -24,10 +25,7 @@ func setupAuth(c *gin.Context) *serverutil.Response {
 		return serverutil.InternalServerError(nil)
 	}
 
-	var req struct {
-		Username string `json:"username" binding:"required"`
-		Password string `json:"password" binding:"required"`
-	}
+	var req credentialsBody
 	if err := c.ShouldBindJSON(&req); err != nil {
 		return serverutil.BadRequest(err)
 	}
@@ -38,10 +36,12 @@ func setupAuth(c *gin.Context) *serverutil.Response {
 	}
 
 	result, err := authutil.Setup(c.Request.Context(), authutil.SetupParams{
-		Database: (*deps).Database(),
-		Username: req.Username,
-		Password: req.Password,
-		FilesDir: filesDir,
+		Database:   (*deps).Database(),
+		Username:   req.Username,
+		Password:   req.Password,
+		AuthKey:    req.AuthKey,
+		SaltSecret: settingsutil.AuthSaltSecret,
+		FilesDir:   filesDir,
 	})
 	if err != nil {
 		return serverutil.BadRequest(err)

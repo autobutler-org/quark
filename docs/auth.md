@@ -36,6 +36,45 @@ curl -X POST http://localhost:8080/api/v0/auth/login \
 
 Returns a session token. Sessions last 30 days.
 
+### Signing in without sending the password
+
+A client does not have to send the password itself. It can derive a 32-byte **auth key** from the password and a
+per-account salt, and send that instead. Ask for the salt first; this needs no session:
+
+```bash
+curl 'http://localhost:8080/api/v0/auth/salt?username=you'
+```
+
+```json
+{ "salt": "3q2+7wAAAAAAAAAAAAAAAA==", "legacy": true }
+```
+
+`salt` is the standard base64 of 16 bytes. A username with no account gets a salt too, the same one every time, so
+the answer does not say whether the account exists. `legacy` is `true` for an account that has no auth key yet.
+
+`POST /api/v0/auth/login` then takes one of three bodies. `authKey` is the standard base64 of exactly 32 bytes;
+anything else is a 400.
+
+| Body                            | What it does                                                                        |
+| ------------------------------- | ----------------------------------------------------------------------------------- |
+| `{username, password}`          | Checks the password, as above.                                                      |
+| `{username, authKey}`           | Checks the auth key. An account that has none yet answers 401, like a wrong password. |
+| `{username, password, authKey}` | Checks the password and, if the account has no auth key yet, stores this one.       |
+
+The third body is how a `legacy` account is upgraded. The account keeps its password, so a client that still sends
+`{username, password}` keeps signing in.
+
+```bash
+curl -X POST http://localhost:8080/api/v0/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "you", "authKey": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="}'
+```
+
+`/auth/setup`, `/auth/request-account` and `POST /admin/users` take `authKey` in place of `password`, and
+`/auth/recover` takes `newAuthKey` in place of `newPassword`: exactly one of the two, never both. An account made
+with an auth key has no password to sign in with. Wherever an action asks for the password again, or a request uses
+HTTP Basic, a client that signs in with an auth key sends that key as the password.
+
 ## Using the token
 
 Pass it as a Bearer token:
@@ -63,10 +102,13 @@ Use your recovery phrase:
 ```bash
 curl -X POST http://localhost:8080/api/v0/auth/recover \
   -H "Content-Type: application/json" \
-  -d '{"recoveryPhrase": "wagon-river-flame-orbit-cedar-stone", "newPassword": "new-password"}'
+  -d '{"username": "you", "recoveryPhrase": "wagon-river-flame-orbit-cedar-stone", "newPassword": "new-password"}'
 ```
 
 This resets your password, invalidates all existing sessions, and gives you a fresh token. Your recovery phrase stays the same.
+
+A recovery replaces both ways of signing in. `newPassword` clears the account's auth key, which was derived from the
+old password; `newAuthKey` clears its password.
 
 ## Check setup status
 

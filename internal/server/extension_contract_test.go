@@ -3,10 +3,12 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/autobutler-org/quark/internal/server/middleware"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/autobutler-org/quark/pkg/util/vaultcrypto"
 	"github.com/autobutler-org/quark/pkg/util/vaultutil"
 	"github.com/gin-gonic/gin"
@@ -27,6 +30,8 @@ import (
 // needs a matching change in the extension.
 func TestExtensionContract(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	settingsutil.ResetForTesting(filepath.Join(t.TempDir(), "settings.json"))
+	t.Cleanup(func() { settingsutil.ResetForTesting("") })
 	ctx := context.Background()
 
 	database := dbtest.NewDB(t)
@@ -108,6 +113,20 @@ func TestExtensionContract(t *testing.T) {
 		t.Errorf("refusal status = %q, want %q", status, authutil.StatusPending)
 	}
 	expectString(t, "refusal error", body, "error")
+
+	// The auth key sign-in the extension moves to (#2430): the salt, an
+	// upgrade carrying both credentials, then the key alone.
+	code, body = do(http.MethodGet, "/api/v0/auth/salt?username=admin", "", nil)
+	expectStatus(t, "salt", code, http.StatusOK)
+	expectString(t, "salt", body, "salt")
+	expectBool(t, "salt legacy", body, "legacy")
+
+	authKey := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
+	code, _ = do(http.MethodPost, "/api/v0/auth/login", "", map[string]string{"username": "admin", "password": "admin-password", "authKey": authKey})
+	expectStatus(t, "login upgrade", code, http.StatusOK)
+	code, body = do(http.MethodPost, "/api/v0/auth/login", "", map[string]string{"username": "admin", "authKey": authKey})
+	expectStatus(t, "login with an auth key", code, http.StatusOK)
+	expectString(t, "auth key login token", body, "token")
 
 	code, body = do(http.MethodGet, "/api/v0/vault/status", "", nil)
 	expectStatus(t, "vault status without a token", code, http.StatusUnauthorized)

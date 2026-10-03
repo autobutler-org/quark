@@ -27,6 +27,7 @@ import (
 // authRateLimitedPaths are the API paths that require rate limiting.
 var authRateLimitedPaths = map[string]bool{
 	"/api/v0/auth/login":           true,
+	"/api/v0/auth/salt":            true,
 	"/api/v0/auth/setup":           true,
 	"/api/v0/auth/recover":         true,
 	"/api/v0/auth/recover/keys":    true,
@@ -111,6 +112,7 @@ var downloadTokenPaths = map[string]bool{
 var authExemptPaths = map[string]bool{
 	"/api/v0/auth/setup":           true,
 	"/api/v0/auth/login":           true,
+	"/api/v0/auth/salt":            true,
 	"/api/v0/auth/recover":         true,
 	"/api/v0/auth/recover/keys":    true,
 	"/api/v0/auth/request-account": true,
