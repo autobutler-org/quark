@@ -942,7 +942,9 @@ void main() {
           ),
           GoRoute(
             path: AppRoutes.files,
-            builder: (_, _) => const Text('files'),
+            // A Scaffold like the real page: refusing an admin-only page
+            // explains itself in a snack bar over Files (#2477).
+            builder: (_, _) => const Scaffold(body: Text('files')),
           ),
           GoRoute(
             path: AppRoutes.login,

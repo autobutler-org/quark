@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
+import 'package:quark/widgets/login/back_to_sign_in.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/utils/connection_error.dart';
@@ -162,65 +163,69 @@ class _SetupPageState extends State<SetupPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: _showThemeStep
-                  ? ThemeStep(onContinue: widget.onSetupComplete)
-                  : _recoveryPhrase != null
-                  ? RecoveryPhraseStep(
-                      phrase: _recoveryPhrase!,
-                      acknowledged: _phraseAcknowledged,
-                      onAcknowledgedChanged: (v) =>
-                          setState(() => _phraseAcknowledged = v ?? false),
-                      onContinue: _confirmPhraseAndProceed,
-                    )
-                  : SetupForm(
-                      formKey: _formKey,
-                      usernameController: _usernameController,
-                      passwordController: _passwordController,
-                      confirmController: _confirmController,
-                      usernameFocus: _usernameFocus,
-                      passwordFocus: _passwordFocus,
-                      confirmFocus: _confirmFocus,
-                      obscurePassword: _obscurePassword,
-                      obscureConfirm: _obscureConfirm,
-                      loading: _loading,
-                      error: _error,
-                      onTogglePassword: () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
-                      onToggleConfirm: () =>
-                          setState(() => _obscureConfirm = !_obscureConfirm),
-                      onSubmit: _submit,
-                      // The same switcher and banner as the login page, in
-                      // the same place: under the heading, above the fields.
-                      header: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          HostSwitcher(
-                            managingHosts: _managingHosts,
-                            onToggleManagingHosts: () => setState(
-                              () => _managingHosts = !_managingHosts,
+    return BackToSignIn(
+      enabled: !_showThemeStep && _recoveryPhrase == null,
+      child: Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: _showThemeStep
+                    ? ThemeStep(onContinue: widget.onSetupComplete)
+                    : _recoveryPhrase != null
+                    ? RecoveryPhraseStep(
+                        phrase: _recoveryPhrase!,
+                        acknowledged: _phraseAcknowledged,
+                        onAcknowledgedChanged: (v) =>
+                            setState(() => _phraseAcknowledged = v ?? false),
+                        onContinue: _confirmPhraseAndProceed,
+                      )
+                    : SetupForm(
+                        formKey: _formKey,
+                        usernameController: _usernameController,
+                        passwordController: _passwordController,
+                        confirmController: _confirmController,
+                        usernameFocus: _usernameFocus,
+                        passwordFocus: _passwordFocus,
+                        confirmFocus: _confirmFocus,
+                        obscurePassword: _obscurePassword,
+                        obscureConfirm: _obscureConfirm,
+                        loading: _loading,
+                        error: _error,
+                        onTogglePassword: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                        onToggleConfirm: () =>
+                            setState(() => _obscureConfirm = !_obscureConfirm),
+                        onSubmit: _submit,
+                        // The same switcher and banner as the login page, in
+                        // the same place: under the heading, above the fields.
+                        header: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            HostSwitcher(
+                              managingHosts: _managingHosts,
+                              onToggleManagingHosts: () => setState(
+                                () => _managingHosts = !_managingHosts,
+                              ),
+                              onHostsChanged: () {
+                                if (mounted) setState(() {});
+                              },
                             ),
-                            onHostsChanged: () {
-                              if (mounted) setState(() {});
-                            },
-                          ),
-                          const SizedBox(height: 24),
-                          if (_retry != null) ...[
-                            QuarkDisconnectedBanner(
-                              onRetry: _loading ? null : _retry,
-                            ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 24),
+                            if (_retry != null) ...[
+                              QuarkDisconnectedBanner(
+                                onRetry: _loading ? null : _retry,
+                              ),
+                              const SizedBox(height: 16),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
+              ),
             ),
           ),
         ),

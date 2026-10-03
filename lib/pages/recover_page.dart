@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
+import 'package:quark/widgets/login/back_to_sign_in.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/error_banner.dart';
@@ -91,193 +92,197 @@ class _RecoverPageState extends State<RecoverPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Recover account'),
-        actions: const [AppThemeToggle()],
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Icon(
-                      QuarkIcons.key_rounded,
-                      size: 48,
-                      color: theme.colorScheme.primary,
-                      semanticLabel: 'Recovery',
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Reset your password',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
+    return BackToSignIn(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Recover account'),
+          actions: const [AppThemeToggle()],
+        ),
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Icon(
+                        QuarkIcons.key_rounded,
+                        size: 48,
+                        color: theme.colorScheme.primary,
+                        semanticLabel: 'Recovery',
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Enter your username and recovery phrase, then choose a new password.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.6,
+                      const SizedBox(height: 12),
+                      Text(
+                        'Reset your password',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
                         ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Enter your username and recovery phrase, then choose a new password.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
 
-                    if (_error != null) ...[
-                      ErrorBanner(message: _error!),
+                      if (_error != null) ...[
+                        ErrorBanner(message: _error!),
+                        const SizedBox(height: 16),
+                      ],
+
+                      TextFormField(
+                        controller: _usernameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Username',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(QuarkIcons.person_outline),
+                        ),
+                        textInputAction: TextInputAction.next,
+                        autocorrect: false,
+                        autofillHints: const [AutofillHints.username],
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Username is required'
+                            : null,
+                      ),
                       const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _phraseController,
+                        decoration: const InputDecoration(
+                          labelText: 'Recovery phrase',
+                          hintText: 'word-word-word-word-word-word',
+                          // The phrase was last seen at setup, an account
+                          // request, or a first sign-in, possibly months ago
+                          // (#2034).
+                          helperText:
+                              'The 6 words Quark showed once when your account '
+                              'was set up, joined by hyphens, in the same order.',
+                          helperMaxLines: 3,
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(QuarkIcons.key_outlined),
+                        ),
+                        textInputAction: TextInputAction.next,
+                        autocorrect: false,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Recovery phrase is required'
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          labelText: 'New password',
+                          helperText: 'At least 8 characters',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(QuarkIcons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? QuarkIcons.visibility_outlined
+                                  : QuarkIcons.visibility_off_outlined,
+                            ),
+                            tooltip: _obscurePassword
+                                ? 'Show password'
+                                : 'Hide password',
+                            onPressed: () {
+                              setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              );
+                            },
+                          ),
+                        ),
+                        textInputAction: TextInputAction.next,
+                        autofillHints: const [AutofillHints.newPassword],
+                        validator: (v) {
+                          if (v == null || v.isEmpty) {
+                            return 'Password is required';
+                          }
+                          if (v.length < 8) {
+                            return 'Password must be at least 8 characters';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      // The same meter the setup form shows. Choosing a password
+                      // here is the same decision it is there, and it was the
+                      // one place in the app that asked for one without saying
+                      // how strong it was (#2031). Listening here, rather than
+                      // setState on the page, keeps the field from rebuilding
+                      // on each character (#2021).
+                      ListenableBuilder(
+                        listenable: _passwordController,
+                        builder: (context, _) => PasswordStrengthBar(
+                          password: _passwordController.text,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      TextFormField(
+                        controller: _confirmController,
+                        obscureText: _obscureConfirm,
+                        decoration: InputDecoration(
+                          labelText: 'Confirm new password',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(QuarkIcons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirm
+                                  ? QuarkIcons.visibility_outlined
+                                  : QuarkIcons.visibility_off_outlined,
+                            ),
+                            tooltip: _obscureConfirm
+                                ? 'Show password'
+                                : 'Hide password',
+                            onPressed: () {
+                              setState(
+                                () => _obscureConfirm = !_obscureConfirm,
+                              );
+                            },
+                          ),
+                        ),
+                        textInputAction: TextInputAction.done,
+                        autofillHints: const [AutofillHints.newPassword],
+                        onFieldSubmitted: (_) => _loading ? null : _submit(),
+                        validator: (v) {
+                          if (v == null || v.isEmpty) {
+                            return 'Please confirm your password';
+                          }
+                          if (v != _passwordController.text) {
+                            return 'Passwords do not match';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 24),
+
+                      FilledButton(
+                        onPressed: _loading ? null : _submit,
+                        child: _loading
+                            ? const QuarkLoader(size: 20)
+                            : const Text('Reset password'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        key: const ValueKey('recover_back'),
+                        onPressed: _loading ? null : _backToSignIn,
+                        child: const Text('Back to sign in'),
+                      ),
                     ],
-
-                    TextFormField(
-                      controller: _usernameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Username',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(QuarkIcons.person_outline),
-                      ),
-                      textInputAction: TextInputAction.next,
-                      autocorrect: false,
-                      autofillHints: const [AutofillHints.username],
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Username is required'
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    TextFormField(
-                      controller: _phraseController,
-                      decoration: const InputDecoration(
-                        labelText: 'Recovery phrase',
-                        hintText: 'word-word-word-word-word-word',
-                        // The phrase was last seen at setup, an account
-                        // request, or a first sign-in, possibly months ago
-                        // (#2034).
-                        helperText:
-                            'The 6 words Quark showed once when your account '
-                            'was set up, joined by hyphens, in the same order.',
-                        helperMaxLines: 3,
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(QuarkIcons.key_outlined),
-                      ),
-                      textInputAction: TextInputAction.next,
-                      autocorrect: false,
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Recovery phrase is required'
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'New password',
-                        helperText: 'At least 8 characters',
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(QuarkIcons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? QuarkIcons.visibility_outlined
-                                : QuarkIcons.visibility_off_outlined,
-                          ),
-                          tooltip: _obscurePassword
-                              ? 'Show password'
-                              : 'Hide password',
-                          onPressed: () {
-                            setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            );
-                          },
-                        ),
-                      ),
-                      textInputAction: TextInputAction.next,
-                      autofillHints: const [AutofillHints.newPassword],
-                      validator: (v) {
-                        if (v == null || v.isEmpty) {
-                          return 'Password is required';
-                        }
-                        if (v.length < 8) {
-                          return 'Password must be at least 8 characters';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    // The same meter the setup form shows. Choosing a password
-                    // here is the same decision it is there, and it was the
-                    // one place in the app that asked for one without saying
-                    // how strong it was (#2031). Listening here, rather than
-                    // setState on the page, keeps the field from rebuilding
-                    // on each character (#2021).
-                    ListenableBuilder(
-                      listenable: _passwordController,
-                      builder: (context, _) => PasswordStrengthBar(
-                        password: _passwordController.text,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    TextFormField(
-                      controller: _confirmController,
-                      obscureText: _obscureConfirm,
-                      decoration: InputDecoration(
-                        labelText: 'Confirm new password',
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(QuarkIcons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscureConfirm
-                                ? QuarkIcons.visibility_outlined
-                                : QuarkIcons.visibility_off_outlined,
-                          ),
-                          tooltip: _obscureConfirm
-                              ? 'Show password'
-                              : 'Hide password',
-                          onPressed: () {
-                            setState(() => _obscureConfirm = !_obscureConfirm);
-                          },
-                        ),
-                      ),
-                      textInputAction: TextInputAction.done,
-                      autofillHints: const [AutofillHints.newPassword],
-                      onFieldSubmitted: (_) => _loading ? null : _submit(),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) {
-                          return 'Please confirm your password';
-                        }
-                        if (v != _passwordController.text) {
-                          return 'Passwords do not match';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 24),
-
-                    FilledButton(
-                      onPressed: _loading ? null : _submit,
-                      child: _loading
-                          ? const QuarkLoader(size: 20)
-                          : const Text('Reset password'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      key: const ValueKey('recover_back'),
-                      onPressed: _loading ? null : _backToSignIn,
-                      child: const Text('Back to sign in'),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),

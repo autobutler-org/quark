@@ -212,6 +212,12 @@ abstract final class Errors {
   /// this is what they read in the meantime.
   static const String sessionExpired = 'Your session expired. Sign in again.';
 
+  /// Opening an admin-only page — Users, the vault, Features — as someone
+  /// who is not an admin. The router sends them to Files and says this, so
+  /// following an admin's link does not just land them there unexplained
+  /// (#2477).
+  static const String adminOnly = 'Only an admin can open that page.';
+
   /// Removing, turning off or deleting the only active admin, which the Quark
   /// refuses with a 409.
   static const String lastAdmin =
