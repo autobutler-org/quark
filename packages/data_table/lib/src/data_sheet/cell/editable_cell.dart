@@ -12,7 +12,10 @@ import 'package:flutter/material.dart'
         TextAlignVertical,
         TextField;
 
-/// The text field shown in a cell while it is being edited.
+import '../formula/formula_autocomplete.dart';
+
+/// The text field shown in a cell while it is being edited, with function autocomplete ([FormulaAutocomplete])
+/// while it holds a formula.
 class EditableCell extends StatelessWidget {
   final TextEditingController controller;
   final void Function(String) onSubmitted;
@@ -29,24 +32,27 @@ class EditableCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      autofocus: true,
+    return FormulaAutocomplete(
       controller: controller,
-      decoration: const InputDecoration(
-        contentPadding: EdgeInsets.symmetric(horizontal: 8),
-        border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        isDense: false,
-        filled: false,
+      child: TextField(
+        autofocus: true,
+        controller: controller,
+        decoration: const InputDecoration(
+          contentPadding: EdgeInsets.symmetric(horizontal: 8),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          isDense: false,
+          filled: false,
+        ),
+        textAlignVertical: TextAlignVertical.center,
+        expands: true,
+        maxLines: null,
+        minLines: null,
+        onSubmitted: onSubmitted,
+        onEditingComplete: onEditingComplete,
+        onTapOutside: onTapOutside,
       ),
-      textAlignVertical: TextAlignVertical.center,
-      expands: true,
-      maxLines: null,
-      minLines: null,
-      onSubmitted: onSubmitted,
-      onEditingComplete: onEditingComplete,
-      onTapOutside: onTapOutside,
     );
   }
 }

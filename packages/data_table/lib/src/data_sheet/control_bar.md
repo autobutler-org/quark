@@ -139,7 +139,22 @@ to memory where the browser blocks the clipboard.
 
 ## Advanced Data Features
 
-- 🔜 Formula bar / expression evaluation
+- ✅ Formula bar / expression evaluation — `DataSheetFormulaBar` (name box + fx field) over `quark_formula`; cells
+  starting with `=` evaluate, and the cell editor and the bar edit the same text
+- ✅ Function autocomplete — typing a name after `=`, an operator, `(` or `,` lists the matching built-ins from
+  `quark_formula`'s `builtinRegistry` (signature and one-line description each, `formula_suggestion_<NAME>`) under the
+  cell editor or the bar. Up/Down move, Tab or Enter accepts and writes `NAME(`, Escape closes the list, a tap
+  accepts. `functionQueryAt` / `acceptFunction` hold the text logic
+- ✅ Reference picking — while a formula is edited (in the cell or the bar), clicking a cell writes `B2` at the caret
+  and dragging writes `B2:D9` (long-press first on touch); a pick straight after replaces it. Where no reference fits
+  the caret (after a value), the click commits the edit and moves the selection as usual. `pickReference` holds the
+  text logic
+- ✅ Reference colors — each reference's text in the cell editor and the bar, and the outline of the cells it names,
+  share one color (`formulaReferences`, `FormulaTextEditingController`, `activeRefColors`). With no edit in progress
+  the selected formula cell's references are outlined
+- ✅ Error display — a formula error shows as a chip (`r<row>c<col>_error`) with its code (`#DIV/0!`, `#REF!`, `#NAME?`,
+  `#VALUE!`); its tooltip and semantics label carry the reason, and selecting the cell spells the reason out under the
+  formula bar (`data_sheet_formula_error`). `errorAt(row, col)` returns the `ErrorValue`
 - 🔜 Per-cell validation rules
 
 ## UX / Accessibility

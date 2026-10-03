@@ -42,8 +42,12 @@ class DataSheetInterpreter {
         if (!raw.startsWith('=')) continue;
         try {
           parsedFormulas[(r, c)] = parseTokens(lex(raw));
-        } catch (e) {
-          parseErrors[(r, c)] = valueError('Parse error: $e');
+        } on LexError catch (e) {
+          parseErrors[(r, c)] = valueError(
+            "Couldn't read the formula: ${e.message}",
+          );
+        } catch (_) {
+          parseErrors[(r, c)] = valueError("Couldn't read the formula");
         }
       }
     }
