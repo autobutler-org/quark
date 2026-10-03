@@ -509,6 +509,65 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // #2501: the dialog asks who can see the channel, private by default.
+    testWidgets('creates a channel for everyone ($label)', (tester) async {
+      final (r, fake) = await pumpChat(tester, size);
+
+      await tapKey(tester, 'chat_new_channel');
+      await tester.enterText(
+        find.byKey(const ValueKey('channel_dialog_name')),
+        'design',
+      );
+      await tester.pump();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('channel_dialog_public')),
+      );
+      await tapKey(tester, 'channel_dialog_public');
+      await tapKey(tester, 'channel_dialog_submit');
+
+      expect(fake.calls, [
+        'create design ""',
+        'ensure keys 12',
+        'principals',
+        'set 12 user=null group=1 Member',
+        'sign 43 user=null $memberSet',
+      ]);
+      expect(at(r), '/chat/12');
+      expect(tester.takeException(), isNull);
+    });
+
+    // #2497: one flow from the top bar to a private channel with them.
+    testWidgets('messages someone in a private channel ($label)', (
+      tester,
+    ) async {
+      final (r, fake) = await pumpChat(tester, size);
+
+      await tapKey(tester, 'chat_message_someone');
+      expect(find.byType(QuarkStartConversationDialog), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('principal_option_user_7')),
+        findsNothing,
+        reason: 'not yourself',
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('principal_option_user_8')),
+      );
+      await tapKey(tester, 'principal_option_user_8');
+      await tapKey(tester, 'start_conversation_submit');
+
+      expect(fake.calls, [
+        'principals',
+        'create ada, bob ""',
+        'ensure keys 12',
+        'set 12 user=8 group=null Member',
+        'sign 43 user=8 $memberSet',
+      ]);
+      expect(find.byType(QuarkStartConversationDialog), findsNothing);
+      expect(at(r), '/chat/12');
+      expect(find.text('# ada, bob'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('a taken name keeps the dialog open ($label)', (tester) async {
       final (r, fake) = await pumpChat(tester, size);
       fake.failWith = const ApiException(409);

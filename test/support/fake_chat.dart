@@ -7,6 +7,7 @@ import 'package:quark/controllers/chat_messages_controller.dart';
 import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
+import 'package:quark/models/path_grant.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -109,7 +110,10 @@ class FakeChat {
     this.otherChannels = const [],
     this.isAdmin = false,
     this.unlocked = true,
-  }) : channels = [...(channels ?? fakeChannels)] {
+  }) : channels = [...(channels ?? fakeChannels)],
+       members =
+           members ??
+           [ChatMember(userId: 7, name: 'ada', permissions: ownerSet)] {
     controller = ChatController(
       listChannels: () async => this.channels,
       listAllChannels: () async {
@@ -162,9 +166,24 @@ class FakeChat {
       },
       signMemberChange: (event, {userId, groupId, permissions}) async =>
           calls.add('sign ${event?.id} user=$userId $permissions'),
-      listMembers: (_) async =>
-          members ??
-          [ChatMember(userId: 7, name: 'ada', permissions: ownerSet)],
+      listMembers: (_) async {
+        memberLoads++;
+        return this.members;
+      },
+      setMember: (id, {userId, groupId, required permissions}) async {
+        calls.add(
+          'set $id user=$userId group=$groupId '
+          '${ChatPermissionPreset.labelOf(permissions)}',
+        );
+        final error = setFailWith;
+        if (error != null) throw error;
+        return (members: this.members, event: setEvent);
+      },
+      loadPrincipals: () async {
+        calls.add('principals');
+        _fail();
+        return principals;
+      },
       messagesFor: (id) =>
           opened[id] = FakeChatMessages(id)
             ..fakeEntries = entries[id] ?? const [],
@@ -189,6 +208,36 @@ class FakeChat {
   /// them to change what the account may do, then fire
   /// `chat_channel_changed`.
   List<ChatChannel> channels;
+
+  /// The open channel's members, as the Quark holds them.
+  List<ChatMember> members;
+
+  /// How many times the members were listed.
+  int memberLoads = 0;
+
+  /// Who the Quark offers to share with: `everyone` and ada (7), bob (8) and
+  /// cy (9).
+  SharePrincipals principals = const SharePrincipals(
+    users: [
+      (id: 7, username: 'ada'),
+      (id: 8, username: 'bob'),
+      (id: 9, username: 'cy'),
+    ],
+    groups: [(id: 1, name: 'everyone', builtin: true)],
+  );
+
+  /// What every member change throws while set.
+  Object? setFailWith;
+
+  /// The event a member change answers with.
+  ChatChannelEvent? setEvent = ChatChannelEvent(
+    id: 43,
+    channelId: 12,
+    kind: ChatChannelEvent.memberSet,
+    actorId: 7,
+    payload: '{}',
+    createdAt: DateTime.utc(2026, 9, 25),
+  );
 
   /// The controller under test.
   late final ChatController controller;

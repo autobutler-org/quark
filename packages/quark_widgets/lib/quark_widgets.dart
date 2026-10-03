@@ -34,6 +34,7 @@ export 'src/chat/quark_encryption_notice.dart';
 export 'src/chat/quark_member_list.dart';
 export 'src/chat/quark_message_composer.dart';
 export 'src/chat/quark_message_list.dart';
+export 'src/chat/quark_start_conversation_dialog.dart';
 export 'src/core/confirm_delete_dialog.dart';
 export 'src/core/copy_button.dart';
 export 'src/core/empty_state_widget.dart';

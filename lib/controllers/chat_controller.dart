@@ -8,9 +8,11 @@ import 'package:quark/controllers/chat_messages_controller.dart';
 import 'package:quark/models/chat_channel.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/models/chat_message.dart';
+import 'package:quark/models/path_grant.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/chat_channels_service.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark/services/sharing_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Lists the channels the signed-in account belongs to.
@@ -85,7 +87,9 @@ class ChatPendingSend {
 /// - [send] shows a pending row at once. A failure keeps it, with its error,
 ///   for [retry] or [discard].
 /// - `chat_channel_changed` reloads the channel list, and the members when it
-///   names the open channel.
+///   names the open channel. `account_changed` — an account deleted, or a
+///   profile picture changed — reloads both, so a stale name or picture
+///   doesn't outlive it (#2563).
 /// - While [isLocked] (on web after a reload) nothing is decrypted; [unlock]
 ///   takes the password and opens the channel.
 /// - What the account may do comes with the channel list, as the Quark
@@ -99,6 +103,10 @@ class ChatPendingSend {
 ///   [saveError], for the dialog that asked. An admin also lists the
 ///   channels they are not in, as [otherChannelItems]; opening one shows its
 ///   members and settings but never its messages.
+/// - [createChannel] makes a private channel, or one everyone reads and
+///   posts in (#2501). [startConversation] makes a private channel with one
+///   other account, or opens the one already made (#2497); [loadPeople]
+///   lists who it can be with.
 ///
 /// Every collaborator has a real default; tests pass fakes.
 class ChatController extends ChangeNotifier {
@@ -113,6 +121,9 @@ class ChatController extends ChangeNotifier {
     Future<void> Function(int channelId) deleteChannel =
         ChatChannelsService.deleteChannel,
     RemoveChatMemberFn removeMember = ChatChannelsService.removeMember,
+    SetChatMemberFn setMember = ChatChannelsService.setMember,
+    Future<SharePrincipals> Function() loadPrincipals =
+        SharingService.principals,
     Future<bool> Function(int channelId)? ensureKeys,
     SignMemberChangeFn? signMemberChange,
     bool Function()? isAdmin,
@@ -131,6 +142,8 @@ class ChatController extends ChangeNotifier {
        _updateChannel = updateChannel,
        _deleteChannel = deleteChannel,
        _removeMember = removeMember,
+       _setMember = setMember,
+       _loadPrincipals = loadPrincipals,
        _ensureKeys =
            ensureKeys ?? ChatChannelKeysController.instance.ensureKeys,
        _signMemberChange =
@@ -181,6 +194,8 @@ class ChatController extends ChangeNotifier {
   final UpdateChatChannelFn _updateChannel;
   final Future<void> Function(int channelId) _deleteChannel;
   final RemoveChatMemberFn _removeMember;
+  final SetChatMemberFn _setMember;
+  final Future<SharePrincipals> Function() _loadPrincipals;
   final Future<bool> Function(int channelId) _ensureKeys;
   final SignMemberChangeFn _signMemberChange;
   final bool Function() _isAdmin;
@@ -216,6 +231,9 @@ class ChatController extends ChangeNotifier {
   bool _isCheckingKey = false;
   bool _isSaving = false;
   Object? _saveError;
+  SharePrincipals _principals = const SharePrincipals();
+  bool _isLoadingPeople = false;
+  Object? _peopleError;
   bool _disposed = false;
 
   /// The channels, `general` first.
@@ -284,6 +302,20 @@ class ChatController extends ChangeNotifier {
   /// Why the last of those failed, for `Errors.chatChannel`; cleared when the
   /// next one starts.
   Object? get saveError => _saveError;
+
+  /// The accounts a conversation can be started with, everyone but this
+  /// one, for `QuarkStartConversationDialog`. Empty until [loadPeople].
+  List<PrincipalItem> get people => [
+    for (final u in _principals.users)
+      if (u.id != _currentUserId())
+        PrincipalItem(kind: PrincipalKind.user, id: u.id, name: u.username),
+  ];
+
+  /// Whether [loadPeople] is running.
+  bool get isLoadingPeople => _isLoadingPeople;
+
+  /// Why [people] didn't load, for `Errors.message`.
+  Object? get peopleError => _peopleError;
 
   /// Whether the signed-in account is an admin, who may manage any channel.
   bool get isAdmin => _isAdmin();
@@ -611,20 +643,90 @@ class ChatController extends ChangeNotifier {
   }
 
   /// Creates channel [name] with [topic], owned by this account, sets up its
-  /// first key, and lists it. The new channel, or null with [saveError] set.
-  /// The page then goes to it.
-  Future<ChatChannel?> createChannel(String name, String topic) =>
-      _save(() async {
-        final channel = await _createChannel(name, topic);
+  /// first key, and lists it. The Quark makes every channel private; unless
+  /// [isPrivate], `everyone` then gets the Member set, signed like any member
+  /// change. The new channel, or null with [saveError] set. A channel that
+  /// was made but couldn't be opened to everyone is still returned, with
+  /// [saveError] saying why, so the page goes to it rather than offering a
+  /// name now taken. The page then goes to it.
+  Future<ChatChannel?> createChannel(
+    String name,
+    String topic, {
+    bool isPrivate = true,
+  }) async {
+    Object? openError;
+    final created = await _save(() async {
+      final channel = await _newChannel(name, topic);
+      if (!isPrivate) {
         try {
-          await _ensureKeys(channel.id);
+          final principals = await _loadPrincipals();
+          final everyone = principals.groups.firstWhere((g) => g.builtin);
+          await _addMember(channel.id, groupId: everyone.id);
         } catch (e) {
-          // The channel stands; the next member to open it makes version 1.
-          debugPrint('chat: no first key for channel ${channel.id}: $e');
+          openError = e;
         }
-        await _loadChannels();
-        return channel;
-      });
+      }
+      await _loadChannels();
+      return channel;
+    });
+    if (openError != null) {
+      _saveError = openError;
+      _notify();
+    }
+    return created;
+  }
+
+  /// Lists the accounts a conversation can be started with, into [people].
+  Future<void> loadPeople() async {
+    if (_isLoadingPeople) return;
+    _isLoadingPeople = true;
+    _peopleError = null;
+    _notify();
+    try {
+      _principals = await _loadPrincipals();
+    } catch (e) {
+      _peopleError = e;
+    } finally {
+      _isLoadingPeople = false;
+      _notify();
+    }
+  }
+
+  /// Opens a private conversation with account [userId], one of [people]:
+  /// the channel named for the two of them that this account is already in,
+  /// or a new private one with them added as a Member. The name is both
+  /// usernames in order, so either side finds the same channel. The channel,
+  /// or null with [saveError] set.
+  Future<ChatChannel?> startConversation(int userId) async {
+    final them = _principals.users.where((u) => u.id == userId).firstOrNull;
+    final me = _principals.users
+        .where((u) => u.id == _currentUserId())
+        .firstOrNull;
+    if (them == null) return null;
+    final names = [
+      me?.username ?? AppSettings.instance.username ?? 'me',
+      them.username,
+    ]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final joined = names.join(', ');
+    final name = joined.length > maxNameLength
+        ? joined.substring(0, maxNameLength)
+        : joined;
+    final existing = _channels
+        .where(
+          (c) =>
+              c.isMember &&
+              c.isPrivate &&
+              c.name.toLowerCase() == name.toLowerCase(),
+        )
+        .firstOrNull;
+    if (existing != null) return existing;
+    return _save(() async {
+      final channel = await _newChannel(name, '');
+      await _addMember(channel.id, userId: userId);
+      await _loadChannels();
+      return channel;
+    });
+  }
 
   /// Renames the open channel to [name] and sets its [topic]. Whether it
   /// worked; otherwise [saveError] says why.
@@ -853,6 +955,36 @@ class ChatController extends ChangeNotifier {
     super.dispose();
   }
 
+  /// Creates channel [name] and sets up its first key.
+  Future<ChatChannel> _newChannel(String name, String topic) async {
+    final channel = await _createChannel(name, topic);
+    try {
+      await _ensureKeys(channel.id);
+    } catch (e) {
+      // The channel stands; the next member to open it makes version 1.
+      debugPrint('chat: no first key for channel ${channel.id}: $e');
+    }
+    return channel;
+  }
+
+  /// Gives account [userId] or group [groupId] the Member set on channel
+  /// [channelId] and signs the change, as the share sheet does.
+  Future<void> _addMember(int channelId, {int? userId, int? groupId}) async {
+    final permissions = ChatPermissionPreset.member.permissions;
+    final change = await _setMember(
+      channelId,
+      userId: userId,
+      groupId: groupId,
+      permissions: permissions,
+    );
+    await _signMemberChange(
+      change.event,
+      userId: userId,
+      groupId: groupId,
+      permissions: permissions,
+    );
+  }
+
   /// Runs one channel change, one at a time, through [isSaving] and
   /// [saveError]. Its result, or null when it failed or another was running.
   Future<T?> _save<T>(Future<T> Function() change) async {
@@ -999,9 +1131,18 @@ class ChatController extends ChangeNotifier {
   }
 
   void _onEvent(FileEvent event) {
-    if (event.kind != 'chat_channel_changed') return;
-    final data = event.data;
-    final channelId = data is Map ? (data['channelId'] as num?)?.toInt() : null;
+    final int? channelId;
+    switch (event.kind) {
+      case 'chat_channel_changed':
+        final data = event.data;
+        channelId = data is Map ? (data['channelId'] as num?)?.toInt() : null;
+      case 'account_changed':
+        // A deleted account drops out of channels and members, and a changed
+        // picture comes with the members' avatarUpdatedAt (#2563).
+        channelId = null;
+      default:
+        return;
+    }
     unawaited(
       _loadChannels().then((_) {
         if (channelId == null || channelId == _selected?.id) {
