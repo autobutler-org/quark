@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/models/chat_keys.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/auth_secret.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/services/feature_flags_service.dart';
@@ -128,18 +129,22 @@ Future<bool> Function(String hostAddress) hostReachabilityProbe =
 /// unwrap them, or make them when the account has none. Overridable in tests.
 ///
 /// [recoveryPhrase] is set at a first sign-in, and [sessionToken] is the new
-/// session, which the app may not have stored yet.
+/// session, which the app may not have stored yet. [authSalt] is the salt the
+/// sign-in's auth key was derived with, null on a Quark that still takes the
+/// raw password (#2430).
 Future<void> Function({
   required String password,
   String? recoveryPhrase,
   required String sessionToken,
+  Uint8List? authSalt,
 })
 chatKeysOnSignIn =
-    ({required password, recoveryPhrase, required sessionToken}) =>
+    ({required password, recoveryPhrase, required sessionToken, authSalt}) =>
         ChatKeysController.instance.signedIn(
           password: password,
           recoveryPhrase: recoveryPhrase,
           sessionToken: sessionToken,
+          authSalt: authSalt,
         );
 
 /// Opens the account's chat keys with the recovery phrase and re-wraps them
@@ -149,6 +154,7 @@ Future<WrappedChatKeys> Function({
   required String username,
   required String recoveryPhrase,
   required String newPassword,
+  Uint8List? authSalt,
 })
 chatKeysForRecovery = ChatKeysController.instance.keysForRecovery;
 
@@ -159,6 +165,7 @@ void _unlockChatKeys({
   required String password,
   String? recoveryPhrase,
   required String sessionToken,
+  required Uint8List? authSalt,
 }) {
   unawaited(
     Future(
@@ -166,6 +173,7 @@ void _unlockChatKeys({
         password: password,
         recoveryPhrase: recoveryPhrase,
         sessionToken: sessionToken,
+        authSalt: authSalt,
       ),
     ).catchError((Object e) {
       debugPrint('[auth_service.dart] chat keys not unlocked: $e');
@@ -302,11 +310,16 @@ class AuthService {
     required String password,
   }) async {
     final uri = _baseUri.resolve('/api/v0/auth/setup');
+    final secret = await AuthSecret.resolve(
+      username: username,
+      password: password,
+      use: AuthSecretUse.newCredential,
+    );
     final response = await authHttpClientFactory()
         .post(
           uri,
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'username': username, 'password': password}),
+          body: jsonEncode({'username': username, ...secret.fields()}),
         )
         .timeout(kAuthRequestTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -316,27 +329,37 @@ class AuthService {
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final token = body['token'] as String;
     final phrase = body['recoveryPhrase'] as String;
+    await secret.accepted(username);
     await AppSettings.instance.setSessionToken(token);
     await AppSettings.instance.setUsername(username);
     _unlockChatKeys(
       password: password,
       recoveryPhrase: phrase,
       sessionToken: token,
+      authSalt: secret.salt,
     );
     return SetupResult(sessionToken: token, recoveryPhrase: phrase);
   }
 
   /// Authenticates with username and password, returns a session token.
+  ///
+  /// The Quark is sent an auth key derived from [password], not the password
+  /// (#2430); see [AuthSecret] for the accounts and Quarks that still get it.
   static Future<LoginResult> login({
     required String username,
     required String password,
   }) async {
     final uri = _baseUri.resolve('/api/v0/auth/login');
+    final secret = await AuthSecret.resolve(
+      username: username,
+      password: password,
+      use: AuthSecretUse.signIn,
+    );
     final response = await authHttpClientFactory()
         .post(
           uri,
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'username': username, 'password': password}),
+          body: jsonEncode({'username': username, ...secret.fields()}),
         )
         .timeout(kAuthRequestTimeout);
     if (response.statusCode == 401) {
@@ -355,10 +378,12 @@ class AuthService {
       username: username,
       recoveryPhrase: body['recoveryPhrase'] as String?,
     );
+    await secret.accepted(username);
     _unlockChatKeys(
       password: password,
       recoveryPhrase: result.recoveryPhrase,
       sessionToken: result.sessionToken,
+      authSalt: secret.salt,
     );
     // The first sign-in of an account an admin created carries its recovery
     // phrase, which is never returned again (#1873). Storing the token now
@@ -396,10 +421,18 @@ class AuthService {
     required String recoveryPhrase,
     required String newPassword,
   }) async {
+    // The salt asked for now is the one the Quark stores with the new key: it
+    // keeps the account's salt, or assigns the one it answers here.
+    final secret = await AuthSecret.resolve(
+      username: username,
+      password: newPassword,
+      use: AuthSecretUse.newCredential,
+    );
     final chatKeys = await chatKeysForRecovery(
       username: username,
       recoveryPhrase: recoveryPhrase,
       newPassword: newPassword,
+      authSalt: secret.salt,
     );
     final uri = _baseUri.resolve('/api/v0/auth/recover');
     final response = await authHttpClientFactory()
@@ -409,7 +442,10 @@ class AuthService {
           body: jsonEncode({
             'username': username,
             'recoveryPhrase': recoveryPhrase,
-            'newPassword': newPassword,
+            ...secret.fields(
+              passwordField: 'newPassword',
+              authKeyField: 'newAuthKey',
+            ),
             'chatKeys': chatKeys.toJson(),
           }),
         )
@@ -424,11 +460,16 @@ class AuthService {
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final token = body['token'] as String;
+    await secret.accepted(username);
     await AppSettings.instance.setSessionToken(token);
     await AppSettings.instance.setUsername(username);
     // ponytail: unwraps again under the new password (one more Argon2id run)
     // rather than threading the identity out of chatKeysForRecovery.
-    _unlockChatKeys(password: newPassword, sessionToken: token);
+    _unlockChatKeys(
+      password: newPassword,
+      sessionToken: token,
+      authSalt: secret.salt,
+    );
     return LoginResult(sessionToken: token, username: username);
   }
 
@@ -478,11 +519,16 @@ class AuthService {
     required String password,
   }) async {
     final uri = _baseUri.resolve('/api/v0/auth/request-account');
+    final secret = await AuthSecret.resolve(
+      username: username,
+      password: password,
+      use: AuthSecretUse.newCredential,
+    );
     final response = await authHttpClientFactory()
         .post(
           uri,
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'username': username, 'password': password}),
+          body: jsonEncode({'username': username, ...secret.fields()}),
         )
         .timeout(kAuthRequestTimeout);
     if (response.statusCode == 404) {
@@ -494,6 +540,40 @@ class AuthService {
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['recoveryPhrase'] as String;
+  }
+
+  /// The salt [username]'s auth key is derived with and whether the account
+  /// is `legacy`, with no auth key yet (#2430): `GET /auth/salt`, which needs
+  /// no session. Null from a Quark that has no such endpoint.
+  ///
+  /// An older Quark does not answer 404 alone. Without a session it refuses an
+  /// unknown API path with a 401, and before setup its web fallback answers
+  /// 200 with the app's `index.html`, so a 2xx with no salt in it counts too.
+  static Future<({Uint8List salt, bool legacy})?> fetchAuthSalt(
+    String username,
+  ) async {
+    final response = await authHttpClientFactory()
+        .get(
+          _baseUri
+              .resolve('/api/v0/auth/salt')
+              .replace(queryParameters: {'username': username}),
+        )
+        .timeout(kAuthRequestTimeout);
+    final status = response.statusCode;
+    if (status == 401 || status == 404) return null;
+    if (status < 200 || status >= 300) {
+      throw ApiException(status, 'Failed to fetch the auth salt');
+    }
+    Object? body;
+    try {
+      body = jsonDecode(response.body);
+    } on FormatException {
+      return null;
+    }
+    if (body is! Map) return null;
+    final salt = body['salt'];
+    if (salt is! String) return null;
+    return (salt: base64Decode(salt), legacy: body['legacy'] == true);
   }
 
   /// Logs out — clears the in-memory session token and notifies the server.
@@ -562,8 +642,9 @@ class AuthService {
 
   /// Issues the delete with [aspects] selected, and forgets the local session.
   ///
-  /// [password] travels in the JSON body, never the URL: query strings end
-  /// up in access and proxy logs.
+  /// [password], or the auth key that stands in for it ([AuthSecret]), travels
+  /// in the JSON body, never the URL: query strings end up in access and
+  /// proxy logs.
   ///
   /// The Quark revokes the session either way, so the token is dropped on
   /// success and the caller routes the user out. Failure keeps it: nothing was
@@ -575,6 +656,15 @@ class AuthService {
   }) async {
     final token = AppSettings.instance.sessionToken;
     if (token == null) throw const UnauthorizedException();
+    // A session that predates the app recording its username asks the Quark.
+    final username =
+        AppSettings.instance.username ?? (await checkStatus()).username;
+    if (username == null) throw const UnauthorizedException();
+    final secret = await AuthSecret.resolve(
+      username: username,
+      password: password,
+      use: AuthSecretUse.reconfirm,
+    );
     final uri = _baseUri
         .resolve('/api/v0/auth/account')
         .replace(queryParameters: aspects);
@@ -585,7 +675,7 @@ class AuthService {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
           },
-          body: jsonEncode({'password': password}),
+          body: jsonEncode({'password': secret.confirmation}),
         )
         .timeout(kAuthRequestTimeout);
     // A session the Quark no longer honors is handled the way the rest of the

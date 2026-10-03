@@ -213,6 +213,114 @@ void main() {
     );
   });
 
+  group('the split-key scheme (#2430)', () {
+    final salt = Uint8List.fromList(List.generate(16, (i) => i));
+
+    test(
+      'a first sign-in with an auth salt wraps under the wrap key',
+      () async {
+        final keys = controller();
+        await keys.signedIn(password: 'pw-one', authSalt: salt);
+
+        final stored = quark.stored!;
+        expect(stored.kdfParams.isSplit, isTrue);
+        expect(stored.toJson()['kdfParams']['alg'], KdfParams.splitAlgorithm);
+        // The auth salt is the wrap's salt, so the password alone re-derives.
+        expect(stored.byPassword.salt, salt);
+        // No longer Argon2id of the password used directly.
+        expect(
+          () => crypto.unwrap(stored.byPassword, 'pw-one', stored.kdfParams),
+          throwsA(isA<MessageException>()),
+        );
+      },
+    );
+
+    test('a split wrap opens through the local unlock, with no salt handed '
+        'in', () async {
+      final first = controller();
+      await first.signedIn(password: 'pw-one', authSalt: salt);
+      final box = first.identity!.box.publicKey;
+
+      final reloaded = controller(persist: false);
+      await reloaded.unlock('pw-one');
+
+      expect(reloaded.identity!.box.publicKey, box);
+      expect(quark.puts, 1);
+      await expectLater(
+        controller(persist: false).unlock('pw-two'),
+        throwsA(
+          isA<MessageException>().having(
+            (e) => e.message,
+            'message',
+            Errors.chatKeysWrongPassword,
+          ),
+        ),
+      );
+    });
+
+    test('a first-scheme wrap is opened and re-wrapped at sign-in', () async {
+      final first = controller();
+      await first.signedIn(password: 'pw-one', recoveryPhrase: 'a b c');
+      final old = quark.stored!;
+      expect(old.kdfParams.isSplit, isFalse);
+      final box = first.identity!.box.publicKey;
+
+      final upgraded = controller();
+      await upgraded.signedIn(password: 'pw-one', authSalt: salt);
+
+      expect(upgraded.identity!.box.publicKey, box);
+      expect(quark.puts, 2);
+      final stored = quark.stored!;
+      expect(stored.kdfParams.isSplit, isTrue);
+      expect(stored.byPassword.salt, salt);
+      expect(stored.publicKeys.boxPublicKey, box);
+      // The phrase wrap is carried over untouched and still opens.
+      expect(stored.byPhrase!.wrapped, old.byPhrase!.wrapped);
+      final recovered = await controller().keysForRecovery(
+        username: 'grace',
+        recoveryPhrase: 'a b c',
+        newPassword: 'pw-two',
+        authSalt: salt,
+      );
+      expect(recovered.publicKeys.boxPublicKey, box);
+      expect(recovered.kdfParams.isSplit, isTrue);
+
+      // And it is not re-wrapped again.
+      await controller().signedIn(password: 'pw-one', authSalt: salt);
+      expect(quark.puts, 2);
+    });
+
+    test('a wrong password re-wraps nothing', () async {
+      await controller().signedIn(password: 'pw-one');
+
+      await expectLater(
+        controller().signedIn(password: 'pw-two', authSalt: salt),
+        throwsA(isA<MessageException>()),
+      );
+      expect(quark.puts, 1);
+      expect(quark.stored!.kdfParams.isSplit, isFalse);
+    });
+
+    test('with no auth salt the first scheme stays', () async {
+      await controller().signedIn(password: 'pw-one');
+      await controller().signedIn(password: 'pw-one');
+
+      expect(quark.puts, 1);
+      expect(quark.stored!.kdfParams.alg, KdfParams.algorithm);
+    });
+
+    test('an unknown scheme is refused, not guessed at', () {
+      expect(
+        () => KdfParams.fromJson({
+          'alg': 'something-else',
+          'opsLimit': 1,
+          'memLimit': 8192,
+        }),
+        throwsFormatException,
+      );
+    });
+  });
+
   test('signing out locks and forgets the cached identity', () async {
     final keys = controller();
     await keys.start();

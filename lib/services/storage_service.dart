@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/auth_secret.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 
@@ -213,6 +214,11 @@ class StorageService with AuthenticatedService {
     required String password,
   }) async {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/role');
+    final secret = await AuthSecret.resolve(
+      username: username,
+      password: password,
+      use: AuthSecretUse.reconfirm,
+    );
     final response = await sharedHttpClient.put(
       uri,
       headers: {'Content-Type': 'application/json', ..._authHeaders},
@@ -220,7 +226,7 @@ class StorageService with AuthenticatedService {
         'serial': serial,
         'role': role,
         'username': username,
-        'password': password,
+        'password': secret.confirmation,
       }),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -239,7 +245,17 @@ class StorageService with AuthenticatedService {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/snapshot-backup');
     final body = <String, dynamic>{'targetDeviceSerial': targetDeviceSerial};
     if (username != null) body['username'] = username;
-    if (password != null) body['password'] = password;
+    if (password != null) {
+      // With no username there is no account to derive an auth key for, and
+      // the Quark has nothing to check a password against either.
+      body['password'] = username == null
+          ? password
+          : (await AuthSecret.resolve(
+              username: username,
+              password: password,
+              use: AuthSecretUse.reconfirm,
+            )).confirmation;
+    }
     if (recoveryPassword != null) body['recoveryPassword'] = recoveryPassword;
 
     final response = await sharedHttpClient.post(

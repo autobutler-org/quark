@@ -239,6 +239,14 @@ abstract final class Errors {
   static const String incorrectPassword =
       "That password isn't right. Nothing was deleted.";
 
+  /// A Quark that wants the raw password of an account this app has already
+  /// signed in to with a derived key (#2430). The app refuses, because a
+  /// Quark that has been tampered with could ask for it to learn the password.
+  static const String passwordDowngradeRefused =
+      'This Quark asked for your password in a form this app no longer '
+      'sends. Update the Quark, or reset your password with your recovery '
+      'phrase.';
+
   /// Unlocking chat with a password that doesn't open the account's chat
   /// keys (#2416). Nothing is sent to the Quark to check it; the keys simply
   /// don't decrypt.

@@ -9,6 +9,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../support/auth_salt.dart';
+
 /// A Quark that answers every request with one canned response, and remembers
 /// what it was asked.
 class _RecordingClient extends http.BaseClient {
@@ -83,7 +85,7 @@ void main() {
       statusCode: statusCode,
       body: jsonEncode(body),
     );
-    authHttpClientFactory = () => client;
+    authHttpClientFactory = () => AuthSaltClient(client);
     return client;
   }
 
@@ -144,9 +146,10 @@ void main() {
       final request = client.requests.single;
       expect(request.method, 'POST');
       expect(request.url.path, '/api/v0/auth/request-account');
+      // #2430: the auth key derived from the password, never the password.
       expect(jsonDecode(request.body), {
         'username': 'bob',
-        'password': 'hunter2hunter2',
+        'authKey': await testAuthKey('hunter2hunter2'),
       });
       // An admin approves the account before it can sign in.
       expect(settings.sessionToken, isNull);

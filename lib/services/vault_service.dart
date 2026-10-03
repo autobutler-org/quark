@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/auth_secret.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 
@@ -439,13 +440,18 @@ class VaultService with AuthenticatedService {
     required String username,
     required String password,
   }) async {
+    final secret = await AuthSecret.resolve(
+      username: username,
+      password: password,
+      use: AuthSecretUse.reconfirm,
+    );
     final resp = await sharedHttpClient.put(
       _apiUri('/vault/storage-location'),
       headers: _jsonHeaders,
       body: json.encode({
         'targetDeviceSerial': targetDeviceSerial,
         'username': username,
-        'password': password,
+        'password': secret.confirmation,
       }),
     );
     if (resp.statusCode == 423) throw VaultLockedException();

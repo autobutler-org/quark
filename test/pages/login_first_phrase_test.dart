@@ -13,6 +13,8 @@ import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/widgets/setup/recovery_phrase_step.dart';
 
+import '../support/auth_salt.dart';
+
 /// #1873: the first sign-in of an account an admin created returns its
 /// recovery phrase, once. The router sends a token-holding user from /login to
 /// /files, so storing the token before the phrase is acknowledged would tear
@@ -81,8 +83,10 @@ void main() {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    authHttpClientFactory = () =>
-        MockClient((_) async => http.Response(jsonEncode(loginBody), 200));
+    authHttpClientFactory = () => AuthSaltClient(
+      MockClient((_) async => http.Response(jsonEncode(loginBody), 200)),
+      status: 404,
+    );
 
     final router = GoRouter(
       initialLocation: AppRoutes.login,
