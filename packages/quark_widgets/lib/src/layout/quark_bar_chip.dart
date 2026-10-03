@@ -13,7 +13,8 @@ import 'quark_bar_icon_button.dart';
 /// primary color.
 ///
 /// Like the icon button, the visual is [QuarkBarIconButton.size] tall inside a
-/// [QuarkBarIconButton.tapTargetSize] touch target, with
+/// [QuarkBarIconButton.tapTargetSize] touch target, growing taller only when
+/// a large text size makes the label need it (#2606), with
 /// [QuarkBarIconButton.tapTargetMargin] of space on either side, so chips and
 /// icon buttons sit the same distance apart in a bar (#2605).
 ///
@@ -106,8 +107,9 @@ class QuarkBarChip extends StatelessWidget {
         padding: EdgeInsets.symmetric(
           horizontal: tokens.spacingSm + tokens.spacingXs,
         ),
+        // No maximum: at large text sizes the label is taller than a bar
+        // button, and the chip grows to hold it rather than clip it (#2606).
         minimumSize: const Size(0, QuarkBarIconButton.size),
-        maximumSize: const Size(double.infinity, QuarkBarIconButton.size),
         tapTargetSize: MaterialTapTargetSize.padded,
         visualDensity: VisualDensity.standard,
       ),

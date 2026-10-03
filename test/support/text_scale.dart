@@ -2,7 +2,11 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 export '../../packages/quark_widgets/test/support/pump.dart'
-    show expectTapTargetGuidelines, narrowViewport, wideViewport;
+    show
+        expectNoClippedText,
+        expectTapTargetGuidelines,
+        narrowViewport,
+        wideViewport;
 
 /// The text scale WCAG 1.4.4 asks every screen to survive (#2606).
 const double largeTextScale = 2.0;

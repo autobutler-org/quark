@@ -121,4 +121,17 @@ void main() {
       isFalse,
     );
   });
+
+  // #2606: the label grows past the 36 pixel bar height instead of being cut.
+  testLargeText('fits its label', (tester, size) async {
+    await pumpAt(
+      tester,
+      chip(onPressed: () {}, keepLabel: true, tooltip: 'Upload files'),
+      size: size,
+    );
+
+    expect(tester.takeException(), isNull);
+    expectNoClippedText(tester);
+    await expectTapTargetGuidelines(tester);
+  });
 }

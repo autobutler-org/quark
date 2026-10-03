@@ -98,4 +98,22 @@ void main() {
     handle.dispose();
     await expectTapTargetGuidelines(tester);
   });
+
+  // #2606: the label grows past the 28 pixel badge beside it.
+  testLargeText('fits its label', (tester, size) async {
+    await pumpAt(
+      tester,
+      Center(
+        child: SizedBox(
+          width: QuarkBrandButton.preferredWidth,
+          child: QuarkBrandButton(label: 'Files', onTap: () {}),
+        ),
+      ),
+      size: size,
+    );
+
+    expect(tester.takeException(), isNull);
+    expectNoClippedText(tester);
+    await expectTapTargetGuidelines(tester);
+  });
 }

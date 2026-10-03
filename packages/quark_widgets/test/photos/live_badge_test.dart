@@ -77,4 +77,25 @@ void main() {
 
     expect(find.byIcon(QuarkIcons.circle), findsNothing);
   });
+
+  // #2606: no text in the badge starts below 11 points.
+  testBothViewports('never sets type smaller than 11', (tester, size) async {
+    for (final ready in [null, false, true]) {
+      await pumpAt(tester, LiveBadge(ready: ready), size: size);
+
+      final style = tester.widget<Text>(find.text('LIVE')).style!;
+      expect(style.fontSize, greaterThanOrEqualTo(11));
+    }
+  });
+
+  testLargeText('fits its text', (tester, size) async {
+    await pumpAt(
+      tester,
+      const Column(children: [LiveBadge(), LiveBadge(ready: true)]),
+      size: size,
+    );
+
+    expect(tester.takeException(), isNull);
+    expectNoClippedText(tester);
+  });
 }
