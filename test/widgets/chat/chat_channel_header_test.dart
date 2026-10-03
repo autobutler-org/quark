@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/chat/chat_channel_header.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart';
+
 /// The channel header's settings menu keeps leave and delete apart from the
 /// routine actions (#2498), and a private channel says what its lock means
 /// (#2501), on narrow and wide viewports alike.
@@ -20,7 +22,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),
-        home: Scaffold(body: header),
+        home: Scaffold(
+          body: Padding(padding: const EdgeInsets.all(8), child: header),
+        ),
       ),
     );
   }
@@ -97,6 +101,30 @@ void main() {
       await pumpHeader(tester, size, const ChatChannelHeader(name: 'general'));
       expect(key('chat_channel_private'), findsNothing);
       expect(tester.takeException(), isNull);
+    });
+  }
+
+  // #2603, #2605: the header and its settings menu are labeled 48dp targets.
+  for (final size in const [narrowViewport, wideViewport]) {
+    testWidgets('every control is a labeled 48dp target at $size', (
+      tester,
+    ) async {
+      await pumpHeader(
+        tester,
+        size,
+        ChatChannelHeader(
+          name: 'design',
+          topic: 'Mockups and reviews',
+          isPrivate: true,
+          onEdit: () {},
+          onMembers: () {},
+          onLeave: () {},
+          onDelete: () {},
+        ),
+      );
+      await expectTapTargetGuidelines(tester);
+      await openMenu(tester);
+      await expectTapTargetGuidelines(tester);
     });
   }
 }

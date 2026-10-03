@@ -11,6 +11,10 @@ import 'package:shimmer/shimmer.dart';
 /// thumbnail fills that square with [BoxFit.cover], replacing the icon only
 /// once it decodes.
 ///
+/// The thumbnail is excluded from semantics: the row or tile around it
+/// already reads the file's name, and an unlabeled image would only add
+/// noise to a screen reader (#2603).
+///
 /// The thumbnail, and the icon when the file has none, are keyed by
 /// [FileNode.apiPath]. The grid reuses a tile's element when the file in
 /// that slot changes; the key makes the image a new element instead of
@@ -42,8 +46,11 @@ class FileGridPreview extends StatelessWidget {
                 key: thumbKey,
                 imageUrl: url,
                 cacheKey: '$url#$generation',
-                imageBuilder: (context, imageProvider) =>
-                    Image(image: imageProvider, fit: BoxFit.cover),
+                imageBuilder: (context, imageProvider) => Image(
+                  image: imageProvider,
+                  fit: BoxFit.cover,
+                  excludeFromSemantics: true,
+                ),
                 placeholder: (context, url) => Shimmer.fromColors(
                   baseColor: Colors.grey[800]!,
                   highlightColor: Colors.grey[700]!,

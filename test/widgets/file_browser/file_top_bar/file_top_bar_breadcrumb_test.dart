@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_breadcrumb.dart';
 
+import '../../../support/tap_target_guidelines.dart';
+
 /// #2010: home opens the landing folder, so once there it must stop looking
 /// and behaving like a button — no handler, no pointer cursor.
 void main() {
@@ -9,6 +11,7 @@ void main() {
     WidgetTester tester, {
     required String currentPath,
     required String rootPath,
+    double width = 600,
   }) async {
     final events = <String>[];
     final menu = MenuController();
@@ -17,7 +20,7 @@ void main() {
         home: Scaffold(
           body: Center(
             child: SizedBox(
-              width: 600,
+              width: width,
               child: FileTopBarBreadcrumb(
                 currentPath: currentPath,
                 rootPath: rootPath,
@@ -77,4 +80,39 @@ void main() {
     expect(events, ['home']);
     expect(homeCursor(tester), SystemMouseCursors.click);
   });
+
+  // #2603, #2605: home, the hidden-ancestors button and every ancestor are
+  // labeled 48dp targets, while the pill keeps the height of a bar button.
+  for (final size in [narrowViewport, wideViewport]) {
+    final label = size == narrowViewport ? 'narrow' : 'wide';
+    testWidgets('every crumb is a labeled 48dp target ($label)', (
+      tester,
+    ) async {
+      setViewport(tester, size);
+      final events = await pumpCrumb(
+        tester,
+        currentPath: '/photos/2024/summer/beach/day-one/morning',
+        rootPath: '',
+        width: size.width - 40,
+      );
+
+      final home = find.byKey(const ValueKey('file_top_bar_home'));
+      expect(tester.getSize(home).width, greaterThanOrEqualTo(48));
+      expect(tester.getSize(home).height, greaterThanOrEqualTo(48));
+      expect(find.byTooltip('Go to the top folder'), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('file_top_bar_pill'))).height,
+        lessThanOrEqualTo(36),
+      );
+      if (size == narrowViewport) {
+        expect(find.byTooltip('Show hidden folders'), findsOneWidget);
+      }
+
+      // A tap in home's margin, clear of the 16px glyph, still lands.
+      await tester.tapAt(tester.getTopLeft(home) + const Offset(2, 2));
+      expect(events, ['home']);
+
+      await expectTapTargetGuidelines(tester);
+    });
+  }
 }

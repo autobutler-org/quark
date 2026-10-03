@@ -5,6 +5,8 @@ import 'package:quark/widgets/calendar/calendar_body.dart';
 import 'package:quark/widgets/error_banner.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../../support/tap_target_guidelines.dart';
+
 /// The Calendar body's error states: a failed load after the first one keeps
 /// the view on show under a banner with its own Try again (#2540).
 void main() {
@@ -108,5 +110,29 @@ void main() {
       expect(find.byType(ErrorBanner), findsNothing);
       expect(find.byKey(const ValueKey('calendar_error_retry')), findsNothing);
     });
+  }
+
+  // #2603, #2605: every view's controls are labeled, and Upcoming's are 48dp.
+  // The day, week and month grids draw slots, day cells and event chips to
+  // the calendar's scale, which quark_widgets exempts from the size check
+  // until those views are redesigned, so they are held to labels only.
+  for (final size in const [narrowViewport, wideViewport]) {
+    for (final view in CalendarView.values) {
+      testWidgets('${view.slug} is labeled tap targets at $size', (
+        tester,
+      ) async {
+        await pumpBody(
+          tester,
+          size,
+          view: view,
+          isInitialLoad: false,
+          error: "Couldn't load your calendar.",
+        );
+        await expectTapTargetGuidelines(
+          tester,
+          checkSize: view == CalendarView.upcoming,
+        );
+      });
+    }
   }
 }
