@@ -92,6 +92,7 @@ type ChatMessage struct {
 	CreatedAt  time.Time
 	EditedAt   sql.NullTime
 	DeletedAt  sql.NullTime
+	Nonce      []byte
 }
 
 type ChatReaction struct {
