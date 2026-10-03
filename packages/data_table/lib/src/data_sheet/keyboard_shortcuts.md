@@ -42,6 +42,28 @@ The entire key binding map is customizable — developers can supply their own
 
 ---
 
+## Formulas
+
+While a cell holds a formula being edited, in the cell or the formula bar:
+
+| Keys / pointer                | Action                                                     | Status |
+| ----------------------------- | ---------------------------------------------------------- | ------ |
+| Type a function name          | List the matching built-in functions                       | ✅     |
+| Up / Down                     | Move through the function list while it is open            | ✅     |
+| Tab or Enter                  | Accept the highlighted function and open its parenthesis   | ✅     |
+| Escape                        | Close the function list (a second Escape cancels the edit) | ✅     |
+| Click a cell                  | Write its reference (`B2`) at the caret                    | ✅     |
+| Drag across cells             | Write the range (`B2:D9`) at the caret                     | ✅     |
+| Long-press, then drag (touch) | Write the range at the caret                               | ✅     |
+
+The function list takes these keys only while it is open; otherwise they do
+what the rest of this page says. A click or drag straight after a pick
+replaces that reference, so it can be moved or grown. Where no reference fits
+the caret, such as right after a number or a closing parenthesis, a click
+commits the edit and selects the clicked cell.
+
+---
+
 ## Clipboard
 
 | Keys       | Action                                                    | Status |

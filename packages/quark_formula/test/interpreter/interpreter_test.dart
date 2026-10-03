@@ -149,4 +149,16 @@ void main() {
       expect(results[(1, 2)], const NumberValue(10));
     });
   });
+
+  group('DataSheetInterpreter – parse errors', () {
+    test('report the reason in words, not the exception', () {
+      final results = interpret(1, 1, {(0, 0): '=1 + !'});
+      final error = results[(0, 0)];
+      expect(error, isA<ErrorValue>());
+      error as ErrorValue;
+      expect(error.code, '#VALUE!');
+      expect(
+          error.message, "Couldn't read the formula: Unexpected character: !");
+    });
+  });
 }

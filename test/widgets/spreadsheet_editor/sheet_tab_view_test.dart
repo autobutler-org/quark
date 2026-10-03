@@ -10,7 +10,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// #2692: a sheet tab copies and pastes through the system clipboard, so
 /// cells move to and from Google Sheets and Excel. #2693: it carries the
-/// formatting toolbar.
+/// formatting toolbar. #2695: its formulas autocomplete, pick references
+/// from the grid, and show errors as chips.
 void main() {
   late String? systemClipboard;
 
@@ -134,6 +135,39 @@ void main() {
       expect(
         controller.formatAt(0, 1).fillColor,
         tokens.warning.withValues(alpha: fillAlpha).toARGB32(),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a formula autocompletes, picks a cell, and shows errors '
+        '($name)', (tester) async {
+      final controller = await pumpTab(tester, size);
+      final cell = find.byKey(const ValueKey('r1c1')).first;
+      await tester.tap(cell);
+      await tester.pump();
+      await tester.tap(cell);
+      await tester.pumpAndSettle();
+      final editor = find.descendant(
+        of: cell,
+        matching: find.byType(TextField),
+      );
+
+      await tester.enterText(editor, '=CONC');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('formula_suggestion_CONCAT')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('r0c0')).first);
+      await tester.pumpAndSettle();
+      expect(controller.activeCellEditingController.text, '=CONCAT(A1');
+
+      await tester.enterText(editor, '=1/0');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('r1c1_error')), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Error #DIV/0!: Division by zero'),
+        findsOneWidget,
       );
       expect(tester.takeException(), isNull);
     });
