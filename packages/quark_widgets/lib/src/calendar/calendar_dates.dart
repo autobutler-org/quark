@@ -24,11 +24,27 @@ abstract final class CalendarDates {
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 
+  /// The weekday a week starts on when nothing better is known:
+  /// `DateTime.sunday`, which is what en-US uses and what Flutter's
+  /// `DefaultMaterialLocalizations.firstDayOfWeekIndex` answers. A caller with
+  /// a locale passes [firstWeekdayFromIndex] of it instead.
+  static const int defaultFirstWeekday = DateTime.sunday;
+
+  /// The `DateTime` weekday a week starts on, from a locale's
+  /// `MaterialLocalizations.firstDayOfWeekIndex` (0 for Sunday through 6 for
+  /// Saturday): 0 is `DateTime.sunday`, 1 `DateTime.monday`, 6
+  /// `DateTime.saturday`. Null or out of range is [defaultFirstWeekday].
+  static int firstWeekdayFromIndex(int? firstDayOfWeekIndex) {
+    final index = firstDayOfWeekIndex;
+    if (index == null || index < 0 || index > 6) return defaultFirstWeekday;
+    return index == 0 ? DateTime.sunday : index;
+  }
+
   /// The first date of the week holding [d], a week starting on
   /// [firstWeekday] (`DateTime.sunday` or `DateTime.monday`, for instance).
   static DateTime startOfWeek(
     DateTime d, {
-    int firstWeekday = DateTime.sunday,
+    int firstWeekday = defaultFirstWeekday,
   }) {
     final back = (d.weekday - firstWeekday) % 7;
     return addDays(dateOnly(d), -back);
@@ -37,7 +53,7 @@ abstract final class CalendarDates {
   /// The seven dates of the week holding [d].
   static List<DateTime> weekOf(
     DateTime d, {
-    int firstWeekday = DateTime.sunday,
+    int firstWeekday = defaultFirstWeekday,
   }) {
     final start = startOfWeek(d, firstWeekday: firstWeekday);
     return [for (var i = 0; i < 7; i++) addDays(start, i)];
@@ -48,7 +64,7 @@ abstract final class CalendarDates {
   /// (28 for a February that fits exactly).
   static List<DateTime> monthGrid(
     DateTime month, {
-    int firstWeekday = DateTime.sunday,
+    int firstWeekday = defaultFirstWeekday,
   }) {
     final first = DateTime(month.year, month.month);
     final last = DateTime(month.year, month.month + 1, 0);

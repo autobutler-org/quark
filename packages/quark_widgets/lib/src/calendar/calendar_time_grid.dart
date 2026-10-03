@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/calendar_event_item.dart';
 import '../theme/quark_tokens.dart';
 import 'calendar_dates.dart';
+import 'calendar_empty_notice.dart';
 import 'calendar_time_grid/time_grid_all_day_row.dart';
 import 'calendar_time_grid/time_grid_column.dart';
 import 'calendar_time_grid/time_grid_day_header.dart';
@@ -21,11 +22,17 @@ import 'calendar_time_grid/time_grid_hour_gutter.dart';
 /// need the room. On a phone a week's seven columns are too narrow for more
 /// than an event's title; the accessible label still reads the whole event.
 ///
+/// A single date with no events at all keeps its timeline and centers a
+/// [CalendarEmptyNotice] over it, "Free day", whose "Add an event" calls
+/// [onAddEvent] (#2538); the hours around it still create at their hour. It
+/// stays away while [isLoading], and a week says nothing: its empty columns
+/// already read as free.
+///
 /// Key prefixes: `calendar_slot_<yyyy-mm-dd>_<hour>` on each hour,
 /// `calendar_day_header_<yyyy-mm-dd>` on each week column's heading,
 /// `calendar_all_day_more_<yyyy-mm-dd>` on an all-day overflow line,
-/// `calendar_now_line` on the now line, and `calendar_event_<item.key>` on
-/// each event.
+/// `calendar_now_line` on the now line, `calendar_event_<item.key>` on
+/// each event, and `calendar_day_add` on the empty day's button.
 ///
 /// ```dart
 /// CalendarTimeGrid(
@@ -49,6 +56,8 @@ class CalendarTimeGrid extends StatefulWidget {
     this.onSlotTap,
     this.onEventTap,
     this.onDayTap,
+    this.onAddEvent,
+    this.isLoading = false,
     super.key,
   });
 
@@ -75,6 +84,12 @@ class CalendarTimeGrid extends StatefulWidget {
 
   /// Called with the date whose heading, or all-day "+N" line, was tapped.
   final ValueChanged<DateTime>? onDayTap;
+
+  /// Called by the empty day's "Add an event". Null hides the button.
+  final VoidCallback? onAddEvent;
+
+  /// Whether [events] is still loading, which holds back the empty notice.
+  final bool isLoading;
 
   /// The width below which the grid lays out for a phone.
   static const double compactWidth = 600;
@@ -115,6 +130,12 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
     final days = widget.days;
     final narrow = compact && days.length > 1;
     final onDayTap = widget.onDayTap;
+    final empty =
+        days.length == 1 &&
+        !widget.isLoading &&
+        !widget.events.any(
+          (e) => e.dates.any((d) => CalendarDates.isSameDay(d, days.single)),
+        );
 
     return ColoredBox(
       color: tokens.card,
@@ -151,32 +172,51 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
             onMoreTap: onDayTap,
           ),
           Expanded(
-            child: SingleChildScrollView(
-              controller: _scroll,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TimeGridHourGutter(
-                    width: gutter,
-                    hourHeight: hourHeight,
-                    days: days,
-                    now: widget.now,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: SingleChildScrollView(
+                    controller: _scroll,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TimeGridHourGutter(
+                          width: gutter,
+                          hourHeight: hourHeight,
+                          days: days,
+                          now: widget.now,
+                        ),
+                        for (final (index, day) in days.indexed)
+                          Expanded(
+                            child: TimeGridColumn(
+                              day: day,
+                              events: widget.events,
+                              hourHeight: hourHeight,
+                              narrow: narrow,
+                              now: widget.now,
+                              leftEdge: index > 0,
+                              onSlotTap: widget.onSlotTap,
+                              onEventTap: widget.onEventTap,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                  for (final (index, day) in days.indexed)
-                    Expanded(
-                      child: TimeGridColumn(
-                        day: day,
-                        events: widget.events,
-                        hourHeight: hourHeight,
-                        narrow: narrow,
-                        now: widget.now,
-                        leftEdge: index > 0,
-                        onSlotTap: widget.onSlotTap,
-                        onEventTap: widget.onEventTap,
+                ),
+                if (empty)
+                  // Only the card takes taps; around it the hours do.
+                  Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(tokens.spacingMd),
+                      child: CalendarEmptyNotice(
+                        headline: 'Free day',
+                        subtext: 'Nothing scheduled',
+                        buttonKey: const ValueKey('calendar_day_add'),
+                        onAdd: widget.onAddEvent,
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ],

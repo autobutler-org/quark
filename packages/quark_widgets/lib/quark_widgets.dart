@@ -14,6 +14,7 @@ export 'src/albums/album_sidebar.dart';
 export 'src/albums/album_tree_tile.dart';
 export 'src/albums/sub_album_strip.dart';
 export 'src/calendar/calendar_dates.dart';
+export 'src/calendar/calendar_empty_notice.dart';
 export 'src/calendar/calendar_event_chip.dart';
 export 'src/calendar/calendar_event_editor.dart';
 export 'src/calendar/calendar_labels.dart';

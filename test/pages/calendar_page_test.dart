@@ -13,7 +13,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The Calendar page (#1148, #2519): its views at their own URLs, Week by
-/// default, the date kept across switches, and the event form.
+/// default, the date kept across switches, the event form, and weeks that
+/// start where the device's locale says (#2539).
 void main() {
   final settings = AppSettings.instance;
   final requests = <http.Request>[];
@@ -165,7 +166,15 @@ void main() {
         expect(tester.takeException(), isNull, reason: view.slug);
         // Upcoming leaves out timed events already over, and a 9 AM one is
         // over for most of the day.
-        if (view != CalendarView.upcoming) {
+        // A phone's month marks events with dots rather than clipped
+        // titles (#2541).
+        if (view == CalendarView.month && name == 'narrow') {
+          expect(
+            find.byKey(ValueKey('calendar_dots_$todayKey')),
+            findsOneWidget,
+          );
+          expect(find.text('Plumber visit'), findsNothing);
+        } else if (view != CalendarView.upcoming) {
           expect(find.text('Plumber visit'), findsOneWidget, reason: view.slug);
         }
       }
@@ -380,5 +389,100 @@ void main() {
       const Size(1280, 800),
     );
     expect(at(r), '/calendar/week?date=2026-09-29');
+  });
+
+  group('week start follows the device locale (#2539)', () {
+    void deviceLocale(WidgetTester tester, Locale locale) {
+      tester.platformDispatcher.localeTestValue = locale;
+      tester.platformDispatcher.localesTestValue = [locale];
+      addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+      addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+    }
+
+    /// The local date the last events load started from.
+    DateTime loadedFrom() =>
+        DateTime.parse(listCalls().last.url.queryParameters['from']!).toLocal();
+
+    for (final (name, size) in [
+      ('narrow', const Size(360, 640)),
+      ('wide', const Size(1280, 800)),
+    ]) {
+      testWidgets('$name: a Monday-first device starts the week on Monday', (
+        tester,
+      ) async {
+        deviceLocale(tester, const Locale('de', 'DE'));
+        await pumpCalendar(
+          tester,
+          AppRoutes.calendarView(
+            CalendarView.week,
+            date: DateTime(2026, 9, 29),
+          ),
+          size,
+        );
+        expect(
+          find.byKey(const ValueKey('calendar_day_header_2026-09-28')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('calendar_day_header_2026-09-27')),
+          findsNothing,
+        );
+        expect(loadedFrom(), DateTime(2026, 9, 28));
+      });
+
+      testWidgets('$name: a Monday-first device starts month rows on Monday', (
+        tester,
+      ) async {
+        deviceLocale(tester, const Locale('en', 'GB'));
+        await pumpCalendar(
+          tester,
+          AppRoutes.calendarView(
+            CalendarView.month,
+            date: DateTime(2026, 9, 29),
+          ),
+          size,
+        );
+        expect(
+          find.byKey(const ValueKey('calendar_day_2026-08-31')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('calendar_day_2026-08-30')),
+          findsNothing,
+        );
+        expect(loadedFrom(), DateTime(2026, 8, 31));
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('a Saturday-first device starts the week on Saturday', (
+      tester,
+    ) async {
+      deviceLocale(tester, const Locale('fa', 'IR'));
+      await pumpCalendar(
+        tester,
+        AppRoutes.calendarView(CalendarView.week, date: DateTime(2026, 9, 29)),
+        const Size(1280, 800),
+      );
+      expect(
+        find.byKey(const ValueKey('calendar_day_header_2026-09-26')),
+        findsOneWidget,
+      );
+      expect(loadedFrom(), DateTime(2026, 9, 26));
+    });
+
+    testWidgets('a US device keeps Sunday', (tester) async {
+      deviceLocale(tester, const Locale('en', 'US'));
+      await pumpCalendar(
+        tester,
+        AppRoutes.calendarView(CalendarView.month, date: DateTime(2026, 9, 29)),
+        const Size(1280, 800),
+      );
+      expect(
+        find.byKey(const ValueKey('calendar_day_2026-08-30')),
+        findsOneWidget,
+      );
+      expect(loadedFrom(), DateTime(2026, 8, 30));
+    });
   });
 }

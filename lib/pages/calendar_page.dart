@@ -70,8 +70,15 @@ class _CalendarPageState extends State<CalendarPage>
     super.dispose();
   }
 
+  @override
+  void didChangeLocales(List<Locale>? locales) {
+    super.didChangeLocales(locales);
+    _followRoute();
+  }
+
   /// Shows the view, date and filter the route names; a missing or bad date
-  /// is today, and no filter is everyone's events.
+  /// is today, and no filter is everyone's events. Weeks start where the
+  /// device's locale starts them (#2539).
   void _followRoute() {
     final query = GoRouterState.of(context).uri.queryParameters;
     final date =
@@ -84,6 +91,9 @@ class _CalendarPageState extends State<CalendarPage>
         date,
         mineOnly: query[AppRoutes.calendarMineParam] == 'true',
         person: person == null || person.isEmpty ? null : person,
+        firstWeekday: firstWeekdayForLocale(
+          View.of(context).platformDispatcher.locale,
+        ),
       ),
     );
   }
@@ -174,6 +184,8 @@ class _CalendarPageState extends State<CalendarPage>
                   occurrences: _calendar.occurrences,
                   upcoming: _calendar.upcoming,
                   isInitialLoad: _calendar.isInitialLoad,
+                  isLoading: _calendar.isLoading,
+                  firstWeekday: _calendar.firstWeekday,
                   dueReminder: _calendar.dueReminder,
                   error: error == null
                       ? null

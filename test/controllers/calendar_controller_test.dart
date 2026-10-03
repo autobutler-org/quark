@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/calendar_controller.dart';
 import 'package:quark/models/calendar_event.dart';
@@ -314,6 +315,71 @@ void main() {
       final admin = _Server(events).controller(admin: true);
       await admin.refresh();
       expect(admin.people, ['maya', 'sam']);
+    });
+  });
+
+  group('week start (#2539)', () {
+    test('follows the locale', () {
+      expect(firstWeekdayForLocale(const Locale('en', 'US')), DateTime.sunday);
+      expect(firstWeekdayForLocale(const Locale('de', 'DE')), DateTime.monday);
+      expect(firstWeekdayForLocale(const Locale('en', 'GB')), DateTime.monday);
+      expect(
+        firstWeekdayForLocale(const Locale('fa', 'IR')),
+        DateTime.saturday,
+      );
+    });
+
+    test('a script code or an unknown language falls back safely', () {
+      expect(
+        firstWeekdayForLocale(
+          const Locale.fromSubtags(
+            languageCode: 'sr',
+            scriptCode: 'Latn',
+            countryCode: 'RS',
+          ),
+        ),
+        DateTime.monday,
+      );
+      expect(
+        firstWeekdayForLocale(const Locale('xx')),
+        CalendarDates.defaultFirstWeekday,
+      );
+    });
+
+    test('the fetch and the grid share it', () async {
+      final server = _Server([vet]);
+      final c = server.controller();
+      await c.show(
+        CalendarView.month,
+        DateTime(2026, 9, 29),
+        firstWeekday: DateTime.monday,
+      );
+      expect(c.firstWeekday, DateTime.monday);
+      expect(c.days.first, DateTime(2026, 8, 31));
+      expect(server.ranges.last.$1, DateTime(2026, 8, 31));
+      expect(server.ranges.last.$2, DateTime(2026, 10, 5));
+
+      await c.show(
+        CalendarView.week,
+        DateTime(2026, 9, 29),
+        firstWeekday: DateTime.saturday,
+      );
+      expect(c.days.first, DateTime(2026, 9, 26));
+      expect(server.ranges.last.$1, DateTime(2026, 9, 26));
+    });
+
+    test('a new week start alone reloads the span', () async {
+      final server = _Server([vet]);
+      final c = server.controller();
+      await c.show(CalendarView.week, DateTime(2026, 9, 29));
+      final loads = server.ranges.length;
+      await c.show(
+        CalendarView.week,
+        DateTime(2026, 9, 29),
+        firstWeekday: DateTime.monday,
+      );
+      expect(server.ranges.length, loads + 1);
+      expect(server.ranges.last.$1, DateTime(2026, 9, 28));
     });
   });
 }
