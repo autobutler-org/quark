@@ -323,3 +323,32 @@ account on this Quark.
 
 - When the only other accounts are pending requests, the deletion goes ahead: the requests are deleted with it, the
   Quark returns to setup, and the files are kept.
+
+---
+
+### JN-AUTH-016: Repeated wrong passwords lock sign-in out for a while
+
+**Preconditions:** Quark is set up. User is not logged in.
+
+**Steps:**
+
+1. Navigate to `/login`.
+2. Enter a username and a wrong password, and tap **Log in**, five times.
+3. Enter the right password and tap **Log in**.
+
+**Expected result:**
+
+- The first five attempts show the usual wrong-password error (JN-AUTH-003).
+- The sixth is refused with an error asking you to wait and try again, even though the password is right. No
+  session is created.
+- After 30 seconds the right password signs in. Each further miss before then doubles the wait, up to 15 minutes.
+
+**Notes:**
+
+- A username that doesn't exist is locked out exactly the same way, so the lockout does not reveal which accounts
+  are real.
+- The lockout covers that username from that address. Twenty misses from one address lock it out of every
+  username; fifty misses on one username from anywhere lock it out of addresses it has never signed in from, while an
+  address it has signed in from still gets through.
+- Lockouts are held in memory only. A restart of the Quark clears them, and none travel with a drive moved to another
+  Quark.

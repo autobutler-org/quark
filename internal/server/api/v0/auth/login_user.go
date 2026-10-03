@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
 	"github.com/gin-gonic/gin"
@@ -11,7 +12,7 @@ import (
 
 // loginUser godoc
 // @Summary Login
-// @Description Authenticates with username and password, returns a session token. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.
+// @Description Authenticates with username and password, returns a session token. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password. Repeated failures lock out the client address, the account at that address, or the account from new addresses for a while: the answer is 429 with Retry-After in seconds, whether or not the username exists.
 // @Tags auth
 // @Accept json
 // @Produce json
@@ -19,6 +20,8 @@ import (
 // @Success 200 {object} loginResponse
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} accountRefusal "status is pending or disabled"
+// @Failure 429 {object} serverutil.Response "locked out after repeated failures; see Retry-After"
+// @Header 429 {integer} Retry-After "seconds until the lockout lifts"
 // @Router /auth/login [post]
 func loginUser(c *gin.Context) *serverutil.Response {
 	deps, ok := getQueries(c)
@@ -37,7 +40,12 @@ func loginUser(c *gin.Context) *serverutil.Response {
 	result, err := authutil.Login(c.Request.Context(), (*deps).Database().Queries, authutil.LoginParams{
 		Username: req.Username,
 		Password: req.Password,
+		Guard:    (*deps).LoginGuard(),
+		ClientIP: ratelimitutil.ExtractIP(c.ClientIP()),
 	})
+	if locked := lockoutResponse(c, err); locked != nil {
+		return locked
+	}
 	if refusal := accountRefusalResponse(err); refusal != nil {
 		return refusal
 	}
