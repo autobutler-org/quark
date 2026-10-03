@@ -13,7 +13,7 @@ import (
 
 // loginUser godoc
 // @Summary Login
-// @Description Authenticates and returns a session token. The body takes one of three shapes: {username, password} checks the password; {username, authKey} checks the key the client derived from the password and the salt GET /auth/salt returned, and is a 401 for an account that has no auth key yet; {username, password, authKey} checks the password and gives an account with no auth key that one, keeping its password. authKey is the standard base64 of 32 bytes. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.
+// @Description Authenticates and returns a session token. The body takes one of three shapes: {username, password} checks the password; {username, authKey} checks the key the client derived from the password and the salt GET /auth/salt returned, and is a 401 for an account that has no auth key yet; {username, password, authKey} checks the password and gives an account with no auth key that one, keeping its password. authKey is the standard base64 of 32 bytes. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. legacyRecovery is true for an account that has no recovery key yet: an updated client generates a phrase and sends its key to PUT /auth/recovery-key (#2430). A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.
 // @Tags auth
 // @Accept json
 // @Produce json
@@ -54,6 +54,7 @@ func loginUser(c *gin.Context) *serverutil.Response {
 	return serverutil.Ok().WithData(loginResponse{
 		Token:          result.SessionToken,
 		RecoveryPhrase: result.RecoveryPhrase,
+		LegacyRecovery: result.LegacyRecovery,
 	})
 }
 

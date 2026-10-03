@@ -241,6 +241,7 @@ type User struct {
 	Status             string
 	AuthSalt           string
 	AuthKeyHash        string
+	RecoveryKeyHash    string
 }
 
 type UserChatKey struct {

@@ -120,6 +120,7 @@ func TestExtensionContract(t *testing.T) {
 	expectStatus(t, "salt", code, http.StatusOK)
 	expectString(t, "salt", body, "salt")
 	expectBool(t, "salt legacy", body, "legacy")
+	expectBool(t, "salt legacyRecovery", body, "legacyRecovery")
 
 	authKey := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
 	code, _ = do(http.MethodPost, "/api/v0/auth/login", "", map[string]string{"username": "admin", "password": "admin-password", "authKey": authKey})

@@ -47,11 +47,12 @@ func ensureAnotherActiveAdmin(ctx context.Context, queries *db.Queries, target d
 	return nil
 }
 
-// firstRecoveryPhrase gives an account with no recovery phrase one, and
-// returns it; an account that already has one gets "". Only the sign-in whose
-// write lands returns the phrase, so two at once cannot both show it.
+// firstRecoveryPhrase gives an account with no recovery credential a phrase,
+// and returns it; an account that already has a phrase or a recovery key gets
+// "". Only the sign-in whose write lands returns the phrase, so two at once
+// cannot both show it.
 func firstRecoveryPhrase(ctx context.Context, queries *db.Queries, user db.User) (string, error) {
-	if user.RecoveryPhraseHash != "" {
+	if user.RecoveryPhraseHash != "" || user.RecoveryKeyHash != "" {
 		return "", nil
 	}
 	phrase, err := GenerateRecoveryPhrase()
@@ -232,13 +233,50 @@ func deterministicSalt(saltSecret func() ([]byte, error), username string) (stri
 }
 
 // validateAuthKey returns ErrInvalidAuthKey unless authKey is the standard
-// base64 of exactly 32 bytes. That is 44 characters, under bcrypt's 72-byte
-// limit, so the encoded key is what gets hashed.
+// base64 of exactly 32 bytes.
 func validateAuthKey(authKey string) error {
-	if decoded, err := base64.StdEncoding.DecodeString(authKey); err != nil || len(decoded) != authKeySize {
-		return ErrInvalidAuthKey
+	return validateKey(authKey, ErrInvalidAuthKey)
+}
+
+// validateKey returns invalid unless key is the standard base64 of exactly 32
+// bytes, the shape of an auth key and of a recovery key. That is 44
+// characters, under bcrypt's 72-byte limit, so the encoded key is what gets
+// hashed.
+func validateKey(key string, invalid error) error {
+	if decoded, err := base64.StdEncoding.DecodeString(key); err != nil || len(decoded) != authKeySize {
+		return invalid
 	}
 	return nil
+}
+
+// recoveryKeyHashFor validates a new recovery key and returns its hash, or ""
+// when there is none. A recovery key is derived with the auth salt, so it is
+// refused beside anything but an auth key (#2430).
+func recoveryKeyHashFor(authKey, recoveryKey string) (string, error) {
+	if recoveryKey == "" {
+		return "", nil
+	}
+	if authKey == "" {
+		return "", ErrRecoveryKeyNeedsAuthKey
+	}
+	if err := validateKey(recoveryKey, ErrInvalidRecoveryKey); err != nil {
+		return "", err
+	}
+	return HashPassword(recoveryKey)
+}
+
+// newRecovery is the recovery credential a new account starts with: the hash
+// of the recovery key its client sent, or else a phrase the Quark generates,
+// returned to show once, and its hash.
+func newRecovery(authKey, recoveryKey string) (phrase, phraseHash, keyHash string, err error) {
+	if keyHash, err = recoveryKeyHashFor(authKey, recoveryKey); err != nil || keyHash != "" {
+		return "", "", keyHash, err
+	}
+	if phrase, err = GenerateRecoveryPhrase(); err != nil {
+		return "", "", "", err
+	}
+	phraseHash, err = HashPassword(phrase)
+	return phrase, phraseHash, "", err
 }
 
 // newCredentials validates the one credential a new account or a recovery
