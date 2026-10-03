@@ -21,6 +21,8 @@ void main() {
     List<DuplicateGroup> groups = const [group],
     Object? loadError,
     bool deleteFails = false,
+    Size size = const Size(390, 844),
+    double textScale = 1,
   }) async {
     final deleted = <String>[];
     final controller = DuplicatesController(
@@ -36,11 +38,19 @@ void main() {
       thumbnailUrl: (path, {serial, size}) => Uri.parse('memory:$path'),
     );
     addTearDown(controller.dispose);
-    tester.view.physicalSize = const Size(390, 844);
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      MaterialApp(home: PhotoDuplicatesPage(controller: controller)),
+      MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(
+            size: size,
+            textScaler: TextScaler.linear(textScale),
+          ),
+          child: PhotoDuplicatesPage(controller: controller),
+        ),
+      ),
     );
     await tester.pump();
     await tester.pump();
@@ -137,4 +147,40 @@ void main() {
     expect(find.text("Couldn't find duplicate photos."), findsOneWidget);
     expect(find.textContaining('boom'), findsNothing);
   });
+
+  // #2575: each copy reads where it is in plain words, never the Quark's
+  // storage path, at either width and at double text size.
+  for (final size in const [Size(360, 640), Size(1280, 800)]) {
+    for (final textScale in const [1.0, 2.0]) {
+      testWidgets('names each copy by place without its storage path at $size '
+          'and ${textScale}x text', (tester) async {
+        await pumpPage(
+          tester,
+          size: size,
+          textScale: textScale,
+          groups: const [
+            DuplicateGroup(
+              isExact: true,
+              photos: [
+                (
+                  deviceSerial: '',
+                  relPath: 'users/ux-test/photos/dup-copy-1.jpg',
+                ),
+                (
+                  deviceSerial: '',
+                  relPath: 'users/ux-test/photos/Trips/dup-copy-2.jpg',
+                ),
+              ],
+            ),
+          ],
+        );
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('dup-copy-1.jpg'), findsOneWidget);
+        expect(find.text('Photos'), findsOneWidget);
+        expect(find.text('Photos › Trips'), findsOneWidget);
+        expect(find.textContaining('users/'), findsNothing);
+      });
+    }
+  }
 }
