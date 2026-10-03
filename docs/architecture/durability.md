@@ -49,6 +49,18 @@ it, and the directory after. `storageutil.UploadFilesStreamed` (uploads to a nam
 same way; where it cannot rename or link — another filesystem, or exFAT, which has no hard links — it copies
 through `WriteFileAtomic` rather than into the real name.
 
+The small state files Quark keeps beside the database go through the same helper, by way of
+`storageutil.WriteFileAtomicPerm`, which keeps a private file private (#2611):
+
+| File                                   | Written by                                                         |
+| -------------------------------------- | ------------------------------------------------------------------ |
+| `settings.json` (0600)                 | `settingsutil.Save`, and the write-back after a settings migration |
+| A trashed item's `.meta.json` sidecar  | `storageutil.TrashFilesImpl`; if it fails, the item goes back      |
+| `certs/server.key`, `certs/server.crt` | `tlsutil`, key first: the cert decides whether to regenerate       |
+| `backup_manifest.json`                 | `backup.WriteManifest`                                             |
+
+A power cut during one of those writes leaves the previous version whole, never an empty or partial file.
+
 Resumable uploads stage under `<data dir>/tmp/upload-sessions`. A session interrupted by a crash is never
 committed, so no partial file reaches the user's folders; `storageutil.ClearTmpDir` removes the staged bytes on
 the next start, and the client starts the upload again.
@@ -65,16 +77,15 @@ In plain English, for support copy:
   cut came at the very end; it is replaced the next time the vault moves back there.
 - Hidden `.vfs-write-*` temp files interrupted by a power cut stay on disk (hidden from listings) until
   something removes them. They cost space, not correctness.
-- Settings files (`settingsutil`) and trash metadata are written in place without a flush. A power cut during
-  one of those writes can lose that setting or the trashed item's original location. They are outside this bar
-  and tracked in #2611.
 - A drive or SD card that lies about flushing, or fails outright, is a hardware failure no software ordering can
   recover from.
 
 ## How it is tested
 
 - Unit tests pin each ordering rule: `storageutil/durable_test.go`, `vaultutil/location_test.go`,
-  `backup/vault_migrate_test.go`.
+  `backup/vault_migrate_test.go`. The state files above each have a test that hard-links the old file before
+  rewriting it, so a write that truncates in place shows up as the link changing: `settingsutil/durability_test.go`,
+  `storageutil/trash_durable_test.go`, `tlsutil/tlsutil_test.go`, `backup/manifest_test.go`.
 - `make test/chaos/powercut` runs the real write paths on [LazyFS](https://github.com/dsrhaslab/lazyfs), a FUSE
   file system that loses everything not yet flushed when it is killed, cuts the power at chosen points mid-write,
   and checks what reached the disk. See [`test/chaos/powercut/README.md`](../../test/chaos/powercut/README.md).

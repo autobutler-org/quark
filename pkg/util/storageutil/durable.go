@@ -15,6 +15,15 @@ import (
 // the file comes back empty under its real name (#2517). The temp carries
 // [WriteTempPrefix] so listings skip it (#1828).
 func WriteFileAtomic(absPath string, r io.Reader) error {
+	// os.CreateTemp makes 0600; a renamed-in file gets what os.Create would
+	// have given it under the usual 022 umask.
+	return WriteFileAtomicPerm(absPath, r, 0o644)
+}
+
+// WriteFileAtomicPerm is [WriteFileAtomic] for a file that must carry perm,
+// such as a private 0600 settings file. The temp never holds wider permissions
+// than perm, so nothing secret is readable on the way in.
+func WriteFileAtomicPerm(absPath string, r io.Reader, perm os.FileMode) error {
 	dir := filepath.Dir(absPath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -31,24 +40,29 @@ func WriteFileAtomic(absPath string, r io.Reader) error {
 		_ = tmp.Close()
 		return err
 	}
-	// os.CreateTemp makes 0600; a renamed-in file gets what os.Create would
-	// have given it under the usual 022 umask.
-	if err := tmp.Chmod(0o644); err != nil {
+	if err := tmp.Chmod(perm); err != nil {
 		_ = tmp.Close()
 		return err
 	}
-	if err := tmp.Sync(); err != nil {
+	if err := syncFile(tmp); err != nil {
 		_ = tmp.Close()
 		return err
 	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(tmpName, absPath); err != nil {
+	if err := renameFile(tmpName, absPath); err != nil {
 		return err
 	}
 	return SyncDir(dir)
 }
+
+// renameFile and syncFile are the steps a test swaps to stand in for a crash
+// partway through [WriteFileAtomicPerm].
+var (
+	renameFile = os.Rename
+	syncFile   = (*os.File).Sync
+)
 
 // SyncFile flushes the file at path to disk. A file that is about to be renamed
 // or linked into place is flushed first, so the name never outlives its bytes

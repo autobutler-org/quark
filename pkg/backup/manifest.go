@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
 const manifestFilename = "backup_manifest.json"
@@ -63,7 +66,7 @@ func WriteManifest(m *Manifest, dir string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, manifestFilename), data, 0644)
+	return storageutil.WriteFileAtomic(filepath.Join(dir, manifestFilename), bytes.NewReader(data))
 }
 
 func ReadManifest(dir string) (*Manifest, error) {

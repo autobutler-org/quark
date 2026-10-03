@@ -65,6 +65,56 @@ func TestWriteFileAtomicLeavesTheOldFileOnAFailedWrite(t *testing.T) {
 	assertNoWriteTemps(t, dir)
 }
 
+func TestWriteFileAtomicPermKeepsAPrivateFilePrivate(t *testing.T) {
+	t.Parallel()
+
+	dst := filepath.Join(t.TempDir(), "settings.json")
+	if err := storageutil.WriteFileAtomicPerm(dst, strings.NewReader("{}"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	info, err := os.Stat(dst)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("mode = %o, want 600", perm)
+	}
+}
+
+// TestWriteFileAtomicLeavesTheOldFileWhenAStepFails stands in for a crash at
+// each step after the bytes are written: the real name keeps the old file
+// whole, and the temp is cleaned up.
+func TestWriteFileAtomicLeavesTheOldFileWhenAStepFails(t *testing.T) {
+	errCut := errors.New("power cut")
+	for name, fail := range map[string]func(*testing.T, error){
+		"sync":   storageutil.FailAtomicSyncForTesting,
+		"rename": storageutil.FailAtomicRenameForTesting,
+	} {
+		t.Run(name, func(t *testing.T) {
+			fail(t, errCut)
+			dir := t.TempDir()
+			dst := filepath.Join(dir, "settings.json")
+			if err := os.WriteFile(dst, []byte("intact"), 0o600); err != nil {
+				t.Fatalf("seed: %v", err)
+			}
+
+			if err := storageutil.WriteFileAtomicPerm(dst, strings.NewReader("new"), 0o600); !errors.Is(err, errCut) {
+				t.Fatalf("err = %v, want %v", err, errCut)
+			}
+
+			got, err := os.ReadFile(dst)
+			if err != nil {
+				t.Fatalf("read: %v", err)
+			}
+			if string(got) != "intact" {
+				t.Fatalf("content = %q, want the old file untouched", got)
+			}
+			assertNoWriteTemps(t, dir)
+		})
+	}
+}
+
 func TestSyncFileAndSyncDir(t *testing.T) {
 	t.Parallel()
 
