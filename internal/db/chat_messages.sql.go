@@ -12,9 +12,9 @@ import (
 
 const createChatMessage = `-- name: CreateChatMessage :one
 
-INSERT INTO chat_messages (channel_id, author_id, key_version, ciphertext)
-VALUES (?, ?, ?, ?)
-RETURNING id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at
+INSERT INTO chat_messages (channel_id, author_id, key_version, ciphertext, nonce)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at, nonce
 `
 
 type CreateChatMessageParams struct {
@@ -22,15 +22,19 @@ type CreateChatMessageParams struct {
 	AuthorID   sql.NullInt64
 	KeyVersion int64
 	Ciphertext []byte
+	Nonce      []byte
 }
 
 // Chat messages (#2418). The Quark stores ciphertext and never opens it.
+// CreateChatMessage stores a message. nonce is the ciphertext's first 24
+// bytes, unique per channel and key version (#2487).
 func (q *Queries) CreateChatMessage(ctx context.Context, arg CreateChatMessageParams) (ChatMessage, error) {
 	row := q.db.QueryRowContext(ctx, createChatMessage,
 		arg.ChannelID,
 		arg.AuthorID,
 		arg.KeyVersion,
 		arg.Ciphertext,
+		arg.Nonce,
 	)
 	var i ChatMessage
 	err := row.Scan(
@@ -42,12 +46,13 @@ func (q *Queries) CreateChatMessage(ctx context.Context, arg CreateChatMessagePa
 		&i.CreatedAt,
 		&i.EditedAt,
 		&i.DeletedAt,
+		&i.Nonce,
 	)
 	return i, err
 }
 
 const getChatMessage = `-- name: GetChatMessage :one
-SELECT id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at FROM chat_messages WHERE id = ?
+SELECT id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at, nonce FROM chat_messages WHERE id = ?
 `
 
 func (q *Queries) GetChatMessage(ctx context.Context, id int64) (ChatMessage, error) {
@@ -62,12 +67,41 @@ func (q *Queries) GetChatMessage(ctx context.Context, id int64) (ChatMessage, er
 		&i.CreatedAt,
 		&i.EditedAt,
 		&i.DeletedAt,
+		&i.Nonce,
+	)
+	return i, err
+}
+
+const getChatMessageByNonce = `-- name: GetChatMessageByNonce :one
+SELECT id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at, nonce FROM chat_messages WHERE channel_id = ? AND key_version = ? AND nonce = ?
+`
+
+type GetChatMessageByNonceParams struct {
+	ChannelID  int64
+	KeyVersion int64
+	Nonce      []byte
+}
+
+// GetChatMessageByNonce finds the message a post's nonce already names.
+func (q *Queries) GetChatMessageByNonce(ctx context.Context, arg GetChatMessageByNonceParams) (ChatMessage, error) {
+	row := q.db.QueryRowContext(ctx, getChatMessageByNonce, arg.ChannelID, arg.KeyVersion, arg.Nonce)
+	var i ChatMessage
+	err := row.Scan(
+		&i.ID,
+		&i.ChannelID,
+		&i.AuthorID,
+		&i.KeyVersion,
+		&i.Ciphertext,
+		&i.CreatedAt,
+		&i.EditedAt,
+		&i.DeletedAt,
+		&i.Nonce,
 	)
 	return i, err
 }
 
 const listChatMessagesAfter = `-- name: ListChatMessagesAfter :many
-SELECT id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at FROM chat_messages WHERE channel_id = ? AND id > ? ORDER BY id LIMIT ?
+SELECT id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at, nonce FROM chat_messages WHERE channel_id = ? AND id > ? ORDER BY id LIMIT ?
 `
 
 type ListChatMessagesAfterParams struct {
@@ -95,6 +129,7 @@ func (q *Queries) ListChatMessagesAfter(ctx context.Context, arg ListChatMessage
 			&i.CreatedAt,
 			&i.EditedAt,
 			&i.DeletedAt,
+			&i.Nonce,
 		); err != nil {
 			return nil, err
 		}
@@ -110,7 +145,7 @@ func (q *Queries) ListChatMessagesAfter(ctx context.Context, arg ListChatMessage
 }
 
 const listChatMessagesBefore = `-- name: ListChatMessagesBefore :many
-SELECT id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at FROM chat_messages WHERE channel_id = ? AND id < ? ORDER BY id DESC LIMIT ?
+SELECT id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at, nonce FROM chat_messages WHERE channel_id = ? AND id < ? ORDER BY id DESC LIMIT ?
 `
 
 type ListChatMessagesBeforeParams struct {
@@ -138,6 +173,7 @@ func (q *Queries) ListChatMessagesBefore(ctx context.Context, arg ListChatMessag
 			&i.CreatedAt,
 			&i.EditedAt,
 			&i.DeletedAt,
+			&i.Nonce,
 		); err != nil {
 			return nil, err
 		}
@@ -156,7 +192,7 @@ const tombstoneChatMessage = `-- name: TombstoneChatMessage :one
 UPDATE chat_messages
 SET ciphertext = NULL, deleted_at = COALESCE(deleted_at, datetime('now'))
 WHERE id = ?
-RETURNING id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at
+RETURNING id, channel_id, author_id, key_version, ciphertext, created_at, edited_at, deleted_at, nonce
 `
 
 // TombstoneChatMessage wipes a message's ciphertext and marks it deleted,
@@ -173,6 +209,7 @@ func (q *Queries) TombstoneChatMessage(ctx context.Context, id int64) (ChatMessa
 		&i.CreatedAt,
 		&i.EditedAt,
 		&i.DeletedAt,
+		&i.Nonce,
 	)
 	return i, err
 }

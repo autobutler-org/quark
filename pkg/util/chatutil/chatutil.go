@@ -1597,12 +1597,13 @@ func WatchKeyNeeds(params WatchKeyNeedsParams) {
 	}
 }
 
-// Message limits (#2418). A message's ciphertext is the 24-byte nonce, the
-// encrypted body and the 16-byte tag, so anything shorter than MinCiphertext
-// can't be one.
+// Message limits (#2418). A message's ciphertext is the NonceBytes nonce,
+// the encrypted body and the 16-byte tag, so anything shorter than
+// MinCiphertext can't be one.
 const (
+	NonceBytes         = 24
 	MaxCiphertextBytes = 16 << 10
-	MinCiphertextBytes = 24 + 16
+	MinCiphertextBytes = NonceBytes + 16
 	// MaxMessageRequestBytes caps a post's body: the ciphertext in base64
 	// plus room for the JSON around it.
 	MaxMessageRequestBytes = 24 << 10
@@ -1625,6 +1626,10 @@ var (
 	// ErrNotMessageAuthor reports deleting someone else's message without
 	// delete_messages.
 	ErrNotMessageAuthor = errors.New("only its author or a member with delete_messages can delete a message")
+	// ErrDuplicateMessage reports a post whose nonce the channel already
+	// holds under that key version (#2487): a replay of another message,
+	// deleted ones included, or a client reusing a nonce.
+	ErrDuplicateMessage = errors.New("this channel already has a message with that nonce; encrypt it again to send it")
 )
 
 // Message is one stored chat message. The Quark sees who sent it, when, and
@@ -1663,13 +1668,19 @@ type PostMessageParams struct {
 // PostMessageResult is the message as stored.
 type PostMessageResult struct {
 	Message Message
+	// Repeated is true when the caller had already posted exactly this
+	// ciphertext, so nothing new was stored or announced and Message is the
+	// first post: a retried request, not a second message.
+	Repeated bool
 }
 
 // PostMessage stores a message from a member holding send_messages and sends
 // it to the channel's readers as chat_message_created. Ciphertext over the cap
 // is ErrMessageTooLarge, a reader without send_messages gets ErrReadOnly, and
 // anyone without read_messages, delegated managers and admins included,
-// ErrChannelNotFound.
+// ErrChannelNotFound. A nonce the channel already holds under KeyVersion is
+// ErrDuplicateMessage, unless the caller is repeating its own live post byte
+// for byte, which returns that post as Repeated.
 func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 	if len(params.Ciphertext) > MaxCiphertextBytes {
 		return PostMessageResult{}, ErrMessageTooLarge
@@ -1700,7 +1711,11 @@ func PostMessage(params PostMessageParams) (PostMessageResult, error) {
 		AuthorID:   sql.NullInt64{Int64: params.Principal.UserID, Valid: true},
 		KeyVersion: params.KeyVersion,
 		Ciphertext: params.Ciphertext,
+		Nonce:      params.Ciphertext[:NonceBytes],
 	})
+	if sqlutil.IsUniqueConstraintErr(err) {
+		return repeatedPost(params)
+	}
 	if err != nil {
 		return PostMessageResult{}, err
 	}

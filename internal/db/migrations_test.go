@@ -681,3 +681,64 @@ INSERT INTO calendar_events (id, calendar_id, title, starts_at, ends_at, all_day
 		}
 	}
 }
+
+// chatMessageNonceVersion is 026_chat_message_nonce, which stores each
+// message's nonce and refuses a second one under the same channel and key
+// version (#2487).
+const chatMessageNonceVersion = 26
+
+// TestChatMessageNonceMigration seeds replays already stored before 026 and
+// checks the migration keeps the first of each and tombstones the rest, takes
+// their reactions with them, refuses a new replay, and rolls back.
+func TestChatMessageNonceMigration(t *testing.T) {
+	conn, m := migrateTo(t, chatMessageNonceVersion-1)
+	nonce := strings.Repeat("n", 24)
+	if _, err := conn.Exec(`
+INSERT INTO users (id, username, password_hash, recovery_phrase_hash) VALUES (1, 'maya', 'h', 'r');
+INSERT INTO chat_channels (id, server_id, name) VALUES (100, (SELECT id FROM chat_servers LIMIT 1), 'room');
+INSERT INTO chat_channel_keys (channel_id, version) VALUES (100, 1), (100, 2);
+INSERT INTO chat_messages (id, channel_id, author_id, key_version, ciphertext, deleted_at) VALUES
+	(1, 100, 1, 1, CAST(? || 'first' AS BLOB), NULL),
+	(2, 100, 1, 1, CAST(? || 'first' AS BLOB), NULL),
+	(3, 100, 1, 1, CAST(? || 'other body' AS BLOB), NULL),
+	(4, 100, 1, 2, CAST(? || 'first' AS BLOB), NULL),
+	(5, 100, 1, 1, CAST('another nonce entirely..' || 'x' AS BLOB), NULL),
+	(6, 100, 1, 1, NULL, '2026-09-01 00:00:00'),
+	(7, 100, 1, 1, NULL, '2026-09-01 00:00:00');
+INSERT INTO chat_reactions (message_id, user_id, key_version, ciphertext) VALUES (1, 1, 1, X'00'), (2, 1, 1, X'00');
+`, nonce, nonce, nonce, nonce); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(chatMessageNonceVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", chatMessageNonceVersion, err)
+	}
+	for id, live := range map[int]bool{1: true, 2: false, 3: false, 4: true, 5: true, 6: false, 7: false} {
+		if n := count(t, conn, `SELECT COUNT(*) FROM chat_messages WHERE id = ? AND ciphertext IS NOT NULL AND deleted_at IS NULL`, id); (n == 1) != live {
+			t.Errorf("message %d live = %v, want %v", id, n == 1, live)
+		}
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM chat_messages`); n != 7 {
+		t.Errorf("messages = %d, want every row kept for paging", n)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM chat_messages WHERE id IN (1, 4) AND nonce = CAST(? AS BLOB)`, nonce); n != 2 {
+		t.Errorf("messages with their nonce recorded = %d, want 2", n)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM chat_reactions`); n != 1 {
+		t.Errorf("reactions = %d, want only the kept message's", n)
+	}
+	if _, err := conn.Exec(`INSERT INTO chat_messages (channel_id, author_id, key_version, ciphertext, nonce)
+		VALUES (100, 1, 1, CAST(? || 'replay' AS BLOB), CAST(? AS BLOB))`, nonce, nonce); err == nil || !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		t.Errorf("a replayed nonce = %v, want a unique failure", err)
+	}
+
+	if err := m.Migrate(chatMessageNonceVersion - 1); err != nil {
+		t.Fatalf("migrate down: %v", err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM chat_messages`); n != 7 {
+		t.Errorf("messages after the down migration = %d, want 7", n)
+	}
+	if err := m.Migrate(chatMessageNonceVersion); err != nil {
+		t.Fatalf("migrate up again: %v", err)
+	}
+}

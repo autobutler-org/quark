@@ -4961,11 +4961,14 @@ paths:
     post:
       consumes:
       - application/json
-      description: Stores ciphertext, base64, that the caller's client encrypted under
-        the channel key of keyVersion, and sends the stored row to the channel's readers
-        as chat_message_created. The Quark never sees the text. Ciphertext is at most
-        16 KiB. Needs send_messages; a reader without it gets 403, and anyone without
-        read_messages 404, delegated managers and admins included.
+      description: 'Stores ciphertext, base64, that the caller''s client encrypted
+        under the channel key of keyVersion, and sends the stored row to the channel''s
+        readers as chat_message_created. The Quark never sees the text. A ciphertext''s
+        24-byte nonce is taken once per channel and key version: repeating your own
+        live post byte for byte returns it with 200 and stores nothing, and any other
+        reuse is 409. Ciphertext is at most 16 KiB. Needs send_messages; a reader
+        without it gets 403, and anyone without read_messages 404, delegated managers
+        and admins included.'
       parameters:
       - description: Channel id
         in: path
@@ -4981,6 +4984,11 @@ paths:
       produces:
       - application/json
       responses:
+        "200":
+          description: the caller already posted exactly this ciphertext; nothing
+            new was stored
+          schema:
+            $ref: '#/definitions/chatutil.Message'
         "201":
           description: Created
           schema:
@@ -5000,6 +5008,11 @@ paths:
             $ref: '#/definitions/serverutil.Response'
         "404":
           description: no such channel, or the caller lacks read_messages
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "409":
+          description: the channel already has a message with this nonce under keyVersion,
+            deleted ones included
           schema:
             $ref: '#/definitions/serverutil.Response'
         "413":

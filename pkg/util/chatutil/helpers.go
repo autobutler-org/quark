@@ -1,6 +1,7 @@
 package chatutil
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"crypto/ed25519"
@@ -686,4 +687,20 @@ func publishReaction(ctx context.Context, queries *db.Queries, bus *eventbus.Bus
 	}
 	bus.Publish(eventbus.Event{Kind: eventbus.EventChatReactionChanged, Data: data})
 	return nil
+}
+
+// repeatedPost answers a post whose nonce the channel already holds under its
+// key version. The caller's own live message with the same ciphertext is a
+// retry and comes back as it is; anything else is a replay.
+func repeatedPost(params PostMessageParams) (PostMessageResult, error) {
+	row, err := params.Database.Queries.GetChatMessageByNonce(params.Ctx, db.GetChatMessageByNonceParams{
+		ChannelID: params.ChannelID, KeyVersion: params.KeyVersion, Nonce: params.Ciphertext[:NonceBytes],
+	})
+	if err != nil {
+		return PostMessageResult{}, err
+	}
+	if row.AuthorID.Int64 != params.Principal.UserID || !bytes.Equal(row.Ciphertext, params.Ciphertext) {
+		return PostMessageResult{}, ErrDuplicateMessage
+	}
+	return PostMessageResult{Message: messageFromRow(row), Repeated: true}, nil
 }
