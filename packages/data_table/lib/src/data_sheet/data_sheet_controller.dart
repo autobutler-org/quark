@@ -1,3 +1,4 @@
+import 'dart:math' show min;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show ChangeNotifier, ValueNotifier;
@@ -9,6 +10,7 @@ import 'package:quark_formula/evaluation/evaluation.dart';
 import '../../data_table.dart';
 import 'cell/heading/heading_cells.dart'
     show kDefaultColumnWidth, kDefaultRowHeight, kMinColumnWidth, kMinRowHeight;
+import 'cell_range.dart';
 import 'data_sheet_selection.dart';
 
 // ---------------------------------------------------------------------------
@@ -225,38 +227,101 @@ class DataSheetController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Clear the value of a single cell.
-  void clearCell(int row, int col) {
-    if (row < 0 || row >= rowCount || col < 0 || col >= colCount) return;
-    _pushSnapshot();
-    updateCell(row, col, DataCell(''));
-  }
+  /// The raw values inside [range], row by row.
+  List<List<String>> valuesIn(CellRange range) => [
+        for (var r = range.top; r <= range.bottom; r++)
+          [
+            for (var c = range.left; c <= range.right; c++)
+              cellAt(r, c).value.toString(),
+          ],
+      ];
 
-  /// Clear all cell values in [rowIndex].
-  void clearRow(int rowIndex) {
-    if (rowIndex < 0 || rowIndex >= rowCount) return;
+  /// Writes [values] with its top-left corner at [top]/[left] as one undo
+  /// step. Whatever falls outside the sheet is dropped; the sheet never grows.
+  void _setCells(int top, int left, List<List<String>> values) {
+    final bottom = min(top + values.length, rowCount);
+    if (top < 0 || left < 0 || top >= bottom || left >= colCount) return;
     _pushSnapshot();
-    final empty = List<DataCell>.generate(colCount, (_) => DataCell(''));
-    for (var c = 0; c < colCount; c++) {
-      table.rows[rowIndex].cells[c] = empty[c];
-    }
-    _rows[rowIndex].value = empty;
-    _recompute();
-    notifyListeners();
-  }
-
-  /// Clear all cell values in [colIndex].
-  void clearColumn(int colIndex) {
-    if (colIndex < 0 || colIndex >= colCount) return;
-    _pushSnapshot();
-    for (var r = 0; r < rowCount; r++) {
-      table.rows[r].cells[colIndex] = DataCell('');
+    for (var r = top; r < bottom; r++) {
+      final row = values[r - top];
       final updated = List<DataCell>.from(_rows[r].value);
-      updated[colIndex] = DataCell('');
+      for (var c = left; c < min(left + row.length, colCount); c++) {
+        updated[c] = DataCell(row[c - left]);
+        table.rows[r].cells[c] = updated[c];
+      }
       _rows[r].value = updated;
     }
     _recompute();
     notifyListeners();
+  }
+
+  /// True when [range]'s top-left cell exists.
+  bool _inSheet(CellRange range) =>
+      range.top >= 0 &&
+      range.left >= 0 &&
+      range.top < rowCount &&
+      range.left < colCount;
+
+  /// Clear every cell value in [range] as one undo step.
+  void clearRange(CellRange range) => _setCells(
+        range.top,
+        range.left,
+        List.generate(range.rowCount, (_) => List.filled(range.colCount, '')),
+      );
+
+  /// Paste [values] into [target] as one undo step. A single value fills the
+  /// whole target; a block lands with its top-left at the target's top-left
+  /// and is clipped at the sheet edge.
+  void pasteValues(CellRange target, List<List<String>> values) {
+    if (values.isEmpty || values.first.isEmpty) return;
+    final single = values.length == 1 && values.first.length == 1;
+    _setCells(
+      target.top,
+      target.left,
+      single
+          ? List.generate(
+              target.rowCount,
+              (_) => List.filled(target.colCount, values.first.first),
+            )
+          : values,
+    );
+  }
+
+  /// Clear the value of a single cell.
+  void clearCell(int row, int col) =>
+      clearRange(CellRange(top: row, left: col, bottom: row, right: col));
+
+  /// Clear all cell values in [count] rows starting at [rowIndex].
+  void clearRow(int rowIndex, {int count = 1}) {
+    if (colCount == 0) return;
+    clearRange(CellRange(
+      top: rowIndex,
+      left: 0,
+      bottom: rowIndex + count - 1,
+      right: colCount - 1,
+    ));
+  }
+
+  /// Clear all cell values in [count] columns starting at [colIndex].
+  void clearColumn(int colIndex, {int count = 1}) {
+    if (rowCount == 0) return;
+    clearRange(CellRange(
+      top: 0,
+      left: colIndex,
+      bottom: rowCount - 1,
+      right: colIndex + count - 1,
+    ));
+  }
+
+  /// After rows or columns are removed, collapse the selection to one cell
+  /// that still exists, so nothing reads past the sheet's new edge.
+  void _collapseSelectionTo(int row, int col) {
+    if (!selection.hasHighlight) return;
+    if (rowCount == 0 || colCount == 0) {
+      selection.clear();
+    } else {
+      selection.setHighlighted(min(row, rowCount - 1), min(col, colCount - 1));
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -290,15 +355,18 @@ class DataSheetController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Delete the row at [index].
-  void deleteRowAt(int index) {
+  /// Delete [count] rows starting at [index] as one undo step.
+  void deleteRowAt(int index, {int count = 1}) {
     if (index < 0 || index >= rowCount) return;
     _pushSnapshot();
-    table.rows.removeAt(index);
-    _rows[index].dispose();
-    _rows.removeAt(index);
-    if (index < rowHeights.length) rowHeights.removeAt(index);
+    for (var i = min(index + count, rowCount) - 1; i >= index; i--) {
+      table.rows.removeAt(i);
+      _rows[i].dispose();
+      _rows.removeAt(i);
+      if (i < rowHeights.length) rowHeights.removeAt(i);
+    }
     _recompute();
+    _collapseSelectionTo(index, selection.highlightedCol);
     notifyListeners();
   }
 
@@ -365,17 +433,21 @@ class DataSheetController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Delete the column at [index].
-  void deleteColumnAt(int index) {
+  /// Delete [count] columns starting at [index] as one undo step.
+  void deleteColumnAt(int index, {int count = 1}) {
     if (index < 0 || index >= colCount) return;
     _pushSnapshot();
+    final end = min(index + count, colCount);
     for (var i = 0; i < _rows.length; i++) {
-      table.rows[i].cells.removeAt(index);
-      final updated = List<DataCell>.from(_rows[i].value)..removeAt(index);
-      _rows[i].value = updated;
+      table.rows[i].cells.removeRange(index, end);
+      _rows[i].value = List<DataCell>.from(_rows[i].value)
+        ..removeRange(index, end);
     }
-    if (index < columnWidths.length) columnWidths.removeAt(index);
+    if (index < columnWidths.length) {
+      columnWidths.removeRange(index, min(end, columnWidths.length));
+    }
     _recompute();
+    _collapseSelectionTo(selection.highlightedRow, index);
     notifyListeners();
   }
 
@@ -489,40 +561,39 @@ class DataSheetController extends ChangeNotifier {
 
   /// Copy the value of cell `(fromRow, col)` to all rows below it in the same
   /// column.
-  void fillDown(int fromRow, int col) {
-    if (fromRow < 0 || fromRow >= rowCount || col < 0 || col >= colCount) {
-      return;
-    }
-    if (fromRow == rowCount - 1) return;
-    _pushSnapshot();
-    final sourceValue = _rows[fromRow].value[col].value.toString();
-    for (var r = fromRow + 1; r < rowCount; r++) {
-      table.rows[r].cells[col] = DataCell(sourceValue);
-      final updated = List<DataCell>.from(_rows[r].value);
-      updated[col] = DataCell(sourceValue);
-      _rows[r].value = updated;
-    }
-    _recompute();
-    notifyListeners();
-  }
+  void fillDown(int fromRow, int col) => fillDownRange(
+      CellRange(top: fromRow, left: col, bottom: fromRow, right: col));
 
   /// Copy the value of cell `(row, fromCol)` to all columns to the right of it
   /// in the same row.
-  void fillRight(int row, int fromCol) {
-    if (row < 0 || row >= rowCount || fromCol < 0 || fromCol >= colCount) {
-      return;
-    }
-    if (fromCol == colCount - 1) return;
-    _pushSnapshot();
-    final sourceValue = _rows[row].value[fromCol].value.toString();
-    final updated = List<DataCell>.from(_rows[row].value);
-    for (var c = fromCol + 1; c < colCount; c++) {
-      table.rows[row].cells[c] = DataCell(sourceValue);
-      updated[c] = DataCell(sourceValue);
-    }
-    _rows[row].value = updated;
-    _recompute();
-    notifyListeners();
+  void fillRight(int row, int fromCol) => fillRightRange(
+      CellRange(top: row, left: fromCol, bottom: row, right: fromCol));
+
+  /// Copy [range]'s top row down through the rest of the range, as one undo
+  /// step. A range one row tall fills its columns to the bottom of the sheet.
+  void fillDownRange(CellRange range) {
+    if (!_inSheet(range)) return;
+    final source = valuesIn(CellRange(
+      top: range.top,
+      left: range.left,
+      bottom: range.top,
+      right: min(range.right, colCount - 1),
+    )).first;
+    final last = range.rowCount == 1 ? rowCount - 1 : range.bottom;
+    _setCells(range.top + 1, range.left,
+        List.generate(last - range.top, (_) => source));
+  }
+
+  /// Copy [range]'s left column right through the rest of the range, as one
+  /// undo step. A range one column wide fills its rows to the sheet's right
+  /// edge.
+  void fillRightRange(CellRange range) {
+    if (!_inSheet(range)) return;
+    final last = range.colCount == 1 ? colCount - 1 : range.right;
+    _setCells(range.top, range.left + 1, [
+      for (var r = range.top; r <= min(range.bottom, rowCount - 1); r++)
+        List.filled(last - range.left, cellAt(r, range.left).value.toString()),
+    ]);
   }
 
   // -------------------------------------------------------------------------

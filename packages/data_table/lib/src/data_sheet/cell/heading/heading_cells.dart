@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../cell.dart' show kRangeTintAlpha;
+
 const double kGutterWidth = 48.0;
 const double kHeaderHeight = 28.0;
 const double kDefaultColumnWidth = 100.0;
@@ -7,6 +9,15 @@ const double kDefaultRowHeight = 40.0;
 const double kMinColumnWidth = 24.0;
 const double kMinRowHeight = 24.0;
 const double kResizeHandleSize = 4.0;
+
+/// The fill of a column or row header: tinted with the primary color while
+/// its column or row is selected.
+Color headerColor(ColorScheme cs, bool isSelected) => isSelected
+    ? Color.alphaBlend(
+        cs.primary.withValues(alpha: kRangeTintAlpha),
+        cs.surfaceContainerHighest,
+      )
+    : cs.surfaceContainerHighest;
 
 /// The blank cell where the column header row meets the row-number gutter. This file also holds the column header
 /// and row number cells.
@@ -36,11 +47,19 @@ class ColumnHeaderCell extends StatefulWidget {
   final void Function(double delta) onResizeDelta;
   final void Function() onAutoSize;
 
+  /// Whether this header's column is part of the selected range.
+  final bool isSelected;
+
+  /// Called when the header is clicked, to select its whole column.
+  final VoidCallback? onSelect;
+
   const ColumnHeaderCell({
     super.key,
     required this.label,
     required this.onResizeDelta,
     required this.onAutoSize,
+    this.isSelected = false,
+    this.onSelect,
   });
 
   @override
@@ -55,21 +74,25 @@ class _ColumnHeaderCellState extends State<ColumnHeaderCell> {
     final cs = Theme.of(context).colorScheme;
     return Stack(
       children: [
-        Container(
-          height: kHeaderHeight,
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest,
-            border: Border.all(color: cs.onSurface.withValues(alpha: 0.2)),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            widget.label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: cs.onSurface,
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onSelect,
+          child: Container(
+            height: kHeaderHeight,
+            decoration: BoxDecoration(
+              color: headerColor(cs, widget.isSelected),
+              border: Border.all(color: cs.onSurface.withValues(alpha: 0.2)),
             ),
-            overflow: TextOverflow.clip,
+            alignment: Alignment.center,
+            child: Text(
+              widget.label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
+              overflow: TextOverflow.clip,
+            ),
           ),
         ),
         // Right-edge resize handle
@@ -109,12 +132,20 @@ class RowNumberCell extends StatefulWidget {
   final void Function(double delta) onResizeDelta;
   final void Function() onAutoSize;
 
+  /// Whether this header's row is part of the selected range.
+  final bool isSelected;
+
+  /// Called when the header is clicked, to select its whole row.
+  final VoidCallback? onSelect;
+
   const RowNumberCell({
     super.key,
     required this.number,
     required this.height,
     required this.onResizeDelta,
     required this.onAutoSize,
+    this.isSelected = false,
+    this.onSelect,
   });
 
   @override
@@ -129,20 +160,24 @@ class _RowNumberCellState extends State<RowNumberCell> {
     final cs = Theme.of(context).colorScheme;
     return Stack(
       children: [
-        Container(
-          width: kGutterWidth,
-          height: widget.height,
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest,
-            border: Border.all(color: cs.onSurface.withValues(alpha: 0.2)),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            '${widget.number}',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: cs.onSurface,
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onSelect,
+          child: Container(
+            width: kGutterWidth,
+            height: widget.height,
+            decoration: BoxDecoration(
+              color: headerColor(cs, widget.isSelected),
+              border: Border.all(color: cs.onSurface.withValues(alpha: 0.2)),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '${widget.number}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: cs.onSurface,
+              ),
             ),
           ),
         ),

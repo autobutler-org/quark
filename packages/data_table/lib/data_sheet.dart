@@ -1,7 +1,8 @@
-/// The spreadsheet widget: `DataSheet` and its controller, selection, control scheme, control bar and formula
+/// The spreadsheet widget: `DataSheet` and its controller, selection and `CellRange`, control scheme, control bar and formula
 /// bar.
 library;
 
+export 'src/data_sheet/cell_range.dart';
 export 'src/data_sheet/control_bar.dart';
 export 'src/data_sheet/data_sheet.dart';
 export 'src/data_sheet/data_sheet_control_scheme.dart';

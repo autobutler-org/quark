@@ -667,8 +667,12 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
   // Address label
   // ---------------------------------------------------------------------------
 
+  /// The name box text: the selected range (`B2:D9`, or `B2` for one cell),
+  /// or the cell being edited.
   String _cellLabel() {
     final sel = _controller.selection;
+    final range = sel.range;
+    if (range != null) return range.label;
     final r = sel.contextRow;
     final c = sel.contextCol;
     if (r < 0 || c < 0) return '';
@@ -710,14 +714,25 @@ class _DataSheetFormulaBarState extends State<DataSheetFormulaBar> {
                             right: BorderSide(color: dividerColor),
                           ),
                         ),
-                        child: Center(
-                          child: Text(
-                            label,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Center(
+                            // A long range like AA100:AB2000 shrinks to fit
+                            // rather than clipping.
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                label,
+                                key: const ValueKey('data_sheet_name_box'),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
                                       fontFamily: 'monospace',
                                       fontWeight: FontWeight.w600,
                                     ),
+                              ),
+                            ),
                           ),
                         ),
                       ),

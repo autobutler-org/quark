@@ -35,10 +35,11 @@ class DataSheetControlBar extends StatelessWidget {
       listenable: controller,
       builder: (context, _) {
         final sel = controller.selection;
-        final hasCell = sel.contextRow >= 0 && sel.contextCol >= 0;
         final hasRow = sel.contextRow >= 0;
         final hasCol = sel.contextCol >= 0;
         final hasData = controller.rowCount > 0;
+        // Row, column, clear and fill actions cover every selected cell.
+        final range = sel.contextRange;
 
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -87,15 +88,21 @@ class DataSheetControlBar extends StatelessWidget {
                   _btn(
                     QuarkIcons.delete_row,
                     'Delete row',
-                    hasRow
-                        ? () => controller.deleteRowAt(sel.contextRow)
+                    range != null
+                        ? () => controller.deleteRowAt(
+                              range.top,
+                              count: range.rowCount,
+                            )
                         : null,
                   ),
                   _btn(
                     QuarkIcons.delete_column,
                     'Delete column',
-                    hasCol
-                        ? () => controller.deleteColumnAt(sel.contextCol)
+                    range != null
+                        ? () => controller.deleteColumnAt(
+                              range.left,
+                              count: range.colCount,
+                            )
                         : null,
                   ),
                   // Duplicate row / column
@@ -130,33 +137,35 @@ class DataSheetControlBar extends StatelessWidget {
                   _btn(
                     QuarkIcons.clear_row,
                     'Clear row',
-                    hasRow ? () => controller.clearRow(sel.contextRow) : null,
+                    range != null
+                        ? () => controller.clearRow(
+                              range.top,
+                              count: range.rowCount,
+                            )
+                        : null,
                   ),
                   _btn(
                     QuarkIcons.clear_column,
                     'Clear column',
-                    hasCol
-                        ? () => controller.clearColumn(sel.contextCol)
+                    range != null
+                        ? () => controller.clearColumn(
+                              range.left,
+                              count: range.colCount,
+                            )
                         : null,
                   ),
                   _btn(
                     QuarkIcons.fill_down,
                     'Fill down',
-                    hasCell
-                        ? () => controller.fillDown(
-                              sel.contextRow,
-                              sel.contextCol,
-                            )
+                    range != null
+                        ? () => controller.fillDownRange(range)
                         : null,
                   ),
                   _btn(
                     QuarkIcons.fill_right,
                     'Fill right',
-                    hasCell
-                        ? () => controller.fillRight(
-                              sel.contextRow,
-                              sel.contextCol,
-                            )
+                    range != null
+                        ? () => controller.fillRightRange(range)
                         : null,
                   ),
                 ]),

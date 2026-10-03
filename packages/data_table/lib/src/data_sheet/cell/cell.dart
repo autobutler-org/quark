@@ -13,12 +13,22 @@ import 'package:flutter/material.dart'
         Container,
         MouseRegion;
 
+/// Opacity of the primary-color tint over selected cells and headers.
+const double kRangeTintAlpha = 0.12;
+
 /// One grid cell's frame: its size, cursor, and the borders that mark it as active, highlighted, or referenced by
 /// the formula being edited.
+///
+/// A cell inside a multi-cell selection ([isInRange]) gets a tint of the
+/// theme's primary color; the highlighted anchor keeps a plain fill so its outline
+/// reads as the active cell.
 class Cell extends StatelessWidget {
   final Widget child;
   final bool isActive;
   final bool isHighlighted;
+
+  /// Whether the cell lies inside the selected range.
+  final bool isInRange;
   final MouseCursor cursor;
   final double height;
 
@@ -31,6 +41,7 @@ class Cell extends StatelessWidget {
     required this.child,
     required this.isActive,
     required this.isHighlighted,
+    this.isInRange = false,
     required this.cursor,
     this.height = 40,
     this.referenceColor,
@@ -48,7 +59,9 @@ class Cell extends StatelessWidget {
               ? referenceColor!.withValues(alpha: 0.08)
               : isActive
                   ? cs.primaryContainer
-                  : null,
+                  : isInRange && !isHighlighted
+                      ? cs.primary.withValues(alpha: kRangeTintAlpha)
+                      : null,
           border: referenceColor != null
               ? Border.all(color: referenceColor!, width: 1.0)
               : Border.all(

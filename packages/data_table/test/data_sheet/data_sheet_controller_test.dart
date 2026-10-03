@@ -1,8 +1,21 @@
+import 'package:data_table/src/data_sheet/cell_range.dart';
 import 'package:data_table/src/data_sheet/data_sheet_controller.dart';
 import 'package:data_table/src/models/data_cell.dart';
 import 'package:data_table/src/models/data_row.dart';
 import 'package:data_table/src/models/data_table.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+List<List<String>> _values(DataSheetController c) => [
+      for (var r = 0; r < c.rowCount; r++)
+        [for (var col = 0; col < c.colCount; col++) c.cellAt(r, col).value],
+    ];
+
+/// A 3x3 sheet of `a`..`i`, row by row.
+DataSheetController _grid() => _makeController([
+      ['a', 'b', 'c'],
+      ['d', 'e', 'f'],
+      ['g', 'h', 'i'],
+    ]);
 
 DataTable _makeTable(List<List<String>> values) {
   return DataTable(
@@ -646,6 +659,139 @@ void main() {
         c.undo();
         c.clearCell(0, 0);
         expect(c.canRedo, false);
+        c.dispose();
+      });
+    });
+
+    group('range operations', () {
+      const topLeft = CellRange(top: 0, left: 0, bottom: 1, right: 1);
+
+      test('valuesIn reads the range row by row', () {
+        final c = _grid();
+        expect(c.valuesIn(topLeft), [
+          ['a', 'b'],
+          ['d', 'e'],
+        ]);
+        c.dispose();
+      });
+
+      test('clearRange empties every cell in one undo step', () {
+        final c = _grid();
+        c.clearRange(topLeft);
+        expect(_values(c), [
+          ['', '', 'c'],
+          ['', '', 'f'],
+          ['g', 'h', 'i'],
+        ]);
+        c.undo();
+        expect(c.valuesIn(topLeft), [
+          ['a', 'b'],
+          ['d', 'e'],
+        ]);
+        expect(c.canUndo, false);
+        c.dispose();
+      });
+
+      test('pasteValues lands a block at the top-left, clipped', () {
+        final c = _grid();
+        c.pasteValues(
+          const CellRange(top: 1, left: 1, bottom: 1, right: 1),
+          [
+            ['1', '2', '3'],
+            ['4', '5', '6'],
+            ['7', '8', '9'],
+          ],
+        );
+        expect(_values(c), [
+          ['a', 'b', 'c'],
+          ['d', '1', '2'],
+          ['g', '4', '5'],
+        ]);
+        c.dispose();
+      });
+
+      test('pasteValues fills the range with a single value', () {
+        final c = _grid();
+        c.pasteValues(topLeft, [
+          ['x'],
+        ]);
+        expect(c.valuesIn(topLeft), [
+          ['x', 'x'],
+          ['x', 'x'],
+        ]);
+        expect(c.cellAt(2, 2).value, 'i');
+        c.dispose();
+      });
+
+      test('fillDownRange copies the top row through the range', () {
+        final c = _grid();
+        c.fillDownRange(topLeft);
+        expect(_values(c), [
+          ['a', 'b', 'c'],
+          ['a', 'b', 'f'],
+          ['g', 'h', 'i'],
+        ]);
+        c.dispose();
+      });
+
+      test('fillDownRange on one row fills to the bottom', () {
+        final c = _grid();
+        c.fillDownRange(const CellRange(top: 0, left: 1, bottom: 0, right: 2));
+        expect(_values(c), [
+          ['a', 'b', 'c'],
+          ['d', 'b', 'c'],
+          ['g', 'b', 'c'],
+        ]);
+        c.dispose();
+      });
+
+      test('fillRightRange copies the left column through the range', () {
+        final c = _grid();
+        c.fillRightRange(topLeft);
+        expect(_values(c), [
+          ['a', 'a', 'c'],
+          ['d', 'd', 'f'],
+          ['g', 'h', 'i'],
+        ]);
+        c.dispose();
+      });
+
+      test('deleteRowAt with a count removes the rows in one undo step', () {
+        final c = _grid();
+        c.selection.selectRange(2, 0, 1, 0);
+        c.deleteRowAt(1, count: 2);
+        expect(_values(c), [
+          ['a', 'b', 'c'],
+        ]);
+        // The selection is collapsed onto a cell that still exists.
+        expect(c.selection.range,
+            const CellRange(top: 0, left: 0, bottom: 0, right: 0));
+        c.undo();
+        expect(c.rowCount, 3);
+        c.dispose();
+      });
+
+      test('deleteColumnAt with a count removes the columns', () {
+        final c = _grid();
+        c.deleteColumnAt(0, count: 2);
+        expect(_values(c), [
+          ['c'],
+          ['f'],
+          ['i'],
+        ]);
+        expect(c.columnWidths.length, 1);
+        c.dispose();
+      });
+
+      test('clearRow and clearColumn take a count', () {
+        final c = _grid();
+        c.clearRow(0, count: 2);
+        c.clearColumn(2);
+        expect(_values(c), [
+          ['', '', ''],
+          ['', '', ''],
+          ['g', 'h', ''],
+        ]);
         c.dispose();
       });
     });

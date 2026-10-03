@@ -119,6 +119,23 @@ class DataSheetControlScheme {
   /// Jump to the last column of the current row (End).
   final List<KeyboardShortcut> jumpRowEnd;
 
+  // --- Selection ---
+
+  /// Grow or shrink the range one row up from its far corner (Shift+Up).
+  final List<KeyboardShortcut> extendUp;
+
+  /// Grow or shrink the range one row down (Shift+Down).
+  final List<KeyboardShortcut> extendDown;
+
+  /// Grow or shrink the range one column left (Shift+Left).
+  final List<KeyboardShortcut> extendLeft;
+
+  /// Grow or shrink the range one column right (Shift+Right).
+  final List<KeyboardShortcut> extendRight;
+
+  /// Select every cell in the sheet (Ctrl+A).
+  final List<KeyboardShortcut> selectAll;
+
   /// Jump to row 0, column 0 (Ctrl+Home).
   final List<KeyboardShortcut> jumpToFirst;
 
@@ -182,6 +199,21 @@ class DataSheetControlScheme {
     required this.deleteRow,
     required this.insertColumn,
     required this.deleteColumn,
+    this.extendUp = const [
+      KeyboardShortcut(LogicalKeyboardKey.arrowUp, shift: true)
+    ],
+    this.extendDown = const [
+      KeyboardShortcut(LogicalKeyboardKey.arrowDown, shift: true)
+    ],
+    this.extendLeft = const [
+      KeyboardShortcut(LogicalKeyboardKey.arrowLeft, shift: true)
+    ],
+    this.extendRight = const [
+      KeyboardShortcut(LogicalKeyboardKey.arrowRight, shift: true)
+    ],
+    this.selectAll = const [
+      KeyboardShortcut(LogicalKeyboardKey.keyA, ctrl: true)
+    ],
   });
 
   /// The built-in default scheme, modeled after common spreadsheet conventions.
@@ -204,6 +236,18 @@ class DataSheetControlScheme {
         jumpRowEnd: [KeyboardShortcut(LogicalKeyboardKey.end)],
         jumpToFirst: [KeyboardShortcut(LogicalKeyboardKey.home, ctrl: true)],
         jumpToLast: [KeyboardShortcut(LogicalKeyboardKey.end, ctrl: true)],
+        // Selection
+        extendUp: [KeyboardShortcut(LogicalKeyboardKey.arrowUp, shift: true)],
+        extendDown: [
+          KeyboardShortcut(LogicalKeyboardKey.arrowDown, shift: true)
+        ],
+        extendLeft: [
+          KeyboardShortcut(LogicalKeyboardKey.arrowLeft, shift: true)
+        ],
+        extendRight: [
+          KeyboardShortcut(LogicalKeyboardKey.arrowRight, shift: true)
+        ],
+        selectAll: [KeyboardShortcut(LogicalKeyboardKey.keyA, ctrl: true)],
         // Editing
         confirmEdit: [KeyboardShortcut(LogicalKeyboardKey.enter)],
         enterEditMode: [KeyboardShortcut(LogicalKeyboardKey.f2)],
@@ -275,6 +319,11 @@ class DataSheetControlScheme {
     List<KeyboardShortcut>? deleteRow,
     List<KeyboardShortcut>? insertColumn,
     List<KeyboardShortcut>? deleteColumn,
+    List<KeyboardShortcut>? extendUp,
+    List<KeyboardShortcut>? extendDown,
+    List<KeyboardShortcut>? extendLeft,
+    List<KeyboardShortcut>? extendRight,
+    List<KeyboardShortcut>? selectAll,
   }) =>
       DataSheetControlScheme(
         moveUp: moveUp ?? this.moveUp,
@@ -302,6 +351,11 @@ class DataSheetControlScheme {
         deleteRow: deleteRow ?? this.deleteRow,
         insertColumn: insertColumn ?? this.insertColumn,
         deleteColumn: deleteColumn ?? this.deleteColumn,
+        extendUp: extendUp ?? this.extendUp,
+        extendDown: extendDown ?? this.extendDown,
+        extendLeft: extendLeft ?? this.extendLeft,
+        extendRight: extendRight ?? this.extendRight,
+        selectAll: selectAll ?? this.selectAll,
       );
 
   Map<String, dynamic> toJson() {
@@ -334,12 +388,21 @@ class DataSheetControlScheme {
       'deleteRow': encodeList(deleteRow),
       'insertColumn': encodeList(insertColumn),
       'deleteColumn': encodeList(deleteColumn),
+      'extendUp': encodeList(extendUp),
+      'extendDown': encodeList(extendDown),
+      'extendLeft': encodeList(extendLeft),
+      'extendRight': encodeList(extendRight),
+      'selectAll': encodeList(selectAll),
     };
   }
 
   factory DataSheetControlScheme.fromJson(Map<String, dynamic> json) {
+    // Actions added after a scheme was saved fall back to their defaults
+    // rather than being silently disabled.
+    final defaults = DataSheetControlScheme.defaults().toJson();
     List<KeyboardShortcut> decodeList(String key) {
-      final raw = json[key] as List<dynamic>? ?? [];
+      final raw =
+          json[key] as List<dynamic>? ?? defaults[key] as List<dynamic>? ?? [];
       return raw
           .map((e) => KeyboardShortcut.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -371,6 +434,11 @@ class DataSheetControlScheme {
       deleteRow: decodeList('deleteRow'),
       insertColumn: decodeList('insertColumn'),
       deleteColumn: decodeList('deleteColumn'),
+      extendUp: decodeList('extendUp'),
+      extendDown: decodeList('extendDown'),
+      extendLeft: decodeList('extendLeft'),
+      extendRight: decodeList('extendRight'),
+      selectAll: decodeList('selectAll'),
     );
   }
 }
