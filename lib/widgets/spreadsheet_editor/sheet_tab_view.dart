@@ -2,9 +2,12 @@ import 'package:data_table/data_sheet.dart';
 import 'package:data_table/data_table.dart';
 import 'package:flutter/material.dart' hide DataTable, DataRow, DataCell;
 import 'package:quark/utils/clipboard_utils.dart';
+import 'package:quark/widgets/spreadsheet_editor/sheet_format_palette.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// One tab of a spreadsheet: the control bar above the grid it drives.
+/// One tab of a spreadsheet: the control bar and the formatting toolbar
+/// above the grid they drive. The formatting colors come from the theme's
+/// [QuarkTokens].
 ///
 /// Both share the system clipboard, so cells copy to and paste from Google
 /// Sheets and Excel. Where the browser blocks the clipboard (plain HTTP) they
@@ -27,19 +30,25 @@ class SheetTabView extends StatelessWidget {
             write: writeClipboardText,
           )
         : DataSheetClipboard.memory;
+    final tokens = QuarkTokens.of(context);
     return Column(
       children: [
-        // The bar scrolls sideways on its own; the scroller adds the wheel
-        // mapping and edge chevrons every other toolbar has (#2770).
-        Align(
-          alignment: Alignment.centerLeft,
-          child: QuarkToolbarScroller(
-            child: DataSheetControlBar(
-              controller: controller,
-              clipboard: clipboard,
-            ),
+        // Each bar scrolls sideways on its own; the scroller adds the wheel
+        // mapping and edge chevrons every other toolbar has (#2770). Its
+        // unbounded width also keeps the formatting toolbar a row on a phone
+        // rather than folding it into a menu.
+        for (final bar in [
+          DataSheetControlBar(controller: controller, clipboard: clipboard),
+          DataSheetFormatBar(
+            controller: controller,
+            textColors: sheetTextSwatches(tokens),
+            fillColors: sheetFillSwatches(tokens),
           ),
-        ),
+        ])
+          Align(
+            alignment: Alignment.centerLeft,
+            child: QuarkToolbarScroller(child: bar),
+          ),
         Expanded(
           child: DataSheet(
             controller: controller,
