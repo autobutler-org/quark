@@ -135,6 +135,15 @@ class QuarkIcons {
   /// Navigate to a specific cell — input/submit arrow reads as 'go to'.
   static const IconData go_to_cell = Icons.input;
 
+  /// Filter a column's rows; the outlined funnel.
+  static const IconData filter_column = Icons.filter_alt_outlined;
+
+  /// A column whose filter is hiding rows; the filled funnel.
+  static const IconData filter_active = Icons.filter_alt;
+
+  /// Remove every column filter, showing all rows again.
+  static const IconData clear_filters = Icons.filter_alt_off_outlined;
+
   // ── View ─────────────────────────────────────────────────────────────────────────
   /// Freeze header rows and columns — a snowflake reads as "frozen".
   static const IconData freeze_panes = Icons.ac_unit;
