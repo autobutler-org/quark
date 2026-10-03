@@ -79,6 +79,27 @@ void main() {
     );
   });
 
+  test('never shows a home\'s storage path (#2575)', () async {
+    final quark = _FakeQuark()
+      ..groups = const [
+        DuplicateGroup(
+          isExact: true,
+          photos: [
+            (deviceSerial: '', relPath: 'users/ux-test/photos/dup-copy-1.jpg'),
+            (deviceSerial: '', relPath: 'users/ux-test/photos/2024/dup.jpg'),
+          ],
+        ),
+      ];
+    final controller = quark.controller();
+
+    await controller.load();
+
+    expect(controller.groups.single.photos.map((p) => p.location), [
+      'Photos',
+      'Photos › 2024',
+    ]);
+  });
+
   test('marks the spare identical copies and no similar ones', () async {
     final controller = _FakeQuark().controller();
 
