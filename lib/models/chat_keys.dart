@@ -25,8 +25,8 @@ class KdfParams {
   /// 220 ms and 256 MiB 456 ms on the same machine.
   static const standard = KdfParams(opsLimit: 3, memLimit: 64 << 20);
 
-  /// How the wraps' keys come out of Argon2id: [algorithm] or
-  /// [splitAlgorithm].
+  /// How the wraps' keys come out of Argon2id: [algorithm],
+  /// [splitAlgorithm] or [phraseSplitAlgorithm].
   final String alg;
 
   /// The first scheme (#2416): each wrap's key is Argon2id of its secret and
@@ -38,18 +38,34 @@ class KdfParams {
   /// its salt is the account's auth salt, so the password alone re-derives it.
   static const splitAlgorithm = 'argon2id13+hkdf-sha256';
 
+  /// [splitAlgorithm] for the phrase wrap too (#2430): its key is the
+  /// `wrapKey` of `ChatCrypto.deriveRecoveryKeys`, and its salt is the auth
+  /// salt. The password wrap is as in [splitAlgorithm].
+  static const phraseSplitAlgorithm = 'argon2id13+hkdf-sha256+recovery';
+
   /// Whether the password wrap is under the split-key scheme's `wrapKey`.
-  bool get isSplit => alg == splitAlgorithm;
+  bool get isSplit => alg == splitAlgorithm || isPhraseSplit;
+
+  /// Whether the phrase wrap is under `ChatCrypto.deriveRecoveryKeys`'s
+  /// `wrapKey`.
+  bool get isPhraseSplit => alg == phraseSplitAlgorithm;
 
   /// The same cost under [splitAlgorithm].
-  KdfParams get split =>
-      KdfParams(opsLimit: opsLimit, memLimit: memLimit, alg: splitAlgorithm);
+  KdfParams get split => _as(splitAlgorithm);
 
-  /// Reads `kdfParams`. Anything but [algorithm] or [splitAlgorithm] is
-  /// refused rather than guessed at.
+  /// The same cost under [phraseSplitAlgorithm].
+  KdfParams get phraseSplit => _as(phraseSplitAlgorithm);
+
+  KdfParams _as(String alg) =>
+      KdfParams(opsLimit: opsLimit, memLimit: memLimit, alg: alg);
+
+  /// Reads `kdfParams`. Anything but the three algorithms above is refused
+  /// rather than guessed at.
   factory KdfParams.fromJson(Map<String, dynamic> json) {
     final alg = json['alg'];
-    if (alg != algorithm && alg != splitAlgorithm) {
+    if (alg != algorithm &&
+        alg != splitAlgorithm &&
+        alg != phraseSplitAlgorithm) {
       throw FormatException('unsupported chat key KDF: $alg');
     }
     return KdfParams(
@@ -120,11 +136,13 @@ class WrappedChatKeys {
   /// the `wrapKey` derived from it when [kdfParams] is [KdfParams.isSplit].
   final WrappedSecret byPassword;
 
-  /// Wrapped under the recovery phrase; null for keys made at a sign-in that
-  /// had no phrase to hand, which recovery cannot open.
+  /// Wrapped under the recovery phrase: directly under its Argon2id, or under
+  /// the `wrapKey` derived from it when [kdfParams] is
+  /// [KdfParams.isPhraseSplit]. Null for keys made at a sign-in that had no
+  /// phrase to hand, which recovery cannot open.
   final WrappedSecret? byPhrase;
 
-  /// The Argon2id cost both wraps used, and the scheme of the password wrap.
+  /// The Argon2id cost both wraps used, and the scheme of each.
   final KdfParams kdfParams;
 
   /// Reads `GET /api/v0/chat/keys/me`.

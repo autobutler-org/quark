@@ -119,7 +119,8 @@ Every journey assumes the user is signed in as an admin unless its preconditions
 
 - The dialog closes and `dee` appears in **Accounts**.
 - A folder `users/dee` exists in Files, owned by `dee`.
-- `dee` can sign in with that password, and sees their recovery phrase once (JN-AUTH-013).
+- `dee` can sign in with that password, and sees their recovery phrase once (JN-AUTH-013). The app makes that
+  phrase at `dee`'s first sign-in.
 
 **Notes:**
 
