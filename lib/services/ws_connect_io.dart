@@ -22,10 +22,11 @@ WebSocketChannel connectLocalTrustWs(Uri uri, {Map<String, dynamic>? headers}) {
     return IOWebSocketChannel.connect(uri, headers: headers);
   }
 
-  // Local host: trust the self-signed cert unconditionally, consistent with
-  // buildLocalTrustHttpClient() in authenticated_service.dart.
+  // Local host: trust its self-signed cert, but never a public name the TLS
+  // layer reports, consistent with buildLocalTrustHttpClient() in
+  // authenticated_service.dart.
   final httpClient = HttpClient()
-    ..badCertificateCallback = (cert, host, port) => true;
+    ..badCertificateCallback = (cert, host, port) => isLocalTrustHost(host);
   return IOWebSocketChannel.connect(
     uri,
     headers: headers,
