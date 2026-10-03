@@ -121,10 +121,22 @@ void main() {
     final tokens = QuarkTokens.of(
       tester.element(find.byType(FileSelectionBar)),
     );
-    expect(
-      tester.getRect(find.byKey(const ValueKey('file_selection_delete'))).right,
-      size.width - tokens.spacingSm,
+    // The button's visible edge; its touch target reaches past it (#2605).
+    final delete = find.descendant(
+      of: find.byKey(const ValueKey('file_selection_delete')),
+      matching: find.byType(Material),
     );
+    expect(tester.getRect(delete).right, size.width - tokens.spacingSm);
+  });
+
+  testBothViewports('meets the tap target guidelines in the trash', (
+    tester,
+    size,
+  ) async {
+    await pumpSelectionBar(tester, size: size, canRestore: true);
+
+    expect(tester.takeException(), isNull);
+    await expectTapTargetGuidelines(tester);
   });
 
   testBothViewports('offers "Select all" until everything is selected', (

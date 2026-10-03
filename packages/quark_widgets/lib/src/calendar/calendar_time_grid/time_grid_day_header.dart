@@ -33,6 +33,9 @@ class TimeGridDayHeader extends StatelessWidget {
       button: onTap != null,
       label: CalendarLabels.dayTitle(day),
       excludeSemantics: true,
+      // Excluding the child's semantics drops its tap too, so the node
+      // carries its own, or a screen reader cannot press it (#2603).
+      onTap: onTap,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(tokens.radiusMd),

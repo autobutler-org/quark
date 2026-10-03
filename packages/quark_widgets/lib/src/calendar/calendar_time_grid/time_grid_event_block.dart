@@ -72,6 +72,9 @@ class TimeGridEventBlock extends StatelessWidget {
         if (item.location.isNotEmpty) item.location,
       ].join(', '),
       excludeSemantics: true,
+      // Excluding the child's semantics drops its tap too, so the node
+      // carries its own, or a screen reader cannot press it (#2603).
+      onTap: onTap,
       child: Material(
         color: Color.alphaBlend(color.withValues(alpha: 0.2), tokens.card),
         shape: RoundedRectangleBorder(

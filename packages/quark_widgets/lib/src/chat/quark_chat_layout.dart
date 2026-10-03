@@ -176,7 +176,12 @@ class QuarkChatLayout extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: EdgeInsets.all(tokens.spacingSm),
+                // Less the margin around each button's 48dp touch target
+                // (#2605), so the header stands as tall as it did and the
+                // buttons' visible edges sit where they did.
+                padding: EdgeInsets.all(
+                  tokens.spacingSm - QuarkBarIconButton.tapTargetMargin,
+                ),
                 child: Row(
                   children: [
                     QuarkBarIconButton(

@@ -212,6 +212,13 @@ void main() {
       final button = find.byKey(ValueKey(key));
       expect(
         tester.getSize(button),
+        const Size.square(QuarkBarIconButton.tapTargetSize),
+        reason: key,
+      );
+      expect(
+        tester.getSize(
+          find.descendant(of: button, matching: find.byType(Material)).first,
+        ),
         const Size.square(QuarkBarIconButton.size),
         reason: key,
       );
@@ -225,6 +232,7 @@ void main() {
       );
     }
     expect(tester.takeException(), isNull);
+    await expectTapTargetGuidelines(tester);
   });
 
   testWidgets('draws a hairline under the bar', (tester) async {

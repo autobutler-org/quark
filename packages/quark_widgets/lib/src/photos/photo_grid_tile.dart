@@ -28,6 +28,9 @@ import 'live_badge.dart';
 /// right-click still open the menu. On the web the browser shows its own menu on a right-click
 /// too, unless the caller has turned it off with `BrowserContextMenu`.
 ///
+/// A screen reader hears the tile as a button named for [PhotoItem.name], and
+/// while selecting, whether it is selected (#2603).
+///
 /// Key prefixes: `photo_tile_<id>` on the tile, `photo_tile_check_<id>` on
 /// the selection checkbox, which is only rendered in [selectionMode], and
 /// `photo_tile_menu_<id>` on the menu button, which is only rendered with
@@ -104,121 +107,131 @@ class PhotoGridTile extends StatelessWidget {
         ? Colors.white.withValues(alpha: 0.1)
         : Colors.black.withValues(alpha: 0.1);
 
-    return MouseRegion(
-      cursor: selectionMode ? MouseCursor.defer : SystemMouseCursors.click,
-      child: GestureDetector(
-        key: ValueKey('photo_tile_${item.id}'),
-        onTap: onTap,
-        onLongPress: longPressMenu ? null : onLongPress,
-        onLongPressStart: longPressMenu
-            ? (details) => onMenu(details.globalPosition)
-            : null,
-        onSecondaryTapUp: onMenu == null
-            ? null
-            : (details) => onMenu(details.globalPosition),
-        onDoubleTap: onDoubleTap,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            thumbnailBuilder(context, item),
-            // An inset hairline, so a white photo on a light page, or a dark
-            // one on a dark page, still has an edge.
-            IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(border: Border.all(color: outline)),
-              ),
-            ),
-            if (item.hasLiveVideo)
-              const Positioned(top: 4, left: 4, child: LiveBadge()),
-            if (item.isFavorite && !selectionMode)
-              const Positioned(
-                bottom: 4,
-                right: 4,
-                child: Icon(
-                  QuarkIcons.star_rounded,
-                  size: 16,
-                  color: Colors.white,
-                  shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+    // A button named for the photo, so a screen reader has something to say
+    // about a thumbnail (#2603), and selected or not while selecting.
+    return Semantics(
+      container: true,
+      button: true,
+      label: item.name,
+      selected: selectionMode ? isSelected : null,
+      child: MouseRegion(
+        cursor: selectionMode ? MouseCursor.defer : SystemMouseCursors.click,
+        child: GestureDetector(
+          key: ValueKey('photo_tile_${item.id}'),
+          onTap: onTap,
+          onLongPress: longPressMenu ? null : onLongPress,
+          onLongPressStart: longPressMenu
+              ? (details) => onMenu(details.globalPosition)
+              : null,
+          onSecondaryTapUp: onMenu == null
+              ? null
+              : (details) => onMenu(details.globalPosition),
+          onDoubleTap: onDoubleTap,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              thumbnailBuilder(context, item),
+              // An inset hairline, so a white photo on a light page, or a dark
+              // one on a dark page, still has an edge.
+              IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(border: Border.all(color: outline)),
                 ),
               ),
-            if (onMenu != null)
-              Positioned(
-                top: 0,
-                right: 0,
-                // A Builder for the button's own box, which the menu opens
-                // under.
-                child: Builder(
-                  builder: (context) => IconButton(
-                    key: ValueKey('photo_tile_menu_${item.id}'),
-                    tooltip: 'More',
-                    iconSize: 18,
-                    padding: EdgeInsets.zero,
-                    // A 40-pixel target around a 28-pixel disc: the disc is
-                    // as small as a photo's corner can spare, but a finger
-                    // needs more than that to land on it.
-                    constraints: const BoxConstraints.tightFor(
-                      width: 40,
-                      height: 40,
-                    ),
-                    style: IconButton.styleFrom(foregroundColor: Colors.white),
-                    icon: const DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.black38,
-                        shape: BoxShape.circle,
-                      ),
-                      child: SizedBox.square(
-                        dimension: 28,
-                        child: Icon(QuarkIcons.more_vert),
-                      ),
-                    ),
-                    onPressed: () {
-                      final box = context.findRenderObject()! as RenderBox;
-                      onMenu(
-                        box.localToGlobal(box.size.bottomLeft(Offset.zero)),
-                      );
-                    },
+              if (item.hasLiveVideo)
+                const Positioned(top: 4, left: 4, child: LiveBadge()),
+              if (item.isFavorite && !selectionMode)
+                const Positioned(
+                  bottom: 4,
+                  right: 4,
+                  child: Icon(
+                    QuarkIcons.star_rounded,
+                    size: 16,
+                    color: Colors.white,
+                    shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
                   ),
                 ),
-              ),
-            if (selectionMode && !isSelected)
-              ColoredBox(color: Colors.black.withValues(alpha: 0.3)),
-            if (selectionMode && isSelected)
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(color: colorScheme.primary, width: 3),
+              if (onMenu != null)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  // A Builder for the button's own box, which the menu opens
+                  // under.
+                  child: Builder(
+                    builder: (context) => IconButton(
+                      key: ValueKey('photo_tile_menu_${item.id}'),
+                      tooltip: 'More',
+                      iconSize: 18,
+                      padding: EdgeInsets.zero,
+                      // A 48dp target around a 28-pixel disc: the disc is as
+                      // small as a photo's corner can spare, but a finger needs
+                      // more than that to land on it (#2605).
+                      constraints: const BoxConstraints.tightFor(
+                        width: kMinInteractiveDimension,
+                        height: kMinInteractiveDimension,
+                      ),
+                      style: IconButton.styleFrom(
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black38,
+                          shape: BoxShape.circle,
+                        ),
+                        child: SizedBox.square(
+                          dimension: 28,
+                          child: Icon(QuarkIcons.more_vert),
+                        ),
+                      ),
+                      onPressed: () {
+                        final box = context.findRenderObject()! as RenderBox;
+                        onMenu(
+                          box.localToGlobal(box.size.bottomLeft(Offset.zero)),
+                        );
+                      },
+                    ),
+                  ),
                 ),
-              ),
-            if (selectionMode)
-              Positioned(
-                top: 6,
-                left: 6,
-                child: AnimatedContainer(
-                  key: ValueKey('photo_tile_check_${item.id}'),
-                  duration: const Duration(milliseconds: 150),
-                  width: 22,
-                  height: 22,
+              if (selectionMode && !isSelected)
+                ColoredBox(color: Colors.black.withValues(alpha: 0.3)),
+              if (selectionMode && isSelected)
+                DecoratedBox(
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected
-                        ? colorScheme.primary
-                        : Colors.transparent,
-                    border: Border.all(
+                    border: Border.all(color: colorScheme.primary, width: 3),
+                  ),
+                ),
+              if (selectionMode)
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: AnimatedContainer(
+                    key: ValueKey('photo_tile_check_${item.id}'),
+                    duration: const Duration(milliseconds: 150),
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
                       color: isSelected
                           ? colorScheme.primary
-                          : Colors.white.withValues(alpha: 0.8),
-                      width: 2,
+                          : Colors.transparent,
+                      border: Border.all(
+                        color: isSelected
+                            ? colorScheme.primary
+                            : Colors.white.withValues(alpha: 0.8),
+                        width: 2,
+                      ),
                     ),
+                    child: isSelected
+                        ? const Icon(
+                            QuarkIcons.check,
+                            size: 14,
+                            color: Colors.white,
+                          )
+                        : null,
                   ),
-                  child: isSelected
-                      ? const Icon(
-                          QuarkIcons.check,
-                          size: 14,
-                          color: Colors.white,
-                        )
-                      : null,
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

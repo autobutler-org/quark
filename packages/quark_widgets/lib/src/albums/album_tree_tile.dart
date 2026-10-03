@@ -17,6 +17,10 @@ import '../theme/quark_tokens.dart';
 /// or right-click on the row does the same thing, so a mouse user can find the
 /// album's actions as easily as a touch user (#2261, #2262).
 ///
+/// Every row is at least 48dp tall, and the disclosure chevron is a 48dp
+/// button a screen reader announces as "Expand" or "Collapse" and the name
+/// (#2603, #2605).
+///
 /// Key prefixes: `album_tile_<id>` on the row, `album_expand_<id>` on the
 /// disclosure chevron, which is only rendered when the album has children,
 /// and `album_menu_<id>` on the menu button, which is only rendered with
@@ -116,29 +120,32 @@ class AlbumTreeTile extends StatelessWidget {
                     : Colors.transparent,
                 borderRadius: radius,
               ),
-              padding: EdgeInsets.only(
-                left: tokens.spacingSm + indent,
-                right: tokens.spacingSm,
-                top: tokens.spacingXs + tokens.spacingXs / 2,
-                bottom: tokens.spacingXs + tokens.spacingXs / 2,
+              // A 48dp row, the minimum touch target (#2605). The chevron's
+              // 48dp button is the row's leading gutter.
+              constraints: const BoxConstraints(
+                minHeight: kMinInteractiveDimension,
               ),
+              padding: EdgeInsets.only(left: indent, right: tokens.spacingSm),
               child: Row(
                 children: [
                   if (hasChildren)
-                    GestureDetector(
+                    IconButton(
                       key: ValueKey('album_expand_${album.id}'),
-                      onTap: () => onToggleExpanded(album.id),
-                      child: Icon(
+                      tooltip: isExpanded
+                          ? 'Collapse ${album.name}'
+                          : 'Expand ${album.name}',
+                      icon: Icon(
                         isExpanded
                             ? QuarkIcons.expand_more_rounded
                             : QuarkIcons.chevron_right_rounded,
-                        size: 16,
-                        color: colorScheme.onSurfaceVariant,
                       ),
+                      iconSize: 16,
+                      padding: EdgeInsets.zero,
+                      color: colorScheme.onSurfaceVariant,
+                      onPressed: () => onToggleExpanded(album.id),
                     )
                   else
-                    const SizedBox(width: 16),
-                  SizedBox(width: tokens.spacingXs),
+                    const SizedBox(width: kMinInteractiveDimension),
                   Icon(
                     systemIcon ?? QuarkIcons.photo_album_outlined,
                     size: 16,

@@ -278,15 +278,14 @@ class ChatMessageRow extends StatelessWidget {
             if (reacts && onReact != null)
               ChatReactionPicker(messageId: message.id, onPick: onReact),
             if (hasMenu)
-              // As compact as the picker beside it, so the two glyphs share a
-              // center and the button does not make a one-line message taller.
-              // The Builder makes the button the anchor of "Add reaction".
+              // The same 48dp touch target as the picker beside it, so the two
+              // glyphs share a center (#2605). The Builder makes the button
+              // the anchor of "Add reaction".
               Builder(
                 builder: (context) => QuarkMenuButton(
                   key: ValueKey('message_menu_${message.id}'),
                   tooltip: 'Message actions',
                   iconSize: 18,
-                  visualDensity: VisualDensity.compact,
                   entries: menuEntries(context, () => quarkMenuAnchor(context)),
                 ),
               ),

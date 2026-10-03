@@ -78,4 +78,24 @@ void main() {
       lessThanOrEqualTo(QuarkBrandButton.preferredWidth),
     );
   });
+
+  testBothViewports('is a 48dp button to a screen reader', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      Center(
+        child: QuarkBrandButton(label: 'Files', onTap: () {}),
+      ),
+      size: size,
+    );
+    final handle = tester.ensureSemantics();
+
+    final button = find.byKey(const ValueKey('brand_button'));
+    expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
+    expect(tester.getSemantics(button).flagsCollection.isButton, isTrue);
+    handle.dispose();
+    await expectTapTargetGuidelines(tester);
+  });
 }

@@ -133,7 +133,14 @@ void main() {
 
     for (final i in [0, 1]) {
       expect(tester.getSize(tab(i)).width, 160);
-      expect(tester.getSize(menuButton(i)), const Size(24, 24));
+      // A 24px glyph box in a 48dp touch target.
+      expect(
+        tester.getSize(
+          find.descendant(of: menuButton(i), matching: find.byType(Material)),
+        ),
+        const Size(24, 24),
+      );
+      expect(tester.getSize(menuButton(i)), const Size.square(48));
     }
     expect(gap(0), gap(1));
     expect(tester.takeException(), isNull);
@@ -319,4 +326,16 @@ void main() {
       expect(other.style?.color, tokens.mutedForeground);
     });
   }
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(
+      tester,
+      Center(child: strip(const ['Sheet 1', 'Sheet 2'])),
+      size: size,
+    );
+
+    expect(tester.getSize(tab(0)).height, greaterThanOrEqualTo(48));
+    expect(tester.getSize(menuButton(0)).height, greaterThanOrEqualTo(48));
+    await expectTapTargetGuidelines(tester);
+  });
 }

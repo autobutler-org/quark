@@ -261,4 +261,21 @@ void main() {
       expect(pane.color, tokens.sidebar);
     });
   }
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(tester, layout(events: []), size: size);
+
+    for (final key in const [
+      'chat_layout_channels_toggle',
+      'chat_layout_members_toggle',
+    ]) {
+      if (find.byKey(ValueKey(key)).evaluate().isEmpty) continue;
+      expect(
+        tester.getSize(find.byKey(ValueKey(key))),
+        const Size.square(QuarkBarIconButton.tapTargetSize),
+        reason: key,
+      );
+    }
+    await expectTapTargetGuidelines(tester);
+  });
 }

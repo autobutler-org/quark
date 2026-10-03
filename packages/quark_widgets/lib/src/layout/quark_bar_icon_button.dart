@@ -12,6 +12,11 @@ import '../theme/quark_tokens.dart';
 /// refresh, the theme toggle, the jobs badge — is one of these now, at one
 /// glyph size.
 ///
+/// The visual is a [size] square, but the button takes a [tapTargetSize]
+/// square in layout and answers taps across all of it: the 48dp minimum
+/// touch target (#2605). A bar lays its controls out with no gap of their
+/// own, because that [tapTargetMargin] is the gap.
+///
 /// A null [onPressed] renders it disabled rather than hiding it, so a bar
 /// keeps its shape as an action comes and goes. [isBusy] swaps the glyph for
 /// a spinner and refuses taps, for an action that is already running.
@@ -41,8 +46,16 @@ class QuarkBarIconButton extends StatelessWidget {
   /// The glyph size every bar action shares.
   static const double glyphSize = 18;
 
-  /// The button's outer edge: the glyph, its padding, and the border.
+  /// The button's visible edge: the glyph, its padding, and the border.
   static const double size = 36;
+
+  /// The square the button takes in layout and answers taps in: the 48dp
+  /// minimum touch target, with the [size] visual centered in it.
+  static const double tapTargetSize = kMinInteractiveDimension;
+
+  /// The tappable margin on each side of the visual, which is also the space
+  /// a bar leaves between two controls.
+  static const double tapTargetMargin = (tapTargetSize - size) / 2;
 
   /// The glyph, from `QuarkIcons`.
   final IconData icon;
@@ -84,7 +97,7 @@ class QuarkBarIconButton extends StatelessWidget {
         padding: EdgeInsets.zero,
         minimumSize: const Size.square(size),
         maximumSize: const Size.square(size),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        tapTargetSize: MaterialTapTargetSize.padded,
         visualDensity: VisualDensity.standard,
       ),
       icon: isBusy ? QuarkLoader(size: glyphSize) : Icon(icon),

@@ -227,11 +227,18 @@ class _CalendarEventEditorState extends State<CalendarEventEditor> {
                       wide: wide,
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: Switch(
-                          key: const ValueKey('event_all_day'),
-                          value: draft.allDay,
-                          onChanged: (on) =>
-                              widget.onChanged(draft.withAllDay(on)),
+                        // The row's label is drawn beside the switch, not
+                        // read with it, so the switch carries its own (#2603).
+                        child: MergeSemantics(
+                          child: Semantics(
+                            label: 'All day',
+                            child: Switch(
+                              key: const ValueKey('event_all_day'),
+                              value: draft.allDay,
+                              onChanged: (on) =>
+                                  widget.onChanged(draft.withAllDay(on)),
+                            ),
+                          ),
                         ),
                       ),
                     ),

@@ -52,10 +52,50 @@ void main() {
   testWidgets('stands as tall as a bar icon button', (tester) async {
     await pumpAt(tester, toggle('grid', (_) {}), size: narrowViewport);
 
-    expect(
-      tester.getSize(find.byType(SegmentedButton<String>)).height,
-      QuarkBarIconButton.size,
-    );
+    for (final id in const ['list', 'grid']) {
+      final segment = find.ancestor(
+        of: find.byKey(ValueKey('bar_segment_$id')),
+        matching: find.byType(TextButton),
+      );
+      expect(
+        tester
+            .getSize(
+              find.descendant(of: segment, matching: find.byType(Material)),
+            )
+            .height,
+        QuarkBarIconButton.size,
+      );
+      expect(tester.getSize(segment).height, QuarkBarIconButton.tapTargetSize);
+    }
     expect(find.byTooltip('Grid'), findsOneWidget);
+  });
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(tester, toggle('list', (_) {}), size: size);
+
+    await expectTapTargetGuidelines(tester);
+  });
+
+  testWidgets('announces which segment is on', (tester) async {
+    final handle = tester.ensureSemantics();
+    await pumpAt(tester, toggle('grid', (_) {}));
+
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('bar_segment_grid'))),
+      isSemantics(
+        label: 'Grid',
+        isButton: true,
+        isSelected: true,
+        hasSelectedState: true,
+        isInMutuallyExclusiveGroup: true,
+        hasTapAction: true,
+        hasFocusAction: true,
+        hasEnabledState: true,
+        isEnabled: true,
+        isFocusable: true,
+        tooltip: 'Grid',
+      ),
+    );
+    handle.dispose();
   });
 }

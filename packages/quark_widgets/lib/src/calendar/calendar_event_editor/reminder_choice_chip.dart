@@ -48,7 +48,9 @@ class ReminderChoiceChip extends StatelessWidget {
         color: selected ? tokens.primary.withValues(alpha: 0.4) : tokens.border,
       ),
       shape: const StadiumBorder(),
-      visualDensity: VisualDensity.compact,
+      // Standard density and a padded target, so the chip answers taps
+      // across 48dp whatever the platform (#2605).
+      materialTapTargetSize: MaterialTapTargetSize.padded,
     );
   }
 }

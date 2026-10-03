@@ -75,7 +75,6 @@ class PhotoCategoryList extends StatelessWidget {
             ListTile(
               key: ValueKey('photo_category_${category.id}'),
               dense: true,
-              visualDensity: VisualDensity.compact,
               contentPadding: EdgeInsets.zero,
               onTap: () => onSelected(category.id),
               leading: Icon(
