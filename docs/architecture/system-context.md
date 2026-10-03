@@ -51,6 +51,16 @@ flowchart TB
 | `quark serve`   | builds `deputil.DefaultDependencies()` and calls `server.StartServer`                 |
 | `quark version` | prints the build version                                                            |
 
+`quark install --system-only` runs as root before every service start, so its setup reaches devices already in
+the field. On a host with apt it also calls `pkg/util/aptutil`: a drop-in at
+`/etc/apt/apt.conf.d/52quark-unattended-upgrades` limits unattended-upgrades to Debian's security pocket and never
+reboots the device on its own (#2122), the package itself is installed in the background if missing, and every
+installed `linux-image-*`, `linux-dtb-*`, `linux-headers-*`, `linux-u-boot-*`, `armbian-bsp-*` and
+`armbian-firmware*` package is held with `apt-mark hold` at the version the device booted (#2124). To move a board
+to a newer kernel on purpose, run `sudo quark install --release-kernel-hold`: it unholds those packages and writes
+`/etc/quark/release-kernel-hold`, which keeps them unheld across restarts. Delete that file to hold them again on
+the next start. Without apt (macOS, a minimal container) the step is skipped with a log line.
+
 `quark serve` binds `HTTPS_PORT` (default 443) with a self-signed certificate from `tlsutil`, or `PORT` (default
 8080) in insecure dev mode. The same listener serves the API under `/api/v0`, Swagger under `/swagger`, and the
 Flutter web build for every other path (an SPA fallback returns `index.html` so go_router can read the URL).
