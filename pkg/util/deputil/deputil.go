@@ -11,6 +11,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
@@ -42,6 +43,9 @@ type Dependencies interface {
 	// closing the database (#2772).
 	Background() *sync.WaitGroup
 	BackupJobStore() backup.BackupJobStore
+	// ByTypeCache keeps the /files/by-type walk between requests until the
+	// file tree changes (#1780). Nil caches nothing.
+	ByTypeCache() *fileutil.ByTypeCache
 	// ChatRateLimiter limits chat writes per account; keys are the account
 	// and route.
 	ChatRateLimiter() *ratelimitutil.Limiter
@@ -67,6 +71,7 @@ type Dependencies interface {
 	// ZipSlots caps how many folder zips are built at once (#2757). Nil
 	// caps nothing.
 	ZipSlots() *downloadutil.ZipSlots
+	WithByTypeCache(cache *fileutil.ByTypeCache) Dependencies
 	WithChatRateLimiter(limiter *ratelimitutil.Limiter) Dependencies
 	WithDatabase(database *db.DatabaseSqlc) Dependencies
 	WithDownloadTokens(store *downloadutil.TokenStore) Dependencies
