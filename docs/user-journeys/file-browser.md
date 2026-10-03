@@ -255,7 +255,7 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 
 **Expected result:**
 
-- Image viewer opens (`ImageViewerPage`).
+- Image viewer opens (`ImageViewerPage`) at `/view/<path>`.
 - Image is displayed correctly.
 - User can navigate back to the file browser.
 
@@ -819,3 +819,26 @@ group the user is in, publishes `access_changed`.
 - A session old enough to have no stored username is greeted with "Welcome back" alone.
 - An owner who has not dismissed their card (JN-FB-041) sees that card after signing in, not this line.
 
+---
+
+### JN-FB-043: Open, reload and share a file by its URL
+
+**Preconditions:** A photo, an SVG, a video, an audio file and a `.pdf` exist in a folder in Files.
+
+**Steps:**
+
+1. From the folder, the home folder included, tap each file in turn.
+2. Reload the page with the file open, or paste its URL into another signed-in browser.
+3. Press browser back, then close a file with the viewer's back button instead.
+4. Sign out, then open the file's URL.
+
+**Expected result:**
+
+- Each file opens at its own `/view/<path>` URL, a new history entry. `/files/<path>` to a file lands there too.
+- A reload or a pasted URL reopens the same viewer.
+- Browser back closes the viewer and returns to the folder.
+- Closing the viewer returns to the folder, and browser back from there does not reopen the viewer.
+- Signed out, the URL goes to sign-in, and signing in returns to the file.
+
+**Notes:** Docs, sheets and text have their own `/docs`, `/sheets` and `/edit` URLs, and `/view/<path>` to one of
+them goes there. Files inside an archive still open over the browser and have no URL of their own (#2328).

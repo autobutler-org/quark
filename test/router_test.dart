@@ -1157,6 +1157,111 @@ void main() {
       expect(find.text('# general'), findsOneWidget);
     });
   });
+
+  // #2328: every kind with an in-app viewer opens at its own URL, so a reload
+  // or a shared link reopens it, and browser back closes it.
+  group('/view/:path', () {
+    test('keeps a kind with a viewer on its own URL', () {
+      for (final path in [
+        'photos/beach.jpg',
+        'art/logo.svg',
+        'movies/clip.mp4',
+        'music/song.mp3',
+        'papers/report.pdf',
+        'books/novel.epub',
+        'misc/blob.bin',
+      ]) {
+        expect(viewFileRedirect(path, null), isNull, reason: path);
+      }
+    });
+
+    test('sends a kind with an editor to the editor, serial kept', () {
+      expect(
+        viewFileRedirect('a b/q1.qdoc', 's1'),
+        '/docs/a%20b/q1.qdoc?serial=s1',
+      );
+      expect(viewFileRedirect('budget.qsheet', null), '/sheets/budget.qsheet');
+      expect(
+        viewFileRedirect('notes/readme.md', null),
+        '/edit/notes/readme.md',
+      );
+    });
+
+    test('sends a folder and an archive to the file browser', () {
+      expect(viewFileRedirect('photos/2024', null), '/files/photos/2024');
+      expect(
+        viewFileRedirect('backups/old.zip', 's1'),
+        '/files/backups/old.zip?serial=s1',
+      );
+    });
+
+    test('the app routes /view to the file viewer', () {
+      final view = router.configuration.routes.whereType<GoRoute>().firstWhere(
+        (route) => route.path == '${AppRoutes.viewFile}/:path(.*)',
+      );
+      expect(view.builder, isNotNull, reason: '/view used to only redirect');
+      expect(
+        AppRoutes.viewFilePath('my photos/beach 1.jpg', serial: 's1'),
+        '/view/my%20photos/beach%201.jpg?serial=s1',
+      );
+    });
+
+    testWidgets('a signed-out link comes back after signing in', (
+      tester,
+    ) async {
+      final settings = AppSettings.instance;
+      const secureStorage = MethodChannel(
+        'plugins.it_nomads.com/flutter_secure_storage',
+      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(secureStorage, (_) async => null);
+      addTearDown(() async {
+        while (settings.hosts.isNotEmpty) {
+          await settings.removeHost(settings.hosts.length - 1);
+        }
+        await settings.setSessionToken(null);
+        authStatusProbe = AuthService.checkStatus;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(secureStorage, null);
+      });
+      await settings.addHost(
+        HostEntry(name: 'Home', hostAddress: 'http://view.local'),
+      );
+      await settings.acceptTerms();
+      authStatusProbe = () async => const AuthStatus(setupComplete: true);
+
+      const link = '/view/photos/beach%201.jpg';
+      final r = GoRouter(
+        initialLocation: link,
+        redirect: authRedirect,
+        refreshListenable: routerRefreshListenable,
+        routes: [
+          GoRoute(
+            path: '${AppRoutes.viewFile}/:path(.*)',
+            builder: (_, state) => Text('view ${state.pathParameters['path']}'),
+          ),
+          GoRoute(
+            path: AppRoutes.files,
+            builder: (_, _) => const Text('files'),
+          ),
+          GoRoute(
+            path: AppRoutes.login,
+            builder: (_, _) => const Text('login'),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+      String at() => r.routerDelegate.currentConfiguration.uri.toString();
+      expect(at(), '/login?from=${Uri.encodeComponent(link)}');
+
+      await settings.setSessionToken('token');
+      await tester.pumpAndSettle();
+      expect(at(), link);
+      expect(find.text('view photos/beach 1.jpg'), findsOneWidget);
+    });
+  });
 }
 
 /// A tabbed page that counts how often its State is created: every creation
