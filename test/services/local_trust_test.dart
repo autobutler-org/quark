@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/local_trust.dart';
+import 'package:quark/services/local_trust_overrides_io.dart';
 
 void main() {
   group('isLocalTrustHost', () {
@@ -70,6 +71,85 @@ void main() {
         isTrue,
       );
       expect(isLocalTrustHost(Uri.parse('https://example.com').host), isFalse);
+    });
+  });
+
+  // #2154: a certificate nobody could verify is accepted for a private
+  // address, or for a local name the user chose, and nothing else.
+  group('acceptsUnverifiedCertificate', () {
+    test('accepts private and loopback addresses whatever was chosen', () {
+      expect(acceptsUnverifiedCertificate('192.168.1.10', const []), isTrue);
+      expect(acceptsUnverifiedCertificate('10.0.2.2', const []), isTrue);
+      expect(acceptsUnverifiedCertificate('fe80::1%en0', const []), isTrue);
+      expect(acceptsUnverifiedCertificate('localhost', const []), isTrue);
+    });
+
+    test('accepts a local name only when it was chosen', () {
+      expect(
+        acceptsUnverifiedCertificate('quark.local', const ['quark.local']),
+        isTrue,
+      );
+      expect(
+        acceptsUnverifiedCertificate('Quark.LAN', const ['quark.lan']),
+        isTrue,
+      );
+      expect(acceptsUnverifiedCertificate('quark', const ['quark']), isTrue);
+      expect(
+        acceptsUnverifiedCertificate('printer.lan', const ['quark.local']),
+        isFalse,
+      );
+      expect(
+        acceptsUnverifiedCertificate('router', const ['quark.local']),
+        isFalse,
+      );
+      expect(acceptsUnverifiedCertificate('nas.internal', const []), isFalse);
+    });
+
+    test('never accepts a public or tailnet name, even when chosen', () {
+      expect(
+        acceptsUnverifiedCertificate('example.com', const ['example.com']),
+        isFalse,
+      );
+      expect(
+        acceptsUnverifiedCertificate('quark.tail1234.ts.net', const [
+          'quark.tail1234.ts.net',
+        ]),
+        isFalse,
+      );
+      expect(acceptsUnverifiedCertificate('100.64.0.1', const []), isFalse);
+    });
+
+    test('rejects empty and null hosts', () {
+      expect(acceptsUnverifiedCertificate(null, const ['']), isFalse);
+      expect(acceptsUnverifiedCertificate('', const ['']), isFalse);
+    });
+  });
+
+  group('LocalTrustHttpOverrides', () {
+    LocalTrustHttpOverrides withSaved(List<String?> addresses) =>
+        LocalTrustHttpOverrides(chosenAddresses: () => addresses);
+
+    test('trusts the saved local hosts and private addresses', () {
+      final overrides = withSaved([
+        'https://quark.local',
+        'https://quark.lan:8443',
+      ]);
+      expect(overrides.trusts('quark.local'), isTrue);
+      expect(overrides.trusts('quark.lan'), isTrue);
+      expect(overrides.trusts('192.168.1.10'), isTrue);
+    });
+
+    test('a local active host does not extend trust to other hosts', () {
+      final overrides = withSaved(['https://quark.local']);
+      expect(overrides.trusts('example.com'), isFalse);
+      expect(overrides.trusts('quark.tail1234.ts.net'), isFalse);
+      expect(overrides.trusts('printer.lan'), isFalse);
+    });
+
+    test('reads remote and unparseable addresses without throwing', () {
+      final overrides = withSaved([null, '', 'https://[fe80::1]', '::::']);
+      expect(overrides.trusts('fe80::1'), isTrue);
+      expect(overrides.trusts('quark.local'), isFalse);
     });
   });
 }

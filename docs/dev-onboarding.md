@@ -51,7 +51,8 @@ Which one you want depends on what you're working on:
 | Root needed | no | on Linux, yes — `:443` is privileged |
 
 The self-signed certificate is never added to your system trust store. The Flutter client opts out of chain
-verification for local and LAN addresses so it can talk to it; browsers and `curl` will still warn.
+verification for private and loopback addresses, and for a local name (`quark.local`, `quark.lan`) only once it is
+the Quark you chose, so it can talk to it; browsers and `curl` will still warn.
 
 If you need root — for USB device mounting on Linux, or to bind `:443` in secure mode — prefix any backend
 target with `AS_ROOT=1`, which runs it under `sudo`:

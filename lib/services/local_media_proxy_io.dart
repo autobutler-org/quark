@@ -85,12 +85,14 @@ class _LocalMediaProxyIo implements LocalMediaProxy {
   /// local.
   ///
   /// The decision comes from [isLocalTrustHost] rather than a copy of its
-  /// rules, and it is made against the URL this proxy was constructed with —
-  /// not against whatever hostname the TLS layer reports. iOS has been seen
-  /// handing back an mDNS-resolved address that doesn't match the configured
-  /// host, which is the same trap `connectLocalTrustWs` sidesteps.
+  /// rules, made against the URL this proxy was constructed with. The hostname
+  /// the TLS layer reports only has to look local, not match: iOS has been
+  /// seen handing back an mDNS-resolved address that doesn't match the
+  /// configured host, which is the same trap `connectLocalTrustWs` sidesteps.
+  /// It may not be a public name, so a redirect from the Quark cannot carry
+  /// the opt-out off the local network (#2154).
   bool _shouldTrustCertificate(X509Certificate cert, String host, int port) {
-    return isLocalTrustHost(_upstream.host) || isLocalTrustHost(host);
+    return isLocalTrustHost(_upstream.host) && isLocalTrustHost(host);
   }
 
   @override

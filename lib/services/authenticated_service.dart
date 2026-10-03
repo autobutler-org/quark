@@ -23,8 +23,12 @@ class UnauthorizedException implements Exception {
 /// however long the OS feels like waiting.
 const Duration kConnectTimeout = Duration(seconds: 5);
 
-/// Returns an [http.Client] that trusts self-signed certificates when the
-/// host it is built for is a local/LAN address (see [isLocalTrustHost]).
+/// Returns an [http.Client] that trusts a self-signed certificate from the
+/// host it is built for when that host is a local/LAN address (see
+/// [isLocalTrustHost]). Whatever host the TLS layer reports must look local
+/// too, so a redirect cannot carry the opt-out to a public or tailnet name
+/// (#2154). It is not held to an exact match: iOS can report a name other than
+/// the one dialed.
 ///
 /// [hostAddress] defaults to [activeBaseUrl]. A caller passes one only to
 /// reach a Quark that is not active yet — probing an address before it is
@@ -40,7 +44,8 @@ http.Client buildLocalTrustHttpClient([String? hostAddress]) {
 
   final inner = HttpClient()..connectionTimeout = kConnectTimeout;
   if (isLocalTrustHost(host)) {
-    inner.badCertificateCallback = (cert, host, port) => true;
+    inner.badCertificateCallback = (cert, certHost, port) =>
+        isLocalTrustHost(certHost);
   }
   return IOClient(inner);
 }

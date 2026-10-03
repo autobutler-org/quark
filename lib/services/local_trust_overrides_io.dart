@@ -5,7 +5,8 @@ import 'dart:io';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/local_trust.dart';
 
-/// Applies [isLocalTrustHost] to every [HttpClient] created in this isolate.
+/// Applies [acceptsUnverifiedCertificate] to every [HttpClient] created in this
+/// isolate.
 ///
 /// [buildLocalTrustHttpClient] only covers services that go through the
 /// [AuthenticatedService] mixin. Several services call the top-level
@@ -13,34 +14,42 @@ import 'package:quark/services/local_trust.dart';
 /// their own clients — all of which would otherwise reject the quark's
 /// self-signed certificate. Installing an override catches them all in one
 /// place.
+///
+/// The hosts these clients may reach are not chosen by the user, so a local
+/// name is trusted only when it is one of the saved Quarks' addresses (home or
+/// remote) or the address in use (#2154). Being connected to a local Quark
+/// does not loosen verification for any other host.
 class LocalTrustHttpOverrides extends HttpOverrides {
-  LocalTrustHttpOverrides();
+  /// [chosenAddresses] lists the addresses the user picked; it defaults to the
+  /// saved Quarks plus [activeBaseUrl] and is read again on every handshake, so
+  /// a Quark added later is trusted without reinstalling the override.
+  LocalTrustHttpOverrides({List<String?> Function()? chosenAddresses})
+    : _chosenAddresses = chosenAddresses ?? _savedAddresses;
+
+  final List<String?> Function() _chosenAddresses;
 
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     return super.createHttpClient(context)
-      ..badCertificateCallback = _shouldTrust;
+      ..badCertificateCallback = (cert, host, port) => trusts(host);
   }
 
-  /// Trusts a bad certificate only when the connection targets the local
-  /// network.
-  ///
-  /// [host] is checked first, but on iOS it can arrive as an mDNS-resolved
-  /// address that doesn't match what the user configured, so the configured
-  /// active host is accepted as well.
-  static bool _shouldTrust(X509Certificate cert, String host, int port) {
-    if (isLocalTrustHost(host)) return true;
-    return isLocalTrustHost(_activeHost());
-  }
+  /// Whether a certificate that failed verification is accepted from [host].
+  bool trusts(String host) => acceptsUnverifiedCertificate(host, [
+    for (final address in _chosenAddresses()) _hostOf(address),
+  ]);
 
-  static String? _activeHost() {
-    final configured = AppSettings.instance.activeHost;
-    if (configured == null || configured.isEmpty) return null;
-    try {
-      return Uri.parse(configured).host;
-    } catch (_) {
-      return configured;
-    }
+  static List<String?> _savedAddresses() => [
+    activeBaseUrl,
+    for (final entry in AppSettings.instance.hosts) ...[
+      entry.hostAddress,
+      entry.remoteAddress,
+    ],
+  ];
+
+  static String? _hostOf(String? address) {
+    if (address == null || address.isEmpty) return null;
+    return Uri.tryParse(address)?.host;
   }
 }
 
