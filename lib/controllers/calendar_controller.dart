@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show Locale;
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:quark/models/calendar_event.dart';
 import 'package:quark/models/calendar_view.dart';
 import 'package:quark/models/user_account.dart';
@@ -24,6 +26,27 @@ Future<List<String>> listCalendarPeople() async => [
     if (account.status == UserAccount.active) account.username,
 ]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
+/// The weekday [locale]'s weeks start on (#2539): what Flutter's
+/// `MaterialLocalizations.firstDayOfWeekIndex` says for it, so Sunday for
+/// en-US, Monday for de-DE or en-GB, Saturday for fa-IR.
+///
+/// The app's own localizations resolve every device to plain English, which
+/// would make every week start on Sunday, so this asks about the device's
+/// locale directly. A language Flutter has no localizations for gets
+/// `CalendarDates.defaultFirstWeekday`, Sunday.
+int firstWeekdayForLocale(Locale locale) {
+  // Language and region only: they decide the week, and the delegate rejects
+  // a script code in a form intl does not use.
+  final plain = Locale(locale.languageCode, locale.countryCode);
+  const delegate = GlobalMaterialLocalizations.delegate;
+  if (!delegate.isSupported(plain)) return CalendarDates.defaultFirstWeekday;
+  int? index;
+  // Material's delegate answers with a SynchronousFuture, so `then` runs
+  // before this returns.
+  unawaited(delegate.load(plain).then((l) => index = l.firstDayOfWeekIndex));
+  return CalendarDates.firstWeekdayFromIndex(index);
+}
+
 /// State behind the Calendar page (#1144): which view and date are on show,
 /// the events in that span expanded into occurrences, the next seven days for
 /// Upcoming, and which reminder is due.
@@ -38,6 +61,10 @@ Future<List<String>> listCalendarPeople() async => [
 /// signed-in person's with [mineOnly], or a named person's with [person],
 /// which an admin picks from [people]. The calendar stays shared, so this is
 /// a filter over what every account can see anyway.
+///
+/// Weeks and month rows start on [firstWeekday], which the page sets from the
+/// device locale through [show]; the span it loads and the grid it draws both
+/// come from [days], so they always agree (#2539).
 class CalendarController extends ChangeNotifier {
   CalendarController({
     this.listEvents = CalendarService.listEvents,
@@ -46,8 +73,9 @@ class CalendarController extends ChangeNotifier {
     this.listPeople = listCalendarPeople,
     this.canListPeople = _isAdmin,
     this.clock = DateTime.now,
-    this.firstWeekday = DateTime.sunday,
-  }) : _anchor = CalendarDates.dateOnly(clock()),
+    int firstWeekday = CalendarDates.defaultFirstWeekday,
+  }) : _firstWeekday = firstWeekday,
+       _anchor = CalendarDates.dateOnly(clock()),
        _now = clock();
 
   final ListCalendarEventsFn listEvents;
@@ -63,8 +91,10 @@ class CalendarController extends ChangeNotifier {
 
   static bool _isAdmin() => AppSettings.instance.isAdmin.value;
 
+  int _firstWeekday;
+
   /// The weekday a week and a month row start on.
-  final int firstWeekday;
+  int get firstWeekday => _firstWeekday;
 
   /// How many days Upcoming covers, today included.
   static const int upcomingDays = 7;
@@ -220,18 +250,21 @@ class CalendarController extends ChangeNotifier {
   };
 
   /// Shows [view] around [anchor], narrowed to the signed-in person's events
-  /// with [mineOnly] or to [person]'s, loading its span when it changed.
-  /// Changing only the filter loads nothing: it narrows what is loaded.
+  /// with [mineOnly] or to [person]'s, with weeks starting on [firstWeekday]
+  /// when given, loading its span when it changed. Changing only the filter
+  /// loads nothing: it narrows what is loaded.
   Future<void> show(
     CalendarView view,
     DateTime anchor, {
     bool mineOnly = false,
     String? person,
+    int? firstWeekday,
   }) async {
     final date = CalendarDates.dateOnly(anchor);
     final before = days;
     _view = view;
     _anchor = date;
+    _firstWeekday = firstWeekday ?? _firstWeekday;
     _mineOnly = mineOnly;
     _person = person;
     final after = days;

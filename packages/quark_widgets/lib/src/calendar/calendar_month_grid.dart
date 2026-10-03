@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/calendar_event_item.dart';
 import '../theme/quark_tokens.dart';
 import 'calendar_dates.dart';
+import 'calendar_empty_notice.dart';
 import 'calendar_labels.dart';
 import 'calendar_month_grid/month_day_cell.dart';
 
@@ -12,8 +13,20 @@ import 'calendar_month_grid/month_day_cell.dart';
 /// six rows sharing the height it is given, so give it a bounded height (an
 /// `Expanded`, say), never an unbounded scroll view. An event spanning several
 /// dates is listed on each. Each cell shows as many events as fit and a
-/// "+N more" line for the rest. On a narrow grid (a phone) the cells go dense:
-/// no times, smaller type, the grid drawn edge to edge.
+/// "+N more" line for the rest. On a narrow grid (a phone) the cells go dense
+/// and drawn edge to edge: a title clipped to a few letters tells events apart
+/// no better than nothing (#2541), so each date shows a colored dot per event,
+/// up to [maxDots], and "+N" for the rest. Its accessible label reads every
+/// title, and a tap opens the date, where they fit.
+///
+/// A month with no events on its own dates keeps its grid and adds a
+/// [CalendarEmptyNotice] under it, "Nothing planned this month", whose
+/// "Add an event" calls [onAddEvent] (#2538). It stays away while [isLoading],
+/// so a month still on its way never reads as empty.
+///
+/// Rows start on [firstWeekday]; pass the locale's, from
+/// `CalendarDates.firstWeekdayFromIndex`, and the same one the caller loaded
+/// the span with (#2539).
 ///
 /// Tapping a date calls [onDayTap], which is also what its "+N more" does:
 /// the Day view is where every event on it fits. A long press calls
@@ -22,8 +35,10 @@ import 'calendar_month_grid/month_day_cell.dart';
 ///
 /// Key prefixes: `calendar_day_<yyyy-mm-dd>` on each date,
 /// `calendar_add_<yyyy-mm-dd>` on its hover add button,
-/// `calendar_more_<yyyy-mm-dd>` on its overflow line, and
-/// `calendar_event_<item.key>` on each event.
+/// `calendar_more_<yyyy-mm-dd>` on its overflow line,
+/// `calendar_event_<item.key>` on each event, and on a phone
+/// `calendar_dots_<yyyy-mm-dd>` on a date's dots, `calendar_dot_<item.key>` on
+/// each. `calendar_month_add` is the empty month's button.
 ///
 /// ```dart
 /// CalendarMonthGrid(
@@ -42,11 +57,13 @@ class CalendarMonthGrid extends StatelessWidget {
     required this.today,
     required this.events,
     this.selectedDay,
-    this.firstWeekday = DateTime.sunday,
+    this.firstWeekday = CalendarDates.defaultFirstWeekday,
+    this.isLoading = false,
     this.onDayTap,
     this.onDayLongPress,
     this.onAddTap,
     this.onEventTap,
+    this.onAddEvent,
     super.key,
   });
 
@@ -62,8 +79,12 @@ class CalendarMonthGrid extends StatelessWidget {
   /// The date drawn as selected, or null for none.
   final DateTime? selectedDay;
 
-  /// The weekday each row starts on, `DateTime.sunday` by default.
+  /// The weekday each row starts on, [CalendarDates.defaultFirstWeekday]
+  /// unless the caller passes the locale's.
   final int firstWeekday;
+
+  /// Whether [events] is still loading, which holds back the empty notice.
+  final bool isLoading;
 
   /// Called with the date that was tapped.
   final ValueChanged<DateTime>? onDayTap;
@@ -77,6 +98,12 @@ class CalendarMonthGrid extends StatelessWidget {
   /// Called with the event whose chip was tapped.
   final ValueChanged<CalendarEventItem>? onEventTap;
 
+  /// Called by the empty month's "Add an event". Null hides the button.
+  final VoidCallback? onAddEvent;
+
+  /// The most dots a phone-sized date draws before "+N".
+  static const int maxDots = 3;
+
   /// Below this width per column, cells draw dense.
   static const double denseColumnWidth = 90;
 
@@ -86,6 +113,14 @@ class CalendarMonthGrid extends StatelessWidget {
     final days = CalendarDates.monthGrid(month, firstWeekday: firstWeekday);
     final rows = days.length ~/ 7;
     final byDay = eventsByDay(events);
+    final empty =
+        !isLoading &&
+        !days.any(
+          (day) =>
+              day.month == month.month &&
+              day.year == month.year &&
+              byDay.containsKey(CalendarDates.key(day)),
+        );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -154,6 +189,7 @@ class CalendarMonthGrid extends StatelessWidget {
                                 selectedDay!,
                               ),
                           dense: dense,
+                          maxDots: maxDots,
                           lastColumn: col == 6,
                           lastRow: row == rows - 1,
                           onTap: onDayTap == null
@@ -174,17 +210,37 @@ class CalendarMonthGrid extends StatelessWidget {
           ],
         );
 
-        if (dense) return ColoredBox(color: tokens.card, child: grid);
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: tokens.card,
-            border: Border.all(color: tokens.border),
-            borderRadius: BorderRadius.circular(tokens.radiusLg),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(tokens.radiusLg - 1),
-            child: grid,
-          ),
+        final framed = dense
+            ? ColoredBox(color: tokens.card, child: grid)
+            : DecoratedBox(
+                decoration: BoxDecoration(
+                  color: tokens.card,
+                  border: Border.all(color: tokens.border),
+                  borderRadius: BorderRadius.circular(tokens.radiusLg),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(tokens.radiusLg - 1),
+                  child: grid,
+                ),
+              );
+        if (!empty) return framed;
+        // The grid is the product, so an empty month keeps it and says so
+        // underneath rather than in its place.
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: framed),
+            Padding(
+              padding: EdgeInsets.all(tokens.spacingSm),
+              child: Center(
+                child: CalendarEmptyNotice(
+                  headline: 'Nothing planned this month',
+                  buttonKey: const ValueKey('calendar_month_add'),
+                  onAdd: onAddEvent,
+                ),
+              ),
+            ),
+          ],
         );
       },
     );

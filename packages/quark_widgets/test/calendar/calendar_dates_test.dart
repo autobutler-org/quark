@@ -53,6 +53,50 @@ void main() {
     expect(CalendarDates.monthGrid(DateTime(2026, 8)), hasLength(42));
   });
 
+  group('week start from a locale (#2539)', () {
+    test('maps MaterialLocalizations.firstDayOfWeekIndex to a weekday', () {
+      // en-US: Sunday first.
+      expect(CalendarDates.firstWeekdayFromIndex(0), DateTime.sunday);
+      // de-DE, en-GB: Monday first.
+      expect(CalendarDates.firstWeekdayFromIndex(1), DateTime.monday);
+      // fa-IR, ar-EG: Saturday first.
+      expect(CalendarDates.firstWeekdayFromIndex(6), DateTime.saturday);
+    });
+
+    test('falls back to the documented default', () {
+      expect(CalendarDates.defaultFirstWeekday, DateTime.sunday);
+      expect(
+        CalendarDates.firstWeekdayFromIndex(null),
+        CalendarDates.defaultFirstWeekday,
+      );
+      expect(
+        CalendarDates.firstWeekdayFromIndex(7),
+        CalendarDates.defaultFirstWeekday,
+      );
+      expect(
+        CalendarDates.firstWeekdayFromIndex(-1),
+        CalendarDates.defaultFirstWeekday,
+      );
+    });
+
+    test('monthGrid starts each row on the weekday it is given', () {
+      final monday = CalendarDates.monthGrid(
+        DateTime(2026, 9),
+        firstWeekday: DateTime.monday,
+      );
+      expect(monday.first, DateTime(2026, 8, 31));
+      expect(monday.last, DateTime(2026, 10, 4));
+
+      final saturday = CalendarDates.monthGrid(
+        DateTime(2026, 9),
+        firstWeekday: DateTime.saturday,
+      );
+      expect(saturday.first, DateTime(2026, 8, 29));
+      expect(saturday.first.weekday, DateTime.saturday);
+      expect(saturday.last.weekday, DateTime.friday);
+    });
+  });
+
   test('an item covers every date it touches, its end exclusive', () {
     final weekend = CalendarEventItem(
       eventId: 1,

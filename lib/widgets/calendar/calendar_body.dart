@@ -15,6 +15,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// one that fails later keeps the last view on show under an [ErrorBanner]
 /// with its own Try again (#2540).
 ///
+/// Month rows start on [firstWeekday], the same weekday the page loaded the
+/// span with (#2539). An empty Month or Day says so over its grid and offers
+/// [onAddEvent], but not while [isLoading], when an empty span only means the
+/// new one has not arrived yet (#2538).
+///
 /// Key prefixes: `calendar_retry` on the first load's retry button,
 /// `calendar_error_retry` on a later failed load's, and the keys of the
 /// package widget on show.
@@ -29,6 +34,8 @@ class CalendarBody extends StatelessWidget {
     required this.occurrences,
     required this.upcoming,
     required this.isInitialLoad,
+    required this.isLoading,
+    required this.firstWeekday,
     required this.onPrevious,
     required this.onNext,
     required this.onRetry,
@@ -60,6 +67,12 @@ class CalendarBody extends StatelessWidget {
   /// Whether nothing has loaded yet.
   final bool isInitialLoad;
 
+  /// Whether a load is in flight, which holds back the empty states.
+  final bool isLoading;
+
+  /// The weekday month rows start on.
+  final int firstWeekday;
+
   /// The reminder to show above the view, or null.
   final CalendarEventItem? dueReminder;
 
@@ -82,7 +95,7 @@ class CalendarBody extends StatelessWidget {
   /// Opens an event in the form.
   final ValueChanged<CalendarEventItem> onEventTap;
 
-  /// Creates an event from an empty Upcoming list.
+  /// Creates an event from an empty Month, Day or Upcoming.
   final VoidCallback onAddEvent;
 
   /// Hides [dueReminder].
@@ -118,10 +131,13 @@ class CalendarBody extends StatelessWidget {
         today: today,
         selectedDay: CalendarDates.isSameDay(anchor, today) ? today : null,
         events: occurrences,
+        firstWeekday: firstWeekday,
+        isLoading: isLoading,
         onDayTap: onDayTap,
         onDayLongPress: onCreateOn,
         onAddTap: onCreateOn,
         onEventTap: onEventTap,
+        onAddEvent: onAddEvent,
       ),
       CalendarView.week || CalendarView.day => CalendarTimeGrid(
         // A new span is a new timeline, opening at the morning again.
@@ -132,9 +148,11 @@ class CalendarBody extends StatelessWidget {
         today: today,
         now: now,
         events: occurrences,
+        isLoading: isLoading,
         onSlotTap: onCreateAt,
         onEventTap: onEventTap,
         onDayTap: onDayTap,
+        onAddEvent: onAddEvent,
       ),
       CalendarView.upcoming => CalendarUpcomingList(
         days: upcoming,

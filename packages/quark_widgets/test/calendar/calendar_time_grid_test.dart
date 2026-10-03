@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -37,6 +39,8 @@ Widget _grid({
   ValueChanged<DateTime>? onSlotTap,
   ValueChanged<CalendarEventItem>? onEventTap,
   ValueChanged<DateTime>? onDayTap,
+  VoidCallback? onAddEvent,
+  bool isLoading = false,
 }) => CalendarTimeGrid(
   days: days,
   today: _today,
@@ -46,6 +50,8 @@ Widget _grid({
   onSlotTap: onSlotTap,
   onEventTap: onEventTap,
   onDayTap: onDayTap,
+  onAddEvent: onAddEvent,
+  isLoading: isLoading,
 );
 
 void main() {
@@ -211,5 +217,108 @@ void main() {
 
     // Event blocks are as tall as their events last, which #2605 leaves open.
     await expectTapTargetGuidelines(tester, checkSize: false);
+  });
+
+  group('an empty day (#2538)', () {
+    testBothViewports('keeps its timeline and offers to add an event', (
+      tester,
+      size,
+    ) async {
+      var added = 0;
+      DateTime? start;
+      await pumpAt(
+        tester,
+        _grid(
+          days: [_today],
+          events: const [],
+          onAddEvent: () => added++,
+          onSlotTap: (s) => start = s,
+        ),
+        size: size,
+      );
+      expect(find.text('Free day'), findsOneWidget);
+      expect(find.text('Nothing scheduled'), findsOneWidget);
+      expect(find.text('No all-day events'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('calendar_day_add')));
+      expect(added, 1);
+      // The hours around the notice still create at their hour.
+      await tester.tap(
+        find.byKey(const ValueKey('calendar_slot_2026-09-29_11')),
+      );
+      expect(start, DateTime(2026, 9, 29, 11));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an all-day event alone is not a free day', (tester) async {
+      await pumpAt(
+        tester,
+        _grid(days: [_today], events: [_garden], onAddEvent: () {}),
+      );
+      expect(find.text('Free day'), findsNothing);
+    });
+
+    testWidgets('says nothing while loading, or across a week', (tester) async {
+      await pumpAt(
+        tester,
+        _grid(
+          days: [_today],
+          events: const [],
+          isLoading: true,
+          onAddEvent: () {},
+        ),
+      );
+      expect(find.text('Free day'), findsNothing);
+      await pumpAt(
+        tester,
+        _grid(
+          days: CalendarDates.weekOf(_today),
+          events: const [],
+          onAddEvent: () {},
+        ),
+      );
+      expect(find.text('Free day'), findsNothing);
+    });
+
+    for (final size in [narrowViewport, wideViewport]) {
+      testWidgets('survives text at twice the size at $size', (tester) async {
+        await pumpAt(
+          tester,
+          Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(2)),
+              child: _grid(days: [_today], events: const [], onAddEvent: () {}),
+            ),
+          ),
+          size: size,
+        );
+        expect(find.text('Free day'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testBothViewports('its button is a labeled, full-size target', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        _grid(days: [_today], events: const [], onAddEvent: () {}),
+        size: size,
+      );
+      final handle = tester.ensureSemantics();
+      final button = tester.getSize(
+        find.byKey(const ValueKey('calendar_day_add')),
+      );
+      expect(button.height, greaterThanOrEqualTo(48));
+      final semantics = tester
+          .getSemantics(find.byKey(const ValueKey('calendar_day_add')))
+          .getSemanticsData();
+      expect(semantics.label, 'Add an event');
+      expect(semantics.flagsCollection.isButton, isTrue);
+      expect(semantics.hasAction(SemanticsAction.tap), isTrue);
+      handle.dispose();
+    });
   });
 }
