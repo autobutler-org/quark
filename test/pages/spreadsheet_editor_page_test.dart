@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:data_table/data_sheet.dart';
+import 'package:data_table/data_table.dart' show CellFormat;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,7 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// #2691: column widths, row heights and frozen panes live in the `.qsheet`
 /// tab beside its data, and sheets saved before them still open. #2694: so do
-/// column filters.
+/// column filters. #2693: and cell formats.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -97,7 +98,24 @@ void main() {
       expect(controller.rowHeights, [40.0, 40.0, 40.0]);
       expect(controller.frozenRows, 0);
       expect(controller.hasFilters, isFalse);
+      expect(controller.formats, isEmpty);
       expect(find.byKey(const ValueKey('frozen_rows_divider')), findsNothing);
+    });
+
+    testWidgets('saved cell formats are drawn ($name)', (tester) async {
+      await pumpEditor(tester, {
+        'name': 'Sheet 1',
+        'data': rows,
+        'formats': [
+          {'row': 0, 'col': 0, 'bold': true},
+          {'row': 1, 'col': 1, 'numberFormat': 'currency', 'decimals': 0},
+        ],
+      }, size: size);
+
+      final controller = sheetController(tester);
+      expect(controller.formatAt(0, 0).bold, isTrue);
+      expect(find.text(r'$1,200'), findsOneWidget);
+      expect(controller.cellAt(1, 1).value, '1200');
     });
 
     testWidgets('saved filters hide their rows ($name)', (tester) async {
@@ -164,7 +182,9 @@ void main() {
     expect(controller.rowHeights, [30.0, 40.0, 40.0]);
   });
 
-  testWidgets('the saved form carries the freeze and filters', (tester) async {
+  testWidgets('the saved form carries the freeze, filters and formats', (
+    tester,
+  ) async {
     // The autosave's upload opens its own client; refuse it so nothing
     // depends on a live Quark.
     final previous = HttpOverrides.current;
@@ -173,6 +193,10 @@ void main() {
     await pumpEditor(tester, {'name': 'Sheet 1', 'data': rows});
 
     sheetController(tester)
+      ..applyFormat(
+        const CellRange(top: 0, left: 0, bottom: 0, right: 1),
+        (f) => f.withBold(true).withFillColor(0x4010B981),
+      )
       ..setFrozenRows(1)
       ..setColumnWidth(1, 175)
       ..setColumnFilter(
@@ -193,6 +217,10 @@ void main() {
     expect(copy.frozenRows, 1);
     expect(copy.columnWidths, [100.0, 175.0]);
     expect(copy.visibleRows, [0, 2]);
+    expect(
+      copy.formatAt(0, 1),
+      const CellFormat(bold: true, fillColor: 0x4010B981),
+    );
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
   });

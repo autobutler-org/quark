@@ -20,6 +20,7 @@ void main() {
           child: Column(
             children: [
               DataSheetControlBar(controller: sheetController),
+              DataSheetFormatBar(controller: sheetController),
               Expanded(
                 child: DataSheet(
                   controller: sheetController,
