@@ -24,6 +24,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/healthutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
@@ -93,6 +94,12 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	idx := storageutil.NewFileIndex()
 	idx.BuildAndWatch(deps.EventBus(), deps.StorageService().GetManagedDevices)
 	deps.WithFileIndex(idx)
+
+	// Keep the Docs and Sheets listings between requests until a file event
+	// says the tree changed (#1780).
+	byType := fileutil.NewByTypeCache()
+	byType.Watch(deps.EventBus())
+	deps.WithByTypeCache(byType)
 
 	// Start the FTS5 content indexer — indexes uploaded text files and
 	// removes entries for deleted/moved files.

@@ -7,6 +7,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
@@ -22,6 +23,7 @@ import (
 type dependencies struct {
 	authRateLimiter  *ratelimitutil.Limiter
 	backupJobStore   backup.BackupJobStore
+	byTypeCache      *fileutil.ByTypeCache
 	chatRateLimiter  *ratelimitutil.Limiter
 	loginGuard       *ratelimitutil.LoginGuard
 	vaultRateLimiter *ratelimitutil.Limiter
@@ -69,6 +71,15 @@ func (d *dependencies) RepairSystem() repairutil.System {
 
 func (d *dependencies) WithRepairSystem(system repairutil.System) Dependencies {
 	d.repairSystem = system
+	return d
+}
+
+func (d *dependencies) ByTypeCache() *fileutil.ByTypeCache {
+	return d.byTypeCache
+}
+
+func (d *dependencies) WithByTypeCache(cache *fileutil.ByTypeCache) Dependencies {
+	d.byTypeCache = cache
 	return d
 }
 

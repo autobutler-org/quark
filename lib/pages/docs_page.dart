@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:quark/controllers/file_type_listing_cache.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -50,7 +51,16 @@ class _DocsPageState extends State<DocsPage>
 
   @override
   void initState() {
+    // Show the last listing on the first frame, then let the refresh the
+    // mixin starts replace it (#1780).
+    final cachedDocs = FileTypeListingCache.instance.peek('qdoc');
+    if (cachedDocs != null) {
+      _files = cachedDocs;
+      _filtered = List.of(cachedDocs);
+      _sheets = FileTypeListingCache.instance.peek('qsheet') ?? const [];
+    }
     super.initState();
+    if (cachedDocs != null) isInitialLoad = false;
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -65,8 +75,8 @@ class _DocsPageState extends State<DocsPage>
   Future<void> refresh() async {
     try {
       final results = await Future.wait([
-        FilesService.getFilesByType('qdoc'),
-        FilesService.getFilesByType('qsheet'),
+        FileTypeListingCache.instance.fetch('qdoc'),
+        FileTypeListingCache.instance.fetch('qsheet'),
       ]);
       setStateSafely(() {
         _files = results[0];
