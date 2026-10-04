@@ -87,12 +87,11 @@ func visibleFiles(access accessutil.Access, files []FileNode) []FileNode {
 	}).Children
 }
 
-// readableNodes keeps the files the caller can read. Unlike a folder listing, a
-// flat result across the tree has no breadcrumbs to keep (#1907).
-func readableNodes(access accessutil.Access, files []FileNode) []FileNode {
-	return slices.DeleteFunc(files, func(f FileNode) bool {
-		return !access.Check(f.DeviceSerial, f.DirPath, accessutil.Read).Readable
-	})
+// readable reports whether the caller can read a search match. Unlike a
+// folder listing, a flat result across the tree has no breadcrumbs to keep
+// (#1907).
+func readable(access accessutil.Access, serial, relPath string) bool {
+	return access.Check(serial, relPath, accessutil.Read).Readable
 }
 
 // listFilesVFS lists files via the VFS registry, optionally scoped to specific device serials.
@@ -426,7 +425,8 @@ type SearchFilesParams struct {
 	Registry vfs.Registry
 	// Storage enumerates the managed devices for the disk walk.
 	Storage *storageutil.StorageService
-	// Query is the substring a file name must contain, empty for everything.
+	// Query is the substring a file name must contain. An empty one, which
+	// would match every file on the appliance, finds nothing.
 	Query string
 	// Serials scopes the search to those devices, empty for all of them.
 	Serials []string
@@ -439,21 +439,25 @@ type SearchFilesResult struct {
 	Files []FileNode
 }
 
-// SearchFiles finds files whose name contains the query, keeping only the ones
-// the caller can read (#1907). The index stays appliance-wide; only its
-// results are filtered.
-func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
-	result, err := searchFiles(params)
-	if err != nil {
-		return SearchFilesResult{}, err
-	}
-	result.Files = readableNodes(params.Access, result.Files)
-	return result, nil
-}
+// MaxSearchResults caps a name search, so a query matching most of the
+// appliance costs a bounded amount of work and response (#2758).
+const MaxSearchResults = 500
 
-// searchFiles finds files whose name contains the query: from the index when
-// one has been built, from a VFS listing or a disk walk otherwise.
-func searchFiles(params SearchFilesParams) (SearchFilesResult, error) {
+// statFile reads a match's size; a variable so a test can prove stat never
+// runs on an unreadable match.
+var statFile = os.Stat
+
+// SearchFiles finds up to MaxSearchResults files whose name contains the
+// query, keeping only the ones the caller can read (#1907): from the index
+// when one has been built, from a VFS listing or a disk walk otherwise. The
+// index stays appliance-wide; a match is checked against the caller's access before
+// anything about it is read from disk, and the search stops at the cap
+// (#2758).
+func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
+	params.Query = strings.TrimSpace(params.Query)
+	if params.Query == "" {
+		return SearchFilesResult{Files: []FileNode{}}, nil
+	}
 	if params.Index == nil {
 		// VFS fallback: recursive list then name-match (avoids disk-walk when VFS is registered).
 		if params.Registry != nil {
@@ -480,12 +484,26 @@ func searchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 		}
 	}
 
-	matches := params.Index.Search(params.Query, serialSet)
+	// The grants alone decide the first cut, in memory and under the
+	// index's lock, so a match the caller cannot read costs no disk access.
+	var matches []storageutil.IndexedFile
+	params.Index.SearchEach(params.Query, serialSet, func(f storageutil.IndexedFile) bool {
+		if params.Access.Level(f.DeviceSerial, f.RelPath) < accessutil.Read {
+			return true
+		}
+		matches = append(matches, f)
+		return len(matches) < MaxSearchResults
+	})
 	allFiles := make([]FileNode, 0, len(matches))
 	for _, f := range matches {
+		// The full check also refuses a path that symlinks out of what the
+		// grants cover; it runs before the stat, never after.
+		if !readable(params.Access, f.DeviceSerial, f.RelPath) {
+			continue
+		}
 		// The index holds no size, which would go stale on every write, so
 		// stat at search time. A file deleted since it was indexed is skipped.
-		info, err := os.Stat(filepath.Join(f.FilesDir, f.RelPath))
+		info, err := statFile(filepath.Join(f.FilesDir, f.RelPath))
 		if err != nil {
 			continue
 		}
@@ -524,7 +542,8 @@ func searchFilesVFS(params SearchFilesParams) (SearchFilesResult, error) {
 		if fi.IsDir {
 			continue
 		}
-		if params.Query != "" && !strings.Contains(strings.ToLower(fi.Name), strings.ToLower(params.Query)) {
+		if !strings.Contains(strings.ToLower(fi.Name), strings.ToLower(params.Query)) ||
+			!readable(params.Access, fi.DeviceSerial, fi.Path) {
 			continue
 		}
 		result = append(result, FileNode{
@@ -538,6 +557,9 @@ func searchFilesVFS(params SearchFilesParams) (SearchFilesResult, error) {
 			DevicePath:   fi.DevicePath,
 			DeviceSerial: fi.DeviceSerial,
 		})
+		if len(result) == MaxSearchResults {
+			break
+		}
 	}
 	return SearchFilesResult{Files: result}, nil
 }
@@ -557,7 +579,7 @@ func searchFilesDiskWalk(params SearchFilesParams) (SearchFilesResult, error) {
 	dirsToScan := []string{""}
 	seenDirs := map[string]bool{"": true}
 
-	for len(dirsToScan) > 0 {
+	for len(dirsToScan) > 0 && len(allFiles) < MaxSearchResults {
 		currentDir := dirsToScan[0]
 		dirsToScan = dirsToScan[1:]
 
@@ -575,7 +597,9 @@ func searchFilesDiskWalk(params SearchFilesParams) (SearchFilesResult, error) {
 				continue
 			}
 
-			if params.Query == "" || strings.Contains(strings.ToLower(entry.Name), strings.ToLower(params.Query)) {
+			if len(allFiles) < MaxSearchResults &&
+				strings.Contains(strings.ToLower(entry.Name), strings.ToLower(params.Query)) &&
+				readable(params.Access, entry.DeviceSerial, entry.DirPath) {
 				allFiles = append(allFiles, entry)
 			}
 		}

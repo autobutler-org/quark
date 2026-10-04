@@ -2,7 +2,6 @@ package v0_files
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
@@ -16,12 +15,12 @@ import (
 // searchFiles godoc
 // @Summary Searches for files
 // @Schemes http https
-// @Description searches for a file across all managed devices for the given search term. If deviceSerial is empty, search across all devices. Otherwise, only for the specified device
+// @Description searches for a file across all managed devices for the given search term. If deviceSerial is empty, search across all devices. Otherwise, only for the specified device. Returns at most 500 files, only ones the caller can read; an empty search term returns an empty list
 // @Tags files
 // @Produce json
 // @Success 200 {array} FileNodeJSON
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
-// @Param query query string false "Search term to find"
+// @Param query query string false "Search term to find; empty finds nothing"
 // @Param serial query string false "Device serial number to filter by"
 // @Security BearerAuth
 // @Router /files/search [get]
@@ -40,7 +39,7 @@ func searchFiles(c *gin.Context) *serverutil.Response {
 		Index:    deps.FileIndex(),
 		Registry: deps.VFSRegistry(),
 		Storage:  deps.StorageService(),
-		Query:    strings.TrimSpace(c.Query("query")),
+		Query:    c.Query("query"),
 		Serials:  c.QueryArray("serial"),
 		Access:   access,
 	})

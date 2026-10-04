@@ -5231,7 +5231,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "searches for a file across all managed devices for the given search term. If deviceSerial is empty, search across all devices. Otherwise, only for the specified device",
+                "description": "searches for a file across all managed devices for the given search term. If deviceSerial is empty, search across all devices. Otherwise, only for the specified device. Returns at most 500 files, only ones the caller can read; an empty search term returns an empty list",
                 "produces": [
                     "application/json"
                 ],
@@ -5242,7 +5242,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Search term to find",
+                        "description": "Search term to find; empty finds nothing",
                         "name": "query",
                         "in": "query"
                     },
