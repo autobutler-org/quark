@@ -4,7 +4,7 @@ import 'package:quark/router.dart';
 import 'package:quark/services/content_search_service.dart';
 import 'package:quark/widgets/doc_sheet_tile.dart';
 
-/// One full-text search hit in the docs or sheets list, drawn as the same
+/// One full-text search hit in the docs, sheets or slides list, drawn as the same
 /// [DocSheetTile] a filename match gets (#2272).
 ///
 /// The hit's own extension decides its icon and which editor it opens, not the
@@ -24,6 +24,19 @@ class ContentResultTile extends StatelessWidget {
     super.key,
   });
 
+  /// The editor URL [result] opens at, picked by its extension.
+  static String routeFor(ContentSearchResult result) {
+    final path = result.relPath;
+    final serial = result.deviceSerial;
+    if (DocSheetTile.isSheet(path)) {
+      return AppRoutes.sheetFile(path, serial: serial);
+    }
+    if (DocSheetTile.isSlides(path)) {
+      return AppRoutes.slideFile(path, serial: serial);
+    }
+    return AppRoutes.docFile(path, serial: serial);
+  }
+
   @override
   Widget build(BuildContext context) {
     return DocSheetTile(
@@ -31,11 +44,7 @@ class ContentResultTile extends StatelessWidget {
       deviceName: deviceName,
       showDevice: showDevice,
       snippet: result.plainSnippet,
-      onTap: () => context.go(
-        DocSheetTile.isSheet(result.relPath)
-            ? AppRoutes.sheetFile(result.relPath, serial: result.deviceSerial)
-            : AppRoutes.docFile(result.relPath, serial: result.deviceSerial),
-      ),
+      onTap: () => context.go(routeFor(result)),
     );
   }
 }

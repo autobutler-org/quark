@@ -30,6 +30,7 @@ const (
 	FileTypePDF       FileType = "pdf"
 	FileTypeQdoc      FileType = "qdoc"
 	FileTypeQsheet    FileType = "qsheet"
+	FileTypeQslide    FileType = "qslide"
 	FileTypeSlideshow FileType = "slideshow"
 	FileTypeSvg       FileType = "svg"
 	FileTypeVideo     FileType = "video"
@@ -202,6 +203,8 @@ func DetermineFileTypeFromPath(filePath string) FileType {
 		return FileTypeQdoc
 	case ".qsheet":
 		return FileTypeQsheet
+	case ".qslide":
+		return FileTypeQslide
 	case ".docx":
 		return FileTypeDocx
 	// .xlsm is the same OOXML package as .xlsx with macros attached, so it

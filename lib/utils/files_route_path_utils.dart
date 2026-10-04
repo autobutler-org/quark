@@ -30,11 +30,11 @@ bool isLikelyFilePath(String path) {
 
 bool hasSupportedFilesEditorForPath(String path) {
   final normalized = path.trim().toLowerCase();
-  return normalized.endsWith('.qdoc') || normalized.endsWith('.qsheet');
+  return hasSupportedFilesEditorForType(fileKindForName(normalized));
 }
 
 bool hasSupportedFilesEditorForType(FileKind kind) =>
-    kind == FileKind.qdoc || kind == FileKind.qsheet;
+    kind == FileKind.qdoc || kind == FileKind.qsheet || kind == FileKind.qslide;
 
 /// File kinds with no in-app viewer yet.
 ///

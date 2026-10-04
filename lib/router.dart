@@ -20,6 +20,8 @@ import 'package:quark/pages/request_account_page.dart';
 import 'package:quark/pages/settings_page.dart';
 import 'package:quark/pages/setup_page.dart';
 import 'package:quark/pages/sheets_page.dart';
+import 'package:quark/pages/slide_editor_page.dart';
+import 'package:quark/pages/slides_page.dart';
 import 'package:quark/pages/spreadsheet_editor_page.dart';
 import 'package:quark/pages/system_page.dart';
 import 'package:quark/pages/terms_page.dart';
@@ -112,6 +114,7 @@ class AppRoutes {
       '$chat/${Uri.encodeComponent(channelId)}';
   static const docs = '/docs';
   static const sheets = '/sheets';
+  static const slides = '/slides';
   static const vault = '/vault';
 
   /// The System page (#2351): the Quark's health, its drives and its jobs,
@@ -294,6 +297,16 @@ class AppRoutes {
   static String sheetFile(String path, {String? serial}) {
     final clean = encodeFilePath(path);
     final base = '$sheets/$clean';
+    return (serial != null && serial.isNotEmpty)
+        ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
+        : base;
+  }
+
+  /// Build a URL for a specific presentation file.
+  /// e.g. slideFile('talks/q1.qslide') → '/slides/talks/q1.qslide'
+  static String slideFile(String path, {String? serial}) {
+    final clean = encodeFilePath(path);
+    final base = '$slides/$clean';
     return (serial != null && serial.isNotEmpty)
         ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
         : base;
@@ -578,6 +591,20 @@ final router = GoRouter(
         return SpreadsheetEditorPage(filePath: filePath, deviceSerial: serial);
       },
     ),
+    GoRoute(
+      path: AppRoutes.slides,
+      builder: (context, state) => const SlidesPage(),
+    ),
+    GoRoute(
+      // Matches /slides/<anything including slashes> — opens the slide
+      // editor. Top-level for the same reason as /docs above (#1749).
+      path: '${AppRoutes.slides}/:path(.*)',
+      builder: (context, state) {
+        final filePath = state.pathParameters['path'] ?? '';
+        final serial = state.uri.queryParameters['serial'] ?? '';
+        return SlideEditorPage(filePath: filePath, deviceSerial: serial);
+      },
+    ),
     ...tabbedRoutes(
       path: AppRoutes.calendar,
       tabs: CalendarView.values,
@@ -685,7 +712,7 @@ final router = GoRouter(
 );
 
 /// Where `/view/[path]` belongs instead, or null when [FileViewerPage] shows
-/// it. Docs, sheets and text have editors at their own URLs; a folder or an
+/// it. Docs, sheets, presentations and text have editors at their own URLs; a folder or an
 /// archive is browsed in Files. [serial] rides along to whichever it is.
 String? viewFileRedirect(String path, String? serial) {
   final folder = AppRoutes.filesPath(path);
@@ -693,6 +720,7 @@ String? viewFileRedirect(String path, String? serial) {
   return switch (fileKindForName(path)) {
     FileKind.qdoc => AppRoutes.docFile(path, serial: serial),
     FileKind.qsheet => AppRoutes.sheetFile(path, serial: serial),
+    FileKind.qslide => AppRoutes.slideFile(path, serial: serial),
     FileKind.text ||
     FileKind.code => AppRoutes.plaintextEditorPath(path, serial: serial),
     FileKind.archive => _withSerial(folder, serial),

@@ -273,6 +273,7 @@ class QuarkIcons {
   static const IconData photo_size_select_large_outlined =
       Icons.photo_size_select_large_outlined;
   static const IconData picture_as_pdf_outlined = Icons.picture_as_pdf_outlined;
+  static const IconData slideshow = Icons.slideshow;
   static const IconData slideshow_outlined = Icons.slideshow_outlined;
   static const IconData video_file_outlined = Icons.video_file_outlined;
   static const IconData audio_file_outlined = Icons.audio_file_outlined;

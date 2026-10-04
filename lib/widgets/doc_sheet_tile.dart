@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark_icons/quark_icons.dart';
 
-/// One doc or sheet in the Docs and Sheets lists, whether it matched by name
+/// One doc, sheet or presentation in the Docs, Sheets and Slides lists, whether it matched by name
 /// or by content, so the same file looks the same either way (#2272).
 ///
 /// The file's own extension picks its icon, so a sheet on the Docs page still
@@ -43,6 +43,10 @@ class DocSheetTile extends StatelessWidget {
   /// Whether [relPath] names a document.
   static bool isDoc(String relPath) => relPath.toLowerCase().endsWith('.qdoc');
 
+  /// Whether [relPath] names a presentation.
+  static bool isSlides(String relPath) =>
+      relPath.toLowerCase().endsWith('.qslide');
+
   /// Identifies a file across a filename listing and a content search, which
   /// spell the same path with and without a leading slash.
   static String fileKey(String deviceSerial, String relPath) =>
@@ -52,7 +56,12 @@ class DocSheetTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final sheet = isSheet(relPath);
-    final accent = sheet ? Colors.green.shade600 : colorScheme.primary;
+    final slides = isSlides(relPath);
+    final accent = sheet
+        ? Colors.green.shade600
+        : slides
+        ? colorScheme.tertiary
+        : colorScheme.primary;
 
     final slash = relPath.lastIndexOf('/');
     final filename = relPath.substring(slash + 1);
@@ -96,6 +105,8 @@ class DocSheetTile extends StatelessWidget {
           child: Icon(
             sheet
                 ? QuarkIcons.table_chart_outlined
+                : slides
+                ? QuarkIcons.slideshow_outlined
                 : QuarkIcons.description_outlined,
             size: 18,
             color: accent,
@@ -103,7 +114,7 @@ class DocSheetTile extends StatelessWidget {
         ),
         title: Text(
           filename.replaceAll(
-            RegExp(r'\.(qdoc|qsheet)$', caseSensitive: false),
+            RegExp(r'\.(qdoc|qsheet|qslide)$', caseSensitive: false),
             '',
           ),
           maxLines: 1,

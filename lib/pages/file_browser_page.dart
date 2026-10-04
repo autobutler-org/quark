@@ -22,6 +22,7 @@ import 'package:quark/services/dropped_file_reader.dart';
 import 'package:quark/models/upload_conflict.dart';
 import 'package:quark/services/upload_manager.dart';
 import 'package:quark/services/files_service.dart';
+import 'package:quark/services/slides_service.dart';
 import 'package:quark/services/sharing_service.dart';
 import 'package:quark/services/health_service.dart';
 import 'package:quark/services/events_service.dart';
@@ -57,6 +58,7 @@ import 'package:quark/widgets/file_browser/shared_roots_sheet.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/quark_connect_form.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The Files page: browse folders and archives on the Quark, upload by picker or drag-and-drop, create, move,
@@ -1131,6 +1133,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         FileKind.qsheet =>
           '{"tabs":[{"name":"Sheet 1","data":{"columns":[],"rows":[]}}]}',
         FileKind.qdoc => '{"ops":[{"insert":"\\n"}]}',
+        FileKind.qslide => QslideCodec.encode(
+          SlidesService.newPresentation(
+            fileNameWithoutExtension(fileName, SlidesService.extension),
+          ),
+        ),
         _ => '',
       };
       final bytes = utf8.encode(emptyContent);
@@ -1155,7 +1162,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       // the listing.
       _refreshFileState();
       switch (kind) {
-        case FileKind.qdoc || FileKind.qsheet:
+        case FileKind.qdoc || FileKind.qsheet || FileKind.qslide:
           _openResolvedFile(filePath, kind, fileName, justCreated: true);
         case FileKind.text || FileKind.code:
           _goToEditor(filePath, AppRoutes.plaintextEditorPath(filePath));
@@ -1924,6 +1931,10 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
       case FileKind.qsheet:
         _goToEditor(filePath, AppRoutes.sheetFile(filePath));
+        return;
+
+      case FileKind.qslide:
+        _goToEditor(filePath, AppRoutes.slideFile(filePath));
         return;
 
       // Source and config files open in the same plaintext editor for now —

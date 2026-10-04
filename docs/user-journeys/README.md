@@ -32,6 +32,7 @@ Journey IDs are stable — don't renumber when adding new ones.
 | [trash.md](trash.md)                     | Trash (browse, restore, delete permanently, empty)     |
 | [docs.md](docs.md)                       | Document editor (.qdoc files)                         |
 | [sheets.md](sheets.md)                   | Spreadsheet editor (.qsheet files)                    |
+| [slides.md](slides.md)                   | Presentation editor (.qslide files)                   |
 | [vault.md](vault.md)                     | Password vault (setup, entries, import/export)         |
 | [health.md](health.md)                   | System page, Health tab: live metrics                  |
 | [storage-devices.md](storage-devices.md) | System page, Storage tab: drive management             |

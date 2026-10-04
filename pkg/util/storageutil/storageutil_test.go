@@ -753,6 +753,7 @@ func TestDetermineFileTypeFromPath(t *testing.T) {
 		{"document.docx", FileTypeDocx},
 		{"notes.qdoc", FileTypeQdoc},
 		{"budget.qsheet", FileTypeQsheet},
+		{"deck.qslide", FileTypeQslide},
 		{"budget.xlsx", FileTypeXlsx},
 		{"macros.xlsm", FileTypeXlsx},
 		{"BUDGET.XLSX", FileTypeXlsx}, // Test case insensitivity

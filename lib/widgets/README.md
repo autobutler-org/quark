@@ -80,6 +80,21 @@ lib/widgets/
                                 a ShareTarget, a file or folder or a chat
                                 channel's members; confirms owner changes
                                 and, for a channel, key-rotating ones
+  slides/
+    slide_editor_body.dart      the slide editor under its bar: reads
+                                SlideEditorController and calls its commands
+    slide_save_status.dart      the editor's save chip, from SlideSaveState
+    slides_body.dart            the Slides list: its rows open editors through
+                                ContentResultTile's router call
+    slides_error_view.dart      opens Settings from the disconnected view and
+                                writes its sentence with Errors
+    slide_panel.dart            the slide panel, slide_thumbnail.dart its rows,
+    slide_thumbnail.dart        and slide_stage.dart (with
+    slide_stage.dart            slide_element_preview.dart) the read-only slide
+    slide_element_preview.dart  they and the editor draw: data in, callbacks
+                                out, app-side until quark_slides gains its
+                                canvas (#1153) and the stage becomes it
+    slides_search_bar.dart      the list's filter field
   system/
     health_tab.dart             the System page's tabs: each loads and
     storage_tab.dart            refreshes itself through its service or
@@ -96,9 +111,9 @@ lib/widgets/
                                 shows its snack bar; the viewer and Files share it
     transcode_dialog_host.dart  hosts TranscodeDialog around an injected
                                 formats loader
-  content_result_tile.dart      one docs/sheets content search hit; pushes the
+  content_result_tile.dart      one docs/sheets/slides content search hit; pushes the
                                 editor its extension names
-  doc_sheet_tile.dart           one doc or sheet row, shared by filename and
+  doc_sheet_tile.dart           one doc, sheet or slides row, shared by filename and
                                 content matches so they look alike (#2272)
   host_dialog.dart              edits AppSettings hosts
   host_manager.dart             edits AppSettings hosts

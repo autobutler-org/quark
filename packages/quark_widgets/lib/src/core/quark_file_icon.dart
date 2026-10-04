@@ -101,6 +101,7 @@ class QuarkFileIcon extends StatelessWidget {
     // Quark native formats
     if (lower.endsWith('.qdoc')) return QuarkIcons.edit_document;
     if (lower.endsWith('.qsheet')) return QuarkIcons.table_chart;
+    if (lower.endsWith('.qslide')) return QuarkIcons.slideshow;
 
     if (lower.endsWith('.doc') ||
         lower.endsWith('.docx') ||
