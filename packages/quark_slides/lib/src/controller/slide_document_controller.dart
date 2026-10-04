@@ -340,6 +340,51 @@ class SlideDocumentController {
         return slide.copyWith(elements: elements..insert(toIndex, element));
       });
 
+  /// Restacks every element in [elementIds] on the slide [slideId] as one
+  /// step, keeping their order among themselves: [ZOrderMove.toFront] and
+  /// [ZOrderMove.toBack] move them past everything else, and
+  /// [ZOrderMove.forward] and [ZOrderMove.backward] each past one
+  /// unselected neighbor.
+  void arrangeElements(
+    String slideId,
+    Iterable<String> elementIds,
+    ZOrderMove move,
+  ) {
+    final ids = elementIds.toSet();
+    _updateSlide(slideId, (slide) {
+      for (final id in ids) {
+        _elementIndex(slide, id);
+      }
+      final elements = [...slide.elements];
+      bool picked(int i) => ids.contains(elements[i].id);
+      void swap(int i, int j) {
+        final e = elements[i];
+        elements[i] = elements[j];
+        elements[j] = e;
+      }
+
+      switch (move) {
+        case ZOrderMove.toFront || ZOrderMove.toBack:
+          final chosen = elements.where((e) => ids.contains(e.id)).toList();
+          final rest = elements.where((e) => !ids.contains(e.id)).toList();
+          return slide.copyWith(
+            elements: move == ZOrderMove.toFront
+                ? [...rest, ...chosen]
+                : [...chosen, ...rest],
+          );
+        case ZOrderMove.forward:
+          for (var i = elements.length - 2; i >= 0; i--) {
+            if (picked(i) && !picked(i + 1)) swap(i, i + 1);
+          }
+        case ZOrderMove.backward:
+          for (var i = 1; i < elements.length; i++) {
+            if (picked(i) && !picked(i - 1)) swap(i, i - 1);
+          }
+      }
+      return slide.copyWith(elements: elements);
+    });
+  }
+
   /// Replaces the text of the text box [elementId]. Throws an
   /// [ArgumentError] when the element is not a [TextBox].
   void editText(
@@ -391,4 +436,20 @@ class SlideDocumentController {
         elements[index] = update(elements[index]);
         return slide.copyWith(elements: elements);
       });
+}
+
+/// Where [SlideDocumentController.arrangeElements] moves elements in the
+/// stacking order.
+enum ZOrderMove {
+  /// In front of every other element.
+  toFront,
+
+  /// One step forward, past the element just in front.
+  forward,
+
+  /// One step back, behind the element just behind.
+  backward,
+
+  /// Behind every other element.
+  toBack,
 }
