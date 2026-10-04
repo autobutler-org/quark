@@ -1031,6 +1031,37 @@ test/perf/summary: ## Render the Markdown performance summary
 	python3 ./test/performance/render_summary.py \
 		$(foreach dir,$(PERF_SUMMARY_WRK_DIRS),--wrk-dir $(dir))
 
+# Simulated clients per level, run in order against one server (#2507).
+STRESS_USERS ?= 100,500,2000
+STRESS_DURATION ?= 30s
+
+.PHONY: test/stress/capacity
+test/stress/capacity: build/backend ## Simulate STRESS_USERS app clients against a temporary local backend (see internal/server/stress)
+	WORK_DIR=test-results/stress
+	rm -rf "$$WORK_DIR"
+	mkdir -p "$$WORK_DIR"
+	if (exec 3<>/dev/tcp/127.0.0.1/$(PERF_PORT)) 2>/dev/null; then
+		echo "port $(PERF_PORT) is already in use; stop whatever listens there or pass PERF_PORT=<free port>" >&2
+		exit 1
+	fi
+	STRESS_HOME="$$(mktemp -d)"
+	trap 'kill $$SERVER_PID 2>/dev/null || true; wait $$SERVER_PID 2>/dev/null || true; rm -rf "$$STRESS_HOME"' EXIT
+	# The perf fixtures give the walks behind files/recent something to walk.
+	$(MAKE) test/perf/generate-files PERF_FIXTURE_TARGET_DIR="$$STRESS_HOME/$(PERF_DATA_DIR)/files"
+	HOME="$$STRESS_HOME" PORT=$(PERF_PORT) QUARK_INSECURE=true GIN_MODE=release ./build/quark serve > "$$WORK_DIR/server.log" 2>&1 &
+	SERVER_PID=$$!
+	for _ in $$(seq 1 60); do
+		curl -sSf $(PERF_BASE_URL)/api/v0/auth/status >/dev/null 2>&1 && break
+		sleep 1
+	done
+	export QUARK_USER=stress QUARK_PASSWORD=stress-password
+	curl -sSf -o /dev/null -X POST -H 'Content-Type: application/json' \
+		-d "{\"username\":\"$$QUARK_USER\",\"password\":\"$$QUARK_PASSWORD\"}" \
+		$(PERF_BASE_URL)/api/v0/auth/setup
+	QUARK_BASE_URL=$(PERF_BASE_URL) QUARK_PID=$$SERVER_PID STRESS_REPORT="$$PWD/$$WORK_DIR/report.md" \
+		STRESS_USERS=$(STRESS_USERS) STRESS_DURATION=$(STRESS_DURATION) \
+		$(GO) test -tags stress -count=1 -timeout 60m -v -run TestCapacity ./internal/server/stress/
+
 .PHONY: test/unit
 test/unit: test/unit/backend test/unit/frontend ## Run unit tests
 
