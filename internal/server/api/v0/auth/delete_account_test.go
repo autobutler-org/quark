@@ -21,6 +21,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
 	"github.com/gin-gonic/gin"
 	_ "modernc.org/sqlite"
 )
@@ -666,5 +667,53 @@ func TestDeleteAccount_DatabaseResetRemovesEveryPicture(t *testing.T) {
 	}
 	if _, err := os.Stat(other); !os.IsNotExist(err) {
 		t.Errorf("a picture outlived the reset (stat err %v)", err)
+	}
+}
+
+// TestDeleteAccount_RemovesOwnSettings verifies the caller's settings file
+// goes with their account, and only theirs, and that a reset takes them all:
+// SQLite hands a deleted id out again (#2740).
+func TestDeleteAccount_RemovesOwnSettings(t *testing.T) {
+	engine, sqlDB, _ := newDeleteAccountEngine(t)
+	var id int64
+	if err := sqlDB.QueryRow(`SELECT id FROM users WHERE username = ?`, deleteAccountUser).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := storageutil.GetDataDir()
+	for _, userID := range []int64{id, id + 100} {
+		if _, err := usersettingsutil.Save(usersettingsutil.SaveParams{
+			DataDir: dataDir, UserID: userID, Settings: usersettingsutil.Settings{ThemeColor: "teal"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if w := deleteAccountRequest(engine, "account=true"); w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if _, err := os.Stat(usersettingsutil.Path(dataDir, id)); !os.IsNotExist(err) {
+		t.Errorf("the deleted account's settings are still there (stat err %v)", err)
+	}
+	if _, err := os.Stat(usersettingsutil.Path(dataDir, id+100)); err != nil {
+		t.Errorf("another account's settings went too: %v", err)
+	}
+}
+
+// TestDeleteAccount_DatabaseResetRemovesEverySettingsFile verifies a reset
+// leaves no settings for a recycled account id to inherit.
+func TestDeleteAccount_DatabaseResetRemovesEverySettingsFile(t *testing.T) {
+	engine, _, _ := newDeleteAccountEngine(t)
+	dataDir := storageutil.GetDataDir()
+	if _, err := usersettingsutil.Save(usersettingsutil.SaveParams{
+		DataDir: dataDir, UserID: 99, Settings: usersettingsutil.Settings{ThemeColor: "teal"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if w := deleteAccountRequest(engine, "database=true"); w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if _, err := os.Stat(usersettingsutil.Path(dataDir, 99)); !os.IsNotExist(err) {
+		t.Errorf("a settings file outlived the reset (stat err %v)", err)
 	}
 }

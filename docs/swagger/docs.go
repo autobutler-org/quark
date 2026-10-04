@@ -6574,6 +6574,124 @@ const docTemplate = `{
                 }
             }
         },
+        "/settings/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the settings the caller chose for their own account. themeColor overrides the Quark's theme color; the empty string, which is also what an account that has chosen nothing gets, means follow the Quark.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Get your own settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/usersettingsutil.Settings"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replaces the settings of the caller's own account with the body. themeColor is a preset name (a lowercase letter, then up to 31 lowercase letters, digits or hyphens) or a custom color as lowercase #rrggbb; the empty string, or leaving it out, means follow the Quark. A field the settings do not have is refused. Publishes no event: the change concerns only the caller.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Replace your own settings",
+                "parameters": [
+                    {
+                        "description": "The settings",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/usersettingsutil.Settings"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/usersettingsutil.Settings"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/public": {
+            "get": {
+                "description": "Returns the Quark's settings that are safe to show before sign-in. Needs no session, so the sign-in page can read them. themeColor is the theme color an admin chose for the Quark, a preset name or a lowercase #rrggbb color, or the empty string when no admin has chosen.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Get the Quark's public settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.PublicSettingsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/settings/remote-access": {
             "get": {
                 "security": [
@@ -6730,6 +6848,69 @@ const docTemplate = `{
                     },
                     "503": {
                         "description": "Remote access is still connecting",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/theme-color": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sets the theme color for everyone on the Quark who has not chosen their own, and publishes public_settings_changed. themeColor is a preset name (a lowercase letter, then up to 31 lowercase letters, digits or hyphens) or a custom color as lowercase #rrggbb; the empty string clears it. Only the shape is checked: the Quark keeps no list of preset names. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Set the Quark's theme color",
+                "parameters": [
+                    {
+                        "description": "The theme color",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.themeColorSetting"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_settings.PublicSettingsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -10544,6 +10725,15 @@ const docTemplate = `{
                 }
             }
         },
+        "usersettingsutil.Settings": {
+            "type": "object",
+            "properties": {
+                "themeColor": {
+                    "description": "ThemeColor overrides the Quark's theme color for this account. Empty means\nfollow the Quark. See settingsutil.ValidateThemeColor for what it may hold.",
+                    "type": "string"
+                }
+            }
+        },
         "v0_access.revokeAccessBody": {
             "type": "object",
             "properties": {
@@ -11580,6 +11770,15 @@ const docTemplate = `{
                 }
             }
         },
+        "v0_settings.PublicSettingsResponse": {
+            "type": "object",
+            "properties": {
+                "themeColor": {
+                    "description": "ThemeColor is the Quark's theme color, or empty when no admin has chosen.",
+                    "type": "string"
+                }
+            }
+        },
         "v0_settings.RemoteAccessRequest": {
             "type": "object",
             "properties": {
@@ -11637,6 +11836,17 @@ const docTemplate = `{
             "properties": {
                 "enabled": {
                     "type": "boolean"
+                }
+            }
+        },
+        "v0_settings.themeColorSetting": {
+            "type": "object",
+            "required": [
+                "themeColor"
+            ],
+            "properties": {
+                "themeColor": {
+                    "type": "string"
                 }
             }
         },

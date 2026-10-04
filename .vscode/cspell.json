@@ -558,6 +558,7 @@
     "urlencode",
     "usbutil",
     "usermod",
+    "usersettingsutil",
     "uuidgen",
     "validpassword",
     "varnames",

@@ -4,9 +4,11 @@ package settingsutil
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 )
 
@@ -40,6 +42,31 @@ type Settings struct {
 	// featureflagutil registers them under (#2542). A missing key means the
 	// registry's default. A retired flag's key is removed by a migration.
 	FeatureFlags map[string]bool `json:"featureFlags,omitempty"`
+	// ThemeColor is the theme color an admin chose for the whole Quark (#2740),
+	// in the form ValidateThemeColor accepts. Empty means the client's default.
+	ThemeColor string `json:"themeColor,omitempty"`
+}
+
+// ErrInvalidThemeColor reports a theme color that is neither empty, a preset name,
+// nor a lowercase #rrggbb color.
+var ErrInvalidThemeColor = errors.New("theme color must be empty, a preset name, or a lowercase #rrggbb color")
+
+// themeColorPattern is a preset name or a custom color.
+var themeColorPattern = regexp.MustCompile(`^(?:[a-z][a-z0-9-]{0,31}|#[0-9a-f]{6})$`)
+
+// ValidateThemeColor checks the shape of a theme color, the Quark's or an account's
+// own: empty (no choice), a preset name, or a custom color as lowercase
+// #rrggbb. Anything else is ErrInvalidThemeColor.
+//
+// Shape is all the server checks, on purpose. The list of preset names lives
+// in the Flutter package, and a client falls back to classic for a name
+// it does not know, so a preset can be added or retired without a server
+// release.
+func ValidateThemeColor(themeColor string) error {
+	if themeColor != "" && !themeColorPattern.MatchString(themeColor) {
+		return ErrInvalidThemeColor
+	}
+	return nil
 }
 
 var (
@@ -241,6 +268,30 @@ func SetFeatureFlag(key string, enabled bool) error {
 		return err
 	}
 	s.FeatureFlags[key] = enabled
+	return Save(s)
+}
+
+// GetThemeColor returns the Quark's theme color, or the empty string when an admin has
+// not chosen one or settings cannot be read.
+func GetThemeColor() string {
+	s, err := Load()
+	if err != nil {
+		return ""
+	}
+	return s.ThemeColor
+}
+
+// SetThemeColor validates and persists the Quark's theme color. The empty string
+// clears it.
+func SetThemeColor(themeColor string) error {
+	if err := ValidateThemeColor(themeColor); err != nil {
+		return err
+	}
+	s, err := Load()
+	if err != nil {
+		return err
+	}
+	s.ThemeColor = themeColor
 	return Save(s)
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -144,12 +145,18 @@ func deleteAccount(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
-	// Account ids can be handed out again, so a picture must not outlive its
-	// account, and none outlives a reset database.
+	// Account ids can be handed out again, so a picture and the account's own
+	// settings must not outlive the account, and none outlives a reset database.
+	dataDir := storageutil.GetDataDir()
 	if result.DatabaseDeleted {
-		err = avatarutil.RemoveAll(avatarutil.RemoveAllParams{DataDir: storageutil.GetDataDir()})
+		err = errors.Join(
+			avatarutil.RemoveAll(avatarutil.RemoveAllParams{DataDir: dataDir}),
+			usersettingsutil.RemoveAll(usersettingsutil.RemoveAllParams{DataDir: dataDir}),
+		)
 	} else if result.AccountDeleted {
-		_, err = avatarutil.Remove(avatarutil.RemoveParams{DataDir: storageutil.GetDataDir(), UserID: user.ID})
+		_, avatarErr := avatarutil.Remove(avatarutil.RemoveParams{DataDir: dataDir, UserID: user.ID})
+		_, settingsErr := usersettingsutil.Remove(usersettingsutil.RemoveParams{DataDir: dataDir, UserID: user.ID})
+		err = errors.Join(avatarErr, settingsErr)
 	}
 	if err != nil {
 		return serverutil.InternalServerError(err)

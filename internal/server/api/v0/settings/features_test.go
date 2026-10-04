@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -30,6 +31,18 @@ type featuresHarness struct {
 	engine *gin.Engine
 	events <-chan eventbus.Event
 	path   string
+	// database resolves a username to its account id.
+	database *db.DatabaseSqlc
+}
+
+// userID returns the account id of username, as it appears in a file name.
+func (h featuresHarness) userID(t *testing.T, username string) string {
+	t.Helper()
+	user, err := h.database.Queries.GetUserByUsername(context.Background(), username)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strconv.FormatInt(user.ID, 10)
 }
 
 func newFeaturesHarness(t *testing.T) featuresHarness {
@@ -63,12 +76,16 @@ func newFeaturesHarness(t *testing.T) featuresHarness {
 	engine.Use(func(c *gin.Context) {
 		c = ctxutil.With(c, "deps", deps)
 		c = ctxutil.With(c, "username", c.GetHeader("X-Test-User"))
+		// As requireAuth does: the id comes from the session's account.
+		if user, err := database.Queries.GetUserByUsername(c.Request.Context(), c.GetHeader("X-Test-User")); err == nil {
+			c = ctxutil.With(c, "userID", user.ID)
+		}
 		c.Next()
 	})
 	group := engine.Group("/api/v0")
 	serverutil.RegisterRouterWithGroup(group, v0_settings.NewRouter())
 	serverutil.RegisterRouterWithGroup(group.Group("", middleware.RequireAdmin(deps)), v0_settings.NewAdminRouter())
-	return featuresHarness{engine: engine, events: events, path: path}
+	return featuresHarness{engine: engine, events: events, path: path, database: database}
 }
 
 func (h featuresHarness) do(user, method, path, body string) *httptest.ResponseRecorder {

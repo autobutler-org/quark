@@ -1,8 +1,16 @@
-// Package v0_settings serves /api/v0/settings: reading the Quark's settings, pairing a device for remote access
-// (POST /settings/remote-access/devices, open to any signed-in user), listing the beta feature flags
-// (GET /settings/features, open to any signed-in user), and the admin-only routes that change appliance-wide
-// ones such as turning remote access on and off, account requests, and a feature flag
-// (PUT /settings/features/:key).
+// Package v0_settings serves /api/v0/settings.
+//
+// Public, no session: GET /settings/public, the Quark's settings that are safe to show on the sign-in page (its
+// theme color).
+//
+// Any signed-in user: reading the Quark's settings (GET /settings), reading remote access (GET
+// /settings/remote-access), pairing a device for remote access (POST /settings/remote-access/devices), listing the
+// beta feature flags (GET /settings/features), and reading and replacing the caller's own settings (GET and PUT
+// /settings/me), which act only on the session's account.
+//
+// Admin-only: the routes that change appliance-wide settings, such as turning remote access on and off, account
+// requests (PUT /settings/access-requests), a feature flag (PUT /settings/features/:key), and the Quark's theme
+// color (PUT /settings/theme-color).
 package v0_settings
 
 import "github.com/autobutler-org/quark/pkg/util/serverutil"
