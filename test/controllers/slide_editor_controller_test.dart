@@ -330,4 +330,82 @@ void main() {
     );
     expect(calls.single, ('photos/a.png', 'usb1'));
   });
+
+  group('speaker notes (#1166)', () {
+    testWidgets('typing is one undo step after a pause, then autosaved', (
+      tester,
+    ) async {
+      final c = controllerFor(deck(2));
+      await c.load();
+      expect(c.notes, '');
+      c.editNotes('Say');
+      c.editNotes('Say hello');
+      expect(c.notes, 'Say hello', reason: 'the field reads what was typed');
+      expect(
+        c.slides.first.notes,
+        '',
+        reason: 'not committed before the pause',
+      );
+      expect(c.saveState, SlideSaveState.dirty);
+      expect(c.canUndo, isTrue);
+
+      await tester.pump(SlideEditorController.notesDelay);
+      expect(c.slides.first.notes, 'Say hello');
+      await tester.pump(const Duration(seconds: 2));
+      expect(saved.single.slides.first.notes, 'Say hello');
+
+      c.undo();
+      expect(c.slides.first.notes, '');
+      expect(c.notes, '');
+      c.redo();
+      expect(c.notes, 'Say hello');
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    test('undo inside the pause takes the typing back', () async {
+      final c = controllerFor(deck(1));
+      await c.load();
+      c.editNotes('Draft');
+      c.undo();
+      expect(c.notes, '');
+      expect(c.slides.first.notes, '');
+      expect(c.canUndo, isFalse);
+      c.redo();
+      expect(c.notes, 'Draft');
+    });
+
+    test(
+      'showing another slide commits the notes to the slide typed on',
+      () async {
+        final c = controllerFor(deck(2));
+        await c.load();
+        c.editNotes('First');
+        c.selectSlide('s2');
+        expect(c.slides.first.notes, 'First');
+        expect(c.notes, '');
+        c.editNotes('Second');
+        expect(await c.save(), isTrue);
+        expect(saved.single.slides.last.notes, 'Second');
+      },
+    );
+
+    testWidgets('leaving inside the pause saves the typing', (tester) async {
+      final c = controllerFor(deck(1), disposeAtEnd: false);
+      await c.load();
+      c.editNotes('Last words');
+      c.dispose();
+      await tester.pump();
+      expect(saved.single.slides.single.notes, 'Last words');
+    });
+
+    test('the notes panel opens and closes', () async {
+      final c = controllerFor(deck(1));
+      await c.load();
+      expect(c.notesOpen, isFalse);
+      c.toggleNotes();
+      expect(c.notesOpen, isTrue);
+      c.toggleNotes();
+      expect(c.notesOpen, isFalse);
+    });
+  });
 }

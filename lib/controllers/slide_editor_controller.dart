@@ -58,6 +58,13 @@ enum SlideSaveState {
 /// set; it empties when another slide is shown and drops ids an edit or an
 /// undo took off the slide.
 ///
+/// Speaker notes (#1166) are typed into a field under the canvas through
+/// [editNotes]. Typing is held for [notesDelay] and then written to the slide
+/// as one undo step, so a sentence undoes as a sentence and not a letter at
+/// a time; showing another slide, an undo, a save or leaving writes it at
+/// once. While it is held, [notes] reads the typing, [canUndo] is true and
+/// the presentation is dirty.
+///
 /// Service calls are parameters defaulting to [SlidesService], so a test
 /// passes fakes.
 class SlideEditorController extends ChangeNotifier {
@@ -104,6 +111,12 @@ class SlideEditorController extends ChangeNotifier {
   double _zoom = 1;
   Timer? _autosaveTimer;
   bool _disposed = false;
+  bool _notesOpen = false;
+  ({String slideId, String text})? _pendingNotes;
+  Timer? _notesTimer;
+
+  /// How long typing in the notes pauses before it becomes an undo step.
+  static const notesDelay = Duration(milliseconds: 500);
 
   String? get _serial => deviceSerial.isEmpty ? null : deviceSerial;
 
@@ -163,7 +176,8 @@ class SlideEditorController extends ChangeNotifier {
   static const zoomLevels = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
   /// Whether [undo] would do anything.
-  bool get canUndo => _doc?.controller.canUndo ?? false;
+  bool get canUndo =>
+      _pendingNotes != null || (_doc?.controller.canUndo ?? false);
 
   /// Whether [redo] would do anything.
   bool get canRedo => _doc?.controller.canRedo ?? false;
@@ -175,8 +189,22 @@ class SlideEditorController extends ChangeNotifier {
   /// Whether the presentation differs from the file on the Quark.
   bool get isDirty {
     final current = presentation;
-    return current != null && !identical(current, _saved);
+    return current != null &&
+        (_pendingNotes != null || !identical(current, _saved));
   }
+
+  /// The selected slide's speaker notes, with any typing not yet written to
+  /// it.
+  String get notes {
+    final pending = _pendingNotes;
+    if (pending != null && pending.slideId == _selectedSlideId) {
+      return pending.text;
+    }
+    return selectedSlide?.notes ?? '';
+  }
+
+  /// Whether the notes panel under the canvas is open.
+  bool get notesOpen => _notesOpen;
 
   /// Where the presentation stands against the file on the Quark.
   SlideSaveState get saveState {
@@ -213,6 +241,7 @@ class SlideEditorController extends ChangeNotifier {
   /// Shows the slide [slideId] on the canvas.
   void selectSlide(String slideId) {
     if (slideId == _selectedSlideId) return;
+    _commitNotes();
     _showSlide(slideId);
     _notify();
   }
@@ -231,6 +260,7 @@ class SlideEditorController extends ChangeNotifier {
 
   /// Makes [slideId] the selected slide, with no elements selected on it.
   void _showSlide(String? slideId) {
+    _commitNotes();
     _selectedSlideId = slideId;
     _selectedElementIds = const {};
   }
@@ -239,6 +269,7 @@ class SlideEditorController extends ChangeNotifier {
   void addSlide() {
     final doc = _doc;
     if (doc == null) return;
+    _commitNotes();
     final at = selectedIndex + 1;
     _showSlide(doc.controller.addSlide(index: at == 0 ? slides.length : at));
     _notify();
@@ -248,6 +279,7 @@ class SlideEditorController extends ChangeNotifier {
   void duplicateSlide(String slideId) {
     final doc = _doc;
     if (doc == null) return;
+    _commitNotes();
     _showSlide(doc.controller.duplicateSlide(slideId));
     _notify();
   }
@@ -259,6 +291,7 @@ class SlideEditorController extends ChangeNotifier {
     if (doc == null || !canDeleteSlide) return;
     final index = presentation!.indexOfSlide(slideId);
     if (index < 0) return;
+    _commitNotes();
     doc.controller.deleteSlide(slideId);
     if (slideId == _selectedSlideId) {
       _showSlide(slides[index.clamp(0, slides.length - 1)].id);
@@ -270,6 +303,7 @@ class SlideEditorController extends ChangeNotifier {
   void moveSlide(String slideId, int toIndex) {
     final doc = _doc;
     if (doc == null || presentation!.indexOfSlide(slideId) < 0) return;
+    _commitNotes();
     doc.controller.moveSlide(slideId, toIndex.clamp(0, slides.length - 1));
   }
 
@@ -277,12 +311,14 @@ class SlideEditorController extends ChangeNotifier {
 
   /// Takes back the last edit.
   void undo() {
+    _commitNotes();
     final selected = selectedIndex;
     if (_doc?.controller.undo() ?? false) _keepSelection(selected);
   }
 
   /// Puts back the last edit [undo] took back.
   void redo() {
+    _commitNotes();
     final selected = selectedIndex;
     if (_doc?.controller.redo() ?? false) _keepSelection(selected);
   }
@@ -329,6 +365,47 @@ class SlideEditorController extends ChangeNotifier {
   Uri imageUrl(String source) =>
       mediaUrl(source.trim().replaceAll(RegExp(r'^/+'), ''), serial: _serial);
 
+  // ── Speaker notes ─────────────────────────────────────────────────────────
+
+  /// Replaces the selected slide's speaker notes with [text], written to the
+  /// slide once typing pauses for [notesDelay].
+  void editNotes(String text) {
+    final slideId = _selectedSlideId;
+    if (_doc == null || slideId == null) return;
+    final wasPending = _pendingNotes != null;
+    _pendingNotes = (slideId: slideId, text: text);
+    _notesTimer?.cancel();
+    _notesTimer = Timer(notesDelay, _commitNotes);
+    // The save chip and undo change once, not on every key.
+    if (!wasPending) {
+      _autosaveTimer?.cancel();
+      _notify();
+    }
+  }
+
+  /// Writes held typing to its slide as one undo step.
+  void _commitNotes() {
+    _notesTimer?.cancel();
+    final pending = _pendingNotes;
+    if (pending == null) return;
+    _pendingNotes = null;
+    final slide = presentation?.slideById(pending.slideId);
+    if (slide == null) return;
+    if (slide.notes == pending.text) {
+      // Typed back to what it was: no step to record, but the save chip and
+      // undo stop counting the typing.
+      _onDocumentChanged();
+    } else {
+      _doc!.controller.setSlideNotes(pending.slideId, pending.text);
+    }
+  }
+
+  /// Opens or closes the notes panel under the canvas.
+  void toggleNotes() {
+    _notesOpen = !_notesOpen;
+    _notify();
+  }
+
   // ── Save ──────────────────────────────────────────────────────────────────
 
   void _onDocumentChanged() {
@@ -348,6 +425,7 @@ class SlideEditorController extends ChangeNotifier {
   /// presentation on screen is saved once it finishes; a failure is also
   /// reported through [saveError] and [onSaveFailed].
   Future<bool> save() async {
+    _commitNotes();
     _autosaveTimer?.cancel();
     final current = presentation;
     if (current == null || _saving || !isDirty) return !isDirty;
@@ -378,6 +456,7 @@ class SlideEditorController extends ChangeNotifier {
   /// out, so leaving the editor inside the pause loses nothing.
   @override
   void dispose() {
+    _commitNotes();
     final pending = _autosaveTimer?.isActive ?? false;
     _autosaveTimer?.cancel();
     final current = presentation;

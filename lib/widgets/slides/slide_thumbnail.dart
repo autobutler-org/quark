@@ -12,16 +12,17 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// changed.
 ///
 /// The menu opens from its button or a right-click on the thumbnail (#1161)
-/// and offers duplicate, move earlier, move later and delete; a move that
-/// would go nowhere and a delete of the last slide are shown disabled.
+/// and offers presenting from this slide (when [onPresent] is given),
+/// duplicate, move earlier, move later and delete; a move that would go
+/// nowhere and a delete of the last slide are shown disabled.
 ///
 /// A thumbnail that becomes the selected one scrolls itself into view, so a
 /// slide just added or duplicated is never left off the end of the panel.
 ///
 /// Key prefixes, each followed by the slide id: `slide_thumb_` on the
-/// thumbnail, `slide_menu_` on its menu button, and `slide_duplicate_`,
-/// `slide_move_earlier_`, `slide_move_later_` and `slide_delete_` on the menu
-/// rows.
+/// thumbnail, `slide_menu_` on its menu button, and `slide_present_`,
+/// `slide_duplicate_`, `slide_move_earlier_`, `slide_move_later_` and
+/// `slide_delete_` on the menu rows.
 class SlideThumbnail extends StatefulWidget {
   /// Creates the thumbnail of [slide], the [number]th in the show.
   const SlideThumbnail({
@@ -35,6 +36,7 @@ class SlideThumbnail extends StatefulWidget {
     this.onDelete,
     this.onMoveEarlier,
     this.onMoveLater,
+    this.onPresent,
     super.key,
   });
 
@@ -67,6 +69,10 @@ class SlideThumbnail extends StatefulWidget {
 
   /// Called from the menu's Move later row; null disables it.
   final VoidCallback? onMoveLater;
+
+  /// Called from the menu's Present from this slide row; null leaves the
+  /// row out.
+  final VoidCallback? onPresent;
 
   @override
   State<SlideThumbnail> createState() => _SlideThumbnailState();
@@ -119,9 +125,18 @@ class _SlideThumbnailState extends State<SlideThumbnail> {
       :onDelete,
       :onMoveEarlier,
       :onMoveLater,
+      :onPresent,
     ) = widget;
     final id = slide.id;
     final entries = [
+      if (onPresent != null) ...[
+        QuarkMenuEntry(
+          key: ValueKey('slide_present_$id'),
+          label: 'Present from this slide',
+          onSelected: onPresent,
+        ),
+        const QuarkMenuEntry.divider(),
+      ],
       QuarkMenuEntry(
         key: ValueKey('slide_duplicate_$id'),
         label: 'Duplicate',

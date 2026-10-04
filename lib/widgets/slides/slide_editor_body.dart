@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
+import 'package:quark/widgets/slides/notes/slide_notes_panel.dart';
 import 'package:quark/widgets/slides/slide_editor_canvas.dart';
 import 'package:quark/widgets/slides/slide_editor_shortcuts.dart';
 import 'package:quark/widgets/slides/slide_image.dart';
@@ -10,7 +11,14 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// Everything under the slide editor's bar: the loader, the load error, or
 /// the [SlidePanel] beside the [SlideEditorCanvas] editing the selected
-/// slide, with the undo and redo keys over both ([SlideEditorShortcuts]).
+/// slide, with the slide's speaker notes ([SlideNotesPanel]) under the
+/// canvas, and the undo and redo keys over all of it
+/// ([SlideEditorShortcuts]).
+///
+/// The open notes field gives up height before the canvas shrinks below one
+/// touch target, so a phone with its keyboard up keeps a sliver of slide.
+///
+/// A slide's menu offers presenting from it through [onPresent].
 ///
 /// Pictures on the canvas and the thumbnails are [SlideImage]s fetched
 /// through the Quark's authenticated download URL for their path
@@ -26,10 +34,14 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// Key prefixes: `slide_editor_stage` on the center area.
 class SlideEditorBody extends StatelessWidget {
   /// Shows [controller]'s presentation.
-  const SlideEditorBody({required this.controller, super.key});
+  const SlideEditorBody({required this.controller, this.onPresent, super.key});
 
   /// The open presentation.
   final SlideEditorController controller;
+
+  /// Presents from the slide with the given id; null leaves the slide menu
+  /// without the row.
+  final ValueChanged<String>? onPresent;
 
   @override
   Widget build(BuildContext context) {
@@ -66,10 +78,35 @@ class SlideEditorBody extends StatelessWidget {
       onSelectPrevious: c.selectPreviousSlide,
       onSelectNext: c.selectNextSlide,
       imageBuilder: imageBuilder,
+      onPresent: onPresent,
     );
-    final stage = KeyedSubtree(
-      key: const ValueKey('slide_editor_stage'),
-      child: SlideEditorCanvas(controller: c, imageBuilder: imageBuilder),
+    final slideId = c.selectedSlideId;
+    final stage = LayoutBuilder(
+      builder: (context, constraints) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: KeyedSubtree(
+              key: const ValueKey('slide_editor_stage'),
+              child: SlideEditorCanvas(
+                controller: c,
+                imageBuilder: imageBuilder,
+              ),
+            ),
+          ),
+          if (slideId != null)
+            SlideNotesPanel(
+              slideId: slideId,
+              notes: c.notes,
+              open: c.notesOpen,
+              onToggle: c.toggleNotes,
+              onChanged: c.editNotes,
+              fieldHeight:
+                  (constraints.maxHeight - 2 * SlideNotesPanel.headerHeight)
+                      .clamp(0, SlideNotesPanel.maxFieldHeight),
+            ),
+        ],
+      ),
     );
 
     return SlideEditorShortcuts(

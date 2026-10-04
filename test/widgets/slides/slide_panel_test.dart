@@ -56,6 +56,7 @@ void main() {
                 onMove: (id, to) => events.add('move $id $to'),
                 onSelectPrevious: () => events.add('previous'),
                 onSelectNext: () => events.add('next'),
+                onPresent: (id) => events.add('present $id'),
                 imageBuilder: (context, image) =>
                     Text(image.source, key: ValueKey('img_${image.source}')),
               ),
@@ -86,8 +87,18 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('slide_move_later_s1')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('slide_menu_s1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('slide_present_s1')));
+      await tester.pumpAndSettle();
 
-      expect(events, ['select s1', 'add', 'duplicate s1', 'move s1 1']);
+      expect(events, [
+        'select s1',
+        'add',
+        'duplicate s1',
+        'move s1 1',
+        'present s1',
+      ]);
     });
   }
 

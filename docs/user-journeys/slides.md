@@ -1,6 +1,7 @@
 # Slides Journeys
 
-Covers the Slides page (`/slides`) and the slide editor for `.qslide` presentations (#1152, #1153, #1161).
+Covers the Slides page (`/slides`), the slide editor for `.qslide` presentations, its speaker notes, and presenting
+(#1152, #1153, #1161, #1165, #1166).
 
 ---
 
@@ -247,3 +248,101 @@ same drive as the presentation (`photos/cover.jpg`).
 - Each arrow selects the next or previous slide, outlines its thumbnail, scrolls it into view, and opens it on the
   canvas; the first and last slides stop there.
 - The arrows move slides, not elements, until the canvas is tapped again.
+
+---
+
+### JN-SL-015: Speaker notes
+
+**Preconditions:** A presentation is open (JN-SL-004).
+
+**Steps:**
+
+1. Tap **Speaker notes** under the canvas.
+2. Type into the field, and pause.
+3. Show another slide, then come back; tap **Undo**.
+
+**Expected result:**
+
+- The panel opens under the canvas with a multi-line field holding the selected slide's notes; tapping the header again
+  closes it.
+- The save chip reads **Save** while typing, and the notes are autosaved after the pause (JN-SL-009).
+- Each slide keeps its own notes; showing another slide shows its notes in the field.
+- **Undo** takes back a burst of typing as one step.
+- On a phone the field shrinks rather than push the canvas off the screen.
+
+---
+
+### JN-SL-016: Present
+
+**Preconditions:** A presentation with at least two slides is open.
+
+**Steps:**
+
+1. Tap **Present** in the top bar, or open a slide's **⋮** menu and choose **Present from this slide**.
+2. Press Right, Space, Page Down or Enter; then Left, Page Up or Backspace; then Home and End.
+3. Tap or click the right two thirds of the screen, then the left third; on a touch screen, swipe left and right.
+4. Press Escape, or tap **End the presentation** in the control bar.
+
+**Expected result:**
+
+- The presentation fills the window at `/slides/<path>/present` (`?slide=N` from the Nth slide), each slide as large as
+  fits, centered on a dark background, starting at the first slide or the one chosen.
+- Edits and notes not yet saved are shown, and are saved on the way.
+- The keys, taps and swipes step forward and back, and Home and End jump to the first and last slide; the first and last
+  slides stop there.
+- A control bar reads "Slide N of M" with previous and next; it fades when the pointer rests and comes back when it moves
+  or the screen is touched. With a screen reader running it stays.
+- Slides cross-fade, unless reduced motion is on.
+- Escape or **End the presentation** returns to the editor.
+
+---
+
+### JN-SL-017: Deep-link to a slide in a presentation
+
+**Preconditions:** A presentation with at least three slides exists at `talks/pitch.qslide`.
+
+**Steps:**
+
+1. Navigate directly to `/slides/talks/pitch.qslide/present?slide=3`, signed in or not.
+
+**Expected result:**
+
+- Signed out, the sign-in page keeps the link (as in JN-SL-005) and the show opens after signing in.
+- The presentation loads and opens at slide 3; a number past the end opens the last slide.
+
+---
+
+### JN-SL-018: Presenter view
+
+**Preconditions:** A presentation is being presented (JN-SL-016) in a window at least 900 pixels wide.
+
+**Steps:**
+
+1. Tap **Presenter view** in the control bar.
+2. Step through the slides.
+
+**Expected result:**
+
+- The slide shows on the left; beside it, the next slide, the time since the show started (`mm:ss`), and the current
+  slide's speaker notes, read-only.
+- A slide without notes reads "No notes for this slide."; after the last slide the preview reads "End of presentation".
+- The control bar sits under the view and stays.
+- On a phone there is no **Presenter view** button; the slide shows alone.
+
+---
+
+### JN-SL-019: Fullscreen while presenting
+
+**Preconditions:** A presentation is being presented (JN-SL-016) in a browser, or on Android or iOS.
+
+**Steps:**
+
+1. Press F, or tap **Fullscreen** in the control bar.
+2. Press F again, or tap **Exit fullscreen**.
+
+**Expected result:**
+
+- The browser goes fullscreen, or the phone hides its status and navigation bars; the second press returns.
+- Ending the presentation leaves fullscreen.
+- The desktop apps have no fullscreen button.
+

@@ -1288,8 +1288,59 @@ void main() {
             .toSet();
         expect(paths, contains(AppRoutes.slides));
         expect(paths, contains('${AppRoutes.slides}/:path(.*)'));
+        expect(paths, contains('${AppRoutes.slides}/:path(.*)/present'));
+        // go_router takes the first route that matches, and the editor's
+        // pattern matches a presenting URL too.
+        final list = paths.toList();
+        expect(
+          list.indexOf('${AppRoutes.slides}/:path(.*)/present'),
+          lessThan(list.indexOf('${AppRoutes.slides}/:path(.*)')),
+        );
       },
     );
+
+    test('slidePresent encodes the path and carries the serial and slide', () {
+      expect(
+        AppRoutes.slidePresent('/my deck.qslide'),
+        '/slides/my%20deck.qslide/present',
+      );
+      expect(
+        AppRoutes.slidePresent('talks/q1.qslide', serial: 's 1', slide: 3),
+        '/slides/talks/q1.qslide/present?serial=s+1&slide=3',
+      );
+    });
+
+    testWidgets('a presenting link opens the presentation at its slide', (
+      tester,
+    ) async {
+      final link = AppRoutes.slidePresent(
+        'talks/present.qslide',
+        serial: 's1',
+        slide: 2,
+      );
+      final r = GoRouter(
+        initialLocation: link,
+        routes: [
+          slidePresentRoute(
+            builder: (filePath, serial, startIndex, _) =>
+                Text('present $filePath $serial $startIndex'),
+          ),
+          GoRoute(
+            path: '${AppRoutes.slides}/:path(.*)',
+            builder: (_, state) =>
+                Text('editor ${state.pathParameters['path']}'),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+      expect(find.text('present talks/present.qslide s1 1'), findsOneWidget);
+
+      r.go(AppRoutes.slideFile('talks/present.qslide'));
+      await tester.pumpAndSettle();
+      expect(find.text('editor talks/present.qslide'), findsOneWidget);
+    });
 
     testWidgets('a signed-out presentation link comes back after signing in', (
       tester,

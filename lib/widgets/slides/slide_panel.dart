@@ -37,6 +37,7 @@ class SlidePanel extends StatefulWidget {
     required this.onSelectPrevious,
     required this.onSelectNext,
     this.imageBuilder,
+    this.onPresent,
     super.key,
   });
 
@@ -78,6 +79,10 @@ class SlidePanel extends StatefulWidget {
 
   /// Draws pictures on the thumbnails.
   final SlideImageBuilder? imageBuilder;
+
+  /// Called with the id of the slide to present from; null leaves the menu
+  /// row out.
+  final ValueChanged<String>? onPresent;
 
   /// The height of the panel across the top of a phone.
   static const double stripHeight = 104;
@@ -127,6 +132,7 @@ class _SlidePanelState extends State<SlidePanel> {
       :onDelete,
       :onMove,
       :imageBuilder,
+      :onPresent,
     ) = widget;
     final tokens = QuarkTokens.of(context);
     final vertical = axis == Axis.vertical;
@@ -156,6 +162,7 @@ class _SlidePanelState extends State<SlidePanel> {
           onDelete: canDelete ? () => onDelete(slide.id) : null,
           onMoveEarlier: index > 0 ? () => onMove(slide.id, index - 1) : null,
           onMoveLater: index < last ? () => onMove(slide.id, index + 1) : null,
+          onPresent: onPresent == null ? null : () => onPresent(slide.id),
         );
         return Padding(
           key: ValueKey('slide_item_${slide.id}'),

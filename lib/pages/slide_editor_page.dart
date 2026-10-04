@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
@@ -17,7 +19,13 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// editing the selected slide in the middle (#1153) with its zoom in the
 /// bar's second row, undo and redo from the bar or the keyboard, and an
 /// autosave whose state the bar shows. A failed save says so and keeps the
-/// edits for a retry.
+/// edits for a retry. Each slide's speaker notes are typed under the canvas
+/// (#1166).
+///
+/// The bar's Present chip, and a slide's "Present from this slide", open
+/// the presentation full-window at `/slides/<path>/present` (#1165). The
+/// presentation as it is on screen goes along, so nothing waits for the
+/// save the chip starts on the way.
 ///
 /// Nothing is pushed underneath it when it opens at its own URL, so its back
 /// button and a system back land in the folder that holds the file, as the
@@ -75,6 +83,22 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
   void _leaveForContainingFolder() =>
       context.go(AppRoutes.containingFolder(widget.filePath));
 
+  void _present(String slideId) {
+    // Saving first writes notes still waiting for a pause into the
+    // presentation handed over.
+    unawaited(_controller.save());
+    final presentation = _controller.presentation;
+    if (presentation == null) return;
+    context.go(
+      AppRoutes.slidePresent(
+        widget.filePath,
+        serial: widget.deviceSerial,
+        slide: presentation.indexOfSlide(slideId) + 1,
+      ),
+      extra: presentation,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final canPop = Navigator.of(context).canPop();
@@ -120,6 +144,15 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                     state: _controller.saveState,
                     onSave: _controller.save,
                   ),
+                  QuarkBarChip(
+                    key: const ValueKey('slide_editor_present'),
+                    icon: QuarkIcons.play_arrow,
+                    label: 'Present',
+                    tooltip: 'Present from the first slide',
+                    onPressed: _controller.slides.isEmpty
+                        ? null
+                        : () => _present(_controller.slides.first.id),
+                  ),
                   const AppThemeToggle(),
                 ],
               ),
@@ -140,7 +173,10 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
           ),
           body: SafeArea(
             top: false,
-            child: SlideEditorBody(controller: _controller),
+            child: SlideEditorBody(
+              controller: _controller,
+              onPresent: _present,
+            ),
           ),
         ),
       ),

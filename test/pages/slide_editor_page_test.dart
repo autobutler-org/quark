@@ -2,8 +2,10 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/pages/slide_editor_page.dart';
+import 'package:quark/router.dart';
 import 'package:quark/widgets/slides/slide_panel.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -386,5 +388,130 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.zoom, 1.25);
     expect(find.text('Slide 1 of 2'), findsOneWidget);
+  });
+
+  group('speaker notes (#1166)', () {
+    Finder field() => find.byKey(const ValueKey('slide_notes_field'));
+
+    for (final (name, size) in [
+      ('narrow', tap.narrowViewport),
+      ('wide', tap.wideViewport),
+    ]) {
+      testWidgets('typed under the canvas, undone and autosaved ($name)', (
+        tester,
+      ) async {
+        tap.setViewport(tester, size);
+        final c = await pumpEditor(tester);
+        expect(field(), findsNothing, reason: 'the panel starts closed');
+        await tester.tap(find.byKey(const ValueKey('slide_notes_toggle')));
+        await tester.pumpAndSettle();
+        expect(field(), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tap.expectTapTargetGuidelines(tester);
+
+        await tester.enterText(field(), 'Open with the story');
+        await tester.pump(SlideEditorController.notesDelay);
+        expect(c.slides.first.notes, 'Open with the story');
+        expect(c.saveState, SlideSaveState.dirty);
+        await letAutosaveRun(tester);
+        expect(saved.last.slides.first.notes, 'Open with the story');
+
+        // Another slide's notes replace the field's text.
+        await tester.tap(thumb('s2'));
+        await tester.pumpAndSettle();
+        expect(find.text('Open with the story'), findsNothing);
+
+        await tester.tap(find.byKey(const ValueKey('slide_editor_undo')));
+        await tester.pumpAndSettle();
+        await tester.tap(thumb('s1'));
+        await tester.pumpAndSettle();
+        expect(c.slides.first.notes, '');
+        expect(tester.widget<TextField>(field()).controller!.text, '');
+        await letAutosaveRun(tester);
+      });
+    }
+
+    testLargeText('the open notes panel fits', (tester, size) async {
+      final c = await pumpEditor(tester);
+      c.toggleNotes();
+      await tester.pumpAndSettle();
+      expect(field(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('presenting (#1165)', () {
+    Future<(SlideEditorController, GoRouter)> pumpRouted(
+      WidgetTester tester,
+    ) async {
+      final controller = SlideEditorController(
+        filePath: 'talks/Deck.qslide',
+        loadPresentation: (path, {serial}) async => deck(3),
+        savePresentation: (path, p, {serial}) async => saved.add(p),
+      );
+      addTearDown(controller.dispose);
+      final router = GoRouter(
+        initialLocation: AppRoutes.slideFile('talks/Deck.qslide'),
+        routes: [
+          slidePresentRoute(
+            builder: (filePath, serial, startIndex, initial) => Text(
+              'present $filePath from $startIndex '
+              '${initial?.slides.first.notes}',
+            ),
+          ),
+          GoRoute(
+            path: '${AppRoutes.slides}/:path(.*)',
+            builder: (_, state) => SlideEditorPage(
+              filePath: state.pathParameters['path']!,
+              controller: controller,
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        MaterialApp.router(
+          theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
+          routerConfig: router,
+        ),
+      );
+      await tester.pumpAndSettle();
+      return (controller, router);
+    }
+
+    testWidgets('Present starts at the first slide with unsaved edits', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final (c, _) = await pumpRouted(tester);
+      c.selectSlide('s2');
+      c.selectSlide('s1');
+      c.editNotes('Fresh');
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('slide_editor_present')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('present talks/Deck.qslide from 0 Fresh'),
+        findsOneWidget,
+      );
+      expect(
+        saved.last.slides.first.notes,
+        'Fresh',
+        reason: 'saved on the way',
+      );
+    });
+
+    testWidgets('a slide\'s menu presents from that slide', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      await pumpRouted(tester);
+      await tester.tap(find.byKey(const ValueKey('slide_menu_s3')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('slide_present_s3')));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('present talks/Deck.qslide from 2'),
+        findsOneWidget,
+      );
+    });
   });
 }

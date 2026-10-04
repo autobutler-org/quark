@@ -21,6 +21,7 @@ import 'package:quark/pages/settings_page.dart';
 import 'package:quark/pages/setup_page.dart';
 import 'package:quark/pages/sheets_page.dart';
 import 'package:quark/pages/slide_editor_page.dart';
+import 'package:quark/pages/slide_present_page.dart';
 import 'package:quark/pages/slides_page.dart';
 import 'package:quark/pages/spreadsheet_editor_page.dart';
 import 'package:quark/pages/system_page.dart';
@@ -35,6 +36,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
+import 'package:quark_slides/quark_slides.dart' show Presentation;
 import 'package:quark_widgets/quark_widgets.dart' show CalendarDates;
 
 // Route paths — use these constants everywhere instead of string literals.
@@ -312,6 +314,20 @@ class AppRoutes {
         : base;
   }
 
+  /// Build a URL presenting a presentation file (#1165), from the [slide]th
+  /// slide counting from 1 when given.
+  /// e.g. slidePresent('talks/q1.qslide', slide: 3)
+  ///   → '/slides/talks/q1.qslide/present?slide=3'
+  static String slidePresent(String path, {String? serial, int? slide}) {
+    final base = '$slides/${encodeFilePath(path)}/present';
+    final query = [
+      if (serial != null && serial.isNotEmpty)
+        'serial=${Uri.encodeQueryComponent(serial)}',
+      if (slide != null) 'slide=$slide',
+    ];
+    return query.isEmpty ? base : '$base?${query.join('&')}';
+  }
+
   /// The files route for the folder that holds [filePath].
   /// e.g. containingFolder('reports/2024/q1.qdoc') → '/files/reports/2024'
   ///
@@ -419,6 +435,51 @@ List<GoRoute> tabbedRoutes<T extends RouteTab>({
     ),
   ];
 }
+
+/// The route presenting a `.qslide` (#1165): `/slides/<path>/present`, with
+/// `?serial=` for a file on another drive and `?slide=N` to start at the Nth
+/// slide (counting from 1, as [AppRoutes.slidePresent] writes it).
+///
+/// [builder] gets the file, the serial, the slide to start at counting from
+/// 0, and the presentation the editor handed over in `extra` — null on a
+/// link or a reload, where the page loads the file itself.
+///
+/// The editor's `/slides/:path(.*)` matches this URL too, and go_router takes
+/// the first route that matches, so this one goes before it.
+GoRoute slidePresentRoute({
+  Widget Function(
+        String filePath,
+        String serial,
+        int startIndex,
+        Presentation? initial,
+      )
+      builder =
+      _slidePresentPage,
+}) => GoRoute(
+  path: '${AppRoutes.slides}/:path(.*)/present',
+  builder: (context, state) {
+    final slide = int.tryParse(state.uri.queryParameters['slide'] ?? '');
+    final extra = state.extra;
+    return builder(
+      state.pathParameters['path'] ?? '',
+      state.uri.queryParameters['serial'] ?? '',
+      slide == null ? 0 : slide - 1,
+      extra is Presentation ? extra : null,
+    );
+  },
+);
+
+Widget _slidePresentPage(
+  String filePath,
+  String serial,
+  int startIndex,
+  Presentation? initial,
+) => SlidePresentPage(
+  filePath: filePath,
+  deviceSerial: serial,
+  startIndex: startIndex,
+  initial: initial,
+);
 
 /// Everything that can invalidate the [authRedirect] gate.
 ///
@@ -595,6 +656,7 @@ final router = GoRouter(
       path: AppRoutes.slides,
       builder: (context, state) => const SlidesPage(),
     ),
+    slidePresentRoute(),
     GoRoute(
       // Matches /slides/<anything including slashes> — opens the slide
       // editor. Top-level for the same reason as /docs above (#1749).
