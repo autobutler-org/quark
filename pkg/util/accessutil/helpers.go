@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -88,28 +87,15 @@ func resolveRel(filesDir, rel string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	root := filepath.Clean(filesDir)
-	current := filepath.Join(root, filepath.FromSlash(rel))
-	suffix := ""
-	for {
-		landed, err := filepath.EvalSymlinks(current)
-		if err == nil {
-			resolved := filepath.Join(landed, suffix)
-			if resolved != base && !strings.HasPrefix(resolved, base+string(filepath.Separator)) {
-				return "", false
-			}
-			inside, err := filepath.Rel(base, resolved)
-			if err != nil {
-				return "", false // coverage: ignore - both paths are absolute and resolved
-			}
-			return Canonical(inside), true
-		}
-		if _, statErr := os.Lstat(current); statErr == nil || current == root {
-			return "", false
-		}
-		suffix = filepath.Join(filepath.Base(current), suffix)
-		current = filepath.Dir(current)
+	resolved, ok := storageutil.ResolvePending(filesDir, filepath.Join(filesDir, filepath.FromSlash(rel)))
+	if !ok || (resolved != base && !strings.HasPrefix(resolved, base+string(filepath.Separator))) {
+		return "", false
 	}
+	inside, err := filepath.Rel(base, resolved)
+	if err != nil {
+		return "", false // coverage: ignore - both paths are absolute and resolved
+	}
+	return Canonical(inside), true
 }
 
 // shareablePath canonicalizes a path whose sharing the caller wants to see or

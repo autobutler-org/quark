@@ -665,3 +665,14 @@ func FindUsbDeviceBySerial(serial string) (UsbDevice, error) {
 func SafeJoin(base string, parts ...string) (string, error) {
 	return safeJoin(base, parts...)
 }
+
+// ResolvePending follows the symlinks on p, a path lexically inside base that
+// need not exist yet, and returns where it really lands: the deepest ancestor
+// that exists is resolved and the components that do not are appended, so a
+// file about to be created resolves to the directory it will land in. It
+// reports false when p runs through a link that resolves to nothing, since a
+// write through a dangling link lands wherever the link points. base must
+// exist; the walk stops there.
+func ResolvePending(base, p string) (string, bool) {
+	return resolvePending(filepath.Clean(base), filepath.Clean(p), filepath.EvalSymlinks)
+}

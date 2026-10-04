@@ -160,3 +160,39 @@ func TestDownloadFileImpl_RefusesSymlinkEscape(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(base, "docs", "a.txt"), res.FullPath)
 }
+
+// Concurrent uploads into one new folder race to create it (#2767): one
+// request finds notes/2024 missing, another's MkdirAll creates it, and the
+// first then sees it exist. That is a directory that appeared, not a dangling
+// link, and must not be refused as one. The fake resolver forces the
+// interleaving: it reports the folder missing, then creates it.
+func TestResolvePending_DirectoryCreatedMidWalk(t *testing.T) {
+	base, _ := symlinkFixture(t)
+	dir := filepath.Join(base, "notes", "2024")
+	target := filepath.Join(dir, "file.txt")
+	raced := false
+	eval := func(p string) (string, error) {
+		if p == dir && !raced {
+			raced = true
+			require.NoError(t, os.MkdirAll(dir, 0o755))
+			return "", os.ErrNotExist
+		}
+		return filepath.EvalSymlinks(p)
+	}
+
+	got, ok := resolvePending(base, target, eval)
+
+	require.True(t, ok, "a directory created mid-walk was refused")
+	realBase, err := filepath.EvalSymlinks(base)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(realBase, "notes", "2024", "file.txt"), got)
+}
+
+func TestResolvePending_DanglingLinkStillRefused(t *testing.T) {
+	base, outside := symlinkFixture(t)
+	link := filepath.Join(base, "gone")
+	require.NoError(t, os.Symlink(filepath.Join(outside, "missing"), link))
+
+	_, ok := ResolvePending(base, filepath.Join(link, "file.txt"))
+	assert.False(t, ok)
+}
