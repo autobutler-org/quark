@@ -2,6 +2,7 @@ package photoutil
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -9,24 +10,28 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
+// rawToolTimeout bounds each converter. A conversion runs while its request
+// holds an IO-semaphore slot, so a tool that hangs on a malformed file would
+// otherwise keep that slot until the server restarts (#2752).
+const rawToolTimeout = 30 * time.Second
+
 // RawToJPEG converts a camera RAW file to a JPEG image by extracting
-// the embedded preview. Tries dcraw first, then exiftool, then ffmpeg.
+// the embedded preview. Tries dcraw first, then exiftool, then ffmpeg, each
+// for at most rawToolTimeout.
 // Returns the decoded image or an error if no tool is available.
 func RawToJPEG(filePath string) (image.Image, error) {
-	if img, err := rawViaDcraw(filePath); err == nil {
-		return img, nil
-	}
-
-	if img, err := rawViaExiftool(filePath); err == nil {
-		return img, nil
-	}
-
-	if img, err := rawViaFfmpeg(filePath); err == nil {
-		return img, nil
+	for _, convert := range []func(context.Context, string) (image.Image, error){rawViaDcraw, rawViaExiftool, rawViaFfmpeg} {
+		ctx, cancel := context.WithTimeout(context.Background(), rawToolTimeout)
+		img, err := convert(ctx, filePath)
+		cancel()
+		if err == nil {
+			return img, nil
+		}
 	}
 
 	return nil, fmt.Errorf("no RAW converter available (install dcraw, exiftool, or ffmpeg)")
@@ -64,13 +69,13 @@ func IsRawConverterAvailable() bool {
 }
 
 // rawViaDcraw extracts the embedded JPEG preview using dcraw -c -e.
-func rawViaDcraw(filePath string) (image.Image, error) {
+func rawViaDcraw(ctx context.Context, filePath string) (image.Image, error) {
 	dcraw, err := exec.LookPath("dcraw")
 	if err != nil {
 		return nil, fmt.Errorf("dcraw not found")
 	}
 
-	cmd := exec.Command(dcraw, "-c", "-e", filePath)
+	cmd := rawTool(ctx, dcraw, "-c", "-e", filePath)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("dcraw: %w", err)
@@ -84,7 +89,7 @@ func rawViaDcraw(filePath string) (image.Image, error) {
 }
 
 // rawViaExiftool extracts the embedded preview using exiftool.
-func rawViaExiftool(filePath string) (image.Image, error) {
+func rawViaExiftool(ctx context.Context, filePath string) (image.Image, error) {
 	exiftool, err := exec.LookPath("exiftool")
 	if err != nil {
 		return nil, fmt.Errorf("exiftool not found")
@@ -97,7 +102,7 @@ func rawViaExiftool(filePath string) (image.Image, error) {
 	defer os.RemoveAll(tmpDir)
 
 	previewPath := filepath.Join(tmpDir, "preview.jpg")
-	cmd := exec.Command(exiftool, "-b", "-PreviewImage", "-w!", previewPath, filePath)
+	cmd := rawTool(ctx, exiftool, "-b", "-PreviewImage", "-w!", previewPath, filePath)
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("exiftool: %w", err)
 	}
@@ -122,7 +127,7 @@ func rawViaExiftool(filePath string) (image.Image, error) {
 }
 
 // rawViaFfmpeg converts the RAW file to JPEG using ffmpeg.
-func rawViaFfmpeg(filePath string) (image.Image, error) {
+func rawViaFfmpeg(ctx context.Context, filePath string) (image.Image, error) {
 	ffmpeg, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		return nil, fmt.Errorf("ffmpeg not found")
@@ -135,7 +140,7 @@ func rawViaFfmpeg(filePath string) (image.Image, error) {
 	defer os.RemoveAll(tmpDir)
 
 	outPath := filepath.Join(tmpDir, "converted.jpg")
-	cmd := exec.Command(ffmpeg, "-i", filePath, "-vframes", "1", "-q:v", "2", "-y", outPath)
+	cmd := rawTool(ctx, ffmpeg, "-i", filePath, "-vframes", "1", "-q:v", "2", "-y", outPath)
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("ffmpeg: %w", err)
 	}
@@ -151,4 +156,12 @@ func rawViaFfmpeg(filePath string) (image.Image, error) {
 		return nil, fmt.Errorf("decode ffmpeg output: %w", err)
 	}
 	return img, nil
+}
+
+// rawTool is exec.CommandContext with a WaitDelay, so a tool whose child keeps
+// the output pipe open cannot hold Output open after the tool is killed.
+func rawTool(ctx context.Context, name string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = time.Second
+	return cmd
 }
