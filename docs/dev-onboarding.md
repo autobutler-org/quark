@@ -70,6 +70,10 @@ Web:
 make serve/frontend
 ```
 
+Serving to a browser on another machine? Use `make serve/frontend FLUTTER_BUILD_MODE=release`. The default
+debug build ships thousands of unbundled modules and is very slow over a network; release serves one minified
+bundle, at the cost of hot reload.
+
 Mobile (pick an emulator first):
 
 ```bash
