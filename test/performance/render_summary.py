@@ -6,6 +6,10 @@ import argparse
 import re
 import sys
 from pathlib import Path
+from typing import NamedTuple
+
+# Exit status when every failure is retryable and --retry-file was given.
+EXIT_RETRY = 3
 
 # Scenarios whose p99 is held to --p99-budget-ms.
 LATENCY_GATED_SCENARIOS = {
@@ -69,29 +73,46 @@ def latency_ms(value: str) -> float:
     return float(match.group(1)) * LATENCY_UNITS_MS[match.group(2)]
 
 
-def gate_failures(results_dir: Path, p99_budget_ms: float) -> list[str]:
+class GateFailure(NamedTuple):
+    scenario: str
+    message: str
+    # Runner noise can produce this on its own: a p99 over budget or a
+    # request that timed out. One rerun of the scenario tells noise from a
+    # regression. A non-2xx response or a scenario that did not run is never
+    # retried: those are the server answering wrongly, and the server was
+    # caught doing exactly that under this gate (#2743).
+    retryable: bool
+
+
+def gate_failures(results_dir: Path, p99_budget_ms: float) -> list[GateFailure]:
     """Every reason the run in results_dir should fail, empty when it passes."""
-    failures: list[str] = []
+    failures: list[GateFailure] = []
     for filename in WRK_SCENARIOS:
         path = results_dir / filename
         name = path.stem
         if not path.exists():
-            failures.append(f"{name}: no wrk output at {path}")
+            failures.append(GateFailure(name, f"no wrk output at {path}", False))
             continue
         stats = parse_wrk_file(path)
         if stats.get("requests_total", "0") == "0":
-            failures.append(f"{name}: no requests completed")
+            failures.append(GateFailure(name, "no requests completed", False))
         if (timeouts := stats.get("timeouts", "0")) != "0":
-            failures.append(f"{name}: {timeouts} requests timed out")
+            failures.append(GateFailure(name, f"{timeouts} requests timed out", True))
         if non2xx := stats.get("non2xx"):
-            failures.append(f"{name}: {non2xx} non-2xx or 3xx responses")
+            failures.append(
+                GateFailure(name, f"{non2xx} non-2xx or 3xx responses", False)
+            )
         if name in LATENCY_GATED_SCENARIOS:
             p99 = stats.get("p99")
             if p99 is None:
-                failures.append(f"{name}: no p99 in wrk output")
+                failures.append(GateFailure(name, "no p99 in wrk output", False))
             elif latency_ms(p99) > p99_budget_ms:
                 failures.append(
-                    f"{name}: p99 {p99} is over the {p99_budget_ms:g}ms budget"
+                    GateFailure(
+                        name,
+                        f"p99 {p99} is over the {p99_budget_ms:g}ms budget",
+                        True,
+                    )
                 )
     return failures
 
@@ -178,6 +199,11 @@ def main() -> None:
         help="Fail when any scenario has a timeout or a non-2xx response, or "
         "a files scenario's p99 is over this many milliseconds.",
     )
+    parser.add_argument(
+        "--retry-file",
+        help="When every failure is a timeout or a p99 over budget, write the "
+        f"failing scenarios here and exit {EXIT_RETRY} instead of 1.",
+    )
     args = parser.parse_args()
 
     print("## Performance Dashboard")
@@ -192,12 +218,23 @@ def main() -> None:
 
     if args.p99_budget_ms is not None:
         failures = [
-            f"{wrk_dir}: {failure}"
+            (wrk_dir, failure)
             for wrk_dir in args.wrk_dirs
             for failure in gate_failures(Path(wrk_dir), args.p99_budget_ms)
         ]
-        for failure in failures:
-            print(f"perf gate: {failure}", file=sys.stderr)
+        retry = args.retry_file is not None and all(
+            failure.retryable for _, failure in failures
+        )
+        label = "perf gate (retrying)" if retry else "perf gate"
+        for wrk_dir, failure in failures:
+            print(
+                f"{label}: {wrk_dir}: {failure.scenario}: {failure.message}",
+                file=sys.stderr,
+            )
+        if failures and retry:
+            scenarios = sorted({failure.scenario for _, failure in failures})
+            Path(args.retry_file).write_text(" ".join(scenarios) + "\n")
+            sys.exit(EXIT_RETRY)
         if failures:
             sys.exit(1)
 
