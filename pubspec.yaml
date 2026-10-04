@@ -31,6 +31,7 @@ workspace:
   - packages/quark_formula
   - packages/quark_icons
   - packages/quark_icons/examples/icon_gallery
+  - packages/quark_slides
   - packages/quark_widgets
   - packages/quark_widgets/examples/widget_gallery
 

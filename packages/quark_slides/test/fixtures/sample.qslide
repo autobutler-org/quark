@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "title": "Sample deck",
+  "size": {
+    "width": 1920,
+    "height": 1080
+  },
+  "theme": "themes/default",
+  "slides": [
+    {
+      "id": "s1",
+      "background": {
+        "color": "#102030"
+      },
+      "elements": [
+        {
+          "id": "e1",
+          "type": "text",
+          "frame": {
+            "x": 160,
+            "y": 120,
+            "width": 1600,
+            "height": 240
+          },
+          "paragraphs": [
+            {
+              "runs": [
+                {
+                  "text": "Hello, ",
+                  "fontSize": 72
+                },
+                {
+                  "text": "slides",
+                  "bold": true,
+                  "italic": true,
+                  "underline": true,
+                  "fontSize": 72,
+                  "fontFamily": "Inter",
+                  "color": "#FFCC00"
+                }
+              ],
+              "align": "center"
+            },
+            {
+              "runs": []
+            },
+            {
+              "runs": [
+                {
+                  "text": "Second line"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "e2",
+          "type": "shape",
+          "frame": {
+            "x": 100.5,
+            "y": 600,
+            "width": 400,
+            "height": 300,
+            "rotation": 15
+          },
+          "kind": "ellipse",
+          "fill": "#3366FF80",
+          "stroke": {
+            "color": "#FFFFFF",
+            "width": 4
+          }
+        }
+      ],
+      "notes": "Welcome everyone."
+    },
+    {
+      "id": "s2",
+      "background": {
+        "image": "photos/sky.jpg"
+      },
+      "elements": [
+        {
+          "id": "e3",
+          "type": "image",
+          "frame": {
+            "x": 0,
+            "y": 0,
+            "width": 960,
+            "height": 1080
+          },
+          "source": "photos/dog.jpg",
+          "altText": "A dog on a beach",
+          "fit": "cover"
+        },
+        {
+          "id": "e4",
+          "type": "line",
+          "frame": {
+            "x": 1000,
+            "y": 200,
+            "width": 600,
+            "height": 0
+          },
+          "stroke": {
+            "color": "#FF0000",
+            "width": 3
+          },
+          "flipped": true,
+          "endCap": "arrow"
+        },
+        {
+          "id": "e5",
+          "type": "shape",
+          "frame": {
+            "x": 1200,
+            "y": 700,
+            "width": 200,
+            "height": 200
+          },
+          "kind": "rectangle"
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "elements": []
+    }
+  ]
+}

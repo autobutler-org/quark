@@ -403,6 +403,7 @@ changes the file tree — upload, move, delete, new folder, conversion, restore 
 | `data_table`    | the headless spreadsheet engine behind the sheets editor                            |
 | `quark_formula` | spreadsheet formula parsing and evaluation                                           |
 | `quark_icons`   | the icon font, regenerated from `svgs/` by `make generate/frontend/quark-icons`      |
+| `quark_slides`  | the headless presentation engine: slide model, `.qslide` format, and undo history   |
 
 Each package carries its own `Makefile` and `analysis_options.yaml` and can be checked on its own
 (`make -C packages/quark_widgets check`).
