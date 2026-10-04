@@ -90,6 +90,10 @@ lib/widgets/
                                 the controller into choices, the rows and
                                 phone menus draw them; SlideToolbarGroup is
                                 the registry of formatting groups
+    shortcuts/                  the keyboard shortcuts dialog (searchable, key
+                                caps per platform) from lib/utils/
+                                slide_shortcuts.dart, and SlideShortcutsHelp,
+                                which opens it on ? and F1
     slide_editor_body.dart      the slide editor under its bar: reads
                                 SlideEditorController and calls its commands
     slide_editor_bar_bottom.dart
