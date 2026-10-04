@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -420,5 +421,61 @@ func TestCopyFile_MissingSource(t *testing.T) {
 	err := copyFile(t.Context(), filepath.Join(dir, "nope"), filepath.Join(dir, "dst"), nil)
 	if err == nil {
 		t.Error("expected error for missing source")
+	}
+}
+
+// A resync means the bus dropped events, so the worker copies whatever the
+// target is missing or holds an older copy of, and deletes nothing (#2753).
+func TestSyncWorker_ResyncReconcilesTarget(t *testing.T) {
+	w, srcDir, dstDir := newTestSyncWorker(t)
+	writeTestFile(t, srcDir, "missed/a.txt", "new")
+	writeTestFile(t, srcDir, "stale.txt", "fresh contents")
+	writeTestFile(t, dstDir, "stale.txt", "old")
+	writeTestFile(t, dstDir, "only-in-target.txt", "keep")
+	if err := os.MkdirAll(filepath.Join(srcDir, "empty"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	w.handleEvent(context.Background(), eventbus.Event{Kind: eventbus.EventResync})
+
+	if got := readTestFile(t, dstDir, "missed/a.txt"); got != "new" {
+		t.Errorf("missed/a.txt = %q, want %q", got, "new")
+	}
+	if got := readTestFile(t, dstDir, "stale.txt"); got != "fresh contents" {
+		t.Errorf("stale.txt = %q, want %q", got, "fresh contents")
+	}
+	if got := readTestFile(t, dstDir, "only-in-target.txt"); got != "keep" {
+		t.Errorf("only-in-target.txt = %q, want %q", got, "keep")
+	}
+	if info, err := os.Stat(filepath.Join(dstDir, "empty")); err != nil || !info.IsDir() {
+		t.Errorf("empty folder not mirrored: %v", err)
+	}
+}
+
+// Started worker, burst of uploads published faster than it copies: every
+// file still reaches the target.
+func TestSyncWorker_MirrorsEveryUploadInABurst(t *testing.T) {
+	w, srcDir, dstDir := newTestSyncWorker(t)
+	const n = 200
+	for i := 0; i < n; i++ {
+		writeTestFile(t, srcDir, fmt.Sprintf("burst/%d.txt", i), "x")
+	}
+	w.Start()
+	defer w.Stop()
+	for i := 0; i < n; i++ {
+		w.bus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: fmt.Sprintf("burst/%d.txt", i)})
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for i := 0; i < n; i++ {
+		for {
+			if _, err := os.Stat(filepath.Join(dstDir, fmt.Sprintf("burst/%d.txt", i))); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("burst/%d.txt never reached the target", i)
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
 }

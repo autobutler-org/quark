@@ -103,6 +103,11 @@ void main() {
 
     events.stop();
   });
+
+  test('a resync from the Quark changes every listing', () {
+    // The Quark sends one when this socket fell behind and lost events (#2753).
+    expect(FileEvent.fromJson({'kind': 'resync'}).changesListing, isTrue);
+  });
 }
 
 /// The default [EventsService.connectChannel], captured before any test

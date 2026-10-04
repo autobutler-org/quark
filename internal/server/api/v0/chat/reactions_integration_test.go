@@ -14,16 +14,12 @@ import (
 // it held, in order.
 func (h harness) drainReactions() []eventbus.ChatReactionChanged {
 	var heard []eventbus.ChatReactionChanged
-	for {
-		select {
-		case evt := <-h.events:
-			if data, ok := evt.Data.(eventbus.ChatReactionChanged); ok && evt.Kind == eventbus.EventChatReactionChanged {
-				heard = append(heard, data)
-			}
-		default:
-			return heard
+	for _, evt := range h.drain() {
+		if data, ok := evt.Data.(eventbus.ChatReactionChanged); ok && evt.Kind == eventbus.EventChatReactionChanged {
+			heard = append(heard, data)
 		}
 	}
+	return heard
 }
 
 // TestChatReactions_AddListRemove adds and removes reactions, enforces

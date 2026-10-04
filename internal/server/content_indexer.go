@@ -19,6 +19,7 @@ import (
 // Upload → index content (if file is a supported text format)
 // Delete → remove index entry
 // Move   → remove old entry, index new path
+// Resync → backfill every device, as at startup
 //
 // Indexing is best-effort: failures are logged but never surfaced to the
 // caller. The index can always be rebuilt from disk.
@@ -38,6 +39,11 @@ func startContentIndexer(deps deputil.Dependencies) {
 
 	for evt := range ch {
 		switch evt.Kind {
+		case eventbus.EventResync:
+			// The bus dropped events while this loop was busy (#2753), so
+			// index the whole tree again, as at startup.
+			backfillContentIndex(deps)
+
 		case eventbus.EventUpload:
 			if evt.Path == "" {
 				continue

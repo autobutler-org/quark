@@ -1,6 +1,7 @@
 package eventbus_test
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -131,4 +132,127 @@ func TestNoEventAfterUnsubscribe(t *testing.T) {
 	default:
 		// closed channel is drained — acceptable
 	}
+}
+
+// A subscriber that falls behind must still see every event, in order (#2753).
+func TestSubscribeDeliversEveryEventToASlowSubscriber(t *testing.T) {
+	bus := eventbus.New()
+	ch, unsub := bus.Subscribe("slow")
+	defer unsub()
+
+	const n = 100
+	for i := 0; i < n; i++ {
+		bus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: fmt.Sprintf("/f%d", i)})
+	}
+	for i := 0; i < n; i++ {
+		got := receive(t, ch)
+		if want := fmt.Sprintf("/f%d", i); got.Path != want {
+			t.Fatalf("event %d: got %q, want %q", i, got.Path, want)
+		}
+	}
+}
+
+// A lossy subscriber that falls behind loses its backlog and hears a resync
+// instead, so it knows to refresh.
+func TestSubscribeLossyReplacesBacklogWithResync(t *testing.T) {
+	bus := eventbus.New()
+	ch, unsub := bus.SubscribeLossy("client")
+	defer unsub()
+
+	for i := 0; i < 17; i++ {
+		bus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: fmt.Sprintf("/f%d", i)})
+	}
+	got := receive(t, ch)
+	if got.Kind != eventbus.EventResync {
+		t.Fatalf("got %q, want %q", got.Kind, eventbus.EventResync)
+	}
+	if r, ok := got.Data.(eventbus.Resync); !ok || r.Dropped != 17 {
+		t.Fatalf("got data %#v, want Resync{Dropped: 17}", got.Data)
+	}
+
+	bus.Publish(eventbus.Event{Kind: eventbus.EventDelete, Path: "/after"})
+	if got := receive(t, ch); got.Path != "/after" {
+		t.Fatalf("got %q after the resync, want /after", got.Path)
+	}
+}
+
+// Publishers race a subscriber that is slower than all of them; once they
+// stop, what the subscriber applied must match what was published last for
+// every path. Run under -race.
+func TestSlowSubscriberSeesFinalStateAfterBurst(t *testing.T) {
+	bus := eventbus.New()
+	ch, unsub := bus.Subscribe("slow")
+	defer unsub()
+
+	const publishers, paths, rounds = 4, 50, 5
+	present := map[string]bool{}
+	applied := make(chan struct{})
+	go func() {
+		defer close(applied)
+		for evt := range ch {
+			time.Sleep(100 * time.Microsecond)
+			switch evt.Kind {
+			case eventbus.EventUpload:
+				present[evt.Path] = true
+			case eventbus.EventDelete:
+				present[evt.Path] = false
+			case eventbus.EventResync:
+				t.Errorf("unexpected resync: %#v", evt.Data)
+			case eventbus.EventNewFolder:
+				return
+			}
+		}
+	}()
+
+	var wg sync.WaitGroup
+	want := map[string]bool{}
+	for p := 0; p < publishers; p++ {
+		for i := 0; i < paths; i++ {
+			// Each publisher owns its paths; an odd path ends deleted.
+			want[fmt.Sprintf("/p%d/f%d", p, i)] = i%2 == 0
+		}
+		wg.Add(1)
+		go func(p int) {
+			defer wg.Done()
+			for r := 0; r < rounds; r++ {
+				for i := 0; i < paths; i++ {
+					path := fmt.Sprintf("/p%d/f%d", p, i)
+					bus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: path})
+					if i%2 == 1 || r < rounds-1 {
+						bus.Publish(eventbus.Event{Kind: eventbus.EventDelete, Path: path})
+					}
+				}
+			}
+			for i := 0; i < paths; i += 2 {
+				bus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: fmt.Sprintf("/p%d/f%d", p, i)})
+			}
+		}(p)
+	}
+	wg.Wait()
+	bus.Publish(eventbus.Event{Kind: eventbus.EventNewFolder, Path: "/done"})
+
+	select {
+	case <-applied:
+	case <-time.After(10 * time.Second):
+		t.Fatal("subscriber never reached the end of the burst")
+	}
+	for path, w := range want {
+		if present[path] != w {
+			t.Errorf("%s: present = %v, want %v", path, present[path], w)
+		}
+	}
+}
+
+func receive(t *testing.T, ch <-chan eventbus.Event) eventbus.Event {
+	t.Helper()
+	select {
+	case got, ok := <-ch:
+		if !ok {
+			t.Fatal("channel closed")
+		}
+		return got
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for event")
+	}
+	return eventbus.Event{}
 }

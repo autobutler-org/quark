@@ -1586,7 +1586,8 @@ func WatchKeyNeeds(params WatchKeyNeedsParams) {
 				return
 			}
 			switch evt.Kind {
-			case eventbus.EventAccessChanged, eventbus.EventAccountChanged, eventbus.EventChatChannelChanged:
+			case eventbus.EventAccessChanged, eventbus.EventAccountChanged, eventbus.EventChatChannelChanged,
+				eventbus.EventResync:
 				// ponytail: every membership event scans every channel again. Fine
 				// for a household; debounce if bursts ever show up.
 				if _, err := NotifyKeyNeeded(NotifyKeyNeededParams(params)); err != nil {
