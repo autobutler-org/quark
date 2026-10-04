@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
@@ -25,7 +26,7 @@ func TestApproveUser_PendingOnly(t *testing.T) {
 	if n := h.drainEvents(); n != 1 {
 		t.Errorf("approve published %d account_changed events, want 1", n)
 	}
-	if _, err := authutil.Login(ctx, h.database.Queries, authutil.LoginParams{Username: "waiting", Password: "user-password"}); err != nil {
+	if _, err := authutil.Login(ctx, h.database.Queries, authutil.LoginParams{Username: "waiting", AuthKey: dbtest.AuthKey("user-password")}); err != nil {
 		t.Errorf("login after approval: %v", err)
 	}
 	// The grant is what an upload is checked against, so it matters more than

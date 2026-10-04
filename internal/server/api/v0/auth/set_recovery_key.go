@@ -15,16 +15,17 @@ import (
 
 // setRecoveryKey godoc
 // @Summary Set the caller's recovery key
-// @Description Re-confirms the caller with password, which carries the auth key for a client that signs in with one, exactly as DELETE /auth/account takes it; a wrong or missing password is a 403 and nothing is written. Then gives the signed-in account the recovery key its client derived from a recovery phrase the client generated, and clears the account's recovery phrase, so the old phrase stops recovering it (#2430). recoveryKey is the standard base64 of the 32-byte key derived from the phrase and the salt GET /auth/salt returned. chatKeys, when sent, replaces the account's chat identity in the same transaction, re-wrapped under the new phrase, exactly as /auth/recover stores it; nothing changes if any part fails. The client calls this after a sign-in whose response says legacyRecovery, after the first sign-in of an account an admin created, and after setup. Shares the sign-in rate limit, and the body is at most 8 KiB.
+// @Description Re-confirms the caller with password, which carries the auth key, exactly as DELETE /auth/account takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is written. Then gives the signed-in account the recovery key its client derived from a recovery phrase the client generated, (#2430). recoveryKey is the standard base64 of the 32-byte key derived from the phrase and the salt GET /auth/salt returned. chatKeys, when sent, replaces the account's chat identity in the same transaction, re-wrapped under the new phrase, exactly as /auth/recover stores it; nothing changes if any part fails. The client calls this after a sign-in whose response says legacyRecovery, such as the first sign-in of an account an admin created. Shares the sign-in rate limit, and the body is at most 8 KiB.
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param body body setRecoveryKeyBody true "The caller's password or auth key, the new recovery key and optionally the re-wrapped chat keys"
+// @Param body body setRecoveryKeyBody true "The caller's auth key, the new recovery key and optionally the re-wrapped chat keys"
 // @Success 204
 // @Failure 400 {object} serverutil.Response "a malformed recoveryKey or chatKeys"
 // @Failure 401 {object} serverutil.Response "no session, or the session's account no longer exists"
-// @Failure 403 {object} serverutil.Response "the password or auth key is wrong or missing"
+// @Failure 403 {object} serverutil.Response "the auth key is wrong or missing"
 // @Failure 409 {object} serverutil.Response "the account has no auth key yet, so no salt to derive the key with"
+// @Failure 426 {object} serverutil.Response "password is a raw password: the app is too old"
 // @Failure 429 {object} serverutil.Response
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth

@@ -21,6 +21,7 @@ import (
 // @Success 202 {object} object
 // @Failure 400 {object} serverutil.Response
 // @Failure 409 {object} serverutil.Response
+// @Failure 426 {object} serverutil.Response "password is a raw password, not the auth key: the app is too old"
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /storage/devices/snapshot-backup [post]

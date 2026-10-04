@@ -18,7 +18,7 @@ import (
 )
 
 // TestRequestAccount_Endpoint drives POST /auth/request-account through each
-// outcome: refused before setup, created with a phrase and an event, refused
+// outcome: refused before setup, created with an event and no phrase, refused
 // for a taken or invalid name, and refused once an admin turns requests off.
 // GET /auth/status reports the toggle as it changes.
 func TestRequestAccount_Endpoint(t *testing.T) {
@@ -36,9 +36,9 @@ func TestRequestAccount_Endpoint(t *testing.T) {
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_auth.NewRouter())
-	post := func(username, password string) int {
+	post := func(username, authKey string) int {
 		t.Helper()
-		return postJSON(engine, "/api/v0/auth/request-account", map[string]string{"username": username, "password": password}).Code
+		return postJSON(engine, "/api/v0/auth/request-account", map[string]string{"username": username, "authKey": authKey, "recoveryKey": dbtest.AuthKey(username + "-phrase")}).Code
 	}
 	statusBody := func() map[string]any {
 		t.Helper()
@@ -46,26 +46,26 @@ func TestRequestAccount_Endpoint(t *testing.T) {
 		return decodeBody(t, w)
 	}
 
-	if got := post("bob", "bob-password"); got != http.StatusNotFound {
+	if got := post("bob", dbtest.AuthKey("bob-password")); got != http.StatusNotFound {
 		t.Errorf("request before setup = %d, want 404", got)
 	}
 	if body := statusBody(); len(body) != 1 || body["setup"] != false {
 		t.Errorf("status before setup = %v, want only setup=false", body)
 	}
 
-	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 	if body := statusBody(); body["accessRequestsEnabled"] != true {
 		t.Errorf("status after setup = %v, want accessRequestsEnabled=true", body)
 	}
 
-	w := postJSON(engine, "/api/v0/auth/request-account", map[string]string{"username": "bob", "password": "bob-password"})
+	w := postJSON(engine, "/api/v0/auth/request-account", map[string]string{"username": "bob", "authKey": dbtest.AuthKey("bob-password"), "recoveryKey": dbtest.AuthKey("bob-phrase")})
 	if w.Code != http.StatusCreated {
 		t.Fatalf("request = %d, want 201: %s", w.Code, w.Body.String())
 	}
-	if phrase, _ := decodeBody(t, w)["recoveryPhrase"].(string); phrase == "" {
-		t.Errorf("request body %s carries no recovery phrase", w.Body.String())
+	if body := decodeBody(t, w); len(body) != 0 {
+		t.Errorf("request body %s, want an empty object: the app made the phrase", w.Body.String())
 	}
 	select {
 	case evt := <-events:
@@ -80,16 +80,16 @@ func TestRequestAccount_Endpoint(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		name, username, password string
-		want                     int
+		name, username, authKey string
+		want                    int
 	}{
-		{"pending name", "bob", "other-password", http.StatusConflict},
-		{"account name", "admin", "other-password", http.StatusConflict},
-		{"invalid name", "../x", "long-enough", http.StatusBadRequest},
-		{"short password", "carol", "short", http.StatusBadRequest},
-		{"missing password", "carol", "", http.StatusBadRequest},
+		{"pending name", "bob", dbtest.AuthKey("other-password"), http.StatusConflict},
+		{"account name", "admin", dbtest.AuthKey("other-password"), http.StatusConflict},
+		{"invalid name", "../x", dbtest.AuthKey("long-enough"), http.StatusBadRequest},
+		{"malformed key", "carol", "short", http.StatusBadRequest},
+		{"missing key", "carol", "", http.StatusBadRequest},
 	} {
-		if got := post(tc.username, tc.password); got != tc.want {
+		if got := post(tc.username, tc.authKey); got != tc.want {
 			t.Errorf("%s = %d, want %d", tc.name, got, tc.want)
 		}
 	}
@@ -97,7 +97,7 @@ func TestRequestAccount_Endpoint(t *testing.T) {
 	if err := settingsutil.SetAccessRequestsEnabled(false); err != nil {
 		t.Fatal(err)
 	}
-	if got := post("carol", "carol-password"); got != http.StatusNotFound {
+	if got := post("carol", dbtest.AuthKey("carol-password")); got != http.StatusNotFound {
 		t.Errorf("request with requests off = %d, want 404", got)
 	}
 	if body := statusBody(); body["accessRequestsEnabled"] != false {

@@ -14,15 +14,16 @@ import (
 
 // requestAccount godoc
 // @Summary Request an account
-// @Description Creates a pending account that can sign in once an admin approves it, and returns its recovery phrase this once, unless the body carried recoveryKey. Needs no session and is rate-limited per IP. A pending request keeps its username taken until it is denied. The body carries exactly one of password and authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned. recoveryKey, sent only with authKey, is the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt: the Quark then stores that key, makes no phrase, and the response has no recoveryPhrase (#2430).
+// @Description Creates a pending account that can sign in once an admin approves it. Needs no session and is rate-limited per IP. A pending request keeps its username taken until it is denied. The body carries authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned, and recoveryKey, the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt; the Quark makes no phrase, and the response is an empty object. Without recoveryKey the account cannot recover until a sign-in gives it one. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430).
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param body body newAccountBody true "The username with a password or an authKey, and optionally a recoveryKey"
-// @Success 201 {object} requestAccountResponse
-// @Failure 400 {object} serverutil.Response "invalid username, password, authKey or recoveryKey, or a recoveryKey without an authKey"
+// @Param body body newAccountBody true "The username, the authKey and the recoveryKey"
+// @Success 201 {object} object
+// @Failure 400 {object} serverutil.Response "invalid username, authKey or recoveryKey"
 // @Failure 404 {object} serverutil.Response "requests are turned off, or the Quark is not set up"
 // @Failure 409 {object} serverutil.Response "that username is taken"
+// @Failure 426 {object} serverutil.Response "the body carried a raw password or phrase: the app is too old"
 // @Failure 429 {object} serverutil.Response
 // @Failure 500 {object} serverutil.Response
 // @Router /auth/request-account [post]
@@ -36,10 +37,12 @@ func requestAccount(c *gin.Context) *serverutil.Response {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		return serverutil.BadRequest(err)
 	}
+	if err := authutil.RefuseRawSecrets(req.Password); err != nil {
+		return serverutil.UpgradeRequired(err)
+	}
 
-	result, err := authutil.RequestAccount(c.Request.Context(), (*deps).Database().Queries, authutil.RequestAccountParams{
+	_, err := authutil.RequestAccount(c.Request.Context(), (*deps).Database().Queries, authutil.RequestAccountParams{
 		Username:        req.Username,
-		Password:        req.Password,
 		AuthKey:         req.AuthKey,
 		RecoveryKey:     req.RecoveryKey,
 		SaltSecret:      settingsutil.AuthSaltSecret,
@@ -50,9 +53,8 @@ func requestAccount(c *gin.Context) *serverutil.Response {
 		return serverutil.NotFound(err)
 	case errors.Is(err, authutil.ErrUsernameTaken):
 		return serverutil.Conflict(err)
-	case errors.Is(err, authutil.ErrInvalidUsername), errors.Is(err, authutil.ErrPasswordTooShort),
-		errors.Is(err, authutil.ErrInvalidAuthKey), errors.Is(err, authutil.ErrCredentialRequired), errors.Is(err, authutil.ErrCredentialConflict),
-		errors.Is(err, authutil.ErrInvalidRecoveryKey), errors.Is(err, authutil.ErrRecoveryKeyNeedsAuthKey):
+	case errors.Is(err, authutil.ErrInvalidUsername), errors.Is(err, authutil.ErrInvalidAuthKey),
+		errors.Is(err, authutil.ErrInvalidRecoveryKey):
 		return serverutil.BadRequest(err)
 	case err != nil:
 		return serverutil.InternalServerError(err)
@@ -61,9 +63,7 @@ func requestAccount(c *gin.Context) *serverutil.Response {
 	if bus := (*deps).EventBus(); bus != nil {
 		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})
 	}
-	return serverutil.NewResponse().WithStatusCode(http.StatusCreated).WithData(requestAccountResponse{
-		RecoveryPhrase: result.RecoveryPhrase,
-	})
+	return serverutil.NewResponse().WithStatusCode(http.StatusCreated).WithData(gin.H{})
 }
 
 var requestAccountRoute = serverutil.ApiRoute("POST", "/auth/request-account", requestAccount)

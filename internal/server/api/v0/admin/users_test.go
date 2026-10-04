@@ -51,7 +51,7 @@ func newAdminHarness(t *testing.T) adminHarness {
 	if _, err := authutil.Setup(ctx, authutil.SetupParams{
 		Database: database,
 		Username: "admin",
-		Password: "admin-password",
+		AuthKey:  dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret,
 		FilesDir: filesDir,
 	}); err != nil {
 		t.Fatal(err)
@@ -98,11 +98,11 @@ func (h adminHarness) do(method, path string) *httptest.ResponseRecorder {
 func (h adminHarness) addUser(t *testing.T, username, status string, admin bool) {
 	t.Helper()
 	ctx := context.Background()
-	hash, err := authutil.HashPassword("user-password")
+	hash, err := authutil.HashPassword(dbtest.AuthKey("user-password"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.database.Queries.CreateUser(ctx, db.CreateUserParams{Username: username, PasswordHash: hash, RecoveryPhraseHash: hash}); err != nil {
+	if _, err := h.database.Queries.CreateUser(ctx, db.CreateUserParams{Username: username, AuthKeyHash: hash}); err != nil {
 		t.Fatal(err)
 	}
 	if admin {

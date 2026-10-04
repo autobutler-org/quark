@@ -5,16 +5,18 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
 // TestVerifyPassword checks the gate in front of account deletion and reset
-// (#2346): only the account's own password passes, and an account that no
-// longer exists is told apart from a wrong password.
+// (#2346): only the account's own auth key passes, a raw password is an app
+// too old to send the key (#2430), and an account that no longer exists is
+// told apart from a wrong key.
 func TestVerifyPassword(t *testing.T) {
 	database := newTestDB(t)
 	ctx := context.Background()
-	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "ada", Password: "long-enough"}); err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "ada", AuthKey: dbtest.AuthKey("long-enough"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
 
@@ -22,10 +24,11 @@ func TestVerifyPassword(t *testing.T) {
 		username, password string
 		want               error
 	}{
-		{"ada", "long-enough", nil},
-		{"ada", "wrong-password", authutil.ErrIncorrectPassword},
+		{"ada", dbtest.AuthKey("long-enough"), nil},
+		{"ada", dbtest.AuthKey("wrong-password"), authutil.ErrIncorrectPassword},
 		{"ada", "", authutil.ErrIncorrectPassword},
-		{"nobody", "long-enough", authutil.ErrUserNotFound},
+		{"ada", "long-enough", authutil.ErrAppTooOld},
+		{"nobody", dbtest.AuthKey("long-enough"), authutil.ErrUserNotFound},
 	} {
 		_, err := authutil.VerifyPassword(ctx, authutil.VerifyPasswordParams{
 			Queries:  database.Queries,

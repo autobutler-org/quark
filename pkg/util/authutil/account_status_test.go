@@ -7,25 +7,28 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
-const statusTestPhrase = "apple-bread-cloud-delta-eagle-flame"
+// statusKey and statusRecoveryKey are the auth key and recovery key every
+// mkStatusUser account has.
+var statusKey, statusRecoveryKey = authKeyOf(5), authKeyOf(6)
 
-// mkStatusUser creates an account with password "pw-for-status" and the
-// shared test phrase, then moves it to status.
+// mkStatusUser creates an account with statusKey and statusRecoveryKey, then
+// moves it to status.
 func mkStatusUser(t *testing.T, q *db.Queries, name, status string) {
 	t.Helper()
 	ctx := context.Background()
-	passwordHash, err := authutil.HashPassword("pw-for-status")
+	keyHash, err := authutil.HashPassword(statusKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	phraseHash, err := authutil.HashPassword(statusTestPhrase)
+	recoveryHash, err := authutil.HashPassword(statusRecoveryKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := q.CreateUser(ctx, db.CreateUserParams{Username: name, PasswordHash: passwordHash, RecoveryPhraseHash: phraseHash}); err != nil {
+	if _, err := q.CreateUser(ctx, db.CreateUserParams{Username: name, AuthKeyHash: keyHash, RecoveryKeyHash: recoveryHash}); err != nil {
 		t.Fatalf("create %s: %v", name, err)
 	}
 	setStatus(t, q, name, authutil.StatusActive, status)
@@ -60,15 +63,15 @@ func TestLogin_RefusesByStatusAfterPassword(t *testing.T) {
 		{"waiting", authutil.ErrAccountPending},
 		{"off", authutil.ErrAccountDisabled},
 	} {
-		if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: tc.user, Password: "pw-for-status"}); !errors.Is(err, tc.want) {
+		if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: tc.user, AuthKey: statusKey}); !errors.Is(err, tc.want) {
 			t.Errorf("login %s with the right password = %v, want %v", tc.user, err, tc.want)
 		}
-		_, err := authutil.Login(ctx, q, authutil.LoginParams{Username: tc.user, Password: "wrong"})
+		_, err := authutil.Login(ctx, q, authutil.LoginParams{Username: tc.user, AuthKey: authKeyOf(0)})
 		if err == nil || err.Error() != "invalid credentials" {
 			t.Errorf("login %s with a wrong password = %v, want invalid credentials", tc.user, err)
 		}
 	}
-	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "on", Password: "pw-for-status"}); err != nil {
+	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "on", AuthKey: statusKey}); err != nil {
 		t.Errorf("active account login: %v", err)
 	}
 }
@@ -81,7 +84,7 @@ func TestSessionsAndBasicAuth_RefuseInactive(t *testing.T) {
 	q := database.Queries
 	ctx := context.Background()
 	mkStatusUser(t, q, "bob", authutil.StatusActive)
-	login, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", Password: "pw-for-status"})
+	login, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", AuthKey: statusKey})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +93,7 @@ func TestSessionsAndBasicAuth_RefuseInactive(t *testing.T) {
 	if _, _, err := authutil.ValidateSession(ctx, q, login.SessionToken); err == nil {
 		t.Error("a disabled account's session still validates")
 	}
-	if _, _, err := authutil.ValidateBasicAuth(ctx, q, "bob", "pw-for-status"); !errors.Is(err, authutil.ErrAccountDisabled) {
+	if _, _, err := authutil.ValidateBasicAuth(ctx, q, "bob", statusKey); !errors.Is(err, authutil.ErrAccountDisabled) {
 		t.Errorf("basic auth for a disabled account = %v, want ErrAccountDisabled", err)
 	}
 	status, err := authutil.GetAuthStatus(ctx, q, authutil.GetAuthStatusParams{SessionToken: login.SessionToken})
@@ -115,12 +118,12 @@ func TestRecover_RefusesPending(t *testing.T) {
 	ctx := context.Background()
 	mkStatusUser(t, q, "waiting", authutil.StatusPending)
 
-	_, err := authutil.Recover(ctx, database, authutil.RecoverParams{Username: "waiting", RecoveryPhrase: statusTestPhrase, NewPassword: "a-new-password"})
+	_, err := authutil.Recover(ctx, database, authutil.RecoverParams{Username: "waiting", RecoveryKey: statusRecoveryKey, NewAuthKey: authKeyOf(0), SaltSecret: saltSecret})
 	if !errors.Is(err, authutil.ErrAccountPending) {
 		t.Fatalf("recover pending = %v, want ErrAccountPending", err)
 	}
 	setStatus(t, q, "waiting", authutil.StatusPending, authutil.StatusActive)
-	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "waiting", Password: "pw-for-status"}); err != nil {
+	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "waiting", AuthKey: statusKey}); err != nil {
 		t.Errorf("the refused recover changed the password: %v", err)
 	}
 }
@@ -167,7 +170,7 @@ func TestSetup_ValidatesUsername(t *testing.T) {
 	for _, name := range []string{"", "Admin", "../x", "a/b", ".trash", "-dash", "has space", strings.Repeat("a", 33)} {
 		t.Run(name, func(t *testing.T) {
 			database := newTestDB(t)
-			_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: name, Password: "long-enough"})
+			_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: name, AuthKey: dbtest.AuthKey("long-enough"), SaltSecret: dbtest.SaltSecret})
 			if !errors.Is(err, authutil.ErrInvalidUsername) {
 				t.Errorf("Setup(%q) = %v, want ErrInvalidUsername", name, err)
 			}
@@ -176,7 +179,7 @@ func TestSetup_ValidatesUsername(t *testing.T) {
 	for _, name := range []string{"admin", "j.doe", "a_b-c", "7", strings.Repeat("a", 32)} {
 		t.Run(name, func(t *testing.T) {
 			database := newTestDB(t)
-			if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: name, Password: "long-enough"}); err != nil {
+			if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: name, AuthKey: dbtest.AuthKey("long-enough"), SaltSecret: dbtest.SaltSecret}); err != nil {
 				t.Errorf("Setup(%q): %v", name, err)
 			}
 		})

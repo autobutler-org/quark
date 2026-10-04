@@ -1,10 +1,13 @@
 package authutil
 
 // wordlist is a curated subset of the BIP39 English wordlist: 256 common,
-// memorable words used for recovery phrase generation. Exactly 256, and all
-// distinct, so each word carries 8 bits and a draw is unbiased — 256 divides
-// the 2^64 range GenerateRecoveryPhrase reduces. TestWordlist enforces both;
-// it held 232 while its comments claimed 256 (#2153).
+// memorable words a recovery phrase is drawn from. Exactly 256, and all
+// distinct, so each word carries 8 bits and a draw is unbiased. TestWordlist
+// enforces both; it held 232 while its comments claimed 256 (#2153).
+//
+// The Quark no longer makes phrases: the app does, from its copy in
+// lib/utils/recovery_phrase.dart, which test/utils/recovery_phrase_test.dart
+// checks against this one (#2430). This stays the canonical list.
 var wordlist = []string{
 	"abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract",
 	"absurd", "abuse", "access", "accident", "account", "accuse", "achieve", "acid",

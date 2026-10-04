@@ -24,7 +24,7 @@ func TestLoginBurstInvalidCredentials(t *testing.T) {
 	perWorker := min(bursts(), 4)
 	payload, _ := json.Marshal(map[string]string{
 		"username": "stress-nonexistent",
-		"password": "stress-wrong-password",
+		"authKey":  "c3RyZXNzLXdyb25nLWtleS1zdHJlc3Mtd3Jvbmcta2U=", // 32 bytes, matches no account
 	})
 
 	hist := newStatusHist()

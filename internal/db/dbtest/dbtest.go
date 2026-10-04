@@ -9,7 +9,9 @@
 package dbtest
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"path/filepath"
 	"testing"
 	"time"
@@ -55,4 +57,20 @@ func NewDB(t *testing.T) *db.DatabaseSqlc {
 		t.Fatalf("dbtest: apply migrations: %v", err)
 	}
 	return database
+}
+
+// AuthKey is the auth key a test's account signs in with in place of secret
+// (#2430): the standard base64 of SHA-256(secret), 32 bytes like the key a
+// client derives. It is not the client's derivation, only a stable stand-in,
+// so two different secrets give two different keys.
+func AuthKey(secret string) string {
+	sum := sha256.Sum256([]byte(secret))
+	return base64.StdEncoding.EncodeToString(sum[:])
+}
+
+// SaltSecret stands in for the install's salt secret, which settingsutil keeps
+// in settings.json, so an account a test makes with an auth key gets the same
+// salt on every run.
+func SaltSecret() ([]byte, error) {
+	return []byte("dbtest salt secret, 32 bytes...."), nil
 }

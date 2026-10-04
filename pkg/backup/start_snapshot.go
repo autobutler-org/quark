@@ -162,6 +162,10 @@ func prepareVaultExport(params StartSnapshotBackupParams) (*VaultExportParams, e
 
 	ctx := params.Ctx
 	if _, _, err := authutil.ValidateBasicAuth(ctx, params.Queries, params.Username, params.Password); err != nil {
+		// A raw password goes back as it is: it carries its own 426.
+		if errors.Is(err, authutil.ErrAppTooOld) {
+			return nil, err
+		}
 		return nil, ErrInvalidCredentials
 	}
 

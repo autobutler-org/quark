@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,7 +134,7 @@ func TestRequireAuth_UnauthorizedAfterSetup(t *testing.T) {
 	ctx := context.Background()
 	_, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -156,7 +157,7 @@ func TestRequireAuth_BearerTokenGrantsAccess(t *testing.T) {
 	ctx := context.Background()
 	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -180,7 +181,7 @@ func TestRequireAuth_CookieGrantsAccess(t *testing.T) {
 	ctx := context.Background()
 	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -204,7 +205,7 @@ func TestRequireAuth_QueryTokenGrantsAccess(t *testing.T) {
 	ctx := context.Background()
 	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -232,7 +233,7 @@ func TestRequireAuth_QueryTokenGrantsThumbnailAccess(t *testing.T) {
 	ctx := context.Background()
 	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -255,7 +256,7 @@ func TestRequireAuth_InvalidTokenReturns401(t *testing.T) {
 	ctx := context.Background()
 	_, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -280,7 +281,7 @@ func TestRequireAuth_DisabledAccountReturns401(t *testing.T) {
 	ctx := context.Background()
 	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -295,7 +296,7 @@ func TestRequireAuth_DisabledAccountReturns401(t *testing.T) {
 	}
 	basic := func() *http.Request {
 		req := httptest.NewRequest(http.MethodGet, "/api/v0/protected", nil)
-		req.SetBasicAuth("admin", "SecurePass1!")
+		req.SetBasicAuth("admin", dbtest.AuthKey("SecurePass1!"))
 		return req
 	}
 	if w := doMiddlewareReq(engine, bearer()); w.Code != http.StatusOK {
@@ -317,13 +318,13 @@ func TestRequireAuth_DisabledAccountReturns401(t *testing.T) {
 }
 
 // TestRequireAuth_BasicAuthGrantsAccess verifies HTTP Basic Auth works as a
-// fallback authentication method.
+// fallback authentication method, with the auth key as its password.
 func TestRequireAuth_BasicAuthGrantsAccess(t *testing.T) {
 	sqlDB, queries := newMiddlewareTestDB(t)
 	ctx := context.Background()
 	_, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -333,10 +334,24 @@ func TestRequireAuth_BasicAuthGrantsAccess(t *testing.T) {
 	engine := newMiddlewareEngine(t, deps)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v0/protected", nil)
-	req.SetBasicAuth("admin", "SecurePass1!")
+	req.SetBasicAuth("admin", dbtest.AuthKey("SecurePass1!"))
 	w := doMiddlewareReq(engine, req)
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200 with Basic Auth, got %d", w.Code)
+	}
+
+	// The raw password is what an old client sends, so it answers the
+	// update-the-app 426, not a 401 that reads as a wrong password (#2430).
+	raw := httptest.NewRequest(http.MethodGet, "/api/v0/protected", nil)
+	raw.SetBasicAuth("admin", "SecurePass1!")
+	w = doMiddlewareReq(engine, raw)
+	if w.Code != http.StatusUpgradeRequired || !strings.Contains(w.Body.String(), authutil.ErrAppTooOld.Error()) {
+		t.Errorf("Basic Auth with the raw password = %d %s, want 426 with the update-the-app copy", w.Code, w.Body)
+	}
+	wrong := httptest.NewRequest(http.MethodGet, "/api/v0/protected", nil)
+	wrong.SetBasicAuth("admin", dbtest.AuthKey("not-it"))
+	if w := doMiddlewareReq(engine, wrong); w.Code != http.StatusUnauthorized {
+		t.Errorf("Basic Auth with a wrong key = %d, want 401", w.Code)
 	}
 }
 
@@ -351,7 +366,7 @@ func TestRequireAuth_SetsUserIDOnContext(t *testing.T) {
 	ctx := context.Background()
 	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -395,7 +410,7 @@ func TestRequireAuth_SetsUserIDOnContext(t *testing.T) {
 			r.AddCookie(&http.Cookie{Name: "session", Value: result.SessionToken})
 		}, sessionID},
 		{"basic auth", func(r *http.Request) {
-			r.SetBasicAuth("admin", "SecurePass1!")
+			r.SetBasicAuth("admin", dbtest.AuthKey("SecurePass1!"))
 		}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -430,7 +445,7 @@ func TestRequireAuth_SetsPrincipalOnContext(t *testing.T) {
 	ctx := context.Background()
 	result, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -488,7 +503,7 @@ func TestRequireAuth_DownloadTokenGrantsOneDownload(t *testing.T) {
 	ctx := context.Background()
 	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	}); err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -554,7 +569,7 @@ func TestRequireAuth_DownloadTokenResumesAnInterruptedDownload(t *testing.T) {
 	ctx := context.Background()
 	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	}); err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -629,7 +644,7 @@ func TestRequireAuth_DownloadTokenRestartsAnInterruptedZip(t *testing.T) {
 	ctx := context.Background()
 	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "SecurePass1!",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	}); err != nil {
 		t.Fatalf("Setup: %v", err)
 	}

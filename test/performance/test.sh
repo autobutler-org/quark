@@ -3,10 +3,14 @@ set -euo pipefail
 
 BASE_URL="${QUARK_BASE_URL:-http://127.0.0.1:8080}"
 AUTH_USER="${QUARK_USERNAME:-perf}"
-AUTH_PASS="${QUARK_PASSWORD:-perf-password}"
+# The Quark takes an auth key, never the password (#2430). The accounts this
+# script sets up sign in with these fixed keys, not ones derived from a password. Against
+# a Quark set up by the app, pass QUARK_ACCESS_TOKEN or the account's derived
+# QUARK_AUTH_KEY; deriving one from a password needs `quark auth-key` (#2713).
+AUTH_KEY="${QUARK_AUTH_KEY:-cGVyZi1hdXRoLWtleS1wZXJmLWF1dGgta2V5LXBlcmY=}"
 ACCESS_TOKEN="${QUARK_ACCESS_TOKEN:-}"
 READER_USER="${QUARK_READER_USERNAME:-perf-reader}"
-READER_PASS="${QUARK_READER_PASSWORD:-perf-reader-password}"
+READER_KEY="${QUARK_READER_AUTH_KEY:-cGVyZi1yZWFkZXIta2V5LXBlcmYtcmVhZGVyLWtleS0=}"
 READER_TOKEN=""
 THREADS="${TEST_THREADS:-4}"
 CONCURRENCY="${TEST_CONCURRENCY:-20}"
@@ -64,7 +68,7 @@ auth_setup_if_needed() {
     -c "$cookie_file" \
     -X POST "$BASE_URL/api/v0/auth/setup" \
     -H "Content-Type: application/json" \
-    -d "{\"username\":\"$AUTH_USER\",\"password\":\"$AUTH_PASS\"}")"
+    -d "{\"username\":\"$AUTH_USER\",\"authKey\":\"$AUTH_KEY\"}")"
 
   if [[ "$setup_status" != "200" ]]; then
     echo "failed to initialize auth via /api/v0/auth/setup (status=$setup_status)." >&2
@@ -92,11 +96,11 @@ auth_login_and_get_token() {
     -c "$cookie_file" \
     -X POST "$BASE_URL/api/v0/auth/login" \
     -H "Content-Type: application/json" \
-    -d "{\"username\":\"$AUTH_USER\",\"password\":\"$AUTH_PASS\"}")"
+    -d "{\"username\":\"$AUTH_USER\",\"authKey\":\"$AUTH_KEY\"}")"
 
   if [[ "$login_status" != "200" ]]; then
     echo "quark auth mismatch: login failed for configured credentials (status=$login_status)." >&2
-    echo "set QUARK_ACCESS_TOKEN or QUARK_USERNAME/QUARK_PASSWORD correctly for this instance." >&2
+    echo "set QUARK_ACCESS_TOKEN or QUARK_USERNAME/QUARK_AUTH_KEY correctly for this instance." >&2
     return 1
   fi
 
@@ -121,7 +125,7 @@ setup_reader() {
     -X POST "$BASE_URL/api/v0/admin/users" \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"username\":\"$READER_USER\",\"password\":\"$READER_PASS\"}")"
+    -d "{\"username\":\"$READER_USER\",\"authKey\":\"$READER_KEY\"}")"
 
   # 409 means an earlier run against this instance already made the account.
   if [[ "$create_status" == "201" ]]; then
@@ -145,7 +149,7 @@ setup_reader() {
     -c "$cookie_file" \
     -X POST "$BASE_URL/api/v0/auth/login" \
     -H "Content-Type: application/json" \
-    -d "{\"username\":\"$READER_USER\",\"password\":\"$READER_PASS\"}")"
+    -d "{\"username\":\"$READER_USER\",\"authKey\":\"$READER_KEY\"}")"
   if [[ "$login_status" != "200" ]]; then
     echo "login failed for $READER_USER (status=$login_status)." >&2
     return 1

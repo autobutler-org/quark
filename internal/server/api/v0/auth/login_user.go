@@ -13,15 +13,17 @@ import (
 
 // loginUser godoc
 // @Summary Login
-// @Description Authenticates and returns a session token. The body takes one of three shapes: {username, password} checks the password; {username, authKey} checks the key the client derived from the password and the salt GET /auth/salt returned, and is a 401 for an account that has no auth key yet; {username, password, authKey} checks the password and gives an account with no auth key that one, keeping its password. authKey is the standard base64 of 32 bytes. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. legacyRecovery is true for an account that has no recovery key yet: an updated client generates a phrase and sends its key to PUT /auth/recovery-key (#2430). A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.
+// @Description Authenticates with {username, authKey} and returns a session token. authKey is the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned. {username, password, authKey} is the one-time upgrade of an account GET /auth/salt calls legacy: the password is checked against the stored one, and the key, its salt and a cleared password hash are stored in one write, so the password never signs in again; a failed write refuses the sign-in with 500. An account that already has an auth key is checked by the key, and the password beside it is ignored. A body carrying password with no authKey, which only an app from before auth keys sends, is refused with 426 before anything is checked (#2430). legacyRecovery is true for an account that has no recovery key yet, such as one an admin created: the client generates a phrase and sends its key to PUT /auth/recovery-key. A pending or disabled account with the right key gets 403 with its status, so the app can tell it from a wrong password.
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param body body credentialsBody true "The username with a password, an authKey, or both"
+// @Param body body credentialsBody true "The username, the authKey, and for the upgrade the password"
 // @Success 200 {object} loginResponse
-// @Failure 400 {object} serverutil.Response "no password or authKey, or a malformed authKey"
+// @Failure 400 {object} serverutil.Response "a missing or malformed authKey"
 // @Failure 401 {object} serverutil.Response
 // @Failure 403 {object} accountRefusal "status is pending or disabled"
+// @Failure 426 {object} serverutil.Response "the body carried a password with no authKey: the app is too old"
+// @Failure 500 {object} serverutil.Response "the upgrade's write failed"
 // @Router /auth/login [post]
 func loginUser(c *gin.Context) *serverutil.Response {
 	deps, ok := getQueries(c)
@@ -43,7 +45,7 @@ func loginUser(c *gin.Context) *serverutil.Response {
 	if refusal := accountRefusalResponse(err); refusal != nil {
 		return refusal
 	}
-	if errors.Is(err, authutil.ErrCredentialRequired) || errors.Is(err, authutil.ErrInvalidAuthKey) {
+	if errors.Is(err, authutil.ErrInvalidAuthKey) {
 		return serverutil.BadRequest(err)
 	}
 	if err != nil {
@@ -53,7 +55,6 @@ func loginUser(c *gin.Context) *serverutil.Response {
 	setSessionCookie(c, result.SessionToken)
 	return serverutil.Ok().WithData(loginResponse{
 		Token:          result.SessionToken,
-		RecoveryPhrase: result.RecoveryPhrase,
 		LegacyRecovery: result.LegacyRecovery,
 	})
 }

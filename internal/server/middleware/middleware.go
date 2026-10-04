@@ -5,6 +5,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -164,7 +165,8 @@ func trackDevice(deps deputil.Dependencies) gin.HandlerFunc {
 //  2. Session cookie
 //  3. Query parameter (?token=)
 //  4. Download token (?downloadToken=, downloadTokenPaths only)
-//  5. HTTP Basic Auth (Authorization: Basic <base64>)
+//  5. HTTP Basic Auth (Authorization: Basic <base64>), whose password is the
+//     account's auth key. A raw password answers 426 instead of 401 (#2430).
 //
 // Exempt paths (setup, login, recover, status) are always allowed through.
 // If no users have been set up yet, all requests are allowed through (first-boot).
@@ -284,6 +286,10 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 			validUser, userID, err := authutil.ValidateBasicAuth(ctx, db.Queries, username, password)
 			if err == nil {
 				authenticated(c, db.Queries, validUser, userID)
+				return
+			}
+			if errors.Is(err, authutil.ErrAppTooOld) {
+				c.AbortWithStatusJSON(http.StatusUpgradeRequired, gin.H{"error": err.Error()})
 				return
 			}
 		}

@@ -23,7 +23,7 @@ func TestOversizedLoginBody(t *testing.T) {
 	prose := generateLargeText(size)
 	payload, err := json.Marshal(map[string]string{
 		"username": prose,
-		"password": prose,
+		"authKey":  prose,
 	})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -37,16 +37,16 @@ func TestOversizedLoginBody(t *testing.T) {
 }
 
 // TestOversizedRecoverBody exercises another public JSON auth path with a huge
-// recoveryPhrase field.
+// recoveryKey field.
 func TestOversizedRecoverBody(t *testing.T) {
 	c := newClient(t)
 	c.requireBackend(t)
 
 	prose := generateLargeText(oversizeBytes())
 	payload, err := json.Marshal(map[string]string{
-		"username":       "stress-user",
-		"recoveryPhrase": prose,
-		"newPassword":    "x",
+		"username":    "stress-user",
+		"recoveryKey": prose,
+		"newAuthKey":  "x",
 	})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)

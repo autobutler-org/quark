@@ -2,10 +2,12 @@ package deviceutil
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
+	"github.com/autobutler-org/quark/pkg/util/authutil"
 	_ "modernc.org/sqlite"
 )
 
@@ -273,5 +275,26 @@ func TestGetAllDeviceNames(t *testing.T) {
 	}
 	if len(names) != 2 {
 		t.Fatalf("expected 2 names, got %d", len(names))
+	}
+}
+
+// TestSetRole_RawPasswordIsAppTooOld checks the re-confirmation passes a raw
+// password's ErrAppTooOld through unwrapped, so the handler answers an old app
+// with 426 rather than 401 (#2430).
+func TestSetRole_RawPasswordIsAppTooOld(t *testing.T) {
+	params := SetRoleParams{
+		Ctx:      context.Background(),
+		Queries:  newTestDBWithRoles(t),
+		Role:     RoleUnassigned,
+		Username: "admin",
+		Password: "admin-password",
+	}
+	if _, err := SetRole(params); !errors.Is(err, authutil.ErrAppTooOld) {
+		t.Fatalf("raw password = %v, want ErrAppTooOld", err)
+	}
+	params.Password = dbtest.AuthKey("admin-password")
+	var unauthorized *UnauthorizedError
+	if _, err := SetRole(params); !errors.As(err, &unauthorized) {
+		t.Fatalf("unknown account's key = %v, want an UnauthorizedError", err)
 	}
 }

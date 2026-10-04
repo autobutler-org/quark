@@ -368,26 +368,6 @@ func (q *Queries) RenewSession(ctx context.Context, arg RenewSessionParams) erro
 	return err
 }
 
-const setAuthKeyIfUnset = `-- name: SetAuthKeyIfUnset :exec
-UPDATE users
-SET auth_key_hash = ?, auth_salt = ?
-WHERE id = ? AND auth_key_hash = ''
-`
-
-type SetAuthKeyIfUnsetParams struct {
-	AuthKeyHash string
-	AuthSalt    string
-	ID          int64
-}
-
-// SetAuthKeyIfUnset upgrades an account to an auth key on a sign-in that
-// carried both the password and the key (#2430). Only an empty hash matches,
-// so an upgraded account's key is never overwritten.
-func (q *Queries) SetAuthKeyIfUnset(ctx context.Context, arg SetAuthKeyIfUnsetParams) error {
-	_, err := q.db.ExecContext(ctx, setAuthKeyIfUnset, arg.AuthKeyHash, arg.AuthSalt, arg.ID)
-	return err
-}
-
 const setRecoveryKey = `-- name: SetRecoveryKey :exec
 UPDATE users
 SET recovery_key_hash = ?, recovery_phrase_hash = ''
@@ -407,52 +387,23 @@ func (q *Queries) SetRecoveryKey(ctx context.Context, arg SetRecoveryKeyParams) 
 	return err
 }
 
-const setRecoveryPhraseIfUnset = `-- name: SetRecoveryPhraseIfUnset :execrows
-UPDATE users
-SET recovery_phrase_hash = ?
-WHERE id = ? AND recovery_phrase_hash = '' AND recovery_key_hash = ''
-`
-
-type SetRecoveryPhraseIfUnsetParams struct {
-	RecoveryPhraseHash string
-	ID                 int64
-}
-
-// SetRecoveryPhraseIfUnset gives an admin-created account its recovery phrase
-// on its first sign-in (#1873). Only an account with neither a phrase nor a
-// recovery key matches, so two sign-ins at once cannot both hand out a phrase,
-// and one racing a recovery-key rotation cannot undo it (#2430).
-func (q *Queries) SetRecoveryPhraseIfUnset(ctx context.Context, arg SetRecoveryPhraseIfUnsetParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, setRecoveryPhraseIfUnset, arg.RecoveryPhraseHash, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
 const setUserCredentials = `-- name: SetUserCredentials :exec
 UPDATE users
-SET password_hash = ?, auth_key_hash = ?, auth_salt = ?
+SET auth_key_hash = ?, auth_salt = ?, password_hash = ''
 WHERE id = ?
 `
 
 type SetUserCredentialsParams struct {
-	PasswordHash string
-	AuthKeyHash  string
-	AuthSalt     string
-	ID           int64
+	AuthKeyHash string
+	AuthSalt    string
+	ID          int64
 }
 
-// SetUserCredentials replaces everything an account signs in with (#2430). A
-// recovery writes all three so that whichever of the password and the auth
-// key it did not set is cleared, and the old one stops signing in.
+// SetUserCredentials replaces what an account signs in with: the auth key a
+// recovery sets, and the salt it was derived with (#2430). It clears the
+// password hash, so a password the Quark once saw stops signing in.
 func (q *Queries) SetUserCredentials(ctx context.Context, arg SetUserCredentialsParams) error {
-	_, err := q.db.ExecContext(ctx, setUserCredentials,
-		arg.PasswordHash,
-		arg.AuthKeyHash,
-		arg.AuthSalt,
-		arg.ID,
-	)
+	_, err := q.db.ExecContext(ctx, setUserCredentials, arg.AuthKeyHash, arg.AuthSalt, arg.ID)
 	return err
 }
 
@@ -472,6 +423,30 @@ type SetUserStatusParams struct {
 // conditional update, so two admins acting at once cannot both succeed.
 func (q *Queries) SetUserStatus(ctx context.Context, arg SetUserStatusParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, setUserStatus, arg.ToStatus, arg.Username, arg.FromStatus)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const upgradeToAuthKey = `-- name: UpgradeToAuthKey :execrows
+UPDATE users
+SET auth_key_hash = ?, auth_salt = ?, password_hash = ''
+WHERE id = ? AND auth_key_hash = ''
+`
+
+type UpgradeToAuthKeyParams struct {
+	AuthKeyHash string
+	AuthSalt    string
+	ID          int64
+}
+
+// UpgradeToAuthKey moves an account from its password to the auth key a
+// sign-in carried beside it (#2430), and clears the password hash in the same
+// write, so the password crosses the wire at most once. Only an account with
+// no auth key matches, so an upgraded account's key is never overwritten.
+func (q *Queries) UpgradeToAuthKey(ctx context.Context, arg UpgradeToAuthKeyParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, upgradeToAuthKey, arg.AuthKeyHash, arg.AuthSalt, arg.ID)
 	if err != nil {
 		return 0, err
 	}

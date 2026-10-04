@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
@@ -252,7 +253,7 @@ func TestSessionID(t *testing.T) {
 	ctx := context.Background()
 	result, err := authutil.Setup(ctx, authutil.SetupParams{
 		Database: database, FilesDir: t.TempDir(),
-		Username: "admin", Password: "SecurePass1!",
+		Username: "admin", AuthKey: dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup: %v", err)

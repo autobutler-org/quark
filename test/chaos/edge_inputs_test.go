@@ -26,7 +26,7 @@ func TestEdgeLoginWhitespaceCredentials(t *testing.T) {
 	c.requireBackend(t)
 	payload, _ := json.Marshal(map[string]string{
 		"username": "   \t\n  ",
-		"password": "   ",
+		"authKey":  "   ",
 	})
 	r := c.exchange(http.MethodPost, "/api/v0/auth/login", payload, map[string]string{
 		"Content-Type": "application/json",
@@ -39,10 +39,10 @@ func TestEdgeLoginUnicodeCredentials(t *testing.T) {
 	c.requireBackend(t)
 	// Mixed scripts + combining marks + emoji via escapes (keeps cspell quiet).
 	username := "user\u7528\u6237\u65e5\u672c\u8a9e\u0627\u0644\u0639\u0631\u0628\u064a\u0629\U0001F1FA\U0001F1E6\u0301\u200B"
-	password := "pass\u043f\u0430\u0440\u043e\u043b\u044c\U0001F510\xef\xbb\xbf" // trailing byte order mark
+	authKey := "key\u043a\u043b\u044e\u0447\U0001F510\xef\xbb\xbf" // trailing byte order mark
 	payload, _ := json.Marshal(map[string]string{
 		"username": username,
-		"password": password,
+		"authKey":  authKey,
 	})
 	r := c.exchange(http.MethodPost, "/api/v0/auth/login", payload, map[string]string{
 		"Content-Type": "application/json",

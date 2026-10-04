@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -15,13 +16,17 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"github.com/gin-gonic/gin"
 )
 
 // newPublicAuthEngine mounts the auth router the way requireAuth leaves its
-// exempt routes: dependencies on the context and no caller.
+// exempt routes: dependencies on the context and no caller. The salt secret
+// lives in a temporary settings file.
 func newPublicAuthEngine(t *testing.T, database *db.DatabaseSqlc) *gin.Engine {
 	t.Helper()
+	settingsutil.ResetForTesting(filepath.Join(t.TempDir(), "settings.json"))
+	t.Cleanup(func() { settingsutil.ResetForTesting("") })
 	deps := deputil.NewDependencies().WithDatabase(database)
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -70,7 +75,7 @@ func setUserStatus(t *testing.T, queries *db.Queries, username, from, to string)
 // founding admin signs in exactly as before.
 func TestLoginUser_StatusRefusals(t *testing.T) {
 	database := dbtest.NewDB(t)
-	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 	createRecoverableUser(t, database.Queries, "waiting", "apple-bread-cloud-delta-eagle-flame")
@@ -79,7 +84,7 @@ func TestLoginUser_StatusRefusals(t *testing.T) {
 	setUserStatus(t, database.Queries, "off", authutil.StatusActive, authutil.StatusDisabled)
 	engine := newPublicAuthEngine(t, database)
 
-	founder := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "admin", "password": "admin-password"})
+	founder := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "admin", "authKey": dbtest.AuthKey("admin-password")})
 	if founder.Code != http.StatusOK || decodeBody(t, founder)["token"] == "" {
 		t.Errorf("founder login = %d: %s", founder.Code, founder.Body.String())
 	}
@@ -88,7 +93,7 @@ func TestLoginUser_StatusRefusals(t *testing.T) {
 		{"waiting", authutil.StatusPending, authutil.ErrAccountPending.Error()},
 		{"off", authutil.StatusDisabled, authutil.ErrAccountDisabled.Error()},
 	} {
-		right := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": tc.user, "password": "original-password"})
+		right := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": tc.user, "authKey": dbtest.AuthKey("original-password")})
 		if right.Code != http.StatusForbidden {
 			t.Errorf("%s right password = %d, want 403: %s", tc.user, right.Code, right.Body.String())
 			continue
@@ -101,8 +106,8 @@ func TestLoginUser_StatusRefusals(t *testing.T) {
 			t.Errorf("%s refused login carried a token", tc.user)
 		}
 
-		wrong := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": tc.user, "password": "not-it"})
-		stranger := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "nobody", "password": "not-it"})
+		wrong := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": tc.user, "authKey": dbtest.AuthKey("not-it")})
+		stranger := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "nobody", "authKey": dbtest.AuthKey("not-it")})
 		if wrong.Code != http.StatusUnauthorized || wrong.Body.String() != stranger.Body.String() {
 			t.Errorf("%s wrong password = %d %s, want the stranger's 401 %s", tc.user, wrong.Code, wrong.Body.String(), stranger.Body.String())
 		}
@@ -113,7 +118,7 @@ func TestLoginUser_StatusRefusals(t *testing.T) {
 // account is 403 with its status, the same shape login uses.
 func TestRecoverAccount_StatusRefusal(t *testing.T) {
 	database := dbtest.NewDB(t)
-	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 	const phrase = "apple-bread-cloud-delta-eagle-flame"
@@ -121,7 +126,7 @@ func TestRecoverAccount_StatusRefusal(t *testing.T) {
 	setUserStatus(t, database.Queries, "waiting", authutil.StatusActive, authutil.StatusPending)
 	engine := newPublicAuthEngine(t, database)
 
-	w := postJSON(engine, "/api/v0/auth/recover", map[string]string{"username": "waiting", "recoveryPhrase": phrase, "newPassword": "brand-new-password"})
+	w := postJSON(engine, "/api/v0/auth/recover", map[string]string{"username": "waiting", "recoveryKey": dbtest.AuthKey(phrase), "newAuthKey": dbtest.AuthKey("brand-new-password")})
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("recover pending = %d, want 403: %s", w.Code, w.Body.String())
 	}

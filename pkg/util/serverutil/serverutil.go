@@ -104,6 +104,13 @@ func Forbidden(err error) *Response {
 	return NewResponse().WithStatusCode(http.StatusForbidden).WithError(err)
 }
 
+// UpgradeRequired reports a request only an outdated client sends, one this
+// server no longer accepts (#2430). err's text should tell the person to
+// update.
+func UpgradeRequired(err error) *Response {
+	return NewResponse().WithStatusCode(http.StatusUpgradeRequired).WithError(err)
+}
+
 func ServiceUnavailable(err error) *Response {
 	return NewResponse().WithStatusCode(http.StatusServiceUnavailable).WithError(err)
 }

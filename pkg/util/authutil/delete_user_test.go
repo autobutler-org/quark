@@ -72,7 +72,7 @@ func TestDeleteUser_ReassignsOwnerRowsToActor(t *testing.T) {
 	if _, err := database.Db.Exec(`INSERT INTO group_members (group_id, user_id) SELECT id, ? FROM groups WHERE name = 'kids'`, bobID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", Password: "pw-for-status"}); err != nil {
+	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", AuthKey: statusKey}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -2,10 +2,10 @@ package authutil_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
@@ -47,44 +47,6 @@ func TestGenerateSessionToken(t *testing.T) {
 	}
 }
 
-func TestGenerateRecoveryPhrase(t *testing.T) {
-	phrase, err := authutil.GenerateRecoveryPhrase()
-	if err != nil {
-		t.Fatalf("GenerateRecoveryPhrase failed: %v", err)
-	}
-	words := strings.Split(phrase, "-")
-	if len(words) != 6 {
-		t.Errorf("Expected 6 words, got %d: %q", len(words), phrase)
-	}
-	for _, w := range words {
-		if w == "" {
-			t.Error("Expected non-empty words in recovery phrase")
-		}
-	}
-	// Should be unique (probabilistically)
-	phrase2, _ := authutil.GenerateRecoveryPhrase()
-	if phrase == phrase2 {
-		t.Error("Expected unique recovery phrases")
-	}
-}
-
-func TestNormalizeRecoveryPhrase(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"Hello-World-Test", "hello-world-test"},
-		{"  hello-world  ", "hello-world"},
-		{"UPPER-CASE", "upper-case"},
-	}
-	for _, tt := range tests {
-		got := authutil.NormalizeRecoveryPhrase(tt.input)
-		if got != tt.want {
-			t.Errorf("NormalizeRecoveryPhrase(%q) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
 // --- Integration tests (real SQLite, full flow) ---
 
 func TestIsSetupComplete_FreshDB(t *testing.T) {
@@ -104,21 +66,13 @@ func TestSetup_Success(t *testing.T) {
 	queries := database.Queries
 	result, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "supersecret",
+		AuthKey:  dbtest.AuthKey("supersecret"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup failed: %v", err)
 	}
 	if result.SessionToken == "" {
 		t.Error("Expected non-empty session token")
-	}
-	if result.RecoveryPhrase == "" {
-		t.Error("Expected non-empty recovery phrase")
-	}
-	// Recovery phrase should be 6 words
-	words := strings.Split(result.RecoveryPhrase, "-")
-	if len(words) != 6 {
-		t.Errorf("Expected 6-word recovery phrase, got %d words", len(words))
 	}
 
 	// Setup should now be complete
@@ -132,7 +86,7 @@ func TestSetup_CannotRunTwice(t *testing.T) {
 	database := newTestDB(t)
 	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "supersecret",
+		AuthKey:  dbtest.AuthKey("supersecret"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("First setup failed: %v", err)
@@ -140,21 +94,10 @@ func TestSetup_CannotRunTwice(t *testing.T) {
 
 	_, err = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin2",
-		Password: "anotherpass",
+		AuthKey:  dbtest.AuthKey("anotherpass"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err == nil {
 		t.Error("Expected error on second setup attempt")
-	}
-}
-
-func TestSetup_ShortPassword(t *testing.T) {
-	database := newTestDB(t)
-	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
-		Username: "admin",
-		Password: "short",
-	})
-	if err == nil {
-		t.Error("Expected error for password shorter than 8 chars")
 	}
 }
 
@@ -162,7 +105,7 @@ func TestSetup_EmptyUsername(t *testing.T) {
 	database := newTestDB(t)
 	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "",
-		Password: "validpassword",
+		AuthKey:  dbtest.AuthKey("validpassword"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err == nil {
 		t.Error("Expected error for empty username")
@@ -174,7 +117,7 @@ func TestLogin_Success(t *testing.T) {
 	queries := database.Queries
 	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "mypassword",
+		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Setup failed: %v", err)
@@ -182,7 +125,7 @@ func TestLogin_Success(t *testing.T) {
 
 	result, err := authutil.Login(context.Background(), queries, authutil.LoginParams{
 		Username: "admin",
-		Password: "mypassword",
+		AuthKey:  dbtest.AuthKey("mypassword"),
 	})
 	if err != nil {
 		t.Fatalf("Login failed: %v", err)
@@ -197,12 +140,12 @@ func TestLogin_WrongPassword(t *testing.T) {
 	queries := database.Queries
 	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "mypassword",
+		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
 
 	_, err := authutil.Login(context.Background(), queries, authutil.LoginParams{
 		Username: "admin",
-		Password: "wrongpassword",
+		AuthKey:  dbtest.AuthKey("wrongpassword"),
 	})
 	if err == nil {
 		t.Error("Expected error for wrong password")
@@ -214,12 +157,12 @@ func TestLogin_WrongUsername(t *testing.T) {
 	queries := database.Queries
 	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "mypassword",
+		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
 
 	_, err := authutil.Login(context.Background(), queries, authutil.LoginParams{
 		Username: "notadmin",
-		Password: "mypassword",
+		AuthKey:  dbtest.AuthKey("mypassword"),
 	})
 	if err == nil {
 		t.Error("Expected error for wrong username")
@@ -235,7 +178,7 @@ func TestValidateSession_Valid(t *testing.T) {
 	queries := database.Queries
 	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "mypassword",
+		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
 
 	username, _, err := authutil.ValidateSession(context.Background(), queries, setupResult.SessionToken)
@@ -261,7 +204,7 @@ func TestLogout_InvalidatesSession(t *testing.T) {
 	queries := database.Queries
 	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "mypassword",
+		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
 
 	err := authutil.Logout(context.Background(), queries, setupResult.SessionToken)
@@ -279,14 +222,17 @@ func TestRecover_Success(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
 	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
-		Username: "admin",
-		Password: "originalpass",
+		Username:    "admin",
+		AuthKey:     dbtest.AuthKey("originalpass"),
+		RecoveryKey: dbtest.AuthKey("admin-phrase"),
+		SaltSecret:  dbtest.SaltSecret,
 	})
 
 	result, err := authutil.Recover(context.Background(), database, authutil.RecoverParams{
-		Username:       "admin",
-		RecoveryPhrase: setupResult.RecoveryPhrase,
-		NewPassword:    "newpassword123",
+		Username:    "admin",
+		RecoveryKey: dbtest.AuthKey("admin-phrase"),
+		NewAuthKey:  dbtest.AuthKey("newpassword123"),
+		SaltSecret:  dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("Recover failed: %v", err)
@@ -304,7 +250,7 @@ func TestRecover_Success(t *testing.T) {
 	// Should be able to login with new password
 	_, err = authutil.Login(context.Background(), queries, authutil.LoginParams{
 		Username: "admin",
-		Password: "newpassword123",
+		AuthKey:  dbtest.AuthKey("newpassword123"),
 	})
 	if err != nil {
 		t.Errorf("Expected login with new password to work: %v", err)
@@ -313,7 +259,7 @@ func TestRecover_Success(t *testing.T) {
 	// Old password should not work
 	_, err = authutil.Login(context.Background(), queries, authutil.LoginParams{
 		Username: "admin",
-		Password: "originalpass",
+		AuthKey:  dbtest.AuthKey("originalpass"),
 	})
 	if err == nil {
 		t.Error("Expected old password to be rejected after recovery")
@@ -323,75 +269,79 @@ func TestRecover_Success(t *testing.T) {
 func TestRecover_WrongPhrase(t *testing.T) {
 	database := newTestDB(t)
 	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
-		Username: "admin",
-		Password: "mypassword",
+		Username:    "admin",
+		AuthKey:     dbtest.AuthKey("mypassword"),
+		RecoveryKey: dbtest.AuthKey("admin-phrase"),
+		SaltSecret:  dbtest.SaltSecret,
 	})
 
 	_, err := authutil.Recover(context.Background(), database, authutil.RecoverParams{
-		Username:       "admin",
-		RecoveryPhrase: "wrong-phrase-that-does-not-match-anything",
-		NewPassword:    "newpassword123",
+		Username:    "admin",
+		RecoveryKey: dbtest.AuthKey("wrong-phrase"),
+		NewAuthKey:  dbtest.AuthKey("newpassword123"),
+		SaltSecret:  dbtest.SaltSecret,
 	})
 	if err == nil {
 		t.Error("Expected error for wrong recovery phrase")
 	}
 }
 
-// createUserWithPhrase adds a second account the way Setup stores the first:
-// the recovery phrase is normalized before it is hashed.
-func createUserWithPhrase(t *testing.T, queries *db.Queries, username, password, phrase string) {
+// createUserWithKeys adds a second account the way Setup stores the first.
+func createUserWithKeys(t *testing.T, queries *db.Queries, username, password, phrase string) {
 	t.Helper()
-	passwordHash, err := authutil.HashPassword(password)
+	keyHash, err := authutil.HashPassword(dbtest.AuthKey(password))
 	if err != nil {
 		t.Fatal(err)
 	}
-	phraseHash, err := authutil.HashPassword(authutil.NormalizeRecoveryPhrase(phrase))
+	recoveryHash, err := authutil.HashPassword(dbtest.AuthKey(phrase))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := queries.CreateUser(context.Background(), db.CreateUserParams{
-		Username:           username,
-		PasswordHash:       passwordHash,
-		RecoveryPhraseHash: phraseHash,
+		Username:        username,
+		AuthKeyHash:     keyHash,
+		AuthSalt:        "AAAAAAAAAAAAAAAAAAAAAA==",
+		RecoveryKeyHash: recoveryHash,
 	}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // TestRecover_NamedAccount recovers the account the request names, not the
-// founding one: a second user's phrase resets the second user's password.
+// founding one: a second user's key resets the second user's password.
 func TestRecover_NamedAccount(t *testing.T) {
 	database := newTestDB(t)
 	queries := database.Queries
 	ctx := context.Background()
-	founder, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"})
-	if err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin",
+		AuthKey: dbtest.AuthKey("admin-password"), RecoveryKey: dbtest.AuthKey("admin-phrase"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
-	const bobPhrase = "apple-bread-cloud-delta-eagle-flame"
-	createUserWithPhrase(t, queries, "bob", "bob-password", bobPhrase)
+	createUserWithKeys(t, queries, "bob", "bob-password", "bob-phrase")
 
 	if _, err := authutil.Recover(ctx, database, authutil.RecoverParams{
-		Username:       "bob",
-		RecoveryPhrase: bobPhrase,
-		NewPassword:    "bob-new-password",
+		Username:    "bob",
+		RecoveryKey: dbtest.AuthKey("bob-phrase"),
+		NewAuthKey:  dbtest.AuthKey("bob-new-password"),
+		SaltSecret:  dbtest.SaltSecret,
 	}); err != nil {
-		t.Fatalf("Recover(bob, bob's phrase) failed: %v", err)
+		t.Fatalf("Recover(bob, bob's key) failed: %v", err)
 	}
-	if _, err := authutil.Login(ctx, queries, authutil.LoginParams{Username: "bob", Password: "bob-new-password"}); err != nil {
+	if _, err := authutil.Login(ctx, queries, authutil.LoginParams{Username: "bob", AuthKey: dbtest.AuthKey("bob-new-password")}); err != nil {
 		t.Errorf("bob should log in with the new password: %v", err)
 	}
-	if _, err := authutil.Login(ctx, queries, authutil.LoginParams{Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Login(ctx, queries, authutil.LoginParams{Username: "admin", AuthKey: dbtest.AuthKey("admin-password")}); err != nil {
 		t.Errorf("admin's password must be untouched: %v", err)
 	}
 
-	// The founder's phrase does not recover bob.
+	// The founder's key does not recover bob.
 	if _, err := authutil.Recover(ctx, database, authutil.RecoverParams{
-		Username:       "bob",
-		RecoveryPhrase: founder.RecoveryPhrase,
-		NewPassword:    "hijacked123",
+		Username:    "bob",
+		RecoveryKey: dbtest.AuthKey("admin-phrase"),
+		NewAuthKey:  dbtest.AuthKey("hijacked123"),
+		SaltSecret:  dbtest.SaltSecret,
 	}); err == nil {
-		t.Error("Recover(bob, admin's phrase) should fail")
+		t.Error("Recover(bob, admin's key) should fail")
 	}
 }
 
@@ -400,20 +350,22 @@ func TestRecover_NamedAccount(t *testing.T) {
 func TestRecover_UnknownUserLooksLikeWrongPhrase(t *testing.T) {
 	database := newTestDB(t)
 	ctx := context.Background()
-	founder, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"})
-	if err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin",
+		AuthKey: dbtest.AuthKey("admin-password"), RecoveryKey: dbtest.AuthKey("admin-phrase"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 
 	_, unknownErr := authutil.Recover(ctx, database, authutil.RecoverParams{
-		Username:       "nobody",
-		RecoveryPhrase: founder.RecoveryPhrase,
-		NewPassword:    "newpassword123",
+		Username:    "nobody",
+		RecoveryKey: dbtest.AuthKey("admin-phrase"),
+		NewAuthKey:  dbtest.AuthKey("newpassword123"),
+		SaltSecret:  dbtest.SaltSecret,
 	})
 	_, wrongErr := authutil.Recover(ctx, database, authutil.RecoverParams{
-		Username:       "admin",
-		RecoveryPhrase: "wrong-phrase-that-does-not-match-anything",
-		NewPassword:    "newpassword123",
+		Username:    "admin",
+		RecoveryKey: dbtest.AuthKey("wrong-phrase"),
+		NewAuthKey:  dbtest.AuthKey("newpassword123"),
+		SaltSecret:  dbtest.SaltSecret,
 	})
 	if unknownErr == nil || wrongErr == nil {
 		t.Fatalf("expected both to fail, got unknown=%v wrong=%v", unknownErr, wrongErr)
@@ -428,10 +380,10 @@ func TestValidateBasicAuth_Success(t *testing.T) {
 	queries := database.Queries
 	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "mypassword",
+		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
 
-	username, _, err := authutil.ValidateBasicAuth(context.Background(), queries, "admin", "mypassword")
+	username, _, err := authutil.ValidateBasicAuth(context.Background(), queries, "admin", dbtest.AuthKey("mypassword"))
 	if err != nil {
 		t.Fatalf("ValidateBasicAuth failed: %v", err)
 	}
@@ -445,10 +397,10 @@ func TestValidateBasicAuth_WrongPassword(t *testing.T) {
 	queries := database.Queries
 	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "mypassword",
+		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
 
-	_, _, err := authutil.ValidateBasicAuth(context.Background(), queries, "admin", "wrongpassword")
+	_, _, err := authutil.ValidateBasicAuth(context.Background(), queries, "admin", dbtest.AuthKey("wrongpassword"))
 	if err == nil {
 		t.Error("Expected error for wrong password")
 	}
@@ -459,30 +411,11 @@ func TestValidateBasicAuth_WrongUsername(t *testing.T) {
 	queries := database.Queries
 	_, _ = authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "admin",
-		Password: "mypassword",
+		AuthKey:  dbtest.AuthKey("mypassword"), SaltSecret: dbtest.SaltSecret,
 	})
 
-	_, _, err := authutil.ValidateBasicAuth(context.Background(), queries, "notadmin", "mypassword")
+	_, _, err := authutil.ValidateBasicAuth(context.Background(), queries, "notadmin", dbtest.AuthKey("mypassword"))
 	if err == nil {
 		t.Error("Expected error for wrong username")
-	}
-}
-
-func TestRecover_CaseInsensitive(t *testing.T) {
-	database := newTestDB(t)
-	setupResult, _ := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
-		Username: "admin",
-		Password: "mypassword",
-	})
-
-	// Recovery phrase should work regardless of case
-	upperPhrase := strings.ToUpper(setupResult.RecoveryPhrase)
-	_, err := authutil.Recover(context.Background(), database, authutil.RecoverParams{
-		Username:       "admin",
-		RecoveryPhrase: upperPhrase,
-		NewPassword:    "newpassword123",
-	})
-	if err != nil {
-		t.Errorf("Recovery should work with uppercased phrase: %v", err)
 	}
 }

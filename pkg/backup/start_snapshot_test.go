@@ -7,6 +7,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
+	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	_ "modernc.org/sqlite"
@@ -128,3 +129,29 @@ func TestStartSnapshotBackup_FinishedJobDoesNotBlockNewOne(t *testing.T) {
 type noDevices struct{}
 
 func (noDevices) DetectDevices() ([]storageutil.Device, error) { return nil, nil }
+
+// TestPrepareVaultExport_RawPasswordIsAppTooOld checks the re-confirmation in
+// front of a vault export passes a raw password's ErrAppTooOld through, so the
+// handler answers an old app's 426 rather than invalid credentials (#2430).
+func TestPrepareVaultExport_RawPasswordIsAppTooOld(t *testing.T) {
+	_, err := prepareVaultExport(StartSnapshotBackupParams{
+		Ctx:              context.Background(),
+		Queries:          newRolesQueries(t),
+		Username:         "admin",
+		Password:         "admin-password",
+		RecoveryPassword: "recovery-password",
+	})
+	if !errors.Is(err, authutil.ErrAppTooOld) {
+		t.Fatalf("raw password = %v, want ErrAppTooOld", err)
+	}
+	_, err = prepareVaultExport(StartSnapshotBackupParams{
+		Ctx:              context.Background(),
+		Queries:          newRolesQueries(t),
+		Username:         "admin",
+		Password:         dbtest.AuthKey("admin-password"),
+		RecoveryPassword: "recovery-password",
+	})
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("unknown account's key = %v, want ErrInvalidCredentials", err)
+	}
+}

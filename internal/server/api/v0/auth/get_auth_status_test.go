@@ -32,12 +32,12 @@ func TestGetAuthStatus_ReportsCaller(t *testing.T) {
 	settingsutil.ResetForTesting(filepath.Join(t.TempDir(), "settings.json"))
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
-	founder, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"})
+	founder, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret})
 	if err != nil {
 		t.Fatalf("authutil.Setup: %v", err)
 	}
 	createRecoverableUser(t, database.Queries, "bob", "apple-bread-cloud-delta-eagle-flame")
-	bob, err := authutil.Login(ctx, database.Queries, authutil.LoginParams{Username: "bob", Password: "original-password"})
+	bob, err := authutil.Login(ctx, database.Queries, authutil.LoginParams{Username: "bob", AuthKey: dbtest.AuthKey("original-password")})
 	if err != nil {
 		t.Fatalf("login bob: %v", err)
 	}

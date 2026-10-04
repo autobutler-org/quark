@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	v0_auth "github.com/autobutler-org/quark/internal/server/api/v0/auth"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/avatarutil"
@@ -71,7 +72,7 @@ func newDeleteAccountEngineWithDeps(t *testing.T) (*gin.Engine, *sql.DB, string,
 
 	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: deleteAccountUser,
-		Password: deleteAccountPassword,
+		AuthKey:  dbtest.AuthKey(deleteAccountPassword), SaltSecret: dbtest.SaltSecret,
 	}); err != nil {
 		t.Fatalf("authutil.Setup: %v", err)
 	}
@@ -100,7 +101,7 @@ func newDeleteAccountEngineWithDeps(t *testing.T) (*gin.Engine, *sql.DB, string,
 
 // deleteAccountRequest sends the caller's correct password.
 func deleteAccountRequest(engine *gin.Engine, query string) *httptest.ResponseRecorder {
-	return deleteAccountRequestWithBody(engine, query, `{"password":"`+deleteAccountPassword+`"}`)
+	return deleteAccountRequestWithBody(engine, query, `{"password":"`+dbtest.AuthKey(deleteAccountPassword)+`"}`)
 }
 
 // deleteAccountRequestWithBody sends body as the JSON request body, so a test
@@ -184,10 +185,11 @@ func TestDeleteAccount_NoAspectSelected(t *testing.T) {
 	}
 }
 
-// TestDeleteAccount_PasswordRequired verifies a missing, empty or wrong
-// password deletes nothing, for every aspect: holding a session is not on its
-// own consent (#2346). A wrong password is a 403, so the app does not read it
-// as a lost session.
+// TestDeleteAccount_PasswordRequired verifies a missing, empty or wrong auth
+// key deletes nothing, for every aspect: holding a session is not on its own
+// consent (#2346). A wrong key is a 403, so the app does not read it as a lost
+// session, and a raw password, even the right one, is the update-the-app 426
+// (#2430).
 func TestDeleteAccount_PasswordRequired(t *testing.T) {
 	for _, query := range []string{"account=true", "database=true&files=true", "devices=true"} {
 		for _, tc := range []struct {
@@ -197,8 +199,9 @@ func TestDeleteAccount_PasswordRequired(t *testing.T) {
 			{"", http.StatusBadRequest},
 			{`{}`, http.StatusBadRequest},
 			{`{"password":""}`, http.StatusBadRequest},
-			{`{"password":"not-the-password"}`, http.StatusForbidden},
-			{`{"password":"OtherPassword123!"}`, http.StatusForbidden},
+			{`{"password":"` + dbtest.AuthKey("not-the-password") + `"}`, http.StatusForbidden},
+			{`{"password":"` + dbtest.AuthKey("OtherPassword123!") + `"}`, http.StatusForbidden},
+			{`{"password":"` + deleteAccountPassword + `"}`, http.StatusUpgradeRequired},
 		} {
 			t.Run(query+" "+tc.body, func(t *testing.T) {
 				engine, sqlDB, filesDir := newDeleteAccountEngine(t)
@@ -208,9 +211,9 @@ func TestDeleteAccount_PasswordRequired(t *testing.T) {
 				if w.Code != tc.want {
 					t.Fatalf("expected %d, got %d: %s", tc.want, w.Code, w.Body.String())
 				}
-				if tc.want == http.StatusForbidden {
-					if got := decodeBody(t, w)["error"]; got != authutil.ErrIncorrectPassword.Error() {
-						t.Errorf("error = %v, want %q", got, authutil.ErrIncorrectPassword.Error())
+				if want := map[int]error{http.StatusForbidden: authutil.ErrIncorrectPassword, http.StatusUpgradeRequired: authutil.ErrAppTooOld}[tc.want]; want != nil {
+					if got := decodeBody(t, w)["error"]; got != want.Error() {
+						t.Errorf("error = %v, want %q", got, want.Error())
 					}
 				}
 				if _, err := os.Stat(filepath.Join(filesDir, "keep.txt")); err != nil {
@@ -482,14 +485,13 @@ func TestDeleteAccount_AccountLeavesOtherUsersAlone(t *testing.T) {
 	database.Queries = db.New(conn)
 
 	const otherUser = "other-user"
-	hash, err := authutil.HashPassword("OtherPassword123!")
+	hash, err := authutil.HashPassword(dbtest.AuthKey("OtherPassword123!"))
 	if err != nil {
 		t.Fatalf("hash password: %v", err)
 	}
 	other, err := database.Queries.CreateUser(context.Background(), db.CreateUserParams{
-		Username:           otherUser,
-		PasswordHash:       hash,
-		RecoveryPhraseHash: hash,
+		Username:    otherUser,
+		AuthKeyHash: hash,
 	})
 	if err != nil {
 		t.Fatalf("create second user: %v", err)

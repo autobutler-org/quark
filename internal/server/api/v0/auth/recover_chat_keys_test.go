@@ -11,22 +11,17 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db/dbtest"
-	v0_auth "github.com/autobutler-org/quark/internal/server/api/v0/auth"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
-	"github.com/autobutler-org/quark/pkg/util/ctxutil"
-	"github.com/autobutler-org/quark/pkg/util/deputil"
-	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/gin-gonic/gin"
 )
 
 // TestRecover_ChatKeys drives the two recovery requests of #2416: fetch the
-// wrapped keys with the phrase, then reset the password and store the
+// wrapped keys with the recovery key, then reset the password and store the
 // re-wrapped keys in one request, which rolls back together.
 func TestRecover_ChatKeys(t *testing.T) {
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
-	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
 	const phrase = "apple-bread-cloud-delta-eagle-flame"
@@ -36,14 +31,7 @@ func TestRecover_ChatKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	deps := deputil.NewDependencies().WithDatabase(database)
-	gin.SetMode(gin.TestMode)
-	engine := gin.New()
-	engine.Use(func(c *gin.Context) {
-		c = ctxutil.With(c, "deps", deps)
-		c.Next()
-	})
-	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_auth.NewRouter())
+	engine := newPublicAuthEngine(t, database)
 	post := func(path string, body any) *httptest.ResponseRecorder {
 		encoded, _ := json.Marshal(body)
 		req := httptest.NewRequest(http.MethodPost, "/api/v0"+path, bytes.NewReader(encoded))
@@ -61,7 +49,7 @@ func TestRecover_ChatKeys(t *testing.T) {
 			KdfParams: json.RawMessage(`{"alg":"argon2id13","opsLimit":3,"memLimit":67108864}`),
 		}
 	}
-	fetch := map[string]string{"username": "bob", "recoveryPhrase": phrase}
+	fetch := map[string]string{"username": "bob", "recoveryKey": dbtest.AuthKey(phrase)}
 
 	if w := post("/auth/recover/keys", fetch); w.Code != http.StatusNotFound {
 		t.Fatalf("fetch before bob has keys = %d %s, want 404", w.Code, w.Body)
@@ -69,7 +57,7 @@ func TestRecover_ChatKeys(t *testing.T) {
 	if _, err := chatutil.PutKeys(chatutil.PutKeysParams{Ctx: ctx, Queries: database.Queries, UserID: bob.ID, Keys: keys(1)}); err != nil {
 		t.Fatal(err)
 	}
-	if w := post("/auth/recover/keys", map[string]string{"username": "bob", "recoveryPhrase": "wrong-phrase"}); w.Code != http.StatusBadRequest {
+	if w := post("/auth/recover/keys", map[string]string{"username": "bob", "recoveryKey": dbtest.AuthKey("wrong-phrase")}); w.Code != http.StatusBadRequest {
 		t.Errorf("fetch with a wrong phrase = %d, want 400", w.Code)
 	}
 	w := post("/auth/recover/keys", fetch)
@@ -85,14 +73,14 @@ func TestRecover_ChatKeys(t *testing.T) {
 	// Malformed keys refuse the whole recovery: the old password still works.
 	bad := keys(2)
 	bad.SaltPw = nil
-	if w := post("/auth/recover", map[string]any{"username": "bob", "recoveryPhrase": phrase, "newPassword": "brand-new-password", "chatKeys": bad}); w.Code != http.StatusBadRequest {
+	if w := post("/auth/recover", map[string]any{"username": "bob", "recoveryKey": dbtest.AuthKey(phrase), "newAuthKey": dbtest.AuthKey("brand-new-password"), "chatKeys": bad}); w.Code != http.StatusBadRequest {
 		t.Fatalf("recover with malformed keys = %d %s, want 400", w.Code, w.Body)
 	}
-	if _, err := authutil.Login(ctx, database.Queries, authutil.LoginParams{Username: "bob", Password: "brand-new-password"}); err == nil {
+	if _, err := authutil.Login(ctx, database.Queries, authutil.LoginParams{Username: "bob", AuthKey: dbtest.AuthKey("brand-new-password")}); err == nil {
 		t.Error("a refused recovery changed the password")
 	}
 
-	w = post("/auth/recover", map[string]any{"username": "bob", "recoveryPhrase": phrase, "newPassword": "brand-new-password", "chatKeys": keys(3)})
+	w = post("/auth/recover", map[string]any{"username": "bob", "recoveryKey": dbtest.AuthKey(phrase), "newAuthKey": dbtest.AuthKey("brand-new-password"), "chatKeys": keys(3)})
 	if w.Code != http.StatusOK {
 		t.Fatalf("recover = %d %s, want 200", w.Code, w.Body)
 	}
@@ -105,14 +93,14 @@ func TestRecover_ChatKeys(t *testing.T) {
 	}
 
 	// Recovering without chatKeys leaves them alone.
-	if w := post("/auth/recover", map[string]any{"username": "bob", "recoveryPhrase": phrase, "newPassword": "another-password"}); w.Code != http.StatusOK {
+	if w := post("/auth/recover", map[string]any{"username": "bob", "recoveryKey": dbtest.AuthKey(phrase), "newAuthKey": dbtest.AuthKey("another-password")}); w.Code != http.StatusOK {
 		t.Fatalf("recover without keys = %d %s", w.Code, w.Body)
 	}
 	if again, _ := chatutil.GetKeys(chatutil.GetKeysParams{Ctx: ctx, Queries: database.Queries, UserID: bob.ID}); !bytes.Equal(again.Keys.WrappedByPassword, got.Keys.WrappedByPassword) {
 		t.Error("recover without chatKeys changed the stored keys")
 	}
 
-	if w := post("/auth/recover", map[string]any{"username": "bob", "recoveryPhrase": phrase, "newPassword": strings.Repeat("p", 9<<10)}); w.Code != http.StatusBadRequest {
+	if w := post("/auth/recover", map[string]any{"username": "bob", "recoveryKey": dbtest.AuthKey(phrase), "newAuthKey": strings.Repeat("p", 9<<10)}); w.Code != http.StatusBadRequest {
 		t.Errorf("recover with a 9 KiB body = %d, want 400", w.Code)
 	}
 }
