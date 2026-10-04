@@ -330,6 +330,7 @@
     "mattn",
     "mdat",
     "MDNS",
+    "memutil",
     "Metadatum",
     "Metaspace",
     "mholt",

@@ -1,5 +1,5 @@
 // Package install is the quark install subcommand, which sets Quark up as a system service through
-// internal/install and keeps the OS patched through pkg/util/aptutil.
+// internal/install, caps its memory through pkg/util/memutil and keeps the OS patched through pkg/util/aptutil.
 package install
 
 import (
@@ -10,6 +10,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/install"
 	"github.com/autobutler-org/quark/pkg/util/aptutil"
+	"github.com/autobutler-org/quark/pkg/util/memutil"
 
 	"github.com/spf13/cobra"
 )
@@ -30,6 +31,9 @@ func Cmd() *cobra.Command {
 				fmt.Printf("Delete %s to hold them again on the next start.\n", aptutil.HoldReleasedMarkerPath)
 				return nil
 			}
+			// Before the unit is (re)started, so a first install starts
+			// under the ceiling.
+			configureMemoryCeiling()
 			if systemOnly {
 				if err := install.Install(true); err != nil {
 					return fmt.Errorf("failed to reapply Quark's system setup; run `sudo quark install` to repair it: %w", err)
@@ -55,6 +59,22 @@ func Cmd() *cobra.Command {
 			aptutil.HoldReleasedMarkerPath+" is deleted")
 
 	return cmd
+}
+
+// configureMemoryCeiling writes the systemd drop-in that caps the service's
+// memory at a share of this board's RAM (#2761). A failure is reported, not
+// returned, for the same reason as configureApt's.
+func configureMemoryCeiling() {
+	result, err := memutil.InstallDropIn(memutil.InstallDropInParams{})
+	switch {
+	case err != nil:
+		fmt.Fprintf(os.Stderr, "warning: the service's memory ceiling is not set up: %v\n", err)
+	case result.Skipped:
+		fmt.Printf("Skipping the memory ceiling: %s.\n", result.SkipReason)
+	case result.Changed:
+		fmt.Printf("Capped the service at MemoryHigh=%d MiB, MemoryMax=%d MiB.\n",
+			result.Limits.MemoryHigh>>20, result.Limits.MemoryMax>>20)
+	}
 }
 
 // configureApt turns on Debian security updates and holds the kernel and
