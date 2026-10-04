@@ -5,6 +5,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/backup"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
@@ -21,6 +22,7 @@ import (
 )
 
 type dependencies struct {
+	accessCache      *accessutil.Cache
 	authRateLimiter  *ratelimitutil.Limiter
 	background       sync.WaitGroup
 	backupJobStore   backup.BackupJobStore
@@ -142,6 +144,15 @@ func (d *dependencies) LoginGuard() *ratelimitutil.LoginGuard {
 
 func (d *dependencies) WithLoginGuard(guard *ratelimitutil.LoginGuard) Dependencies {
 	d.loginGuard = guard
+	return d
+}
+
+func (d *dependencies) AccessCache() *accessutil.Cache {
+	return d.accessCache
+}
+
+func (d *dependencies) WithAccessCache(cache *accessutil.Cache) Dependencies {
+	d.accessCache = cache
 	return d
 }
 

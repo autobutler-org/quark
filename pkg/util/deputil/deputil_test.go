@@ -37,6 +37,9 @@ func TestNewDependencies(t *testing.T) {
 	if deps.ZipSlots() == nil {
 		t.Error("Expected ZipSlots() to be ready")
 	}
+	if deps.AccessCache() == nil {
+		t.Error("Expected AccessCache() to be ready")
+	}
 }
 
 func TestWithDatabase(t *testing.T) {

@@ -11,6 +11,7 @@
 package accessutil
 
 import (
+	"container/list"
 	"context"
 	"database/sql"
 	"errors"
@@ -18,6 +19,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
@@ -1118,4 +1121,115 @@ func ListSharedWithMe(params ListSharedWithMeParams) (ListSharedWithMeResult, er
 		items[i].Owner = ownerName(rows)
 	}
 	return ListSharedWithMeResult{Items: items}, nil
+}
+
+// CacheCapacity is how many accounts a [Cache] holds by default. One pushed
+// out only loads again on its next change.
+const CacheCapacity = 1024
+
+// Cache shares each account's access between every event stream the account
+// has open (#2764). An account or access change reaches every open stream, and
+// without it each one would query the database for itself: thousands of
+// queries for one role change, all on the one shared connection. With it,
+// the account's rows load once per change and every stream reads that.
+//
+// It is keyed by account and versioned by the event bus's sequence numbers.
+// Nothing invalidates it: a stream asks for its account as of the event it is
+// handling, and anything loaded before that event was published is reloaded.
+// So a revoked grant is gone from the answer for the event that announced it,
+// and from everything the stream filters after it.
+type Cache struct {
+	mu      sync.Mutex
+	limit   int
+	entries map[int64]*list.Element // of *cacheEntry
+	order   *list.List              // front is most recently used
+	flights map[int64]*cacheFlight
+	refills atomic.Uint64
+}
+
+// CacheParams configures a Cache. A zero field takes its default.
+type CacheParams struct {
+	// Capacity defaults to CacheCapacity.
+	Capacity int
+}
+
+// NewCache returns an empty Cache.
+func NewCache(params CacheParams) *Cache {
+	limit := params.Capacity
+	if limit <= 0 {
+		limit = CacheCapacity
+	}
+	return &Cache{
+		limit:   limit,
+		entries: map[int64]*list.Element{},
+		order:   list.New(),
+		flights: map[int64]*cacheFlight{},
+	}
+}
+
+// CacheGetParams asks for one account as of one event.
+type CacheGetParams struct {
+	// Ctx bounds the wait. The load itself is shared, so it outlives a caller
+	// that stops waiting.
+	Ctx context.Context
+	// Database holds the account and its rows. Nil fails the load.
+	Database *db.DatabaseSqlc
+	// Storage lists the attached devices. Nil denies every non-admin
+	// everything, as it does for Load.
+	Storage *storageutil.StorageService
+	// Bus is the bus the event came from; its sequence number versions a load.
+	Bus    *eventbus.Bus
+	UserID int64
+	// Seq is the event's sequence number. The answer is loaded after it was
+	// published.
+	Seq uint64
+}
+
+// CacheGetResult is the account as of the event.
+type CacheGetResult struct {
+	// Active reports whether the account exists and may sign in.
+	Active bool
+	// Access is the account's access in the role it holds now, which may not
+	// be the one a stream connected with.
+	Access Access
+}
+
+// Get answers for the account as loaded after params.Seq was published. A
+// snapshot that new is returned as it is; otherwise every caller waiting for
+// the account shares one load. A failed load is returned to everyone waiting
+// on it and kept by no one.
+func (c *Cache) Get(params CacheGetParams) (CacheGetResult, error) {
+	c.mu.Lock()
+	if el, ok := c.entries[params.UserID]; ok {
+		if entry := el.Value.(*cacheEntry); entry.seq >= params.Seq {
+			c.order.MoveToFront(el)
+			c.mu.Unlock()
+			return entry.result, nil
+		}
+	}
+	flight, ok := c.flights[params.UserID]
+	if !ok || flight.seq < params.Seq {
+		// Read the bus before loading: every event up to here was published
+		// after its change committed, so the load sees all of them.
+		seq := params.Seq
+		if params.Bus != nil {
+			seq = max(seq, params.Bus.Seq())
+		}
+		flight = &cacheFlight{seq: seq, done: make(chan struct{})}
+		c.flights[params.UserID] = flight
+		go c.refill(params, flight)
+	}
+	c.mu.Unlock()
+
+	select {
+	case <-flight.done:
+		return flight.result, flight.err
+	case <-params.Ctx.Done():
+		return CacheGetResult{}, params.Ctx.Err()
+	}
+}
+
+// Refills is how many times the cache has gone to the database.
+func (c *Cache) Refills() uint64 {
+	return c.refills.Load()
 }

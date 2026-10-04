@@ -2,7 +2,10 @@
 // tree publishes an Event, and each connected client holds a subscription.
 package eventbus
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 type EventKind string
 
@@ -135,6 +138,12 @@ type Event struct {
 	NewPath      string      `json:"newPath,omitempty"`
 	Data         interface{} `json:"data,omitempty"`
 	DeviceSerial string      `json:"deviceSerial,omitempty"` // serial of the device this event originated from; empty = internal
+	// Seq is the bus's sequence number for the event, stamped by Publish. A
+	// resync carries the newest Seq of the events it stands in for. A
+	// subscriber compares it with [Bus.Seq] read before it loaded something,
+	// to know whether what it loaded already reflects the event (#2764). It is
+	// never sent.
+	Seq uint64 `json:"-"`
 }
 
 // Resync is the data of a resync event: how many events the subscriber missed.
@@ -150,7 +159,13 @@ type Bus struct {
 	subscribers map[string]subscriber
 	// maxPending bounds each Subscribe queue; tests lower it.
 	maxPending int
+	seq        atomic.Uint64
 }
+
+// Seq is the sequence number of the newest event published. A publisher
+// commits its change before it publishes, so whatever is read from the
+// database after Seq returns n reflects every event up to n.
+func (b *Bus) Seq() uint64 { return b.seq.Load() }
 
 func New() *Bus { return &Bus{subscribers: map[string]subscriber{}, maxPending: defaultMaxPending} }
 
@@ -175,8 +190,10 @@ func (b *Bus) SubscribeLossy(id string) (<-chan Event, func()) {
 	return b.add(id, newLossySubscriber())
 }
 
-// Publish hands an event to every subscriber. It never blocks.
+// Publish stamps an event with the next sequence number and hands it to every
+// subscriber. It never blocks.
 func (b *Bus) Publish(e Event) {
+	e.Seq = b.seq.Add(1)
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	for _, s := range b.subscribers {

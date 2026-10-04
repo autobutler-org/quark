@@ -53,9 +53,17 @@ func TestSubscribeOverflowBecomesResync(t *testing.T) {
 	if r := got.Data.(Resync); r.Dropped == 0 {
 		t.Fatalf("resync reports no drops")
 	}
+	// It stands in for the newest event it dropped (#2764): everything after
+	// it was published later.
+	if got.Seq == 0 {
+		t.Fatalf("resync carries no Seq")
+	}
 	var rest []string
 	for {
 		e := receive(t, ch)
+		if e.Seq <= got.Seq {
+			t.Fatalf("event %q after the resync has Seq %d, not after its %d", e.Path, e.Seq, got.Seq)
+		}
 		rest = append(rest, e.Path)
 		if e.Path == "/after" {
 			break

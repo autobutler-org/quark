@@ -42,6 +42,8 @@ type queuedSubscriber struct {
 	// which holds only what came after the overflow.
 	resync  bool
 	dropped int
+	// resyncSeq is the newest Seq among the events the resync stands in for.
+	resyncSeq uint64
 	// inFlight is set while pump holds an event it took off pending, so a
 	// newer one cannot overtake it straight into out.
 	inFlight bool
@@ -97,6 +99,9 @@ func (s *queuedSubscriber) deliver(e Event) {
 	if s.pending.Len() > s.max {
 		s.resync = true
 		s.dropped += s.pending.Len()
+		for el := s.pending.Front(); el != nil; el = el.Next() {
+			s.resyncSeq = max(s.resyncSeq, el.Value.(Event).Seq)
+		}
 		s.pending.Init()
 		clear(s.byKey)
 	}
@@ -113,8 +118,8 @@ func (s *queuedSubscriber) next() (Event, bool) {
 	for {
 		s.mu.Lock()
 		if s.resync {
-			e := Event{Kind: EventResync, Data: Resync{Dropped: s.dropped}}
-			s.resync, s.dropped, s.inFlight = false, 0, true
+			e := Event{Kind: EventResync, Data: Resync{Dropped: s.dropped}, Seq: s.resyncSeq}
+			s.resync, s.dropped, s.resyncSeq, s.inFlight = false, 0, 0, true
 			s.mu.Unlock()
 			return e, true
 		}
@@ -188,10 +193,11 @@ func (s *lossySubscriber) deliver(e Event) {
 	// Full: everything buffered is stale once the app reloads, so swap it
 	// all for one resync. Only this method sends, under mu, so the slot
 	// freed here stays free.
-	dropped := 1
+	dropped, seq := 1, e.Seq
 	for drained := false; !drained; {
 		select {
 		case old := <-s.ch:
+			seq = max(seq, old.Seq)
 			if r, ok := old.Data.(Resync); ok && old.Kind == EventResync {
 				dropped += r.Dropped
 			} else {
@@ -201,7 +207,7 @@ func (s *lossySubscriber) deliver(e Event) {
 			drained = true
 		}
 	}
-	s.ch <- Event{Kind: EventResync, Data: Resync{Dropped: dropped}}
+	s.ch <- Event{Kind: EventResync, Data: Resync{Dropped: dropped}, Seq: seq}
 }
 
 func (s *lossySubscriber) channel() <-chan Event { return s.ch }
