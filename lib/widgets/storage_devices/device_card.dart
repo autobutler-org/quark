@@ -59,36 +59,47 @@ class DeviceCard extends StatelessWidget {
                   color: theme.colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
+                // A wrap, so at large text the badges drop under the name
+                // instead of pushing the row off the card (#2606).
                 Expanded(
-                  child: Text(
-                    device.name.isNotEmpty ? device.name : device.mountPoint,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        device.name.isNotEmpty
+                            ? device.name
+                            : device.mountPoint,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (isVaultDevice) const VaultBadge(),
+                      if (device.role != 'unassigned')
+                        RoleBadge(role: device.role),
+                      if (device.role == 'unassigned' && device.isEnabled)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            'Enabled',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.green.shade800,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                if (isVaultDevice) const VaultBadge(),
-                if (device.role != 'unassigned') RoleBadge(role: device.role),
-                if (device.role == 'unassigned' && device.isEnabled)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      'Enabled',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.green.shade800,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
               ],
             ),
             const SizedBox(height: 6),
@@ -125,17 +136,21 @@ class DeviceCard extends StatelessWidget {
               const SizedBox(height: 12),
               QuarkStorageBar(usedFraction: usedPct),
               const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(device.usedDisplay, style: theme.textTheme.bodySmall),
-                  Text(
-                    '${device.usedPercent.toStringAsFixed(0)}% used',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+              SizedBox(
+                width: double.infinity,
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  spacing: 8,
+                  children: [
+                    Text(device.usedDisplay, style: theme.textTheme.bodySmall),
+                    Text(
+                      '${device.usedPercent.toStringAsFixed(0)}% used',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
 

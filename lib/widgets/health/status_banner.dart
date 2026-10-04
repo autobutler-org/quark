@@ -50,12 +50,14 @@ class StatusBanner extends StatelessWidget {
               children: [
                 Icon(icon, color: onColor),
                 const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: onColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: onColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
               ],

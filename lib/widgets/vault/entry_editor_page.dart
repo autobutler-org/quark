@@ -100,6 +100,9 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                             ? QuarkIcons.visibility_off
                             : QuarkIcons.visibility,
                       ),
+                      tooltip: _showPassword
+                          ? 'Hide password'
+                          : 'Show password',
                       onPressed: () =>
                           setState(() => _showPassword = !_showPassword),
                     ),
