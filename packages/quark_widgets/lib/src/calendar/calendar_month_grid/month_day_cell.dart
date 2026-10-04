@@ -8,17 +8,21 @@ import '../../theme/quark_tokens.dart';
 import '../calendar_dates.dart';
 import '../calendar_event_chip.dart';
 import '../calendar_labels.dart';
+import 'month_day_dots.dart';
 
 /// One date in `CalendarMonthGrid`: its number, as many of its [events] as fit,
-/// and a "+N more" line for the rest.
+/// and a "+N more" line for the rest. A [dense] cell draws a `MonthDayDots`
+/// row instead of titles, and its accessible label reads every title.
 ///
 /// It is stateful only for the pointer: hovering shows an add button in the
 /// corner, the desktop stand-in for a long press.
 ///
 /// Key prefixes: `calendar_day_<yyyy-mm-dd>` on the cell,
 /// `calendar_add_<yyyy-mm-dd>` on its add button, `calendar_more_<yyyy-mm-dd>`
-/// on its overflow line, and each event chip's own `calendar_event_` key. The
-/// overflow line has no tap of its own: a tap on it is a tap on the cell.
+/// on its overflow line, each event chip's own `calendar_event_` key, and a
+/// dense cell's `calendar_dots_<yyyy-mm-dd>` and `calendar_dot_<item.key>`.
+/// The overflow line and the dots have no tap of their own: a tap on them is a
+/// tap on the cell.
 class MonthDayCell extends StatefulWidget {
   /// Creates the cell for [day].
   const MonthDayCell({
@@ -30,6 +34,7 @@ class MonthDayCell extends StatefulWidget {
     required this.dense,
     required this.lastColumn,
     required this.lastRow,
+    required this.maxDots,
     this.onTap,
     this.onLongPress,
     this.onEventTap,
@@ -61,6 +66,9 @@ class MonthDayCell extends StatefulWidget {
   /// Whether the cell sits in the grid's last row and draws no bottom edge.
   final bool lastRow;
 
+  /// The most dots a [dense] cell draws before "+N".
+  final int maxDots;
+
   /// Called when the cell or its overflow line is tapped.
   final VoidCallback? onTap;
 
@@ -85,10 +93,9 @@ class _MonthDayCellState extends State<MonthDayCell> {
     final tokens = QuarkTokens.of(context);
     final key = CalendarDates.key(widget.day);
     final dense = widget.dense;
-    final chipHeight =
-        (dense ? CalendarEventChip.denseHeight : CalendarEventChip.height) + 2;
+    final chipHeight = CalendarEventChip.height + 2;
     final headerHeight = dense ? 30.0 : 34.0;
-    final moreHeight = dense ? 16.0 : 18.0;
+    const moreHeight = 18.0;
     final count = widget.events.length;
 
     final Color background;
@@ -114,9 +121,14 @@ class _MonthDayCellState extends State<MonthDayCell> {
             bottom: widget.lastRow ? BorderSide.none : hairline,
           );
 
+    // A dense cell draws no titles, so its label is where they are read.
+    final titles = dense && count > 0
+        ? ': ${widget.events.map((e) => e.title).join(', ')}'
+        : '';
     final label =
         '${CalendarLabels.dayTitle(widget.day)}, '
-        '${count == 0 ? 'no events' : '$count ${count == 1 ? 'event' : 'events'}'}';
+        '${count == 0 ? 'no events' : '$count ${count == 1 ? 'event' : 'events'}'}'
+        '$titles';
 
     final number = Container(
       constraints: BoxConstraints(minWidth: widget.dense ? 24 : 28),
@@ -153,7 +165,12 @@ class _MonthDayCellState extends State<MonthDayCell> {
           ? MainAxisAlignment.center
           : MainAxisAlignment.spaceBetween,
       children: [
-        number,
+        // Large text can make a two-digit date wider than a phone's column;
+        // it shrinks to fit there rather than overflow, and is untouched
+        // anywhere it already fits.
+        Flexible(
+          child: FittedBox(fit: BoxFit.scaleDown, child: number),
+        ),
         if (!widget.dense && _hovered && onAdd != null)
           SizedBox.square(
             dimension: 26,
@@ -204,6 +221,23 @@ class _MonthDayCellState extends State<MonthDayCell> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final room = constraints.maxHeight - headerHeight;
+                  if (dense) {
+                    return ClipRect(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(height: headerHeight, child: header),
+                          if (count > 0 && room >= MonthDayDots.height)
+                            MonthDayDots(
+                              key: ValueKey('calendar_dots_$key'),
+                              dateKey: key,
+                              events: widget.events,
+                              maxDots: widget.maxDots,
+                            ),
+                        ],
+                      ),
+                    );
+                  }
                   final fits = math.max(0, room ~/ chipHeight);
                   var shown = math.min(count, fits);
                   if (shown < count) {
@@ -223,7 +257,6 @@ class _MonthDayCellState extends State<MonthDayCell> {
                             padding: const EdgeInsets.only(bottom: 2),
                             child: CalendarEventChip(
                               item: item,
-                              dense: dense,
                               onTap: widget.onEventTap == null
                                   ? null
                                   : () => widget.onEventTap!(item),
@@ -238,16 +271,14 @@ class _MonthDayCellState extends State<MonthDayCell> {
                             // (#2605).
                             child: Padding(
                               key: ValueKey('calendar_more_$key'),
-                              padding: EdgeInsets.symmetric(
-                                horizontal: dense ? 3 : 6,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
                               ),
                               child: Text(
-                                dense
-                                    ? '+${count - shown}'
-                                    : '+${count - shown} more',
+                                '+${count - shown} more',
                                 maxLines: 1,
                                 style: TextStyle(
-                                  fontSize: dense ? 10.5 : 12,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                   color: tokens.secondaryForeground,
                                 ),

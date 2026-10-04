@@ -38,15 +38,31 @@ Widget _grid({
   ValueChanged<DateTime>? onDayLongPress,
   ValueChanged<DateTime>? onAddTap,
   ValueChanged<CalendarEventItem>? onEventTap,
+  VoidCallback? onAddEvent,
+  bool isLoading = false,
+  int firstWeekday = DateTime.sunday,
 }) => CalendarMonthGrid(
   month: month ?? DateTime(2026, 9),
   today: _today,
   selectedDay: _today,
   events: events ?? [_weekend, ..._busyDay],
+  firstWeekday: firstWeekday,
+  isLoading: isLoading,
   onDayTap: onDayTap,
   onDayLongPress: onDayLongPress,
   onAddTap: onAddTap,
   onEventTap: onEventTap,
+  onAddEvent: onAddEvent,
+);
+
+/// [child] with its text scaled by [factor], as a large-text setting does.
+Widget _scaled(Widget child, double factor) => Builder(
+  builder: (context) => MediaQuery(
+    data: MediaQuery.of(
+      context,
+    ).copyWith(textScaler: TextScaler.linear(factor)),
+    child: child,
+  ),
 );
 
 void main() {
@@ -82,11 +98,10 @@ void main() {
     );
   });
 
-  testBothViewports('lists a multi-day event on each date', (
+  testWidgets('lists a multi-day event on each date on a desktop', (
     tester,
-    size,
   ) async {
-    await pumpAt(tester, _grid(events: [_weekend]), size: size);
+    await pumpAt(tester, _grid(events: [_weekend]), size: wideViewport);
     expect(find.text('Cabin weekend'), findsNWidgets(2));
     expect(
       find.byKey(const ValueKey('calendar_event_1_2026-09-26')),
@@ -106,20 +121,15 @@ void main() {
     expect(tapped, DateTime(2026, 9, 29));
   });
 
-  testBothViewports('taps, long presses and event taps call back', (
-    tester,
-    size,
-  ) async {
+  testBothViewports('taps and long presses call back', (tester, size) async {
     DateTime? tapped;
     DateTime? pressed;
-    CalendarEventItem? event;
     await pumpAt(
       tester,
       _grid(
         events: [_weekend],
         onDayTap: (d) => tapped = d,
         onDayLongPress: (d) => pressed = d,
-        onEventTap: (e) => event = e,
       ),
       size: size,
     );
@@ -129,6 +139,15 @@ void main() {
       find.byKey(const ValueKey('calendar_day_2026-09-16')),
     );
     expect(pressed, DateTime(2026, 9, 16));
+  });
+
+  testWidgets('an event chip calls back on a desktop', (tester) async {
+    CalendarEventItem? event;
+    await pumpAt(
+      tester,
+      _grid(events: [_weekend], onEventTap: (e) => event = e),
+      size: wideViewport,
+    );
     await tester.tap(
       find.byKey(const ValueKey('calendar_event_1_2026-09-26')).first,
     );
@@ -143,9 +162,217 @@ void main() {
       _grid(events: [_timed(3, 'Dentist', 22, 9)]),
       size: narrowViewport,
     );
-    expect(find.text('Dentist'), findsOneWidget);
     expect(find.text('9am'), findsNothing);
     expect(find.text('SUN'), findsNothing);
+  });
+
+  group('a phone marks events instead of truncating them (#2541)', () {
+    testWidgets('a date shows a dot per event, not a clipped title', (
+      tester,
+    ) async {
+      await pumpAt(
+        tester,
+        _grid(
+          events: [
+            _timed(3, 'Dentist appointment', 22, 9),
+            _timed(4, 'Parent teacher night', 22, 18),
+          ],
+        ),
+        size: narrowViewport,
+      );
+      expect(find.text('Dentist appointment'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('calendar_event_3_2026-09-22')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('calendar_dots_2026-09-22')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('calendar_dots_2026-09-22')),
+          matching: find.byKey(const ValueKey('calendar_dot_3_2026-09-22')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('calendar_dots_2026-09-23')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('a crowded date caps its dots and counts the rest', (
+      tester,
+    ) async {
+      await pumpAt(tester, _grid(), size: narrowViewport);
+      final dots = find.descendant(
+        of: find.byKey(const ValueKey('calendar_dots_2026-09-29')),
+        matching: find.byWidgetPredicate(
+          (w) =>
+              w.key is ValueKey<String> &&
+              (w.key! as ValueKey<String>).value.startsWith('calendar_dot_'),
+        ),
+      );
+      expect(dots, findsNWidgets(CalendarMonthGrid.maxDots));
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('calendar_more_2026-09-29')),
+          matching: find.text('+${6 - CalendarMonthGrid.maxDots}'),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a screen reader hears every title on the date', (
+      tester,
+    ) async {
+      await pumpAt(
+        tester,
+        _grid(
+          events: [_timed(3, 'Dentist', 22, 9), _timed(4, 'Piano', 22, 16)],
+        ),
+        size: narrowViewport,
+      );
+      final handle = tester.ensureSemantics();
+      final day = tester.getSemantics(
+        find.byKey(const ValueKey('calendar_day_2026-09-22')),
+      );
+      expect(
+        day.label,
+        startsWith('Tuesday, September 22, 2 events: Dentist, Piano'),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('tapping a marked date opens it', (tester) async {
+      DateTime? tapped;
+      await pumpAt(
+        tester,
+        _grid(onDayTap: (d) => tapped = d),
+        size: narrowViewport,
+      );
+      await tester.tap(find.byKey(const ValueKey('calendar_dots_2026-09-29')));
+      expect(tapped, DateTime(2026, 9, 29));
+    });
+  });
+
+  for (final size in [narrowViewport, wideViewport]) {
+    testWidgets('survives text at twice the size at $size', (tester) async {
+      await pumpAt(tester, _scaled(_grid(), 2), size: size);
+      expect(tester.takeException(), isNull);
+      await pumpAt(
+        tester,
+        _scaled(_grid(events: const [], onAddEvent: () {}), 2),
+        size: size,
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('Nothing planned this month'), findsOneWidget);
+    });
+  }
+
+  group('week start (#2539)', () {
+    testBothViewports('rows start on the weekday given', (tester, size) async {
+      await pumpAt(
+        tester,
+        _grid(events: const [], firstWeekday: DateTime.monday),
+        size: size,
+      );
+      final first = tester.getTopLeft(
+        find.byKey(const ValueKey('calendar_day_2026-08-31')),
+      );
+      final sunday = tester.getTopLeft(
+        find.byKey(const ValueKey('calendar_day_2026-09-06')),
+      );
+      expect(first.dy, sunday.dy);
+      expect(first.dx, lessThan(sunday.dx));
+      expect(
+        find.byKey(const ValueKey('calendar_day_2026-08-30')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('the weekday row follows it', (tester) async {
+      await pumpAt(
+        tester,
+        _grid(events: const [], firstWeekday: DateTime.saturday),
+        size: wideViewport,
+      );
+      final sat = tester.getTopLeft(find.text('SAT'));
+      final sun = tester.getTopLeft(find.text('SUN'));
+      final fri = tester.getTopLeft(find.text('FRI'));
+      expect(sat.dx, lessThan(sun.dx));
+      expect(sun.dx, lessThan(fri.dx));
+    });
+  });
+
+  group('an empty month (#2538)', () {
+    testBothViewports('keeps the grid and offers to add an event', (
+      tester,
+      size,
+    ) async {
+      var added = 0;
+      await pumpAt(
+        tester,
+        _grid(events: const [], onAddEvent: () => added++),
+        size: size,
+      );
+      expect(
+        find.byKey(const ValueKey('calendar_day_2026-09-15')),
+        findsOneWidget,
+      );
+      expect(find.text('Nothing planned this month'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('calendar_month_add')));
+      expect(added, 1);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an event on a padding date still leaves the month empty', (
+      tester,
+    ) async {
+      await pumpAt(
+        tester,
+        _grid(
+          events: [
+            CalendarEventItem(
+              eventId: 8,
+              title: 'Late August',
+              start: DateTime(2026, 8, 31, 9),
+              end: DateTime(2026, 8, 31, 10),
+            ),
+          ],
+          onAddEvent: () {},
+        ),
+      );
+      expect(find.text('Nothing planned this month'), findsOneWidget);
+    });
+
+    testWidgets('says nothing while the month loads or has events', (
+      tester,
+    ) async {
+      await pumpAt(
+        tester,
+        _grid(events: const [], isLoading: true, onAddEvent: () {}),
+      );
+      expect(find.text('Nothing planned this month'), findsNothing);
+      await pumpAt(tester, _grid(onAddEvent: () {}));
+      expect(find.text('Nothing planned this month'), findsNothing);
+    });
+
+    testBothViewports('its button is a labeled, full-size target', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: _grid(events: const [], onAddEvent: () {}),
+        ),
+        size: size,
+      );
+      await expectTapTargetGuidelines(tester);
+    });
   });
 
   testWidgets('shows times and full weekday names on a desktop', (
@@ -211,8 +438,9 @@ void main() {
     day.owner!.performAction(day.id, SemanticsAction.tap);
     expect(tapped, [DateTime(2026, 9, 29)]);
     handle.dispose();
-    // Its event chips are drawn to a month cell's scale, which #2605 leaves
-    // open, so only the size check is off.
-    await expectTapTargetGuidelines(tester, checkSize: false);
+    // A desktop cell's event chips are drawn to its scale, which #2605 leaves
+    // open, so the size check is off there. A phone cell has no chips, only
+    // dots, so the cell is the one target and meets 48dp (#2541).
+    await expectTapTargetGuidelines(tester, checkSize: size == narrowViewport);
   });
 }

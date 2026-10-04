@@ -2029,6 +2029,27 @@ final List<GalleryEntry> registry = [
 
   // ── Calendar ──────────────────────────────────────────────────────────────
   GalleryEntry(
+    name: 'CalendarEmptyNotice',
+    group: 'Calendar',
+    build: (context, log) => Wrap(
+      spacing: 24,
+      runSpacing: 24,
+      children: [
+        CalendarEmptyNotice(
+          headline: 'Nothing planned this month',
+          buttonKey: const ValueKey('calendar_month_add'),
+          onAdd: () => log('CalendarEmptyNotice.onAdd (month)'),
+        ),
+        CalendarEmptyNotice(
+          headline: 'Free day',
+          subtext: 'Nothing scheduled',
+          buttonKey: const ValueKey('calendar_day_add'),
+          onAdd: () => log('CalendarEmptyNotice.onAdd (day)'),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'CalendarEventChip',
     group: 'Calendar',
     build: (context, log) => Wrap(
@@ -2120,6 +2141,7 @@ final List<GalleryEntry> registry = [
                   log('onDayLongPress ${CalendarDates.key(day)}'),
               onAddTap: (day) => log('onAddTap ${CalendarDates.key(day)}'),
               onEventTap: (item) => log('onEventTap ${item.key}'),
+              onAddEvent: () => log('onAddEvent'),
             ),
           ),
       ],
