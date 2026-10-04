@@ -93,6 +93,41 @@ void main() {
     expect(rent.toDraft().lastDate, DateTime(2026, 10, 1));
   });
 
+  test('a series reads its last date, or none for forever (#2524)', () {
+    expect(CalendarEvent.fromJson(vet).repeatUntil, isNull);
+    final ending = CalendarEvent.fromJson({
+      ...vet,
+      'repeatUntil': '2026-12-31T00:00:00Z',
+    });
+    expect(ending.repeatUntil, DateTime.utc(2026, 12, 31));
+    // The date is the same wherever it is read.
+    expect(ending.toDraft().repeatUntil, DateTime(2026, 12, 31));
+  });
+
+  test('sends a repeating draft\'s last date as midnight UTC', () async {
+    answer(201, vet);
+    final start = DateTime(2026, 9, 29, 16);
+    final weekly = CalendarEventDraft(
+      title: 'Vet',
+      start: start,
+      end: start.add(const Duration(minutes: 45)),
+      repeat: CalendarRepeat.weekly,
+      repeatUntil: DateTime(2026, 12, 31),
+    );
+
+    await CalendarService.saveEvent(weekly);
+    var body = jsonDecode(requests.last.body) as Map<String, dynamic>;
+    expect(body['repeatUntil'], '2026-12-31T00:00:00.000Z');
+
+    // A draft that stopped repeating sends no end, whatever it kept.
+    await CalendarService.saveEvent(
+      weekly.copyWith(repeat: CalendarRepeat.none),
+    );
+    body = jsonDecode(requests.last.body) as Map<String, dynamic>;
+    expect(body.containsKey('repeatUntil'), isTrue);
+    expect(body['repeatUntil'], isNull);
+  });
+
   test('an unknown repeat reads as none', () {
     expect(CalendarEvent.repeatFromWire('yearly'), CalendarRepeat.none);
   });

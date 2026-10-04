@@ -9,12 +9,14 @@ CalendarEvent _timed(
   DateTime localStart,
   Duration length, {
   CalendarRepeat repeat = CalendarRepeat.none,
+  DateTime? until,
 }) => CalendarEvent(
   id: id,
   title: 'Event $id',
   start: localStart.toUtc(),
   end: localStart.add(length).toUtc(),
   repeat: repeat,
+  repeatUntil: until,
 );
 
 CalendarEvent _allDay(
@@ -22,6 +24,7 @@ CalendarEvent _allDay(
   DateTime date, {
   int days = 1,
   CalendarRepeat repeat = CalendarRepeat.none,
+  DateTime? until,
 }) => CalendarEvent(
   id: id,
   title: 'All day $id',
@@ -29,6 +32,7 @@ CalendarEvent _allDay(
   end: DateTime.utc(date.year, date.month, date.day + days),
   allDay: true,
   repeat: repeat,
+  repeatUntil: until,
 );
 
 void main() {
@@ -156,5 +160,53 @@ void main() {
       september.$2,
     );
     expect(items.map((i) => i.eventId), [10, 9]);
+  });
+
+  test('a series stops after its last date, inclusive (#2524)', () {
+    // Daily at 11 PM, so a viewer west of UTC sees the UTC date after.
+    final late = _timed(
+      1,
+      DateTime(2026, 9, 1, 23),
+      const Duration(minutes: 30),
+      repeat: CalendarRepeat.daily,
+      until: DateTime.utc(2026, 9, 10),
+    );
+    final items = expandOccurrences([late], september.$1, september.$2);
+    expect(items.map((i) => i.start.day), [for (var d = 1; d <= 10; d++) d]);
+    expect(items.last.repeatUntil, DateTime(2026, 9, 10));
+
+    final weekly = _allDay(
+      2,
+      DateTime(2026, 9, 1),
+      repeat: CalendarRepeat.weekly,
+      until: DateTime.utc(2026, 9, 22),
+    );
+    expect(
+      expandOccurrences(
+        [weekly],
+        september.$1,
+        september.$2,
+      ).map((i) => i.start.day),
+      [1, 8, 15, 22],
+    );
+    final monthly = _timed(
+      3,
+      DateTime(2026, 1, 15, 9),
+      const Duration(hours: 1),
+      repeat: CalendarRepeat.monthly,
+      until: DateTime.utc(2026, 9, 14),
+    );
+    expect(expandOccurrences([monthly], september.$1, september.$2), isEmpty);
+    // With no end it carries on.
+    final forever = _timed(
+      4,
+      DateTime(2026, 1, 15, 9),
+      const Duration(hours: 1),
+      repeat: CalendarRepeat.monthly,
+    );
+    expect(
+      expandOccurrences([forever], september.$1, september.$2).single.start,
+      DateTime(2026, 9, 15, 9),
+    );
   });
 }

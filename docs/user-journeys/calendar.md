@@ -104,8 +104,7 @@ the date on show is the `date` query (`?date=2026-09-29`). Reminders show inside
   saving change.
 - **Monthly** keeps the date and skips months without it; **Daily** repeats every date.
 
-**Notes:** The presets have no end date yet (#2524). Editing a repeating event changes every repeat, and the form
-says so ("Changes apply to every repeat.").
+**Notes:** Editing a repeating event changes every repeat, and the form says so ("Changes apply to every repeat.").
 
 ---
 
@@ -183,3 +182,29 @@ says so ("Changes apply to every repeat.").
 **Notes:** This is a filter, not privacy: every account still sees and edits every event (#2544). Only admins get
 the person chip, since only admins can list accounts. Events created before owners were recorded belong to nobody
 and show only under **Everyone**.
+
+---
+
+### JN-CA-010: End a repeating event on a date
+
+**Preconditions:** Creating or editing a repeating event.
+
+**Steps:**
+
+1. Under **Repeat ends**, choose **On a date**.
+2. Tap the date and pick the last date it should repeat on.
+3. Save.
+
+**Expected result:**
+
+- **Repeat ends** shows only while the event repeats, and starts on **Never**.
+- **On a date** fills in the date a month after the first occurrence; the line beneath **Repeat** reads "Every week
+  on Thursday until Oct 31, 2026."
+- The event repeats up to and including that date and not after it, in every view; Upcoming reads "Weekly until
+  Oct 31, 2026."
+- A date before the event's first date says "The repeat can't end before the event starts." and Save waits.
+- Choosing **Never** again makes it repeat forever.
+
+**Notes:** The end date is a calendar date, the same wherever the calendar is read (#2524). The Quark leaves a series
+that ended before the dates on screen out of what it sends (#2535). An event saved by an app from before end dates
+repeats forever.

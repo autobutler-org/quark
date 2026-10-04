@@ -173,7 +173,7 @@ func TestMigrationsApplyCleanly(t *testing.T) {
 		"photo_hashes":    {"dhash", "content_hash"},
 		"photo_albums":    {"user_id"},
 		"photo_favorites": {"user_id"},
-		"calendar_events": {"created_by"},
+		"calendar_events": {"created_by", "repeat_until"},
 	}
 	for table, names := range columns {
 		for _, name := range names {
@@ -739,6 +739,61 @@ INSERT INTO chat_reactions (message_id, user_id, key_version, ciphertext) VALUES
 		t.Errorf("messages after the down migration = %d, want 7", n)
 	}
 	if err := m.Migrate(chatMessageNonceVersion); err != nil {
+		t.Fatalf("migrate up again: %v", err)
+	}
+}
+
+// calendarRepeatUntilVersion is 027_calendar_repeat_until, which gives a
+// repeating event an optional last date (#2524).
+const calendarRepeatUntilVersion = 27
+
+// TestCalendarRepeatUntilMigration checks events from before 027 keep
+// repeating forever, a new one can end on a date, a one-off event or a time
+// that is not a date is refused, and the rollback keeps every event and the
+// checks 025 added.
+func TestCalendarRepeatUntilMigration(t *testing.T) {
+	conn, m := migrateTo(t, calendarRepeatUntilVersion-1)
+	if _, err := conn.Exec(`
+INSERT INTO calendar_events (id, calendar_id, title, starts_at, ends_at, repeat, color_index) VALUES
+	(1, 1, 'Walk',  '2026-09-01T07:00:00Z', '2026-09-01T07:30:00Z', 'daily', 3),
+	(2, 1, 'Dentist', '2026-09-02T09:00:00Z', '2026-09-02T10:00:00Z', 'none', 0);
+`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(calendarRepeatUntilVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", calendarRepeatUntilVersion, err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM calendar_events WHERE repeat_until IS NULL`); n != 2 {
+		t.Errorf("events with no end = %d, want both kept repeating forever", n)
+	}
+	if _, err := conn.Exec(`UPDATE calendar_events SET repeat_until = '2026-12-31T00:00:00Z' WHERE id = 1`); err != nil {
+		t.Errorf("a series ending on a date refused: %v", err)
+	}
+	for name, stmt := range map[string]string{
+		"a one-off event":  `UPDATE calendar_events SET repeat_until = '2026-12-31T00:00:00Z' WHERE id = 2`,
+		"a time of day":    `UPDATE calendar_events SET repeat_until = '2026-12-31T09:00:00Z' WHERE id = 1`,
+		"not a date":       `UPDATE calendar_events SET repeat_until = 'soon' WHERE id = 1`,
+		"025's color rule": `UPDATE calendar_events SET color_index = 9 WHERE id = 1`,
+	} {
+		if _, err := conn.Exec(stmt); err == nil || !strings.Contains(err.Error(), "CHECK constraint failed") {
+			t.Errorf("%s = %v, want a check failure", name, err)
+		}
+	}
+
+	if err := m.Migrate(calendarRepeatUntilVersion - 1); err != nil {
+		t.Fatalf("migrate down: %v", err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM calendar_events WHERE id = 1 AND repeat = 'daily' AND color_index = 3`); n != 1 {
+		t.Error("the down migration lost an event")
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM pragma_table_info('calendar_events') WHERE name = 'repeat_until'`); n != 0 {
+		t.Error("repeat_until still present after the down migration")
+	}
+	if _, err := conn.Exec(`UPDATE calendar_events SET color_index = 9 WHERE id = 1`); err == nil {
+		t.Error("the down migration dropped 025's color check")
+	}
+	if err := m.Migrate(calendarRepeatUntilVersion); err != nil {
 		t.Fatalf("migrate up again: %v", err)
 	}
 }

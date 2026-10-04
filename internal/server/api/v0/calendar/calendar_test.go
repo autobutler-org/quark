@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -245,5 +246,73 @@ func TestEventOwnerFields(t *testing.T) {
 		if len(events) != 1 || events[0].Owner != "maya" || events[0].Mine != tt.mine {
 			t.Errorf("as %d: events = %+v, want maya's event with mine=%v", tt.as, events, tt.mine)
 		}
+	}
+}
+
+// TestEventRepeatUntil checks a series can end on a date, is not listed after
+// it, and a client that never sends the field still gets one that repeats
+// forever (#2524, #2535).
+func TestEventRepeatUntil(t *testing.T) {
+	engine, _ := newCalendarEngine(t)
+	const walk = `"title":"Walk","start":"2026-10-01T02:00:00Z","end":"2026-10-01T02:30:00Z","repeat":"daily"`
+
+	w := do(engine, http.MethodPost, "/api/v0/calendar/events", `{`+walk+`,"repeatUntil":"2026-10-31T00:00:00Z"}`)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create = %d %s, want 201", w.Code, w.Body.String())
+	}
+	ending := decode[EventJSON](t, w)
+	if ending.RepeatUntil == nil || *ending.RepeatUntil != "2026-10-31T00:00:00Z" {
+		t.Errorf("repeatUntil = %v, want 2026-10-31T00:00:00Z", ending.RepeatUntil)
+	}
+
+	w = do(engine, http.MethodPost, "/api/v0/calendar/events", `{`+walk+`}`)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create without an end = %d %s, want 201", w.Code, w.Body.String())
+	}
+	forever := decode[EventJSON](t, w)
+	if forever.RepeatUntil != nil {
+		t.Errorf("repeatUntil = %v, want null when the client sends none", *forever.RepeatUntil)
+	}
+	if !bytes.Contains(w.Body.Bytes(), []byte(`"repeatUntil":null`)) {
+		t.Errorf("body %s, want repeatUntil sent as null", w.Body.String())
+	}
+
+	ids := func(from, to string) map[int64]bool {
+		t.Helper()
+		w := do(engine, http.MethodGet, "/api/v0/calendar/events?from="+from+"&to="+to, "")
+		if w.Code != http.StatusOK {
+			t.Fatalf("list = %d %s, want 200", w.Code, w.Body.String())
+		}
+		got := map[int64]bool{}
+		for _, e := range decode[EventListJSON](t, w).Events {
+			got[e.ID] = true
+		}
+		return got
+	}
+	if got := ids("2026-10-12T00:00:00Z", "2026-10-19T00:00:00Z"); !got[ending.ID] || !got[forever.ID] {
+		t.Errorf("a week before the end lists %v, want both series", got)
+	}
+	if got := ids("2099-01-05T00:00:00Z", "2099-01-12T00:00:00Z"); got[ending.ID] || !got[forever.ID] {
+		t.Errorf("a week in 2099 lists %v, want only the series with no end", got)
+	}
+
+	for name, body := range map[string]string{
+		"a malformed end":     `{` + walk + `,"repeatUntil":"halloween"}`,
+		"an end with a time":  `{` + walk + `,"repeatUntil":"2026-10-31T09:00:00Z"}`,
+		"an end before start": `{` + walk + `,"repeatUntil":"2026-09-01T00:00:00Z"}`,
+	} {
+		w := do(engine, http.MethodPost, "/api/v0/calendar/events", body)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s = %d %s, want 400", name, w.Code, w.Body.String())
+			continue
+		}
+		if msg, _ := decode[map[string]any](t, w)["error"].(string); !strings.Contains(msg, "repeat") {
+			t.Errorf("%s: error = %q, want it to name the repeat's end", name, msg)
+		}
+	}
+
+	path := fmt.Sprintf("/api/v0/calendar/events/%d", ending.ID)
+	if w = do(engine, http.MethodPut, path, `{`+walk+`,"repeatUntil":null}`); w.Code != http.StatusOK || decode[EventJSON](t, w).RepeatUntil != nil {
+		t.Errorf("update to no end = %d %s, want 200 and no end", w.Code, w.Body.String())
 	}
 }

@@ -68,6 +68,10 @@ void main() {
     );
     expect(CalendarLabels.repeat(CalendarRepeat.daily, morning), 'Every day');
     expect(CalendarLabels.repeatShort(CalendarRepeat.none), 'Never');
+    expect(
+      CalendarLabels.repeatUntil(DateTime(2026, 10, 31)),
+      'until Oct 31, 2026',
+    );
   });
 
   test('reminders', () {

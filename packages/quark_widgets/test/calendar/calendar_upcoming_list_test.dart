@@ -76,6 +76,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testBothViewports('a series with an end says until when', (
+    tester,
+    size,
+  ) async {
+    final ending = CalendarEventItem(
+      eventId: 7,
+      title: 'Soccer practice',
+      start: DateTime(2026, 10, 1, 17, 30),
+      end: DateTime(2026, 10, 1, 19),
+      repeat: CalendarRepeat.weekly,
+      repeatUntil: DateTime(2026, 11, 26),
+    );
+    await pumpAt(
+      tester,
+      _list(
+        days: [
+          CalendarDayEvents(day: DateTime(2026, 10, 1), events: [ending]),
+        ],
+      ),
+      size: size,
+    );
+    expect(find.textContaining('Weekly until Nov 26, 2026'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testBothViewports('a due reminder says how soon the event starts', (
     tester,
     size,

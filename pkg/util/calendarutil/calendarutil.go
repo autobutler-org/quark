@@ -6,7 +6,8 @@
 // account reads and writes. A repeating event is stored once, as its first
 // occurrence and a preset (daily, weekly or monthly); the app expands the
 // occurrences in the viewer's local time, so ListEvents returns series, not
-// occurrences.
+// occurrences. A series repeats forever unless it has a RepeatUntil date
+// (#2524), and ListEvents leaves out a series that ended before the range.
 //
 // An event belongs to the account that created it (#2544), which lets the
 // calendar be narrowed to one person. It is not privacy: every account still
@@ -76,6 +77,11 @@ type EventInput struct {
 	TimeZone string
 	// Repeat is RepeatNone when empty.
 	Repeat Repeat
+	// RepeatUntil is the last date an occurrence may start on, inclusive:
+	// midnight UTC standing for that calendar date, like an all-day date. Nil
+	// repeats forever. It must not fall before the first occurrence's date,
+	// and a one-off event drops it.
+	RepeatUntil *time.Time
 	// ReminderMinutes counts back from Start; nil is no reminder.
 	ReminderMinutes *int
 	ColorIndex      int
@@ -83,16 +89,18 @@ type EventInput struct {
 
 // Event is a stored event, or the first occurrence of a repeating one.
 type Event struct {
-	ID              int64
-	CalendarID      int64
-	Title           string
-	Notes           string
-	Location        string
-	Start           time.Time
-	End             time.Time
-	AllDay          bool
-	TimeZone        string
-	Repeat          Repeat
+	ID         int64
+	CalendarID int64
+	Title      string
+	Notes      string
+	Location   string
+	Start      time.Time
+	End        time.Time
+	AllDay     bool
+	TimeZone   string
+	Repeat     Repeat
+	// RepeatUntil is the series' last date, or nil when it repeats forever.
+	RepeatUntil     *time.Time
 	ReminderMinutes *int
 	ColorIndex      int
 	// OwnerID is the account that created the event, or 0 for an event made
@@ -175,7 +183,7 @@ type ListEventsResult struct {
 
 // ListEvents lists the one-off events overlapping [From, To) and every
 // repeating event with an occurrence there, however long ago its series began
-// (#2535). The range is widened by a day each way so an all-day event, whose
+// (#2535); a series that ended before the range is left out. The range is widened by a day each way so an all-day event, whose
 // date means midnight wherever it is read, is not missed at the edges, and so
 // a series the app expands in local time is not missed either; the app
 // narrows it again.
@@ -195,6 +203,10 @@ func ListEvents(ctx context.Context, params ListEventsParams) (ListEventsResult,
 		CalendarID: calendar.ID,
 		RangeStart: formatTime(from),
 		RangeEnd:   formatTime(to),
+		// Only a series that occursIn would refuse is left out here: an
+		// occurrence may start a day or two past its end date and last up to
+		// a month.
+		EndedBefore: formatTime(from.Add(-untilSlack - longestOccurrence)),
 	})
 	if err != nil {
 		return ListEventsResult{}, err

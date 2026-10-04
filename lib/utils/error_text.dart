@@ -88,6 +88,10 @@ abstract final class Errors {
   static const String calendarEndBeforeStart =
       'The event has to end after it starts.';
 
+  /// A repeating calendar event whose last date is before its first (#2524).
+  static const String calendarRepeatEndsBeforeStart =
+      "The repeat can't end before the event starts.";
+
   /// A file or folder name that is nothing but spaces, or nothing at all.
   static const String nameBlank = "The name can't be blank.";
 

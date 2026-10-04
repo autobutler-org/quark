@@ -28,6 +28,7 @@ class _Harness {
     bool isSaving = false,
     bool canSave = true,
     String? timeError,
+    String? repeatError,
     String? saveError,
   }) => CalendarEventEditor(
     draft: draft ?? _draft,
@@ -35,6 +36,7 @@ class _Harness {
     editsSeries: editsSeries,
     isSaving: isSaving,
     timeError: timeError,
+    repeatError: repeatError,
     saveError: saveError,
     onChanged: (d) => changed = d,
     onSave: canSave ? () => saves++ : null,
@@ -206,6 +208,111 @@ void main() {
     await pumpAt(tester, h.editor(canSave: false), size: size);
     await tester.tap(find.byKey(const ValueKey('event_save')));
     expect(h.saves, 0);
+  });
+
+  testBothViewports('a one-off event has no repeat end', (tester, size) async {
+    await pumpAt(tester, _Harness().editor(), size: size);
+    expect(find.text('Repeat ends'), findsNothing);
+    expect(find.byKey(const ValueKey('event_repeat_ends_on')), findsNothing);
+  });
+
+  testBothViewports('a repeating event can end on a date, or never', (
+    tester,
+    size,
+  ) async {
+    final h = _Harness();
+    final weekly = _draft.copyWith(repeat: CalendarRepeat.weekly);
+    await pumpAt(tester, h.editor(draft: weekly), size: size);
+    expect(find.text('Repeat ends'), findsOneWidget);
+    expect(find.byKey(const ValueKey('event_repeat_until')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('event_repeat_ends_on')));
+    // On a date starts a month after the first occurrence.
+    expect(h.changed?.repeatUntil, DateTime(2026, 10, 17));
+    expect(h.changed?.repeat, CalendarRepeat.weekly);
+
+    await pumpAt(tester, h.editor(draft: h.changed), size: size);
+    expect(find.byKey(const ValueKey('event_repeat_until')), findsOneWidget);
+    expect(
+      find.text('Every week on Thursday until Oct 17, 2026.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('event_repeat_ends_never')));
+    expect(h.changed?.repeatUntil, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testBothViewports('the repeat end opens a date picker from its value', (
+    tester,
+    size,
+  ) async {
+    final h = _Harness();
+    final ending = _draft.copyWith(
+      repeat: CalendarRepeat.daily,
+      repeatUntil: DateTime(2026, 9, 30),
+    );
+    await pumpAt(tester, h.editor(draft: ending), size: size);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('event_repeat_until')),
+    );
+    await tester.tap(find.byKey(const ValueKey('event_repeat_until')));
+    await tester.pumpAndSettle();
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+    await tester.tap(find.text('25'));
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(h.changed?.repeatUntil, DateTime(2026, 9, 25));
+  });
+
+  testBothViewports('shows the repeat end error the caller composed', (
+    tester,
+    size,
+  ) async {
+    final early = _draft.copyWith(
+      repeat: CalendarRepeat.weekly,
+      repeatUntil: DateTime(2026, 9, 1),
+    );
+    await pumpAt(
+      tester,
+      _Harness().editor(draft: early, repeatError: 'Too early.'),
+      size: size,
+    );
+    expect(find.text('Too early.'), findsOneWidget);
+  });
+
+  testLargeText('the repeat end fits at large text', (tester, size) async {
+    final ending = _draft.copyWith(
+      repeat: CalendarRepeat.monthly,
+      repeatUntil: DateTime(2027, 9, 17),
+    );
+    await pumpAt(
+      tester,
+      _Harness().editor(draft: ending, repeatError: 'Too early.'),
+      size: size,
+    );
+    expect(tester.takeException(), isNull);
+    expectNoClippedText(tester);
+  });
+
+  testBothViewports('the repeat end meets the tap target guidelines', (
+    tester,
+    size,
+  ) async {
+    final ending = _draft.copyWith(
+      repeat: CalendarRepeat.weekly,
+      repeatUntil: DateTime(2026, 12, 17),
+    );
+    await pumpAt(tester, _Harness().editor(draft: ending), size: size);
+    final handle = tester.ensureSemantics();
+    final until = tester.getSemantics(
+      find.byKey(const ValueKey('event_repeat_until')),
+    );
+    expect(until.label, startsWith('Last repeat, '));
+    expect(until.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    expect(until.rect.height, greaterThanOrEqualTo(48));
+    handle.dispose();
+    await expectTapTargetGuidelines(tester);
   });
 
   testBothViewports('meets the tap target guidelines', (tester, size) async {

@@ -80,6 +80,14 @@ func toInput(req eventRequest) (calendarutil.EventInput, error) {
 	if err != nil {
 		return calendarutil.EventInput{}, err
 	}
+	var until *time.Time
+	if req.RepeatUntil != nil {
+		t, err := parseInstant("repeatUntil", *req.RepeatUntil)
+		if err != nil {
+			return calendarutil.EventInput{}, err
+		}
+		until = &t
+	}
 	return calendarutil.EventInput{
 		Title:           req.Title,
 		Notes:           req.Notes,
@@ -89,6 +97,7 @@ func toInput(req eventRequest) (calendarutil.EventInput, error) {
 		AllDay:          req.AllDay,
 		TimeZone:        req.TimeZone,
 		Repeat:          calendarutil.Repeat(req.Repeat),
+		RepeatUntil:     until,
 		ReminderMinutes: req.ReminderMinutes,
 		ColorIndex:      req.ColorIndex,
 	}, nil
@@ -102,6 +111,11 @@ func callerID(c *gin.Context) int64 {
 
 // toEventJSON converts a stored event for a response to account caller.
 func toEventJSON(e calendarutil.Event, caller int64) EventJSON {
+	var until *string
+	if e.RepeatUntil != nil {
+		s := e.RepeatUntil.UTC().Format(time.RFC3339)
+		until = &s
+	}
 	return EventJSON{
 		ID:              e.ID,
 		CalendarID:      e.CalendarID,
@@ -113,6 +127,7 @@ func toEventJSON(e calendarutil.Event, caller int64) EventJSON {
 		AllDay:          e.AllDay,
 		TimeZone:        e.TimeZone,
 		Repeat:          string(e.Repeat),
+		RepeatUntil:     until,
 		ReminderMinutes: e.ReminderMinutes,
 		ColorIndex:      e.ColorIndex,
 		Owner:           e.OwnerName,

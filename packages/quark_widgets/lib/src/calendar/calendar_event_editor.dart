@@ -3,23 +3,26 @@ import 'package:quark_icons/quark_icons.dart';
 
 import '../core/quark_loader.dart';
 import '../models/calendar_event_draft.dart';
+import '../models/calendar_repeat.dart';
 import '../theme/quark_tokens.dart';
 import 'calendar_event_editor/editor_field_row.dart';
 import 'calendar_event_editor/editor_picker_button.dart';
 import 'calendar_event_editor/event_color_picker.dart';
 import 'calendar_event_editor/reminder_picker.dart';
+import 'calendar_event_editor/repeat_end_picker.dart';
 import 'calendar_event_editor/repeat_preset_picker.dart';
+import 'calendar_dates.dart';
 import 'calendar_labels.dart';
 
 /// The one form for creating and editing a calendar event: title, all day,
-/// start and end, repeat, reminder, color, location and notes, with Save,
-/// Cancel and (for a saved event) Delete.
+/// start and end, repeat and when it stops, reminder, color, location and
+/// notes, with Save, Cancel and (for a saved event) Delete.
 ///
 /// It edits nothing itself. Every change comes back through [onChanged] as a
 /// new [CalendarEventDraft] and the caller hands the next draft in. The caller
 /// validates, too: it passes a null [onSave] until the draft can be saved,
-/// which disables Save, and [timeError] and [saveError] are sentences it
-/// composed, shown under their fields. Date and time fields open the platform
+/// which disables Save, and [timeError], [repeatError] and [saveError] are
+/// sentences it composed, shown under their fields. Date and time fields open the platform
 /// pickers. It lays itself out for its width: labels beside fields in a
 /// desktop dialog, above them in a phone's bottom sheet. It is only the form,
 /// so the caller shows it in whichever of the two fits. Its body scrolls, so
@@ -27,7 +30,8 @@ import 'calendar_labels.dart';
 ///
 /// Key prefixes: `event_title`, `event_all_day`, `event_start_date`,
 /// `event_start_time`, `event_end_date`, `event_end_time`,
-/// `event_repeat_<preset>`, `event_remind_<minutes|off>`,
+/// `event_repeat_<preset>`, `event_repeat_ends_never`, `event_repeat_ends_on`,
+/// `event_repeat_until`, `event_remind_<minutes|off>`,
 /// `event_color_<index>`, `event_location`, `event_notes`, `event_save`,
 /// `event_cancel`, `event_delete` and `event_close`.
 ///
@@ -52,6 +56,7 @@ class CalendarEventEditor extends StatefulWidget {
     this.editsSeries = false,
     this.isSaving = false,
     this.timeError,
+    this.repeatError,
     this.saveError,
     super.key,
   });
@@ -85,6 +90,9 @@ class CalendarEventEditor extends StatefulWidget {
 
   /// The caller's sentence about the start and end, or null.
   final String? timeError;
+
+  /// The caller's sentence about when the repeat stops, or null.
+  final String? repeatError;
 
   /// The caller's sentence about a failed save or delete, or null.
   final String? saveError;
@@ -139,6 +147,18 @@ class _CalendarEventEditorState extends State<CalendarEventEditor> {
     widget.onChanged(
       start ? draft.withStartDate(picked) : draft.withEndDate(picked),
     );
+  }
+
+  Future<void> _pickRepeatUntil(DateTime initial) async {
+    final first = widget.draft.start;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(first) ? first : initial,
+      firstDate: CalendarDates.dateOnly(first),
+      lastDate: DateTime(first.year + 50),
+    );
+    if (picked == null || !mounted) return;
+    widget.onChanged(widget.draft.copyWith(repeatUntil: picked));
   }
 
   Future<void> _pickTime(DateTime initial, bool start) async {
@@ -330,11 +350,39 @@ class _CalendarEventEditorState extends State<CalendarEventEditor> {
                       child: RepeatPresetPicker(
                         value: draft.repeat,
                         start: draft.start,
+                        until: draft.savedRepeatUntil,
                         editsSeries: widget.editsSeries,
                         onChanged: (repeat) =>
                             widget.onChanged(draft.copyWith(repeat: repeat)),
                       ),
                     ),
+                    if (draft.repeat != CalendarRepeat.none)
+                      EditorFieldRow(
+                        label: 'Repeat ends',
+                        wide: wide,
+                        alignTop: true,
+                        child: RepeatEndPicker(
+                          value: draft.repeatUntil,
+                          wide: wide,
+                          error: widget.repeatError,
+                          // On a date starts a month after the first
+                          // occurrence, a date the field then changes.
+                          onEndsChanged: (ends) => widget.onChanged(
+                            ends
+                                ? draft.copyWith(
+                                    repeatUntil: DateTime(
+                                      draft.start.year,
+                                      draft.start.month + 1,
+                                      draft.start.day,
+                                    ),
+                                  )
+                                : draft.copyWith(clearRepeatUntil: true),
+                          ),
+                          onPickDate: () => _pickRepeatUntil(
+                            draft.repeatUntil ?? draft.start,
+                          ),
+                        ),
+                      ),
                     EditorFieldRow(
                       label: 'Remind me',
                       icon: QuarkIcons.notifications_outlined,

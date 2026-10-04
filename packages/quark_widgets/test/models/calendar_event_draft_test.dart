@@ -81,4 +81,29 @@ void main() {
     expect(vet.copyWith(clearReminder: true).reminderMinutes, isNull);
     expect(vet.copyWith(reminderMinutes: 5).reminderMinutes, 5);
   });
+
+  test('an end to the repeat is kept for the form to flag', () {
+    final weekly = vet.copyWith(
+      repeat: CalendarRepeat.weekly,
+      repeatUntil: DateTime(2026, 10, 31),
+    );
+    expect(weekly.repeatEndsInTime, isTrue);
+    expect(weekly.savedRepeatUntil, DateTime(2026, 10, 31));
+    // Its first day is enough: one occurrence.
+    expect(
+      weekly.copyWith(repeatUntil: DateTime(2026, 9, 29)).repeatEndsInTime,
+      isTrue,
+    );
+    final early = weekly.copyWith(repeatUntil: DateTime(2026, 9, 28));
+    expect(early.repeatEndsInTime, isFalse);
+    expect(early, isNot(weekly));
+    // A draft that no longer repeats keeps the date, saves none, and breaks
+    // no rule.
+    final once = early.copyWith(repeat: CalendarRepeat.none);
+    expect(once.repeatUntil, DateTime(2026, 9, 28));
+    expect(once.savedRepeatUntil, isNull);
+    expect(once.repeatEndsInTime, isTrue);
+    expect(weekly.copyWith(clearRepeatUntil: true).repeatUntil, isNull);
+    expect(weekly.copyWith(title: 'x').repeatUntil, DateTime(2026, 10, 31));
+  });
 }

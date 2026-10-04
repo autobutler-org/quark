@@ -339,3 +339,108 @@ func TestEventOwner(t *testing.T) {
 		t.Errorf("owner after delete = %d %q, want none", orphan.Event.OwnerID, orphan.Event.OwnerName)
 	}
 }
+
+func dayPtr(s string) *time.Time {
+	t := at(s)
+	return &t
+}
+
+func TestRepeatUntil(t *testing.T) {
+	q := dbtest.NewDB(t).Queries
+	ctx := context.Background()
+
+	// A daily 7 PM walk in UTC-7, through Saturday Oct 31 2026.
+	walk := timed("Walk", "2026-10-01T02:00:00Z", "2026-10-01T02:30:00Z")
+	walk.Repeat = calendarutil.RepeatDaily
+	walk.RepeatUntil = dayPtr("2026-10-31T00:00:00Z")
+	e := create(t, q, walk)
+	if e.RepeatUntil == nil || !e.RepeatUntil.Equal(*walk.RepeatUntil) {
+		t.Fatalf("repeat until = %v, want %v", e.RepeatUntil, walk.RepeatUntil)
+	}
+
+	// Its first walk is Sep 30 at home, though Oct 1 in UTC: a series that
+	// ends that same day is one walk, not an error.
+	once := walk
+	once.RepeatUntil = dayPtr("2026-09-30T00:00:00Z")
+	create(t, q, once)
+
+	forever := timed("Forever", "2026-10-01T02:00:00Z", "2026-10-01T02:30:00Z")
+	forever.Repeat = calendarutil.RepeatDaily
+	endless := create(t, q, forever)
+	if endless.RepeatUntil != nil {
+		t.Errorf("repeat until = %v, want nil when none is given", endless.RepeatUntil)
+	}
+
+	// A one-off event has nothing to end: the date is dropped, not refused.
+	oneOff := timed("Dentist", "2026-10-01T16:00:00Z", "2026-10-01T17:00:00Z")
+	oneOff.RepeatUntil = dayPtr("2026-12-31T00:00:00Z")
+	if got := create(t, q, oneOff); got.RepeatUntil != nil {
+		t.Errorf("one-off repeat until = %v, want nil", got.RepeatUntil)
+	}
+
+	list := func(from, to string) map[int64]bool {
+		t.Helper()
+		result, err := calendarutil.ListEvents(ctx, calendarutil.ListEventsParams{Queries: q, From: at(from), To: at(to)})
+		if err != nil {
+			t.Fatalf("ListEvents: %v", err)
+		}
+		got := map[int64]bool{}
+		for _, e := range result.Events {
+			got[e.ID] = true
+		}
+		return got
+	}
+	for view, w := range map[string]struct {
+		from, to string
+		want     bool
+	}{
+		"its last day, Oct 31":  {"2026-10-31T07:00:00Z", "2026-11-01T07:00:00Z", true},
+		"the week after it":     {"2026-11-09T07:00:00Z", "2026-11-16T07:00:00Z", false},
+		"a week in 2099":        {"2099-01-05T00:00:00Z", "2099-01-12T00:00:00Z", false},
+		"a month it repeats in": {"2026-10-01T07:00:00Z", "2026-11-01T07:00:00Z", true},
+	} {
+		got := list(w.from, w.to)
+		if got[e.ID] != w.want {
+			t.Errorf("%s: walk listed = %v, want %v", view, got[e.ID], w.want)
+		}
+		if !got[endless.ID] {
+			t.Errorf("%s: a series with no end is missing", view)
+		}
+	}
+
+	// Taking the end away makes it repeat forever again.
+	walk.RepeatUntil = nil
+	updated, err := calendarutil.UpdateEvent(ctx, calendarutil.UpdateEventParams{Queries: q, ID: e.ID, Input: walk})
+	if err != nil || updated.Event.RepeatUntil != nil {
+		t.Fatalf("UpdateEvent without an end = %+v, %v; want no end", updated.Event, err)
+	}
+	if !list("2099-01-05T00:00:00Z", "2099-01-12T00:00:00Z")[e.ID] {
+		t.Error("a series whose end was removed is missing from 2099")
+	}
+}
+
+func TestRepeatUntilRules(t *testing.T) {
+	q := dbtest.NewDB(t).Queries
+	for name, w := range map[string]struct {
+		allDay      bool
+		start, end  string
+		until, rule string
+	}{
+		"a time of day":           {false, "2026-10-01T16:00:00Z", "2026-10-01T17:00:00Z", "2026-10-31T09:00:00Z", "a date"},
+		"before a timed start":    {false, "2026-10-01T16:00:00Z", "2026-10-01T17:00:00Z", "2026-09-29T00:00:00Z", "on or after"},
+		"before an all-day start": {true, "2026-10-01T00:00:00Z", "2026-10-02T00:00:00Z", "2026-09-30T00:00:00Z", "on or after"},
+	} {
+		input := timed("Series", w.start, w.end)
+		input.AllDay = w.allDay
+		input.Repeat = calendarutil.RepeatWeekly
+		input.RepeatUntil = dayPtr(w.until)
+		_, err := calendarutil.CreateEvent(context.Background(), calendarutil.CreateEventParams{Queries: q, Input: input})
+		if !errors.Is(err, calendarutil.ErrInvalidEvent) || !strings.Contains(err.Error(), w.rule) {
+			t.Errorf("%s: CreateEvent = %v, want ErrInvalidEvent naming %q", name, err, w.rule)
+		}
+	}
+	// An all-day series may end on its first day.
+	input := calendarutil.EventInput{Title: "Once", Start: at("2026-10-01T00:00:00Z"), End: at("2026-10-02T00:00:00Z"),
+		AllDay: true, Repeat: calendarutil.RepeatWeekly, RepeatUntil: dayPtr("2026-10-01T00:00:00Z")}
+	create(t, q, input)
+}
