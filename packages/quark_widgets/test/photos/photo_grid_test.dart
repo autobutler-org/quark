@@ -366,4 +366,13 @@ void main() {
       });
     }
   });
+
+  testBothViewports('names every tile for a screen reader', (
+    tester,
+    size,
+  ) async {
+    await pumpGrid(tester, size: size, withMenu: true);
+
+    await expectTapTargetGuidelines(tester);
+  });
 }

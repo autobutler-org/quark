@@ -1,3 +1,5 @@
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -175,5 +177,42 @@ void main() {
     await pumpTile(tester, size: size, selectionMode: true, isSelected: true);
 
     expect(find.byIcon(QuarkIcons.check), findsOneWidget);
+  });
+
+  testBothViewports('reads as a button named for the photo', (
+    tester,
+    size,
+  ) async {
+    await pumpTile(tester, size: size, withMenu: true);
+    final handle = tester.ensureSemantics();
+
+    final node = tester.getSemantics(
+      find.byKey(const ValueKey('photo_tile_p1')),
+    );
+    expect(node.label, contains('beach.jpg'));
+    expect(node.flagsCollection.isButton, isTrue);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('photo_tile_menu_p1'))),
+      const Size.square(48),
+    );
+    handle.dispose();
+    await expectTapTargetGuidelines(tester);
+  });
+
+  testBothViewports('says whether it is selected while selecting', (
+    tester,
+    size,
+  ) async {
+    await pumpTile(tester, size: size, selectionMode: true, isSelected: true);
+    final handle = tester.ensureSemantics();
+
+    expect(
+      tester
+          .getSemantics(find.byKey(const ValueKey('photo_tile_p1')))
+          .flagsCollection
+          .isSelected,
+      Tristate.isTrue,
+    );
+    handle.dispose();
   });
 }

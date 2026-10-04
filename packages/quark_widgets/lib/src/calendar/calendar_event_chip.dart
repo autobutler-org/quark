@@ -61,6 +61,9 @@ class CalendarEventChip extends StatelessWidget {
       button: onTap != null,
       label: '${item.title}, ${item.allDay ? 'all day' : time}',
       excludeSemantics: true,
+      // Excluding the child's semantics drops its tap too, so the node
+      // carries its own, or a screen reader cannot press it (#2603).
+      onTap: onTap,
       child: Material(
         color: item.allDay ? color.withValues(alpha: 0.24) : Colors.transparent,
         borderRadius: radius,

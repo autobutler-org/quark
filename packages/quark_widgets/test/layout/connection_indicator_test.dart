@@ -79,4 +79,22 @@ void main() {
       }
     });
   }
+
+  testBothViewports('keeps a bar control\'s margin around its tile', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      const Center(
+        child: ConnectionIndicator(mode: ConnectionMode.local, label: 'Home'),
+      ),
+      size: size,
+    );
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('connection_indicator'))),
+      const Size.square(QuarkBarIconButton.tapTargetSize),
+    );
+  });
 }

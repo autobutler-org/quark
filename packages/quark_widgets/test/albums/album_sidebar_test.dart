@@ -295,4 +295,26 @@ void main() {
     );
     expect(labelWeight(tester, 'Trips'), FontWeight.w600);
   });
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(
+      tester,
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: bounded(sidebar(withAllPhotos: true, withSort: true)),
+      ),
+      size: size,
+    );
+
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('album_sidebar_all_photos')))
+          .height,
+      greaterThanOrEqualTo(48),
+    );
+    for (final key in const ['album_create', 'album_sort']) {
+      expect(tester.getSize(find.byKey(ValueKey(key))), const Size.square(48));
+    }
+    await expectTapTargetGuidelines(tester);
+  });
 }

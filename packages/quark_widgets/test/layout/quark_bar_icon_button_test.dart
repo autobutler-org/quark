@@ -49,7 +49,9 @@ void main() {
     await pumpAt(tester, button(onPressed: () {}), size: size);
 
     expect(
-      tester.getSize(find.byKey(key)),
+      tester.getSize(
+        find.descendant(of: find.byKey(key), matching: find.byType(Material)),
+      ),
       const Size.square(QuarkBarIconButton.size),
     );
     expect(glyph(tester).text.style!.fontSize, QuarkBarIconButton.glyphSize);
@@ -102,5 +104,23 @@ void main() {
     await tester.pump();
 
     expect(presses, 0);
+  });
+
+  testBothViewports('takes a 48dp touch target around its 36px visual', (
+    tester,
+    size,
+  ) async {
+    var presses = 0;
+    await pumpAt(tester, button(onPressed: () => presses++), size: size);
+
+    expect(
+      tester.getSize(find.byKey(key)),
+      const Size.square(QuarkBarIconButton.tapTargetSize),
+    );
+    // A tap in the margin, outside the visual, still lands.
+    await tester.tapAt(tester.getTopLeft(find.byKey(key)) + const Offset(2, 2));
+    await tester.pump();
+    expect(presses, 1);
+    await expectTapTargetGuidelines(tester);
   });
 }

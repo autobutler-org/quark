@@ -854,6 +854,35 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testBothViewports('a chip is a 48dp button a screen reader can press', (
+      tester,
+      size,
+    ) async {
+      final events = <String>[];
+      await pumpAt(
+        tester,
+        QuarkMessageList(
+          messages: reacted,
+          permissions: ChatPermissionPreset.member.permissions,
+          onReact: (id, emoji) => events.add('$id $emoji'),
+        ),
+        size: size,
+      );
+      final handle = tester.ensureSemantics();
+
+      final chip = find.byKey(const ValueKey('message_reaction_r1_😂'));
+      final node = tester.getSemantics(chip);
+      expect(node.flagsCollection.isButton, isTrue);
+      expect(node.rect.width, greaterThanOrEqualTo(48));
+      expect(node.rect.height, greaterThanOrEqualTo(48));
+      node.owner!.performAction(node.id, SemanticsAction.tap);
+      // A tap just below the drawn chip, in its touch target, lands too.
+      await tester.tapAt(tester.getBottomLeft(chip) + const Offset(4, 4));
+      expect(events, ['r1 😂', 'r1 😂']);
+      handle.dispose();
+      await expectTapTargetGuidelines(tester);
+    });
+
     testBothViewports('a viewer without add_reactions only sees them', (
       tester,
       size,

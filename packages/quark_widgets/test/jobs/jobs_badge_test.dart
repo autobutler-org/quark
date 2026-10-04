@@ -52,4 +52,14 @@ void main() {
       expect(badge.textColor, tokens.primaryForeground);
     });
   }
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(
+      tester,
+      Center(child: JobsBadge(runningCount: 3, onTap: () {})),
+      size: size,
+    );
+
+    await expectTapTargetGuidelines(tester);
+  });
 }

@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -204,5 +206,24 @@ void main() {
     await pumpAt(tester, h.editor(canSave: false), size: size);
     await tester.tap(find.byKey(const ValueKey('event_save')));
     expect(h.saves, 0);
+  });
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(tester, _Harness().editor(), size: size);
+    final handle = tester.ensureSemantics();
+
+    // The switch is named, and the pickers can be pressed by a screen
+    // reader, not only announced (#2603).
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('event_all_day'))).label,
+      'All day',
+    );
+    final start = tester.getSemantics(
+      find.byKey(const ValueKey('event_start_date')),
+    );
+    expect(start.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    expect(start.rect.height, greaterThanOrEqualTo(48));
+    handle.dispose();
+    await expectTapTargetGuidelines(tester);
   });
 }

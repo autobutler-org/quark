@@ -17,7 +17,8 @@ import '../calendar_labels.dart';
 ///
 /// Key prefixes: `calendar_day_<yyyy-mm-dd>` on the cell,
 /// `calendar_add_<yyyy-mm-dd>` on its add button, `calendar_more_<yyyy-mm-dd>`
-/// on its overflow line, and each event chip's own `calendar_event_` key.
+/// on its overflow line, and each event chip's own `calendar_event_` key. The
+/// overflow line has no tap of its own: a tap on it is a tap on the cell.
 class MonthDayCell extends StatefulWidget {
   /// Creates the cell for [day].
   const MonthDayCell({
@@ -179,9 +180,15 @@ class _MonthDayCellState extends State<MonthDayCell> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
+      // Its own node, carrying the cell's taps: merged into the grid's, the
+      // label and the button role ended up apart from the tap, and a screen
+      // reader announced a button it could not press (#2603).
       child: Semantics(
+        container: true,
         label: label,
         button: widget.onTap != null,
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
         child: Material(
           color: background,
           child: InkWell(
@@ -225,23 +232,24 @@ class _MonthDayCellState extends State<MonthDayCell> {
                         if (shown < count)
                           SizedBox(
                             height: moreHeight,
-                            child: InkWell(
+                            // No tap of its own: the line does what tapping
+                            // the cell does, and the cell is a target a
+                            // finger can hit where this 18px line is not
+                            // (#2605).
+                            child: Padding(
                               key: ValueKey('calendar_more_$key'),
-                              onTap: widget.onTap,
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: dense ? 3 : 6,
-                                ),
-                                child: Text(
-                                  dense
-                                      ? '+${count - shown}'
-                                      : '+${count - shown} more',
-                                  maxLines: 1,
-                                  style: TextStyle(
-                                    fontSize: dense ? 10.5 : 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: tokens.secondaryForeground,
-                                  ),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: dense ? 3 : 6,
+                              ),
+                              child: Text(
+                                dense
+                                    ? '+${count - shown}'
+                                    : '+${count - shown} more',
+                                maxLines: 1,
+                                style: TextStyle(
+                                  fontSize: dense ? 10.5 : 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: tokens.secondaryForeground,
                                 ),
                               ),
                             ),

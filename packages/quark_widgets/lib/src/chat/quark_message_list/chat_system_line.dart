@@ -62,7 +62,6 @@ class ChatSystemLine extends StatelessWidget {
             IconButton(
               key: ValueKey('message_help_${message.id}'),
               tooltip: QuarkMessageList.encryptionHelpTooltip,
-              visualDensity: VisualDensity.compact,
               iconSize: 16,
               color: color,
               icon: const Icon(QuarkIcons.help_outline),

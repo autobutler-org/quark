@@ -323,4 +323,31 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(
+      tester,
+      QuarkPageScaffold(
+        title: 'Photos',
+        icon: QuarkIcons.photo_library_outlined,
+        onRefresh: () {},
+        actions: [
+          QuarkBarIconButton(
+            icon: QuarkIcons.check_circle_outline,
+            tooltip: 'Select',
+            onPressed: () {},
+          ),
+        ],
+        body: const SizedBox.shrink(),
+      ),
+      size: size,
+      scaffold: false,
+    );
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('brand_button'))).height,
+      greaterThanOrEqualTo(48),
+    );
+    await expectTapTargetGuidelines(tester);
+  });
 }

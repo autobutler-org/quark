@@ -83,8 +83,9 @@ class QuarkAppBarBottom extends StatelessWidget implements PreferredSizeWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < collapseBreakpoint;
+          // No spacing: every bar control carries its own margin, the edge of
+          // its 48dp touch target (#2605).
           return Row(
-            spacing: tokens.spacingSm,
             children: [
               Expanded(child: lead),
               if (!compact) ...actions,

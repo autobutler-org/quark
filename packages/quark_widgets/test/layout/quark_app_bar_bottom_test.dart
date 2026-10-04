@@ -77,4 +77,11 @@ void main() {
       kToolbarHeight + QuarkAppBarBottom.height,
     );
   });
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(tester, page((_) {}), size: size, scaffold: false);
+
+    expect(tester.takeException(), isNull);
+    await expectTapTargetGuidelines(tester);
+  });
 }

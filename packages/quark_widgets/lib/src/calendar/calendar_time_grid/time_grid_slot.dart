@@ -56,6 +56,9 @@ class _TimeGridSlotState extends State<TimeGridSlot> {
         button: onTap != null,
         label: 'New event at $time, ${CalendarLabels.dayTitle(widget.start)}',
         excludeSemantics: true,
+        // Excluding the child's semantics drops its tap too, so the node
+        // carries its own, or a screen reader cannot press it (#2603).
+        onTap: onTap,
         child: InkWell(
           key: ValueKey(
             'calendar_slot_${CalendarDates.key(widget.start)}_${widget.start.hour}',

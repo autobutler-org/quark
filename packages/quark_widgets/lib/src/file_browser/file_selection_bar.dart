@@ -15,6 +15,11 @@ import '../theme/quark_tokens.dart';
 /// background and hairline and uses the bar buttons, so swapping it in for
 /// the page's bar changes the controls, not the chrome.
 ///
+/// Every control is a 48dp touch target (#2605), so on a phone the bar has
+/// room for "Select all" in words only beside a lone delete button. With
+/// restore or the page's own [actions] as well, it shrinks to its icon there,
+/// still named by its tooltip.
+///
 /// This is custom chrome rather than a real [AppBar], so it consults the
 /// display insets itself: the [SafeArea] inside is what keeps the controls
 /// clear of the status bar, notch, or Dynamic Island (#1597). The surface color
@@ -119,9 +124,13 @@ class FileSelectionBar extends StatelessWidget implements PreferredSizeWidget {
         child: SizedBox(
           height: height,
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: tokens.spacingSm),
+            // No spacing, and the padding less the margin every bar control
+            // carries around its 48dp touch target (#2605), so the controls'
+            // visible edges sit where they did.
+            padding: EdgeInsets.symmetric(
+              horizontal: tokens.spacingSm - QuarkBarIconButton.tapTargetMargin,
+            ),
             child: Row(
-              spacing: tokens.spacingXs,
               children: [
                 QuarkBarIconButton(
                   key: const ValueKey('file_selection_cancel'),
@@ -152,7 +161,7 @@ class FileSelectionBar extends StatelessWidget implements PreferredSizeWidget {
                       ? QuarkIcons.circle_outlined
                       : QuarkIcons.check_circle_rounded,
                   label: everything ? 'Deselect all' : 'Select all',
-                  keepLabel: true,
+                  keepLabel: actions.isEmpty && onRestore == null,
                   onPressed: everything ? onDeselectAll : onSelectAll,
                 ),
                 ...actions,

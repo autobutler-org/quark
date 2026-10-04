@@ -159,4 +159,14 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('calendar_upcoming_add')));
     expect(adds, 1);
   });
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(
+      tester,
+      _list(onEventTap: (_) {}, onAddEvent: () {}),
+      size: size,
+    );
+
+    await expectTapTargetGuidelines(tester);
+  });
 }

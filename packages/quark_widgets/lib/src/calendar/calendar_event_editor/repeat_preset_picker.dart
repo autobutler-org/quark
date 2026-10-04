@@ -75,7 +75,9 @@ class RepeatPresetPicker extends StatelessWidget {
               fontWeight: FontWeight.w500,
             ),
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            visualDensity: const VisualDensity(vertical: -1),
+            // Standard density: any less and Material shrinks the 48dp touch
+            // target with it (#2605).
+            visualDensity: VisualDensity.standard,
           ),
         ),
         if (help.isNotEmpty)

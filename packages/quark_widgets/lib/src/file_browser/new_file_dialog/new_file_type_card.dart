@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../../theme/quark_tokens.dart';
 import '../new_file_dialog.dart';
 
-/// One selectable file type in [NewFileDialog]'s type picker.
+/// One selectable file type in [NewFileDialog]'s type picker. A screen reader
+/// hears it as a button, and whether it is the selected type (#2603).
 ///
 /// Key prefix: `new_file_type_<extension without the dot, or `generic`>`.
 class NewFileTypeCard extends StatelessWidget {
@@ -37,47 +38,57 @@ class NewFileTypeCard extends StatelessWidget {
     final borderWidth = isSelected ? 2.0 : 1.0;
     final inset = borderWidth - 1;
 
-    return GestureDetector(
-      key: ValueKey('new_file_type_$slug'),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: 88,
-        padding: EdgeInsets.symmetric(
-          vertical: tokens.spacingSm + tokens.spacingXs - inset,
-          horizontal: tokens.spacingSm - inset,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? colorScheme.primaryContainer
-              : colorScheme.surfaceContainerHighest,
-          border: Border.all(
-            color: isSelected ? colorScheme.primary : colorScheme.outline,
-            width: borderWidth,
+    // One of a set of choices to a screen reader, saying which is picked
+    // (#2603).
+    return Semantics(
+      container: true,
+      button: true,
+      inMutuallyExclusiveGroup: true,
+      selected: isSelected,
+      child: GestureDetector(
+        key: ValueKey('new_file_type_$slug'),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 88,
+          padding: EdgeInsets.symmetric(
+            vertical: tokens.spacingSm + tokens.spacingXs - inset,
+            horizontal: tokens.spacingSm - inset,
           ),
-          borderRadius: BorderRadius.circular(tokens.radiusMd),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              type.icon,
-              size: 28,
-              color: isSelected
-                  ? colorScheme.primary
-                  : colorScheme.onSurface.withValues(alpha: 0.5),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? colorScheme.primaryContainer
+                : colorScheme.surfaceContainerHighest,
+            border: Border.all(
+              color: isSelected ? colorScheme.primary : colorScheme.outline,
+              width: borderWidth,
             ),
-            SizedBox(height: tokens.spacingXs + tokens.spacingXs / 2),
-            Text(
-              type.label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected ? colorScheme.primary : colorScheme.onSurface,
+            borderRadius: BorderRadius.circular(tokens.radiusMd),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                type.icon,
+                size: 28,
+                color: isSelected
+                    ? colorScheme.primary
+                    : colorScheme.onSurface.withValues(alpha: 0.5),
               ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+              SizedBox(height: tokens.spacingXs + tokens.spacingXs / 2),
+              Text(
+                type.label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: isSelected
+                      ? colorScheme.primary
+                      : colorScheme.onSurface,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );

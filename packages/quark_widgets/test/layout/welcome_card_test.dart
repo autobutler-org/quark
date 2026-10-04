@@ -156,4 +156,22 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  testBothViewports('meets the tap target guidelines', (tester, size) async {
+    await pumpAt(
+      tester,
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: WelcomeCard(
+          headline: 'Welcome back, ada',
+          actions: chips([]),
+          onDismiss: () {},
+        ),
+      ),
+      size: size,
+    );
+
+    expect(tester.takeException(), isNull);
+    await expectTapTargetGuidelines(tester);
+  });
 }

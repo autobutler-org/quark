@@ -99,10 +99,11 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
     final middle = this.middle;
     final slotWidth =
         QuarkBrandButton.preferredWidth +
-        (refresh == null ? 0 : tokens.spacingSm + QuarkBarIconButton.size);
+        (refresh == null ? 0 : QuarkBarIconButton.tapTargetSize);
+    // No spacing in the bar's rows: every bar control carries its own
+    // margin, the edge of its 48dp touch target (#2605).
     Widget brandAndRefresh(BuildContext ctx) => Row(
       mainAxisSize: MainAxisSize.min,
-      spacing: tokens.spacingSm,
       children: [
         // Flexible, so a page name longer than the slot is clipped by the
         // brand button rather than overflowing the bar.
@@ -152,13 +153,7 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
       centerTitle: false,
       actions: trailing.isEmpty
           ? null
-          : [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: tokens.spacingSm,
-                children: trailing,
-              ),
-            ],
+          : [Row(mainAxisSize: MainAxisSize.min, children: trailing)],
       bottom: bottom,
     );
   }

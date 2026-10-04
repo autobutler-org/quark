@@ -35,6 +35,9 @@ class EditorPickerButton extends StatelessWidget {
       button: true,
       label: '$semanticLabel, $value',
       excludeSemantics: true,
+      // Excluding the child's semantics drops its tap too, so the node
+      // carries its own, or a screen reader cannot press it (#2603).
+      onTap: onPressed,
       child: Material(
         color: tokens.input,
         shape: RoundedRectangleBorder(
@@ -47,7 +50,8 @@ class EditorPickerButton extends StatelessWidget {
           onTap: onPressed,
           borderRadius: radius,
           child: SizedBox(
-            height: 44,
+            // The minimum touch target (#2605).
+            height: kMinInteractiveDimension,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(

@@ -11,6 +11,9 @@ import '../theme/quark_tokens.dart';
 /// wrapping, so a deep path never grows the bar's height on a narrow screen.
 /// It renders nothing in search mode, where there is no path to show.
 ///
+/// The home glyph and every tappable segment are buttons to a screen reader
+/// and at least 48dp square to a finger (#2603, #2605).
+///
 /// Key prefixes: `breadcrumb_up`, `breadcrumb_home`, and
 /// `breadcrumb_segment_<index>` counting from zero at the shallowest.
 ///
@@ -83,29 +86,41 @@ class FileBreadcrumbBar extends StatelessWidget {
                   // primary-colored and tappable and answer a click with
                   // nothing at all (#2010). The up button beside it has
                   // always gone quiet here for the same reason.
-                  Tooltip(
-                    message: atRoot
-                        ? 'You are in the top folder'
-                        : 'Go to the top folder',
-                    child: MouseRegion(
-                      cursor: atRoot
-                          ? SystemMouseCursors.basic
-                          : SystemMouseCursors.click,
-                      child: GestureDetector(
-                        key: const ValueKey('breadcrumb_home'),
-                        onTap: atRoot ? null : onGoHome,
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: tokens.spacingXs,
-                          ),
-                          child: Icon(
-                            QuarkIcons.home_rounded,
-                            size: 20,
-                            color: atRoot
-                                ? Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface.withValues(alpha: 0.4)
-                                : Theme.of(context).colorScheme.primary,
+                  //
+                  // Elsewhere it is a button to a screen reader, and 48dp
+                  // square to a finger around its 20px glyph (#2603, #2605).
+                  Semantics(
+                    container: true,
+                    button: !atRoot,
+                    child: Tooltip(
+                      message: atRoot
+                          ? 'You are in the top folder'
+                          : 'Go to the top folder',
+                      child: MouseRegion(
+                        cursor: atRoot
+                            ? SystemMouseCursors.basic
+                            : SystemMouseCursors.click,
+                        child: GestureDetector(
+                          key: const ValueKey('breadcrumb_home'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: atRoot ? null : onGoHome,
+                          child: Container(
+                            constraints: const BoxConstraints(
+                              minWidth: kMinInteractiveDimension,
+                              minHeight: kMinInteractiveDimension,
+                            ),
+                            child: Center(
+                              widthFactor: 1,
+                              heightFactor: 1,
+                              child: Icon(
+                                QuarkIcons.home_rounded,
+                                size: 20,
+                                color: atRoot
+                                    ? Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.4)
+                                    : Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -160,15 +175,30 @@ class FileBreadcrumbBar extends StatelessWidget {
 
       final targetPath = '/${segments.take(index + 1).join('/')}';
       children.add(
-        GestureDetector(
-          key: ValueKey('breadcrumb_segment_$index'),
-          onTap: () => onPathSelected(targetPath),
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: tokens.spacingXs),
-            child: Text(
-              segment,
-              style: style?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
+        // A button to a screen reader, and at least 48dp to a finger, however
+        // short the folder's name (#2603, #2605).
+        Semantics(
+          container: true,
+          button: true,
+          child: GestureDetector(
+            key: ValueKey('breadcrumb_segment_$index'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onPathSelected(targetPath),
+            child: Container(
+              constraints: const BoxConstraints(
+                minWidth: kMinInteractiveDimension,
+                minHeight: kMinInteractiveDimension,
+              ),
+              padding: EdgeInsets.symmetric(horizontal: tokens.spacingXs),
+              child: Center(
+                widthFactor: 1,
+                heightFactor: 1,
+                child: Text(
+                  segment,
+                  style: style?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
               ),
             ),
           ),

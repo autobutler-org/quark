@@ -111,6 +111,9 @@ class UpcomingEventRow extends StatelessWidget {
           'reminder $reminder',
       ].join(', '),
       excludeSemantics: true,
+      // Excluding the child's semantics drops its tap too, so the node
+      // carries its own, or a screen reader cannot press it (#2603).
+      onTap: onTap,
       child: InkWell(
         key: ValueKey('calendar_upcoming_${item.key}'),
         onTap: onTap,
