@@ -103,16 +103,17 @@ func readTakenAt(source io.ReadSeeker, relPath string) (sql.NullTime, error) {
 // its perceptual hash: the same value [GenerateThumbnail] reports for it.
 func DHashFile(filePath string) (string, error) {
 	var img image.Image
+	orientation := 1
 	var err error
 	if IsRawFile(filePath) {
 		img, err = RawToJPEG(filePath)
 	} else {
-		img, _, err = decodeImageFile(filePath)
+		img, orientation, _, err = decodeImageFile(filePath)
 	}
 	if err != nil {
 		return "", err
 	}
-	return DHashHex(img), nil
+	return uprightDHash(img, orientation), nil
 }
 
 // BackfillHashesParams points the backfill at the photo library.
@@ -281,18 +282,19 @@ func openBackfillPhoto(params BackfillHashesParams, photo DuplicatePhoto) (*os.F
 	return f, resolved, err
 }
 
-// decodeImageFile decodes an image file and turns it upright by its EXIF
-// orientation.
-func decodeImageFile(filePath string) (image.Image, string, error) {
+// decodeImageFile decodes an image file and reads the EXIF orientation that
+// turns it upright. The pixels are left as stored: turning a full-size image
+// is left to whoever needs it, which thumbnails do after shrinking it.
+func decodeImageFile(filePath string) (image.Image, int, string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, "", fmt.Errorf("error opening image file %s: %w", filePath, err)
+		return nil, 0, "", fmt.Errorf("error opening image file %s: %w", filePath, err)
 	}
 	defer file.Close()
 
-	img, format, err := image.Decode(file)
+	img, format, err := DecodeImage(file)
 	if err != nil {
-		return nil, "", fmt.Errorf("error decoding image file %s: %w", filePath, err)
+		return nil, 0, "", fmt.Errorf("error decoding image file %s: %w", filePath, err)
 	}
-	return orientDecodedImage(img, file, ImageFormatFromPath(filePath)), format, nil
+	return img, sourceOrientation(file, ImageFormatFromPath(filePath)), format, nil
 }

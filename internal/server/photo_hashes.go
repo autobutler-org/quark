@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -30,7 +31,7 @@ func backfillPhotoHashes(deps deputil.Dependencies) {
 		Queries:     dbConn.Queries,
 		FS:          fsys,
 		Storage:     deps.StorageService(),
-		IOSemaphore: deps.IOSemaphore(),
+		IOSemaphore: deps.IOSemaphore().For(iosemutil.Decode),
 	})
 	if err != nil {
 		log.Printf("[photo-hashes] backfill: %v", err)

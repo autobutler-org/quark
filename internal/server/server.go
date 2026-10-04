@@ -26,6 +26,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/healthutil"
+	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
 	"github.com/autobutler-org/quark/pkg/util/remoteutil"
@@ -84,7 +85,7 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 		Bus:         deps.EventBus(),
 		Storage:     deps.StorageService(),
 		Queries:     deps.Database().Queries,
-		IOSemaphore: deps.IOSemaphore(),
+		IOSemaphore: deps.IOSemaphore().For(iosemutil.Copy),
 	})
 	syncWorker.Start()
 

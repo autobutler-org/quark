@@ -139,11 +139,14 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 
 	cachedModTime := prepared.CachedModTime
 	if !prepared.Hit {
-		// Acquire IO semaphore before disk-bound thumbnail generation.
-		if sem := deps.IOSemaphore(); sem != nil {
+		// Hold the semaphore for this kind of work: a backup or a burst of
+		// video thumbnails cannot take the slots photo thumbnails need.
+		class := thumbnailutil.SemaphoreClass(fullPath, isVideo)
+		if sem := deps.IOSemaphore().For(class); sem != nil {
 			if !sem.AcquireDefault(c.Request.Context()) {
 				slog.Warn("thumbnail: IO semaphore timed out",
 					"path", filePath,
+					"class", class,
 					"available", sem.Available(),
 					"cap", sem.Cap(),
 				)
@@ -172,7 +175,7 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 		if genErr != nil && thumbnailutil.NeedsClientRender(relPath) {
 			return clientRenderNotFound(filePath, srcInfo.ModTime(), genErr)
 		}
-		if errors.Is(genErr, thumbnailutil.ErrFFmpegUnavailable) {
+		if errors.Is(genErr, thumbnailutil.ErrFFmpegUnavailable) || errors.Is(genErr, photoutil.ErrImageTooLarge) {
 			return serverutil.NotFound(genErr)
 		}
 		if genErr != nil {

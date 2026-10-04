@@ -4816,6 +4816,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "422": {
+                        "description": "Image too large to convert",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -4890,6 +4896,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Entry not found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "Image too large to convert",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

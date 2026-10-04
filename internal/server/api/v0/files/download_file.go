@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
@@ -27,6 +28,7 @@ import (
 // @Param downloadToken query string false "Token from POST /files/download-token, for a browser link that cannot send an Authorization header. It is good for one download: the first request, then retries that resume it with a Range header or start it over without one, until the file is delivered or 10 minutes pass with no request. The response is then always an attachment."
 // @Success 200 {file} file
 // @Failure 404 {object} serverutil.Response "Not Found"
+// @Failure 422 {object} serverutil.Response "Image too large to convert"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Security BearerAuth
 // @Router /files/download [get]
@@ -99,7 +101,11 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 		// path (full uncompressed image.Image decode + re-encode). Limit
 		// concurrency to prevent RAM spikes and disk thrashing under concurrent
 		// load — especially on spinning HDDs.
-		if sem := deps.IOSemaphore(); sem != nil {
+		class := iosemutil.Decode
+		if opened.Kind == fileutil.DownloadRawJPEG {
+			class = iosemutil.Raw
+		}
+		if sem := deps.IOSemaphore().For(class); sem != nil {
 			if !sem.AcquireDefault(c.Request.Context()) {
 				slog.Warn("download: IO semaphore timed out for JPEG conversion",
 					"path", opened.FullPath,
@@ -130,7 +136,7 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 
 		img, err := fileutil.DecodeImage(opened.File)
 		if err != nil {
-			return serverutil.InternalServerError(err)
+			return decodeError(err)
 		}
 
 		c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))

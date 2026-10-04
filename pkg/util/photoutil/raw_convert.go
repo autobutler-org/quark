@@ -76,7 +76,7 @@ func rawViaDcraw(filePath string) (image.Image, error) {
 		return nil, fmt.Errorf("dcraw: %w", err)
 	}
 
-	img, _, err := image.Decode(bytes.NewReader(out))
+	img, _, err := DecodeImage(bytes.NewReader(out))
 	if err != nil {
 		return nil, fmt.Errorf("decode dcraw output: %w", err)
 	}
@@ -114,7 +114,7 @@ func rawViaExiftool(filePath string) (image.Image, error) {
 	}
 	defer f.Close()
 
-	img, _, err := image.Decode(f)
+	img, _, err := DecodeImage(f)
 	if err != nil {
 		return nil, fmt.Errorf("decode exiftool output: %w", err)
 	}
@@ -146,7 +146,7 @@ func rawViaFfmpeg(filePath string) (image.Image, error) {
 	}
 	defer f.Close()
 
-	img, _, err := image.Decode(f)
+	img, _, err := DecodeImage(f)
 	if err != nil {
 		return nil, fmt.Errorf("decode ffmpeg output: %w", err)
 	}

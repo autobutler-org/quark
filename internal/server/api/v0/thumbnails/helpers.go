@@ -12,6 +12,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -50,7 +51,7 @@ func getArchiveThumbnail(
 
 	cachedModTime := prepared.CachedModTime
 	if !prepared.Hit {
-		if sem := deps.IOSemaphore(); sem != nil {
+		if sem := deps.IOSemaphore().For(iosemutil.Decode); sem != nil {
 			if !sem.AcquireDefault(c.Request.Context()) {
 				slog.Warn("thumbnail: IO semaphore timed out (archive entry)",
 					"path", filePath,
@@ -186,7 +187,8 @@ func getThumbnailVFS(
 
 	cachedModTime := prepared.CachedModTime
 	if !prepared.Hit {
-		if sem := deps.IOSemaphore(); sem != nil {
+		// Only images reach this path: RAW and video fall through.
+		if sem := deps.IOSemaphore().For(iosemutil.Decode); sem != nil {
 			if !sem.AcquireDefault(c.Request.Context()) {
 				slog.Warn("thumbnail: IO semaphore timed out (VFS path)",
 					"path", filePath,

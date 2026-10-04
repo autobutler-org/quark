@@ -7,103 +7,91 @@ import (
 	"github.com/bep/imagemeta"
 )
 
-// orientDecodedImage turns a freshly decoded image upright using the EXIF
-// orientation of the source stream it was decoded from. r is rewound to
-// the start, because the decode has already consumed it.
+// sourceOrientation is the EXIF orientation to apply to an image decoded from
+// r, read from the start of r, because the decode has already consumed it.
 //
-// It is the one place orientation is applied, because whether it *should* be
-// applied depends on the decoder: libheif — behind image.Decode for HEIC/HEIF —
-// applies the container's rotate and mirror transforms itself and hands back
-// pixels that are already upright, leaving the EXIF tag informational
-// (gen2brain/heic says so on DecodeExif). Applying the tag on top of that
-// rotates the image a second time, which is why iPhone portrait photos came
-// back sideways (#1798). Every other decoder registered here — Go's JPEG, PNG
-// and GIF, x/image's BMP, TIFF and WebP — ignores orientation, so those still
-// need it applied.
-func orientDecodedImage(img image.Image, r io.ReadSeeker, format imagemeta.ImageFormat) image.Image {
+// It is the one place that decision is made, because whether orientation
+// *should* be applied depends on the decoder: libheif — behind image.Decode
+// for HEIC/HEIF — applies the container's rotate and mirror transforms itself
+// and hands back pixels that are already upright, leaving the EXIF tag
+// informational (gen2brain/heic says so on DecodeExif). Applying the tag on top
+// of that rotates the image a second time, which is why iPhone portrait photos
+// came back sideways (#1798). Every other decoder registered here — Go's JPEG,
+// PNG and GIF, x/image's BMP, TIFF and WebP — ignores orientation, so those
+// still need it applied.
+func sourceOrientation(r io.ReadSeeker, format imagemeta.ImageFormat) int {
 	if format == 0 || format == imagemeta.HEIF {
-		return img
+		return 1
 	}
 	if _, err := r.Seek(0, io.SeekStart); err != nil {
-		return img
+		return 1
 	}
-	return applyExifOrientation(img, GetOrientation(r, format))
+	return GetOrientation(r, format)
 }
 
-// applyExifOrientation transforms an image based on the EXIF orientation value.
+// uprightThumbnail scales and center-crops a decoded source to width × height
+// as it will look once its EXIF orientation is applied, and applies the
+// orientation to the thumbnail rather than to the source (#2762). Rotating
+// the source first cost a second full-size RGBA and most of the CPU of a
+// portrait thumbnail.
+func uprightThumbnail(img image.Image, orientation int, width, height uint) (image.Image, error) {
+	if swapsAxes(orientation) {
+		width, height = height, width
+	}
+	thumb, _, err := cropToFit(img, width, height)
+	if err != nil {
+		return nil, err
+	}
+	return applyExifOrientation(thumb, orientation), nil
+}
+
+// swapsAxes reports whether an EXIF orientation turns the image a quarter,
+// so that its upright width is the source's height.
+func swapsAxes(orientation int) bool {
+	return orientation >= 5 && orientation <= 8
+}
+
+// uprightCoord maps the pixel at (x, y) of a w × h source, counted from its
+// origin, to where an EXIF orientation puts it in the upright image.
 // http://sylvana.net/jpegcrop/exif_orientation.html
-func applyExifOrientation(img image.Image, orientation int) image.Image {
+func uprightCoord(orientation, w, h, x, y int) (int, int) {
 	switch orientation {
 	case 2:
-		return flipHorizontal(img)
+		return w - 1 - x, y
 	case 3:
-		return rotate180(img)
+		return w - 1 - x, h - 1 - y
 	case 4:
-		return flipVertical(img)
+		return x, h - 1 - y
 	case 5:
-		return rotate270(flipHorizontal(img))
+		return y, x
 	case 6:
-		return rotate90(img)
+		return h - 1 - y, x
 	case 7:
-		return rotate90(flipHorizontal(img))
+		return h - 1 - y, w - 1 - x
 	case 8:
-		return rotate270(img)
-	default:
+		return y, w - 1 - x
+	}
+	return x, y
+}
+
+// applyExifOrientation transforms an image by an EXIF orientation value. The
+// result starts at the origin whatever img's bounds are, because cropToFit
+// hands back a SubImage that does not.
+func applyExifOrientation(img image.Image, orientation int) image.Image {
+	if orientation < 2 || orientation > 8 {
 		return img
 	}
-}
-
-func rotate90(img image.Image) image.Image {
-	bounds := img.Bounds()
-	newImg := image.NewRGBA(image.Rect(0, 0, bounds.Dy(), bounds.Dx()))
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			newImg.Set(bounds.Max.Y-y-1, x, img.At(x, y))
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	out := image.NewRGBA(image.Rect(0, 0, w, h))
+	if swapsAxes(orientation) {
+		out = image.NewRGBA(image.Rect(0, 0, h, w))
+	}
+	for y := range h {
+		for x := range w {
+			ux, uy := uprightCoord(orientation, w, h, x, y)
+			out.Set(ux, uy, img.At(b.Min.X+x, b.Min.Y+y))
 		}
 	}
-	return newImg
-}
-
-func rotate180(img image.Image) image.Image {
-	bounds := img.Bounds()
-	newImg := image.NewRGBA(bounds)
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			newImg.Set(bounds.Max.X-x-1, bounds.Max.Y-y-1, img.At(x, y))
-		}
-	}
-	return newImg
-}
-
-func rotate270(img image.Image) image.Image {
-	bounds := img.Bounds()
-	newImg := image.NewRGBA(image.Rect(0, 0, bounds.Dy(), bounds.Dx()))
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			newImg.Set(y, bounds.Max.X-x-1, img.At(x, y))
-		}
-	}
-	return newImg
-}
-
-func flipHorizontal(img image.Image) image.Image {
-	bounds := img.Bounds()
-	newImg := image.NewRGBA(bounds)
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			newImg.Set(bounds.Max.X-x-1, y, img.At(x, y))
-		}
-	}
-	return newImg
-}
-
-func flipVertical(img image.Image) image.Image {
-	bounds := img.Bounds()
-	newImg := image.NewRGBA(bounds)
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			newImg.Set(x, bounds.Max.Y-y-1, img.At(x, y))
-		}
-	}
-	return newImg
+	return out
 }

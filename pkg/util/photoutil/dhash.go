@@ -32,8 +32,19 @@ const (
 // The result is an 8-byte (64-bit) value. Two images with a Hamming distance
 // <= 10 are considered near-duplicates in practice.
 func DHash(img image.Image) uint64 {
-	grid := lumaGrid(img)
+	return dHashGrid(lumaGrid(img, 1))
+}
 
+// uprightDHash is the hex dHash of img as it looks once an EXIF orientation is
+// applied, bit for bit, without building the upright image: the grid cells
+// are laid over the upright picture and each source pixel is added to the
+// cell it lands in.
+func uprightDHash(img image.Image, orientation int) string {
+	return hashHex(dHashGrid(lumaGrid(img, orientation)))
+}
+
+// dHashGrid sets one bit per pair of horizontally adjacent grid cells.
+func dHashGrid(grid [dHashHeight][dHashWidth]float64) uint64 {
 	// Compute horizontal differences row by row.
 	var hash uint64
 	var bit uint64 = 1
@@ -51,7 +62,11 @@ func DHash(img image.Image) uint64 {
 // DHashHex returns the hex-encoded 16-character string representation of the
 // dHash for img (suitable for storage in SQLite and indexed string comparison).
 func DHashHex(img image.Image) string {
-	h := DHash(img)
+	return hashHex(DHash(img))
+}
+
+// hashHex is the 16-character hex spelling of a dHash.
+func hashHex(h uint64) string {
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], h)
 	return hex.EncodeToString(buf[:])
@@ -85,22 +100,31 @@ func hexToUint64(s string) (uint64, error) {
 	return binary.BigEndian.Uint64(raw), nil
 }
 
-// lumaGrid is the mean luma of img over each cell of a 9 × 8 grid. A cell
-// with no pixels, in an image narrower or shorter than the grid, takes the
-// pixel it falls on.
-func lumaGrid(img image.Image) [dHashHeight][dHashWidth]float64 {
+// lumaGrid is the mean luma over each cell of a 9 × 8 grid laid on img as an
+// EXIF orientation turns it upright. A cell with no pixels, in an image
+// narrower or shorter than the grid, takes the pixel it falls on.
+func lumaGrid(img image.Image, orientation int) [dHashHeight][dHashWidth]float64 {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
 	var grid [dHashHeight][dHashWidth]float64
 	if w == 0 || h == 0 {
 		return grid
 	}
+	uw, uh := w, h
+	if swapsAxes(orientation) {
+		uw, uh = h, w
+	}
+	if orientation != 1 && (uw < dHashWidth || uh < dHashHeight) {
+		// Some cell has no pixel and takes one by its upright position;
+		// an image this thin is cheap to turn upright instead.
+		return lumaGrid(applyExifOrientation(img, orientation), 1)
+	}
 	at := pixelLuma(img)
 	var sum, count [dHashHeight][dHashWidth]uint64
 	for y := range h {
-		gy := y * dHashHeight / h
 		for x := range w {
-			gx := x * dHashWidth / w
+			ux, uy := uprightCoord(orientation, w, h, x, y)
+			gx, gy := ux*dHashWidth/uw, uy*dHashHeight/uh
 			sum[gy][gx] += uint64(at(b.Min.X+x, b.Min.Y+y))
 			count[gy][gx]++
 		}

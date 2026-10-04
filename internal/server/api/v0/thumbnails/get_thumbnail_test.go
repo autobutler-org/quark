@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/png"
@@ -235,5 +237,43 @@ func TestGetThumbnail_PathThroughFileIsNotFound(t *testing.T) {
 
 	if w := get(engine, "/api/v0/thumbnails/notes.txt/pic.jpg?size=sm"); w.Code != http.StatusNotFound {
 		t.Errorf("got %d, want 404: %s", w.Code, w.Body.String())
+	}
+}
+
+// oversizePNGHeader is a PNG signature and an IHDR claiming 9000 × 9000 8-bit
+// grayscale, 81 MP: all a decoder reads before sizing its pixel buffer.
+func oversizePNGHeader() []byte {
+	var data bytes.Buffer
+	data.WriteString("\x89PNG\r\n\x1a\n")
+	ihdr := []byte("IHDR")
+	ihdr = binary.BigEndian.AppendUint32(ihdr, 9000)
+	ihdr = binary.BigEndian.AppendUint32(ihdr, 9000)
+	ihdr = append(ihdr, 8, 0, 0, 0, 0)
+	_ = binary.Write(&data, binary.BigEndian, uint32(len(ihdr)-4))
+	data.Write(ihdr)
+	_ = binary.Write(&data, binary.BigEndian, crc32.ChecksumIEEE(ihdr))
+	return data.Bytes()
+}
+
+// A photo over the pixel cap is refused before it is decoded (#2762), and
+// that is a photo with no thumbnail, not a server error.
+func TestGetThumbnail_ImageOverPixelCapIsNotFound(t *testing.T) {
+	for name, withVFS := range map[string]bool{"vfs": true, "storage": false} {
+		t.Run(name, func(t *testing.T) {
+			engine, dir, _ := newThumbnailEngine(t, withVFS)
+			if !withVFS {
+				var err error
+				if dir, err = storageutil.GetFilesDir(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(dir, "bomb.png"), oversizePNGHeader(), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			if w := get(engine, "/api/v0/thumbnails/bomb.png?size=sm"); w.Code != http.StatusNotFound {
+				t.Errorf("got %d, want 404: %s", w.Code, w.Body.String())
+			}
+		})
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +29,7 @@ import (
 // @Success 200 {file} binary "File content"
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 404 {object} serverutil.Response "Entry not found"
+// @Failure 422 {object} serverutil.Response "Image too large to convert"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Failure 503 {object} serverutil.Response "Server busy converting other images"
 // @Security BearerAuth
@@ -70,7 +72,7 @@ func downloadArchiveFile(c *gin.Context) *serverutil.Response {
 	if entry.Kind == fileutil.DownloadJPEG {
 		// A conversion decodes the whole image, so it shares the IO semaphore
 		// with the regular download conversions.
-		if sem := deps.IOSemaphore(); sem != nil {
+		if sem := deps.IOSemaphore().For(iosemutil.Decode); sem != nil {
 			if !sem.AcquireDefault(c.Request.Context()) {
 				slog.Warn("download-archive-file: IO semaphore timed out for JPEG conversion",
 					"archive", archivePath,
@@ -87,7 +89,7 @@ func downloadArchiveFile(c *gin.Context) *serverutil.Response {
 
 		img, err := fileutil.DecodeImage(entry.Reader)
 		if err != nil {
-			return serverutil.InternalServerError(err)
+			return decodeError(err)
 		}
 
 		c.Header("Content-Disposition", contentDisposition(c, entry.FileName, "inline; filename=\""+entry.FileName+"\""))

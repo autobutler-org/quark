@@ -7,6 +7,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/gin-gonic/gin"
 )
@@ -47,7 +48,7 @@ func startSnapshotBackup(c *gin.Context) *serverutil.Response {
 		Storage:            deps.StorageService(),
 		Store:              deps.BackupJobStore(),
 		EventBus:           deps.EventBus(),
-		IOSemaphore:        deps.IOSemaphore(),
+		IOSemaphore:        deps.IOSemaphore().For(iosemutil.Copy),
 		TargetDeviceSerial: req.TargetDeviceSerial,
 		Username:           req.Username,
 		Password:           req.Password,
