@@ -177,6 +177,14 @@ void main() {
     await pumpTile(tester, size: size, selectionMode: true, isSelected: true);
 
     expect(find.byIcon(QuarkIcons.check), findsOneWidget);
+    // The check sits on the accent, so it is the accent's foreground: white
+    // on the dark-mode blue was 2.77:1 (#2523).
+    final check = tester.widget<Icon>(find.byIcon(QuarkIcons.check));
+    expect(check.color, QuarkTokens.dark.primaryForeground);
+    expect(
+      contrastRatio(check.color!, QuarkTokens.dark.primary),
+      greaterThanOrEqualTo(4.5),
+    );
   });
 
   testBothViewports('reads as a button named for the photo', (

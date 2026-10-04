@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -37,6 +35,22 @@ void main() {
       // #1789: dark's errorForeground was red-300, a tint of the error fill it
       // sits on. At 1.98:1 the label on an enabled destructive button read as
       // the disabled gray it had just stopped being.
+      // #2523: white on sky 500 was 2.77:1 on every filled button, and the
+      // same blue as text on a light card was no better.
+      test('$name: the primary pair is legible', () {
+        final scheme = QuarkTheme.from(tokens, brightness).colorScheme;
+        expect(
+          contrastRatio(scheme.onPrimary, scheme.primary),
+          greaterThanOrEqualTo(4.5),
+        );
+        for (final surface in [tokens.background, tokens.card]) {
+          expect(
+            contrastRatio(scheme.primary, surface),
+            greaterThanOrEqualTo(4.5),
+          );
+        }
+      });
+
       test('$name: the error foreground contrasts with the error fill', () {
         final scheme = QuarkTheme.from(tokens, brightness).colorScheme;
         expect(
@@ -62,6 +76,78 @@ void main() {
           borderRadius: BorderRadius.circular(21),
           side: BorderSide(color: edited.border),
         ),
+      );
+    });
+
+    test('a theme color builds the whole theme from its tokens', () {
+      for (final themeColor in [
+        QuarkThemeColor.violet,
+        QuarkThemeColor.fromSeed(const Color(0xFF00AA55)),
+      ]) {
+        for (final (theme, brightness) in [
+          (QuarkTheme.light(themeColor: themeColor), Brightness.light),
+          (QuarkTheme.dark(themeColor: themeColor), Brightness.dark),
+        ]) {
+          final tokens = themeColor.tokensFor(brightness);
+          final classic = QuarkThemeColor.classic.tokensFor(brightness);
+          expect(theme.brightness, brightness);
+          expect(theme.extension<QuarkTokens>(), tokens);
+          expect(theme.colorScheme.primary, tokens.primary);
+          expect(theme.colorScheme.onPrimary, tokens.primaryForeground);
+          expect(theme.colorScheme.surface, tokens.card);
+          expect(theme.scaffoldBackgroundColor, tokens.background);
+          // Not just the accent: the surfaces and the chrome move too.
+          expect(tokens.background, isNot(classic.background));
+          expect(tokens.card, isNot(classic.card));
+          expect(tokens.chrome, isNot(classic.chrome));
+          expect(
+            theme.filledButtonTheme.style!.side!.resolve({
+              WidgetState.focused,
+            })!.color,
+            tokens.primary,
+          );
+          expect(
+            theme.switchTheme.thumbColor!.resolve({WidgetState.selected}),
+            tokens.primary,
+          );
+        }
+      }
+    });
+
+    test('the app bar and the drawer are chrome, with its text color', () {
+      for (final themeColor in [
+        QuarkThemeColor.classic,
+        QuarkThemeColor.pink,
+      ]) {
+        for (final brightness in Brightness.values) {
+          final tokens = themeColor.tokensFor(brightness);
+          final theme = QuarkTheme.from(tokens, brightness);
+          expect(theme.appBarTheme.backgroundColor, tokens.chrome);
+          expect(theme.appBarTheme.foregroundColor, tokens.chromeForeground);
+          expect(theme.drawerTheme.backgroundColor, tokens.chrome);
+          // Side panels in the content keep the content's recessed surface.
+          expect(theme.colorScheme.secondary, tokens.sidebar);
+        }
+      }
+    });
+
+    test('classic is the default, and the shipped tokens', () {
+      expect(
+        QuarkTheme.light(themeColor: QuarkThemeColor.classic).colorScheme,
+        QuarkTheme.light().colorScheme,
+      );
+      expect(
+        QuarkTheme.dark(themeColor: QuarkThemeColor.classic).colorScheme,
+        QuarkTheme.dark().colorScheme,
+      );
+      // What the app bar and the drawer were before they had a token.
+      expect(
+        QuarkTheme.light().appBarTheme.backgroundColor,
+        QuarkTokens.light.sidebar,
+      );
+      expect(
+        QuarkTheme.dark().appBarTheme.foregroundColor,
+        QuarkTokens.dark.foreground,
       );
     });
 
@@ -120,11 +206,4 @@ void main() {
       });
     }
   });
-}
-
-/// The WCAG contrast ratio between [a] and [b], from 1.0 to 21.0.
-double contrastRatio(Color a, Color b) {
-  final lighter = math.max(a.computeLuminance(), b.computeLuminance());
-  final darker = math.min(a.computeLuminance(), b.computeLuminance());
-  return (lighter + 0.05) / (darker + 0.05);
 }

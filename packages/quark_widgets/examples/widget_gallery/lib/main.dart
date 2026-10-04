@@ -29,6 +29,7 @@ class WidgetGalleryApp extends StatefulWidget {
 class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
   Brightness _brightness = Brightness.dark;
   QuarkTokens _tokens = QuarkTokens.dark;
+  QuarkThemeColor _themeColor = QuarkThemeColor.classic;
   GalleryEntry _selected = registry.first;
   String _filter = '';
   final List<String> _events = [];
@@ -45,11 +46,18 @@ class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
       _brightness = _brightness == Brightness.dark
           ? Brightness.light
           : Brightness.dark;
-      // Start each side from its shipped token set rather than carrying dark
-      // colors into the light theme.
-      _tokens = _brightness == Brightness.dark
-          ? QuarkTokens.dark
-          : QuarkTokens.light;
+      // Start each side from the theme color's own token set rather than
+      // carrying dark colors into the light theme.
+      _tokens = _themeColor.tokensFor(_brightness);
+    });
+  }
+
+  /// Picking a theme color replaces the whole token set, hand edits included,
+  /// the way `QuarkTheme.light` and `QuarkTheme.dark` build from one.
+  void _setThemeColor(QuarkThemeColor themeColor) {
+    setState(() {
+      _themeColor = themeColor;
+      _tokens = themeColor.tokensFor(_brightness);
     });
   }
 
@@ -72,7 +80,9 @@ class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
         themePanel: GalleryThemePanel(
           tokens: _tokens,
           brightness: _brightness,
+          themeColor: _themeColor,
           onToggleBrightness: _toggleBrightness,
+          onThemeColorChanged: _setThemeColor,
           onTokensChanged: (tokens) => setState(() => _tokens = tokens),
         ),
         events: GalleryEventsPanel(

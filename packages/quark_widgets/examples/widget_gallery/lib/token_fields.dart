@@ -69,6 +69,36 @@ final List<ColorField> colorFields = [
     read: (t) => t.primaryForeground,
     write: (t, v) => t.copyWith(primaryForeground: v),
   ),
+  (
+    name: 'chrome',
+    read: (t) => t.chrome,
+    write: (t, v) => t.copyWith(chrome: v),
+  ),
+  (
+    name: 'chromeBorder',
+    read: (t) => t.chromeBorder,
+    write: (t, v) => t.copyWith(chromeBorder: v),
+  ),
+  (
+    name: 'chromeForeground',
+    read: (t) => t.chromeForeground,
+    write: (t, v) => t.copyWith(chromeForeground: v),
+  ),
+  (
+    name: 'chromeSecondaryForeground',
+    read: (t) => t.chromeSecondaryForeground,
+    write: (t, v) => t.copyWith(chromeSecondaryForeground: v),
+  ),
+  (
+    name: 'chromeMutedForeground',
+    read: (t) => t.chromeMutedForeground,
+    write: (t, v) => t.copyWith(chromeMutedForeground: v),
+  ),
+  (
+    name: 'chromePrimary',
+    read: (t) => t.chromePrimary,
+    write: (t, v) => t.copyWith(chromePrimary: v),
+  ),
   (name: 'error', read: (t) => t.error, write: (t, v) => t.copyWith(error: v)),
   (
     name: 'errorForeground',

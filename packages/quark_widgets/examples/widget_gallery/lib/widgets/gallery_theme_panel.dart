@@ -11,7 +11,9 @@ class GalleryThemePanel extends StatelessWidget {
   const GalleryThemePanel({
     required this.tokens,
     required this.brightness,
+    required this.themeColor,
     required this.onToggleBrightness,
+    required this.onThemeColorChanged,
     required this.onTokensChanged,
     super.key,
   });
@@ -21,6 +23,12 @@ class GalleryThemePanel extends StatelessWidget {
 
   /// The brightness the gallery is showing, driving the dark switch.
   final Brightness brightness;
+
+  /// The theme color the gallery's tokens were derived from.
+  final QuarkThemeColor themeColor;
+
+  /// Called with the theme color picked. Its token set replaces [tokens].
+  final ValueChanged<QuarkThemeColor> onThemeColorChanged;
 
   /// Called when the dark switch is flipped.
   final VoidCallback onToggleBrightness;
@@ -44,11 +52,17 @@ class GalleryThemePanel extends StatelessWidget {
           value: brightness == Brightness.dark,
           onChanged: (_) => onToggleBrightness(),
         ),
+        QuarkThemeColorPicker(
+          value: themeColor,
+          onChanged: onThemeColorChanged,
+        ),
         SizedBox(height: themeTokens.spacingSm),
         for (final field in colorFields)
           HexField(
             // Rebuild the controllers when the token set is swapped wholesale.
-            key: ValueKey('${field.name}-$brightness'),
+            key: ValueKey(
+              '${field.name}-$brightness-${themeColor.storageValue}',
+            ),
             name: field.name,
             value: field.read(tokens),
             onSubmitted: (color) => onTokensChanged(field.write(tokens, color)),

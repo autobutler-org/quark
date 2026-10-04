@@ -3,6 +3,8 @@ import 'dart:ui' show lerpDouble;
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
+import '../layout/quark_chrome.dart';
+
 /// The design tokens every Quark widget draws from: colors, corner radii, and
 /// a spacing scale.
 ///
@@ -21,7 +23,9 @@ import 'package:flutter/material.dart';
 /// );
 /// ```
 ///
-/// [QuarkTokens.dark] and [QuarkTokens.light] are the two sets the app ships.
+/// [QuarkTokens.dark] and [QuarkTokens.light] are the two sets the app ships,
+/// and what the `classic` theme color yields. Every other theme color derives
+/// a set of its own; see `QuarkThemeColor.tokensFor`.
 @immutable
 class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// Creates a token set. Every value is required so a new token cannot be
@@ -38,6 +42,12 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     required this.cardForeground,
     required this.primary,
     required this.primaryForeground,
+    required this.chrome,
+    required this.chromeBorder,
+    required this.chromeForeground,
+    required this.chromeSecondaryForeground,
+    required this.chromeMutedForeground,
+    required this.chromePrimary,
     required this.error,
     required this.errorForeground,
     required this.warning,
@@ -59,7 +69,10 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// The surface color for cards, dialogs, menus, and snack bars.
   final Color card;
 
-  /// The surface color for the app bar, the drawer, and side panels.
+  /// The recessed content surface: side panels, list headers, and strips.
+  ///
+  /// The app bar and the drawer were drawn in it too, and still match it in
+  /// the shipped sets, but they read [chrome] now.
   final Color sidebar;
 
   /// Hairlines: outlines, dividers, and unfocused input borders.
@@ -81,10 +94,39 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   final Color cardForeground;
 
   /// The accent color: filled buttons, focus rings, selection, and links.
+  ///
+  /// Nobody picks it. A `QuarkThemeColor` derives it from the picked hue so
+  /// that it stands out from the content surfaces and from [chrome] alike.
   final Color primary;
 
   /// Text and icons drawn on top of [primary].
   final Color primaryForeground;
+
+  /// The surface of the chrome: the app bar and the navigation drawer.
+  ///
+  /// The shipped sets give it the same color as [sidebar]. A derived theme
+  /// color makes it clearly colored, which is why text on it has tokens of
+  /// its own; [onChrome] swaps them in for a widget that sits on it.
+  final Color chrome;
+
+  /// Hairlines on [chrome]: the bar's edge, and the outline of a bar button.
+  final Color chromeBorder;
+
+  /// Primary text on [chrome], such as the page name beside the brand badge.
+  final Color chromeForeground;
+
+  /// Secondary text and icons on [chrome]: bar buttons and their labels.
+  final Color chromeSecondaryForeground;
+
+  /// De-emphasized text on [chrome]: hints and disabled bar buttons.
+  final Color chromeMutedForeground;
+
+  /// The accent as drawn on [chrome]: the brand badge, a selected chip, the
+  /// active drawer row. [primaryForeground] is legible on it too.
+  ///
+  /// The shipped sets give it the color of [primary]. On same-hue chrome a
+  /// derived theme pushes it further than [primary] has to go.
+  final Color chromePrimary;
 
   /// The error accent for destructive actions and failure states.
   final Color error;
@@ -127,8 +169,9 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   final double spacingXl;
 
   /// The colors a person can give a calendar event, in the order the picker
-  /// offers them. The first is [primary], every event's default. An event
-  /// stores its index, so reordering these recolors saved events.
+  /// offers them. The first is every event's default: a blue of its own, which
+  /// does not follow the theme color. An event stores its index, so reordering
+  /// these recolors saved events.
   final List<Color> eventColors;
 
   /// The dark token set, and Quark's default appearance.
@@ -143,7 +186,13 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     foreground: Color(0xFFE2E8F0),
     cardForeground: Color(0xFFE2E8F0),
     primary: Color(0xFF0EA5E9),
-    primaryForeground: Color(0xFFFFFFFF),
+    primaryForeground: Color(0xFF0F172A),
+    chrome: Color(0xFF0C1220),
+    chromeBorder: Color(0xFF1E293B),
+    chromeForeground: Color(0xFFE2E8F0),
+    chromeSecondaryForeground: Color(0xFF94A3B8),
+    chromeMutedForeground: Color(0xFF475569),
+    chromePrimary: Color(0xFF0EA5E9),
     error: Color(0xFFEF4444),
     errorForeground: Color(0xFFFFFFFF),
     warning: Color(0xFFF59E0B),
@@ -177,8 +226,14 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     secondaryForeground: Color(0xFF475569),
     foreground: Color(0xFF0F172A),
     cardForeground: Color(0xFF0F172A),
-    primary: Color(0xFF0EA5E9),
+    primary: Color(0xFF0369A1),
     primaryForeground: Color(0xFFFFFFFF),
+    chrome: Color(0xFFF1F5F9),
+    chromeBorder: Color(0xFFE2E8F0),
+    chromeForeground: Color(0xFF0F172A),
+    chromeSecondaryForeground: Color(0xFF475569),
+    chromeMutedForeground: Color(0xFF64748B),
+    chromePrimary: Color(0xFF0369A1),
     error: Color(0xFFDC2626),
     errorForeground: Color(0xFFFFFFFF),
     warning: Color(0xFFF59E0B),
@@ -204,8 +259,29 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// The tokens attached to the nearest [Theme], falling back to [dark] when a
   /// widget is rendered under a bare [ThemeData] (a test, or a host app that
   /// has not adopted [QuarkTheme]).
-  static QuarkTokens of(BuildContext context) =>
-      Theme.of(context).extension<QuarkTokens>() ?? dark;
+  ///
+  /// Under a [QuarkChrome] the result is [onChrome], so a widget placed in the
+  /// app bar or the drawer reads chrome colors without knowing where it is.
+  static QuarkTokens of(BuildContext context) {
+    final tokens = Theme.of(context).extension<QuarkTokens>() ?? dark;
+    return QuarkChrome.isOn(context) ? tokens.onChrome : tokens;
+  }
+
+  /// These tokens as a widget sitting on [chrome] should read them: text,
+  /// hairlines and the accent swapped for their chrome counterparts,
+  /// everything else as it is.
+  ///
+  /// The surfaces stay, [input] included: a bar button keeps the content's
+  /// input fill, and chrome text is legible on it as well. For the shipped
+  /// sets this is the same set, so the classic look does not move.
+  QuarkTokens get onChrome => copyWith(
+    border: chromeBorder,
+    foreground: chromeForeground,
+    cardForeground: chromeForeground,
+    secondaryForeground: chromeSecondaryForeground,
+    mutedForeground: chromeMutedForeground,
+    primary: chromePrimary,
+  );
 
   @override
   QuarkTokens copyWith({
@@ -220,6 +296,12 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     Color? cardForeground,
     Color? primary,
     Color? primaryForeground,
+    Color? chrome,
+    Color? chromeBorder,
+    Color? chromeForeground,
+    Color? chromeSecondaryForeground,
+    Color? chromeMutedForeground,
+    Color? chromePrimary,
     Color? error,
     Color? errorForeground,
     Color? warning,
@@ -246,6 +328,14 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
       cardForeground: cardForeground ?? this.cardForeground,
       primary: primary ?? this.primary,
       primaryForeground: primaryForeground ?? this.primaryForeground,
+      chrome: chrome ?? this.chrome,
+      chromeBorder: chromeBorder ?? this.chromeBorder,
+      chromeForeground: chromeForeground ?? this.chromeForeground,
+      chromeSecondaryForeground:
+          chromeSecondaryForeground ?? this.chromeSecondaryForeground,
+      chromeMutedForeground:
+          chromeMutedForeground ?? this.chromeMutedForeground,
+      chromePrimary: chromePrimary ?? this.chromePrimary,
       error: error ?? this.error,
       errorForeground: errorForeground ?? this.errorForeground,
       warning: warning ?? this.warning,
@@ -285,6 +375,24 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
         other.primaryForeground,
         t,
       )!,
+      chrome: Color.lerp(chrome, other.chrome, t)!,
+      chromeBorder: Color.lerp(chromeBorder, other.chromeBorder, t)!,
+      chromeForeground: Color.lerp(
+        chromeForeground,
+        other.chromeForeground,
+        t,
+      )!,
+      chromeSecondaryForeground: Color.lerp(
+        chromeSecondaryForeground,
+        other.chromeSecondaryForeground,
+        t,
+      )!,
+      chromeMutedForeground: Color.lerp(
+        chromeMutedForeground,
+        other.chromeMutedForeground,
+        t,
+      )!,
+      chromePrimary: Color.lerp(chromePrimary, other.chromePrimary, t)!,
       error: Color.lerp(error, other.error, t)!,
       errorForeground: Color.lerp(errorForeground, other.errorForeground, t)!,
       warning: Color.lerp(warning, other.warning, t)!,
@@ -323,6 +431,12 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
         other.cardForeground == cardForeground &&
         other.primary == primary &&
         other.primaryForeground == primaryForeground &&
+        other.chrome == chrome &&
+        other.chromeBorder == chromeBorder &&
+        other.chromeForeground == chromeForeground &&
+        other.chromeSecondaryForeground == chromeSecondaryForeground &&
+        other.chromeMutedForeground == chromeMutedForeground &&
+        other.chromePrimary == chromePrimary &&
         other.error == error &&
         other.errorForeground == errorForeground &&
         other.warning == warning &&
@@ -351,6 +465,12 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     cardForeground,
     primary,
     primaryForeground,
+    chrome,
+    chromeBorder,
+    chromeForeground,
+    chromeSecondaryForeground,
+    chromeMutedForeground,
+    chromePrimary,
     error,
     errorForeground,
     warning,

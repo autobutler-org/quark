@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -360,6 +361,119 @@ void main() {
     }
     expect(tester.takeException(), isNull);
   });
+
+  // #2740: the drawer is colored chrome under a derived theme color.
+  for (final brightness in Brightness.values) {
+    testBothViewports('${brightness.name}: the rows wear the chrome colors', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        QuarkDrawer(
+          activeSection: QuarkDrawerSection.photos,
+          onTapFiles: () {},
+          onTapPhotos: () {},
+          onTapCalendar: () {},
+        ),
+        size: size,
+        brightness: brightness,
+        themeColor: QuarkThemeColor.magenta,
+      );
+
+      final tokens = QuarkThemeColor.magenta.tokensFor(brightness);
+      Color textColor(String label) => tester
+          .renderObject<RenderParagraph>(find.text(label))
+          .text
+          .style!
+          .color!;
+      Color iconColor(String key) => IconTheme.of(
+        tester.element(
+          find.descendant(
+            of: find.byKey(ValueKey(key)),
+            matching: find.byType(Icon),
+          ),
+        ),
+      ).color!;
+
+      expect(
+        tester
+            .widget<Material>(
+              find
+                  .descendant(
+                    of: find.byType(Drawer),
+                    matching: find.byType(Material),
+                  )
+                  .first,
+            )
+            .color,
+        tokens.chrome,
+      );
+      expect(textColor('Files'), tokens.chromeForeground);
+      expect(iconColor('drawer_files'), tokens.chromeSecondaryForeground);
+      // The active row and the beta badge are the accent as chrome draws it.
+      expect(textColor('Photos'), tokens.chromePrimary);
+      expect(iconColor('drawer_photos'), tokens.chromePrimary);
+      expect(textColor('Beta'), tokens.chromePrimary);
+      final header = tester.widget<DrawerHeader>(find.byType(DrawerHeader));
+      expect((header.decoration! as BoxDecoration).color, tokens.chromePrimary);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  // The header is filled with the accent as chrome draws it, so everything
+  // on it has to be the accent's foreground, whichever way that flipped.
+  for (final themeColor in [QuarkThemeColor.blue, QuarkThemeColor.lime]) {
+    for (final brightness in Brightness.values) {
+      testBothViewports(
+        '${themeColor.name} ${brightness.name}: the header text is legible',
+        (tester, size) async {
+          await pumpAt(
+            tester,
+            QuarkDrawer(
+              activeSection: QuarkDrawerSection.files,
+              hosts: const [
+                HostItem(name: 'Home Quark', address: 'quark.local'),
+                HostItem(name: 'Office', address: 'office.local'),
+              ],
+              activeHostIndex: 0,
+              onSelectHost: (_) {},
+              onTapFiles: () {},
+            ),
+            size: size,
+            brightness: brightness,
+            themeColor: themeColor,
+          );
+
+          final tokens = themeColor.tokensFor(brightness);
+          final header = tester.widget<DrawerHeader>(find.byType(DrawerHeader));
+          final fill = (header.decoration! as BoxDecoration).color!;
+          expect(fill, tokens.chromePrimary);
+
+          final inHeader = find.descendant(
+            of: find.byType(DrawerHeader),
+            matching: find.byType(RichText),
+          );
+          final paragraphs = tester.renderObjectList<RenderParagraph>(inHeader);
+          // "Quark", the host name, its address, and the switcher glyph.
+          expect(paragraphs, hasLength(4));
+          for (final paragraph in paragraphs) {
+            // Muted lines are the foreground at reduced alpha, so measure
+            // what is painted: the color over the fill.
+            final painted = Color.alphaBlend(
+              paragraph.text.style!.color!,
+              fill,
+            );
+            expect(
+              contrastRatio(painted, fill),
+              greaterThanOrEqualTo(4.5),
+              reason: '"${paragraph.text.toPlainText()}"',
+            );
+          }
+        },
+      );
+    }
+  }
 }
 
 void _ignore(int _) {}

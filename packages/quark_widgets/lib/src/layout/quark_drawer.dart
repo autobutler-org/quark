@@ -6,6 +6,7 @@ import 'package:quark_icons/quark_icons.dart';
 import '../core/quark_beta_badge.dart';
 import '../models/host_item.dart';
 import '../theme/quark_tokens.dart';
+import 'quark_chrome.dart';
 import 'quark_drawer/quark_drawer_header.dart';
 
 /// The top-level destinations in [QuarkDrawer], one per main page.
@@ -160,7 +161,8 @@ class QuarkDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    // The drawer is chrome: its rows wear the chrome's text colors.
+    final tokens = QuarkTokens.of(context).onChrome;
     final rows = [
       (
         QuarkDrawerSection.files,
@@ -215,37 +217,44 @@ class QuarkDrawer extends StatelessWidget {
       ),
     ];
 
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          DrawerHeader(
-            decoration: BoxDecoration(color: theme.colorScheme.primary),
+    return QuarkChrome(
+      child: ListTileTheme.merge(
+        textColor: tokens.foreground,
+        iconColor: tokens.secondaryForeground,
+        selectedColor: tokens.primary,
+        child: Drawer(
+          child: ListView(
             padding: EdgeInsets.zero,
-            child: QuarkDrawerHeader(
-              hosts: hosts,
-              activeHostIndex: activeHostIndex,
-              onSelectHost: onSelectHost,
-            ),
-          ),
-          for (final (section, icon, label, onTap) in rows)
-            if (onTap != null)
-              ListTile(
-                key: ValueKey('drawer_${section.name}'),
-                leading: Icon(icon),
-                title: _betaSections.contains(section)
-                    ? Row(
-                        children: [
-                          Flexible(child: Text(label)),
-                          SizedBox(width: QuarkTokens.of(context).spacingSm),
-                          const QuarkBetaBadge(),
-                        ],
-                      )
-                    : Text(label),
-                selected: activeSection == section,
-                onTap: onTap,
+            children: [
+              DrawerHeader(
+                decoration: BoxDecoration(color: tokens.primary),
+                padding: EdgeInsets.zero,
+                child: QuarkDrawerHeader(
+                  hosts: hosts,
+                  activeHostIndex: activeHostIndex,
+                  onSelectHost: onSelectHost,
+                ),
               ),
-        ],
+              for (final (section, icon, label, onTap) in rows)
+                if (onTap != null)
+                  ListTile(
+                    key: ValueKey('drawer_${section.name}'),
+                    leading: Icon(icon),
+                    title: _betaSections.contains(section)
+                        ? Row(
+                            children: [
+                              Flexible(child: Text(label)),
+                              SizedBox(width: tokens.spacingSm),
+                              const QuarkBetaBadge(),
+                            ],
+                          )
+                        : Text(label),
+                    selected: activeSection == section,
+                    onTap: onTap,
+                  ),
+            ],
+          ),
+        ),
       ),
     );
   }
