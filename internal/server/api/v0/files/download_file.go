@@ -30,6 +30,8 @@ import (
 // @Failure 404 {object} serverutil.Response "Not Found"
 // @Failure 422 {object} serverutil.Response "Image too large to convert"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
+// @Failure 503 {object} serverutil.Response "Every folder zip slot is busy, or no JPEG conversion slot came free; retry after the Retry-After header"
+// @Header 503 {integer} Retry-After "seconds to wait before retrying"
 // @Security BearerAuth
 // @Router /files/download [get]
 func downloadFile(c *gin.Context) *serverutil.Response {
@@ -86,6 +88,11 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 
 	switch opened.Kind {
 	case fileutil.DownloadFolder:
+		release, ok := acquireZipSlot(c, deps, opened.FullPath)
+		if !ok {
+			return nil
+		}
+		defer release()
 		// Before the first byte of the archive: writing the zip commits the
 		// headers, so a Content-Disposition set afterwards never reached the
 		// client and the download landed with no .zip extension.

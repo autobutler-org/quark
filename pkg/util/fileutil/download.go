@@ -213,10 +213,14 @@ func downloadContentType(fileType storageutil.FileType, ext string) string {
 
 // ZipDir streams a zip of the directory at fullPath onto w, every entry under a
 // top-level folder named root, so extracting the archive makes that folder
-// rather than spilling its contents into the current directory.
+// rather than spilling its contents into the current directory. Each entry is
+// stored or deflated as ZipMethod says. Nothing is buffered beyond the zip
+// writer's own: the archive goes onto w as it is built, and entries over
+// 4 GiB, or archives past 65,535 entries, get zip64 records.
 func ZipDir(w io.Writer, fullPath string, root string) error {
-	zipWriter := zip.NewWriter(w)
+	zipWriter := newFolderZipWriter(w)
 	defer zipWriter.Close()
+	buf := make([]byte, zipCopyBuffer)
 	// zip.Writer.AddFS, with each name joined onto root.
 	fsys := os.DirFS(fullPath)
 	err := fs.WalkDir(fsys, ".", func(name string, d fs.DirEntry, err error) error {
@@ -235,10 +239,11 @@ func ZipDir(w io.Writer, fullPath string, root string) error {
 			return err
 		}
 		h.Name = path.Join(root, name)
+		h.Method = zip.Store
 		if d.IsDir() {
 			h.Name += "/"
 		} else {
-			h.Method = zip.Deflate
+			h.Method = ZipMethod(name, "", info.Size())
 		}
 		zw, err := zipWriter.CreateHeader(h)
 		if err != nil || d.IsDir() {
@@ -249,7 +254,7 @@ func ZipDir(w io.Writer, fullPath string, root string) error {
 			return err
 		}
 		defer f.Close()
-		_, err = io.Copy(zw, f)
+		_, err = copyEntry(zw, f, buf)
 		return err
 	})
 	if err != nil {
@@ -267,9 +272,13 @@ func ZipDir(w io.Writer, fullPath string, root string) error {
 // symlinked folder, but it does list a symlinked file, and opening it follows
 // the link — so a link inside a shared folder would otherwise carry whatever
 // it points at into the archive (#1903).
+//
+// Each entry is stored or deflated as ZipMethod says, and the archive is
+// streamed as ZipDir's is.
 func ZipVFSDir(ctx context.Context, fsys vfs.VFS, basePath string, root string, access accessutil.Access, w io.Writer) error {
-	zipWriter := zip.NewWriter(w)
+	zipWriter := newFolderZipWriter(w)
 	defer zipWriter.Close()
+	buf := make([]byte, zipCopyBuffer)
 
 	// Open resolves on the internal device only, so the listing is held to it
 	// too (the empty serial). Unfiltered, it walked every device: a file only
@@ -290,12 +299,17 @@ func ZipVFSDir(ctx context.Context, fsys vfs.VFS, basePath string, root string, 
 		// Compute a relative path inside the zip (trim the base filePath prefix).
 		rel := strings.TrimPrefix(entry.Path, basePath)
 		rel = path.Join(root, strings.TrimPrefix(rel, "/"))
-		zw, err := zipWriter.Create(rel)
+		zw, err := zipWriter.CreateHeader(&zip.FileHeader{
+			Name:               rel,
+			Method:             ZipMethod(entry.Name, entry.MimeType, entry.Size),
+			Modified:           entry.ModTime,
+			UncompressedSize64: uint64(max(entry.Size, 0)),
+		})
 		if err != nil {
 			r.Close()
 			return fmt.Errorf("failed to create zip entry %s: %w", rel, err)
 		}
-		if _, err := io.Copy(zw, r); err != nil {
+		if _, err := copyEntry(zw, r, buf); err != nil {
 			r.Close()
 			return fmt.Errorf("failed to write zip entry %s: %w", rel, err)
 		}

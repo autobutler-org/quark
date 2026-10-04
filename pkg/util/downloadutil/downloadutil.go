@@ -12,13 +12,19 @@
 // OS's send buffers before the client goes away looks complete, so its retry
 // gets a 401. Tokens live in memory, so a restart ends every download in
 // progress.
+//
+// It also caps how many folder zips run at once ([ZipSlots], #2757), since
+// each one can pin a core.
 package downloadutil
 
 import (
 	"errors"
 	"net/http"
+	"runtime"
 	"sync"
 	"time"
+
+	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 )
 
 // DefaultTokenTTL is how long a token waits to be used. It only has to cover
@@ -106,4 +112,48 @@ type ReleaseTokenParams struct {
 	// through a response that cannot be resumed, such as a zipped folder. The
 	// token then survives, so a retry starts the download over.
 	Interrupted bool
+}
+
+// DefaultZipWait is how long a folder download waits for a zip slot before it
+// is answered 503 with a Retry-After.
+const DefaultZipWait = 10 * time.Second
+
+// ZipRetryAfter is the Retry-After, in seconds, a folder download turned away
+// for want of a slot is sent.
+const ZipRetryAfter = "5"
+
+// DefaultZipSlots is how many folder zips run at once: half the cores, at
+// least one. A zip that deflates pins a core (~62 MiB/s on an M2, about a
+// third of that on an A76, #2757), so half leaves the rest for thumbnails and
+// every other request. Entries already compressed are stored, which makes
+// most photo and video zips disk-bound, but the cap holds either way.
+func DefaultZipSlots() int {
+	return max(1, runtime.NumCPU()/2)
+}
+
+// ZipSlotsParams sizes a ZipSlots. Zero values take the defaults.
+type ZipSlotsParams struct {
+	// Slots is how many zips may run at once; DefaultZipSlots when zero.
+	Slots int
+	// Wait is how long Acquire waits for a slot; DefaultZipWait when zero.
+	Wait time.Duration
+}
+
+// ZipSlots caps how many folder zips are built at once. The archive itself is
+// still streamed straight onto the response; this bounds only how many
+// streams run side by side.
+type ZipSlots struct {
+	sem  *iosemutil.Semaphore
+	wait time.Duration
+}
+
+// NewZipSlots returns a ZipSlots sized by params.
+func NewZipSlots(params ZipSlotsParams) *ZipSlots {
+	if params.Slots < 1 {
+		params.Slots = DefaultZipSlots()
+	}
+	if params.Wait <= 0 {
+		params.Wait = DefaultZipWait
+	}
+	return &ZipSlots{sem: iosemutil.NewWithConcurrency(params.Slots), wait: params.Wait}
 }

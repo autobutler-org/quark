@@ -27,6 +27,7 @@ type dependencies struct {
 
 	database       *db.DatabaseSqlc
 	downloadTokens *downloadutil.TokenStore
+	zipSlots       *downloadutil.ZipSlots
 	eventBus       *eventbus.Bus
 	fileIndex      *storageutil.FileIndex
 	healthDatabase *db.DatabaseRaw
@@ -157,6 +158,15 @@ func (d *dependencies) DownloadTokens() *downloadutil.TokenStore {
 
 func (d *dependencies) WithDownloadTokens(store *downloadutil.TokenStore) Dependencies {
 	d.downloadTokens = store
+	return d
+}
+
+func (d *dependencies) ZipSlots() *downloadutil.ZipSlots {
+	return d.zipSlots
+}
+
+func (d *dependencies) WithZipSlots(slots *downloadutil.ZipSlots) Dependencies {
+	d.zipSlots = slots
 	return d
 }
 

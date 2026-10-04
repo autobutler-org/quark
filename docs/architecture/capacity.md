@@ -160,7 +160,7 @@ cover ffmpeg children too: the kernel throttles and then kills inside the servic
   instead of 24. A library of millions of files still costs tens of MB and a scan per search; an on-disk index
   is the step past that.
 - **Uncached HEIC view conversion** goes away with #2378.
-- **Deflate on already-compressed zips, uncapped** (#2757); **bcrypt on every Basic-auth request** (#2765).
+- **bcrypt on every Basic-auth request** (#2765).
 
 ## Fixed in this audit
 
@@ -172,6 +172,7 @@ cover ffmpeg children too: the kernel throttles and then kills inside the servic
 | #2752 | RAW converters ran without a timeout while holding an IO-semaphore slot | `TestRawViaDcraw_HungToolReturns` |
 | #2755 | the server and the tailnet proxy had no header or idle timeout and spoke only HTTP/1.1; the proxy kept 2 idle loopback connections | `TestNewHTTPServer_ClosesStalledHeaders`, `TestNewHTTPServer_ClosesStalledTLSHandshake`, `TestNewHTTPServer_ClosesIdleKeepAlive`, `TestNewHTTPServer_SlowBodyOutlivesHeaderTimeout`, `TestNewHTTPServer_OffersHTTP2OverTLS`, `TestNewProxy_KeepsEnoughIdleConnections` |
 | #2756 | `connected_devices` and `jobs` grew a row per peer and per job and were never pruned; upload sessions had no count cap; the access log was appended to `/var/log/quark.app` and never rotated, so it now goes to the journal | `TestRecord_NewPeersNeverGrowPastTheCap`, `TestPrune_DropsPeersNotSeenForTheMaxAge`, `TestPruneKeepsEachAccountsNewestFinishedJobs`, `TestPruneDropsOldFinishedJobsButNeverActiveOnes`, `TestListFiltersByOwner`, `TestCreateSessionCapsSessionsPerUser`, `TestCreateSessionCapsSessionsOverall`, `TestExpiredSessionsDoNotCountTowardTheCap`, `TestOpenUploadSessionPastTheCapIsTooManyRequests`, `TestSystemdUnit_LogsToTheJournal` |
+| #2757 | folder zips deflated every entry, JPEG and MP4 included, at the default level, and nothing capped how many ran at once | `TestZipMethod`, `TestZipDirsStoreCompressedEntries`, `TestZipDirStreamsManySmallFiles`, `TestZipDirWritesZip64ForAnEntryOver4GiB`, `TestZipSlots_WaitsThenGivesUp`, `TestZipSlots_ContextEndsTheWait`, `TestDownloadFolder_BusyZipSlotsAnswer503`, `TestDownloadFolder_CanceledZipReleasesItsSlot` |
 | #2761 | nothing set a Go memory limit or a cgroup ceiling; the OOM killer was the only backstop | `TestApplyGoLimit_DerivesFromRAM`, `TestApplyGoLimit_EnvWins`, `TestInstallDropIn_WritesCeilingAndReloads`, `TestInstallDropIn_Idempotent`, `TestInstallDropIn_FollowsTheRAM`, `TestInstallDropIn_SkipsWithoutSystemd` |
 | #2762 | images were decoded with no pixel cap, a thumbnail's EXIF rotation copied the full-size image, and backup copies held the same 8 slots as decodes | `TestDecodeImage_RefusesPixelsOverTheCap`, `TestThumbnailPaths_RefusePixelsOverTheCap`, `TestGetThumbnail_ImageOverPixelCapIsNotFound`, `TestUprightThumbnailMatchesRotatingFirst`, `TestUprightThumbnailDoesNotCopyTheSource`, `TestUprightDHashMatchesRotatedImage`, `TestOrientationTransformsHandleSubImages`, `TestNew_ClassesAreIsolated`, `TestClassSlots_FollowCPUs` |
 
@@ -189,7 +190,7 @@ other race; the existing tests rarely run these paths concurrently, which is why
 3. **Never drop events for internal subscribers** (#2753). A correctness bug at any N.
 4. **Replace whole-tree walks with an indexed, paged query, and give filename search one** (#2759; #2760 cut the
    index to ~30 B a file). These set the limit past ~1,000 accounts, by file count rather than by request rate.
-5. **Bound folder zips** (#2757) and drop server-side HEIC conversion (#2378).
+5. **Drop server-side HEIC conversion** (#2378). Folder zips are bounded since #2757: compressed formats are stored and at most half the cores' worth run at once.
 6. **Stop running bcrypt per Basic-auth request** (#2765).
 7. **Measure on a board.** The last open item of #2507: run the harness against an A55 board before and after (1)
    (`go test -tags stress ./internal/server/stress/` with `QUARK_BASE_URL`, `QUARK_USER` and `QUARK_PASSWORD`
