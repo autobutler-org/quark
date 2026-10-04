@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
+	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
@@ -91,7 +92,8 @@ func startProxyLocked(localPort int, localTLS bool) error {
 	}
 	rp := newProxy(target, localTLS)
 	go func() {
-		if err := http.Serve(ln, rp); err != nil {
+		srv := serverutil.NewHTTPServer(serverutil.NewHTTPServerParams{Handler: rp})
+		if err := srv.Serve(ln); err != nil {
 			log.Printf("[tsnet] proxy stopped: %v", err)
 		}
 	}()
@@ -317,16 +319,22 @@ func newProxy(target *url.URL, localTLS bool) *httputil.ReverseProxy {
 			r.SetXForwarded()
 		},
 	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConnsPerHost = proxyMaxIdleConnsPerHost
 	if localTLS {
 		// The quark presents its own self-signed cert, and this hop is a
 		// loopback connection to that same process — there is no third party to
 		// authenticate, and no CA that could vouch for the cert.
-		rp.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
+	rp.Transport = transport
 	return rp
 }
+
+// proxyMaxIdleConnsPerHost is how many idle loopback connections the proxy
+// keeps to the quark. The default of 2 made every request past the second in
+// flight open a new connection, over TLS a full handshake each (#2755).
+const proxyMaxIdleConnsPerHost = 32
 
 // connectionFromStatus maps a tsnet status to whether the node is on the
 // tailnet and, if it is, the URL peers reach it at. tsnet.Server.Start returns

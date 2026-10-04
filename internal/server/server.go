@@ -489,7 +489,9 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 
 	if opts.Insecure {
 		log.Println("[server] WARNING: TLS disabled — running in insecure HTTP mode")
-		if err := router.Run(fmt.Sprintf(":%s", port)); err != nil {
+		srv := serverutil.NewHTTPServer(serverutil.NewHTTPServerParams{Handler: router.Handler()})
+		srv.Addr = fmt.Sprintf(":%s", port)
+		if err := srv.ListenAndServe(); err != nil {
 			return err
 		}
 	} else {
@@ -517,10 +519,16 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 		if err != nil {
 			return fmt.Errorf("failed to bind TLS listener on %s: %w", addr, err)
 		}
-		tlsLn := tls.NewListener(ln, tlsCfg)
+		// ServeTLS with empty paths takes the certificate from TLSConfig, and
+		// NewHTTPServer offers h2 there, so a browser multiplexes its
+		// requests over one connection instead of opening six (#2755).
+		srv := serverutil.NewHTTPServer(serverutil.NewHTTPServerParams{
+			Handler:   router.Handler(),
+			TLSConfig: tlsCfg,
+		})
 
-		log.Printf("[server] TLS 1.3+ enabled — cert: %s", certFile)
-		if err := router.RunListener(tlsLn); err != nil {
+		log.Printf("[server] TLS 1.3+ and HTTP/2 enabled — cert: %s", certFile)
+		if err := srv.ServeTLS(ln, "", ""); err != nil {
 			return err
 		}
 	}
