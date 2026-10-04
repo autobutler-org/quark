@@ -8,6 +8,7 @@ import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/slides/export/slide_export_button.dart';
 import 'package:quark/widgets/slides/insert/slide_quark_image_dialog.dart';
 import 'package:quark/widgets/slides/properties/slide_properties_panel.dart';
 import 'package:quark/widgets/slides/slide_editor_bar_bottom.dart';
@@ -36,6 +37,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// the presentation full-window at `/slides/<path>/present` (#1165). The
 /// presentation as it is on screen goes along, so nothing waits for the
 /// save the chip starts on the way.
+///
+/// The bar's export button saves the presentation as a PowerPoint file
+/// (#1172), saving unsaved edits first; a failure is a snack bar.
 ///
 /// Nothing is pushed underneath it when it opens at its own URL, so its back
 /// button and a system back land in the folder that holds the file, as the
@@ -74,18 +78,10 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
   @override
   void initState() {
     super.initState();
-    _controller.onSaveFailed = (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(error, 'save the presentation'))),
-      );
-    };
-    _controller.onImageInsertFailed = (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(error, 'add the picture'))),
-      );
-    };
+    _controller
+      ..onSaveFailed = _reportFailure('save the presentation')
+      ..onImageInsertFailed = _reportFailure('add the picture')
+      ..onExportFailed = _reportFailure('export the presentation');
     _controller.load();
   }
 
@@ -93,9 +89,18 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
   void dispose() {
     _controller.onSaveFailed = null;
     _controller.onImageInsertFailed = null;
+    _controller.onExportFailed = null;
     if (widget.controller == null) _controller.dispose();
     super.dispose();
   }
+
+  /// A failure handler that says, in a snack bar, the app couldn't [action].
+  void Function(Object error) _reportFailure(String action) => (error) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(Errors.message(error, action))));
+  };
 
   void _leaveForContainingFolder() =>
       context.go(AppRoutes.containingFolder(widget.filePath));
@@ -178,6 +183,12 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                   SlideSaveStatus(
                     state: _controller.saveState,
                     onSave: _controller.save,
+                  ),
+                  SlideExportButton(
+                    isExporting: _controller.isExporting,
+                    onPressed: _controller.presentation == null
+                        ? null
+                        : _controller.exportPptx,
                   ),
                   QuarkBarChip(
                     key: const ValueKey('slide_editor_present'),

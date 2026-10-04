@@ -5021,6 +5021,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/files/export/pptx": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams a .qslide back as a .pptx attachment, one slide per slide in show order. Shapes, lines and arrows, rich text, pictures, groups, rotation, stacking order, backgrounds and speaker notes carry across. Pictures are read from the files they name on the same device and embedded; one the caller cannot read, or that is missing, too large, or not a PNG, JPEG, GIF or BMP, is drawn as a gray placeholder with its alt text. Only reads: nothing is written beside the presentation. Needs read access on the .qslide.",
+                "produces": [
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Download a Quark presentation as a PowerPoint file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Path to the .qslide file to export",
+                        "name": "filePath",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Device serial number",
+                        "name": "serial",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The presentation",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/files/export/xlsx": {
             "get": {
                 "security": [

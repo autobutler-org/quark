@@ -708,19 +708,47 @@ class FilesService with AuthenticatedService {
     String filePath, {
     String? serial,
     required String fileName,
+  }) => _saveExport(
+    filePath,
+    serial: serial,
+    fileName: fileName,
+    endpoint: '/api/v0/files/export/xlsx',
+  );
+
+  /// Saves the presentation at [filePath] as a PowerPoint file under
+  /// [fileName], its pictures embedded (#1172): `GET
+  /// /api/v0/files/export/pptx`. The Quark builds it from the presentation as
+  /// last saved, so a caller with unsaved edits saves them first. Returns
+  /// where it was saved, or null when the save was canceled.
+  static Future<String?> savePresentationAsPptx(
+    String filePath, {
+    String? serial,
+    required String fileName,
+  }) => _saveExport(
+    filePath,
+    serial: serial,
+    fileName: fileName,
+    endpoint: '/api/v0/files/export/pptx',
+  );
+
+  /// Saves what [endpoint] exports the file at [filePath] as, under
+  /// [fileName]: through the browser's download on the web, the platform's
+  /// save dialog everywhere else.
+  static Future<String?> _saveExport(
+    String filePath, {
+    String? serial,
+    required String fileName,
+    required String endpoint,
   }) async {
-    final uri = _buildDownloadUri(
-      filePath,
-      serial: serial,
-      endpoint: '/api/v0/files/export/xlsx',
-    );
+    final uri = _buildDownloadUri(filePath, serial: serial, endpoint: endpoint);
     if (kIsWeb) {
-      // A download-token link only reaches the download routes, so the
-      // workbook comes through here. It is compressed, and no larger than the
-      // sheet the editor already holds.
+      // A download-token link only reaches the download routes, so the export
+      // comes through here and the browser holds it whole: a workbook is no
+      // larger than the sheet the editor already holds, a presentation that
+      // plus its pictures.
       final response = await instance.authenticatedGet(uri);
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw ApiException(response.statusCode, 'Failed to export the sheet');
+        throw ApiException(response.statusCode, 'Failed to export $filePath');
       }
       return web_download.saveBytesForDownload(response.bodyBytes, fileName);
     }

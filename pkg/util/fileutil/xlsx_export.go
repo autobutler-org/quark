@@ -55,7 +55,7 @@ func ExportQsheetToXlsx(params ExportXlsxParams) (ExportXlsxResult, error) {
 		}
 	}
 
-	source, err := openQsheetSource(params)
+	source, _, err := openExportFile(params.Ctx, params.Registry, params.Storage, params.FilePath, params.Serial)
 	if err != nil {
 		return ExportXlsxResult{}, err
 	}
@@ -72,31 +72,46 @@ func XlsxExportName(filePath string) string {
 	return strings.TrimSuffix(base, filepath.Ext(base)) + ".xlsx"
 }
 
-// openQsheetSource opens the .qsheet as a stream, which is all an export
-// reads it as.
-func openQsheetSource(params ExportXlsxParams) (io.ReadCloser, error) {
-	if params.Serial == "" {
-		if fsys := FilesVFS(params.Registry); fsys != nil {
-			r, err := fsys.Open(params.Ctx, params.FilePath)
+// openExportFile opens the file an export reads, as a stream, with its size
+// in bytes: through the VFS when no serial routes past it, through the storage
+// service otherwise.
+func openExportFile(
+	ctx context.Context, registry vfs.Registry, storage *storageutil.StorageService, filePath, serial string,
+) (io.ReadCloser, int64, error) {
+	if serial == "" {
+		if fsys := FilesVFS(registry); fsys != nil {
+			info, err := fsys.Stat(ctx, filePath)
 			if err != nil {
-				return nil, notFound(err)
+				return nil, 0, notFound(err)
 			}
-			return r, nil
+			if info.IsDir {
+				return nil, 0, &UnsupportedError{Err: fmt.Errorf("not a file: %s", filePath)}
+			}
+			r, err := fsys.Open(ctx, filePath)
+			if err != nil {
+				return nil, 0, notFound(err)
+			}
+			return r, info.Size, nil
 		}
 	}
-	if params.Storage == nil {
-		return nil, ErrNoFilesNamespace
+	if storage == nil {
+		return nil, 0, ErrNoFilesNamespace
 	}
 	opened, err := OpenDownload(OpenDownloadParams{
-		Storage:  params.Storage,
-		FilePath: params.FilePath,
-		Serial:   params.Serial,
+		Storage:  storage,
+		FilePath: filePath,
+		Serial:   serial,
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if opened.File == nil {
-		return nil, &UnsupportedError{Err: fmt.Errorf("not a file: %s", params.FilePath)}
+		return nil, 0, &UnsupportedError{Err: fmt.Errorf("not a file: %s", filePath)}
 	}
-	return opened.File, nil
+	info, err := opened.File.Stat()
+	if err != nil {
+		_ = opened.File.Close()
+		return nil, 0, err
+	}
+	return opened.File, info.Size(), nil
 }

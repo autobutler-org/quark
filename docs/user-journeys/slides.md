@@ -426,3 +426,26 @@ same drive as the presentation (`photos/cover.jpg`).
   its size comes from the file's header.
 - A failed upload or listing reads "Couldn't add the picture." (or the Quark's reason) and leaves the slide unchanged.
 
+
+---
+
+### JN-SL-024: Export to PowerPoint
+
+**Preconditions:** A presentation is open (JN-SL-004).
+
+**Steps:**
+
+1. Tap **Export as PowerPoint (.pptx)**, the download button in the editor's bar.
+2. Choose where to save it in the save dialog; in a browser it downloads.
+
+**Expected result:**
+
+- Unsaved edits are saved first; if that save fails it says so (JN-SL-010) and nothing is exported.
+- The file is named after the presentation (`Talk.qslide` saves as `Talk.pptx`), and the button shows a spinner and
+  ignores taps until the export ends.
+- It opens in PowerPoint, Keynote, LibreOffice and Google Slides at the presentation's aspect ratio, with its shapes,
+  lines and arrows, text and its formatting, pictures, groups, rotation, stacking order, backgrounds and speaker
+  notes.
+- Pictures are embedded from the files they name. One that is missing, in a folder the user cannot read, or not a
+  PNG, JPEG, GIF or BMP is a gray box carrying its alt text, so the slide keeps its layout.
+- Exporting changes nothing in the presentation's folder. A failed export reads "Couldn't export the presentation."

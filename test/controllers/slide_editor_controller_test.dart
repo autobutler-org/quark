@@ -741,4 +741,108 @@ void main() {
       expect(c.selectedElementIds, isEmpty);
     });
   });
+
+  group('export to PowerPoint (#1172)', () {
+    late List<String> events;
+    late Object? exportFailure;
+
+    SlideEditorController exportController() {
+      final controller = SlideEditorController(
+        filePath: 'talks/Quarterly review.qslide',
+        deviceSerial: 'usb1',
+        loadPresentation: (_, {serial}) async => deck(2),
+        savePresentation: (path, p, {serial}) async {
+          final failure = saveFailure;
+          if (failure != null) throw failure;
+          events.add('save');
+        },
+        exportPresentation: (path, {serial, required fileName}) async {
+          final failure = exportFailure;
+          if (failure != null) throw failure;
+          events.add('export $path $serial $fileName');
+          return '/downloads/$fileName';
+        },
+        newId: () => 'n${events.length}',
+      );
+      addTearDown(controller.dispose);
+      return controller;
+    }
+
+    setUp(() {
+      events = [];
+      exportFailure = null;
+    });
+
+    test('exports the saved presentation under its own name', () async {
+      final c = exportController();
+      await c.load();
+      await c.exportPptx();
+      expect(events, [
+        'export talks/Quarterly review.qslide usb1 Quarterly review.pptx',
+      ]);
+      expect(c.isExporting, isFalse);
+    });
+
+    test('saves unsaved edits first', () async {
+      final c = exportController();
+      await c.load();
+      c.addSlide();
+      expect(c.saveState, SlideSaveState.dirty);
+      await c.exportPptx();
+      expect(events, [
+        'save',
+        'export talks/Quarterly review.qslide usb1 Quarterly review.pptx',
+      ]);
+      expect(c.saveState, SlideSaveState.saved);
+    });
+
+    test('a failed save stops the export, which would be stale', () async {
+      final c = exportController();
+      final exportErrors = <Object>[];
+      c.onExportFailed = exportErrors.add;
+      await c.load();
+      c.addSlide();
+      saveFailure = Exception('offline');
+      await c.exportPptx();
+      expect(events, isEmpty);
+      // The save reports its own failure; the export adds nothing.
+      expect(exportErrors, isEmpty);
+      expect(c.isExporting, isFalse);
+    });
+
+    test('a failed export is reported as the thrown object', () async {
+      final c = exportController();
+      final exportErrors = <Object>[];
+      c.onExportFailed = exportErrors.add;
+      await c.load();
+      final failure = Exception('500');
+      exportFailure = failure;
+      await c.exportPptx();
+      expect(exportErrors, [same(failure)]);
+      expect(c.isExporting, isFalse);
+    });
+
+    test('a second tap while one is running does nothing', () async {
+      final gate = Completer<String?>();
+      var calls = 0;
+      final c = SlideEditorController(
+        filePath: 'talks/deck.qslide',
+        loadPresentation: (_, {serial}) async => deck(1),
+        exportPresentation: (path, {serial, required fileName}) {
+          calls++;
+          return gate.future;
+        },
+      );
+      addTearDown(c.dispose);
+      await c.load();
+      final first = c.exportPptx();
+      await Future<void>.delayed(Duration.zero);
+      expect(c.isExporting, isTrue);
+      await c.exportPptx();
+      gate.complete(null);
+      await first;
+      expect(calls, 1);
+      expect(c.isExporting, isFalse);
+    });
+  });
 }

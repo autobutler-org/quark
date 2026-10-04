@@ -6,6 +6,7 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
+import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark_slides/quark_slides.dart';
 
 /// Downloads and decodes the presentation at a path.
@@ -40,6 +41,15 @@ typedef UploadImageFn =
 /// Reads the size of a picture on the Quark from its header.
 typedef ReadImageSizeFn =
     Future<SlideImageSize?> Function(String path, {String? serial});
+
+/// Saves the presentation at a path as a PowerPoint file named [fileName];
+/// returns where it was saved, or null when the save was canceled.
+typedef ExportPresentationFn =
+    Future<String?> Function(
+      String path, {
+      String? serial,
+      required String fileName,
+    });
 
 /// Lists a folder on the Quark.
 typedef ListFolderFn =
@@ -109,6 +119,11 @@ enum SlideSaveState {
 /// Quark, without the upload. [imageUpload] says how far an upload has got;
 /// a failure goes to [onImageInsertFailed].
 ///
+/// **Export** (#1172). [exportPptx] saves unsaved edits, then hands the
+/// presentation as the Quark builds it to the platform's save dialog or the
+/// browser's download as a `.pptx`; [isExporting] is true meanwhile, and a
+/// failure goes to [onExportFailed].
+///
 /// Service calls are parameters defaulting to [SlidesService], so a test
 /// passes fakes.
 class SlideEditorController extends ChangeNotifier {
@@ -127,6 +142,7 @@ class SlideEditorController extends ChangeNotifier {
     this.uploadImage = SlidesService.uploadImage,
     this.readImageSize = SlidesService.readImageSize,
     this.listFolder = _listFolder,
+    this.exportPresentation = FilesService.savePresentationAsPptx,
   });
 
   /// The presentation's path, relative to the device's files root.
@@ -161,11 +177,17 @@ class SlideEditorController extends ChangeNotifier {
   /// Lists a folder on the Quark, for picking a picture there.
   final ListFolderFn listFolder;
 
+  /// Saves the presentation as a PowerPoint file.
+  final ExportPresentationFn exportPresentation;
+
   /// Called with the thrown object when a save fails.
   void Function(Object error)? onSaveFailed;
 
   /// Called with the thrown object when a picture cannot be put on a slide.
   void Function(Object error)? onImageInsertFailed;
+
+  /// Called with the thrown object when an export fails.
+  void Function(Object error)? onExportFailed;
 
   /// The tool the canvas draws with, shared with the toolbar.
   final SlideToolController tools = SlideToolController();
@@ -233,6 +255,7 @@ class SlideEditorController extends ChangeNotifier {
   Timer? _notesTimer;
   bool _propertiesOpen = true;
   ({String name, double progress})? _imageUpload;
+  bool _exporting = false;
 
   /// How long typing in the notes pauses before it becomes an undo step.
   static const notesDelay = Duration(milliseconds: 500);
@@ -312,6 +335,9 @@ class SlideEditorController extends ChangeNotifier {
 
   /// The picture being uploaded and the share of it sent, or null.
   ({String name, double progress})? get imageUpload => _imageUpload;
+
+  /// Whether an export is running.
+  bool get isExporting => _exporting;
 
   /// The canvas zoom relative to fitting the slide in its box: 1 fits.
   double get zoom => _zoom;
@@ -768,6 +794,35 @@ class SlideEditorController extends ChangeNotifier {
     _autosaveTimer?.cancel();
     if (isDirty) _autosaveTimer = Timer(autosaveDelay, save);
     _notify();
+  }
+
+  // ── Export ────────────────────────────────────────────────────────────────
+
+  /// Saves the presentation as a PowerPoint file named after it.
+  ///
+  /// The Quark builds the file from the presentation as saved, so unsaved
+  /// edits are saved first; a save that fails reports itself through
+  /// [onSaveFailed] and stops the export rather than exporting stale slides.
+  /// A tap while one export runs does nothing.
+  Future<void> exportPptx() async {
+    if (_exporting || presentation == null) return;
+    _exporting = true;
+    _notify();
+    try {
+      if (!await save() || _disposed) return;
+      await exportPresentation(
+        filePath,
+        serial: _serial,
+        fileName:
+            '${fileNameWithoutExtension(filePath, SlidesService.extension)}'
+            '.pptx',
+      );
+    } catch (e) {
+      if (!_disposed) onExportFailed?.call(e);
+    } finally {
+      _exporting = false;
+      _notify();
+    }
   }
 
   /// Saves now, without waiting for the autosave. Returns whether the
