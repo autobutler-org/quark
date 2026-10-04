@@ -136,3 +136,17 @@ func TestPlistNameMatchesLabel(t *testing.T) {
 		t.Errorf("plist %s should carry the Label %s:\n%s", plistServiceName, label, plistServiceContent)
 	}
 }
+
+// The access log is one line per request. Appended to a file under /var/log
+// it grew without bound on the boot media (#2756); journald caps what it
+// keeps and rotates it, so the unit hands both streams to the journal.
+func TestSystemdUnit_LogsToTheJournal(t *testing.T) {
+	for _, want := range []string{"StandardOutput=journal", "StandardError=journal"} {
+		if !strings.Contains(systemdServiceContent, want) {
+			t.Errorf("systemd unit should carry %s:\n%s", want, systemdServiceContent)
+		}
+	}
+	if strings.Contains(systemdServiceContent, "append:") {
+		t.Errorf("systemd unit still appends a stream to a file nothing rotates:\n%s", systemdServiceContent)
+	}
+}

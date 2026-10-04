@@ -25,6 +25,19 @@ WHERE
 ORDER BY
     id DESC;
 
+-- ListJobs for one account, so a non-admin's listing never loads every other
+-- account's jobs (#2756).
+-- name: ListUserJobs :many
+SELECT
+    *
+FROM
+    jobs
+WHERE
+    user_id = sqlc.arg(user_id)
+    AND kind IN (sqlc.slice('kinds'))
+ORDER BY
+    id DESC;
+
 -- The pending jobs, oldest first, for the dispatcher to pick from by lane.
 -- name: ListPendingJobs :many
 SELECT
@@ -108,3 +121,29 @@ SET
     finished_at = datetime('now')
 WHERE
     status = 'running';
+
+-- Drops finished jobs that finished before the cutoff, and every finished job
+-- past each owner's newest keep, so job history is bounded per account
+-- (#2756). Pending and running jobs are never touched.
+-- name: PruneFinishedJobs :execrows
+DELETE FROM jobs
+WHERE
+    jobs.status IN ('completed', 'failed', 'canceled')
+    AND (
+        jobs.finished_at < sqlc.arg(cutoff)
+        OR jobs.id <= (
+            SELECT
+                newer.id
+            FROM
+                jobs AS newer
+            WHERE
+                newer.status IN ('completed', 'failed', 'canceled')
+                AND newer.user_id IS jobs.user_id
+            ORDER BY
+                newer.id DESC
+            LIMIT
+                1
+            OFFSET
+                sqlc.arg(keep)
+        )
+    );

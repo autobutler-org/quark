@@ -9,7 +9,7 @@ import (
 
 // listDevices godoc
 // @Summary List connected devices
-// @Description Returns all unique client IP + User-Agent combinations that have connected to the quark
+// @Description Returns the unique client IP + User-Agent combinations that have connected to the quark, most recently seen first. The list is bounded: the least recently seen are dropped past a cap and after a month unseen.
 // @Tags devices
 // @Produce json
 // @Success 200 {array} ConnectedDeviceJSON

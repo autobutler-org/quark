@@ -31,7 +31,11 @@ func listJobs(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
-	result, err := deps.JobQueue().List(c.Request.Context(), jobutil.ListParams{Kinds: c.QueryArray("kind")})
+	params := jobutil.ListParams{Kinds: c.QueryArray("kind")}
+	if principal := access.Principal(); !principal.IsAdmin {
+		params.UserID = principal.UserID
+	}
+	result, err := deps.JobQueue().List(c.Request.Context(), params)
 	switch {
 	case errors.Is(err, jobutil.ErrKindRequired), errors.Is(err, jobutil.ErrUnknownKind):
 		return serverutil.BadRequest(err)

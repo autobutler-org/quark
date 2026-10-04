@@ -278,6 +278,8 @@ func uploadSessionError(c *gin.Context, err error) *serverutil.Response {
 	case errors.Is(err, uploadutil.ErrInvalidRange),
 		errors.Is(err, uploadutil.ErrInvalidRequest):
 		return serverutil.BadRequest(err)
+	case errors.Is(err, uploadutil.ErrTooManySessions):
+		return serverutil.NewResponse().WithStatusCode(http.StatusTooManyRequests).WithError(err)
 	default:
 		return serverutil.InternalServerError(err)
 	}

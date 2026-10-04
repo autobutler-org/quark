@@ -17,6 +17,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/deviceutil"
 	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/featureflagutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
@@ -133,7 +134,8 @@ func inject(deps deputil.Dependencies) gin.HandlerFunc {
 	}
 }
 
-// trackDevice records the client IP and User-Agent in connected_devices.
+// trackDevice records the client IP and User-Agent in connected_devices,
+// which deviceutil keeps bounded.
 // Runs asynchronously so it never blocks the request.
 func trackDevice(deps deputil.Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -146,10 +148,11 @@ func trackDevice(deps deputil.Dependencies) gin.HandlerFunc {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			if _, err := deps.Database().Queries.UpsertConnectedDevice(
-				ctx,
-				db.UpsertConnectedDeviceParams{IpAddress: ip, UserAgent: ua},
-			); err != nil {
+			if _, err := deviceutil.RecordConnectedDevice(ctx, deviceutil.RecordConnectedDeviceParams{
+				Database:  deps.Database(),
+				IPAddress: ip,
+				UserAgent: ua,
+			}); err != nil {
 				slog.Debug("trackDevice: upsert failed", "err", err)
 			}
 		}()

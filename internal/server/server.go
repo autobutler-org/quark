@@ -23,6 +23,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/deviceutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/healthutil"
@@ -171,6 +172,31 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 		defer ticker.Stop()
 		for range ticker.C {
 			purge()
+		}
+	}()
+
+	// Prune connected devices and finished jobs past their caps and max ages,
+	// once at startup and then hourly (#2756).
+	go func() {
+		prune := func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if res, err := deviceutil.PruneConnectedDevices(ctx, deviceutil.PruneConnectedDevicesParams{Database: deps.Database()}); err != nil {
+				log.Printf("[devices] connected device prune failed: %v", err)
+			} else if res.Removed > 0 {
+				log.Printf("[devices] pruned %d connected device(s)", res.Removed)
+			}
+			if res, err := jobs.Prune(ctx, jobutil.PruneParams{}); err != nil {
+				log.Printf("[jobs] finished job prune failed: %v", err)
+			} else if res.Removed > 0 {
+				log.Printf("[jobs] pruned %d finished job(s)", res.Removed)
+			}
+		}
+		prune()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			prune()
 		}
 	}()
 

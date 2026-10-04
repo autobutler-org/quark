@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 )
 
 const countConnectedDevices = `-- name: CountConnectedDevices :one
@@ -96,6 +97,38 @@ func (q *Queries) ListConnectedDevices(ctx context.Context) ([]ConnectedDevice, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const pruneConnectedDevices = `-- name: PruneConnectedDevices :execrows
+DELETE FROM connected_devices
+WHERE
+    connected_devices.last_seen_at < ?1
+    OR connected_devices.id NOT IN (
+        SELECT
+            newest.id
+        FROM
+            connected_devices AS newest
+        ORDER BY
+            newest.last_seen_at DESC,
+            newest.id DESC
+        LIMIT
+            ?2
+    )
+`
+
+type PruneConnectedDevicesParams struct {
+	Cutoff time.Time
+	Keep   int64
+}
+
+// Drops peers not seen since the cutoff, and every peer past the newest keep
+// by last_seen_at, so the table holds at most keep rows (#2756).
+func (q *Queries) PruneConnectedDevices(ctx context.Context, arg PruneConnectedDevicesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneConnectedDevices, arg.Cutoff, arg.Keep)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const upsertConnectedDevice = `-- name: UpsertConnectedDevice :one

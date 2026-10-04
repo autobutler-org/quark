@@ -4333,7 +4333,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns all unique client IP + User-Agent combinations that have connected to the quark",
+                "description": "Returns the unique client IP + User-Agent combinations that have connected to the quark, most recently seen first. The list is bounded: the least recently seen are dropped past a cap and after a month unseen.",
                 "produces": [
                     "application/json"
                 ],
@@ -5532,6 +5532,12 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests — too many sessions are open; finish or cancel one first",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }

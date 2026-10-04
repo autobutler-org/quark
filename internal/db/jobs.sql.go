@@ -317,6 +317,113 @@ func (q *Queries) ListPendingJobs(ctx context.Context) ([]ListPendingJobsRow, er
 	return items, nil
 }
 
+const listUserJobs = `-- name: ListUserJobs :many
+SELECT
+    id, kind, name, status, params, progress, lane, attempts, error, created_at, started_at, finished_at, user_id
+FROM
+    jobs
+WHERE
+    user_id = ?1
+    AND kind IN (/*SLICE:kinds*/?)
+ORDER BY
+    id DESC
+`
+
+type ListUserJobsParams struct {
+	UserID sql.NullInt64
+	Kinds  []string
+}
+
+// ListJobs for one account, so a non-admin's listing never loads every other
+// account's jobs (#2756).
+func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]Job, error) {
+	query := listUserJobs
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.UserID)
+	if len(arg.Kinds) > 0 {
+		for _, v := range arg.Kinds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:kinds*/?", strings.Repeat(",?", len(arg.Kinds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:kinds*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Job
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Name,
+			&i.Status,
+			&i.Params,
+			&i.Progress,
+			&i.Lane,
+			&i.Attempts,
+			&i.Error,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.UserID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const pruneFinishedJobs = `-- name: PruneFinishedJobs :execrows
+DELETE FROM jobs
+WHERE
+    jobs.status IN ('completed', 'failed', 'canceled')
+    AND (
+        jobs.finished_at < ?1
+        OR jobs.id <= (
+            SELECT
+                newer.id
+            FROM
+                jobs AS newer
+            WHERE
+                newer.status IN ('completed', 'failed', 'canceled')
+                AND newer.user_id IS jobs.user_id
+            ORDER BY
+                newer.id DESC
+            LIMIT
+                1
+            OFFSET
+                ?2
+        )
+    )
+`
+
+type PruneFinishedJobsParams struct {
+	Cutoff sql.NullTime
+	Keep   int64
+}
+
+// Drops finished jobs that finished before the cutoff, and every finished job
+// past each owner's newest keep, so job history is bounded per account
+// (#2756). Pending and running jobs are never touched.
+func (q *Queries) PruneFinishedJobs(ctx context.Context, arg PruneFinishedJobsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneFinishedJobs, arg.Cutoff, arg.Keep)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const retryJob = `-- name: RetryJob :one
 UPDATE jobs
 SET

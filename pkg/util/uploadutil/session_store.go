@@ -93,7 +93,7 @@ func (s *SessionStore) CreateSession(params CreateSessionParams) (CreateSessionR
 	}
 
 	const createdOffset = 0
-	now := time.Now()
+	now := s.now()
 	sess := &session{
 		id:        id,
 		rootDir:   rootDir,
@@ -110,9 +110,10 @@ func (s *SessionStore) CreateSession(params CreateSessionParams) (CreateSessionR
 		offset:    createdOffset,
 	}
 
-	s.mu.Lock()
-	s.sessions[id] = sess
-	s.mu.Unlock()
+	if err := s.admit(sess); err != nil {
+		sess.discard()
+		return CreateSessionResult{}, err
+	}
 
 	return CreateSessionResult{
 		SessionID: id,
@@ -294,7 +295,7 @@ func (s *SessionStore) lookup(id string, userID int64) (*session, error) {
 	s.mu.Lock()
 	sess, ok := s.sessions[id]
 	ok = ok && sess.userID == userID
-	expired := ok && time.Now().After(sess.expiresAt)
+	expired := ok && s.now().After(sess.expiresAt)
 	if expired {
 		delete(s.sessions, id)
 	}
@@ -308,6 +309,39 @@ func (s *SessionStore) lookup(id string, userID int64) (*session, error) {
 		return nil, fmt.Errorf("%w: %q has expired", ErrSessionNotFound, id)
 	}
 	return sess, nil
+}
+
+// admit adds a new session unless that would put its owner past
+// MaxSessionsPerUser or the store past MaxSessions. Sessions already past
+// their deadline are dropped first, so an abandoned upload holds no slot
+// between its deadline and the next sweep.
+func (s *SessionStore) admit(sess *session) error {
+	s.mu.Lock()
+	var expired []*session
+	owned := 0
+	for id, other := range s.sessions {
+		switch {
+		case sess.createdAt.After(other.expiresAt):
+			expired = append(expired, other)
+			delete(s.sessions, id)
+		case other.userID == sess.userID:
+			owned++
+		}
+	}
+	full := owned >= MaxSessionsPerUser || len(s.sessions) >= MaxSessions
+	if !full {
+		s.sessions[sess.id] = sess
+	}
+	s.mu.Unlock()
+
+	// Outside the store lock, as in Sweep.
+	for _, other := range expired {
+		other.discard()
+	}
+	if full {
+		return ErrTooManySessions
+	}
+	return nil
 }
 
 // commit moves a fully staged file into the namespace. Called with the

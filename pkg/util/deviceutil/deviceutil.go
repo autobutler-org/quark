@@ -1,7 +1,8 @@
 // Package deviceutil holds the services behind /api/v0/storage/devices: the
 // mount and unmount of a USB storage device, the display name and role the
 // database keeps for each device, and the status list that overlays the two
-// onto what the detector reports.
+// onto what the detector reports. It also keeps the connected devices behind
+// /api/v0/devices, the HTTP peers that talk to this appliance, bounded.
 //
 // storageutil owns the hardware — detection, partitions, mount commands — and
 // deliberately does not depend on the database. What lives here is the half

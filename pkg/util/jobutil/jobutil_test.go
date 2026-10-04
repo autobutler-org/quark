@@ -829,3 +829,130 @@ func TestShutdownFailsEveryRunningJob(t *testing.T) {
 		}
 	}
 }
+
+// finishedJob queues a job for userID and cancels it, which finishes it now.
+func (h harness) finishedJob(t *testing.T, userID int64) Job {
+	t.Helper()
+	ctx := context.Background()
+	res, err := h.queue.Enqueue(ctx, EnqueueParams{Kind: testKind, Name: "job", UserID: userID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	canceled, err := h.queue.Cancel(ctx, CancelParams{ID: res.Job.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return canceled.Job
+}
+
+func (h harness) user(t *testing.T, name string) int64 {
+	t.Helper()
+	user, err := h.database.Queries.CreateUser(context.Background(),
+		db.CreateUserParams{Username: name, PasswordHash: "h", RecoveryPhraseHash: "r"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return user.ID
+}
+
+func (h harness) ids(t *testing.T, params ListParams) []int64 {
+	t.Helper()
+	params.Kinds = []string{testKind}
+	res, err := h.queue.List(context.Background(), params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]int64, 0, len(res.Jobs))
+	for _, job := range res.Jobs {
+		ids = append(ids, job.ID)
+	}
+	return ids
+}
+
+// Job history grows by one row per queued job, and nothing removed a row
+// (#2756). Each account keeps only its newest finished jobs.
+func TestPruneKeepsEachAccountsNewestFinishedJobs(t *testing.T) {
+	h := newHarness(t)
+	alice, bob := h.user(t, "alice"), h.user(t, "bob")
+	var aliceFinished []int64
+	for range MaxFinishedJobsPerAccount + 2 {
+		aliceFinished = append(aliceFinished, h.finishedJob(t, alice).ID)
+	}
+	bobFinished := h.finishedJob(t, bob).ID
+	systemFinished := h.finishedJob(t, 0).ID
+	pending, err := h.queue.Enqueue(context.Background(), EnqueueParams{Kind: testKind, Name: "job", UserID: alice})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := h.queue.Prune(context.Background(), PruneParams{Now: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Removed != 2 {
+		t.Errorf("Removed = %d, want the 2 oldest of alice's finished jobs", res.Removed)
+	}
+	kept := h.ids(t, ListParams{})
+	for _, gone := range aliceFinished[:2] {
+		if slices.Contains(kept, gone) {
+			t.Errorf("alice's old finished job %d survived the prune", gone)
+		}
+	}
+	for _, want := range append(aliceFinished[2:], bobFinished, systemFinished, pending.Job.ID) {
+		if !slices.Contains(kept, want) {
+			t.Errorf("job %d was pruned, want it kept", want)
+		}
+	}
+}
+
+// A finished job past the max age goes whatever its rank; a pending or running
+// job stays however old it is.
+func TestPruneDropsOldFinishedJobsButNeverActiveOnes(t *testing.T) {
+	h := newHarness(t)
+	h.run(t)
+	finished := h.finishedJob(t, 0)
+	running := h.enqueue(t, 1)
+	h.started(t)
+	h.waitStatus(t, running.ID, StatusRunning)
+	pending := h.enqueue(t, 2)
+
+	notYet, err := h.queue.Prune(context.Background(), PruneParams{Now: time.Now().Add(FinishedJobMaxAge - time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if notYet.Removed != 0 {
+		t.Errorf("Removed = %d before the max age, want 0", notYet.Removed)
+	}
+	later, err := h.queue.Prune(context.Background(), PruneParams{Now: time.Now().Add(FinishedJobMaxAge + time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if later.Removed != 1 {
+		t.Errorf("Removed = %d past the max age, want only the finished job", later.Removed)
+	}
+	if got := h.ids(t, ListParams{}); !slices.Equal(got, []int64{pending.ID, running.ID}) {
+		t.Errorf("jobs after the prune = %v, want pending %d and running %d", got, pending.ID, running.ID)
+	}
+	if _, err := h.queue.Get(context.Background(), GetParams{ID: finished.ID}); !errors.Is(err, ErrJobNotFound) {
+		t.Errorf("Get(pruned job) error = %v, want ErrJobNotFound", err)
+	}
+	h.fake.release <- nil
+	h.waitStatus(t, running.ID, StatusCompleted)
+}
+
+// A non-admin's listing is filtered by owner in SQL rather than loading every
+// account's jobs (#2756).
+func TestListFiltersByOwner(t *testing.T) {
+	h := newHarness(t)
+	alice, bob := h.user(t, "alice"), h.user(t, "bob")
+	aliceJob := h.finishedJob(t, alice)
+	bobJob := h.finishedJob(t, bob)
+	systemJob := h.finishedJob(t, 0)
+
+	if got := h.ids(t, ListParams{UserID: alice}); !slices.Equal(got, []int64{aliceJob.ID}) {
+		t.Errorf("List(alice) = %v, want only %d", got, aliceJob.ID)
+	}
+	if got := h.ids(t, ListParams{}); !slices.Equal(got, []int64{systemJob.ID, bobJob.ID, aliceJob.ID}) {
+		t.Errorf("List(every owner) = %v, want every job newest first", got)
+	}
+}
