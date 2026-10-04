@@ -7,6 +7,8 @@ import 'package:quark/widgets/file_browser/file_browser_view/file_grid_sort_head
 import 'package:quark/widgets/file_browser/file_browser_view/file_sort_header.dart';
 
 import '../../../support/tap_target_guidelines.dart';
+import '../../../support/text_scale.dart'
+    show expectNoClippedText, testLargeText;
 
 /// #2603, #2605: every column label is a 48dp button that says which way the
 /// listing is sorted.
@@ -76,5 +78,18 @@ void main() {
         await expectTapTargetGuidelines(tester);
       });
     }
+  }
+
+  // #2606: the column labels in the Trash listing (and Files) grow past the
+  // header's height instead of being cut off.
+  for (final grid in [false, true]) {
+    final view = grid ? 'grid' : 'list';
+    testLargeText('$view header cells fit their labels', (tester, size) async {
+      await pump(tester, size, grid: grid);
+
+      expect(tester.takeException(), isNull);
+      expectNoClippedText(tester);
+      await expectTapTargetGuidelines(tester);
+    });
   }
 }

@@ -338,4 +338,17 @@ void main() {
     expect(tester.getSize(menuButton(0)).height, greaterThanOrEqualTo(48));
     await expectTapTargetGuidelines(tester);
   });
+
+  // #2606: the tab names grow past the 49 pixel strip.
+  testLargeText('fits its tab names', (tester, size) async {
+    await pumpAt(
+      tester,
+      Align(alignment: Alignment.bottomCenter, child: strip(three)),
+      size: size,
+    );
+
+    expect(tester.takeException(), isNull);
+    expectNoClippedText(tester);
+    await expectTapTargetGuidelines(tester);
+  });
 }

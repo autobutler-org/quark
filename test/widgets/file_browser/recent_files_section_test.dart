@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/widgets/file_browser/recent_files_section.dart';
 
+import '../../support/text_scale.dart';
+
 FileNode _file(String name) => FileNode(
   name: name,
   size: 1,
@@ -77,5 +79,22 @@ void main() {
     await pumpSection(tester, 0);
     await pumpSection(tester, 0);
     expect(fetches, hasLength(1));
+  });
+
+  // #2606: the strip was a fixed 72 pixels, which cut the chips' two lines of
+  // text off at large text sizes.
+  testLargeText('the strip grows to fit its chips', (tester, _) async {
+    await pumpSection(tester, 0);
+    fetches.single.complete([_file('a.txt'), _file('b.txt')]);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expectNoClippedText(tester);
+    final chip = tester.getRect(
+      find.byKey(const ValueKey('recent_file_a.txt')),
+    );
+    final strip = tester.getRect(find.byType(SingleChildScrollView));
+    expect(chip.bottom, lessThanOrEqualTo(strip.bottom));
+    await expectTapTargetGuidelines(tester);
   });
 }

@@ -11,7 +11,11 @@ void main() {
       label: 'Files',
       icon: QuarkIcons.folder_outlined,
       bottom: QuarkAppBarBottom(
-        lead: const Text('Home / Documents'),
+        lead: const Text(
+          'Home / Documents',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           QuarkBarChip(
             key: const ValueKey('upload'),
@@ -82,6 +86,16 @@ void main() {
     await pumpAt(tester, page((_) {}), size: size, scaffold: false);
 
     expect(tester.takeException(), isNull);
+    await expectTapTargetGuidelines(tester);
+  });
+
+  // #2606: the row grows with its text rather than clipping the breadcrumb
+  // and chips at 52 pixels.
+  testLargeText('fits its lead and actions', (tester, size) async {
+    await pumpAt(tester, page((_) {}), size: size, scaffold: false);
+
+    expect(tester.takeException(), isNull);
+    expectNoClippedText(tester);
     await expectTapTargetGuidelines(tester);
   });
 }

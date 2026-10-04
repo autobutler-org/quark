@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/quark_tokens.dart';
@@ -28,7 +30,8 @@ class QuarkBarSegment {
 /// filled style and at its height — the list/grid switch in Files.
 ///
 /// Each segment answers taps across a [QuarkBarIconButton.tapTargetSize]
-/// height around its [QuarkBarIconButton.size] visual, and the toggle keeps
+/// height around its [QuarkBarIconButton.size] visual, which grows only when
+/// a large text size makes the labels taller (#2606), and the toggle keeps
 /// [QuarkBarIconButton.tapTargetMargin] of space either side, like every bar
 /// control (#2605). Screen readers hear each segment as selectable, with the
 /// one that is on announced as selected.
@@ -73,6 +76,17 @@ class QuarkBarSegmentedToggle extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
     final radius = Radius.circular(tokens.radiusLg);
     final textStyle = Theme.of(context).textTheme.labelLarge;
+    // A bar button's height, unless a large text size makes the label taller
+    // (#2606). The border is drawn around the visual, so its height has to be
+    // known here rather than left to the buttons.
+    final labelHeight =
+        MediaQuery.textScalerOf(context).scale(textStyle?.fontSize ?? 14) *
+        (textStyle?.height ?? 1);
+    final height = math.max(QuarkBarIconButton.size, labelHeight);
+    final margin = math.max(
+      0.0,
+      (QuarkBarIconButton.tapTargetSize - height) / 2,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: QuarkBarIconButton.tapTargetMargin,
@@ -85,9 +99,7 @@ class QuarkBarSegmentedToggle extends StatelessWidget {
         children: [
           Positioned.fill(
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: QuarkBarIconButton.tapTargetMargin,
-              ),
+              padding: EdgeInsets.symmetric(vertical: margin),
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: tokens.input,
@@ -102,11 +114,7 @@ class QuarkBarSegmentedToggle extends StatelessWidget {
             children: [
               for (final (index, segment) in segments.indexed) ...[
                 if (index > 0)
-                  Container(
-                    width: 1,
-                    height: QuarkBarIconButton.size,
-                    color: tokens.border,
-                  ),
+                  Container(width: 1, height: height, color: tokens.border),
                 MergeSemantics(
                   child: Semantics(
                     inMutuallyExclusiveGroup: true,
@@ -145,11 +153,8 @@ class QuarkBarSegmentedToggle extends StatelessWidget {
                           padding: EdgeInsets.symmetric(
                             horizontal: tokens.spacingSm + tokens.spacingXs,
                           ),
-                          minimumSize: const Size(0, QuarkBarIconButton.size),
-                          maximumSize: const Size(
-                            double.infinity,
-                            QuarkBarIconButton.size,
-                          ),
+                          minimumSize: Size(0, height),
+                          maximumSize: Size(double.infinity, height),
                           tapTargetSize: MaterialTapTargetSize.padded,
                           visualDensity: VisualDensity.standard,
                         ),

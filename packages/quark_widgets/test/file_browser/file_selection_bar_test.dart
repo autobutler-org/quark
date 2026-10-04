@@ -307,4 +307,13 @@ void main() {
       expect(bar.color, tokens.sidebar);
     });
   }
+
+  // #2606: the count and "Select all" grow past the 56 pixel bar.
+  testLargeText('fits its count and controls', (tester, size) async {
+    await pumpSelectionBar(tester, size: size, totalCount: 5);
+
+    expect(tester.takeException(), isNull);
+    expectNoClippedText(tester);
+    await expectTapTargetGuidelines(tester);
+  });
 }
