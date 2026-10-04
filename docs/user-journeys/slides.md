@@ -1,6 +1,6 @@
 # Slides Journeys
 
-Covers the Slides page (`/slides`) and the slide editor for `.qslide` presentations (#1152, #1161).
+Covers the Slides page (`/slides`) and the slide editor for `.qslide` presentations (#1152, #1153, #1161).
 
 ---
 
@@ -65,7 +65,9 @@ Covers the Slides page (`/slides`) and the slide editor for `.qslide` presentati
 **Expected result:**
 
 - The slide editor opens at `/slides/<path>` (with `?serial=<device>` for a file on another drive).
-- The slide panel lists every slide as a numbered thumbnail; the first is selected and shown in the middle.
+- The slide panel lists every slide as a numbered thumbnail; the first is selected, outlined, and open on the canvas in
+  the middle.
+- The bar's second row reads "Slide 1 of N".
 - On a phone the panel is a strip across the top; on a wide window it runs down the left.
 
 ---
@@ -123,17 +125,20 @@ Covers the Slides page (`/slides`) and the slide editor for `.qslide` presentati
 
 ### JN-SL-008: Undo and redo
 
-**Preconditions:** A presentation is open and a slide was added, duplicated, deleted or moved.
+**Preconditions:** A presentation is open and a slide was added, duplicated, deleted or moved, or an element was edited
+on the canvas (JN-SL-011).
 
 **Steps:**
 
-1. Tap **Undo** in the top bar.
-2. Tap **Redo**.
+1. Tap **Undo** in the top bar, or press Ctrl+Z (Cmd+Z on a Mac).
+2. Tap **Redo**, or press Ctrl+Shift+Z (Cmd+Shift+Z), or Ctrl+Y.
 
 **Expected result:**
 
-- Undo takes the last change back; redo puts it back.
+- Undo takes the last change back; redo puts it back, whether it was made in the slide panel or on the canvas.
+- A whole drag, resize or rotate undoes as one step.
 - Each button is disabled when there is nothing to undo or redo.
+- The keys work with focus on the canvas or in the slide panel.
 
 ---
 
@@ -143,7 +148,7 @@ Covers the Slides page (`/slides`) and the slide editor for `.qslide` presentati
 
 **Steps:**
 
-1. Change the presentation (JN-SL-006 or JN-SL-007).
+1. Change the presentation (JN-SL-006, JN-SL-007 or JN-SL-011).
 2. Wait two seconds.
 
 **Expected result:**
@@ -169,4 +174,76 @@ Covers the Slides page (`/slides`) and the slide editor for `.qslide` presentati
 - The save chip reads **Retry save**; the changes stay on screen.
 - Tapping **Retry save** once the Quark is back saves them.
 
-**Notes:** The slide editing canvas itself (#1153) lands separately; until then the middle of the editor shows the selected slide read-only.
+---
+
+### JN-SL-011: Edit elements on the canvas
+
+**Preconditions:** A presentation with elements on its slides is open.
+
+**Steps:**
+
+1. Tap or click an element on the canvas; Shift-, Ctrl- or Cmd-click another to add it, or drag a box on empty slide.
+2. Drag the selection to move it; drag a handle to resize, or the rotate handle to rotate.
+3. Press the arrow keys (Shift for ten units), Delete, Tab, or Ctrl/Cmd `]` and `[`.
+
+**Expected result:**
+
+- Selected elements are outlined; one selected element shows eight resize handles and a rotate handle.
+- A moved element snaps to the slide's and other elements' edges and centers, with guide lines; Alt places it freely.
+- The arrow keys nudge, Delete removes, Tab steps through the elements, and `]` / `[` bring forward and send backward.
+- The slide's thumbnail in the panel shows each change, and the save chip reads **Save** until the autosave runs.
+- Showing another slide clears the selection.
+
+---
+
+### JN-SL-012: Zoom the canvas
+
+**Preconditions:** A presentation is open.
+
+**Steps:**
+
+1. On a wide window, tap **Zoom in** or **Zoom out** in the bar's second row; on a phone, open its **Zoom** menu.
+2. Or pinch, or Ctrl/Cmd-scroll, over the canvas; scroll or two-finger drag to pan.
+3. Tap the percentage chip (**Fit slide** in the phone menu).
+
+**Expected result:**
+
+- The zoom steps between 50% and 200% of the fitted slide, and the chip shows the current percentage.
+- **Zoom in** is disabled at 200% and **Zoom out** at 50%.
+- The percentage chip fits the whole slide in the canvas again.
+- Zooming is not an edit: it does not mark the presentation unsaved.
+
+---
+
+### JN-SL-013: Pictures on slides
+
+**Preconditions:** A presentation is open whose slides have image elements or background images, named by a path on the
+same drive as the presentation (`photos/cover.jpg`).
+
+**Steps:**
+
+1. Open the presentation and look at the canvas and the slide panel.
+
+**Expected result:**
+
+- Each picture loads from the Quark with the user's session, on the canvas and in the thumbnails.
+- A muted box stands in while it loads.
+- A picture that cannot be loaded — moved, deleted, or the Quark unreachable — shows a muted box with a broken-picture
+  icon, and the rest of the slide still draws.
+
+---
+
+### JN-SL-014: Step through slides from the keyboard
+
+**Preconditions:** A presentation with at least two slides is open.
+
+**Steps:**
+
+1. Tap a thumbnail in the slide panel.
+2. Press the down (or right) arrow, then the up (or left) arrow.
+
+**Expected result:**
+
+- Each arrow selects the next or previous slide, outlines its thumbnail, scrolls it into view, and opens it on the
+  canvas; the first and last slides stop there.
+- The arrows move slides, not elements, until the canvas is tapped again.

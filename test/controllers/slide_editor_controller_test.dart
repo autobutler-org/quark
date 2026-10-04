@@ -209,4 +209,125 @@ void main() {
     // It survives the file format.
     expect(QslideCodec.decode(QslideCodec.encode(p)), p);
   });
+
+  Presentation withElements() => Presentation(
+    title: 'Deck',
+    slides: [
+      Slide(
+        id: 's1',
+        elements: [
+          ShapeElement(
+            id: 'a',
+            kind: ShapeKind.rectangle,
+            frame: ElementFrame(x: 0, y: 0, width: 100, height: 100),
+          ),
+          ShapeElement(
+            id: 'b',
+            kind: ShapeKind.rectangle,
+            frame: ElementFrame(x: 200, y: 0, width: 100, height: 100),
+          ),
+        ],
+      ),
+      Slide(id: 's2'),
+    ],
+  );
+
+  test('the canvas selection lives here and follows the slide', () async {
+    final c = controllerFor(withElements());
+    await c.load();
+    expect(c.selectedElementIds, isEmpty);
+    c.selectElements({'a', 'b'});
+    expect(c.selectedElementIds, {'a', 'b'});
+
+    // An element deleted on the canvas leaves the selection.
+    c.document!.controller.deleteElements('s1', {'a'});
+    expect(c.selectedElementIds, {'b'});
+
+    // Another slide starts with nothing selected.
+    c.selectSlide('s2');
+    expect(c.selectedElementIds, isEmpty);
+    c.selectSlide('s1');
+    c.selectElements({'b'});
+    c.addSlide();
+    expect(c.selectedElementIds, isEmpty);
+    await c.save();
+  });
+
+  test('a canvas edit is dirty, undoable and autosaved', () async {
+    final c = controllerFor(withElements());
+    await c.load();
+    c.document!.controller.moveElements('s1', {'a'}, 10, 0);
+    expect(c.isDirty, isTrue);
+    expect(c.canUndo, isTrue);
+    expect(c.saveState, SlideSaveState.dirty);
+    await c.save();
+    expect(saved.single.slides.first.elements.first.frame.x, 10);
+    c.undo();
+    expect(c.isDirty, isTrue);
+    expect(c.presentation!.slides.first.elements.first.frame.x, 0);
+    await c.save();
+  });
+
+  test('zoom steps between fixed levels within the canvas range', () async {
+    final c = controllerFor(deck(1));
+    await c.load();
+    expect(c.zoom, 1);
+    expect(c.zoomPercent, '100%');
+    c.zoomIn();
+    expect(c.zoom, 1.25);
+    c.zoomIn();
+    c.zoomIn();
+    c.zoomIn();
+    expect(c.zoom, SlideCanvas.maxZoom);
+    expect(c.canZoomIn, isFalse);
+    c.zoomIn();
+    expect(c.zoom, SlideCanvas.maxZoom);
+    c.zoomToFit();
+    expect(c.zoom, 1);
+    // A pinch lands between levels; the buttons step to the next one.
+    c.setZoom(0.8);
+    expect(c.zoomPercent, '80%');
+    c.zoomOut();
+    expect(c.zoom, 0.75);
+    c.zoomOut();
+    expect(c.zoom, SlideCanvas.minZoom);
+    expect(c.canZoomOut, isFalse);
+    c.setZoom(9);
+    expect(c.zoom, SlideCanvas.maxZoom);
+  });
+
+  test(
+    'previous and next step through the slides and stop at the ends',
+    () async {
+      final c = controllerFor(deck(3));
+      await c.load();
+      c.selectPreviousSlide();
+      expect(c.selectedSlideId, 's1');
+      c.selectNextSlide();
+      c.selectNextSlide();
+      expect(c.selectedSlideId, 's3');
+      c.selectNextSlide();
+      expect(c.selectedSlideId, 's3');
+      c.selectPreviousSlide();
+      expect(c.selectedSlideId, 's2');
+    },
+  );
+
+  test('an image source is fetched from the presentation\'s device', () {
+    final calls = <(String, String?)>[];
+    final c = SlideEditorController(
+      filePath: 'talks/deck.qslide',
+      deviceSerial: 'usb1',
+      mediaUrl: (path, {serial}) {
+        calls.add((path, serial));
+        return Uri.parse('https://quark.test/$path');
+      },
+    );
+    addTearDown(c.dispose);
+    expect(
+      c.imageUrl('/photos/a.png'),
+      Uri.parse('https://quark.test/photos/a.png'),
+    );
+    expect(calls.single, ('photos/a.png', 'usb1'));
+  });
 }

@@ -83,17 +83,23 @@ lib/widgets/
   slides/
     slide_editor_body.dart      the slide editor under its bar: reads
                                 SlideEditorController and calls its commands
+    slide_editor_bar_bottom.dart
+                                the editor's zoom row, from the controller
+    slide_editor_canvas.dart    the package's SlideCanvas bound to the
+                                controller's document, selection and zoom
+    slide_editor_shortcuts.dart the editor's undo and redo keys
+    slide_image.dart            a slide picture from the authenticated
+                                download URL, with loading and error states
     slide_save_status.dart      the editor's save chip, from SlideSaveState
     slides_body.dart            the Slides list: its rows open editors through
                                 ContentResultTile's router call
     slides_error_view.dart      opens Settings from the disconnected view and
                                 writes its sentence with Errors
-    slide_panel.dart            the slide panel, slide_thumbnail.dart its rows,
-    slide_thumbnail.dart        and slide_stage.dart (with
-    slide_stage.dart            slide_element_preview.dart) the read-only slide
-    slide_element_preview.dart  they and the editor draw: data in, callbacks
-                                out, app-side until quark_slides gains its
-                                canvas (#1153) and the stage becomes it
+    slide_panel.dart            the slide panel, slide_thumbnail.dart its rows
+    slide_thumbnail.dart        drawn by a read-only SlideCanvas: data in,
+                                callbacks out, app-side while it sizes itself
+                                to the editor's split and takes the app's
+                                image builder
     slides_search_bar.dart      the list's filter field
   system/
     health_tab.dart             the System page's tabs: each loads and

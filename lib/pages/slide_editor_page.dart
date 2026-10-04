@@ -6,15 +6,18 @@ import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/slides/slide_editor_bar_bottom.dart';
 import 'package:quark/widgets/slides/slide_editor_body.dart';
 import 'package:quark/widgets/slides/slide_save_status.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The editor for one presentation, at `/slides/<path>?serial=` (#1161): the
-/// slide panel to add, duplicate, delete and reorder slides, the selected
-/// slide in the middle, undo and redo, and an autosave whose state the bar
-/// shows. A failed save says so and keeps the edits for a retry.
+/// slide panel to add, duplicate, delete and reorder slides, the canvas
+/// editing the selected slide in the middle (#1153) with its zoom in the
+/// bar's second row, undo and redo from the bar or the keyboard, and an
+/// autosave whose state the bar shows. A failed save says so and keeps the
+/// edits for a retry.
 ///
 /// Nothing is pushed underneath it when it opens at its own URL, so its back
 /// button and a system back land in the folder that holds the file, as the
@@ -121,6 +124,19 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                 ],
               ),
             ],
+            bottom: _controller.presentation == null
+                ? null
+                : SlideEditorBarBottom(
+                    position:
+                        'Slide ${_controller.selectedIndex + 1} of '
+                        '${_controller.slides.length}',
+                    zoomPercent: _controller.zoomPercent,
+                    onZoomIn: _controller.canZoomIn ? _controller.zoomIn : null,
+                    onZoomOut: _controller.canZoomOut
+                        ? _controller.zoomOut
+                        : null,
+                    onFit: _controller.zoomToFit,
+                  ),
           ),
           body: SafeArea(
             top: false,

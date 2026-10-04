@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/slides/slide_panel.dart';
 import 'package:quark_slides/quark_slides.dart';
@@ -9,7 +10,19 @@ import '../../support/tap_target_guidelines.dart' as tap;
 /// The slide panel reports every action by slide id and holds no state
 /// (#1161).
 void main() {
-  final slides = [for (var i = 1; i <= 3; i++) Slide(id: 's$i')];
+  final slides = [
+    for (var i = 1; i <= 3; i++)
+      Slide(
+        id: 's$i',
+        elements: [
+          ImageElement(
+            id: 'i$i',
+            source: 'pics/$i.png',
+            frame: ElementFrame(x: 0, y: 0, width: 960, height: 540),
+          ),
+        ],
+      ),
+  ];
   late List<String> events;
 
   setUp(() => events = []);
@@ -41,6 +54,10 @@ void main() {
                 onDuplicate: (id) => events.add('duplicate $id'),
                 onDelete: (id) => events.add('delete $id'),
                 onMove: (id, to) => events.add('move $id $to'),
+                onSelectPrevious: () => events.add('previous'),
+                onSelectNext: () => events.add('next'),
+                imageBuilder: (context, image) =>
+                    Text(image.source, key: ValueKey('img_${image.source}')),
               ),
             ),
           ),
@@ -97,5 +114,65 @@ void main() {
     expect(find.bySemanticsLabel('Slide 2'), findsOneWidget);
     expect(find.bySemanticsLabel('Slide 3'), findsOneWidget);
     await tap.expectTapTargetGuidelines(tester);
+  });
+
+  for (final (name, size, axis) in [
+    ('narrow', tap.narrowViewport, Axis.horizontal),
+    ('wide', tap.wideViewport, Axis.vertical),
+  ]) {
+    testWidgets('the arrow keys step once the panel has focus ($name)', (
+      tester,
+    ) async {
+      tap.setViewport(tester, size);
+      await pumpPanel(tester, axis: axis);
+      await tester.pumpAndSettle();
+      // No focus yet: the keys go elsewhere.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      expect(events, isEmpty);
+
+      await tester.tap(find.byKey(const ValueKey('slide_thumb_s2')));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      expect(events, ['select s2', 'next', 'next', 'previous', 'previous']);
+    });
+
+    testWidgets('thumbnails draw read-only, pictures and all ($name)', (
+      tester,
+    ) async {
+      tap.setViewport(tester, size);
+      await pumpPanel(tester, axis: axis);
+      await tester.pumpAndSettle();
+      final canvas = find.descendant(
+        of: find.byKey(const ValueKey('slide_thumb_s1')),
+        matching: find.byType(SlideCanvas),
+      );
+      expect(tester.widget<SlideCanvas>(canvas).readOnly, isTrue);
+      expect(
+        find.ancestor(of: canvas, matching: find.byType(RepaintBoundary)),
+        findsWidgets,
+      );
+      expect(find.byKey(const ValueKey('img_pics/1.png')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('the selected thumbnail is marked selected', (tester) async {
+    tap.setViewport(tester, tap.wideViewport);
+    await pumpPanel(tester, axis: Axis.vertical);
+    await tester.pumpAndSettle();
+    final handle = tester.ensureSemantics();
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('slide_thumb_s1'))),
+      matchesSemantics(
+        label: 'Slide 1',
+        isButton: true,
+        isSelected: true,
+        hasSelectedState: true,
+        hasTapAction: true,
+      ),
+    );
+    handle.dispose();
   });
 }

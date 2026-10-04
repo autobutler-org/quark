@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:quark/services/files_service.dart';
 import 'package:quark/services/slides_service.dart';
 import 'package:quark_slides/quark_slides.dart';
 
@@ -15,6 +16,9 @@ typedef SavePresentationFn =
       Presentation presentation, {
       String? serial,
     });
+
+/// The URL a file on the Quark is downloaded from, authenticated.
+typedef MediaUrlFn = Uri Function(String path, {String? serial});
 
 /// Where the open presentation stands against the file on the Quark.
 enum SlideSaveState {
@@ -32,7 +36,8 @@ enum SlideSaveState {
 }
 
 /// State behind the slide editor: loading the `.qslide`, the slide panel's
-/// selection and commands, undo and redo, and the autosave.
+/// selection and commands, the canvas's element selection and zoom, undo and
+/// redo, and the autosave.
 ///
 /// Every edit goes through the package's `SlideDocumentController`, so each
 /// one is a step [undo] can take back. An edit marks the presentation dirty
@@ -46,6 +51,13 @@ enum SlideSaveState {
 /// [saveError] set, and calls [onSaveFailed] so the page can say so. The next
 /// edit, or [save], tries again.
 ///
+/// The canvas edits [document] directly, so its edits take the same path as
+/// the panel's: each is an undo step, marks the presentation dirty and starts
+/// the autosave. Which elements are selected lives here rather than in the
+/// canvas, so the panel, the toolbar and a properties panel read the same
+/// set; it empties when another slide is shown and drops ids an edit or an
+/// undo took off the slide.
+///
 /// Service calls are parameters defaulting to [SlidesService], so a test
 /// passes fakes.
 class SlideEditorController extends ChangeNotifier {
@@ -56,6 +68,7 @@ class SlideEditorController extends ChangeNotifier {
     this.deviceSerial = '',
     this.loadPresentation = SlidesService.load,
     this.savePresentation = SlidesService.save,
+    this.mediaUrl = FilesService.constructMediaUrl,
     this.autosaveDelay = const Duration(seconds: 2),
     this.newId,
   });
@@ -67,6 +80,9 @@ class SlideEditorController extends ChangeNotifier {
   final String deviceSerial;
   final LoadPresentationFn loadPresentation;
   final SavePresentationFn savePresentation;
+
+  /// Builds the download URL a picture on a slide is fetched from.
+  final MediaUrlFn mediaUrl;
 
   /// How long editing has to pause before the autosave runs.
   final Duration autosaveDelay;
@@ -84,6 +100,8 @@ class SlideEditorController extends ChangeNotifier {
   Object? _saveError;
   bool _saving = false;
   String? _selectedSlideId;
+  Set<String> _selectedElementIds = const {};
+  double _zoom = 1;
   Timer? _autosaveTimer;
   bool _disposed = false;
 
@@ -99,6 +117,10 @@ class SlideEditorController extends ChangeNotifier {
 
   /// The thrown object from the last failed save; null once one succeeds.
   Object? get saveError => _saveError;
+
+  /// The document the canvas edits, or null before the presentation has
+  /// loaded.
+  SlideDocumentNotifier? get document => _doc;
 
   /// The presentation as edited, or null before it has loaded.
   Presentation? get presentation => _doc?.presentation;
@@ -120,6 +142,25 @@ class SlideEditorController extends ChangeNotifier {
     final id = _selectedSlideId;
     return id == null ? -1 : presentation?.indexOfSlide(id) ?? -1;
   }
+
+  /// The ids of the elements selected on the canvas, all on [selectedSlide].
+  Set<String> get selectedElementIds => _selectedElementIds;
+
+  /// The canvas zoom relative to fitting the slide in its box: 1 fits.
+  double get zoom => _zoom;
+
+  /// [zoom] as the bar shows it, such as `125%`.
+  String get zoomPercent => '${(_zoom * 100).round()}%';
+
+  /// Whether [zoomIn] would do anything.
+  bool get canZoomIn => _zoom < SlideCanvas.maxZoom;
+
+  /// Whether [zoomOut] would do anything.
+  bool get canZoomOut => _zoom > SlideCanvas.minZoom;
+
+  /// The zooms the bar's buttons step between, from [SlideCanvas.minZoom]
+  /// to [SlideCanvas.maxZoom].
+  static const zoomLevels = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
   /// Whether [undo] would do anything.
   bool get canUndo => _doc?.controller.canUndo ?? false;
@@ -159,7 +200,7 @@ class SlideEditorController extends ChangeNotifier {
         ..addListener(_onDocumentChanged);
       _saved = loaded;
       _saveError = null;
-      _selectedSlideId = loaded.slides.firstOrNull?.id;
+      _showSlide(loaded.slides.firstOrNull?.id);
     } catch (e) {
       _loadError = e;
     }
@@ -172,8 +213,26 @@ class SlideEditorController extends ChangeNotifier {
   /// Shows the slide [slideId] on the canvas.
   void selectSlide(String slideId) {
     if (slideId == _selectedSlideId) return;
-    _selectedSlideId = slideId;
+    _showSlide(slideId);
     _notify();
+  }
+
+  /// Shows the slide before the selected one; nothing at the first.
+  void selectPreviousSlide() => _step(-1);
+
+  /// Shows the slide after the selected one; nothing at the last.
+  void selectNextSlide() => _step(1);
+
+  void _step(int by) {
+    final to = selectedIndex + by;
+    if (selectedIndex < 0 || to < 0 || to >= slides.length) return;
+    selectSlide(slides[to].id);
+  }
+
+  /// Makes [slideId] the selected slide, with no elements selected on it.
+  void _showSlide(String? slideId) {
+    _selectedSlideId = slideId;
+    _selectedElementIds = const {};
   }
 
   /// Adds a blank slide after the selected one and selects it.
@@ -181,9 +240,7 @@ class SlideEditorController extends ChangeNotifier {
     final doc = _doc;
     if (doc == null) return;
     final at = selectedIndex + 1;
-    _selectedSlideId = doc.controller.addSlide(
-      index: at == 0 ? slides.length : at,
-    );
+    _showSlide(doc.controller.addSlide(index: at == 0 ? slides.length : at));
     _notify();
   }
 
@@ -191,7 +248,7 @@ class SlideEditorController extends ChangeNotifier {
   void duplicateSlide(String slideId) {
     final doc = _doc;
     if (doc == null) return;
-    _selectedSlideId = doc.controller.duplicateSlide(slideId);
+    _showSlide(doc.controller.duplicateSlide(slideId));
     _notify();
   }
 
@@ -204,7 +261,7 @@ class SlideEditorController extends ChangeNotifier {
     if (index < 0) return;
     doc.controller.deleteSlide(slideId);
     if (slideId == _selectedSlideId) {
-      _selectedSlideId = slides[index.clamp(0, slides.length - 1)].id;
+      _showSlide(slides[index.clamp(0, slides.length - 1)].id);
     }
     _notify();
   }
@@ -234,13 +291,54 @@ class SlideEditorController extends ChangeNotifier {
   /// and otherwise selects whatever is now at its old position.
   void _keepSelection(int previousIndex) {
     if (selectedSlide != null || slides.isEmpty) return;
-    _selectedSlideId = slides[previousIndex.clamp(0, slides.length - 1)].id;
+    _showSlide(slides[previousIndex.clamp(0, slides.length - 1)].id);
     _notify();
   }
+
+  // ── Canvas ────────────────────────────────────────────────────────────────
+
+  /// Selects the elements [ids] on the selected slide.
+  void selectElements(Set<String> ids) {
+    if (setEquals(ids, _selectedElementIds)) return;
+    _selectedElementIds = Set.unmodifiable(ids);
+    _notify();
+  }
+
+  /// Sets the canvas zoom, kept within [SlideCanvas.minZoom] and
+  /// [SlideCanvas.maxZoom].
+  void setZoom(double zoom) {
+    final next = zoom.clamp(SlideCanvas.minZoom, SlideCanvas.maxZoom);
+    if (next == _zoom) return;
+    _zoom = next;
+    _notify();
+  }
+
+  /// Zooms to the next of [zoomLevels] above the current zoom.
+  void zoomIn() =>
+      setZoom(zoomLevels.firstWhere((z) => z > _zoom, orElse: () => _zoom));
+
+  /// Zooms to the next of [zoomLevels] below the current zoom.
+  void zoomOut() =>
+      setZoom(zoomLevels.lastWhere((z) => z < _zoom, orElse: () => _zoom));
+
+  /// Fits the whole slide in the canvas again.
+  void zoomToFit() => setZoom(1);
+
+  /// The URL of the picture a slide names by [source], a path relative to
+  /// the files root of the device the presentation is on.
+  Uri imageUrl(String source) =>
+      mediaUrl(source.trim().replaceAll(RegExp(r'^/+'), ''), serial: _serial);
 
   // ── Save ──────────────────────────────────────────────────────────────────
 
   void _onDocumentChanged() {
+    // An edit or an undo may have taken selected elements off the slide.
+    final onSlide = {...?selectedSlide?.elements.map((e) => e.id)};
+    if (!_selectedElementIds.every(onSlide.contains)) {
+      _selectedElementIds = Set.unmodifiable(
+        _selectedElementIds.where(onSlide.contains),
+      );
+    }
     _autosaveTimer?.cancel();
     if (isDirty) _autosaveTimer = Timer(autosaveDelay, save);
     _notify();

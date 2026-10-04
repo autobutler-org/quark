@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
+import 'package:quark/widgets/slides/slide_editor_canvas.dart';
+import 'package:quark/widgets/slides/slide_editor_shortcuts.dart';
+import 'package:quark/widgets/slides/slide_image.dart';
 import 'package:quark/widgets/slides/slide_panel.dart';
-import 'package:quark/widgets/slides/slide_stage.dart';
 import 'package:quark/widgets/slides/slides_error_view.dart';
+import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Everything under the slide editor's bar: the loader, the load error, or
-/// the [SlidePanel] beside the selected slide on its stage.
+/// the [SlidePanel] beside the [SlideEditorCanvas] editing the selected
+/// slide, with the undo and redo keys over both ([SlideEditorShortcuts]).
+///
+/// Pictures on the canvas and the thumbnails are [SlideImage]s fetched
+/// through the Quark's authenticated download URL for their path
+/// ([SlideEditorController.imageUrl]).
 ///
 /// The panel runs down the side of a wide window and across the top of a
 /// phone, switching at [QuarkSplitView.collapseBreakpoint] so the editor
@@ -39,7 +47,11 @@ class SlideEditorBody extends StatelessWidget {
 
     final tokens = QuarkTokens.of(context);
     final collapsed = QuarkSplitView.isCollapsed(context);
-    final selected = c.selectedSlide;
+    Widget imageBuilder(BuildContext context, SlideImageSource image) =>
+        SlideImage(
+          image: NetworkImage(c.imageUrl(image.source).toString()),
+          fit: image.fit,
+        );
     final panel = SlidePanel(
       slides: presentation.slides,
       size: presentation.size,
@@ -51,44 +63,35 @@ class SlideEditorBody extends StatelessWidget {
       onDuplicate: c.duplicateSlide,
       onDelete: c.deleteSlide,
       onMove: c.moveSlide,
+      onSelectPrevious: c.selectPreviousSlide,
+      onSelectNext: c.selectNextSlide,
+      imageBuilder: imageBuilder,
     );
-    final stage = Padding(
+    final stage = KeyedSubtree(
       key: const ValueKey('slide_editor_stage'),
-      padding: EdgeInsets.all(tokens.spacingLg),
-      child: Center(
-        child: selected == null
-            ? const SizedBox.shrink()
-            : DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(color: tokens.border),
-                ),
-                child: SlideStage(
-                  slide: selected,
-                  size: presentation.size,
-                  semanticLabel:
-                      'Slide ${c.selectedIndex + 1} of '
-                      '${presentation.slides.length}',
-                ),
-              ),
-      ),
+      child: SlideEditorCanvas(controller: c, imageBuilder: imageBuilder),
     );
 
-    return collapsed
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(height: SlidePanel.stripHeight, child: panel),
-              Divider(height: 1, color: tokens.border),
-              Expanded(child: stage),
-            ],
-          )
-        : Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(width: SlidePanel.sideWidth, child: panel),
-              VerticalDivider(width: 1, color: tokens.border),
-              Expanded(child: stage),
-            ],
-          );
+    return SlideEditorShortcuts(
+      onUndo: c.undo,
+      onRedo: c.redo,
+      child: collapsed
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(height: SlidePanel.stripHeight, child: panel),
+                Divider(height: 1, color: tokens.border),
+                Expanded(child: stage),
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(width: SlidePanel.sideWidth, child: panel),
+                VerticalDivider(width: 1, color: tokens.border),
+                Expanded(child: stage),
+              ],
+            ),
+    );
   }
 }

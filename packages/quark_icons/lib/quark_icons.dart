@@ -216,6 +216,9 @@ class QuarkIcons {
   static const IconData search_rounded = Icons.search_rounded;
   static const IconData fullscreen = Icons.fullscreen;
   static const IconData fullscreen_exit = Icons.fullscreen_exit;
+  static const IconData zoom_in = Icons.zoom_in;
+  static const IconData zoom_out = Icons.zoom_out;
+  static const IconData fit_screen = Icons.fit_screen;
   static const IconData refresh = Icons.refresh;
   static const IconData refresh_rounded = Icons.refresh_rounded;
 

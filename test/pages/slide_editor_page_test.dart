@@ -1,10 +1,10 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/pages/slide_editor_page.dart';
 import 'package:quark/widgets/slides/slide_panel.dart';
-import 'package:quark/widgets/slides/slide_stage.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,8 +12,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../support/tap_target_guidelines.dart' as tap;
 import '../support/text_scale.dart';
 
-/// The slide editor (#1161): the slide panel's add, duplicate, delete and
-/// reorder, undo and redo, and the save state, on a phone and a desktop.
+/// The slide editor (#1161, #1153): the slide panel's add, duplicate, delete
+/// and reorder, the canvas editing the selected slide, zoom, undo and redo
+/// from the bar and the keyboard, and the save state, on a phone and a
+/// desktop.
 void main() {
   late List<Presentation> saved;
   late Object? saveFailure;
@@ -111,9 +113,20 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('slide_editor_stage')),
-          matching: find.byType(SlideStage),
+          matching: find.byType(SlideCanvas),
         ),
         findsOneWidget,
+      );
+      // The thumbnails draw with the read-only canvas, behind a repaint
+      // boundary and with no input.
+      final thumbCanvas = find.descendant(
+        of: thumb('s2'),
+        matching: find.byType(SlideCanvas),
+      );
+      expect(tester.widget<SlideCanvas>(thumbCanvas).readOnly, isTrue);
+      expect(
+        find.ancestor(of: thumbCanvas, matching: find.byType(RepaintBoundary)),
+        findsWidgets,
       );
       expect(find.bySemanticsLabel('Slide 1 of 2'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -249,5 +262,129 @@ void main() {
     await pumpEditor(tester);
     expect(tester.takeException(), isNull);
     expectNoClippedText(tester);
+  });
+
+  /// An element on the editing canvas, not its copy in a thumbnail.
+  Finder element(String id) => find.descendant(
+    of: find.byKey(const ValueKey('slide_editor_canvas')),
+    matching: find.byKey(ValueKey('slide_element_$id')),
+  );
+
+  for (final (name, size) in [
+    ('narrow', tap.narrowViewport),
+    ('wide', tap.wideViewport),
+  ]) {
+    testWidgets(
+      'a canvas edit undoes from the keyboard and autosaves ($name)',
+      (tester) async {
+        tap.setViewport(tester, size);
+        final c = await pumpEditor(tester);
+        await tester.tap(element('t1'));
+        await tester.pump();
+        expect(c.selectedElementIds, {'t1'});
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+        double x() => c.slides.first.elements.single.frame.x;
+        expect(x(), 101);
+        expect(c.saveState, SlideSaveState.dirty);
+        // The panel's thumbnail draws the edit.
+        final thumbCanvas = tester.widget<SlideCanvas>(
+          find.descendant(of: thumb('s1'), matching: find.byType(SlideCanvas)),
+        );
+        expect(thumbCanvas.slide!.elements.single.frame.x, 101);
+
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+        expect(x(), 100);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        expect(x(), 101);
+        // Cmd works as well as Ctrl.
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+        expect(x(), 100);
+        await tester.pump();
+        expect(c.canRedo, isTrue);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await letAutosaveRun(tester);
+        expect(saved.last.slides.first.elements.single.frame.y, 101);
+        expect(c.saveState, SlideSaveState.saved);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('the canvas selection empties on another slide', (tester) async {
+    tap.setViewport(tester, tap.wideViewport);
+    final c = await pumpEditor(tester);
+    await tester.tap(element('t1'));
+    await tester.pump();
+    expect(c.selectedElementIds, {'t1'});
+    await tester.tap(thumb('s2'));
+    await tester.pumpAndSettle();
+    expect(c.selectedElementIds, isEmpty);
+    expect(element('t2'), findsOneWidget);
+  });
+
+  testWidgets('the arrow keys step through the slide panel', (tester) async {
+    tap.setViewport(tester, tap.wideViewport);
+    final c = await pumpEditor(tester, slides: 3);
+    await tester.tap(thumb('s1'));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(c.selectedSlideId, 's2');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(c.selectedSlideId, 's3');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pumpAndSettle();
+    expect(c.selectedSlideId, 's2');
+    // Nothing moved on the canvas: the keys went to the panel.
+    expect(c.isDirty, isFalse);
+  });
+
+  testWidgets('the bar zooms the canvas and fits it again', (tester) async {
+    tap.setViewport(tester, tap.wideViewport);
+    final c = await pumpEditor(tester);
+    expect(find.text('100%'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('slide_zoom_in')));
+    await tester.pump();
+    expect(c.zoom, 1.25);
+    expect(find.text('125%'), findsOneWidget);
+    expect(
+      tester
+          .widget<SlideCanvas>(
+            find.byKey(const ValueKey('slide_editor_canvas')),
+          )
+          .zoom,
+      1.25,
+    );
+    await tester.tap(find.byKey(const ValueKey('slide_zoom_out')));
+    await tester.tap(find.byKey(const ValueKey('slide_zoom_out')));
+    await tester.pump();
+    expect(c.zoom, 0.75);
+    await tester.tap(find.byKey(const ValueKey('slide_zoom_fit')));
+    await tester.pump();
+    expect(c.zoom, 1);
+    expect(c.isDirty, isFalse);
+  });
+
+  testWidgets('a phone zooms from the Zoom menu', (tester) async {
+    tap.setViewport(tester, tap.narrowViewport);
+    final c = await pumpEditor(tester);
+    expect(find.byKey(const ValueKey('slide_zoom_in')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('app_bar_bottom_menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('slide_menu_zoom_in')));
+    await tester.pumpAndSettle();
+    expect(c.zoom, 1.25);
+    expect(find.text('Slide 1 of 2'), findsOneWidget);
   });
 }

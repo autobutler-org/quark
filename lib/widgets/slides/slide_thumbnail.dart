@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:quark/widgets/slides/slide_stage.dart';
+import 'package:quark/widgets/slides/slide_editor_canvas.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// One slide in the slide panel: a small [SlideStage] with its number, the
-/// selected one outlined, and a menu of what can be done to it.
+/// One slide in the slide panel: the slide drawn by a read-only
+/// [SlideCanvas] with its number, the selected one outlined, and a menu of
+/// what can be done to it.
+///
+/// The picture takes no input and sits in its own [RepaintBoundary], so an
+/// edit on the big canvas repaints only the thumbnail of the slide it
+/// changed.
 ///
 /// The menu opens from its button or a right-click on the thumbnail (#1161)
 /// and offers duplicate, move earlier, move later and delete; a move that
@@ -26,6 +31,7 @@ class SlideThumbnail extends StatefulWidget {
     required this.selected,
     required this.onSelect,
     required this.onDuplicate,
+    this.imageBuilder,
     this.onDelete,
     this.onMoveEarlier,
     this.onMoveLater,
@@ -49,6 +55,9 @@ class SlideThumbnail extends StatefulWidget {
 
   /// Called from the menu's Duplicate row.
   final VoidCallback onDuplicate;
+
+  /// Draws image elements and background images.
+  final SlideImageBuilder? imageBuilder;
 
   /// Called from the menu's Delete row; null disables it.
   final VoidCallback? onDelete;
@@ -106,6 +115,7 @@ class _SlideThumbnailState extends State<SlideThumbnail> {
       :selected,
       :onSelect,
       :onDuplicate,
+      :imageBuilder,
       :onDelete,
       :onMoveEarlier,
       :onMoveLater,
@@ -167,7 +177,14 @@ class _SlideThumbnailState extends State<SlideThumbnail> {
                 ),
                 child: Stack(
                   children: [
-                    SlideStage(slide: slide, size: size),
+                    RepaintBoundary(
+                      child: SlideCanvas.readOnly(
+                        slide: slide,
+                        size: size,
+                        imageBuilder: imageBuilder,
+                        style: SlideEditorCanvas.styleOf(context),
+                      ),
+                    ),
                     PositionedDirectional(
                       start: tokens.spacingXs,
                       bottom: tokens.spacingXs,

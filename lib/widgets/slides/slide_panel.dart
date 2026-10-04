@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:quark/widgets/slides/slide_thumbnail.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_slides/quark_slides.dart';
@@ -12,11 +13,15 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// new place — a long press first on a touch screen — or moved from its menu,
 /// which also duplicates and deletes it; see [SlideThumbnail].
 ///
-/// Every change is reported out by slide id; the panel holds no state.
+/// With focus in the panel — after a tap on it, or tabbing to a thumbnail —
+/// the arrow keys step to the previous and next slide.
+///
+/// Every change is reported out by slide id; the panel holds no state but
+/// its focus.
 ///
 /// Key prefixes: `slide_panel_add` on the add button, `slide_panel_list` on
 /// the list, and [SlideThumbnail]'s on each slide.
-class SlidePanel extends StatelessWidget {
+class SlidePanel extends StatefulWidget {
   /// Creates the panel over [slides].
   const SlidePanel({
     required this.slides,
@@ -29,6 +34,9 @@ class SlidePanel extends StatelessWidget {
     required this.onDuplicate,
     required this.onDelete,
     required this.onMove,
+    required this.onSelectPrevious,
+    required this.onSelectNext,
+    this.imageBuilder,
     super.key,
   });
 
@@ -62,6 +70,15 @@ class SlidePanel extends StatelessWidget {
   /// Called with a slide's id and the position it should end up at.
   final void Function(String slideId, int toIndex) onMove;
 
+  /// Called on the up or left arrow key.
+  final VoidCallback onSelectPrevious;
+
+  /// Called on the down or right arrow key.
+  final VoidCallback onSelectNext;
+
+  /// Draws pictures on the thumbnails.
+  final SlideImageBuilder? imageBuilder;
+
   /// The height of the panel across the top of a phone.
   static const double stripHeight = 104;
 
@@ -69,7 +86,48 @@ class SlidePanel extends StatelessWidget {
   static const double sideWidth = 220;
 
   @override
+  State<SlidePanel> createState() => _SlidePanelState();
+}
+
+class _SlidePanelState extends State<SlidePanel> {
+  final _focusNode = FocusNode(debugLabel: 'SlidePanel');
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowLeft) {
+      widget.onSelectPrevious();
+    } else if (key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowRight) {
+      widget.onSelectNext();
+    } else {
+      return KeyEventResult.ignored;
+    }
+    return KeyEventResult.handled;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final SlidePanel(
+      :slides,
+      :size,
+      :selectedSlideId,
+      :axis,
+      :canDelete,
+      :onSelect,
+      :onAdd,
+      :onDuplicate,
+      :onDelete,
+      :onMove,
+      :imageBuilder,
+    ) = widget;
     final tokens = QuarkTokens.of(context);
     final vertical = axis == Axis.vertical;
     final last = slides.length - 1;
@@ -94,6 +152,7 @@ class SlidePanel extends StatelessWidget {
           selected: slide.id == selectedSlideId,
           onSelect: () => onSelect(slide.id),
           onDuplicate: () => onDuplicate(slide.id),
+          imageBuilder: imageBuilder,
           onDelete: canDelete ? () => onDelete(slide.id) : null,
           onMoveEarlier: index > 0 ? () => onMove(slide.id, index - 1) : null,
           onMoveLater: index < last ? () => onMove(slide.id, index + 1) : null,
@@ -107,13 +166,14 @@ class SlidePanel extends StatelessWidget {
               ? thumbnail
               : SizedBox(
                   width:
-                      (stripHeight - 2 * tokens.spacingSm) * size.aspectRatio,
+                      (SlidePanel.stripHeight - 2 * tokens.spacingSm) *
+                      size.aspectRatio,
                   child: thumbnail,
                 ),
         );
       },
     );
-    return ColoredBox(
+    final panel = ColoredBox(
       color: tokens.sidebar,
       child: vertical
           ? Column(
@@ -146,6 +206,16 @@ class SlidePanel extends StatelessWidget {
                 Expanded(child: list),
               ],
             ),
+    );
+    return Focus(
+      focusNode: _focusNode,
+      onKeyEvent: _onKey,
+      // A press anywhere in the panel brings the arrow keys here, away from
+      // the canvas, which takes them back the same way.
+      child: Listener(
+        onPointerDown: (_) => _focusNode.requestFocus(),
+        child: panel,
+      ),
     );
   }
 }
