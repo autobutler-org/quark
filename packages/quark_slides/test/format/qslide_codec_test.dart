@@ -70,6 +70,39 @@ void main() {
       expect(elements[2]['frame']['x'], 405);
     });
 
+    test('a group keeps what it and its children do not understand', () {
+      final doc = SlideDocumentController(
+        QslideCodec.decode(fixture('future_fields.qslide')),
+      );
+      final group = doc.presentation.slides.single.elementById('e5');
+      expect(group, isA<GroupElement>());
+      expect((group! as GroupElement).children.first, isA<UnknownElement>());
+      doc.moveElements('s1', ['e5'], 10, 0);
+      doc.moveElements('s1', ['e7'], 0, 50);
+      final json = jsonDecode(QslideCodec.encode(doc.presentation)) as Map;
+      final saved = ((json['slides'] as List).single['elements'] as List)
+          .firstWhere((e) => e['id'] == 'e5') as Map;
+      expect(saved['locked'], isTrue);
+      final children = saved['children'] as List;
+      expect(children[0]['series'], isNotEmpty);
+      expect(children[1]['glow'], 4);
+      expect(saved['frame']['x'], 610);
+      // The group refitted around its moved child.
+      expect(saved['frame']['height'], 250);
+    });
+
+    test('a reader that predates groups keeps one verbatim', () {
+      // What an older version sees: a type it does not know.
+      final group = SlideElement.fromJson({
+        'id': 'g',
+        'type': 'group-v2',
+        'frame': {'x': 0, 'y': 0, 'width': 1, 'height': 1},
+        'children': [],
+      }, r'$');
+      expect(group, isA<UnknownElement>());
+      expect(group.toJson()['children'], isEmpty);
+    });
+
     test('a dash this version cannot read draws solid and is kept', () {
       final deck = QslideCodec.decode(fixture('future_fields.qslide'));
       final shape = deck.slides.single.elementById('e2') as ShapeElement;

@@ -7,8 +7,9 @@ import '../geometry/slide_viewport.dart';
 import '../model/element_frame.dart';
 import 'slide_canvas_style.dart';
 
-/// Paints the editing marks over a slide, in viewport pixels: an outline
-/// around each selected frame, the stem up to the rotate handle, the snap
+/// Paints the editing marks over a slide, in viewport pixels: a faint
+/// outline around an entered [groupFrame], an outline around each selected
+/// frame, the stem up to the rotate handle, the snap
 /// guides and the marquee. Hairlines stay one pixel wide at every zoom.
 class SlideSelectionPainter extends CustomPainter {
   /// Creates a painter.
@@ -19,6 +20,7 @@ class SlideSelectionPainter extends CustomPainter {
     this.showRotateStem = false,
     this.guides = const [],
     this.marquee,
+    this.groupFrame,
   });
 
   /// Maps slide units to the viewport.
@@ -39,12 +41,28 @@ class SlideSelectionPainter extends CustomPainter {
   /// The marquee rectangle in slide units, while one is dragged.
   final Rect? marquee;
 
+  /// The frame of the group whose children are being edited, or `null`.
+  final ElementFrame? groupFrame;
+
   @override
   void paint(Canvas canvas, Size size) {
     final outline = Paint()
       ..color = style.selectionColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
+    if (groupFrame case final group?) {
+      canvas.drawPath(
+        Path()
+          ..addPolygon(
+            [for (final c in group.corners) viewport.toView(c)],
+            true,
+          ),
+        Paint()
+          ..color = style.selectionColor.withValues(alpha: 0.4)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+    }
     for (final frame in frames) {
       canvas.drawPath(
         Path()

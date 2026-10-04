@@ -94,7 +94,9 @@ class SlideStage extends StatelessWidget {
                     selected: selection.contains(element.id),
                     onSelect:
                         onSelect == null ? null : () => onSelect!(element.id),
-                    editor: element.id == editingId ? editor : null,
+                    elementLabel: elementLabel,
+                    editingId: editingId,
+                    editor: editor,
                     showPlaceholder: onSelect != null,
                   ),
                 if (preview case final preview?)

@@ -321,6 +321,37 @@ void main() {
   });
 
   group('accessibility', () {
+    testBothViewports(
+        'switching tools keeps the canvas and its semantics intact',
+        (tester, size) async {
+      final semantics = tester.ensureSemantics();
+      await pumpCanvas(tester, doc, size: size);
+      Element inner() => tester.element(find
+          .descendant(
+            of: find.byType(SlideCanvas),
+            matching: find.byType(LayoutBuilder),
+          )
+          .first);
+      final before = inner();
+      for (final tool in [
+        SlideCanvasTool.text,
+        const SlideCanvasTool.shape(ShapeKind.star),
+        SlideCanvasTool.select,
+      ]) {
+        harness(tester).useTool(tool);
+        await tester.pump();
+      }
+      await tester.tap(elementKey('box'));
+      await tester.pump();
+      await tester.tap(elementKey('ball'));
+      await tester.pump();
+      expect(harness(tester).selection, {'ball'});
+      // The canvas was rebuilt in place, not torn down and remade.
+      expect(inner(), same(before));
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+    });
+
     testBothViewports('a drawing tool labels the canvas, and a tap inserts',
         (tester, size) async {
       final semantics = tester.ensureSemantics();

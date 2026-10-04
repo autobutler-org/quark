@@ -1,6 +1,7 @@
 import 'package:quark_slides/quark_slides.dart';
 
-/// A presentation that uses every element type and every optional field, so
+/// A presentation that uses every element type — groups nested in groups
+/// among them — and every optional field, so
 /// that a round trip through `.qslide` exercises the whole model.
 /// `test/fixtures/sample.qslide` is its golden encoding.
 Presentation samplePresentation() => Presentation(
@@ -69,6 +70,42 @@ Presentation samplePresentation() => Presentation(
               id: 'e7',
               frame: ElementFrame(x: 1500, y: 100, width: 200, height: 100),
               source: 'asset:logo-1',
+            ),
+            GroupElement(
+              id: 'e8',
+              frame: ElementFrame(
+                x: 100,
+                y: 100,
+                width: 600,
+                height: 400,
+                rotation: 30,
+              ),
+              children: [
+                TextBox(
+                  id: 'e9',
+                  frame: ElementFrame(x: 0, y: 0, width: 600, height: 100),
+                  paragraphs: const [
+                    TextParagraph([TextRun('Grouped')]),
+                  ],
+                ),
+                GroupElement(
+                  id: 'e10',
+                  frame: ElementFrame(x: 0, y: 200, width: 400, height: 200),
+                  children: [
+                    ShapeElement(
+                      id: 'e11',
+                      frame: ElementFrame(x: 0, y: 0, width: 200, height: 200),
+                      kind: ShapeKind.star,
+                    ),
+                    ImageElement(
+                      id: 'e12',
+                      frame:
+                          ElementFrame(x: 200, y: 0, width: 200, height: 200),
+                      source: 'photos/cat.jpg',
+                    ),
+                  ],
+                ),
+              ],
             ),
           ],
         ),

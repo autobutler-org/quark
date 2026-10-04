@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_slides/quark_slides.dart';
@@ -73,6 +74,7 @@ class CanvasHarness extends StatefulWidget {
     this.textEditing,
     this.tools,
     this.onPickImage,
+    this.clipboard,
   });
 
   final SlideDocumentNotifier document;
@@ -81,6 +83,7 @@ class CanvasHarness extends StatefulWidget {
   final SlideTextEditingController? textEditing;
   final SlideToolController? tools;
   final ValueChanged<ElementFrame?>? onPickImage;
+  final SlideClipboard? clipboard;
 
   @override
   State<CanvasHarness> createState() => CanvasHarnessState();
@@ -118,6 +121,7 @@ class CanvasHarnessState extends State<CanvasHarness> {
         textEditing: widget.textEditing,
         tools: tools,
         onPickImage: widget.onPickImage,
+        clipboard: widget.clipboard,
       );
 }
 
@@ -131,6 +135,7 @@ Future<void> pumpCanvas(
   SlideTextEditingController? textEditing,
   SlideToolController? tools,
   ValueChanged<ElementFrame?>? onPickImage,
+  SlideClipboard? clipboard,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -145,10 +150,26 @@ Future<void> pumpCanvas(
           textEditing: textEditing,
           tools: tools,
           onPickImage: onPickImage,
+          clipboard: clipboard,
         ),
       ),
     ),
   );
+  await tester.pump();
+}
+
+/// Taps [global] twice, 100 ms apart, as a double tap.
+Future<void> doubleTap(
+  WidgetTester tester,
+  Offset global, {
+  PointerDeviceKind kind = PointerDeviceKind.touch,
+}) async {
+  for (final ms in [0, 100]) {
+    final gesture = await tester.createGesture(kind: kind);
+    await gesture.down(global, timeStamp: Duration(milliseconds: ms));
+    await gesture.up(timeStamp: Duration(milliseconds: ms + 20));
+    await tester.pump();
+  }
   await tester.pump();
 }
 

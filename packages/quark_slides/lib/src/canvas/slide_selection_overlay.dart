@@ -10,8 +10,9 @@ import 'slide_selection_handle.dart';
 import 'slide_selection_painter.dart';
 
 /// The editing chrome over a slide, sized to the whole viewport: selection
-/// outlines, snap guides and the marquee, and — when exactly one element is
-/// selected — its eight resize handles and its rotate handle.
+/// outlines, the faint outline of an entered group, snap guides and the
+/// marquee, and — when exactly one element is selected — its eight resize
+/// handles and its rotate handle.
 ///
 /// It sits in screen space rather than in the scaled slide, so handles keep
 /// their size at every zoom. Handles are keyed `slide_handle_<id>`; see
@@ -25,6 +26,7 @@ class SlideSelectionOverlay extends StatelessWidget {
     required this.style,
     this.guides = const [],
     this.marquee,
+    this.groupFrame,
   });
 
   /// Maps slide units to the viewport.
@@ -42,6 +44,9 @@ class SlideSelectionOverlay extends StatelessWidget {
   /// The marquee rectangle in slide units, while one is dragged.
   final Rect? marquee;
 
+  /// The frame of the group whose children are being edited, or `null`.
+  final ElementFrame? groupFrame;
+
   @override
   Widget build(BuildContext context) {
     final single = frames.length == 1 ? frames.single : null;
@@ -57,6 +62,7 @@ class SlideSelectionOverlay extends StatelessWidget {
               showRotateStem: single != null,
               guides: guides,
               marquee: marquee,
+              groupFrame: groupFrame,
             ),
           ),
         ),

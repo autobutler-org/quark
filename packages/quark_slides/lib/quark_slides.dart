@@ -8,8 +8,13 @@
 /// and the `SlideTextEditingController` a toolbar formats through; and the
 /// drawing tools: `SlideCanvasTool` and the `SlideToolController` a toolbar
 /// picks them through, the insertion commands, `ElementStyle`, `ImageSource`,
-/// and the pure path and drag geometry behind shapes and lines.
+/// and the pure path and drag geometry behind shapes and lines; grouping
+/// (`GroupElement`, `SlideTree`, the group geometry), alignment
+/// (`alignFrames`, `distributeFrames`, `matchFrameSizes`), and copy and
+/// paste through a `SlideClipboard` and its `SlideClipboardCodec`.
 library;
+
+export 'src/clipboard/slide_clipboard.dart';
 
 export 'src/canvas/slide_canvas.dart';
 export 'src/canvas/slide_canvas_style.dart';
@@ -25,10 +30,14 @@ export 'src/controller/slide_document_controller.dart';
 export 'src/controller/slide_document_notifier.dart';
 export 'src/format/qslide_codec.dart';
 export 'src/format/qslide_format_exception.dart';
+export 'src/format/slide_clipboard_codec.dart';
 export 'src/geometry/frame_geometry.dart';
+export 'src/geometry/group_geometry.dart';
+export 'src/geometry/slide_alignment.dart';
 export 'src/geometry/slide_drawing.dart';
 export 'src/geometry/slide_handle.dart';
 export 'src/geometry/slide_snapping.dart';
+export 'src/geometry/slide_tree.dart';
 export 'src/geometry/slide_viewport.dart';
 export 'src/model/element_frame.dart';
 export 'src/model/element_style.dart';

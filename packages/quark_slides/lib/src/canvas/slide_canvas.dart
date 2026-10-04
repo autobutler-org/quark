@@ -6,12 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import '../clipboard/slide_clipboard.dart';
 import '../controller/slide_document_controller.dart';
 import '../controller/slide_document_notifier.dart';
 import '../geometry/frame_geometry.dart';
 import '../geometry/slide_drawing.dart';
 import '../geometry/slide_handle.dart';
 import '../geometry/slide_snapping.dart';
+import '../geometry/slide_tree.dart';
 import '../geometry/slide_viewport.dart';
 import '../model/element_frame.dart';
 import '../model/presentation.dart';
@@ -51,8 +53,18 @@ import 'slide_text_layout.dart';
 ///   next and previous element in stacking order and then let focus move
 ///   on; Ctrl or Cmd with `]` or `[` brings forward or sends backward, and
 ///   with Shift as well, to the front or back;
+/// - Ctrl or Cmd with C, X and V copy, cut and paste through [clipboard],
+///   and with D duplicate in place; Ctrl or Cmd G groups the selection and
+///   with Shift ungroups it (see [SlideDocumentController.groupElements]);
 /// - scroll to pan a zoomed slide, Ctrl or Cmd scroll (or pinch) to zoom
 ///   about the pointer, middle-drag or two fingers to pan.
+///
+/// **Groups.** A group selects, moves, resizes and rotates as one element.
+/// Double-click or double-tap it — or press Enter with it selected — to
+/// enter it and select the child under the pointer (the backmost child
+/// from the keyboard); its outline stays drawn faintly while you work on
+/// its children, with the same gestures and keys. Escape, or a press
+/// outside the group, steps back out.
 ///
 /// **Text.** Double-click or double-tap a text box, or press Enter or F2
 /// with one selected, to edit its text in place — at the canvas's scale and
@@ -87,6 +99,12 @@ import 'slide_text_layout.dart';
 ///
 /// **Read-only.** [SlideCanvas.readOnly] draws a [Slide] with no chrome and
 /// no input, for thumbnails and presenting.
+///
+/// **Clipboard.** Copied elements go to [clipboard] as versioned JSON (see
+/// [SlideClipboardCodec]); a paste lands [SlideDocumentController.pasteOffset]
+/// units past anything it would cover exactly, and selects what it pasted.
+/// Plain text from another app pastes as a new text box. Each cut, paste,
+/// duplicate, group and ungroup is one undo step.
 ///
 /// Images are drawn by [imageBuilder]; the package never loads one. The
 /// canvas needs a bounded box when editing and handles pointers itself, so
@@ -130,6 +148,7 @@ class SlideCanvas extends StatefulWidget {
     this.toolLabel = defaultSlideToolLabel,
     this.editingAnnouncement = 'Editing text',
     this.editingDoneAnnouncement = 'Done editing text',
+    this.clipboard,
   })  : slide = null,
         size = null;
 
@@ -157,7 +176,8 @@ class SlideCanvas extends StatefulWidget {
         onPickImage = null,
         toolLabel = defaultSlideToolLabel,
         editingAnnouncement = '',
-        editingDoneAnnouncement = '';
+        editingDoneAnnouncement = '',
+        clipboard = null;
 
   /// The smallest zoom, half the fitted size.
   static const minZoom = 0.5;
@@ -233,6 +253,10 @@ class SlideCanvas extends StatefulWidget {
 
   /// What a screen reader hears when editing ends.
   final String editingDoneAnnouncement;
+
+  /// Where copy and cut write and paste reads; [SlideClipboard.memory],
+  /// inside the app only, when none is given.
+  final SlideClipboard? clipboard;
 
   /// Whether the canvas only draws.
   bool get readOnly => document == null;
@@ -337,6 +361,10 @@ class _SlideCanvasState extends State<SlideCanvas> {
   /// The element a draw gesture would insert, drawn over the slide.
   SlideElement? _preview;
 
+  /// The group whose children are being selected, entered by a double
+  /// click; `null` at the slide's top level.
+  String? _entered;
+
   /// The last tap that did not drag: when, where in slide units, and on
   /// which element, to tell a double tap.
   (Duration, Offset, String)? _lastTap;
@@ -350,6 +378,8 @@ class _SlideCanvasState extends State<SlideCanvas> {
   SlideCanvasTool get _tool => _tools.tool;
 
   SlideDocumentController get _doc => widget.document!.controller;
+
+  SlideClipboard get _clipboard => widget.clipboard ?? SlideClipboard.memory;
 
   Slide? get _slide => widget.document!.presentation.slideById(widget.slideId!);
 
@@ -372,6 +402,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
     super.didUpdateWidget(oldWidget);
     if (!setEquals(widget.selection, oldWidget.selection)) {
       _selection = widget.selection;
+      _leaveUnlessInside(_selection);
     }
     final oldEditing = oldWidget.textEditing ?? _ownTextEditing;
     if (widget.slideId != oldWidget.slideId ||
@@ -381,6 +412,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
       oldEditing?.commit();
       _cancelGesture();
       _selection = widget.selection;
+      _entered = null;
     }
     if (oldEditing != _editing) {
       oldEditing?.removeListener(_onEditingChanged);
@@ -455,7 +487,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
   /// Drops the session when its box leaves the slide — undone, say.
   void _onDocumentChanged() {
     final id = _editing.elementId;
-    if (id != null && _slide?.elementById(id) is! TextBox) _editing.cancel();
+    if (id != null && _slide?.findElement(id) is! TextBox) _editing.cancel();
   }
 
   /// Opens [id] for editing, with the caret under the global point
@@ -497,16 +529,18 @@ class _SlideCanvasState extends State<SlideCanvas> {
         TextSelection.collapsed(offset: position.offset);
   }
 
-  /// The frame of the box being edited, grown to its draft text when it
-  /// grows to fit.
+  /// The frame on the slide of the box being edited, grown to its draft
+  /// text when it grows to fit.
   ElementFrame? get _editingFrame {
     final draft = _editing.draft;
-    if (draft == null) return null;
-    if (draft.autoFit != TextAutoFit.grow) return draft.frame;
-    final height = SlideTextLayout.fromStyle(_style).contentHeight(draft);
-    return height <= draft.frame.height
-        ? draft.frame
-        : draft.frame.copyWith(height: height);
+    final slide = _slide;
+    if (draft == null || slide == null) return null;
+    var frame = draft.frame;
+    if (draft.autoFit == TextAutoFit.grow) {
+      final height = SlideTextLayout.fromStyle(_style).contentHeight(draft);
+      if (height > frame.height) frame = frame.copyWith(height: height);
+    }
+    return slide.placeOnSlide(draft.id, frame);
   }
 
   bool _insideEditor(Offset viewPoint) {
@@ -523,16 +557,70 @@ class _SlideCanvasState extends State<SlideCanvas> {
   // Selection
   // ---------------------------------------------------------------------------
 
-  /// The selected ids that are on [slide], back to front.
+  /// The selected ids that are on [slide], at any depth, back to front.
   Set<String> _validSelection(Slide slide) => {
-        for (final e in slide.elements)
+        for (final e in slide.allElements)
           if (_selection.contains(e.id)) e.id,
       };
 
   void _select(Set<String> ids) {
+    _leaveUnlessInside(ids);
     if (setEquals(ids, _selection)) return;
     setState(() => _selection = ids);
     widget.onSelectionChanged?.call(ids);
+  }
+
+  /// The entered group, when it is still a group on the slide.
+  GroupElement? _enteredGroup(Slide slide) {
+    final id = _entered;
+    final group = id == null ? null : slide.findElement(id);
+    return group is GroupElement ? group : null;
+  }
+
+  /// Steps out of the entered group unless every one of [ids] is inside it.
+  void _leaveUnlessInside(Set<String> ids) {
+    final entered = _entered;
+    final slide = widget.readOnly ? null : _slide;
+    if (entered == null) return;
+    final inside = slide != null &&
+        ids.isNotEmpty &&
+        ids.every(
+          (id) => slide.ancestorsOf(id)?.any((g) => g.id == entered) ?? false,
+        );
+    if (!inside) _entered = null;
+  }
+
+  /// Enters the group [groupId] and selects its child [childId].
+  void _enter(String groupId, String childId) {
+    setState(() => _entered = groupId);
+    _select({childId});
+  }
+
+  /// The id of the front element under the slide point [point]: a child of
+  /// the entered group when the point is on one, otherwise an element on
+  /// the slide itself.
+  String? _hitAt(Slide slide, Offset point, double tolerance) {
+    final group = _enteredGroup(slide);
+    if (group != null) {
+      final child = _childAt(slide, group, point, tolerance);
+      if (child != null) return child;
+    }
+    return slide.elementAt(point, tolerance: tolerance)?.id;
+  }
+
+  /// The front child of [group] under the slide point [point], or `null`.
+  static String? _childAt(
+    Slide slide,
+    GroupElement group,
+    Offset point,
+    double tolerance,
+  ) {
+    final frame = slide.frameOnSlide(group.id)!;
+    final local = frame.toLocal(point) + Offset(frame.width, frame.height) / 2;
+    for (final child in group.children.reversed) {
+      if (child.hitTest(local, tolerance: tolerance)) return child.id;
+    }
+    return null;
   }
 
   // ---------------------------------------------------------------------------
@@ -580,14 +668,13 @@ class _SlideCanvasState extends State<SlideCanvas> {
     final point = event.localPosition;
     final slidePoint = viewport.toSlide(point);
     final selected = _validSelection(slide);
-    final hit = slide
-        .elementAt(slidePoint, tolerance: _style.handleSize / viewport.scale)
-        ?.id;
+    final hit = _hitAt(slide, slidePoint, _style.handleSize / viewport.scale);
     _Gesture gesture(
       _GestureKind kind,
       Set<String> ids, {
       SlideHandle? handle,
       SlideElement? element,
+      ElementFrame? frame,
       String? collapseTo,
     }) =>
         _Gesture(
@@ -597,7 +684,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
           startSlide: slidePoint,
           ids: ids,
           handle: handle,
-          frame: element?.frame,
+          frame: frame,
           isLine: element is LineElement,
           isImage: element is ImageElement,
           startBounds: kind == _GestureKind.move ? slide.boundsOf(ids) : null,
@@ -607,14 +694,16 @@ class _SlideCanvasState extends State<SlideCanvas> {
 
     if (_tool.draws) return gesture(_GestureKind.draw, const {});
     if (selected.length == 1) {
-      final element = slide.elementById(selected.single)!;
-      final handle = _handleAt(element.frame, point, viewport);
+      final element = slide.findElement(selected.single)!;
+      final frame = slide.frameOnSlide(element.id)!;
+      final handle = _handleAt(frame, point, viewport);
       if (handle != null) {
         return gesture(
           handle.isResize ? _GestureKind.resize : _GestureKind.rotate,
           selected,
           handle: handle,
           element: element,
+          frame: frame,
         );
       }
     }
@@ -697,7 +786,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
     final keys = HardwareKeyboard.instance;
     switch (gesture.kind) {
       case _GestureKind.move:
-        final ids = gesture.ids.where((id) => slide.elementById(id) != null);
+        final ids = gesture.ids.where((id) => slide.findElement(id) != null);
         final snap = keys.isAltPressed || gesture.startBounds == null
             ? SnapResult(travel, const [])
             : snapMove(
@@ -705,7 +794,12 @@ class _SlideCanvasState extends State<SlideCanvas> {
                 delta: travel,
                 slide: slide,
                 size: _size,
-                exclude: gesture.ids,
+                // A grouped element's group follows it; it is no target.
+                exclude: {
+                  ...gesture.ids,
+                  for (final id in gesture.ids)
+                    ...?slide.ancestorsOf(id)?.map((g) => g.id),
+                },
                 threshold: _style.snapDistance / viewport.scale,
               );
         final step = snap.delta - gesture.applied;
@@ -784,7 +878,23 @@ class _SlideCanvasState extends State<SlideCanvas> {
     final isDouble = id == hit &&
         event.timeStamp - time <= kDoubleTapTimeout &&
         (point - where).distance <= kDoubleTapSlop;
-    if (!isDouble || _slide?.elementById(hit) is! TextBox) return;
+    final slide = _slide;
+    final viewport = _viewport;
+    if (!isDouble || slide == null || viewport == null) return;
+    final element = slide.findElement(hit);
+    if (element is GroupElement) {
+      // Into the group, onto the child under the pointer.
+      final child = _childAt(
+        slide,
+        element,
+        viewport.toSlide(point),
+        _style.handleSize / viewport.scale,
+      );
+      if (child == null) return;
+      _lastTap = null;
+      return _enter(hit, child);
+    }
+    if (element is! TextBox) return;
     _lastTap = null;
     _select({hit});
     _beginEditing(hit, caretAt: event.position);
@@ -1054,8 +1164,13 @@ class _SlideCanvasState extends State<SlideCanvas> {
     final key = event.logicalKey;
     final selected = _validSelection(slide);
     final slideId = widget.slideId!;
+    final command = keys.isControlPressed || keys.isMetaPressed;
     if (key == LogicalKeyboardKey.tab) {
       return _cycle(slide, selected, backward: keys.isShiftPressed);
+    }
+    if (command && key == LogicalKeyboardKey.keyV) {
+      _paste();
+      return KeyEventResult.handled;
     }
     if (_tool.draws) {
       if (key == LogicalKeyboardKey.escape) {
@@ -1069,16 +1184,21 @@ class _SlideCanvasState extends State<SlideCanvas> {
       }
     }
     if (selected.isEmpty) return KeyEventResult.ignored;
-    if ((key == LogicalKeyboardKey.enter ||
-            key == LogicalKeyboardKey.numpadEnter ||
-            key == LogicalKeyboardKey.f2) &&
-        selected.length == 1 &&
-        slide.elementById(selected.single) is TextBox) {
-      _beginEditing(selected.single);
-      return KeyEventResult.handled;
+    final single =
+        selected.length == 1 ? slide.findElement(selected.single) : null;
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter ||
+        key == LogicalKeyboardKey.f2) {
+      if (single is TextBox) {
+        _beginEditing(single.id);
+        return KeyEventResult.handled;
+      }
+      if (single is GroupElement && key != LogicalKeyboardKey.f2) {
+        _enter(single.id, single.children.first.id);
+        return KeyEventResult.handled;
+      }
     }
     final nudge = _nudges[key];
-    final command = keys.isControlPressed || keys.isMetaPressed;
     final toFront = _forwardKeys.contains(key);
     if (nudge != null) {
       final step = nudge * (keys.isShiftPressed ? 10 : 1);
@@ -1088,7 +1208,32 @@ class _SlideCanvasState extends State<SlideCanvas> {
       _doc.deleteElements(slideId, selected);
       _select(const {});
     } else if (key == LogicalKeyboardKey.escape) {
+      // Out of the group, with the group selected; out of the selection.
+      final group = _enteredGroup(slide);
+      if (group == null) {
+        _select(const {});
+      } else {
+        _select({group.id});
+        setState(() => _entered = slide.parentOf(group.id)?.id);
+      }
+    } else if (command && key == LogicalKeyboardKey.keyC) {
+      _clipboard.copy(_doc, slideId, selected);
+    } else if (command && key == LogicalKeyboardKey.keyX) {
+      _clipboard.cut(_doc, slideId, selected);
       _select(const {});
+    } else if (command && key == LogicalKeyboardKey.keyD) {
+      _select(_doc.duplicateElements(slideId, selected).toSet());
+    } else if (command && key == LogicalKeyboardKey.keyG) {
+      if (keys.isShiftPressed) {
+        if (!_doc.canUngroup(slideId, selected)) return KeyEventResult.handled;
+        final kept = {
+          for (final id in selected)
+            if (slide.findElement(id) is! GroupElement) id,
+        };
+        _select({...kept, ..._doc.ungroupElements(slideId, selected)});
+      } else if (_doc.canGroup(slideId, selected)) {
+        _select({_doc.groupElements(slideId, selected)});
+      }
     } else if (command && (toFront || _backwardKeys.contains(key))) {
       final all = keys.isShiftPressed;
       _doc.arrangeElements(
@@ -1104,6 +1249,21 @@ class _SlideCanvasState extends State<SlideCanvas> {
     return KeyEventResult.handled;
   }
 
+  /// Pastes the clipboard onto the slide and selects what it pasted, when
+  /// the canvas is still on that slide.
+  Future<void> _paste() async {
+    final slideId = widget.slideId!;
+    final document = widget.document;
+    final ids = await _clipboard.paste(_doc, slideId);
+    if (!mounted ||
+        ids.isEmpty ||
+        widget.slideId != slideId ||
+        widget.document != document) {
+      return;
+    }
+    _select(ids.toSet());
+  }
+
   /// Selects the element after (or before) the selection in stacking
   /// order. Past either end it deselects and lets focus leave the canvas.
   KeyEventResult _cycle(
@@ -1111,7 +1271,8 @@ class _SlideCanvasState extends State<SlideCanvas> {
     Set<String> selected, {
     required bool backward,
   }) {
-    final ids = [for (final e in slide.elements) e.id];
+    final scope = _enteredGroup(slide)?.children ?? slide.elements;
+    final ids = [for (final e in scope) e.id];
     if (ids.isEmpty) return KeyEventResult.ignored;
     final int next;
     if (selected.isEmpty) {
@@ -1238,13 +1399,20 @@ class _SlideCanvasState extends State<SlideCanvas> {
                               child: SlideSelectionOverlay(
                                 viewport: viewport,
                                 frames: [
-                                  for (final e in slide.elements)
-                                    if (e.id == editingId &&
-                                        editingFrame != null)
+                                  for (final id in {
+                                    ...selected,
+                                    if (editingId != null) editingId,
+                                  })
+                                    if (id == editingId && editingFrame != null)
                                       editingFrame
-                                    else if (selected.contains(e.id))
-                                      e.frame,
+                                    else if (slide.frameOnSlide(id)
+                                        case final frame?)
+                                      frame,
                                 ],
+                                groupFrame: switch (_enteredGroup(slide)) {
+                                  final group? => slide.frameOnSlide(group.id),
+                                  null => null,
+                                },
                                 style: style,
                                 guides: _guides,
                                 marquee: _marquee,
@@ -1264,13 +1432,12 @@ class _SlideCanvasState extends State<SlideCanvas> {
     );
     final tool = _tool;
     // A screen reader's way to insert with the active tool: tap the canvas.
-    return tool.draws
-        ? Semantics(
-            container: true,
-            label: widget.toolLabel(tool),
-            onTap: _insert,
-            child: canvas,
-          )
-        : canvas;
+    // Always wrapped, so switching tools never rebuilds the canvas anew.
+    return Semantics(
+      container: tool.draws,
+      label: tool.draws ? widget.toolLabel(tool) : null,
+      onTap: tool.draws ? _insert : null,
+      child: canvas,
+    );
   }
 }

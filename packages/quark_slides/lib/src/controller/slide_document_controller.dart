@@ -1,5 +1,9 @@
 import 'dart:math';
 
+import '../format/json_fields.dart';
+import '../geometry/group_geometry.dart';
+import '../geometry/slide_alignment.dart';
+import '../geometry/slide_tree.dart';
 import '../model/element_frame.dart';
 import '../model/element_style.dart';
 import '../model/image_source.dart';
@@ -12,6 +16,7 @@ import '../model/slide_element.dart';
 import '../model/stroke.dart';
 import '../model/text_format.dart';
 import '../model/text_paragraph.dart';
+import '../model/text_run.dart';
 
 /// Measures how tall, in slide units, a [TextBox]'s text lays out at its
 /// frame's width. `SlideDocumentNotifier` supplies one built on Flutter's
@@ -184,7 +189,7 @@ class SlideDocumentController {
     final used = {
       for (final slide in _presentation.slides) ...[
         slide.id,
-        for (final element in slide.elements) element.id,
+        for (final element in slide.allElements) element.id,
       ],
     };
     final ids = <String>[];
@@ -193,6 +198,28 @@ class SlideDocumentController {
       if (used.add(id)) ids.add(id);
     }
     return ids;
+  }
+
+  /// [elements] with fresh ids for themselves and every element inside
+  /// their groups.
+  List<SlideElement> _renewIds(List<SlideElement> elements) {
+    var count = 0;
+    void tally(SlideElement e) {
+      count++;
+      if (e is GroupElement) e.children.forEach(tally);
+    }
+
+    elements.forEach(tally);
+    final ids = _freshIds(count).iterator;
+    SlideElement renew(SlideElement e) {
+      ids.moveNext();
+      final id = ids.current;
+      return e is GroupElement
+          ? e.copyWith(id: id, children: [for (final c in e.children) renew(c)])
+          : e.withId(id);
+    }
+
+    return [for (final e in elements) renew(e)];
   }
 
   static final _random = Random();
@@ -218,17 +245,14 @@ class SlideDocumentController {
   }
 
   /// Inserts a copy of the slide [slideId] right after it and returns the
-  /// copy's id. The copy and each of its elements get new ids.
+  /// copy's id. The copy and each of its elements, grouped ones included,
+  /// get new ids.
   String duplicateSlide(String slideId) {
     final index = _slideIndex(slideId);
     final source = _presentation.slides[index];
-    final ids = _freshIds(source.elements.length + 1);
     final copy = source.copyWith(
-      id: ids.first,
-      elements: [
-        for (var i = 0; i < source.elements.length; i++)
-          source.elements[i].withId(ids[i + 1]),
-      ],
+      id: newId(),
+      elements: _renewIds(source.elements),
     );
     _commit(
       _presentation.copyWith(
@@ -260,6 +284,19 @@ class SlideDocumentController {
   void setSlideNotes(String slideId, String notes) =>
       _updateSlide(slideId, (slide) => slide.copyWith(notes: notes));
 
+  /// Sets the slide [slideId]'s own background, or clears it with `null`
+  /// so the slide falls back to the theme's. Setting the background it
+  /// already has records no step.
+  ///
+  /// ```dart
+  /// doc.setSlideBackground(slideId, const SlideBackground(color: c));
+  /// ```
+  void setSlideBackground(String slideId, SlideBackground? background) =>
+      _updateSlide(
+        slideId,
+        (slide) => slide.copyWith(background: background),
+      );
+
   // ---------------------------------------------------------------------------
   // Elements
   // ---------------------------------------------------------------------------
@@ -280,33 +317,34 @@ class SlideDocumentController {
   }
 
   bool _idInUse(String id) => _presentation.slides.any(
-        (s) => s.id == id || s.elements.any((e) => e.id == id),
+        (s) => s.id == id || s.allElements.any((e) => e.id == id),
       );
 
   /// Moves every element in [elementIds] on the slide [slideId] by [dx],
   /// [dy] slide units, as one step.
+  ///
+  /// Like every element command, this reaches elements inside groups too:
+  /// the move is along the slide's axes whatever the group's rotation, and
+  /// the group's frame is refitted around its children (see [GroupElement]).
   void moveElements(
     String slideId,
     Iterable<String> elementIds,
     double dx,
     double dy,
-  ) {
-    final ids = elementIds.toSet();
-    _updateSlide(slideId, (slide) {
-      for (final id in ids) {
-        _elementIndex(slide, id);
-      }
-      return slide.copyWith(
-        elements: [
-          for (final e in slide.elements)
-            ids.contains(e.id) ? e.withFrame(e.frame.translate(dx, dy)) : e,
-        ],
-      );
-    });
-  }
+  ) =>
+      _updateTree(slideId, elementIds, (e, parent) {
+        final (x, y) =
+            parent == null ? (dx, dy) : rotateVector(dx, dy, -parent.rotation);
+        return e.withFrame(e.frame.translate(x, y));
+      });
 
   /// Gives the element [elementId] a new size, and a new top-left corner
   /// when [x] or [y] is given — as dragging a left or top handle needs.
+  ///
+  /// The values are the element's frame on the slide (see
+  /// `SlideTree.frameOnSlide`), so a handle drag on a grouped element works
+  /// the same as on any other. Resizing a group scales its children with it
+  /// (see [resizeGroup]).
   void resizeElement(
     String slideId,
     String elementId, {
@@ -318,41 +356,62 @@ class SlideDocumentController {
     if (width < 0 || height < 0) {
       throw ArgumentError('a size cannot be negative: $width×$height');
     }
-    _updateElement(
-      slideId,
-      elementId,
-      (e) => _fitted(
-        e.withFrame(
-          e.frame.copyWith(x: x, y: y, width: width, height: height),
-        ),
-      ),
-    );
-  }
-
-  /// Sets the element [elementId]'s clockwise rotation, in degrees.
-  void rotateElement(String slideId, String elementId, double degrees) =>
-      _updateElement(
-        slideId,
-        elementId,
-        (e) => e.withFrame(e.frame.copyWith(rotation: degrees)),
-      );
-
-  /// Removes every element in [elementIds] from the slide [slideId], as one
-  /// step.
-  void deleteElements(String slideId, Iterable<String> elementIds) {
-    final ids = elementIds.toSet();
-    _updateSlide(slideId, (slide) {
-      for (final id in ids) {
-        _elementIndex(slide, id);
-      }
-      return slide.copyWith(
-        elements: [
-          for (final e in slide.elements)
-            if (!ids.contains(e.id)) e,
-        ],
+    _updateTree(slideId, [elementId], (e, parent) {
+      final onSlide = parent == null ? e.frame : frameInParent(parent, e.frame);
+      final resized =
+          onSlide.copyWith(x: x, y: y, width: width, height: height);
+      return _fitted(
+        reframe(e, parent == null ? resized : frameInGroup(parent, resized)),
       );
     });
   }
+
+  /// Sets the element [elementId]'s clockwise rotation on the slide, in
+  /// degrees; inside a group, the group's own rotation counts toward it.
+  void rotateElement(String slideId, String elementId, double degrees) =>
+      _updateTree(
+        slideId,
+        [elementId],
+        (e, parent) => e.withFrame(
+          e.frame.copyWith(
+            rotation: parent == null
+                ? degrees
+                : normalizedRotation(degrees - parent.rotation),
+          ),
+        ),
+      );
+
+  /// Removes every element in [elementIds] from the slide [slideId], as one
+  /// step. A group left with one element dissolves into it; one left with
+  /// none goes too.
+  void deleteElements(String slideId, Iterable<String> elementIds) {
+    final ids = elementIds.toSet();
+    _updateSlide(slideId, (slide) {
+      _checkIds(slide, ids);
+      return slide.copyWith(elements: _removeFrom(slide.elements, ids));
+    });
+  }
+
+  static List<SlideElement> _removeFrom(
+    List<SlideElement> list,
+    Set<String> ids,
+  ) =>
+      [
+        for (final e in list)
+          if (ids.contains(e.id))
+            ...const <SlideElement>[]
+          else if (e is GroupElement)
+            ...() {
+              final children = _removeFrom(e.children, ids);
+              if (children.length == e.children.length) return [e];
+              final group = e.copyWith(children: children);
+              return children.length < 2
+                  ? ungroupChildren(group)
+                  : [fitGroup(group)];
+            }()
+          else
+            e,
+      ];
 
   /// Moves the element [elementId] to stacking position [toIndex]: 0 sends
   /// it to the back, the last index brings it to the front.
@@ -368,18 +427,16 @@ class SlideDocumentController {
   /// step, keeping their order among themselves: [ZOrderMove.toFront] and
   /// [ZOrderMove.toBack] move them past everything else, and
   /// [ZOrderMove.forward] and [ZOrderMove.backward] each past one
-  /// unselected neighbor.
+  /// unselected neighbor. Grouped elements restack among their group's
+  /// other children.
   void arrangeElements(
     String slideId,
     Iterable<String> elementIds,
     ZOrderMove move,
   ) {
     final ids = elementIds.toSet();
-    _updateSlide(slideId, (slide) {
-      for (final id in ids) {
-        _elementIndex(slide, id);
-      }
-      final elements = [...slide.elements];
+    _updateLists(slideId, ids, (list) {
+      final elements = [...list];
       bool picked(int i) => ids.contains(elements[i].id);
       void swap(int i, int j) {
         final e = elements[i];
@@ -391,11 +448,9 @@ class SlideDocumentController {
         case ZOrderMove.toFront || ZOrderMove.toBack:
           final chosen = elements.where((e) => ids.contains(e.id)).toList();
           final rest = elements.where((e) => !ids.contains(e.id)).toList();
-          return slide.copyWith(
-            elements: move == ZOrderMove.toFront
-                ? [...rest, ...chosen]
-                : [...chosen, ...rest],
-          );
+          return move == ZOrderMove.toFront
+              ? [...rest, ...chosen]
+              : [...chosen, ...rest];
         case ZOrderMove.forward:
           for (var i = elements.length - 2; i >= 0; i--) {
             if (picked(i) && !picked(i + 1)) swap(i, i + 1);
@@ -405,7 +460,7 @@ class SlideDocumentController {
             if (picked(i) && !picked(i - 1)) swap(i, i - 1);
           }
       }
-      return slide.copyWith(elements: elements);
+      return elements;
     });
   }
 
@@ -416,10 +471,10 @@ class SlideDocumentController {
     String elementId,
     List<TextParagraph> paragraphs,
   ) =>
-      _updateElement(
+      _updateTree(
         slideId,
-        elementId,
-        (e) => _fitted(
+        [elementId],
+        (e, _) => _fitted(
           _textBox(e).copyWith(paragraphs: List.unmodifiable(paragraphs)),
         ),
       );
@@ -431,22 +486,12 @@ class SlideDocumentController {
     String slideId,
     Iterable<String> elementIds,
     TextFormat format,
-  ) {
-    final ids = elementIds.toSet();
-    _updateSlide(slideId, (slide) {
-      for (final id in ids) {
-        _elementIndex(slide, id);
-      }
-      return slide.copyWith(
-        elements: [
-          for (final e in slide.elements)
-            e is TextBox && ids.contains(e.id)
-                ? _fitted(formatTextBox(e, format))
-                : e,
-        ],
+  ) =>
+      _updateTree(
+        slideId,
+        elementIds,
+        (e, _) => e is TextBox ? _fitted(formatTextBox(e, format)) : e,
       );
-    });
-  }
 
   /// Inserts a text box on the slide [slideId] with its top-left corner at
   /// the slide point [at] and returns its id.
@@ -630,29 +675,17 @@ class SlideDocumentController {
     String slideId,
     Iterable<String> elementIds,
     ElementStyle style,
-  ) {
-    final ids = elementIds.toSet();
-    _updateSlide(slideId, (slide) {
-      for (final id in ids) {
-        _elementIndex(slide, id);
-      }
-      return slide.copyWith(
-        elements: [
-          for (final e in slide.elements)
-            ids.contains(e.id) ? style.applyTo(e) : e,
-        ],
-      );
-    });
-  }
+  ) =>
+      _updateTree(slideId, elementIds, (e, _) => style.applyTo(e));
 
   /// Sets the image [elementId]'s alt text, which a screen reader reads
   /// for it. Throws an [ArgumentError] when the element is not an
   /// [ImageElement].
   void setAltText(String slideId, String elementId, String altText) =>
-      _updateElement(
+      _updateTree(
         slideId,
-        elementId,
-        (e) => e is ImageElement
+        [elementId],
+        (e, _) => e is ImageElement
             ? e.copyWith(altText: altText)
             : throw ArgumentError.value(
                 elementId, 'elementId', 'is not an image'),
@@ -704,8 +737,292 @@ class SlideDocumentController {
   }
 
   // ---------------------------------------------------------------------------
+  // Grouping
+  // ---------------------------------------------------------------------------
+
+  /// Whether [groupElements] can group [elementIds] on the slide [slideId]:
+  /// at least two of them, all directly in the same stacking list — on the
+  /// slide itself, or in one group.
+  bool canGroup(String slideId, Iterable<String> elementIds) {
+    final slide = _presentation.slideById(slideId);
+    final ids = elementIds.toSet();
+    if (slide == null || ids.length < 2) return false;
+    final parents = <String?>{};
+    for (final id in ids) {
+      final up = slide.ancestorsOf(id);
+      if (up == null) return false;
+      parents.add(up.isEmpty ? null : up.last.id);
+    }
+    return parents.length == 1;
+  }
+
+  /// Whether [ungroupElements] would ungroup anything: one of [elementIds]
+  /// on the slide [slideId] is a group.
+  bool canUngroup(String slideId, Iterable<String> elementIds) {
+    final slide = _presentation.slideById(slideId);
+    return slide != null &&
+        elementIds.any((id) => slide.findElement(id) is GroupElement);
+  }
+
+  /// Groups [elementIds] on the slide [slideId] into one [GroupElement], as
+  /// one step, and returns the group's id.
+  ///
+  /// Nothing moves on the slide: the group's frame is the box around the
+  /// elements, which keep their stacking order among themselves, and the
+  /// group takes the place of the frontmost of them. Elements already in a
+  /// group make a group nested in it. Throws an [ArgumentError] unless
+  /// [canGroup] says yes.
+  ///
+  /// ```dart
+  /// final group = doc.groupElements(slideId, selection);
+  /// setState(() => selection = {group});
+  /// ```
+  String groupElements(String slideId, Iterable<String> elementIds) {
+    final ids = elementIds.toSet();
+    final slide = _slideOf(slideId);
+    _checkIds(slide, ids);
+    if (!canGroup(slideId, ids)) {
+      throw ArgumentError.value(
+        ids,
+        'elementIds',
+        'needs two or more elements sharing one parent',
+      );
+    }
+    final id = newId();
+    _updateLists(slideId, ids, (list) {
+      final members = [
+        for (final e in list)
+          if (ids.contains(e.id)) e,
+      ];
+      final front = list.lastIndexWhere((e) => ids.contains(e.id));
+      return [
+        for (final e in list)
+          if (!ids.contains(e.id)) e,
+      ]..insert(front - members.length + 1, groupOf(id, members));
+    });
+    return id;
+  }
+
+  /// Replaces every group among [elementIds] on the slide [slideId] with
+  /// its children, as one step, and returns the children's ids, back to
+  /// front.
+  ///
+  /// Nothing moves on the slide: each child's frame is placed through the
+  /// group's, rotation included, and the children take the group's place
+  /// in the stacking order. A group nested inside stays a group. Ids that
+  /// are not groups are left alone.
+  List<String> ungroupElements(String slideId, Iterable<String> elementIds) {
+    final ids = elementIds.toSet();
+    final freed = <String>[];
+    _updateLists(slideId, ids, (list) {
+      final next = <SlideElement>[];
+      for (final e in list) {
+        if (e is GroupElement && ids.contains(e.id)) {
+          final children = ungroupChildren(e);
+          next.addAll(children);
+          freed.addAll(children.map((c) => c.id));
+        } else {
+          next.add(e);
+        }
+      }
+      return next;
+    });
+    return freed;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Alignment
+  // ---------------------------------------------------------------------------
+
+  /// Lines up [elementIds] on the slide [slideId] by [alignment], as one
+  /// step, moving them along the slide's axes (see [alignFrames]).
+  ///
+  /// They line up on the box around them all, or on the slide when
+  /// [toSlide] — which, left out, is the case for a single element, since
+  /// one element can only line up with the slide.
+  ///
+  /// ```dart
+  /// doc.alignElements(slideId, selection, ElementAlignment.left);
+  /// ```
+  void alignElements(
+    String slideId,
+    Iterable<String> elementIds,
+    ElementAlignment alignment, {
+    bool? toSlide,
+  }) {
+    final frames = _framesOnSlide(slideId, elementIds);
+    _placeOnSlide(
+      slideId,
+      alignFrames(
+        frames,
+        alignment,
+        within: (toSlide ?? frames.length == 1) ? _slideBox : null,
+      ),
+    );
+  }
+
+  /// Spaces [elementIds] on the slide [slideId] out along [axis] with equal
+  /// gaps, as one step (see [distributeFrames]): between the outermost two
+  /// of three or more, or across the slide when [toSlide].
+  void distributeElements(
+    String slideId,
+    Iterable<String> elementIds,
+    DistributeAxis axis, {
+    bool toSlide = false,
+  }) =>
+      _placeOnSlide(
+        slideId,
+        distributeFrames(
+          _framesOnSlide(slideId, elementIds),
+          axis,
+          within: toSlide ? _slideBox : null,
+        ),
+      );
+
+  /// Gives [elementIds] on the slide [slideId] the width, height or both of
+  /// [reference] — the largest of them, left out — each keeping its
+  /// top-left corner, as one step (see [matchFrameSizes]). A group scales
+  /// its children.
+  void matchSize(
+    String slideId,
+    Iterable<String> elementIds,
+    SizeMatch match, {
+    String? reference,
+  }) =>
+      _placeOnSlide(
+        slideId,
+        matchFrameSizes(
+          _framesOnSlide(slideId, elementIds),
+          match,
+          reference: reference,
+        ),
+      );
+
+  SlideBox get _slideBox => (
+        left: 0,
+        top: 0,
+        right: _presentation.size.width,
+        bottom: _presentation.size.height,
+      );
+
+  /// The frames on the slide of [elementIds], by id.
+  Map<String, ElementFrame> _framesOnSlide(
+    String slideId,
+    Iterable<String> elementIds,
+  ) {
+    final slide = _slideOf(slideId);
+    final ids = elementIds.toSet();
+    _checkIds(slide, ids);
+    return {for (final id in ids) id: slide.frameOnSlide(id)!};
+  }
+
+  /// Gives each element in [frames] its frame on the slide, as one step.
+  void _placeOnSlide(String slideId, Map<String, ElementFrame> frames) =>
+      _updateTree(slideId, frames.keys, (e, parent) {
+        final frame = frames[e.id]!;
+        return _fitted(
+          reframe(e, parent == null ? frame : frameInGroup(parent, frame)),
+        );
+      });
+
+  // ---------------------------------------------------------------------------
+  // Copy and paste
+  // ---------------------------------------------------------------------------
+
+  /// How far each paste or duplicate of the same elements onto the same
+  /// slide lands from the last, in slide units, right and down.
+  static const pasteOffset = 16.0;
+
+  /// The elements [elementIds] on the slide [slideId], back to front, with
+  /// their frames on the slide — what copying them puts on a clipboard. An
+  /// element inside a group comes out on its own, placed where it shows; one
+  /// whose group is also named comes with its group instead.
+  List<SlideElement> copyElements(String slideId, Iterable<String> elementIds) {
+    final slide = _slideOf(slideId);
+    final ids = elementIds.toSet();
+    _checkIds(slide, ids);
+    return [
+      for (final e in slide.allElements)
+        if (ids.contains(e.id) &&
+            !slide.ancestorsOf(e.id)!.any((g) => ids.contains(g.id)))
+          e.withFrame(slide.frameOnSlide(e.id)!),
+    ];
+  }
+
+  /// Puts copies of [elements] in front of everything on the slide
+  /// [slideId], as one step, and returns their ids.
+  ///
+  /// Every copy — and every element inside a copied group — gets a fresh
+  /// id; everything else, an image's source included, is kept. The copies
+  /// land where the originals were, unless one would land exactly on an
+  /// element already there, as pasting back onto the slide copied from
+  /// does; then they all move [pasteOffset] right and down, as many times
+  /// as it takes, so each paste lands 16 units past the last.
+  ///
+  /// ```dart
+  /// final ids = doc.pasteElements(slideId, doc.copyElements(from, selection));
+  /// ```
+  List<String> pasteElements(String slideId, List<SlideElement> elements) {
+    final slide = _slideOf(slideId);
+    if (elements.isEmpty) return const [];
+    final taken = [
+      for (final e in slide.allElements) slide.frameOnSlide(e.id)!,
+    ];
+    bool lands(ElementFrame a, ElementFrame b) =>
+        (a.x - b.x).abs() < 1e-6 &&
+        (a.y - b.y).abs() < 1e-6 &&
+        (a.width - b.width).abs() < 1e-6 &&
+        (a.height - b.height).abs() < 1e-6;
+    var shift = 0.0;
+    while (shift < 1000 * pasteOffset &&
+        elements.any(
+          (e) => taken.any((t) => lands(e.frame.translate(shift, shift), t)),
+        )) {
+      shift += pasteOffset;
+    }
+    final copies = [
+      for (final e in _renewIds(elements))
+        e.withFrame(e.frame.translate(shift, shift)),
+    ];
+    _updateSlide(
+      slideId,
+      (slide) => slide.copyWith(elements: [...slide.elements, ...copies]),
+    );
+    return [for (final e in copies) e.id];
+  }
+
+  /// Pastes a copy of [elementIds] onto the slide [slideId] itself, as one
+  /// step, [pasteOffset] past the originals (and past each earlier
+  /// duplicate), and returns the copies' ids.
+  List<String> duplicateElements(String slideId, Iterable<String> elementIds) =>
+      pasteElements(slideId, copyElements(slideId, elementIds));
+
+  /// Puts plain [text] on the slide [slideId] as a new text box, a
+  /// paragraph per line, centered at the default width, as one step, and
+  /// returns its id; `null` for blank text, which adds nothing. This is how
+  /// text copied from another app pastes.
+  String? pasteText(String slideId, String text) {
+    if (text.trim().isEmpty) return null;
+    final lines = text.replaceAll('\r\n', '\n').split('\n');
+    final size = _presentation.size;
+    return insertTextBox(
+      slideId,
+      at: (
+        x: (size.width - defaultTextBoxWidth) / 2,
+        y: (size.height - defaultTextBoxHeight) / 2,
+      ),
+      paragraphs: [
+        for (final line in lines)
+          TextParagraph(line.isEmpty ? const [] : [TextRun(line)]),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Lookup
   // ---------------------------------------------------------------------------
+
+  Slide _slideOf(String slideId) => _presentation.slides[_slideIndex(slideId)];
 
   int _slideIndex(String slideId) {
     final index = _presentation.indexOfSlide(slideId);
@@ -728,17 +1045,97 @@ class SlideDocumentController {
     _commit(_presentation.copyWith(slides: slides));
   }
 
-  void _updateElement(
+  /// Throws an [ArgumentError] unless every id in [ids] is on [slide], at
+  /// any depth.
+  static void _checkIds(Slide slide, Set<String> ids) {
+    if (ids.isEmpty) return;
+    final missing = {...ids}..removeAll(slide.allElements.map((e) => e.id));
+    if (missing.isNotEmpty) {
+      throw ArgumentError.value(
+          missing.first, 'elementId', 'not on ${slide.id}');
+    }
+  }
+
+  /// Replaces every element in [elementIds], at any depth of the slide
+  /// [slideId], with what [update] makes of it, as one step, and refits
+  /// every group whose children changed. [update] gets the frame on the
+  /// slide of the group holding the element, or `null` on the slide itself.
+  void _updateTree(
     String slideId,
-    String elementId,
-    SlideElement Function(SlideElement) update,
-  ) =>
-      _updateSlide(slideId, (slide) {
-        final elements = [...slide.elements];
-        final index = _elementIndex(slide, elementId);
-        elements[index] = update(elements[index]);
-        return slide.copyWith(elements: elements);
-      });
+    Iterable<String> elementIds,
+    SlideElement Function(SlideElement element, ElementFrame? parent) update,
+  ) {
+    final ids = elementIds.toSet();
+    _updateSlide(slideId, (slide) {
+      _checkIds(slide, ids);
+      return slide.copyWith(
+        elements: _mapTree(slide.elements, ids, null, update),
+      );
+    });
+  }
+
+  static List<SlideElement> _mapTree(
+    List<SlideElement> list,
+    Set<String> ids,
+    ElementFrame? parent,
+    SlideElement Function(SlideElement, ElementFrame?) update,
+  ) {
+    var changed = false;
+    final mapped = [
+      for (final e in list)
+        () {
+          final SlideElement next;
+          if (ids.contains(e.id)) {
+            next = update(e, parent);
+          } else if (e is GroupElement) {
+            final children = _mapTree(
+              e.children,
+              ids,
+              parent == null ? e.frame : frameInParent(parent, e.frame),
+              update,
+            );
+            next = identical(children, e.children)
+                ? e
+                : fitGroup(e.copyWith(children: children));
+          } else {
+            next = e;
+          }
+          changed |= next != e;
+          return next;
+        }(),
+    ];
+    return changed ? mapped : list;
+  }
+
+  /// Rebuilds, as one step, every stacking list on the slide [slideId] —
+  /// the slide's own and each group's children — that holds an element in
+  /// [ids], with what [update] makes of it.
+  void _updateLists(
+    String slideId,
+    Set<String> ids,
+    List<SlideElement> Function(List<SlideElement> list) update,
+  ) {
+    List<SlideElement> visit(List<SlideElement> list) {
+      final inner = [
+        for (final e in list)
+          if (e is GroupElement)
+            () {
+              final children = visit(e.children);
+              return listEquals(children, e.children)
+                  ? e
+                  : fitGroup(e.copyWith(children: children));
+            }()
+          else
+            e,
+      ];
+      return inner.any((e) => ids.contains(e.id)) ? update(inner) : inner;
+    }
+
+    _updateSlide(slideId, (slide) {
+      _checkIds(slide, ids);
+      return slide.copyWith(elements: visit(slide.elements));
+    });
+  }
 }
 
 /// Where [SlideDocumentController.arrangeElements] moves elements in the

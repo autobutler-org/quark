@@ -16,7 +16,7 @@ Everything is immutable and compares by value. An edit makes a new
 | ---------------- | ---------------------------------------------------------------------- |
 | `Presentation`   | `title`, `size` (a `SlideSize`), `theme` reference, `slides`           |
 | `Slide`          | stable `id`, `background`, `elements` back to front, speaker `notes`   |
-| `SlideElement`   | sealed: `TextBox`, `ShapeElement`, `ImageElement`, `LineElement`, `UnknownElement` |
+| `SlideElement`   | sealed: `TextBox`, `ShapeElement`, `ImageElement`, `LineElement`, `GroupElement`, `UnknownElement` |
 | `ElementFrame`   | `x`, `y`, `width`, `height` in slide units, `rotation` in degrees       |
 | `TextBox`        | paragraphs, vertical `anchor`, `autoFit` (grow, fixed, shrink), `placeholder` |
 | `TextParagraph`  | styled `TextRun`s, alignment, `lineSpacing`, `list` (none, bullet, numbered) |
@@ -24,6 +24,7 @@ Everything is immutable and compares by value. An edit makes a new
 | `ShapeElement`   | `kind`, solid `fill` or none, `stroke`, `cornerRadius`, `opacity`      |
 | `LineElement`    | `stroke`, `flipped`, `startCap` and `endCap` (none or arrow), `opacity` |
 | `ImageElement`   | `source` (an `ImageSource` reference), `altText`, `fit`                |
+| `GroupElement`   | `children`, back to front, in group-local frames; groups nest          |
 | `Stroke`         | `color`, `width`, `dash` (solid, dash, dot, dash-dot)                  |
 
 Slide units are an abstract space set by `SlideSize` (1920×1080 for the
@@ -79,13 +80,19 @@ enum (paragraph alignment, image fit, line cap) reads as its default.
 `SlideDocumentController` applies commands and keeps a 100-step undo
 history of earlier presentations:
 
-- slides: `addSlide`, `duplicateSlide`, `deleteSlide`, `moveSlide`, `setSlideNotes`
+- slides: `addSlide`, `duplicateSlide`, `deleteSlide`, `moveSlide`, `setSlideNotes`,
+  `setSlideBackground`
 - elements: `addElement`, `moveElements`, `resizeElement`, `rotateElement`,
   `deleteElements`, `reorderElement`, `arrangeElements`
 - text: `editText`, `formatText` (a `TextFormat` over whole boxes),
   `insertTextBox(slideId, at: (x: 160, y: 120))`
 - drawing: `insertShape`, `insertLine`, `insertImage`, `styleElements` (an
   `ElementStyle` over shapes and lines), `setAltText`
+- groups and layout: `groupElements`, `ungroupElements`, `alignElements`,
+  `distributeElements`, `matchSize` (see [Groups and
+  alignment](#groups-and-alignment--for-a-toolbar))
+- clipboard: `copyElements`, `pasteElements`, `duplicateElements`,
+  `pasteText` (see [Copy and paste](#copy-and-paste))
 - history: `undo`, `redo`, `load`, and `batch` / `beginBatch` / `endBatch`
 
 A command that changes nothing records no step. Commands inside a batch apply
@@ -359,6 +366,106 @@ c.setAltText(slideId, imageId, 'A dog on a beach');
 **Keys.** The element being drawn is previewed under the key
 `slide_element_` (an empty id) and is hidden from screen readers; the new
 element is `slide_element_<id>` like any other.
+
+## Groups and alignment — for a toolbar
+
+A `GroupElement` holds its `children` in **group-local** frames: measured
+from the group frame's top-left corner along its own axes, before its
+rotation. Moving or rotating a group leaves them alone; resizing it scales
+them (`resizeGroup`). The group's frame is kept to its children's bounds,
+so editing a child refits it (`fitGroup`). In `.qslide` a group is
+`{"type": "group", "children": [...]}`; a reader that predates groups
+keeps one verbatim as an `UnknownElement`, and an unknown child inside a
+group survives the same way.
+
+On the canvas a group selects, moves, resizes and rotates as one element.
+Double-click or double-tap it — or press Enter — to enter it and select
+the child under the pointer; its outline stays drawn faintly. Escape, or a
+press outside it, steps back out. Ctrl/Cmd+G groups the selection and
+Ctrl/Cmd+Shift+G ungroups it.
+
+Every element command — move, resize, rotate, delete, restack, style,
+text — reaches grouped elements too, by id. Coordinates a command takes
+are on the slide (`slide.frameOnSlide(id)`), whatever groups an element
+sits in. `SlideTree` (`allElements`, `findElement`, `ancestorsOf`,
+`parentOf`, `frameOnSlide`) sees through groups; `Slide.elementById` sees
+only the top level.
+
+A toolbar calls the document directly. Each call is **one undo step**:
+
+```dart
+final c = doc.controller;
+
+if (c.canGroup(slideId, selection)) {
+  final group = c.groupElements(slideId, selection); // returns the group's id
+  setState(() => selection = {group});
+}
+if (c.canUngroup(slideId, selection)) {
+  final freed = c.ungroupElements(slideId, selection); // the children's ids
+  setState(() => selection = freed.toSet());
+}
+
+// One element aligns to the slide; several to the box around them.
+c.alignElements(slideId, selection, ElementAlignment.left);
+c.alignElements(slideId, selection, ElementAlignment.middle, toSlide: true);
+c.distributeElements(slideId, selection, DistributeAxis.horizontal);
+c.matchSize(slideId, selection, SizeMatch.both); // to the largest
+c.matchSize(slideId, selection, SizeMatch.width, reference: firstId);
+```
+
+| Command | Does | Needs |
+| --- | --- | --- |
+| `groupElements` | groups in place of the frontmost; nothing moves | `canGroup`: two or more with one parent |
+| `ungroupElements` | frees each group's children in its place; nested groups stay | `canUngroup`: a group among them |
+| `alignElements` | `left`, `center`, `right`, `top`, `middle`, `bottom`, by rotated bounds | one or more; one aligns to the slide |
+| `distributeElements` | equal gaps `horizontal` or `vertical` | three or more; two with `toSlide` |
+| `matchSize` | `width`, `height` or `both` of the reference, top-left kept | one or more |
+
+The math is pure and exported — `alignFrames`, `distributeFrames`,
+`matchFrameSizes` over `id → ElementFrame` maps, and `groupOf`,
+`ungroupChildren`, `resizeGroup`, `fitGroup`, `frameInParent`,
+`frameInGroup` and `frameBox` — and tested on its own.
+
+## Copy and paste
+
+Ctrl/Cmd+C, X and V copy, cut and paste the selection on the canvas, and
+Ctrl/Cmd+D duplicates it. Copied elements travel as versioned JSON
+(`SlideClipboardCodec`: `{"format": "quark-slides/elements", "version":
+1, "elements": [...]}`, frames on the slide) through a `SlideClipboard`,
+so they paste across slides and presentations. A paste gets fresh ids —
+inside groups too — keeps images' sources, lands where the originals were
+unless that covers an element exactly, and then moves 16 units right and
+down (`SlideDocumentController.pasteOffset`) as many times as it takes, so
+pasting or duplicating again lands 16 further on. Plain text from another
+app pastes as a new text box. A newer payload version pastes nothing. Each
+cut, paste and duplicate is one undo step, and the canvas selects what it
+pasted.
+
+The package never touches the platform clipboard. Without one, the canvas
+uses `SlideClipboard.memory`, inside the app only; to reach the system
+clipboard the app passes its own, as `DataSheetClipboard` does in
+`data_table`:
+
+```dart
+final clipboard = SlideClipboard(
+  read: () async => (await Clipboard.getData('text/plain'))?.text,
+  write: (text) => Clipboard.setData(ClipboardData(text: text)),
+);
+
+SlideCanvas(document: doc, slideId: slideId, clipboard: clipboard, ...);
+
+// A toolbar's or menu's buttons:
+await clipboard.copy(doc.controller, slideId, selection);
+await clipboard.cut(doc.controller, slideId, selection);
+final pasted = await clipboard.paste(doc.controller, slideId);
+setState(() => selection = pasted.toSet());
+final copies = doc.controller.duplicateElements(slideId, selection);
+```
+
+**Keys.** A group is keyed `slide_element_<id>` like any element, and each
+child inside it keeps its own `slide_element_<id>`. A group reads to a
+screen reader as `elementLabel` names it ("Group of 2"), with its children
+inside.
 
 ## Development
 

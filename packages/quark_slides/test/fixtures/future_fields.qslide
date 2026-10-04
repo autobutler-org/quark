@@ -40,6 +40,27 @@
           "kind": "heart",
           "frame": {"x": 5, "y": 5, "width": 50, "height": 50},
           "fill": "#FF0000"
+        },
+        {
+          "id": "e5",
+          "type": "group",
+          "frame": {"x": 600, "y": 0, "width": 300, "height": 200},
+          "locked": true,
+          "children": [
+            {
+              "id": "e6",
+              "type": "chart",
+              "frame": {"x": 0, "y": 0, "width": 300, "height": 100},
+              "series": [{"name": "Cost", "values": [3, 2]}]
+            },
+            {
+              "id": "e7",
+              "type": "shape",
+              "kind": "rectangle",
+              "frame": {"x": 0, "y": 100, "width": 300, "height": 100},
+              "glow": 4
+            }
+          ]
         }
       ],
       "transition": {"kind": "fade", "duration": 0.3}

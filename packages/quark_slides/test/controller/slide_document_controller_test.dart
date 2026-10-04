@@ -97,6 +97,20 @@ void main() {
       expect(h.doc.presentation.slideById('s3')!.notes, 'Questions?');
     });
 
+    test('setSlideBackground sets or clears it, one step when it changes', () {
+      final h = Harness();
+      const red = SlideBackground(color: SlideColor(0xFFFF0000));
+      h.doc.setSlideBackground('s3', red);
+      expect(h.doc.presentation.slideById('s3')!.background, red);
+      h.doc.setSlideBackground('s3', red);
+      expect(h.changes, 1, reason: 'the same background records nothing');
+      h.doc.setSlideBackground('s3', null);
+      expect(h.doc.presentation.slideById('s3')!.background, isNull);
+      h.doc.undo();
+      expect(h.doc.presentation.slideById('s3')!.background, red);
+      expect(() => h.doc.setSlideBackground('nope', red), throwsArgumentError);
+    });
+
     test('an unknown slide id throws', () {
       final h = Harness();
       expect(() => h.doc.deleteSlide('nope'), throwsArgumentError);

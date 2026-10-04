@@ -10,7 +10,7 @@ typedef SlideElementLabel = String Function(SlideElement element);
 /// English screen reader labels: a text box reads its text, a line per
 /// non-blank paragraph (its placeholder, or "Empty text box", when it has
 /// none), an image its alt
-/// text, a shape its kind.
+/// text, a shape its kind, a group how many elements it holds.
 ///
 /// ```dart
 /// defaultSlideElementLabel(ImageElement(..., altText: 'A dog'));
@@ -31,6 +31,7 @@ String defaultSlideElementLabel(SlideElement element) => switch (element) {
           when startCap == LineCap.arrow || endCap == LineCap.arrow =>
         'Arrow',
       LineElement() => 'Line',
+      GroupElement(:final children) => 'Group of ${children.length}',
       UnknownElement(:final type) => 'Unsupported $type element',
     };
 

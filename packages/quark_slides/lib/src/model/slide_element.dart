@@ -8,8 +8,9 @@ import 'stroke.dart';
 import 'text_paragraph.dart';
 import 'unset.dart';
 
-/// Something placed on a slide: a [TextBox], [ShapeElement], [ImageElement]
-/// or [LineElement], or an [UnknownElement] a newer version wrote.
+/// Something placed on a slide: a [TextBox], [ShapeElement], [ImageElement],
+/// [LineElement] or [GroupElement], or an [UnknownElement] a newer version
+/// wrote.
 ///
 /// Every element has an [id], unique within its presentation and stable for
 /// the element's life — moving, restyling or reordering it keeps the id —
@@ -129,6 +130,17 @@ sealed class SlideElement {
           endCap: enumByName(json, 'endCap', LineCap.values, LineCap.none),
           opacity: _opacity(json, path),
           extra: unknownFields(json, LineElement._known),
+        );
+      case GroupElement.typeName:
+        final children = optionalList(json, 'children', path);
+        return GroupElement(
+          id: id,
+          frame: frame,
+          children: [
+            for (var i = 0; i < children.length; i++)
+              SlideElement.fromJson(children[i], '$path.children[$i]'),
+          ],
+          extra: unknownFields(json, GroupElement._known),
         );
     }
     return UnknownElement(
@@ -633,6 +645,79 @@ class LineElement extends SlideElement {
         opacity,
         jsonHash(extra),
       );
+}
+
+/// Elements moved, resized and rotated as one: the [children], back to
+/// front, drawn inside the group's frame.
+///
+/// A child's frame is **group-local**: measured from the group frame's
+/// top-left corner along the group's own axes, before the group's rotation,
+/// in slide units. Moving or rotating the group leaves its children's
+/// frames alone; resizing it scales them (see `resizeGroup`). The group's
+/// frame is kept to the bounds of its children, so after a child changes
+/// the controller refits it (see `fitGroup`). Groups nest.
+///
+/// In `.qslide` a group is `{"type": "group", "children": [...]}` beside
+/// its id and frame, each child an element object of its own — including
+/// an [UnknownElement] a newer version wrote, which round-trips verbatim.
+class GroupElement extends SlideElement {
+  /// Creates a group of [children].
+  GroupElement({
+    required super.id,
+    required super.frame,
+    List<SlideElement> children = const [],
+    super.extra,
+  }) : children = List.unmodifiable(children);
+
+  /// The `type` discriminator, `group`.
+  static const typeName = 'group';
+
+  static const _known = {'id', 'type', 'frame', 'children'};
+
+  /// The grouped elements, back to front, in group-local frames.
+  final List<SlideElement> children;
+
+  @override
+  String get type => typeName;
+
+  @override
+  JsonMap _fieldsToJson() => {
+        'children': [for (final c in children) c.toJson()],
+      };
+
+  /// Returns a copy with the given fields replaced.
+  GroupElement copyWith({
+    String? id,
+    ElementFrame? frame,
+    List<SlideElement>? children,
+  }) =>
+      GroupElement(
+        id: id ?? this.id,
+        frame: frame ?? this.frame,
+        children: children ?? this.children,
+        extra: extra,
+      );
+
+  /// Returns a copy with [frame] replaced and the children left as they
+  /// are — a move or a rotation. A resize scales the children too; see
+  /// `resizeGroup`.
+  @override
+  GroupElement withFrame(ElementFrame frame) => copyWith(frame: frame);
+
+  @override
+  GroupElement withId(String id) => copyWith(id: id);
+
+  @override
+  bool operator ==(Object other) =>
+      other is GroupElement &&
+      other.id == id &&
+      other.frame == frame &&
+      listEquals(other.children, children) &&
+      jsonEquals(other.extra, extra);
+
+  @override
+  int get hashCode =>
+      Object.hash(id, frame, Object.hashAll(children), jsonHash(extra));
 }
 
 /// An element this version cannot interpret, kept verbatim.
