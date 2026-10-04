@@ -235,8 +235,8 @@ func statPhoto(params MetadataParams) (photoStat, error) {
 		filesDir = deviceDir
 	}
 	cleanFilesDir := filepath.Clean(filesDir)
-	fullPath := filepath.Join(cleanFilesDir, params.RelPath)
-	if !strings.HasPrefix(fullPath, cleanFilesDir+string(filepath.Separator)) {
+	fullPath, err := storageutil.SafeJoin(cleanFilesDir, params.RelPath)
+	if err != nil || fullPath == cleanFilesDir {
 		return photoStat{}, ErrInvalidRelPath
 	}
 	fileStat, err := os.Stat(fullPath)
