@@ -34,6 +34,7 @@
                   "bold": true,
                   "italic": true,
                   "underline": true,
+                  "strikethrough": true,
                   "fontSize": 72,
                   "fontFamily": "Inter",
                   "color": "#FFCC00"
@@ -49,9 +50,14 @@
                 {
                   "text": "Second line"
                 }
-              ]
+              ],
+              "lineSpacing": 1.5,
+              "list": "numbered"
             }
-          ]
+          ],
+          "anchor": "middle",
+          "autoFit": "shrink",
+          "placeholder": "Click to add title"
         },
         {
           "id": "e2",

@@ -6,18 +6,23 @@ import '../model/slide_element.dart';
 /// default is [defaultSlideElementLabel].
 typedef SlideElementLabel = String Function(SlideElement element);
 
-/// English screen reader labels: a text box reads its first line, an image
-/// its alt text, a shape its kind.
+/// English screen reader labels: a text box reads its text, a line per
+/// non-blank paragraph (its placeholder, or "Empty text box", when it has
+/// none), an image its alt
+/// text, a shape its kind.
 ///
 /// ```dart
 /// defaultSlideElementLabel(ImageElement(..., altText: 'A dog'));
 /// // 'Image: A dog'
 /// ```
 String defaultSlideElementLabel(SlideElement element) => switch (element) {
-      TextBox(:final plainText) when plainText.trim().isEmpty =>
-        'Empty text box',
-      TextBox(:final plainText) =>
-        'Text box: ${plainText.trim().split('\n').first.trim()}',
+      TextBox(:final plainText, :final placeholder)
+          when plainText.trim().isEmpty =>
+        placeholder.isEmpty ? 'Empty text box' : placeholder,
+      TextBox(:final plainText) => [
+          for (final line in plainText.split('\n'))
+            if (line.trim().isNotEmpty) line.trim(),
+        ].join('\n'),
       ShapeElement(:final kind) => '${_shapeNames[kind]} shape',
       ImageElement(:final altText) when altText.isEmpty => 'Image',
       ImageElement(:final altText) => 'Image: $altText',

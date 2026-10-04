@@ -1,19 +1,33 @@
 import 'package:flutter/widgets.dart';
 
+import '../model/rich_text.dart';
 import '../model/slide_element.dart';
 import '../model/text_paragraph.dart';
-import '../model/text_run.dart';
 import 'slide_canvas_style.dart';
+import 'slide_text_layout.dart';
+import 'slide_text_paragraph_view.dart';
 
 /// Draws a [TextBox]'s paragraphs inside its frame, in slide units.
 ///
-/// Each paragraph is one block of styled runs with its own alignment. A run
-/// that leaves its size or color unset takes [SlideCanvasStyle.fontSize] or
-/// [SlideCanvasStyle.textColor]. Text taller than the frame runs past its
-/// bottom, as it does in other slide editors, instead of being cut off.
+/// Each paragraph is one block of styled runs with its own alignment, line
+/// spacing and list marker, laid out by [SlideTextLayout]; a run that
+/// leaves its size or color unset takes [SlideCanvasStyle.fontSize] or
+/// [SlideCanvasStyle.textColor]. The text sits against the box's
+/// [TextBox.anchor] edge. Text taller than the frame runs past it, as it
+/// does in other slide editors, instead of being cut off — unless the box
+/// shrinks text to fit ([TextAutoFit.shrink]).
+///
+/// With [showPlaceholder], an empty box shows its [TextBox.placeholder] in
+/// [SlideCanvasStyle.placeholderColor], as an editor does and a slideshow
+/// does not.
 class SlideTextBoxView extends StatelessWidget {
   /// Creates the view of [box].
-  const SlideTextBoxView({super.key, required this.box, required this.style});
+  const SlideTextBoxView({
+    super.key,
+    required this.box,
+    required this.style,
+    this.showPlaceholder = false,
+  });
 
   /// The text box to draw.
   final TextBox box;
@@ -21,50 +35,59 @@ class SlideTextBoxView extends StatelessWidget {
   /// Supplies the defaults for unset run styles.
   final SlideCanvasStyle style;
 
-  static const _alignments = {
-    TextAlignment.start: TextAlign.start,
-    TextAlignment.center: TextAlign.center,
-    TextAlignment.end: TextAlign.end,
-    TextAlignment.justify: TextAlign.justify,
-  };
+  /// Whether an empty box shows its placeholder.
+  final bool showPlaceholder;
+
+  /// The alignment that holds text against [anchor]'s edge.
+  static Alignment alignmentOf(TextAnchor anchor) => switch (anchor) {
+        TextAnchor.top => Alignment.topLeft,
+        TextAnchor.middle => Alignment.centerLeft,
+        TextAnchor.bottom => Alignment.bottomLeft,
+      };
 
   @override
   Widget build(BuildContext context) {
-    final base = TextStyle(
-      fontSize: style.fontSize,
-      color: style.textColor,
-      height: 1.2,
-    );
+    final layout = SlideTextLayout.fromStyle(style);
+    final scale = layout.shrinkScale(box);
+    final placeholder =
+        showPlaceholder && box.placeholder.isNotEmpty && box.plainText.isEmpty;
+    final paragraphs = placeholder
+        ? [
+            TextParagraph.plain(box.placeholder).copyWith(
+              alignment: box.paragraphs.firstOrNull?.alignment,
+            ),
+          ]
+        : box.paragraphs;
+    final markers = listMarkers(paragraphs);
     return OverflowBox(
-      alignment: Alignment.topLeft,
+      alignment: alignmentOf(box.anchor),
       minHeight: 0,
       maxHeight: double.infinity,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final paragraph in box.paragraphs)
-            Text.rich(
-              TextSpan(
-                style: base,
-                children: [for (final run in paragraph.runs) _span(run)],
+          for (var i = 0; i < paragraphs.length; i++)
+            SlideTextParagraphView(
+              paragraph: paragraphs[i],
+              layout: layout,
+              marker: markers[i],
+              scale: scale,
+              child: RichText(
+                text: placeholder
+                    ? TextSpan(
+                        text: box.placeholder,
+                        style: layout
+                            .rootStyle(
+                                box.paragraphs.firstOrNull ?? paragraphs.first)
+                            .copyWith(color: style.placeholderColor),
+                      )
+                    : layout.paragraphSpan(paragraphs[i], scale: scale),
+                textAlign: layout.textAlign(paragraphs[i]),
               ),
-              textAlign: _alignments[paragraph.alignment],
             ),
         ],
       ),
     );
   }
-
-  static TextSpan _span(TextRun run) => TextSpan(
-        text: run.text,
-        style: TextStyle(
-          fontSize: run.fontSize,
-          fontFamily: run.fontFamily,
-          color: run.color == null ? null : Color(run.color!.argb),
-          fontWeight: run.bold ? FontWeight.bold : null,
-          fontStyle: run.italic ? FontStyle.italic : null,
-          decoration: run.underline ? TextDecoration.underline : null,
-        ),
-      );
 }

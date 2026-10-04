@@ -77,6 +77,14 @@ sealed class SlideElement {
             for (var i = 0; i < paragraphs.length; i++)
               TextParagraph.fromJson(paragraphs[i], '$path.paragraphs[$i]'),
           ]),
+          anchor: enumByName(json, 'anchor', TextAnchor.values, TextAnchor.top),
+          autoFit: enumByName(
+            json,
+            'autoFit',
+            TextAutoFit.values,
+            TextAutoFit.grow,
+          ),
+          placeholder: optionalString(json, 'placeholder', path) ?? '',
           extra: unknownFields(json, TextBox._known),
         );
       case ShapeElement.typeName:
@@ -124,24 +132,71 @@ sealed class SlideElement {
   }
 }
 
+/// Where a [TextBox]'s text sits between the top and bottom of its frame.
+enum TextAnchor {
+  /// Against the top edge.
+  top,
+
+  /// Centered.
+  middle,
+
+  /// Against the bottom edge.
+  bottom,
+}
+
+/// What a [TextBox] does when its text is taller than its frame.
+enum TextAutoFit {
+  /// The frame grows taller to fit the text; it never shrinks on its own.
+  grow,
+
+  /// The frame keeps its size and the text runs past its bottom.
+  fixed,
+
+  /// The frame keeps its size and the text is drawn smaller until it fits.
+  shrink,
+}
+
 /// A box of rich text: [paragraphs] of styled runs laid out inside the
-/// frame.
+/// frame, held to the [anchor] edge, and fitted as [autoFit] says.
+///
+/// [placeholder] is the prompt an editor shows while the box is empty —
+/// "Click to add title" — and is never part of the text itself.
 class TextBox extends SlideElement {
   /// Creates a text box.
   const TextBox({
     required super.id,
     required super.frame,
     this.paragraphs = const [],
+    this.anchor = TextAnchor.top,
+    this.autoFit = TextAutoFit.grow,
+    this.placeholder = '',
     super.extra,
   });
 
   /// The `type` discriminator, `text`.
   static const typeName = 'text';
 
-  static const _known = {'id', 'type', 'frame', 'paragraphs'};
+  static const _known = {
+    'id',
+    'type',
+    'frame',
+    'paragraphs',
+    'anchor',
+    'autoFit',
+    'placeholder',
+  };
 
   /// The text, one entry per paragraph.
   final List<TextParagraph> paragraphs;
+
+  /// Where the text sits vertically in the frame.
+  final TextAnchor anchor;
+
+  /// How the box fits text taller than its frame.
+  final TextAutoFit autoFit;
+
+  /// The prompt an editor shows while the box is empty; empty for none.
+  final String placeholder;
 
   /// The text with styling dropped, paragraphs joined by `\n`.
   String get plainText => paragraphs.map((p) => p.plainText).join('\n');
@@ -152,6 +207,9 @@ class TextBox extends SlideElement {
   @override
   JsonMap _fieldsToJson() => {
         'paragraphs': [for (final p in paragraphs) p.toJson()],
+        if (anchor != TextAnchor.top) 'anchor': anchor.name,
+        if (autoFit != TextAutoFit.grow) 'autoFit': autoFit.name,
+        if (placeholder.isNotEmpty) 'placeholder': placeholder,
       };
 
   /// Returns a copy with the given fields replaced.
@@ -159,11 +217,17 @@ class TextBox extends SlideElement {
     String? id,
     ElementFrame? frame,
     List<TextParagraph>? paragraphs,
+    TextAnchor? anchor,
+    TextAutoFit? autoFit,
+    String? placeholder,
   }) =>
       TextBox(
         id: id ?? this.id,
         frame: frame ?? this.frame,
         paragraphs: paragraphs ?? this.paragraphs,
+        anchor: anchor ?? this.anchor,
+        autoFit: autoFit ?? this.autoFit,
+        placeholder: placeholder ?? this.placeholder,
         extra: extra,
       );
 
@@ -178,12 +242,22 @@ class TextBox extends SlideElement {
       other is TextBox &&
       other.id == id &&
       other.frame == frame &&
+      other.anchor == anchor &&
+      other.autoFit == autoFit &&
+      other.placeholder == placeholder &&
       listEquals(other.paragraphs, paragraphs) &&
       jsonEquals(other.extra, extra);
 
   @override
-  int get hashCode =>
-      Object.hash(id, frame, Object.hashAll(paragraphs), jsonHash(extra));
+  int get hashCode => Object.hash(
+        id,
+        frame,
+        Object.hashAll(paragraphs),
+        anchor,
+        autoFit,
+        placeholder,
+        jsonHash(extra),
+      );
 }
 
 /// The geometric figures a [ShapeElement] can draw, each fitted to the
