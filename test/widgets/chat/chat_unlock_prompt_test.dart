@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/chat/chat_unlock_prompt.dart';
 
+import '../../support/tap_target_guidelines.dart';
+
 /// #2489: the unlock prompt hands the password over once and keeps no copy of
 /// it in the field afterward, on narrow and wide viewports alike.
 void main() {
@@ -91,4 +93,14 @@ void main() {
     expect(find.text(ChatUnlockPrompt.failureHint), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  // #2603, #2605: the prompt's field and button are labeled 48dp targets.
+  for (final size in const [narrowViewport, wideViewport]) {
+    testWidgets('every control is a labeled 48dp target at $size', (
+      tester,
+    ) async {
+      await pumpPrompt(tester, size);
+      await expectTapTargetGuidelines(tester);
+    });
+  }
 }

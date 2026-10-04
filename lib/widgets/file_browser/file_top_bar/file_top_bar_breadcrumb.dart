@@ -20,6 +20,15 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// Segments outside [rootPath] are shown but not offered: a member's reach
 /// starts at their own home, and the `users` folder on the way to it is a
 /// waypoint they cannot use (#2139).
+///
+/// Home, the "⋯" button and every ancestor are labeled 48dp targets, which
+/// overhang the pill: the pill keeps a bar button's height, and the targets
+/// reach [QuarkBarIconButton.tapTargetMargin] above and below it (#2603,
+/// #2605).
+///
+/// Probe keys: `file_top_bar_home`, `file_top_bar_hidden_crumbs`,
+/// `file_top_bar_crumb_<index>` counting from zero at the shallowest, and
+/// `file_top_bar_pill` for the pill itself.
 class FileTopBarBreadcrumb extends StatelessWidget {
   const FileTopBarBreadcrumb({
     required this.currentPath,
@@ -57,48 +66,75 @@ class FileTopBarBreadcrumb extends StatelessWidget {
     final canGoHome =
         navEnabled && normalizePath(currentPath) != normalizePath(rootPath);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: tokens.input,
-        border: Border.all(color: tokens.border),
-        borderRadius: BorderRadius.circular(tokens.radiusLg),
-      ),
-      // LayoutBuilder inside the Container so constraints.maxWidth already
-      // reflects the width after the Container's padding is subtracted.
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Home icon — always visible, never truncated.
-              MouseRegion(
-                cursor: canGoHome
-                    ? SystemMouseCursors.click
-                    : SystemMouseCursors.basic,
-                child: InkWell(
-                  key: const ValueKey('file_top_bar_home'),
-                  onTap: canGoHome ? onGoHome : null,
-                  borderRadius: BorderRadius.circular(4),
-                  child: Padding(
-                    padding: const EdgeInsets.all(2),
-                    child: Icon(
-                      QuarkIcons.home_rounded,
-                      size: 16,
-                      color: canGoHome
-                          ? colorScheme.onSurfaceVariant
-                          : colorScheme.onSurface.withValues(alpha: 0.4),
-                    ),
-                  ),
-                ),
+    return SizedBox(
+      height: kMinInteractiveDimension,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            top: QuarkBarIconButton.tapTargetMargin,
+            bottom: QuarkBarIconButton.tapTargetMargin,
+            child: DecoratedBox(
+              key: const ValueKey('file_top_bar_pill'),
+              decoration: BoxDecoration(
+                color: tokens.input,
+                border: Border.all(color: tokens.border),
+                borderRadius: BorderRadius.circular(tokens.radiusLg),
               ),
-              if (segments.isNotEmpty) ...[
-                const SizedBox(width: 2),
-                ..._buildSmartCrumbs(context, segments, constraints.maxWidth),
-              ],
-            ],
-          );
-        },
+            ),
+          ),
+          // Home's target supplies the left inset, so only a trailing crumb
+          // needs padding after it. LayoutBuilder sits inside it so
+          // constraints.maxWidth already has the padding subtracted.
+          Padding(
+            padding: EdgeInsets.only(right: segments.isEmpty ? 0 : 10),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Home icon — always visible, never truncated.
+                    Semantics(
+                      container: true,
+                      button: canGoHome,
+                      child: Tooltip(
+                        message: canGoHome
+                            ? 'Go to the top folder'
+                            : 'You are in the top folder',
+                        child: MouseRegion(
+                          cursor: canGoHome
+                              ? SystemMouseCursors.click
+                              : SystemMouseCursors.basic,
+                          child: GestureDetector(
+                            key: const ValueKey('file_top_bar_home'),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: canGoHome ? onGoHome : null,
+                            child: SizedBox.square(
+                              dimension: kMinInteractiveDimension,
+                              child: Icon(
+                                QuarkIcons.home_rounded,
+                                size: 16,
+                                color: canGoHome
+                                    ? colorScheme.onSurfaceVariant
+                                    : colorScheme.onSurface.withValues(
+                                        alpha: 0.4,
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    ..._buildSmartCrumbs(
+                      context,
+                      segments,
+                      constraints.maxWidth,
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -122,27 +158,29 @@ class FileTopBarBreadcrumb extends StatelessWidget {
 
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Space occupied by the home icon + small gap before the first crumb.
-    const homeIconPx = 20.0; // Icon(16) + Padding(all(2)) = 16 + 4
-    const homeGapPx = 2.0;
+    // Space occupied by the home target.
+    const homeIconPx = kMinInteractiveDimension;
     // Each separator (chevron icon + horizontal padding).
     const separatorPx = 22.0; // Icon(14) + Padding(horizontal(4)) = 14 + 8
-    // The "⋯" ellipsis prefix when ancestors are hidden (same visual budget).
-    const ellipsisPx = 22.0;
+    // The "⋯" target prefixed when ancestors are hidden.
+    const ellipsisPx = kMinInteractiveDimension;
     // Hard cap on a single segment's rendered text width.
     const maxSegmentPx = 140.0;
     // Text style used for segment labels.
     const segStyle = TextStyle(fontSize: 13);
 
-    final budget = availableWidth - homeIconPx - homeGapPx;
+    final budget = availableWidth - homeIconPx;
 
     // Measure each segment, capped at maxSegmentPx.
     final segWidths = segments.map((s) {
       return math.min(_measureText(s, segStyle), maxSegmentPx);
     }).toList();
 
-    // Slot cost for a segment = separator + text + small horizontal padding.
-    List<double> slotCosts = segWidths.map((w) => separatorPx + w + 4).toList();
+    // Slot cost for a segment = separator + text and its small horizontal
+    // padding, or the 48dp minimum target if that is wider.
+    List<double> slotCosts = segWidths
+        .map((w) => separatorPx + math.max(w + 4, kMinInteractiveDimension))
+        .toList();
 
     // Greedily add segments from right to left until the budget is exhausted.
     double accumulated = 0;
@@ -174,7 +212,6 @@ class FileTopBarBreadcrumb extends StatelessWidget {
         final targetPath = '/${segments.take(idx + 1).join('/')}';
         return ListTile(
           dense: true,
-          visualDensity: VisualDensity.compact,
           leading: Icon(
             idx == 0 ? QuarkIcons.home_rounded : QuarkIcons.folder_rounded,
             size: 18,
@@ -205,27 +242,35 @@ class FileTopBarBreadcrumb extends StatelessWidget {
             ),
           ),
           menuChildren: menuItems,
-          child: MouseRegion(
-            cursor: navEnabled
-                ? SystemMouseCursors.click
-                : SystemMouseCursors.basic,
-            child: InkWell(
-              onTap: !navEnabled
-                  ? null
-                  : () {
-                      if (hiddenCrumbsController.isOpen) {
-                        hiddenCrumbsController.close();
-                      } else {
-                        hiddenCrumbsController.open();
-                      }
-                    },
-              borderRadius: BorderRadius.circular(4),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                child: Icon(
-                  QuarkIcons.more_horiz_rounded,
-                  size: 14,
-                  color: colorScheme.onSurface.withValues(alpha: 0.55),
+          child: Semantics(
+            container: true,
+            button: navEnabled,
+            child: Tooltip(
+              message: 'Show hidden folders',
+              child: MouseRegion(
+                cursor: navEnabled
+                    ? SystemMouseCursors.click
+                    : SystemMouseCursors.basic,
+                child: GestureDetector(
+                  key: const ValueKey('file_top_bar_hidden_crumbs'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: !navEnabled
+                      ? null
+                      : () {
+                          if (hiddenCrumbsController.isOpen) {
+                            hiddenCrumbsController.close();
+                          } else {
+                            hiddenCrumbsController.open();
+                          }
+                        },
+                  child: SizedBox.square(
+                    dimension: kMinInteractiveDimension,
+                    child: Icon(
+                      QuarkIcons.more_horiz_rounded,
+                      size: 14,
+                      color: colorScheme.onSurface.withValues(alpha: 0.55),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -255,23 +300,39 @@ class FileTopBarBreadcrumb extends StatelessWidget {
       final tappable = !isLast && _canOpen(targetPath);
 
       result.add(
-        MouseRegion(
-          cursor: tappable
-              ? SystemMouseCursors.click
-              : SystemMouseCursors.basic,
-          child: InkWell(
-            onTap: tappable ? () => onPathSelected!(targetPath) : null,
-            borderRadius: BorderRadius.circular(4),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: tappable ? colorScheme.primary : colorScheme.onSurface,
+        Semantics(
+          container: true,
+          button: tappable,
+          child: MouseRegion(
+            cursor: tappable
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
+            child: GestureDetector(
+              key: ValueKey('file_top_bar_crumb_$i'),
+              behavior: HitTestBehavior.opaque,
+              onTap: tappable ? () => onPathSelected!(targetPath) : null,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minWidth: kMinInteractiveDimension,
+                  minHeight: kMinInteractiveDimension,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.clip,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Center(
+                    widthFactor: 1,
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: tappable
+                            ? colorScheme.primary
+                            : colorScheme.onSurface,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
