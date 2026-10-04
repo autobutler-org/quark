@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/router.dart';
@@ -144,7 +145,7 @@ class _PlaintextEditorPageState extends State<PlaintextEditorPage> {
         if (!didPop && !canPop) leave();
       },
       child: Scaffold(
-        appBar: AppBar(
+        appBar: ChromeAppBar(
           title: Text(title),
           leading: BackButton(onPressed: canPop ? context.pop : leave),
           actions: [

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/router.dart';
 import 'package:quark/widgets/login/back_to_sign_in.dart';
@@ -94,7 +95,7 @@ class _RecoverPageState extends State<RecoverPage> {
     final theme = Theme.of(context);
     return BackToSignIn(
       child: Scaffold(
-        appBar: AppBar(
+        appBar: ChromeAppBar(
           title: const Text('Recover account'),
           actions: const [AppThemeToggle()],
         ),

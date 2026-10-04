@@ -142,6 +142,19 @@ in dark and at least twice the page's, content surfaces stay within 0.03 of the 
 and dark sets of one color share a hue, and preset hues keep 25 degrees from the status colors and from each
 other.
 
+In the app, `AppSettings.themeColor` is the theme color in effect and `QuarkApp` in `lib/main.dart` rebuilds both
+themes from it. It resolves two inputs: the Quark's default from `GET /settings/public` and the signed-in user's
+own from `GET /settings/me`, which wins when it is not empty. `SettingsService.refreshThemeColor` fetches both
+whenever the account is refreshed, the active host changes, or a `public_settings_changed` event arrives. The
+resolved value is cached per host in `shared_preferences`, so the sign-in page wears the color last seen on that
+Quark. Settings, General tab, is where a user picks their own and an admin picks the Quark's.
+
+App widgets that sit in the app bar or the drawer read `QuarkTokens.of(context)`, never
+`Theme.of(context).colorScheme` or a hardcoded color, neither of which `QuarkChrome` remaps. A drill-down page's
+bar is a `ChromeAppBar` (`lib/widgets/layout/chrome_app_bar.dart`), a Material `AppBar` under `QuarkChrome`.
+`test/widgets/chrome_legibility_test.dart` pumps the Files, Calendar and editor bars and the drawer under derived
+themes and measures every text and icon against the fill behind it.
+
 ## What's enforced, and where
 
 The token system makes consistency possible; these rules, all in `AGENTS.md`, are what keep pages from

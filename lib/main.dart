@@ -59,15 +59,17 @@ class QuarkApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: AppSettings.instance.themeMode,
-      builder: (context, mode, _) {
+    final settings = AppSettings.instance;
+    return ListenableBuilder(
+      listenable: Listenable.merge([settings.themeMode, settings.themeColor]),
+      builder: (context, _) {
+        final themeColor = settings.themeColor.value;
         return MaterialApp.router(
           debugShowCheckedModeBanner: false,
           title: 'Quark',
-          theme: QuarkTheme.light(),
-          darkTheme: QuarkTheme.dark(),
-          themeMode: mode,
+          theme: QuarkTheme.light(themeColor: themeColor),
+          darkTheme: QuarkTheme.dark(themeColor: themeColor),
+          themeMode: settings.themeMode.value,
           routerConfig: router,
           scaffoldMessengerKey: rootScaffoldMessengerKey,
           builder: (context, child) => JobFinishAnnouncer(

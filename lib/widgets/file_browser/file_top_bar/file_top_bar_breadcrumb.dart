@@ -54,7 +54,6 @@ class FileTopBarBreadcrumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final tokens = QuarkTokens.of(context);
 
     final trimmed = currentPath.startsWith('/')
@@ -114,10 +113,8 @@ class FileTopBarBreadcrumb extends StatelessWidget {
                                 QuarkIcons.home_rounded,
                                 size: 16,
                                 color: canGoHome
-                                    ? colorScheme.onSurfaceVariant
-                                    : colorScheme.onSurface.withValues(
-                                        alpha: 0.4,
-                                      ),
+                                    ? tokens.secondaryForeground
+                                    : tokens.mutedForeground,
                               ),
                             ),
                           ),
@@ -156,7 +153,8 @@ class FileTopBarBreadcrumb extends StatelessWidget {
   ) {
     if (segments.isEmpty) return [];
 
-    final colorScheme = Theme.of(context).colorScheme;
+    // The crumbs sit in the bar, so these are the chrome's colors (#2740).
+    final tokens = QuarkTokens.of(context);
 
     // Space occupied by the home target.
     const homeIconPx = kMinInteractiveDimension;
@@ -215,7 +213,8 @@ class FileTopBarBreadcrumb extends StatelessWidget {
           leading: Icon(
             idx == 0 ? QuarkIcons.home_rounded : QuarkIcons.folder_rounded,
             size: 18,
-            color: colorScheme.onSurfaceVariant,
+            // In a menu, which is content and not under QuarkChrome.
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           title: Text(name, style: const TextStyle(fontSize: 14)),
           onTap: !_canOpen(targetPath)
@@ -234,7 +233,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
             minimumSize: const WidgetStatePropertyAll(Size(200, 0)),
             shape: WidgetStatePropertyAll(
               RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(QuarkColors.radiusLg),
+                borderRadius: BorderRadius.circular(tokens.radiusLg),
               ),
             ),
             padding: const WidgetStatePropertyAll(
@@ -268,7 +267,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
                     child: Icon(
                       QuarkIcons.more_horiz_rounded,
                       size: 14,
-                      color: colorScheme.onSurface.withValues(alpha: 0.55),
+                      color: tokens.mutedForeground,
                     ),
                   ),
                 ),
@@ -287,7 +286,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
           child: Icon(
             QuarkIcons.chevron_right_rounded,
             size: 14,
-            color: colorScheme.onSurface.withValues(alpha: 0.4),
+            color: tokens.mutedForeground,
           ),
         ),
       );
@@ -324,9 +323,7 @@ class FileTopBarBreadcrumb extends StatelessWidget {
                       label,
                       style: TextStyle(
                         fontSize: 13,
-                        color: tappable
-                            ? colorScheme.primary
-                            : colorScheme.onSurface,
+                        color: tappable ? tokens.primary : tokens.foreground,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.clip,

@@ -54,6 +54,9 @@ lib/widgets/
                                 ConnectionIndicator fed by ConnectionController
                                 and a JobsBadge fed by JobsController
     app_drawer.dart             AppDrawer, QuarkDrawer wired to the router
+    chrome_app_bar.dart         ChromeAppBar, a drill-down page's AppBar under
+                                QuarkChrome; not coupled, a candidate for the
+                                package
     theme_toggle_button.dart    AppThemeToggle, ThemeToggleButton wired to AppSettings
   login/
     active_host_card.dart       the active Quark from AppSettings, with the

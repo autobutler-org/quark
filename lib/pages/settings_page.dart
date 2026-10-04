@@ -231,12 +231,22 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _disconnected = disconnected);
   }
 
+  /// Everything the theme color pickers show (#2740).
+  final Listenable _themeColors = Listenable.merge([
+    AppSettings.instance.themeColor,
+    AppSettings.instance.quarkThemeColor,
+    AppSettings.instance.userThemeColor,
+    AppSettings.instance.sessionTokenNotifier,
+  ]);
+
   @override
   void initState() {
     super.initState();
     // Admin-only actions appear and disappear as the Quark reports the role.
     AppSettings.instance.isAdmin.addListener(_onAdminChanged);
     _features.addListener(_onAdminChanged);
+    // The theme color pickers follow the theme colors as they are fetched and saved.
+    _themeColors.addListener(_onAdminChanged);
     _load();
   }
 
@@ -628,8 +638,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final hasHost = AppSettings.instance.activeHost != null;
-    final isAdmin = AppSettings.instance.isAdmin.value;
+    final settings = AppSettings.instance;
+    final hasHost = settings.activeHost != null;
+    final isAdmin = settings.isAdmin.value;
     final showFeatures = isAdmin && hasHost && _features.flags.isNotEmpty;
     // Heads every tab, since it explains every "Not connected" row and the
     // address it points at is on General (#1637). It scrolls with the tab's
@@ -660,6 +671,18 @@ class _SettingsPageState extends State<SettingsPage> {
               header: banner,
               theme: _theme,
               onThemeChanged: _setTheme,
+              themeColor: settings.themeColor.value,
+              followsQuarkThemeColor:
+                  (settings.userThemeColor.value ?? '').isEmpty,
+              quarkThemeColor: QuarkThemeColor.parse(
+                settings.quarkThemeColor.value,
+              ),
+              onThemeColorChanged: hasHost && settings.sessionToken != null
+                  ? _setThemeColor
+                  : null,
+              onQuarkThemeColorChanged: hasHost && isAdmin
+                  ? _setQuarkThemeColor
+                  : null,
               refreshIntervalSeconds: _refreshIntervalSeconds,
               onRefreshIntervalChanged: _setRefreshInterval,
               demoMode: _demoMode,
@@ -796,6 +819,47 @@ class _SettingsPageState extends State<SettingsPage> {
     await AppSettings.instance.setDemoMode(enabled);
   }
 
+  /// Saves the user's own theme color, empty to follow the Quark's.
+  Future<void> _setThemeColor(String themeColor) => _saveThemeColor(
+    themeColor,
+    previous: AppSettings.instance.userThemeColor.value,
+    apply: AppSettings.instance.setUserThemeColor,
+    save: SettingsService.setMyThemeColor,
+    action: 'save your theme color',
+  );
+
+  /// Saves the Quark's default theme color, as an admin.
+  Future<void> _setQuarkThemeColor(String themeColor) => _saveThemeColor(
+    themeColor,
+    previous: AppSettings.instance.quarkThemeColor.value,
+    apply: AppSettings.instance.setQuarkThemeColor,
+    save: SettingsService.setQuarkThemeColor,
+    action: "save this Quark's theme color",
+  );
+
+  /// Applies [themeColor] at once and saves it, putting [previous] back if the
+  /// Quark refuses.
+  Future<void> _saveThemeColor(
+    String themeColor, {
+    required String? previous,
+    required Future<void> Function(String?) apply,
+    required Future<void> Function(String) save,
+    required String action,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await apply(themeColor);
+    try {
+      await save(themeColor);
+    } catch (e) {
+      debugPrint('[settings_page.dart] Error saving theme color: $e');
+      await apply(previous);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(Errors.message(e, action))),
+      );
+    }
+  }
+
   /// Saves the automatic-updates switch, flipping it back if the Quark
   /// refuses.
   Future<void> _setAutoUpdate(bool enabled) async {
@@ -884,6 +948,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void dispose() {
     AppSettings.instance.isAdmin.removeListener(_onAdminChanged);
     _features.removeListener(_onAdminChanged);
+    _themeColors.removeListener(_onAdminChanged);
     if (widget.featureFlags == null) _features.dispose();
     _remoteAccessPoll?.cancel();
     super.dispose();

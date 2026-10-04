@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill_to_pdf/flutter_quill_to_pdf.dart';
@@ -576,7 +577,7 @@ class _DocumentEditorPageState extends State<DocumentEditorPage>
           // user has clicked into the editor (which never autofocuses).
           autofocus: true,
           child: Scaffold(
-            appBar: AppBar(
+            appBar: ChromeAppBar(
               leading: _backButton(),
               title: Tooltip(
                 message: 'Rename',

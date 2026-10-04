@@ -9,7 +9,9 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   /// The bars whose `actions:` this test reads: the drawer pages' and every
   /// detail, editor and viewer page's.
-  final bar = RegExp(r'\b(QuarkAppBar|QuarkPageScaffold|AppBar)\(');
+  final bar = RegExp(
+    r'\b(QuarkAppBar|QuarkPageScaffold|ChromeAppBar|AppBar)\(',
+  );
 
   /// Bars allowed an exception, each with the reason.
   const exempt = {

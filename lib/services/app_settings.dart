@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -9,7 +10,8 @@ import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/models/feature_flag.dart';
 import 'package:quark/models/photo_sort.dart';
-import 'package:quark_widgets/quark_widgets.dart' show AlbumSort;
+import 'package:quark_widgets/quark_widgets.dart'
+    show AlbumSort, QuarkThemeColor;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Matches an explicit URI scheme prefix (`https://`, `http://`, `ws://`, ...).
@@ -203,6 +205,34 @@ class AppSettings {
   bool isFeatureEnabled(String key) =>
       featureFlags.value.any((flag) => flag.key == key && flag.enabled);
 
+  /// The theme color the app's theme wears (#2740): the user's own on the current
+  /// [activeHost] when they have picked one, otherwise that Quark's default,
+  /// otherwise [QuarkThemeColor.classic].
+  ///
+  /// Derived state, never assigned directly: [setQuarkThemeColor], [setUserThemeColor]
+  /// and a change of host recompute it.
+  final ValueNotifier<QuarkThemeColor> themeColor = ValueNotifier(
+    QuarkThemeColor.classic,
+  );
+
+  /// The current [activeHost]'s default theme color as its storage string, empty
+  /// when its admin has not chosen one. Null until `GET /settings/public` has
+  /// answered for this host. Change it with [setQuarkThemeColor].
+  ValueListenable<String?> get quarkThemeColor => _quarkThemeColor;
+  final ValueNotifier<String?> _quarkThemeColor = ValueNotifier(null);
+
+  /// The signed-in user's own theme color on the current [activeHost] as its
+  /// storage string, empty when they follow the Quark's. Null without a
+  /// session and until `GET /settings/me` has answered. Change it with
+  /// [setUserThemeColor].
+  ValueListenable<String?> get userThemeColor => _userThemeColor;
+  final ValueNotifier<String?> _userThemeColor = ValueNotifier(null);
+
+  /// The storage string last resolved into [themeColor] on each Quark, keyed by
+  /// [_hostKey], so the sign-in page wears a Quark's color before anything
+  /// has been fetched. A Quark on the default theme color has no entry.
+  Map<String, String> _themeColors = {};
+
   /// Whether terms have been accepted **for the current [activeHost]**.
   ///
   /// Derived state — never assign to it directly. It is recomputed by
@@ -254,6 +284,9 @@ class AppSettings {
   /// Holds a JSON object of host key -> username. Absent for a session that
   /// predates it.
   static const _usernamesKey = 'usernames';
+
+  /// Holds a JSON object of host key -> resolved theme color storage string.
+  static const _themeColorsKey = 'themeColors';
 
   /// Pre-#1623 key: a single app-wide "terms accepted" bool. Read once on
   /// load and migrated into [_acceptedTermsHostsKey] so existing users aren't
@@ -322,7 +355,10 @@ class AppSettings {
         _prefs!.getStringList(_ownerWelcomeHostsKey)?.toSet() ?? {};
     _signInGreetingHost = null;
 
-    _usernames = _decodeUsernames(_prefs!.getString(_usernamesKey));
+    _usernames = _decodeHostMap(_prefs!.getString(_usernamesKey));
+    _themeColors = _decodeHostMap(_prefs!.getString(_themeColorsKey));
+    _quarkThemeColor.value = null;
+    _userThemeColor.value = null;
 
     // If no hosts configured and running in debug (local development), add a local loopback
     // host appropriate for the running platform so developers can quickly connect.
@@ -433,15 +469,66 @@ class AppSettings {
     await _prefs?.setString(_usernamesKey, jsonEncode(_usernames));
   }
 
-  Map<String, String> _decodeUsernames(String? stored) {
+  /// Reads a stored JSON object of host key -> string, empty when there is
+  /// none or it cannot be read.
+  Map<String, String> _decodeHostMap(String? stored) {
     if (stored == null || stored.isEmpty) return {};
     try {
       final decoded = jsonDecode(stored);
       if (decoded is Map) return decoded.map((k, v) => MapEntry('$k', '$v'));
     } catch (_) {
-      debugPrint('[app_settings.dart] Unreadable username store');
+      debugPrint('[app_settings.dart] Unreadable per-host store');
     }
     return {};
+  }
+
+  /// Records the current [activeHost]'s default theme color, null when it is not
+  /// known, and recomputes [themeColor].
+  Future<void> setQuarkThemeColor(String? stored) {
+    _quarkThemeColor.value = stored;
+    return _resolveThemeColor();
+  }
+
+  /// Records the signed-in user's own theme color on the current [activeHost] —
+  /// empty to follow the Quark's, null when it is not known, as after signing
+  /// out — and recomputes [themeColor].
+  Future<void> setUserThemeColor(String? stored) {
+    _userThemeColor.value = stored;
+    return _resolveThemeColor();
+  }
+
+  /// Recomputes [themeColor] for the current [activeHost] and caches what it
+  /// resolved to against that host.
+  ///
+  /// The user's own theme color wins. When they follow the Quark and its default
+  /// is known, that is used. With either one unknown (signed out, not fetched
+  /// yet, a failed fetch) the host's cached theme color stands, so the sign-in
+  /// page keeps the color the user last saw there; a host with nothing cached
+  /// takes the Quark's default.
+  ///
+  /// [themeColor] is set before the first await.
+  Future<void> _resolveThemeColor() async {
+    final host = activeHost;
+    final key = host == null ? null : _hostKey(host);
+    final user = _userThemeColor.value;
+    final quark = _quarkThemeColor.value;
+    final resolved = user != null && user.isNotEmpty
+        ? user
+        : user != null && quark != null
+        ? quark
+        : _themeColors[key] ?? quark ?? '';
+    themeColor.value = QuarkThemeColor.parse(resolved);
+    if (key == null || (_themeColors[key] ?? '') == resolved) return;
+    if (resolved.isEmpty) {
+      _themeColors.remove(key);
+    } else {
+      _themeColors[key] = resolved;
+    }
+    await _persistThemeColors();
+  }
+
+  Future<void> _persistThemeColors() async {
+    await _prefs?.setString(_themeColorsKey, jsonEncode(_themeColors));
   }
 
   /// Reads [stored] into [_sessionTokens].
@@ -510,7 +597,7 @@ class AppSettings {
   }
 
   /// Publishes the current [activeHost] to [activeHostNotifier] and recomputes
-  /// [hasAcceptedTerms] for it.
+  /// [hasAcceptedTerms], [filesWelcome] and [themeColor] for it.
   /// Every mutation of [_hosts] or [_activeIndex] must end with this call.
   ///
   /// [hasAcceptedTerms] is updated first so that a listener woken by either
@@ -525,6 +612,13 @@ class AppSettings {
         : key != null && key == _signInGreetingHost
         ? FilesWelcome.signedIn
         : FilesWelcome.none;
+    // The theme colors in memory belong to the host they were fetched from. A new
+    // host starts from its cached theme color until its own are fetched.
+    if (host != activeHostNotifier.value) {
+      _quarkThemeColor.value = null;
+      _userThemeColor.value = null;
+    }
+    unawaited(_resolveThemeColor());
     // Tokens are per-host, so switching Quarks changes what [sessionToken]
     // reports; republish so no listener is left holding the old host's.
     sessionTokenNotifier.value = sessionToken;
@@ -598,6 +692,9 @@ class AppSettings {
       }
       if (_ownerWelcomeHosts.remove(_hostKey(_hosts[idx].hostAddress))) {
         await _persistOwnerWelcomeHosts();
+      }
+      if (_themeColors.remove(_hostKey(_hosts[idx].hostAddress)) != null) {
+        await _persistThemeColors();
       }
       _hosts.removeAt(idx);
       if (_activeIndex >= _hosts.length) {

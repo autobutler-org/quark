@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/terms/agree_button.dart';
 import 'package:quark/widgets/terms/terms_summary.dart';
@@ -24,7 +25,7 @@ class TermsPage extends StatelessWidget {
     return PopScope(
       canPop: Navigator.of(context).canPop(),
       child: Scaffold(
-        appBar: AppBar(
+        appBar: ChromeAppBar(
           title: const Text('Terms & Conditions'),
           actions: const [AppThemeToggle()],
         ),

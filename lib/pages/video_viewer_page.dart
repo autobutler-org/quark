@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/local_media_proxy.dart';
@@ -345,9 +346,14 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
+    // A text button is drawn in the content's accent, which the chrome is not
+    // a surface for (#2740).
+    final onChrome = TextButton.styleFrom(
+      foregroundColor: QuarkTokens.of(context).onChrome.foreground,
+    );
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: ChromeAppBar(
         title: Text(widget.name),
         actions: [
           Row(
@@ -361,10 +367,12 @@ class _VideoViewerPageState extends State<VideoViewerPage> {
                 )
               else if (_trimMode) ...[
                 TextButton(
+                  style: onChrome,
                   onPressed: _exportTrim,
                   child: const Text('Save Clip'),
                 ),
                 TextButton(
+                  style: onChrome,
                   onPressed: () => setState(() {
                     _trimMode = false;
                     _trimStart = 0.0;
