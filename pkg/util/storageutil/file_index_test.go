@@ -3,7 +3,12 @@ package storageutil
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/autobutler-org/quark/pkg/util/eventbus"
 )
 
 // makeDir creates a directory and returns the path.
@@ -188,4 +193,128 @@ func TestConcurrentAccess(t *testing.T) {
 		_ = idx.Search("concurrent", nil)
 	}
 	<-done
+}
+
+// relPaths is the sorted relative paths of a search result.
+func relPaths(files []IndexedFile) []string {
+	out := make([]string, len(files))
+	for i, f := range files {
+		out[i] = f.RelPath
+	}
+	slices.Sort(out)
+	return out
+}
+
+// buildTree indexes a fresh directory holding the given files.
+func buildTree(t *testing.T, rels ...string) (*FileIndex, string) {
+	t.Helper()
+	root := t.TempDir()
+	for _, rel := range rels {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		makeFile(t, makeDir(t, filepath.Dir(full), ""), filepath.Base(full))
+	}
+	idx := NewFileIndex()
+	idx.Build([]ManagedDevice{{FilesDir: root}})
+	return idx, root
+}
+
+// A folder delete publishes one event for the folder; everything under it
+// leaves the index, and a sibling sharing the name as a prefix stays (#2754).
+func TestHandleDeleteFolderDropsDescendants(t *testing.T) {
+	idx, root := buildTree(t, "a/b.txt", "a/c/d.txt", "ab.txt")
+
+	idx.HandleDelete(root, "a")
+
+	if got := relPaths(idx.Search("", nil)); !slices.Equal(got, []string{"ab.txt"}) {
+		t.Errorf("after deleting a: %v, want [ab.txt]", got)
+	}
+}
+
+// A folder move publishes one event for the folder; its contents move with it
+// (#2754).
+func TestHandleMoveFolderRewritesDescendants(t *testing.T) {
+	idx, root := buildTree(t, "a/b.txt", "a/c/d.txt", "ab.txt")
+
+	idx.HandleMove(root, "a", "x/c", "")
+
+	want := []string{"ab.txt", "x/c/b.txt", "x/c/c/d.txt"}
+	if got := relPaths(idx.Search("", nil)); !slices.Equal(got, want) {
+		t.Errorf("after moving a to x/c: %v, want %v", got, want)
+	}
+}
+
+// The events the file tree publishes name a folder as often as a file: an
+// upload names the folder it landed in, a new or restored folder names
+// itself, and a delete or move into the trash names whatever was selected.
+// The watcher keeps the index matching the disk through all of them (#2754).
+func TestBuildAndWatchFollowsFolderEvents(t *testing.T) {
+	root := t.TempDir()
+	makeFile(t, makeDir(t, root, "a/c"), "d.txt")
+	makeFile(t, filepath.Join(root, "a"), "b.txt")
+	bus := eventbus.New()
+	idx := NewFileIndex()
+	idx.BuildAndWatch(bus, func() ([]ManagedDevice, error) {
+		return []ManagedDevice{{FilesDir: root}}, nil
+	})
+
+	expect := func(step string, want ...string) {
+		t.Helper()
+		slices.Sort(want)
+		waitFor(t, func() bool { return slices.Equal(relPaths(idx.Search("", nil)), want) },
+			step+": want "+strings.Join(want, ", "))
+	}
+
+	// Into the trash: fileutil.DeleteFiles publishes delete for the folder.
+	trashed := filepath.Join(t.TempDir(), "a")
+	if err := os.Rename(filepath.Join(root, "a"), trashed); err != nil {
+		t.Fatal(err)
+	}
+	bus.Publish(eventbus.Event{Kind: eventbus.EventDelete, Path: "a"})
+	expect("trash a")
+
+	// Back out: RestoreTrash publishes new_folder for a restored folder.
+	if err := os.Rename(trashed, filepath.Join(root, "a")); err != nil {
+		t.Fatal(err)
+	}
+	bus.Publish(eventbus.Event{Kind: eventbus.EventNewFolder, Path: "a"})
+	expect("restore a", "a/b.txt", "a/c/d.txt")
+
+	// An upload publishes the folder the files landed in, not the files.
+	makeFile(t, filepath.Join(root, "a"), "new.txt")
+	bus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: "a"})
+	expect("upload into a", "a/b.txt", "a/c/d.txt", "a/new.txt")
+
+	// A move publishes the folder's old and new paths.
+	if err := os.Rename(filepath.Join(root, "a"), filepath.Join(root, "z")); err != nil {
+		t.Fatal(err)
+	}
+	bus.Publish(eventbus.Event{Kind: eventbus.EventMove, Path: "a", NewPath: "z"})
+	expect("move a to z", "z/b.txt", "z/c/d.txt", "z/new.txt")
+
+	// An empty new folder adds nothing, and is never indexed as a file.
+	makeDir(t, root, "empty")
+	bus.Publish(eventbus.Event{Kind: eventbus.EventNewFolder, Path: "empty"})
+	if err := os.RemoveAll(filepath.Join(root, "z", "c")); err != nil {
+		t.Fatal(err)
+	}
+	bus.Publish(eventbus.Event{Kind: eventbus.EventDelete, Path: "z/c"})
+	expect("delete z/c", "z/b.txt", "z/new.txt")
+
+	// A subscriber that fell too far behind gets one resync in place of what
+	// it missed, and rebuilds from the disk (#2753).
+	makeFile(t, filepath.Join(root, "empty"), "missed.txt")
+	bus.Publish(eventbus.Event{Kind: eventbus.EventResync, Data: eventbus.Resync{Dropped: 1}})
+	expect("resync", "empty/missed.txt", "z/b.txt", "z/new.txt")
+}
+
+// waitFor polls until cond holds, failing after a few seconds.
+func waitFor(t *testing.T, cond func() bool, what string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
