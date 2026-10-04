@@ -449,6 +449,31 @@ void main() {
     chat.controller.dispose();
   });
 
+  // #2763: a resync means the socket dropped events, chat ones among them,
+  // so the channels and the open channel's members are fetched again.
+  test('resync reloads the members and channels', () async {
+    final chat = FakeChat();
+    chat.controller.select('2');
+    await chat.controller.refresh();
+    final loads = chat.memberLoads;
+
+    chat.channels.removeWhere((c) => c.id == 2);
+    chat.channels.add(
+      ChatChannel(
+        id: 2,
+        name: 'renamed',
+        isPrivate: true,
+        permissions: ownerSet,
+      ),
+    );
+    chat.events.add(const FileEvent(kind: 'resync', path: ''));
+    await pumpEventQueue();
+
+    expect(chat.memberLoads, loads + 1);
+    expect(chat.controller.selectedChannel?.name, 'renamed');
+    chat.controller.dispose();
+  });
+
   test('members map to the list, groups with their accounts', () async {
     final chat = FakeChat(
       members: [

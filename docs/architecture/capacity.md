@@ -141,9 +141,10 @@ cover ffmpeg children too: the kernel throttles and then kills inside the servic
 ## Known limits
 
 - **One connection for every query, and a write per request** (#2766). The first wall, above.
-- **Every app refreshes on every readable change anywhere** (#2763). In the 100-client run, 7 uploads caused 620
-  of the 820 refreshes, about 70% of all requests. Reconnects have no jitter, so a restart is a synchronized
-  stampede.
+- **Every app refreshed on every readable change anywhere** (#2763, fixed). In the 100-client run, 7 uploads
+  caused 620 of the 820 refreshes, about 70% of all requests, and reconnects without jitter made a restart a
+  synchronized stampede. The Files page now refreshes only for events in or above the folder on screen, once per
+  burst (2 s quiet, 10 s at most; `EventsConfig`), and reconnects back off from 1 s to 30 s with ±50% jitter.
 - **Event fan-out is per socket**: `account_changed` and `access_changed` make every socket query the database,
   and each event is encoded once per subscriber (#2764).
 - **The event bus drops events**, including for the backup sync and the indexers, which then silently miss files

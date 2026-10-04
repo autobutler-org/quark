@@ -197,6 +197,21 @@ void main() {
     expect(controller.jobs, isEmpty);
   });
 
+  // #2763: the Quark sends resync when this socket fell behind and it dropped
+  // events, job events among them, so the list may be wrong in any way.
+  test('fetches the list again on a resync', () async {
+    served = [_job(1)];
+    final controller = build()..start();
+    await controller.load();
+
+    served = [_job(1, status: 'completed')];
+    events.add(const FileEvent(kind: 'resync', path: ''));
+    await pumpEventQueue();
+
+    expect(listCalls, 2);
+    expect(controller.runningCount, 0);
+  });
+
   test('cancel applies the returned job, or maps a refusal', () async {
     served = [_job(1)];
     final controller = build()..start();
