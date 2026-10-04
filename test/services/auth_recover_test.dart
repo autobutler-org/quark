@@ -30,7 +30,7 @@ class _RecordingClient extends http.BaseClient {
 }
 
 /// #1900: with more than one account, recovery has to say which account the
-/// phrase belongs to.
+/// phrase belongs to. #2430: it sends keys, never the phrase or the password.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -88,17 +88,13 @@ void main() {
   final rewraps = <String>[];
   final unlocks = <String>[];
 
-  /// The recovery keys each re-wrap was handed, null for none.
-  final recoveryKeysSeen = <String?>[];
-
-  /// How many re-wraps were handed a new phrase's wrap key.
-  var newPhraseKeys = 0;
+  /// The recovery keys each re-wrap was handed.
+  final recoveryKeysSeen = <String>[];
 
   setUp(() {
     rewraps.clear();
     unlocks.clear();
     recoveryKeysSeen.clear();
-    newPhraseKeys = 0;
     chatKeysForRecovery =
         ({
           required username,
@@ -106,17 +102,15 @@ void main() {
           recoveryKeys,
           newPhraseWrapKey,
           required newPassword,
-          authSalt,
+          required authSalt,
         }) {
           rewraps.add('$username/$recoveryPhrase/$newPassword/$authSalt');
-          recoveryKeysSeen.add(recoveryKeys?.authKey);
-          if (newPhraseWrapKey != null) newPhraseKeys++;
+          recoveryKeysSeen.add(recoveryKeys!.authKey);
           return Future.value(rewrapped);
         };
     chatKeysOnSignIn =
         ({
           required password,
-          recoveryPhrase,
           phraseWrapKey,
           required sessionToken,
           authSalt,
@@ -128,39 +122,42 @@ void main() {
 
   tearDown(() => authHttpClientFactory = () => sharedHttpClient);
 
-  test('recovery names the account the phrase belongs to, and a Quark that '
-      'does not report recovery keys still gets the phrase', () async {
+  test('recovery names the account the phrase belongs to, and sends only '
+      'keys', () async {
     final client = _RecordingClient();
     final salts = AuthSaltClient(client);
     authHttpClientFactory = () => salts;
+    const phrase = 'apple-bread-cloud-delta-eagle-flame';
 
-    await AuthService.recover(
+    final result = await AuthService.recover(
       username: 'grace',
-      recoveryPhrase: 'apple-bread-cloud-delta-eagle-flame',
+      recoveryPhrase: phrase,
       newPassword: 'brand-new-password',
     );
 
     final request = client.requests.single;
     expect(request.url.path, '/api/v0/auth/recover');
+    final recoveryKey = await testRecoveryKey(phrase);
+    // #2430: the keys derived from the phrase and the new password, never
+    // either one.
     expect(jsonDecode(request.body), {
       'username': 'grace',
-      'recoveryPhrase': 'apple-bread-cloud-delta-eagle-flame',
-      // #2430: the key derived from the new password, never the password.
+      'recoveryKey': recoveryKey,
       'newAuthKey': await testAuthKey('brand-new-password'),
       'chatKeys': rewrapped.toJson(),
     });
+    expect(request.body, isNot(contains('apple')));
+    expect(request.body, isNot(contains('brand-new-password')));
     expect(salts.asked, ['grace']);
-    expect(AppSettings.instance.signsInWithAuthKey('grace'), isTrue);
+    expect(result.recoveryPhrase, isNull);
     expect(AppSettings.instance.sessionToken, 'new-token');
     // Recovery now names the account, so the app knows who is signed in.
     expect(AppSettings.instance.username, 'grace');
     // #2416: the keys were re-wrapped under the new password before the reset,
-    // and chat unlocks with it afterwards.
+    // with the same recovery key, and chat unlocks with it afterwards.
     // #2430: both under the salt the new auth key was derived with.
-    expect(rewraps, [
-      'grace/apple-bread-cloud-delta-eagle-flame/brand-new-password/'
-          '$testAuthSalt',
-    ]);
+    expect(rewraps, ['grace/$phrase/brand-new-password/$testAuthSalt']);
+    expect(recoveryKeysSeen, [recoveryKey]);
     await pumpEventQueue();
     expect(unlocks, ['brand-new-password/new-token/$testAuthSalt']);
   });
@@ -177,7 +174,7 @@ void main() {
             recoveryKeys,
             newPhraseWrapKey,
             required newPassword,
-            authSalt,
+            required authSalt,
           }) => Future.error(const MessageException('invalid recovery phrase'));
 
       await expectLater(
@@ -192,8 +189,7 @@ void main() {
     },
   );
 
-  group('recovery keys (#2430):', () {
-    const phrase = 'apple-bread-cloud-delta-eagle-flame';
+  group('refused before anything is sent (#2430):', () {
     late _RecordingClient client;
     late AuthSaltClient salts;
 
@@ -205,93 +201,26 @@ void main() {
 
     Future<LoginResult> recover() => AuthService.recover(
       username: 'grace',
-      recoveryPhrase: phrase,
+      recoveryPhrase: 'apple-bread-cloud-delta-eagle-flame',
       newPassword: 'brand-new-password',
     );
 
-    Map<String, dynamic> sent() =>
-        jsonDecode(client.requests.single.body) as Map<String, dynamic>;
+    Matcher refusesWith(String message) => throwsA(
+      isA<MessageException>().having((e) => e.message, 'message', message),
+    );
 
-    test('an account with a recovery key is sent the key, not the phrase, '
-        'and keeps its phrase', () async {
-      salts.legacyRecovery = false;
+    test('a Quark that does not report recovery keys: update it', () async {
+      salts.legacyRecovery = null;
 
-      final result = await recover();
-
-      final recoveryKey = await testRecoveryKey(phrase);
-      expect(sent(), {
-        'username': 'grace',
-        'recoveryKey': recoveryKey,
-        'newAuthKey': await testAuthKey('brand-new-password'),
-        'chatKeys': rewrapped.toJson(),
-      });
-      expect(client.requests.single.body, isNot(contains('apple')));
-      // The re-wrap fetched and opened with the same key.
-      expect(recoveryKeysSeen, [recoveryKey]);
-      expect(newPhraseKeys, 0);
-      expect(result.recoveryPhrase, isNull);
-      expect(AppSettings.instance.hasRecoveryKey('grace'), isTrue);
-    });
-
-    test('an account without one sends its phrase once, and is given a new '
-        'one', () async {
-      salts.legacyRecovery = true;
-
-      final result = await recover();
-
-      final body = sent();
-      expect(body['recoveryPhrase'], phrase);
-      expect(body['newAuthKey'], await testAuthKey('brand-new-password'));
-      expect(body.containsKey('recoveryKey'), isFalse);
-      final next = result.recoveryPhrase!;
-      expect(next, isNot(phrase));
-      expect(body['newRecoveryKey'], await testRecoveryKey(next));
-      expect(client.requests.single.body, isNot(contains(next)));
-      expect(newPhraseKeys, 1);
-      expect(AppSettings.instance.hasRecoveryKey('grace'), isTrue);
-    });
-
-    for (final claim in [true, null]) {
-      test('once this Quark has a recovery key, a claim of '
-          '${claim == null ? 'no field' : 'legacyRecovery'} is refused the '
-          'phrase', () async {
-        salts.legacyRecovery = false;
-        await recover();
-        client.requests.clear();
-        salts.legacyRecovery = claim;
-
-        await expectLater(
-          recover(),
-          throwsA(
-            isA<MessageException>().having(
-              (e) => e.message,
-              'message',
-              Errors.recoveryPhraseDowngradeRefused,
-            ),
-          ),
-        );
-        expect(client.requests, isEmpty);
-        expect(rewraps, hasLength(1));
-      });
-    }
-
-    test('a Quark with no salt endpoint is refused it too', () async {
-      await AppSettings.instance.rememberRecoveryKey('grace');
-      salts.status = 404;
-
-      await expectLater(recover(), throwsA(isA<MessageException>()));
+      await expectLater(recover(), refusesWith(Errors.quarkTooOld));
       expect(client.requests, isEmpty);
     });
 
-    test('a failed recovery remembers nothing', () async {
-      salts.legacyRecovery = true;
-      authHttpClientFactory = () => AuthSaltClient(
-        MockClient((_) async => http.Response('{"error":"nope"}', 400)),
-        legacyRecovery: true,
-      );
+    test('a Quark with no salt endpoint: update it', () async {
+      salts.status = 404;
 
-      await expectLater(recover(), throwsA(isA<MessageException>()));
-      expect(AppSettings.instance.hasRecoveryKey('grace'), isFalse);
+      await expectLater(recover(), refusesWith(Errors.quarkTooOld));
+      expect(client.requests, isEmpty);
     });
   });
 
@@ -307,7 +236,7 @@ void main() {
     });
 
     await expectLater(
-      AuthService.fetchRecoveryChatKeys(username: 'grace', recoveryPhrase: 'x'),
+      AuthService.fetchRecoveryChatKeys(username: 'grace', recoveryKey: 'x'),
       throwsA(
         isA<MessageException>().having(
           (e) => e.message,

@@ -119,10 +119,12 @@ Covers first-boot setup, login, logout, and password recovery.
 
 **Notes:**
 
-- An account whose phrase the Quark made, and that has not yet signed in from an updated app (JN-AUTH-016), is
-  shown a new recovery phrase after step 8, with the same acknowledgment checkbox and **Continue**. The old phrase
-  stops working.
-- Once an account has a phrase the app made, recovering it never sends the phrase itself to the Quark (#2430).
+- Recovering never sends the new password to the Quark, only a key derived from it (#2430).
+- An account whose phrase the Quark made, and that has not yet signed in from an updated app (JN-AUTH-016), sends
+  that phrase this once and is shown a new recovery phrase after step 8, with the same acknowledgment checkbox and
+  **Continue**; Back stays on the phrase until then. The old phrase stops working.
+- Once an account has a phrase the app made, recovering it sends only a key derived from the phrase, unless the
+  Quark answers that the account has none, as a reset Quark does; then the phrase goes out that once, as above.
 
 ---
 
@@ -337,8 +339,9 @@ account on this Quark.
 
 ### JN-AUTH-016: New recovery phrase at the next sign-in
 
-**Preconditions:** An account whose recovery phrase the Quark made: one set up, requested or added before #2430.
-It has not signed in from an updated app yet.
+**Preconditions:** An account with no recovery phrase the app made: one whose phrase the Quark made, set up,
+requested or added before #2430. It may never have signed in from an updated app. An admin-added account's first
+sign-in is the same step (JN-AUTH-013).
 
 **Steps:**
 
@@ -359,4 +362,36 @@ It has not signed in from an updated app yet.
 
 - If the Quark does not take the new phrase, nothing is shown, the sign-in goes ahead, and the old phrase keeps
   working. The next sign-in tries again.
-- A Quark that has not been updated keeps the old phrase, and shows nothing.
+- An account that never signed in from an updated app sends its password this once, beside the key derived from it,
+  and the Quark moves it to the key and forgets the password (JN-AUTH-017).
+
+---
+
+### JN-AUTH-017: The sign-in form works for every account; old apps are told to update
+
+**Preconditions:** One of: an account that never signed in from an app that sends an auth key (#2430); an app
+from before auth keys; or a Quark that has not been updated to take auth keys.
+
+**Steps:**
+
+1. Navigate to `/login`.
+2. Enter the username and password.
+3. Tap **Sign in**.
+
+**Expected result:**
+
+- For the old account: the sign-in goes ahead, as for any account. The app sends the password once, beside the key
+  derived from it, and the Quark moves the account to the key and forgets the password. Every later sign-in sends
+  only the key. If the Quark cannot store the key, the sign-in fails and nothing changes.
+- For an old app: the Quark answers with its own "This version of the app is too old for this Quark. Update the app
+  to continue." The same goes for an old app's setup, account request, recovery and re-confirmations.
+- For an old Quark: "This Quark needs an update before this app can sign in to it. Update the Quark, then try
+  again." The app stays on `/login`, and nothing but the salt lookup was sent: never the password.
+
+**Notes:**
+
+- A Quark that answers that an account is old always gets the password once, beside the key, even from a device
+  that signed in to it with the key before, since a reset or reinstalled Quark answers that way.
+- An old account still holding a session from an older app, asked for its password again (deleting the account, a
+  drive's role, the vault's storage location), is told "Sign out and sign in again, then try this again.", since
+  only the sign-in form moves it to a key.

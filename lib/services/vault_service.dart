@@ -451,7 +451,7 @@ class VaultService with AuthenticatedService {
       body: json.encode({
         'targetDeviceSerial': targetDeviceSerial,
         'username': username,
-        'password': secret.confirmation,
+        'password': secret.authKey,
       }),
     );
     if (resp.statusCode == 423) throw VaultLockedException();

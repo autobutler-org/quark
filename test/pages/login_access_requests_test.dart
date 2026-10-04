@@ -10,6 +10,7 @@ import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/utils/error_text.dart';
 
 import '../support/auth_salt.dart';
@@ -18,6 +19,8 @@ import '../support/auth_salt.dart';
 /// requests, and a sign-in refused for the account's status says so rather
 /// than "invalid username or password".
 void main() {
+  // Loaded once outside the fake clock, so a sign-in can derive its key.
+  setUpAll(ChatCrypto.load);
   final settings = AppSettings.instance;
 
   Future<void> clearHosts() async {
@@ -114,7 +117,6 @@ void main() {
             403,
           ),
         ),
-        status: 404,
       );
 
       await pumpLogin(tester);
@@ -127,6 +129,7 @@ void main() {
         'hunter2hunter2',
       );
       await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+      await pumpWhileDeriving(tester);
       await tester.pumpAndSettle();
 
       expect(find.text(sentence), findsOneWidget);

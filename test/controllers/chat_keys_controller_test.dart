@@ -7,10 +7,14 @@ import 'package:quark/models/chat_keys.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/recovery_phrase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Argon2id's floor; the shipped cost is [KdfParams.standard].
 const _cheap = KdfParams(opsLimit: 1, memLimit: 8192);
+
+/// The account's auth salt.
+final _salt = Uint8List.fromList(List.generate(16, (i) => i));
 
 /// A Quark that stores one account's wrapped keys, as `/chat/keys/me` and
 /// `/auth/recover/keys` would.
@@ -25,8 +29,9 @@ class _FakeQuark {
     stored = keys;
   }
 
-  /// The recovery key the last recovery fetch carried, if any.
+  /// The recovery key and the raw phrase the last recovery fetch carried.
   String? recoveryKey;
+  String? recoveryPhrase;
 
   Future<WrappedChatKeys?> fetchForRecovery({
     required String username,
@@ -34,6 +39,7 @@ class _FakeQuark {
     String? recoveryKey,
   }) async {
     this.recoveryKey = recoveryKey;
+    this.recoveryPhrase = recoveryPhrase;
     return stored;
   }
 
@@ -65,6 +71,27 @@ void main() {
     kdfParams: _cheap,
   );
 
+  /// [phrase]'s recovery keys under [_salt], as the app derives them.
+  AuthKeys phraseKeys(String phrase) {
+    final keys = crypto.deriveRecoveryKeys(phrase, _salt, _cheap);
+    addTearDown(keys.dispose);
+    return keys;
+  }
+
+  /// Stores keys as an app from before #2430 made them: the first scheme,
+  /// with a phrase wrap under Argon2id of [phrase], which recovery still
+  /// opens. Returns the identity's box public key.
+  Uint8List storeOldScheme({required String password, required String phrase}) {
+    final identity = crypto.generateIdentity();
+    quark.stored = WrappedChatKeys(
+      publicKeys: identity.publicKeys,
+      byPassword: crypto.wrap(identity, password, _cheap),
+      byPhrase: crypto.wrap(identity, normalizeRecoveryPhrase(phrase), _cheap),
+      kdfParams: _cheap,
+    );
+    return identity.box.publicKey;
+  }
+
   setUpAll(() async {
     crypto = await ChatCrypto.load();
     // AppSettings keeps session tokens in the keystore too.
@@ -88,16 +115,12 @@ void main() {
   test('a first sign-in makes, wraps and uploads an identity', () async {
     final keys = controller();
 
-    await keys.signedIn(
-      password: 'first-password',
-      recoveryPhrase: 'Apple Bread Cloud',
-    );
+    await keys.signedIn(password: 'first-password');
 
     expect(keys.isUnlocked, isTrue);
     expect(quark.puts, 1);
     final stored = quark.stored!;
     expect(stored.publicKeys.boxPublicKey, keys.identity!.box.publicKey);
-    expect(stored.byPhrase, isNotNull);
     expect(keystore, hasLength(1));
   });
 
@@ -130,51 +153,54 @@ void main() {
     expect(keys.isUnlocked, isFalse);
   });
 
-  test('recovery re-wraps the same keypair under the new password', () async {
-    final first = controller();
-    await first.signedIn(
+  test('recovery re-wraps the same keypair under the new password, its '
+      'old-scheme phrase wrap opened by the typed phrase', () async {
+    final box = storeOldScheme(
       password: 'old-password',
-      recoveryPhrase: 'apple bread cloud',
+      phrase: 'apple bread cloud',
     );
-    final box = first.identity!.box.publicKey;
-    final sign = first.identity!.sign.publicKey;
 
     // Typed with capitals and spaces around it, as the Quark accepts.
+    final keys = phraseKeys('  Apple Bread Cloud ');
     final rewrapped = await controller().keysForRecovery(
       username: 'grace',
       recoveryPhrase: '  Apple Bread Cloud ',
+      recoveryKeys: keys,
       newPassword: 'new-password',
+      authSalt: _salt,
     );
+    expect(quark.recoveryKey, keys.authKey);
     quark.recover(rewrapped);
 
     final after = controller();
     await after.signedIn(password: 'new-password');
     expect(after.identity!.box.publicKey, box);
-    expect(after.identity!.sign.publicKey, sign);
     expect(
       () => controller().unlock('old-password'),
       throwsA(isA<MessageException>()),
     );
-    // The phrase still opens it, for the next recovery.
+    // The phrase still opens it, now under its key, for the next recovery.
+    expect(rewrapped.kdfParams.alg, KdfParams.phraseSplitAlgorithm);
     final next = await controller().keysForRecovery(
       username: 'grace',
       recoveryPhrase: 'apple bread cloud',
+      recoveryKeys: phraseKeys('apple bread cloud'),
       newPassword: 'newer-password',
+      authSalt: _salt,
     );
     expect(next.publicKeys.boxPublicKey, box);
   });
 
   test('a wrong phrase fails before anything is re-wrapped', () async {
-    await controller().signedIn(
-      password: 'old-password',
-      recoveryPhrase: 'apple bread cloud',
-    );
+    storeOldScheme(password: 'old-password', phrase: 'apple bread cloud');
 
     await expectLater(
       controller().keysForRecovery(
         username: 'grace',
         recoveryPhrase: 'wrong phrase',
+        recoveryKeys: phraseKeys('wrong phrase'),
         newPassword: 'new-password',
+        authSalt: _salt,
       ),
       throwsA(
         isA<MessageException>().having(
@@ -193,7 +219,9 @@ void main() {
     final fresh = await controller().keysForRecovery(
       username: 'grace',
       recoveryPhrase: 'apple bread cloud',
+      recoveryKeys: phraseKeys('apple bread cloud'),
       newPassword: 'new-password',
+      authSalt: _salt,
     );
 
     expect(fresh.publicKeys.boxPublicKey, isNot(old));
@@ -221,7 +249,7 @@ void main() {
   });
 
   group('the split-key scheme (#2430)', () {
-    final salt = Uint8List.fromList(List.generate(16, (i) => i));
+    final salt = _salt;
 
     test(
       'a first sign-in with an auth salt wraps under the wrap key',
@@ -266,17 +294,15 @@ void main() {
     });
 
     test('a first-scheme wrap is opened and re-wrapped at sign-in', () async {
-      final first = controller();
-      await first.signedIn(password: 'pw-one', recoveryPhrase: 'a b c');
+      final box = storeOldScheme(password: 'pw-one', phrase: 'a b c');
       final old = quark.stored!;
-      expect(old.kdfParams.isSplit, isFalse);
-      final box = first.identity!.box.publicKey;
+      final puts = quark.puts;
 
       final upgraded = controller();
       await upgraded.signedIn(password: 'pw-one', authSalt: salt);
 
       expect(upgraded.identity!.box.publicKey, box);
-      expect(quark.puts, 2);
+      expect(quark.puts, puts + 1);
       final stored = quark.stored!;
       expect(stored.kdfParams.isSplit, isTrue);
       expect(stored.byPassword.salt, salt);
@@ -286,6 +312,7 @@ void main() {
       final recovered = await controller().keysForRecovery(
         username: 'grace',
         recoveryPhrase: 'a b c',
+        recoveryKeys: phraseKeys('a b c'),
         newPassword: 'pw-two',
         authSalt: salt,
       );
@@ -294,7 +321,7 @@ void main() {
 
       // And it is not re-wrapped again.
       await controller().signedIn(password: 'pw-one', authSalt: salt);
-      expect(quark.puts, 2);
+      expect(quark.puts, puts + 1);
     });
 
     test('a wrong password re-wraps nothing', () async {
@@ -355,11 +382,7 @@ void main() {
 
       test('stored keys come back re-wrapped under it, and are not '
           'uploaded', () async {
-        await controller().signedIn(
-          password: 'pw-one',
-          recoveryPhrase: 'old phrase',
-          authSalt: salt,
-        );
+        await controller().signedIn(password: 'pw-one', authSalt: salt);
         final before = quark.stored!;
         final puts = quark.puts;
 
@@ -415,44 +438,48 @@ void main() {
               .publicKey,
           box,
         );
-        // Without the keys handed in, the phrase derives them itself.
-        quark.recover(rewrapped);
-        final again = await controller().keysForRecovery(
-          username: 'grace',
-          recoveryPhrase: 'apple-bread-cloud',
-          newPassword: 'pw-three',
-          authSalt: salt,
-        );
-        expect(quark.recoveryKey, isNull);
-        expect(again.publicKeys.boxPublicKey, box);
       });
 
-      test('an old-scheme phrase wrap still opens, and moves to a new '
-          'phrase', () async {
-        final first = controller();
-        await first.signedIn(
-          password: 'pw-one',
-          recoveryPhrase: 'old phrase',
-          authSalt: salt,
-        );
-        expect(quark.stored!.kdfParams.isPhraseSplit, isFalse);
-        final box = first.identity!.box.publicKey;
+      test('an old-scheme phrase wrap opens with the typed phrase, and comes '
+          "back under the phrase's key", () async {
+        final box = storeOldScheme(password: 'pw-one', phrase: 'old phrase');
+        final old = phraseKeys('Old Phrase');
 
         final rewrapped = await controller().keysForRecovery(
           username: 'grace',
           recoveryPhrase: 'Old Phrase',
-          newPhraseWrapKey: phrase.wrapKey,
+          recoveryKeys: old,
           newPassword: 'pw-two',
           authSalt: salt,
         );
 
+        expect(quark.recoveryKey, old.authKey);
         expect(rewrapped.publicKeys.boxPublicKey, box);
         expect(rewrapped.kdfParams.alg, KdfParams.phraseSplitAlgorithm);
         expect(
-          crypto
-              .unwrapWithKey(rewrapped.byPhrase!, phrase.wrapKey)
-              .box
-              .publicKey,
+          crypto.unwrapWithKey(rewrapped.byPhrase!, old.wrapKey).box.publicKey,
+          box,
+        );
+      });
+
+      test('a legacy recovery fetches with the raw phrase and moves the wrap '
+          'to the new phrase', () async {
+        final box = storeOldScheme(password: 'pw-one', phrase: 'old phrase');
+        final next = phraseKeys('a brand new phrase');
+
+        final rewrapped = await controller().keysForRecovery(
+          username: 'grace',
+          recoveryPhrase: 'Old Phrase',
+          newPhraseWrapKey: next.wrapKey,
+          newPassword: 'pw-two',
+          authSalt: salt,
+        );
+
+        expect(quark.recoveryPhrase, 'Old Phrase');
+        expect(quark.recoveryKey, isNull);
+        expect(rewrapped.kdfParams.alg, KdfParams.phraseSplitAlgorithm);
+        expect(
+          crypto.unwrapWithKey(rewrapped.byPhrase!, next.wrapKey).box.publicKey,
           box,
         );
       });

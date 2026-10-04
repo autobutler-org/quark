@@ -157,20 +157,6 @@ void main() {
       expect(settings.sessionToken, isNull);
     });
 
-    test(
-      'a Quark that makes its own phrase anyway has that one shown',
-      () async {
-        serve(201, {'recoveryPhrase': 'apple banana cherry'});
-
-        final phrase = await AuthService.requestAccount(
-          username: 'bob',
-          password: 'hunter2hunter2',
-        );
-
-        expect(phrase, 'apple banana cherry');
-      },
-    );
-
     test('a Quark not taking requests says so', () async {
       serve(404, {'error': "this Quark isn't taking account requests"});
 

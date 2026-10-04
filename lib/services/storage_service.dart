@@ -226,7 +226,7 @@ class StorageService with AuthenticatedService {
         'serial': serial,
         'role': role,
         'username': username,
-        'password': secret.confirmation,
+        'password': secret.authKey,
       }),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -245,16 +245,15 @@ class StorageService with AuthenticatedService {
     final uri = apiBaseUri.resolve('/api/v0/storage/devices/snapshot-backup');
     final body = <String, dynamic>{'targetDeviceSerial': targetDeviceSerial};
     if (username != null) body['username'] = username;
-    if (password != null) {
-      // With no username there is no account to derive an auth key for, and
-      // the Quark has nothing to check a password against either.
-      body['password'] = username == null
-          ? password
-          : (await AuthSecret.resolve(
-              username: username,
-              password: password,
-              use: AuthSecretUse.reconfirm,
-            )).confirmation;
+    // With no username there is no account to derive an auth key for, and
+    // the raw password is never sent (#2430), so it is left out; the Quark
+    // then refuses a vault export for want of credentials.
+    if (password != null && username != null) {
+      body['password'] = (await AuthSecret.resolve(
+        username: username,
+        password: password,
+        use: AuthSecretUse.reconfirm,
+      )).authKey;
     }
     if (recoveryPassword != null) body['recoveryPassword'] = recoveryPassword;
 
