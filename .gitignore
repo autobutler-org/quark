@@ -102,6 +102,7 @@ playwright-report/
 test-results/performance/*
 !test-results/performance/.gitkeep
 test-results/powercut/
+test-results/stress/
 
 # Ralph loops
 .ralph/
