@@ -692,8 +692,49 @@ class FilesService with AuthenticatedService {
       );
     }
 
-    // Everywhere else the download streams to a temp file and the save dialog
-    // copies from there. It used to arrive as bodyBytes and then be copied
+    return _saveThroughDialog(
+      uri,
+      fileName: fileName,
+      fallbackPath: fallbackPath,
+    );
+  }
+
+  /// Saves the spreadsheet at [filePath] as an Excel workbook under
+  /// [fileName], every tab a worksheet (#2696): `GET
+  /// /api/v0/files/export/xlsx`. The Quark builds it from the sheet as last
+  /// saved, so a caller with unsaved edits saves them first. Returns where it
+  /// was saved, or null when the save was canceled.
+  static Future<String?> saveSheetAsXlsx(
+    String filePath, {
+    String? serial,
+    required String fileName,
+  }) async {
+    final uri = _buildDownloadUri(
+      filePath,
+      serial: serial,
+      endpoint: '/api/v0/files/export/xlsx',
+    );
+    if (kIsWeb) {
+      // A download-token link only reaches the download routes, so the
+      // workbook comes through here. It is compressed, and no larger than the
+      // sheet the editor already holds.
+      final response = await instance.authenticatedGet(uri);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(response.statusCode, 'Failed to export the sheet');
+      }
+      return web_download.saveBytesForDownload(response.bodyBytes, fileName);
+    }
+    return _saveThroughDialog(uri, fileName: fileName, fallbackPath: filePath);
+  }
+
+  /// Streams [uri] to a temp file and offers it to the platform save dialog.
+  static Future<String?> _saveThroughDialog(
+    Uri uri, {
+    String? fileName,
+    required String fallbackPath,
+  }) async {
+    // Everywhere but the web the download streams to a temp file and the save
+    // dialog copies from there. It used to arrive as bodyBytes and then be copied
     // again by Uint8List.fromList, costing twice the file's size in RAM
     // before the dialog even opened (#1723).
     final downloaded = await instance.authenticatedDownload(uri);
@@ -973,7 +1014,12 @@ class FilesService with AuthenticatedService {
     return endpointUri.replace(query: querySegments.join('&'));
   }
 
-  static Uri _buildDownloadUri(String filePath, {String? serial}) {
+  /// [endpoint] with the file and device query every per-file GET takes.
+  static Uri _buildDownloadUri(
+    String filePath, {
+    String? serial,
+    String endpoint = '/api/v0/files/download',
+  }) {
     final querySegments = <String>[
       'filePath=${Uri.encodeQueryComponent(filePath)}',
     ];
@@ -983,7 +1029,7 @@ class FilesService with AuthenticatedService {
       querySegments.add('serial=${Uri.encodeQueryComponent(serialValue)}');
     }
 
-    final endpointUri = apiBaseUri.resolve('/api/v0/files/download');
+    final endpointUri = apiBaseUri.resolve(endpoint);
     return endpointUri.replace(query: querySegments.join('&'));
   }
 

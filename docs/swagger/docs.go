@@ -5021,6 +5021,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/files/export/xlsx": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Streams a .qsheet back as an .xlsx attachment, one worksheet per tab in tab order. Values, bold, italic, colors, alignment, number formats, column widths and frozen panes carry across; formulas are written as their text, since the editor's formula dialect is not Excel's and the server has no evaluator to supply the cached results Excel expects. Only reads: nothing is written beside the sheet. Needs read access on the .qsheet.",
+                "produces": [
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Download a Quark spreadsheet as an Excel workbook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Path to the .qsheet file to export",
+                        "name": "filePath",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Device serial number",
+                        "name": "serial",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The workbook",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/files/extract": {
             "post": {
                 "security": [

@@ -105,56 +105,65 @@ class SheetTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
 
-    return InkWell(
-      key: ValueKey('sheet_tab_$index'),
-      onTap: isSelected ? () => _openMenu(context) : onSelect,
-      onLongPress: () => _openMenu(context),
-      child: Container(
-        width: 160,
-        padding: EdgeInsets.only(
-          left: tokens.spacingMd,
-          right: tokens.spacingXs,
-        ),
-        color: isSelected ? tokens.card : null,
-        // Painted over the tab rather than inset from it, so the borders
-        // take nothing from the menu button's 48dp touch target (#2605).
-        foregroundDecoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(
-              color: isSelected ? tokens.primary : tokens.border,
-              width: 2,
-            ),
-            right: BorderSide(color: tokens.border),
+    // A screen reader announces the tab as a button named for its sheet, and
+    // says which one the editor is showing.
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      child: InkWell(
+        key: ValueKey('sheet_tab_$index'),
+        onTap: isSelected ? () => _openMenu(context) : onSelect,
+        onLongPress: () => _openMenu(context),
+        child: Container(
+          width: 160,
+          padding: EdgeInsets.only(
+            left: tokens.spacingMd,
+            right: tokens.spacingXs,
           ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: isSelected
-                      ? tokens.foreground
-                      : tokens.mutedForeground,
-                  fontWeight: isSelected ? FontWeight.w600 : null,
+          color: isSelected ? tokens.card : null,
+          // Painted over the tab rather than inset from it, so the borders
+          // take nothing from the menu button's 48dp touch target (#2605).
+          foregroundDecoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(
+                color: isSelected ? tokens.primary : tokens.border,
+                width: 2,
+              ),
+              right: BorderSide(color: tokens.border),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isSelected
+                        ? tokens.foreground
+                        : tokens.mutedForeground,
+                    fontWeight: isSelected ? FontWeight.w600 : null,
+                  ),
                 ),
               ),
-            ),
-            IconButton(
-              key: ValueKey('sheet_tab_menu_button_$index'),
-              tooltip: 'Sheet options',
-              icon: const Icon(QuarkIcons.more_vert),
-              iconSize: 16,
-              color: tokens.secondaryForeground,
-              padding: EdgeInsets.zero,
-              // A 24px glyph box inside the 48dp touch target Material pads
-              // it to (#2605).
-              constraints: const BoxConstraints.tightFor(width: 24, height: 24),
-              onPressed: () => _openMenu(context),
-            ),
-          ],
+              IconButton(
+                key: ValueKey('sheet_tab_menu_button_$index'),
+                tooltip: 'Sheet options',
+                icon: const Icon(QuarkIcons.more_vert),
+                iconSize: 16,
+                color: tokens.secondaryForeground,
+                padding: EdgeInsets.zero,
+                // A 24px glyph box inside the 48dp touch target Material pads
+                // it to (#2605).
+                constraints: const BoxConstraints.tightFor(
+                  width: 24,
+                  height: 24,
+                ),
+                onPressed: () => _openMenu(context),
+              ),
+            ],
+          ),
         ),
       ),
     );

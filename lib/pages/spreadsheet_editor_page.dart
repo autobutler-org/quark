@@ -52,7 +52,8 @@ class _SheetTab {
 // ---------------------------------------------------------------------------
 
 /// The editor for one spreadsheet: a tab per sheet, which can be added, renamed or deleted, all saved back to the
-/// Quark. Once the sheet has loaded, the title renames the file itself.
+/// Quark. Once the sheet has loaded, the title renames the file itself, and the control bar exports every tab as one
+/// Excel workbook.
 class SpreadsheetEditorPage extends StatefulWidget {
   final String filePath;
   final String deviceSerial;
@@ -72,6 +73,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   bool _saving = false;
   bool _dirty = false;
   bool _renaming = false;
+  bool _exporting = false;
 
   /// The thrown object, not its message — the render decides whether it means
   /// "your Quark is unreachable" or "the request failed" (#1637).
@@ -330,6 +332,36 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     }
   }
 
+  /// Saves every tab as one Excel workbook, through the platform's save
+  /// dialog or the browser's download (#2696).
+  ///
+  /// The Quark builds the workbook from the file, so a dirty sheet is saved
+  /// first; [_doSave] reports a failure itself and leaves the sheet dirty, so
+  /// a failed save stops here instead of exporting stale content.
+  Future<void> _exportXlsx() async {
+    if (_exporting) return;
+    _exporting = true;
+    try {
+      if (_dirty) {
+        _autoSaveTimer?.cancel();
+        await _doSave();
+        if (!mounted || _dirty) return;
+      }
+      await FilesService.saveSheetAsXlsx(
+        widget.filePath,
+        serial: serialOrNull(widget.deviceSerial),
+        fileName: '$_displayName.xlsx',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(Errors.message(e, 'export the sheet'))),
+      );
+    } finally {
+      _exporting = false;
+    }
+  }
+
   /// Renames the spreadsheet file from the title.
   ///
   /// A dirty sheet is saved first. [_doSave] reports a failure itself and
@@ -453,6 +485,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
           key: ObjectKey(tab),
           controller: tab.controller,
           table: tab.table,
+          onExportXlsx: _exportXlsx,
         ),
         bottomNavigationBar: SafeArea(
           top: false,

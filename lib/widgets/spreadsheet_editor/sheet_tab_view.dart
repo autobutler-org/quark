@@ -12,13 +12,21 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// Both share the system clipboard, so cells copy to and paste from Google
 /// Sheets and Excel. Where the browser blocks the clipboard (plain HTTP) they
 /// fall back to an in-app one.
+///
+/// [onExportXlsx] puts the control bar's Excel export button up; exporting
+/// the whole spreadsheet, every tab of it, is the page's to do.
 class SheetTabView extends StatelessWidget {
   final DataSheetController controller;
   final DataTable table;
 
+  /// Called when the control bar's "Export Excel workbook" is tapped. Null
+  /// hides the button.
+  final VoidCallback? onExportXlsx;
+
   const SheetTabView({
     required this.controller,
     required this.table,
+    this.onExportXlsx,
     super.key,
   });
 
@@ -38,7 +46,11 @@ class SheetTabView extends StatelessWidget {
         // unbounded width also keeps the formatting toolbar a row on a phone
         // rather than folding it into a menu.
         for (final bar in [
-          DataSheetControlBar(controller: controller, clipboard: clipboard),
+          DataSheetControlBar(
+            controller: controller,
+            clipboard: clipboard,
+            onExportXlsx: onExportXlsx,
+          ),
           DataSheetFormatBar(
             controller: controller,
             textColors: sheetTextSwatches(tokens),

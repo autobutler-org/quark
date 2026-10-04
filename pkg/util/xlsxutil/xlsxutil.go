@@ -1,5 +1,6 @@
 // Package xlsxutil reads an OOXML spreadsheet (.xlsx / .xlsm) and rewrites it
-// as the .qsheet JSON envelope Quark's Sheets editor already understands:
+// as the .qsheet JSON envelope Quark's Sheets editor already understands, and
+// writes a .qsheet back out as an .xlsx for export ([ExportQsheet]):
 //
 //	{"tabs":[{"name":"Sheet1","data":{"rows":[["a","b"], …]}}]}
 //
@@ -56,6 +57,9 @@ var (
 	// ErrTooLarge reports a workbook past one of the limits above. Also the
 	// caller's file, and also a 400.
 	ErrTooLarge = errors.New("xlsxutil: workbook exceeds conversion limits")
+	// ErrNotQsheet reports an export source that is not a .qsheet envelope.
+	// Like the two above, it is the caller's file and a 400.
+	ErrNotQsheet = errors.New("xlsxutil: not a qsheet")
 )
 
 // ConvertToQsheetParams is one workbook on its way to becoming a .qsheet.
@@ -92,7 +96,7 @@ type ConvertToQsheetResult struct {
 // formulas across would turn an unsupported function into a visible error
 // where the workbook showed a value.
 //
-// Errors wrap [ErrNotSpreadsheet] or [ErrTooLarge] when the workbook is at
+// Errors wrap [ErrNotQsheet] or [ErrTooLarge] when the workbook is at
 // fault; anything else is a read or write failure.
 func ConvertToQsheet(params ConvertToQsheetParams) (ConvertToQsheetResult, error) {
 	if params.Source == nil || params.Out == nil {
@@ -123,4 +127,48 @@ func ConvertToQsheet(params ConvertToQsheetParams) (ConvertToQsheetResult, error
 	}
 
 	return writeQsheet(params.Out, book, shared, styles)
+}
+
+// MaxQsheetBytes bounds the .qsheet an export reads. The document is decoded
+// one tab at a time, so this caps what a single oversized tab can cost.
+const MaxQsheetBytes = 256 << 20 // 256 MiB
+
+// ExportQsheetParams is one .qsheet on its way to becoming an .xlsx.
+type ExportQsheetParams struct {
+	// Source is the .qsheet JSON envelope. It is read once, front to back.
+	Source io.Reader
+	// Out receives the .xlsx package, written as each tab is read. A zip is
+	// written front to back, so this is a plain stream.
+	Out io.Writer
+}
+
+// ExportQsheetResult reports what the exported workbook came to.
+type ExportQsheetResult struct {
+	// Tabs is the number of worksheets written.
+	Tabs int
+	// Rows is the number of rows written across every worksheet.
+	Rows int
+	// Cells is the number of non-empty cells written across every worksheet.
+	Cells int
+}
+
+// ExportQsheet reads the .qsheet in params.Source and writes the equivalent
+// workbook to params.Out, one worksheet per tab, in tab order.
+//
+// A cell whose text is a plain decimal number is written as a number, so the
+// tab's number formats apply to it in Excel; everything else is text. A
+// formula is written as its text ("=SUM(A1:A3)") rather than as a formula:
+// the editor's dialect is not Excel's (it has == and !=, for one), and Quark
+// has no evaluator on the server to supply the cached result Excel expects
+// beside a formula. Bold, italic, text and fill colors, alignment and number
+// formats carry across, as do column widths and frozen rows and columns.
+//
+// Only one tab is held in memory at a time. Errors wrap [ErrNotQsheet]
+// when the source is not a .qsheet and [ErrTooLarge] past the conversion
+// limits; anything else is a read or write failure.
+func ExportQsheet(params ExportQsheetParams) (ExportQsheetResult, error) {
+	if params.Source == nil || params.Out == nil {
+		return ExportQsheetResult{}, errors.New("xlsxutil: Source and Out are required")
+	}
+	return writeXlsx(params.Out, &cappedReader{r: params.Source, remaining: MaxQsheetBytes})
 }

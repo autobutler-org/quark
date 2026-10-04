@@ -1,5 +1,6 @@
 // Package v0_files serves /api/v0/files: listing, searching and stat-ing files, uploads (including resumable upload
-// sessions), downloads and archive views, and moves, deletes and new folders.
+// sessions), downloads and archive views, moves, deletes and new folders, and spreadsheet conversions between .xlsx
+// and .qsheet (the .xlsx export streamed back as a download).
 package v0_files
 
 import (

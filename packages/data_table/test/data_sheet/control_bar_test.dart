@@ -24,14 +24,41 @@ DataSheetController _makeController(List<List<String>> values) {
 void main() {
   Future<void> pumpBar(
     WidgetTester tester,
-    DataSheetController controller,
-  ) async {
+    DataSheetController controller, {
+    VoidCallback? onExportXlsx,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DataSheetControlBar(controller: controller)),
+        home: Scaffold(
+          body: DataSheetControlBar(
+            controller: controller,
+            onExportXlsx: onExportXlsx,
+          ),
+        ),
       ),
     );
   }
+
+  const exportXlsx = ValueKey('data_sheet_export_xlsx');
+
+  testWidgets('the Excel export shows only when the host handles it', (
+    tester,
+  ) async {
+    final controller = _makeController([
+      ['a'],
+    ]);
+    addTearDown(controller.dispose);
+
+    await pumpBar(tester, controller);
+    expect(find.byKey(exportXlsx), findsNothing);
+
+    var exports = 0;
+    await pumpBar(tester, controller, onExportXlsx: () => exports++);
+    expect(find.byTooltip('Export Excel workbook'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(exportXlsx));
+    await tester.tap(find.byKey(exportXlsx));
+    expect(exports, 1);
+  });
 
   testWidgets('with no selection, row inserts anchor to the sheet edges', (
     tester,

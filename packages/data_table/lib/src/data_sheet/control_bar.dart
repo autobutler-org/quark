@@ -38,6 +38,10 @@ import 'freeze_menu_button.dart';
 /// `data_sheet_clear_filters` removes every filter. While filters are set,
 /// Clear filters carries a badge counting the filtered columns, and its
 /// tooltip says how many rows are shown.
+///
+/// With [onExportXlsx] set, `data_sheet_export_xlsx` sits beside Export CSV.
+/// The bar only reports the tap: producing the workbook (every sheet of it,
+/// where the host has several) is the host's to do.
 class DataSheetControlBar extends StatelessWidget {
   final DataSheetController controller;
 
@@ -45,10 +49,14 @@ class DataSheetControlBar extends StatelessWidget {
   /// `DataSheet`. Defaults to [DataSheetClipboard.memory].
   final DataSheetClipboard? clipboard;
 
+  /// Called when "Export Excel workbook" is tapped. Null hides the button.
+  final VoidCallback? onExportXlsx;
+
   const DataSheetControlBar({
     super.key,
     required this.controller,
     this.clipboard,
+    this.onExportXlsx,
   });
 
   @override
@@ -311,6 +319,13 @@ class DataSheetControlBar extends StatelessWidget {
                         ? () => _showExportCsvDialog(context, controller)
                         : null,
                   ),
+                  if (onExportXlsx != null)
+                    _btn(
+                      QuarkIcons.table_chart,
+                      'Export Excel workbook',
+                      onExportXlsx,
+                      key: 'data_sheet_export_xlsx',
+                    ),
                   _btn(
                     QuarkIcons.import_csv,
                     'Import CSV…',

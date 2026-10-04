@@ -339,6 +339,29 @@ void main() {
     await expectTapTargetGuidelines(tester);
   });
 
+  testBothViewports('tells a screen reader which tab is selected', (
+    tester,
+    size,
+  ) async {
+    final handle = tester.ensureSemantics();
+    await pumpAt(tester, strip(three, selectedIndex: 1), size: size);
+
+    expect(
+      tester.getSemantics(tab(1)),
+      isSemantics(
+        label: 'Budget',
+        isSelected: true,
+        isButton: true,
+        hasTapAction: true,
+      ),
+    );
+    expect(
+      tester.getSemantics(tab(0)),
+      isSemantics(label: 'Sheet 1', isSelected: false, isButton: true),
+    );
+    handle.dispose();
+  });
+
   // #2606: the tab names grow past the 49 pixel strip.
   testLargeText('fits its tab names', (tester, size) async {
     await pumpAt(
