@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../controller/slide_document_controller.dart';
 import '../controller/slide_document_notifier.dart';
 import '../geometry/frame_geometry.dart';
+import '../geometry/slide_drawing.dart';
 import '../geometry/slide_handle.dart';
 import '../geometry/slide_snapping.dart';
 import '../geometry/slide_viewport.dart';
@@ -17,9 +18,12 @@ import '../model/presentation.dart';
 import '../model/slide.dart';
 import '../model/slide_element.dart';
 import '../model/slide_size.dart';
+import '../model/stroke.dart';
 import 'slide_canvas_style.dart';
 import 'slide_canvas_tool.dart';
 import 'slide_element_label.dart';
+import 'slide_tool_controller.dart';
+import 'slide_tool_label.dart';
 import 'slide_image_source.dart';
 import 'slide_selection_overlay.dart';
 import 'slide_stage.dart';
@@ -57,10 +61,22 @@ import 'slide_text_layout.dart';
 /// editing and writes everything typed as one undo step. A screen reader's
 /// tap on a selected text box edits it too, and the canvas announces
 /// [editingAnnouncement] and [editingDoneAnnouncement] as editing starts
-/// and stops. With [tool] set to [SlideCanvasTool.text], a click places a
-/// new text box and a drag draws one, which opens for typing; one left
-/// empty disappears again. [textEditing] is the session a toolbar formats
-/// through; see [SlideTextEditingController].
+/// and stops. [textEditing] is the session a toolbar formats through; see
+/// [SlideTextEditingController].
+///
+/// **Drawing.** [tools] holds the active [SlideCanvasTool]: text, any
+/// [ShapeKind], a line or arrow, or an image. With a drawing tool a click
+/// places the element at its default size and a drag draws it (Shift keeps
+/// a shape square or a line at 45° steps, Alt draws out from the point
+/// pressed), previewing it as it goes. The insertion is one undo step; the
+/// canvas selects the new element and returns to [SlideCanvasTool.select],
+/// as Escape does. A text box opens for typing, and one left empty
+/// disappears again. The image tool draws nothing itself: it calls
+/// [onPickImage] with the box drawn, or `null` for a click, and the app
+/// picks a picture and calls `SlideDocumentController.insertImage`.
+/// Without a pointer, Enter on the focused canvas — or a screen reader's
+/// tap, labeled by [toolLabel] — inserts at the slide's center. An image
+/// is resized keeping its aspect ratio, unless Alt is held.
 ///
 /// The caller owns [selection] and [zoom] and hears about changes through
 /// [onSelectionChanged] and [onZoomChanged]; zoom is relative to fitting
@@ -109,8 +125,9 @@ class SlideCanvas extends StatefulWidget {
     this.focusNode,
     this.autofocus = false,
     this.textEditing,
-    this.tool = SlideCanvasTool.select,
-    this.onToolChanged,
+    this.tools,
+    this.onPickImage,
+    this.toolLabel = defaultSlideToolLabel,
     this.editingAnnouncement = 'Editing text',
     this.editingDoneAnnouncement = 'Done editing text',
   })  : slide = null,
@@ -136,8 +153,9 @@ class SlideCanvas extends StatefulWidget {
         focusNode = null,
         autofocus = false,
         textEditing = null,
-        tool = SlideCanvasTool.select,
-        onToolChanged = null,
+        tools = null,
+        onPickImage = null,
+        toolLabel = defaultSlideToolLabel,
         editingAnnouncement = '',
         editingDoneAnnouncement = '';
 
@@ -195,11 +213,20 @@ class SlideCanvas extends StatefulWidget {
   /// its own when none is given.
   final SlideTextEditingController? textEditing;
 
-  /// What the pointer does.
-  final SlideCanvasTool tool;
+  /// The active tool, shared with a toolbar; the canvas makes its own when
+  /// none is given. It hands the tool back to [SlideCanvasTool.select]
+  /// after each insertion and on Escape.
+  final SlideToolController? tools;
 
-  /// Called when the canvas hands the tool back, after drawing a text box.
-  final ValueChanged<SlideCanvasTool>? onToolChanged;
+  /// Asks the app for a picture after the image tool marks where it goes:
+  /// with the box drawn, in slide units, or `null` for a click or Enter,
+  /// meaning the default place. The app passes it on as
+  /// `insertImage(..., within: box)`.
+  final ValueChanged<ElementFrame?>? onPickImage;
+
+  /// Names a drawing tool for a screen reader, as the action that inserts
+  /// at the center.
+  final SlideToolLabel toolLabel;
 
   /// What a screen reader hears when a text box opens for editing.
   final String editingAnnouncement;
@@ -238,6 +265,7 @@ class _Gesture {
     this.handle,
     this.frame,
     this.isLine = false,
+    this.isImage = false,
     this.startBounds,
     this.collapseTo,
     this.hit,
@@ -255,6 +283,7 @@ class _Gesture {
   final SlideHandle? handle;
   final ElementFrame? frame;
   final bool isLine;
+  final bool isImage;
   final Rect? startBounds;
 
   /// The element to select alone if this ends as a tap on a multi-selection.
@@ -266,6 +295,9 @@ class _Gesture {
 
   bool started = false;
   Offset applied = Offset.zero;
+
+  /// Where a draw gesture's pointer is now, in slide units.
+  Offset? current;
 
   /// The controller holding this gesture's open batch, if it opened one.
   SlideDocumentController? batch;
@@ -299,7 +331,11 @@ class _SlideCanvasState extends State<SlideCanvas> {
   Rect? _marquee;
   MouseCursor _cursor = MouseCursor.defer;
   SlideTextEditingController? _ownTextEditing;
+  SlideToolController? _ownTools;
   bool _wasEditing = false;
+
+  /// The element a draw gesture would insert, drawn over the slide.
+  SlideElement? _preview;
 
   /// The last tap that did not drag: when, where in slide units, and on
   /// which element, to tell a double tap.
@@ -307,6 +343,11 @@ class _SlideCanvasState extends State<SlideCanvas> {
 
   SlideTextEditingController get _editing =>
       widget.textEditing ?? (_ownTextEditing ??= SlideTextEditingController());
+
+  SlideToolController get _tools =>
+      widget.tools ?? (_ownTools ??= SlideToolController());
+
+  SlideCanvasTool get _tool => _tools.tool;
 
   SlideDocumentController get _doc => widget.document!.controller;
 
@@ -322,6 +363,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
     super.initState();
     if (widget.readOnly) return;
     _editing.addListener(_onEditingChanged);
+    _tools.addListener(_onToolChanged);
     widget.document!.addListener(_onDocumentChanged);
   }
 
@@ -348,6 +390,11 @@ class _SlideCanvasState extends State<SlideCanvas> {
       oldWidget.document?.removeListener(_onDocumentChanged);
       widget.document?.addListener(_onDocumentChanged);
     }
+    final oldTools = oldWidget.tools ?? _ownTools;
+    if (oldTools != _tools) {
+      oldTools?.removeListener(_onToolChanged);
+      if (!widget.readOnly) _tools.addListener(_onToolChanged);
+    }
   }
 
   @override
@@ -356,6 +403,8 @@ class _SlideCanvasState extends State<SlideCanvas> {
     widget.document?.removeListener(_onDocumentChanged);
     final editing = widget.textEditing ?? _ownTextEditing;
     editing?.removeListener(_onEditingChanged);
+    (widget.tools ?? _ownTools)?.removeListener(_onToolChanged);
+    _ownTools?.dispose();
     final own = _ownTextEditing;
     if (editing != null && editing.isEditing) {
       // Keep what was typed; the document cannot change mid-unmount.
@@ -368,6 +417,14 @@ class _SlideCanvasState extends State<SlideCanvas> {
     }
     _ownFocusNode?.dispose();
     super.dispose();
+  }
+
+  /// Drops a drawing in progress when the tool changes under it.
+  void _onToolChanged() {
+    if (!mounted) return;
+    setState(() {
+      if (_gesture?.kind == _GestureKind.draw) _cancelGesture();
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -542,14 +599,13 @@ class _SlideCanvasState extends State<SlideCanvas> {
           handle: handle,
           frame: element?.frame,
           isLine: element is LineElement,
+          isImage: element is ImageElement,
           startBounds: kind == _GestureKind.move ? slide.boundsOf(ids) : null,
           collapseTo: collapseTo,
           hit: hit,
         );
 
-    if (widget.tool == SlideCanvasTool.text) {
-      return gesture(_GestureKind.draw, const {});
-    }
+    if (_tool.draws) return gesture(_GestureKind.draw, const {});
     if (selected.length == 1) {
       final element = slide.elementById(selected.single)!;
       final handle = _handleAt(element.frame, point, viewport);
@@ -662,7 +718,9 @@ class _SlideCanvasState extends State<SlideCanvas> {
         final frame = gesture.frame!.resized(
           gesture.handle!,
           travel,
-          keepAspect: keys.isShiftPressed,
+          // A picture keeps its proportions unless Alt frees them.
+          keepAspect:
+              gesture.isImage ? !keys.isAltPressed : keys.isShiftPressed,
           minExtent: gesture.isLine ? 0 : 1,
         );
         _doc.resizeElement(
@@ -684,9 +742,12 @@ class _SlideCanvasState extends State<SlideCanvas> {
         _select({...gesture.ids, ...slide.elementsInside(area)});
         setState(() => _marquee = area);
       case _GestureKind.draw:
-        setState(
-          () => _marquee = Rect.fromPoints(gesture.startSlide, slidePoint),
-        );
+        gesture.current = slidePoint;
+        final preview = _drawn(gesture.startSlide, slidePoint);
+        setState(() {
+          _preview = preview is SlideElement ? preview : null;
+          _marquee = preview is Rect ? preview : null;
+        });
       case _GestureKind.pan:
         _viewTo(gesture.startPan + (point - gesture.startView), widget.zoom);
     }
@@ -700,13 +761,13 @@ class _SlideCanvasState extends State<SlideCanvas> {
     }
     final gesture = _gesture;
     if (gesture == null || gesture.pointer != event.pointer) return;
-    final drawn = _marquee;
     if (!gesture.started && gesture.collapseTo != null) {
       _select({gesture.collapseTo!});
     }
     setState(_cancelGesture);
     if (gesture.kind == _GestureKind.draw) {
-      return _drawTextBox(gesture.started ? drawn : null, gesture.startSlide);
+      final end = gesture.started ? gesture.current : null;
+      return _insert(at: gesture.startSlide, end: end);
     }
     // A handle that was tapped, not dragged, was a tap on its element: on a
     // phone a short box is all handle.
@@ -729,24 +790,125 @@ class _SlideCanvasState extends State<SlideCanvas> {
     _beginEditing(hit, caretAt: event.position);
   }
 
-  /// Inserts a text box filling [area], or at [point] at the default size
-  /// when the pointer did not drag, and opens it for typing.
-  void _drawTextBox(Rect? area, Offset point) {
-    final viewport = _viewport;
-    if (viewport == null || _slide == null) return;
+  /// What a drag from [start] to [end] with the active tool would insert,
+  /// with the held modifiers applied: the element itself for a shape or a
+  /// line, the box for text or an image. `null` when it is too small to
+  /// tell from a click.
+  Object? _drawn(Offset start, Offset end) {
+    final viewport = _viewport!;
+    final keys = HardwareKeyboard.instance;
     final minimum = _style.handleHitSize / viewport.scale;
+    final tool = _tool;
+    if (tool.mode == SlideToolMode.line) {
+      final line = drawnLine(
+        start,
+        end,
+        snap: keys.isShiftPressed,
+        fromCenter: keys.isAltPressed,
+      );
+      final box = line.box;
+      if (math.max(box.width, box.height) < minimum) return null;
+      final arrow = tool.arrow ? LineCap.arrow : LineCap.none;
+      return LineElement(
+        id: '',
+        frame: _frameOf(box),
+        flipped: line.flipped,
+        startCap: line.reversed ? arrow : LineCap.none,
+        endCap: line.reversed ? LineCap.none : arrow,
+        stroke: Stroke(width: SlideDocumentController.defaultLineWidth),
+      );
+    }
+    final box = drawnBox(
+      start,
+      end,
+      square: keys.isShiftPressed,
+      fromCenter: keys.isAltPressed,
+    );
+    if (box.width < minimum && box.height < minimum) return null;
+    if (tool.mode != SlideToolMode.shape) return box;
+    return ShapeElement(
+      id: '',
+      frame: _frameOf(box),
+      kind: tool.shapeKind!,
+      fill: SlideDocumentController.defaultShapeFill,
+    );
+  }
+
+  static ElementFrame _frameOf(Rect box) => ElementFrame(
+        x: box.left,
+        y: box.top,
+        width: box.width,
+        height: box.height,
+      );
+
+  /// Inserts what the active tool makes, as one undo step: drawn from [at]
+  /// to [end] after a drag, placed at its default size with its top-left
+  /// corner at [at] after a click, or at the slide's center with neither.
+  /// Then selects it and hands the tool back. A text box opens for typing;
+  /// the image tool asks the app for a picture instead.
+  void _insert({Offset? at, Offset? end}) {
+    final slide = _slide;
+    if (slide == null) return;
+    final tool = _tool;
     final slideId = widget.slideId!;
-    final id = area == null || area.width < minimum
-        ? _doc.insertTextBox(slideId, at: (x: point.dx, y: point.dy))
-        : _doc.insertTextBox(
-            slideId,
-            at: (x: area.left, y: area.top),
-            width: area.width,
-            height: area.height,
-          );
+    final drawn = at != null && end != null ? _drawn(at, end) : null;
+    _tools.reset();
+    final String id;
+    switch (tool.mode) {
+      case SlideToolMode.select:
+        return;
+      case SlideToolMode.image:
+        widget.onPickImage?.call(drawn is Rect ? _frameOf(drawn) : null);
+        return;
+      case SlideToolMode.text:
+        const width = SlideDocumentController.defaultTextBoxWidth;
+        id = drawn is Rect
+            ? _doc.insertTextBox(
+                slideId,
+                at: (x: drawn.left, y: drawn.top),
+                width: drawn.width,
+                height: drawn.height,
+              )
+            : _doc.insertTextBox(
+                slideId,
+                at: at != null
+                    ? (x: at.dx, y: at.dy)
+                    : (
+                        x: (_size.width - width) / 2,
+                        y: (_size.height -
+                                SlideDocumentController.defaultTextBoxHeight) /
+                            2,
+                      ),
+              );
+      case SlideToolMode.shape || SlideToolMode.line when drawn is SlideElement:
+        final element = drawn.withId(_doc.newId());
+        _doc.addElement(slideId, element);
+        id = element.id;
+      case SlideToolMode.shape:
+        const side = SlideDocumentController.defaultShapeSize;
+        id = _doc.insertShape(
+          slideId,
+          tool.shapeKind!,
+          frame: at == null
+              ? null
+              : ElementFrame(x: at.dx, y: at.dy, width: side, height: side),
+        );
+      case SlideToolMode.line:
+        id = _doc.insertLine(
+          slideId,
+          endCap: tool.arrow ? LineCap.arrow : LineCap.none,
+          frame: at == null
+              ? null
+              : ElementFrame(
+                  x: at.dx,
+                  y: at.dy,
+                  width: SlideDocumentController.defaultLineLength,
+                  height: 0,
+                ),
+        );
+    }
     _select({id});
-    widget.onToolChanged?.call(SlideCanvasTool.select);
-    _beginEditing(id, fresh: true);
+    if (tool.mode == SlideToolMode.text) _beginEditing(id, fresh: true);
   }
 
   /// Ends the current gesture, closing its undo step and clearing its
@@ -757,6 +919,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
     _gesture = null;
     _guides = const [];
     _marquee = null;
+    _preview = null;
     final batch = gesture?.batch;
     if (batch == null) return;
     batch.endBatch();
@@ -894,6 +1057,17 @@ class _SlideCanvasState extends State<SlideCanvas> {
     if (key == LogicalKeyboardKey.tab) {
       return _cycle(slide, selected, backward: keys.isShiftPressed);
     }
+    if (_tool.draws) {
+      if (key == LogicalKeyboardKey.escape) {
+        _tools.reset();
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.enter ||
+          key == LogicalKeyboardKey.numpadEnter) {
+        _insert();
+        return KeyEventResult.handled;
+      }
+    }
     if (selected.isEmpty) return KeyEventResult.ignored;
     if ((key == LogicalKeyboardKey.enter ||
             key == LogicalKeyboardKey.numpadEnter ||
@@ -982,7 +1156,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
         ),
       );
     }
-    return Focus(
+    final Widget canvas = Focus(
       focusNode: _focusNode,
       autofocus: widget.autofocus,
       onKeyEvent: _onKey,
@@ -1009,9 +1183,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
               final editingId = _editing.elementId;
               final editingFrame = _editingFrame;
               return MouseRegion(
-                cursor: widget.tool == SlideCanvasTool.text
-                    ? SystemMouseCursors.precise
-                    : _cursor,
+                cursor: _tool.draws ? SystemMouseCursors.precise : _cursor,
                 child: Listener(
                   behavior: HitTestBehavior.opaque,
                   onPointerDown: _onPointerDown,
@@ -1046,6 +1218,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
                                   _select({id});
                                 },
                                 editingId: editingId,
+                                preview: _preview,
                                 editor: editingId == null
                                     ? null
                                     : SlideTextEditor(
@@ -1089,5 +1262,15 @@ class _SlideCanvasState extends State<SlideCanvas> {
         },
       ),
     );
+    final tool = _tool;
+    // A screen reader's way to insert with the active tool: tap the canvas.
+    return tool.draws
+        ? Semantics(
+            container: true,
+            label: widget.toolLabel(tool),
+            onTap: _insert,
+            child: canvas,
+          )
+        : canvas;
   }
 }

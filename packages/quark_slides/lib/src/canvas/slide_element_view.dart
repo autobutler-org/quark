@@ -21,7 +21,9 @@ import 'slide_text_box_view.dart';
 ///
 /// While a text box is being edited the canvas passes its [editor], which
 /// takes the place of the box's view and speaks for itself to a screen
-/// reader. [showPlaceholder] shows an empty text box's placeholder.
+/// reader. [showPlaceholder] shows an empty text box's placeholder. A shape
+/// or line is drawn at its opacity; an image reads as its alt text through
+/// [label].
 class SlideElementView extends StatelessWidget {
   /// Creates the view of [element].
   const SlideElementView({
@@ -34,6 +36,7 @@ class SlideElementView extends StatelessWidget {
     this.onSelect,
     this.editor,
     this.showPlaceholder = false,
+    this.excluded = false,
   });
 
   /// The element to draw.
@@ -60,6 +63,10 @@ class SlideElementView extends StatelessWidget {
 
   /// Whether an empty text box shows its placeholder.
   final bool showPlaceholder;
+
+  /// Whether the view is left out of the semantics tree, as a drawing
+  /// preview is.
+  final bool excluded;
 
   /// The [ValueKey] value of the element with [id]: `slide_element_<id>`.
   static String keyName(String id) => 'slide_element_$id';
@@ -94,6 +101,12 @@ class SlideElementView extends StatelessWidget {
         ),
       ImageElement() || UnknownElement() => SlidePlaceholderView(style: style),
     };
+    final opacity = switch (element) {
+      ShapeElement(:final opacity) || LineElement(:final opacity) => opacity,
+      _ => 1.0,
+    };
+    final drawn =
+        opacity < 1 ? Opacity(opacity: opacity, child: content) : content;
     return Positioned(
       left: frame.x,
       top: frame.y,
@@ -102,16 +115,18 @@ class SlideElementView extends StatelessWidget {
       child: Transform.rotate(
         key: ValueKey(keyName(element.id)),
         angle: frame.rotation * math.pi / 180,
-        child: editor != null
-            ? content
-            : Semantics(
-                container: true,
-                label: label,
-                selected: onSelect == null ? null : selected,
-                onTap: onSelect,
-                excludeSemantics: true,
-                child: content,
-              ),
+        child: excluded
+            ? ExcludeSemantics(child: drawn)
+            : editor != null
+                ? drawn
+                : Semantics(
+                    container: true,
+                    label: label,
+                    selected: onSelect == null ? null : selected,
+                    onTap: onSelect,
+                    excludeSemantics: true,
+                    child: drawn,
+                  ),
       ),
     );
   }

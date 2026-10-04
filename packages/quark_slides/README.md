@@ -21,6 +21,10 @@ Everything is immutable and compares by value. An edit makes a new
 | `TextBox`        | paragraphs, vertical `anchor`, `autoFit` (grow, fixed, shrink), `placeholder` |
 | `TextParagraph`  | styled `TextRun`s, alignment, `lineSpacing`, `list` (none, bullet, numbered) |
 | `TextRun`        | text with bold, italic, underline, strikethrough, size, family, color  |
+| `ShapeElement`   | `kind`, solid `fill` or none, `stroke`, `cornerRadius`, `opacity`      |
+| `LineElement`    | `stroke`, `flipped`, `startCap` and `endCap` (none or arrow), `opacity` |
+| `ImageElement`   | `source` (an `ImageSource` reference), `altText`, `fit`                |
+| `Stroke`         | `color`, `width`, `dash` (solid, dash, dot, dash-dot)                  |
 
 Slide units are an abstract space set by `SlideSize` (1920×1080 for the
 default 16:9). Stacking order is an element's index in `Slide.elements`. Ids are
@@ -80,6 +84,8 @@ history of earlier presentations:
   `deleteElements`, `reorderElement`, `arrangeElements`
 - text: `editText`, `formatText` (a `TextFormat` over whole boxes),
   `insertTextBox(slideId, at: (x: 160, y: 120))`
+- drawing: `insertShape`, `insertLine`, `insertImage`, `styleElements` (an
+  `ElementStyle` over shapes and lines), `setAltText`
 - history: `undo`, `redo`, `load`, and `batch` / `beginBatch` / `endBatch`
 
 A command that changes nothing records no step. Commands inside a batch apply
@@ -160,10 +166,10 @@ document; Ctrl/Cmd+Z inside the editor steps back through the session
 itself. Ctrl/Cmd+B, I and U toggle bold, italic and underline, and
 Ctrl/Cmd+A selects every paragraph.
 
-The text tool draws new boxes: set `tool: SlideCanvasTool.text`, and a click
+The text tool draws new boxes: `tools.use(SlideCanvasTool.text)` (see
+[Drawing tools](#drawing-tools-and-insertion--for-a-toolbar)), and a click
 places a box at the default width (a drag sizes it), which opens for typing.
-The canvas hands the tool back through `onToolChanged`, and a new box left
-empty disappears again.
+A new box left empty disappears again.
 
 ### For a toolbar: `SlideTextEditingController`
 
@@ -232,6 +238,127 @@ placeholder when empty. Editing announces `editingAnnouncement` ("Editing
 text") and `editingDoneAnnouncement`; the editor's fields are ordinary text
 fields to a screen reader, and a screen reader's tap on a selected text box
 opens it. Slide text ignores the device text scale while editing too.
+
+## Shapes, lines and images
+
+A `ShapeElement` is a rectangle, rounded rectangle, ellipse, triangle,
+diamond, right arrow (`ShapeKind.arrow`) or star, fitted to its frame. It has
+a solid fill or none, an outline with a color, width and dash or none, a
+corner radius when it is a rounded rectangle (15% of its shorter side when
+unset), and an opacity. A `LineElement` is a line, or an arrow when either
+cap is `LineCap.arrow`, with the same stroke and opacity. They are drawn by
+`CustomPainter`s over pure path builders — `shapePath`, `starPoints`,
+`lineEnds`, `arrowheadPath`, `dashIntervals`, `dashedPath` — which are
+exported and tested as geometry.
+
+An `ImageElement`'s `source` is an `ImageSource` written as one string:
+
+| `ImageSource`        | Stored as        | What it is                                  |
+| -------------------- | ---------------- | ------------------------------------------- |
+| `QuarkFileImage`     | the path itself  | a file in the user's Quark (`photos/a.jpg`) |
+| `UploadedAssetImage` | `asset:<id>`     | an asset the app uploaded for the deck      |
+
+`ImageSource.parse(element.source)` (or `SlideImageSource.imageSource` in an
+image builder) reads it back. The package never loads a picture: the canvas
+asks the app's `imageBuilder`. An image's `altText` is what a screen reader
+reads for it ("Image: A dog on a beach"). Resizing an image keeps its aspect
+ratio, at an edge handle as well as a corner, unless Alt is held. Cropping is
+not supported yet.
+
+## Drawing tools and insertion — for a toolbar
+
+`SlideToolController` holds the active `SlideCanvasTool`. Pass one to the
+canvas and to the toolbar; the toolbar calls `use` and listens to light the
+active button:
+
+```dart
+final tools = SlideToolController();
+
+SlideCanvas(
+  document: doc,
+  slideId: slideId,
+  tools: tools,
+  // The image tool marks where a picture goes; the app picks one.
+  onPickImage: (box) async {
+    final picked = await pickImage(); // the app's picker and upload
+    if (picked == null) return;
+    final id = doc.controller.insertImage(
+      slideId,
+      QuarkFileImage(picked.path), // or UploadedAssetImage(assetId)
+      (width: picked.width, height: picked.height),
+      within: box, // null: centered, within 60% of the slide
+      altText: picked.description,
+    );
+    setState(() => selection = {id});
+  },
+  ...
+);
+
+ListenableBuilder(
+  listenable: tools,
+  builder: (context, _) => IconButton(
+    isSelected: tools.tool == const SlideCanvasTool.shape(ShapeKind.star),
+    onPressed: () => tools.use(const SlideCanvasTool.shape(ShapeKind.star)),
+    tooltip: defaultSlideToolLabel(const SlideCanvasTool.shape(ShapeKind.star)),
+    icon: const Icon(Icons.star_outline),
+  ),
+);
+```
+
+| Tool | Mode | Draws |
+| --- | --- | --- |
+| `SlideCanvasTool.select` | `select` | nothing: selects and edits |
+| `SlideCanvasTool.text` | `text` | a text box, opened for typing |
+| `SlideCanvasTool.shape(kind)` | `shape` | a shape of any `ShapeKind` |
+| `SlideCanvasTool.line` | `line` | a line |
+| `SlideCanvasTool.arrowLine` | `line` | a line with an arrowhead where the drag ends |
+| `SlideCanvasTool.image` | `image` | nothing: calls `onPickImage` with the box drawn, or `null` |
+
+With a drawing tool, a click places the element at its default size with
+its top-left corner at the pointer, and a drag draws it, previewed as it
+goes: Shift keeps a shape square or turns a line in 45° steps, and Alt draws
+out from the point pressed. Each insertion is **one undo step**; the canvas
+selects the new element (through `onSelectionChanged`) and calls
+`tools.reset()`, back to select. Escape does the same without inserting.
+
+**Without a pointer.** A toolbar button activated from the keyboard calls
+the document directly; each command centers the element on the slide by
+default, returns its id for the toolbar to select, and is one undo step:
+
+```dart
+final c = doc.controller;
+c.insertShape(slideId, ShapeKind.ellipse);         // 400×400, blue
+c.insertLine(slideId, endCap: LineCap.arrow);      // 400 long, horizontal
+c.insertTextBox(slideId, at: (x: 660, y: 500));
+c.insertImage(slideId, source, (width: w, height: h));
+```
+
+With a drawing tool active, Enter on the focused canvas inserts at the
+center too, and a screen reader sees the canvas as an action labeled by
+`toolLabel` ("Insert star"; `defaultSlideToolLabel` in English) whose tap
+inserts.
+
+**Styling.** `styleElements` applies an `ElementStyle` to the shapes and
+lines of a selection as one step, skipping other elements; a field left out
+is left alone. `elementStyleOf(elements)` summarizes what a selection
+shares, for the toolbar's controls:
+
+```dart
+c.styleElements(slideId, selection, const ElementStyle(fill: null)); // hollow
+c.styleElements(slideId, selection, const ElementStyle(
+  strokeColor: SlideColor(0xFF000000),
+  strokeWidth: 4,
+  dash: StrokeDash.dash,
+));
+c.styleElements(slideId, selection, const ElementStyle(opacity: 0.5));
+c.styleElements(slideId, selection, const ElementStyle(cornerRadius: 24.0));
+c.styleElements(slideId, selection, const ElementStyle(endCap: LineCap.arrow));
+c.setAltText(slideId, imageId, 'A dog on a beach');
+```
+
+**Keys.** The element being drawn is previewed under the key
+`slide_element_` (an empty id) and is hidden from screen readers; the new
+element is `slide_element_<id>` like any other.
 
 ## Development
 

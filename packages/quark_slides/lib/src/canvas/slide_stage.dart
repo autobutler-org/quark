@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../model/slide.dart';
+import '../model/slide_element.dart';
 import '../model/slide_size.dart';
 import 'slide_background_view.dart';
 import 'slide_canvas_style.dart';
@@ -17,7 +18,9 @@ import 'slide_image_source.dart';
 /// slide's type sizes are part of its design, like an image's pixels.
 ///
 /// An editable stage — one given [onSelect] — shows empty text boxes'
-/// placeholders, and draws the text box [editingId] as [editor].
+/// placeholders, draws the text box [editingId] as [editor], and draws
+/// [preview], the element a drawing tool is dragging out, in front of
+/// everything, hidden from screen readers and pointers.
 class SlideStage extends StatelessWidget {
   /// Creates a stage for [slide].
   const SlideStage({
@@ -31,6 +34,7 @@ class SlideStage extends StatelessWidget {
     this.onSelect,
     this.editingId,
     this.editor,
+    this.preview,
   });
 
   /// The slide to draw.
@@ -62,6 +66,9 @@ class SlideStage extends StatelessWidget {
   /// The in-place editor of [editingId].
   final Widget? editor;
 
+  /// An element being drawn, not yet in the slide; `null` when none is.
+  final SlideElement? preview;
+
   @override
   Widget build(BuildContext context) => MediaQuery.withNoTextScaling(
         child: SizedBox(
@@ -89,6 +96,13 @@ class SlideStage extends StatelessWidget {
                         onSelect == null ? null : () => onSelect!(element.id),
                     editor: element.id == editingId ? editor : null,
                     showPlaceholder: onSelect != null,
+                  ),
+                if (preview case final preview?)
+                  SlideElementView(
+                    element: preview,
+                    style: style,
+                    label: '',
+                    excluded: true,
                   ),
               ],
             ),

@@ -70,6 +70,25 @@ void main() {
       expect(elements[2]['frame']['x'], 405);
     });
 
+    test('a dash this version cannot read draws solid and is kept', () {
+      final deck = QslideCodec.decode(fixture('future_fields.qslide'));
+      final shape = deck.slides.single.elementById('e2') as ShapeElement;
+      expect(shape.stroke!.dash, StrokeDash.solid);
+      expect(shape.stroke!.toJson()['dash'], [4, 2]);
+      final named = Stroke.fromJson({'dash': 'zigzag'}, r'$');
+      expect(named.dash, StrokeDash.solid);
+      expect(named.toJson()['dash'], 'zigzag');
+      // Choosing a dash replaces the one kept.
+      expect(
+        shape.stroke!.copyWith(dash: StrokeDash.dot).toJson()['dash'],
+        'dot',
+      );
+      expect(
+        shape.stroke!.copyWith(dash: StrokeDash.solid).toJson(),
+        isNot(contains('dash')),
+      );
+    });
+
     test('a newer schemaVersion is refused rather than misread', () {
       expect(
         () => QslideCodec.decode(fixture('newer_schema.qslide')),
@@ -152,6 +171,111 @@ void main() {
       });
       expect(
           (deck.slides.single.elements.single as LineElement).stroke, Stroke());
+    });
+  });
+
+  group('shapes, lines and images', () {
+    Presentation read(List<Map<String, Object?>> elements) =>
+        QslideCodec.fromJson({
+          'schemaVersion': 1,
+          'slides': [
+            {'id': 's', 'elements': elements},
+          ],
+        });
+    const frame = {'x': 0, 'y': 0, 'width': 10, 'height': 10};
+
+    test('opacity, dash and corner radius default when absent', () {
+      final deck = read([
+        {'id': 'a', 'type': 'shape', 'kind': 'rectangle', 'frame': frame},
+        {'id': 'b', 'type': 'line', 'frame': frame},
+      ]);
+      final [shape as ShapeElement, line as LineElement] =
+          deck.slides.single.elements;
+      expect(shape.opacity, 1);
+      expect(shape.cornerRadius, isNull);
+      expect(line.opacity, 1);
+      expect(line.stroke.dash, StrokeDash.solid);
+      // Defaults are not written out.
+      final json = shape.toJson();
+      expect(json.containsKey('opacity'), isFalse);
+      expect(json.containsKey('cornerRadius'), isFalse);
+    });
+
+    test('an opacity outside 0–1 and a negative radius are clamped', () {
+      final deck = read([
+        {
+          'id': 'a',
+          'type': 'shape',
+          'kind': 'roundedRectangle',
+          'frame': frame,
+          'opacity': 3,
+          'cornerRadius': -4,
+        },
+        {'id': 'b', 'type': 'line', 'frame': frame, 'opacity': -1},
+      ]);
+      final [shape as ShapeElement, line as LineElement] =
+          deck.slides.single.elements;
+      expect(shape.opacity, 1);
+      expect(shape.cornerRadius, 0);
+      expect(line.opacity, 0);
+    });
+
+    test('every dash round trips', () {
+      for (final dash in StrokeDash.values) {
+        final stroke = Stroke(dash: dash);
+        expect(Stroke.fromJson(stroke.toJson(), r'$'), stroke);
+      }
+    });
+
+    test('a non-numeric opacity names its path', () {
+      expect(
+        () => read([
+          {
+            'id': 'a',
+            'type': 'line',
+            'frame': frame,
+            'opacity': 'half',
+          },
+        ]),
+        throwsFormatAt(r'$.slides[0].elements[0].opacity'),
+      );
+    });
+  });
+
+  group('ImageSource', () {
+    test('an asset: reference is an uploaded asset, anything else a path', () {
+      expect(
+        ImageSource.parse('asset:abc'),
+        const UploadedAssetImage('abc'),
+      );
+      expect(
+        ImageSource.parse('photos/dog.jpg'),
+        const QuarkFileImage('photos/dog.jpg'),
+      );
+      expect(ImageSource.parse('/a/asset:b'), isA<QuarkFileImage>());
+    });
+
+    test('ref round trips through parse', () {
+      for (final source in const [
+        QuarkFileImage('photos/dog.jpg'),
+        UploadedAssetImage('logo-1'),
+      ]) {
+        expect(ImageSource.parse(source.ref), source);
+      }
+      expect(const UploadedAssetImage('x').ref, 'asset:x');
+      expect(const QuarkFileImage('x'), isNot(const UploadedAssetImage('x')));
+    });
+
+    test('the sample deck reads both kinds', () {
+      final [s1, s2, ...] = samplePresentation().slides;
+      expect(
+        (s2.elementById('e3') as ImageElement).imageSource,
+        const QuarkFileImage('photos/dog.jpg'),
+      );
+      expect(
+        (s1.elementById('e7') as ImageElement).imageSource,
+        const UploadedAssetImage('logo-1'),
+      );
     });
   });
 

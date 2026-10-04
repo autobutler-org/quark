@@ -51,7 +51,24 @@ Presentation samplePresentation() => Presentation(
               ),
               kind: ShapeKind.ellipse,
               fill: const SlideColor(0x803366FF),
-              stroke: Stroke(color: SlideColor.white, width: 4),
+              stroke: Stroke(
+                color: SlideColor.white,
+                width: 4,
+                dash: StrokeDash.dashDot,
+              ),
+              opacity: 0.75,
+            ),
+            ShapeElement(
+              id: 'e6',
+              frame: ElementFrame(x: 1500, y: 700, width: 300, height: 200),
+              kind: ShapeKind.roundedRectangle,
+              fill: SlideColor.white,
+              cornerRadius: 24,
+            ),
+            ImageElement(
+              id: 'e7',
+              frame: ElementFrame(x: 1500, y: 100, width: 200, height: 100),
+              source: 'asset:logo-1',
             ),
           ],
         ),
@@ -73,6 +90,7 @@ Presentation samplePresentation() => Presentation(
               flipped: true,
               startCap: LineCap.none,
               endCap: LineCap.arrow,
+              opacity: 0.5,
             ),
             ShapeElement(
               id: 'e5',

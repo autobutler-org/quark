@@ -1,9 +1,12 @@
 import 'package:flutter/widgets.dart';
 
+import '../model/image_source.dart';
+
 /// Builds the widget for a picture on a slide. The package never loads an
-/// image itself: the host app resolves [SlideImageSource.source] — a path
-/// or URL — however it fetches files, and a test or gallery returns a
-/// placeholder.
+/// image itself: the host app resolves [SlideImageSource.imageSource] — a
+/// Quark file path or an uploaded asset — however it fetches files, and a
+/// test or gallery returns a placeholder. The picture's semantics come from
+/// the element's alt text, so the builder's widget need not label itself.
 typedef SlideImageBuilder = Widget Function(
   BuildContext context,
   SlideImageSource image,
@@ -18,8 +21,11 @@ class SlideImageSource {
   /// Creates a request for [source].
   const SlideImageSource(this.source, {this.fit = BoxFit.contain});
 
-  /// The opaque reference stored in the presentation.
+  /// The reference stored in the presentation; see [ImageSource].
   final String source;
+
+  /// [source] read as a Quark file or an uploaded asset.
+  ImageSource get imageSource => ImageSource.parse(source);
 
   /// How the picture fits its box.
   final BoxFit fit;
