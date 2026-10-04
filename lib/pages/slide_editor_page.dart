@@ -8,9 +8,12 @@ import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/slides/insert/slide_quark_image_dialog.dart';
+import 'package:quark/widgets/slides/properties/slide_properties_panel.dart';
 import 'package:quark/widgets/slides/slide_editor_bar_bottom.dart';
 import 'package:quark/widgets/slides/slide_editor_body.dart';
 import 'package:quark/widgets/slides/slide_save_status.dart';
+import 'package:quark/widgets/slides/toolbar/slide_phone_toolbar.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -21,6 +24,13 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// autosave whose state the bar shows. A failed save says so and keeps the
 /// edits for a retry. Each slide's speaker notes are typed under the canvas
 /// (#1166).
+///
+/// Under the bar, the toolbar (#1167) picks drawing tools and formats the
+/// selection, and the properties panel sets its position, size and alt
+/// text — beside the canvas on a wide screen, in a sheet
+/// the page opens on a phone. Pictures (#1158) come from this device,
+/// uploaded beside the presentation, or from the Quark through a folder
+/// picker the page shows; a failure is a snack bar in the app's words.
 ///
 /// The bar's Present chip, and a slide's "Present from this slide", open
 /// the presentation full-window at `/slides/<path>/present` (#1165). The
@@ -70,12 +80,19 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
         SnackBar(content: Text(Errors.message(error, 'save the presentation'))),
       );
     };
+    _controller.onImageInsertFailed = (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(Errors.message(error, 'add the picture'))),
+      );
+    };
     _controller.load();
   }
 
   @override
   void dispose() {
     _controller.onSaveFailed = null;
+    _controller.onImageInsertFailed = null;
     if (widget.controller == null) _controller.dispose();
     super.dispose();
   }
@@ -98,6 +115,24 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
       extra: presentation,
     );
   }
+
+  Future<void> _insertImageFromQuark() async {
+    final path = await SlideQuarkImageDialog.show(
+      context,
+      startPath: _controller.folderPath,
+      listFolder: _controller.listImageFolder,
+    );
+    if (path != null) await _controller.insertImageFromQuark(path);
+  }
+
+  void _openPropertiesSheet() => showQuarkSheet<void>(
+    context,
+    title: 'Properties',
+    builder: (_) => ListenableBuilder(
+      listenable: _controller,
+      builder: (_, _) => SlidePropertiesPanel(controller: _controller),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -169,6 +204,12 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                         ? _controller.zoomOut
                         : null,
                     onFit: _controller.zoomToFit,
+                    phoneTools: SlidePhoneToolbar(
+                      controller: _controller,
+                      onImageFromDevice: _controller.insertImageFromDevice,
+                      onImageFromQuark: _insertImageFromQuark,
+                      onOpenProperties: _openPropertiesSheet,
+                    ),
                   ),
           ),
           body: SafeArea(
@@ -176,6 +217,8 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
             child: SlideEditorBody(
               controller: _controller,
               onPresent: _present,
+              onImageFromDevice: _controller.insertImageFromDevice,
+              onImageFromQuark: _insertImageFromQuark,
             ),
           ),
         ),

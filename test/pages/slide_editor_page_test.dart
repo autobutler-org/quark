@@ -5,7 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/pages/slide_editor_page.dart';
+import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
+import 'package:quark/widgets/slides/toolbar/slide_toolbar_group.dart';
 import 'package:quark/widgets/slides/slide_panel.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -378,11 +380,14 @@ void main() {
     expect(c.isDirty, isFalse);
   });
 
-  testWidgets('a phone zooms from the Zoom menu', (tester) async {
+  testWidgets('a phone zooms from the Format menu\'s Zoom', (tester) async {
     tap.setViewport(tester, tap.narrowViewport);
     final c = await pumpEditor(tester);
     expect(find.byKey(const ValueKey('slide_zoom_in')), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('app_bar_bottom_menu')));
+    expect(find.byKey(const ValueKey('app_bar_bottom_menu')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('slide_format_menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('slide_zoom_menu')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('slide_menu_zoom_in')));
     await tester.pumpAndSettle();
@@ -512,6 +517,330 @@ void main() {
         find.textContaining('present talks/Deck.qslide from 2'),
         findsOneWidget,
       );
+    });
+  });
+
+  group('toolbar, properties and pictures (#1167, #1158)', () {
+    Presentation drawn() => Presentation(
+      title: 'Deck',
+      slides: [
+        Slide(
+          id: 's1',
+          elements: [
+            TextBox(
+              id: 'text',
+              frame: ElementFrame(x: 100, y: 100, width: 1700, height: 300),
+              paragraphs: [TextParagraph.plain('Hello')],
+            ),
+            ShapeElement(
+              id: 'shape',
+              frame: ElementFrame(x: 200, y: 500, width: 400, height: 300),
+              fill: const SlideColor(0xFF3366FF),
+            ),
+            ImageElement(
+              id: 'pic',
+              frame: ElementFrame(x: 1000, y: 500, width: 400, height: 300),
+              source: 'talks/dog.png',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    late List<String> uploads;
+    late Object? uploadFailure;
+
+    Future<SlideEditorController> pumpDrawn(WidgetTester tester) async {
+      uploads = [];
+      uploadFailure = null;
+      final controller = SlideEditorController(
+        filePath: 'talks/Deck.qslide',
+        loadPresentation: (_, {serial}) async => drawn(),
+        savePresentation: (_, p, {serial}) async => saved.add(p),
+        // A picture never loads in a test; the canvas shows its placeholder.
+        mediaUrl: (path, {serial}) => Uri.parse('http://quark.invalid/$path'),
+        pickImageFile: () async =>
+            (name: 'cat.png', length: 3, bytes: Stream<List<int>>.empty),
+        uploadImage:
+            (
+              path, {
+              required name,
+              required bytes,
+              required length,
+              serial,
+              onProgress,
+            }) async {
+              final failure = uploadFailure;
+              if (failure != null) throw failure;
+              uploads.add(name);
+              return (path: 'talks/$name', size: (width: 800.0, height: 400.0));
+            },
+        readImageSize: (path, {serial}) async => (width: 300.0, height: 300.0),
+        listFolder: (path, {serial}) async => [
+          FileNode(
+            name: 'holiday',
+            size: 0,
+            isDir: true,
+            deviceName: '',
+            devicePath: '',
+            deviceSerial: '',
+            dirPath: '$path/holiday',
+          ),
+          FileNode(
+            name: 'beach.jpg',
+            size: 10,
+            isDir: false,
+            deviceName: '',
+            devicePath: '',
+            deviceSerial: '',
+            dirPath: '$path/beach.jpg',
+          ),
+          FileNode(
+            name: 'notes.txt',
+            size: 10,
+            isDir: false,
+            deviceName: '',
+            devicePath: '',
+            deviceSerial: '',
+            dirPath: '$path/notes.txt',
+          ),
+        ],
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
+          home: SlideEditorPage(
+            filePath: 'talks/Deck.qslide',
+            controller: controller,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return controller;
+    }
+
+    Finder key(String k) => find.byKey(ValueKey(k));
+
+    SlideElement element(SlideEditorController c, String id) =>
+        c.selectedSlide!.elements.firstWhere((e) => e.id == id);
+
+    testWidgets('a wide window\'s tool row picks the tool the canvas '
+        'draws with', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpDrawn(tester);
+
+      expect(key('slide_toolbar'), findsOneWidget);
+      expect(key('slide_format_hint'), findsOneWidget);
+      await tester.tap(key('slide_tool_text'));
+      await tester.pump();
+      expect(c.tools.tool, SlideCanvasTool.text);
+      await tester.tap(key('slide_tool_shape'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_tool_shape_ellipse'));
+      await tester.pumpAndSettle();
+      expect(c.tools.tool, const SlideCanvasTool.shape(ShapeKind.ellipse));
+      await tester.tap(key('slide_tool_select'));
+      await tester.pump();
+      expect(c.tools.tool, SlideCanvasTool.select);
+    });
+
+    // Switching tools and then the selection in one test trips a semantics
+    // assertion in quark_slides' SlideCanvas, which wraps itself in a
+    // Semantics only while a drawing tool is active; reported to its owner.
+    testWidgets('a wide window\'s format row follows the selection', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpDrawn(tester);
+
+      c.selectElements({'text'});
+      await tester.pump();
+      expect(key(SlideToolbarGroup.text.key), findsOneWidget);
+      expect(key(SlideToolbarGroup.shape.key), findsNothing);
+      await tester.tap(key('slide_format_bold'));
+      await tester.pump();
+      final run = (element(c, 'text') as TextBox).paragraphs.single.runs.single;
+      expect(run.bold, isTrue);
+      expect(c.saveState, SlideSaveState.dirty);
+      await tester.tap(key('slide_format_font_larger'));
+      await tester.pump();
+      expect(c.fontSize, 40);
+      expect(find.text('40'), findsOneWidget);
+
+      c.selectElements({'shape'});
+      await tester.pump();
+      expect(key(SlideToolbarGroup.text.key), findsNothing);
+      expect(key(SlideToolbarGroup.shape.key), findsOneWidget);
+      await tester.tap(key('slide_fill'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_fill_none'));
+      await tester.pumpAndSettle();
+      expect((element(c, 'shape') as ShapeElement).fill, isNull);
+      await tester.tap(key('slide_arrange'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_arrange_toFront'));
+      await tester.pumpAndSettle();
+      expect(c.selectedSlide!.elements.last.id, 'shape');
+      await tester.tap(key('slide_delete'));
+      await tester.pump();
+      expect(
+        c.selectedSlide!.elements.map((e) => e.id),
+        isNot(contains('shape')),
+      );
+
+      expect(tester.takeException(), isNull);
+      await tap.expectTapTargetGuidelines(tester);
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('a custom color is typed as hex', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpDrawn(tester);
+      c.selectElements({'shape'});
+      await tester.pump();
+      await tester.tap(key('slide_stroke_color'));
+      await tester.pumpAndSettle();
+      await tester.enterText(key('slide_stroke_color_hex'), '#12ab34');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(
+        (element(c, 'shape') as ShapeElement).stroke?.color,
+        const SlideColor(0xFF12AB34),
+      );
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('the properties panel sets position, size and alt text, '
+        'and hides from the toolbar', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpDrawn(tester);
+      expect(key('slide_properties'), findsOneWidget);
+      expect(key('slide_prop_hint'), findsOneWidget);
+
+      c.selectElements({'pic'});
+      await tester.pump();
+      await tester.enterText(key('slide_prop_x'), '640');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(element(c, 'pic').frame.x, 640);
+      await tester.enterText(key('slide_prop_rotation'), '90');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(element(c, 'pic').frame.rotation, 90);
+
+      await tester.enterText(key('slide_prop_alt_text'), 'A dog');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect((element(c, 'pic') as ImageElement).altText, 'A dog');
+
+      c.undo();
+      await tester.pump();
+      expect((element(c, 'pic') as ImageElement).altText, '');
+
+      await tester.tap(key('slide_properties_toggle'));
+      await tester.pump();
+      expect(key('slide_properties'), findsNothing);
+      expect(c.propertiesOpen, isFalse);
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('a picture from this device is uploaded and placed, '
+        'and a failure says so', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpDrawn(tester);
+      await tester.tap(key('slide_tool_image'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_image_device'));
+      await tester.pumpAndSettle();
+
+      expect(uploads, ['cat.png']);
+      final image = c.selectedSlide!.elements.last as ImageElement;
+      expect(image.source, 'talks/cat.png');
+      expect(c.selectedElementIds, {image.id});
+
+      uploadFailure = Exception('offline');
+      await tester.tap(key('slide_tool_image'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_image_device'));
+      await tester.pumpAndSettle();
+      expect(find.text("Couldn't add the picture."), findsOneWidget);
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('a picture on the Quark is picked from its folder', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpDrawn(tester);
+      await tester.tap(key('slide_tool_image'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_image_quark'));
+      await tester.pumpAndSettle();
+
+      expect(key('slide_quark_image_dialog'), findsOneWidget);
+      expect(key('slide_quark_image_folder_holiday'), findsOneWidget);
+      expect(key('slide_quark_image_file_notes.txt'), findsNothing);
+      await tester.tap(key('slide_quark_image_file_beach.jpg'));
+      await tester.pumpAndSettle();
+
+      final image = c.selectedSlide!.elements.last as ImageElement;
+      expect(image.source, 'talks/beach.jpg');
+      expect(image.frame.width, image.frame.height);
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('a phone picks a tool from the Insert menu', (tester) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final c = await pumpDrawn(tester);
+      await tester.tap(key('slide_insert_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_insert_shape'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_tool_shape_star'));
+      await tester.pumpAndSettle();
+      expect(c.tools.tool, const SlideCanvasTool.shape(ShapeKind.star));
+      await tester.tap(key('slide_insert_menu'));
+      await tester.pumpAndSettle();
+      expect(key('slide_insert_image'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a phone folds the toolbar into Insert and Format menus '
+        'in the bar, with Properties in a sheet', (tester) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final c = await pumpDrawn(tester);
+      expect(key('slide_toolbar'), findsNothing);
+      expect(key('slide_properties'), findsNothing);
+
+      c.selectElements({'shape'});
+      await tester.pump();
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key(SlideToolbarGroup.arrange.key));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_duplicate'));
+      await tester.pumpAndSettle();
+      expect(c.selectedSlide!.elements, hasLength(4));
+
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_format_properties'));
+      await tester.pumpAndSettle();
+      expect(key('slide_properties'), findsOneWidget);
+      expect(key('slide_prop_x'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+    });
+
+    testLargeText('the toolbar and panel fit', (tester, size) async {
+      final c = await pumpDrawn(tester);
+      c.selectElements({'text'});
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      c.selectElements({'shape'});
+      await tester.pump();
+      expect(tester.takeException(), isNull);
     });
   });
 }

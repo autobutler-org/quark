@@ -408,4 +408,337 @@ void main() {
       expect(c.notesOpen, isFalse);
     });
   });
+
+  group('toolbar and properties panel (#1167)', () {
+    ElementFrame box(double x, double y) =>
+        ElementFrame(x: x, y: y, width: 200, height: 100);
+
+    Presentation drawn() => Presentation(
+      title: 'Deck',
+      slides: [
+        Slide(
+          id: 's1',
+          elements: [
+            ShapeElement(id: 'shape', frame: box(100, 100)),
+            LineElement(id: 'line', frame: box(400, 100)),
+            TextBox(
+              id: 'text',
+              frame: box(100, 400),
+              paragraphs: const [
+                TextParagraph([TextRun('Hello')]),
+              ],
+            ),
+            ImageElement(id: 'pic', frame: box(400, 400), source: 'a.png'),
+          ],
+        ),
+        Slide(id: 's2'),
+      ],
+    );
+
+    SlideElement element(SlideEditorController c, String id) =>
+        c.selectedSlide!.elements.firstWhere((e) => e.id == id);
+
+    test('restyles the selected shapes and lines as one undo step', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      c.selectElements({'shape', 'line', 'text'});
+      expect(c.hasShapesOrLines, isTrue);
+
+      c.styleSelection(const ElementStyle(strokeColor: SlideColor(0xFFFF0000)));
+
+      expect(
+        (element(c, 'shape') as ShapeElement).stroke?.color,
+        const SlideColor(0xFFFF0000),
+      );
+      expect(
+        (element(c, 'line') as LineElement).stroke.color,
+        const SlideColor(0xFFFF0000),
+      );
+      expect(c.selectionStyle.strokeColor, const SlideColor(0xFFFF0000));
+      expect(c.saveState, SlideSaveState.dirty);
+      c.undo();
+      expect((element(c, 'shape') as ShapeElement).stroke, isNull);
+      expect(c.canUndo, isFalse);
+    });
+
+    test(
+      'formats the selected text boxes through the text controller',
+      () async {
+        final c = controllerFor(drawn());
+        await c.load();
+        expect(c.textEditing.canFormat, isFalse);
+        c.selectElements({'text'});
+        expect(c.textEditing.canFormat, isTrue);
+
+        c.textEditing.toggle(TextToggle.bold);
+
+        final run =
+            (element(c, 'text') as TextBox).paragraphs.single.runs.single;
+        expect(run.bold, isTrue);
+        expect(c.textEditing.selectionFormat.bold, isTrue);
+        c.undo();
+        expect(
+          (element(c, 'text') as TextBox).paragraphs.single.runs.single.bold,
+          isFalse,
+        );
+      },
+    );
+
+    test('steps the font size through the sizes the toolbar offers', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      c.selectElements({'text'});
+      expect(c.fontSize, SlideEditorController.inheritedFontSize);
+
+      c.stepFontSize(1);
+      expect(c.fontSize, 40);
+      c.stepFontSize(-1);
+      c.stepFontSize(-1);
+      expect(c.fontSize, 32);
+      c.setFontSize(500);
+      expect(c.fontSize, SlideEditorController.maxFontSize);
+      c.setFontSize(1);
+      expect(c.fontSize, SlideEditorController.minFontSize);
+    });
+
+    test('moves the selection in the stacking order', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      c.selectElements({'shape'});
+      c.arrange(ZOrderMove.toFront);
+      expect(c.selectedSlide!.elements.last.id, 'shape');
+      c.arrange(ZOrderMove.backward);
+      expect(c.selectedSlide!.elements[2].id, 'shape');
+    });
+
+    test('deletes the selection in one step', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      c.selectElements({'shape', 'pic'});
+      c.deleteSelection();
+      expect(
+        [for (final e in c.selectedSlide!.elements) e.id],
+        ['line', 'text'],
+      );
+      expect(c.selectedElementIds, isEmpty);
+      c.undo();
+      expect(c.selectedSlide!.elements, hasLength(4));
+    });
+
+    test('duplicates the selection, offset, and selects the copies', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      c.selectElements({'shape', 'line'});
+      c.duplicateSelection();
+
+      final elements = c.selectedSlide!.elements;
+      expect(elements, hasLength(6));
+      final copies = elements.sublist(4);
+      expect({for (final e in copies) e.id}, c.selectedElementIds);
+      expect(c.selectedElementIds.intersection({'shape', 'line'}), isEmpty);
+      expect(copies.first.frame.x, greaterThan(100));
+      c.undo();
+      expect(c.selectedSlide!.elements, hasLength(4));
+      expect(c.canUndo, isFalse);
+    });
+
+    test('sets one element\'s position, size and rotation, '
+        'each as its own step', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      c.selectElements({'shape'});
+      expect(c.singleSelected?.id, 'shape');
+
+      c.setFrame(x: 150);
+      c.setFrame(y: 175, width: 300);
+      c.setFrame(height: 50, rotation: 45);
+      final frame = element(c, 'shape').frame;
+      expect(
+        [frame.x, frame.y, frame.width, frame.height, frame.rotation],
+        [150, 175, 300, 50, 45],
+      );
+      c.undo();
+      expect(element(c, 'shape').frame.rotation, 0);
+      expect(element(c, 'shape').frame.height, 100);
+      c.undo();
+      c.undo();
+      expect(element(c, 'shape').frame, box(100, 100));
+
+      c.selectElements({'shape', 'line'});
+      expect(c.singleSelected, isNull);
+      c.setFrame(x: 0);
+      expect(element(c, 'shape').frame.x, 100);
+    });
+
+    test('a negative size is kept at zero', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      c.selectElements({'shape'});
+      c.setFrame(width: -5);
+      expect(element(c, 'shape').frame.width, 0);
+    });
+
+    test('sets an image\'s alt text, and ignores what is unchanged', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      c.selectElements({'pic'});
+      c.setAltText('A dog on a beach');
+      expect((element(c, 'pic') as ImageElement).altText, 'A dog on a beach');
+      c.setAltText('A dog on a beach');
+      c.undo();
+      expect((element(c, 'pic') as ImageElement).altText, '');
+    });
+
+    test('picks the tool the canvas draws with', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      c.useTool(const SlideCanvasTool.shape(ShapeKind.star));
+      expect(c.tools.tool, const SlideCanvasTool.shape(ShapeKind.star));
+    });
+
+    test('opens and closes the properties panel', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      expect(c.propertiesOpen, isTrue);
+      c.toggleProperties();
+      expect(c.propertiesOpen, isFalse);
+    });
+  });
+
+  group('inserting a picture (#1158)', () {
+    const picked = (name: 'dog.png', length: 3, bytes: Stream<List<int>>.empty);
+
+    late List<String> uploadedTo;
+    late List<double> progress;
+
+    SlideEditorController imageController({
+      Future<SlideImageUpload> Function()? upload,
+      Future<SlideImageSize?> Function(String path)? size,
+      SlideImagePick? pick = picked,
+    }) {
+      uploadedTo = [];
+      progress = [];
+      final c = SlideEditorController(
+        filePath: 'talks/deck.qslide',
+        deviceSerial: 'usb1',
+        loadPresentation: (_, {serial}) async => deck(2),
+        savePresentation: (_, p, {serial}) async => saved.add(p),
+        newId: () => 'img',
+        pickImageFile: () async => pick,
+        uploadImage:
+            (
+              path, {
+              required name,
+              required bytes,
+              required length,
+              serial,
+              onProgress,
+            }) async {
+              uploadedTo.add('$path $name $length $serial');
+              onProgress?.call(0.5);
+              return upload == null
+                  ? (path: 'talks/dog.png', size: (width: 400.0, height: 300.0))
+                  : await upload();
+            },
+        readImageSize: (path, {serial}) async {
+          expect(serial, 'usb1');
+          return size == null ? (width: 800.0, height: 600.0) : size(path);
+        },
+      );
+      c.addListener(() {
+        final p = c.imageUpload?.progress;
+        if (p != null) progress.add(p);
+      });
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    test('uploads a picked file beside the presentation and puts it '
+        'on the slide at its own shape, selected, as one step', () async {
+      final c = imageController();
+      await c.load();
+      await c.insertImageFromDevice();
+
+      expect(uploadedTo, ['talks/deck.qslide dog.png 3 usb1']);
+      expect(progress, contains(0.5));
+      expect(c.imageUpload, isNull);
+      final image = c.selectedSlide!.elements.single as ImageElement;
+      expect(image.source, 'talks/dog.png');
+      expect(image.frame.width / image.frame.height, closeTo(4 / 3, 1e-9));
+      expect(c.selectedElementIds, {image.id});
+      c.undo();
+      expect(c.selectedSlide!.elements, isEmpty);
+      expect(c.canUndo, isFalse);
+    });
+
+    test('a canceled pick does nothing', () async {
+      final c = imageController(pick: null);
+      await c.load();
+      await c.insertImageFromDevice();
+      expect(uploadedTo, isEmpty);
+      expect(c.canUndo, isFalse);
+    });
+
+    test('a failed upload is reported and leaves the slide alone', () async {
+      final failure = Exception('offline');
+      Object? reported;
+      final c = imageController(upload: () async => throw failure);
+      c.onImageInsertFailed = (e) => reported = e;
+      await c.load();
+      await c.insertImageFromDevice();
+
+      expect(reported, same(failure));
+      expect(c.imageUpload, isNull);
+      expect(c.selectedSlide!.elements, isEmpty);
+    });
+
+    test(
+      'a picture whose size is unknown goes in at a default shape',
+      () async {
+        final c = imageController(
+          upload: () async => (path: 'talks/odd.png', size: null),
+        );
+        await c.load();
+        await c.insertImageFromDevice();
+        final image = c.selectedSlide!.elements.single;
+        expect(
+          image.frame.width / image.frame.height,
+          closeTo(
+            SlideEditorController.fallbackImageSize.width /
+                SlideEditorController.fallbackImageSize.height,
+            1e-9,
+          ),
+        );
+      },
+    );
+
+    test('a picture already on the Quark goes in without an upload, '
+        'within the box drawn for it', () async {
+      final c = imageController();
+      await c.load();
+      final within = ElementFrame(x: 0, y: 0, width: 100, height: 100);
+      await c.insertImageFromQuark('photos/cat.jpg', within: within);
+
+      expect(uploadedTo, isEmpty);
+      final image = c.selectedSlide!.elements.single as ImageElement;
+      expect(image.source, 'photos/cat.jpg');
+      expect(image.frame.width, 100);
+      expect(image.frame.height, 75);
+    });
+
+    test('the picture lands on the slide it was picked for', () async {
+      final gate = Completer<SlideImageUpload>();
+      final c = imageController(upload: () => gate.future);
+      await c.load();
+      final inserting = c.insertImageFromDevice();
+      c.selectSlide('s2');
+      gate.complete((path: 'talks/dog.png', size: (width: 4.0, height: 3.0)));
+      await inserting;
+
+      expect(c.slides.first.elements, hasLength(1));
+      expect(c.slides.last.elements, isEmpty);
+      // Nothing is selected on the slide showing now.
+      expect(c.selectedElementIds, isEmpty);
+    });
+  });
 }

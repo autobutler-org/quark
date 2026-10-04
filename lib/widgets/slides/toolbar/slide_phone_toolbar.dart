@@ -1,0 +1,63 @@
+import 'package:flutter/material.dart';
+import 'package:quark/controllers/slide_editor_controller.dart';
+import 'package:quark/widgets/slides/toolbar/slide_phone_format_menu.dart';
+import 'package:quark/widgets/slides/toolbar/slide_phone_insert_menu.dart';
+import 'package:quark/widgets/slides/toolbar/slide_toolbar_actions.dart';
+
+/// The slide toolbar on a phone (#1167): the labeled "Insert" and "Format"
+/// menus, which hold everything the wide `SlideToolbar`'s two rows do, with
+/// "Properties" at the end of "Format". It sits in the bar's second row
+/// beside the slide position, so a phone's slide keeps its height.
+///
+/// It listens to [controller], its tools and its text editing session, so
+/// the menus follow the selection.
+///
+/// Key prefixes: the menus' own (`slide_insert_menu`, `slide_format_menu`).
+class SlidePhoneToolbar extends StatelessWidget {
+  /// The menus for [controller].
+  const SlidePhoneToolbar({
+    required this.controller,
+    required this.onImageFromDevice,
+    required this.onImageFromQuark,
+    required this.onOpenProperties,
+    super.key,
+  });
+
+  /// The open presentation.
+  final SlideEditorController controller;
+
+  /// Picks a picture on this device to insert.
+  final VoidCallback onImageFromDevice;
+
+  /// Picks a picture on the Quark to insert.
+  final VoidCallback onImageFromQuark;
+
+  /// Opens the properties sheet.
+  final VoidCallback onOpenProperties;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([
+      controller,
+      controller.tools,
+      controller.textEditing,
+    ]),
+    builder: (context, _) {
+      final actions = SlideToolbarActions(
+        controller,
+        onImageFromDevice: onImageFromDevice,
+        onImageFromQuark: onImageFromQuark,
+      );
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SlidePhoneInsertMenu(actions: actions),
+          SlidePhoneFormatMenu(
+            actions: actions,
+            onOpenProperties: onOpenProperties,
+          ),
+        ],
+      );
+    },
+  );
+}

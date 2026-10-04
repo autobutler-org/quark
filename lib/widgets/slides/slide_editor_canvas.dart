@@ -15,6 +15,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// arrow, Delete, Tab and stacking keys work at once; Ctrl or Cmd Z is not
 /// one of them, so it reaches the editor's undo shortcut above.
 ///
+/// The toolbar's drawing tool and text formatting reach it through the
+/// controller's `tools` and `textEditing`, which it shares.
+///
 /// The bar's second row says which slide it is; the canvas names each
 /// element to a screen reader. Colors come from [styleOf].
 ///
@@ -64,6 +67,8 @@ class SlideEditorCanvas extends StatelessWidget {
       onZoomChanged: controller.setZoom,
       imageBuilder: imageBuilder,
       style: styleOf(context),
+      tools: controller.tools,
+      textEditing: controller.textEditing,
       autofocus: true,
     );
   }

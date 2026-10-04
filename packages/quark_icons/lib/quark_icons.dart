@@ -185,6 +185,73 @@ class QuarkIcons {
   /// The phone menu that holds every formatting action.
   static const IconData format_menu = Icons.text_format;
 
+  // ── Slide editing ────────────────────────────────────────────────────────────────
+  /// The pointer tool that selects, moves and resizes slide elements.
+  static const IconData select_tool = Icons.near_me_outlined;
+
+  /// Draw a text box on a slide.
+  static const IconData text_box = Icons.text_fields;
+
+  /// The menu of shapes to draw on a slide.
+  static const IconData shapes = Icons.category_outlined;
+
+  /// Draw a straight line on a slide.
+  static const IconData line = Icons.horizontal_rule;
+
+  /// Draw an arrow on a slide.
+  static const IconData arrow_line = Icons.arrow_right_alt;
+
+  /// Insert a picture on a slide.
+  static const IconData add_image = Icons.add_photo_alternate_outlined;
+
+  /// Underline the selected text.
+  static const IconData format_underlined = Icons.format_underlined;
+
+  /// Strike through the selected text.
+  static const IconData format_strikethrough = Icons.format_strikethrough;
+
+  /// Justify the selected paragraphs.
+  static const IconData format_align_justify = Icons.format_align_justify;
+
+  /// A bulleted list.
+  static const IconData format_list_bulleted = Icons.format_list_bulleted;
+
+  /// A numbered list.
+  static const IconData format_list_numbered = Icons.format_list_numbered;
+
+  /// The font family of the selected text.
+  static const IconData font_family = Icons.font_download_outlined;
+
+  /// A shape or line's outline color.
+  static const IconData stroke_color = Icons.border_color_outlined;
+
+  /// A shape or line's outline width.
+  static const IconData stroke_width = Icons.line_weight;
+
+  /// A shape or line's outline pattern: solid, dashed, dotted.
+  static const IconData stroke_dash = Icons.line_style;
+
+  /// A rounded rectangle's corner radius.
+  static const IconData corner_radius = Icons.rounded_corner;
+
+  /// An element's opacity.
+  static const IconData opacity = Icons.opacity;
+
+  /// Bring the selection forward in the stacking order.
+  static const IconData bring_forward = Icons.flip_to_front;
+
+  /// Send the selection backward in the stacking order.
+  static const IconData send_backward = Icons.flip_to_back;
+
+  /// The menu of stacking-order moves.
+  static const IconData arrange = Icons.layers_outlined;
+
+  /// Show or hide the selection's properties.
+  static const IconData properties = Icons.tune_outlined;
+
+  /// The menu of things to insert on a slide.
+  static const IconData insert_menu = Icons.add_box_outlined;
+
   // ── Import / Export ────────────────────────────────────────────────────────────────
   /// Export data as a CSV file.
   static const IconData export_csv = Icons.file_download;
@@ -287,6 +354,7 @@ class QuarkIcons {
 
   // ── Actions & editing ────────────────────────────────────────────────────────────
   static const IconData add = Icons.add;
+  static const IconData remove = Icons.remove;
   static const IconData add_rounded = Icons.add_rounded;
   static const IconData add_link = Icons.add_link;
   static const IconData edit = Icons.edit;

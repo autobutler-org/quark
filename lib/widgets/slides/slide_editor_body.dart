@@ -1,19 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
+import 'package:quark/widgets/slides/insert/slide_image_upload_status.dart';
 import 'package:quark/widgets/slides/notes/slide_notes_panel.dart';
+import 'package:quark/widgets/slides/properties/slide_properties_panel.dart';
 import 'package:quark/widgets/slides/slide_editor_canvas.dart';
 import 'package:quark/widgets/slides/slide_editor_shortcuts.dart';
 import 'package:quark/widgets/slides/slide_image.dart';
 import 'package:quark/widgets/slides/slide_panel.dart';
 import 'package:quark/widgets/slides/slides_error_view.dart';
+import 'package:quark/widgets/slides/toolbar/slide_toolbar.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Everything under the slide editor's bar: the loader, the load error, or
-/// the [SlidePanel] beside the [SlideEditorCanvas] editing the selected
-/// slide, with the slide's speaker notes ([SlideNotesPanel]) under the
-/// canvas, and the undo and redo keys over all of it
-/// ([SlideEditorShortcuts]).
+/// the [SlideToolbar] across the top (#1167) over the [SlidePanel] beside
+/// the [SlideEditorCanvas] editing the selected slide, with the slide's
+/// speaker notes ([SlideNotesPanel]) under the canvas, the
+/// [SlidePropertiesPanel] down the right on a wide screen, and the undo
+/// and redo keys over all of it ([SlideEditorShortcuts]). While a picture
+/// uploads, a [SlideImageUploadStatus] sits over the canvas.
+///
+/// The properties panel goes beside the canvas where the toolbar shows its
+/// two rows — at [QuarkAppBarBottom.collapseBreakpoint] and wider — and is
+/// hidden by the toolbar's toggle; narrower, the page shows it as a sheet
+/// from the phone toolbar in its bar.
 ///
 /// The open notes field gives up height before the canvas shrinks below one
 /// touch target, so a phone with its keyboard up keeps a sliver of slide.
@@ -34,7 +44,13 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// Key prefixes: `slide_editor_stage` on the center area.
 class SlideEditorBody extends StatelessWidget {
   /// Shows [controller]'s presentation.
-  const SlideEditorBody({required this.controller, this.onPresent, super.key});
+  const SlideEditorBody({
+    required this.controller,
+    required this.onImageFromDevice,
+    required this.onImageFromQuark,
+    this.onPresent,
+    super.key,
+  });
 
   /// The open presentation.
   final SlideEditorController controller;
@@ -42,6 +58,12 @@ class SlideEditorBody extends StatelessWidget {
   /// Presents from the slide with the given id; null leaves the slide menu
   /// without the row.
   final ValueChanged<String>? onPresent;
+
+  /// Picks a picture on this device for the selected slide.
+  final VoidCallback onImageFromDevice;
+
+  /// Picks a picture already on the Quark for the selected slide.
+  final VoidCallback onImageFromQuark;
 
   @override
   Widget build(BuildContext context) {
@@ -81,10 +103,16 @@ class SlideEditorBody extends StatelessWidget {
       onPresent: onPresent,
     );
     final slideId = c.selectedSlideId;
+    final upload = c.imageUpload;
     final stage = LayoutBuilder(
       builder: (context, constraints) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (upload != null)
+            SlideImageUploadStatus(
+              name: upload.name,
+              progress: upload.progress,
+            ),
           Expanded(
             child: KeyedSubtree(
               key: const ValueKey('slide_editor_stage'),
@@ -109,26 +137,59 @@ class SlideEditorBody extends StatelessWidget {
       ),
     );
 
+    final editor = collapsed
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(height: SlidePanel.stripHeight, child: panel),
+              Divider(height: 1, color: tokens.border),
+              Expanded(child: stage),
+            ],
+          )
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(width: SlidePanel.sideWidth, child: panel),
+              VerticalDivider(width: 1, color: tokens.border),
+              Expanded(child: stage),
+            ],
+          );
+
     return SlideEditorShortcuts(
       onUndo: c.undo,
       onRedo: c.redo,
-      child: collapsed
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(height: SlidePanel.stripHeight, child: panel),
-                Divider(height: 1, color: tokens.border),
-                Expanded(child: stage),
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(width: SlidePanel.sideWidth, child: panel),
-                VerticalDivider(width: 1, color: tokens.border),
-                Expanded(child: stage),
-              ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SlideToolbar(
+            controller: c,
+            onImageFromDevice: onImageFromDevice,
+            onImageFromQuark: onImageFromQuark,
+          ),
+          Expanded(
+            // The canvas stays the first child whether or not the panel
+            // shows, so toggling it keeps the canvas's state.
+            child: LayoutBuilder(
+              builder: (context, constraints) => Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: editor),
+                  if (c.propertiesOpen &&
+                      !SlideToolbar.isCompact(constraints.maxWidth)) ...[
+                    VerticalDivider(width: 1, color: tokens.border),
+                    SizedBox(
+                      width: SlidePropertiesPanel.sideWidth,
+                      child: SingleChildScrollView(
+                        child: SlidePropertiesPanel(controller: c),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
+          ),
+        ],
+      ),
     );
   }
 }

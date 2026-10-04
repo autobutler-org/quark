@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:quark/models/file_node.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/slides_service.dart';
+import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark_slides/quark_slides.dart';
 
 /// Downloads and decodes the presentation at a path.
@@ -19,6 +22,31 @@ typedef SavePresentationFn =
 
 /// The URL a file on the Quark is downloaded from, authenticated.
 typedef MediaUrlFn = Uri Function(String path, {String? serial});
+
+/// Asks the user for a picture on this device; null when they cancel.
+typedef PickImageFileFn = Future<SlideImagePick?> Function();
+
+/// Uploads a picture beside the presentation at a path.
+typedef UploadImageFn =
+    Future<SlideImageUpload> Function(
+      String presentationPath, {
+      required String name,
+      required Stream<List<int>> bytes,
+      required int length,
+      String? serial,
+      void Function(double sent)? onProgress,
+    });
+
+/// Reads the size of a picture on the Quark from its header.
+typedef ReadImageSizeFn =
+    Future<SlideImageSize?> Function(String path, {String? serial});
+
+/// Lists a folder on the Quark.
+typedef ListFolderFn =
+    Future<List<FileNode>> Function(String path, {String? serial});
+
+Future<List<FileNode>> _listFolder(String path, {String? serial}) =>
+    FilesService.getFiles(path, serials: serial == null ? null : [serial]);
 
 /// Where the open presentation stands against the file on the Quark.
 enum SlideSaveState {
@@ -65,6 +93,22 @@ enum SlideSaveState {
 /// once. While it is held, [notes] reads the typing, [canUndo] is true and
 /// the presentation is dirty.
 ///
+/// **Toolbar and properties panel** (#1167). The active drawing tool is
+/// [tools] and the text formatting commands go through [textEditing]; both
+/// are shared with the canvas, and [textEditing] is kept pointed at the
+/// selected slide and elements so the toolbar can format before the canvas
+/// has built. [styleSelection], [arrange], [deleteSelection],
+/// [duplicateSelection], [setFrame] and [setAltText] act on the selection
+/// through the document, each as one undo step that starts the autosave.
+/// Undo and redo write an open text editing session first, so the step it
+/// makes exists before history moves.
+///
+/// **Pictures** (#1158). [insertImageFromDevice] picks a file, streams it up
+/// beside the presentation and puts it on the slide at the size its header
+/// gives; [insertImageFromQuark] does the same for a file already on the
+/// Quark, without the upload. [imageUpload] says how far an upload has got;
+/// a failure goes to [onImageInsertFailed].
+///
 /// Service calls are parameters defaulting to [SlidesService], so a test
 /// passes fakes.
 class SlideEditorController extends ChangeNotifier {
@@ -78,6 +122,11 @@ class SlideEditorController extends ChangeNotifier {
     this.mediaUrl = FilesService.constructMediaUrl,
     this.autosaveDelay = const Duration(seconds: 2),
     this.newId,
+    this.fontFamilies = defaultFontFamilies,
+    this.pickImageFile = SlidesService.pickImageFile,
+    this.uploadImage = SlidesService.uploadImage,
+    this.readImageSize = SlidesService.readImageSize,
+    this.listFolder = _listFolder,
   });
 
   /// The presentation's path, relative to the device's files root.
@@ -97,8 +146,76 @@ class SlideEditorController extends ChangeNotifier {
   /// Generates ids for new slides; the package's random ids by default.
   final String Function()? newId;
 
+  /// The font families the toolbar offers.
+  final List<String> fontFamilies;
+
+  /// Asks the user for a picture on this device.
+  final PickImageFileFn pickImageFile;
+
+  /// Uploads a picture beside the presentation.
+  final UploadImageFn uploadImage;
+
+  /// Reads the size of a picture on the Quark.
+  final ReadImageSizeFn readImageSize;
+
+  /// Lists a folder on the Quark, for picking a picture there.
+  final ListFolderFn listFolder;
+
   /// Called with the thrown object when a save fails.
   void Function(Object error)? onSaveFailed;
+
+  /// Called with the thrown object when a picture cannot be put on a slide.
+  void Function(Object error)? onImageInsertFailed;
+
+  /// The tool the canvas draws with, shared with the toolbar.
+  final SlideToolController tools = SlideToolController();
+
+  /// The canvas's text editing session and the toolbar's text formatting
+  /// commands.
+  late final SlideTextEditingController textEditing =
+      SlideTextEditingController(fontFamilies: fontFamilies);
+
+  /// The families the toolbar offers by default: the generic ones every
+  /// platform can draw.
+  static const defaultFontFamilies = ['sans-serif', 'serif', 'monospace'];
+
+  /// The size of text whose runs set none, as the canvas draws it.
+  static final double inheritedFontSize = const SlideTextLayout().fontSize;
+
+  /// The font sizes the toolbar's stepper moves between, in slide units.
+  static const fontSizes = <double>[
+    12,
+    14,
+    16,
+    18,
+    20,
+    24,
+    28,
+    32,
+    36,
+    40,
+    48,
+    56,
+    64,
+    72,
+    96,
+    120,
+    144,
+    200,
+  ];
+
+  /// The smallest font size the toolbar sets.
+  static final double minFontSize = fontSizes.first;
+
+  /// The largest font size the toolbar sets.
+  static final double maxFontSize = fontSizes.last;
+
+  /// How far [duplicateSelection] offsets a copy, in slide units.
+  static const duplicateOffset = 16.0;
+
+  /// The shape a picture goes in at when its header gives no size; the
+  /// picture is fitted inside it, so it is never stretched.
+  static const SlideImageSize fallbackImageSize = (width: 1600, height: 1200);
 
   SlideDocumentNotifier? _doc;
   Presentation? _saved;
@@ -114,6 +231,8 @@ class SlideEditorController extends ChangeNotifier {
   bool _notesOpen = false;
   ({String slideId, String text})? _pendingNotes;
   Timer? _notesTimer;
+  bool _propertiesOpen = true;
+  ({String name, double progress})? _imageUpload;
 
   /// How long typing in the notes pauses before it becomes an undo step.
   static const notesDelay = Duration(milliseconds: 500);
@@ -158,6 +277,41 @@ class SlideEditorController extends ChangeNotifier {
 
   /// The ids of the elements selected on the canvas, all on [selectedSlide].
   Set<String> get selectedElementIds => _selectedElementIds;
+
+  /// The selected elements, back to front.
+  List<SlideElement> get selectedElements => [
+    ...?selectedSlide?.elements.where(
+      (e) => _selectedElementIds.contains(e.id),
+    ),
+  ];
+
+  /// The selected element when exactly one is selected, else null: what the
+  /// properties panel's position, size and alt text fields edit.
+  SlideElement? get singleSelected {
+    final selected = selectedElements;
+    return selected.length == 1 ? selected.single : null;
+  }
+
+  /// Whether the selection holds a shape or a line for [styleSelection].
+  bool get hasShapesOrLines =>
+      selectedElements.any((e) => e is ShapeElement || e is LineElement);
+
+  /// What the selected shapes and lines share, for the toolbar's controls.
+  ElementStyle get selectionStyle => elementStyleOf(selectedElements);
+
+  /// The selected text's size: a shared size, [inheritedFontSize] when it
+  /// sets none, or null when the selection mixes sizes.
+  double? get fontSize {
+    final size = textEditing.selectionFormat.fontSize;
+    if (size is double) return size;
+    return size == null ? inheritedFontSize : null;
+  }
+
+  /// Whether the properties panel is showing beside the canvas.
+  bool get propertiesOpen => _propertiesOpen;
+
+  /// The picture being uploaded and the share of it sent, or null.
+  ({String name, double progress})? get imageUpload => _imageUpload;
 
   /// The canvas zoom relative to fitting the slide in its box: 1 fits.
   double get zoom => _zoom;
@@ -261,8 +415,20 @@ class SlideEditorController extends ChangeNotifier {
   /// Makes [slideId] the selected slide, with no elements selected on it.
   void _showSlide(String? slideId) {
     _commitNotes();
+    textEditing.commit();
     _selectedSlideId = slideId;
     _selectedElementIds = const {};
+    _attachText();
+  }
+
+  /// Points [textEditing] at the selected slide and elements, as the canvas
+  /// does when it builds, so the toolbar reads the selection at once.
+  void _attachText() {
+    final doc = _doc;
+    final slideId = _selectedSlideId;
+    if (doc != null && slideId != null) {
+      textEditing.attach(doc.controller, slideId, _selectedElementIds);
+    }
   }
 
   /// Adds a blank slide after the selected one and selects it.
@@ -312,6 +478,7 @@ class SlideEditorController extends ChangeNotifier {
   /// Takes back the last edit.
   void undo() {
     _commitNotes();
+    textEditing.commit();
     final selected = selectedIndex;
     if (_doc?.controller.undo() ?? false) _keepSelection(selected);
   }
@@ -319,6 +486,7 @@ class SlideEditorController extends ChangeNotifier {
   /// Puts back the last edit [undo] took back.
   void redo() {
     _commitNotes();
+    textEditing.commit();
     final selected = selectedIndex;
     if (_doc?.controller.redo() ?? false) _keepSelection(selected);
   }
@@ -337,6 +505,7 @@ class SlideEditorController extends ChangeNotifier {
   void selectElements(Set<String> ids) {
     if (setEquals(ids, _selectedElementIds)) return;
     _selectedElementIds = Set.unmodifiable(ids);
+    _attachText();
     _notify();
   }
 
@@ -364,6 +533,185 @@ class SlideEditorController extends ChangeNotifier {
   /// the files root of the device the presentation is on.
   Uri imageUrl(String source) =>
       mediaUrl(source.trim().replaceAll(RegExp(r'^/+'), ''), serial: _serial);
+
+  // ── Toolbar and properties ────────────────────────────────────────────────
+
+  /// Makes [tool] the one the canvas draws with.
+  void useTool(SlideCanvasTool tool) => tools.use(tool);
+
+  /// Runs [edit] on the selected slide's document when there is a
+  /// selection.
+  void _onSelection(
+    void Function(SlideDocumentController doc, String slideId) edit,
+  ) {
+    final doc = _doc;
+    final slideId = _selectedSlideId;
+    if (doc == null || slideId == null || _selectedElementIds.isEmpty) return;
+    edit(doc.controller, slideId);
+  }
+
+  /// Restyles the selected shapes and lines; other elements are skipped.
+  void styleSelection(ElementStyle style) => _onSelection(
+    (doc, slideId) => doc.styleElements(slideId, _selectedElementIds, style),
+  );
+
+  /// Sets the selected text's size, kept within [minFontSize] and
+  /// [maxFontSize].
+  void setFontSize(double size) => textEditing.format(
+    TextFormat(fontSize: size.clamp(minFontSize, maxFontSize).toDouble()),
+  );
+
+  /// Moves the selected text's size to the next of [fontSizes] up
+  /// ([direction] 1) or down (-1).
+  void stepFontSize(int direction) {
+    final current = fontSize ?? inheritedFontSize;
+    final next = direction > 0
+        ? fontSizes.firstWhere((s) => s > current, orElse: () => maxFontSize)
+        : fontSizes.lastWhere((s) => s < current, orElse: () => minFontSize);
+    setFontSize(next);
+  }
+
+  /// Restacks the selection.
+  void arrange(ZOrderMove move) => _onSelection(
+    (doc, slideId) => doc.arrangeElements(slideId, _selectedElementIds, move),
+  );
+
+  /// Deletes the selected elements.
+  void deleteSelection() => _onSelection(
+    (doc, slideId) => doc.deleteElements(slideId, _selectedElementIds),
+  );
+
+  /// Copies the selected elements in front of everything, offset by
+  /// [duplicateOffset], and selects the copies.
+  void duplicateSelection() => _onSelection((doc, slideId) {
+    final ids = doc.batch(
+      () => [for (final e in selectedElements) _addCopy(doc, slideId, e)],
+    );
+    selectElements(ids.toSet());
+  });
+
+  String _addCopy(SlideDocumentController doc, String slideId, SlideElement e) {
+    final id = doc.newId();
+    doc.addElement(
+      slideId,
+      e
+          .withId(id)
+          .withFrame(e.frame.translate(duplicateOffset, duplicateOffset)),
+    );
+    return id;
+  }
+
+  /// Gives the one selected element ([singleSelected]) the position, size
+  /// or rotation given, as one step; a size below zero is kept at zero.
+  void setFrame({
+    double? x,
+    double? y,
+    double? width,
+    double? height,
+    double? rotation,
+  }) {
+    final element = singleSelected;
+    if (element == null) return;
+    _onSelection((doc, slideId) {
+      final frame = element.frame;
+      doc.batch(() {
+        if (x != null || y != null || width != null || height != null) {
+          doc.resizeElement(
+            slideId,
+            element.id,
+            x: x,
+            y: y,
+            width: math.max(0, width ?? frame.width),
+            height: math.max(0, height ?? frame.height),
+          );
+        }
+        if (rotation != null) doc.rotateElement(slideId, element.id, rotation);
+      });
+    });
+  }
+
+  /// Sets the one selected image's alt text, which a screen reader reads
+  /// for it.
+  void setAltText(String altText) {
+    final image = singleSelected;
+    if (image is! ImageElement || image.altText == altText) return;
+    _onSelection((doc, slideId) => doc.setAltText(slideId, image.id, altText));
+  }
+
+  /// Shows or hides the properties panel beside the canvas.
+  void toggleProperties() {
+    _propertiesOpen = !_propertiesOpen;
+    _notify();
+  }
+
+  // ── Pictures ──────────────────────────────────────────────────────────────
+
+  /// Asks for a picture on this device, uploads it beside the presentation
+  /// and puts it on the selected slide — in [within], the box the image tool
+  /// drew, or centered — selected. Nothing happens when the user cancels.
+  Future<void> insertImageFromDevice({ElementFrame? within}) =>
+      _insertImage(within, () async {
+        final pick = await pickImageFile();
+        if (pick == null) return null;
+        _imageUpload = (name: pick.name, progress: 0);
+        _notify();
+        return uploadImage(
+          filePath,
+          name: pick.name,
+          bytes: pick.bytes(),
+          length: pick.length,
+          serial: _serial,
+          onProgress: (sent) {
+            _imageUpload = (name: pick.name, progress: sent);
+            _notify();
+          },
+        );
+      });
+
+  /// The folder the presentation is in, where picking a picture on the
+  /// Quark starts.
+  String get folderPath => parentPath(filePath);
+
+  /// Lists the folder at [path] on the presentation's device.
+  Future<List<FileNode>> listImageFolder(String path) =>
+      listFolder(path, serial: _serial);
+
+  /// Puts the picture at [path] on the Quark (relative to the files root of
+  /// the presentation's device) on the selected slide, as
+  /// [insertImageFromDevice] does after its upload.
+  Future<void> insertImageFromQuark(String path, {ElementFrame? within}) =>
+      _insertImage(
+        within,
+        () async =>
+            (path: path, size: await readImageSize(path, serial: _serial)),
+      );
+
+  Future<void> _insertImage(
+    ElementFrame? within,
+    Future<SlideImageUpload?> Function() fetch,
+  ) async {
+    final slideId = _selectedSlideId;
+    if (_doc == null || slideId == null) return;
+    try {
+      final picture = await fetch();
+      final doc = _doc;
+      if (picture == null || doc == null || _disposed) return;
+      // The slide it was picked for may have gone while it uploaded.
+      if (presentation?.slideById(slideId) == null) return;
+      final id = doc.controller.insertImage(
+        slideId,
+        QuarkFileImage(picture.path),
+        picture.size ?? fallbackImageSize,
+        within: within,
+      );
+      if (slideId == _selectedSlideId) selectElements({id});
+    } catch (e) {
+      if (!_disposed) onImageInsertFailed?.call(e);
+    } finally {
+      _imageUpload = null;
+      _notify();
+    }
+  }
 
   // ── Speaker notes ─────────────────────────────────────────────────────────
 
@@ -415,6 +763,7 @@ class SlideEditorController extends ChangeNotifier {
       _selectedElementIds = Set.unmodifiable(
         _selectedElementIds.where(onSlide.contains),
       );
+      _attachText();
     }
     _autosaveTimer?.cancel();
     if (isDirty) _autosaveTimer = Timer(autosaveDelay, save);
@@ -471,6 +820,8 @@ class SlideEditorController extends ChangeNotifier {
     }
     _disposed = true;
     _doc?.dispose();
+    tools.dispose();
+    textEditing.dispose();
     super.dispose();
   }
 }

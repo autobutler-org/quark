@@ -1,7 +1,7 @@
 # Slides Journeys
 
-Covers the Slides page (`/slides`), the slide editor for `.qslide` presentations, its speaker notes, and presenting
-(#1152, #1153, #1161, #1165, #1166).
+Covers the Slides page (`/slides`), the slide editor for `.qslide` presentations, its toolbar and properties panel,
+inserting pictures, its speaker notes, and presenting (#1152, #1153, #1158, #1161, #1165, #1166, #1167).
 
 ---
 
@@ -203,7 +203,7 @@ on the canvas (JN-SL-011).
 
 **Steps:**
 
-1. On a wide window, tap **Zoom in** or **Zoom out** in the bar's second row; on a phone, open its **Zoom** menu.
+1. On a wide window, tap **Zoom in** or **Zoom out** in the bar's second row; on a phone, open **Format** › **Zoom**.
 2. Or pinch, or Ctrl/Cmd-scroll, over the canvas; scroll or two-finger drag to pan.
 3. Tap the percentage chip (**Fit slide** in the phone menu).
 
@@ -345,4 +345,84 @@ same drive as the presentation (`photos/cover.jpg`).
 - The browser goes fullscreen, or the phone hides its status and navigation bars; the second press returns.
 - Ending the presentation leaves fullscreen.
 - The desktop apps have no fullscreen button.
+
+---
+
+### JN-SL-020: Draw with the toolbar
+
+**Preconditions:** A presentation is open (JN-SL-004).
+
+**Steps:**
+
+1. On a wide window, tap **Insert text box**, the **Insert shape** menu (rectangle, rounded rectangle, ellipse, triangle,
+   diamond, right arrow, star), **Insert line** or **Insert arrow** in the toolbar under the bar. On a phone, open
+   **Insert** in the bar's second row and choose the same.
+2. Tap or drag on the slide.
+
+**Expected result:**
+
+- The chosen tool is lit; a tap places the element at its default size, a drag draws it.
+- The new element is selected, the tool goes back to **Select**, and the insertion undoes as one step.
+
+---
+
+### JN-SL-021: Format the selection
+
+**Preconditions:** A presentation is open with a text box and a shape on the slide.
+
+**Steps:**
+
+1. Select the text box (or start typing in it), then use the formatting row: the font menu, the size stepper, **Bold**,
+   **Italic**, **Underline**, **Strikethrough**, **Text color**, the alignments and the list toggles.
+2. Select the shape, then use **Fill color**, **Outline color**, **Outline width**, **Outline style**, **Corner radius**
+   (a rounded rectangle) and **Opacity**.
+3. With anything selected, use **Arrange** (bring to front, forward, backward, to back), **Duplicate** and **Delete**.
+4. On a phone, open **Format** in the bar's second row and use the same controls from its submenus.
+
+**Expected result:**
+
+- With nothing selected the row reads "Select something on the slide to format it"; the groups that apply to the
+  selection appear, and the toggles show what the selection has.
+- A color palette offers the theme's colors, black and white, a none option, and a hex field for any other color
+  (`#RRGGBB`); anything else in the field says how to type it.
+- Each change is one undo step and marks the presentation unsaved until the autosave runs.
+
+---
+
+### JN-SL-022: Properties panel
+
+**Preconditions:** A presentation is open.
+
+**Steps:**
+
+1. On a wide window, look right of the canvas; tap **Hide properties** / **Show properties** at the end of the tool
+   row. On a phone, open **Format** › **Properties**.
+2. Select one element and type a new X, Y, Width, Height or Rotation, then press Enter or leave the field.
+3. Select a picture and type its **Alt text**.
+
+**Expected result:**
+
+- Without exactly one element selected the panel says to select one.
+- Each value is applied once editing ends, as one undo step; dragging on the canvas updates the fields.
+- The alt text is what a screen reader reads for the picture on the slide.
+
+---
+
+### JN-SL-023: Insert a picture
+
+**Preconditions:** A presentation is open.
+
+**Steps:**
+
+1. Open the **Insert image** menu in the tool row (**Insert** › **Image** on a phone).
+2. Choose **From this device** and pick a picture; or choose **From your Quark**, browse folders (starting in the
+   presentation's folder, **Up one folder** to climb) and tap a picture.
+
+**Expected result:**
+
+- A picture from this device uploads into the presentation's folder, under a new name if one is taken, with a progress
+  strip over the canvas; it is streamed, never held whole in memory.
+- The picture is placed centered at its own shape, scaled to fit within 60% of the slide, selected, as one undo step;
+  its size comes from the file's header.
+- A failed upload or listing reads "Couldn't add the picture." (or the Quark's reason) and leaves the slide unchanged.
 

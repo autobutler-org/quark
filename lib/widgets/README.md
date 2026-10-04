@@ -81,6 +81,15 @@ lib/widgets/
                                 channel's members; confirms owner changes
                                 and, for a channel, key-rotating ones
   slides/
+    insert/                     picking a picture for a slide: the Quark
+                                folder browser (lists through an injected
+                                function) and the upload progress strip
+    properties/                 the properties panel and its fields: reads
+                                SlideEditorController and calls its commands
+    toolbar/                    the slide toolbar: SlideToolbarActions maps
+                                the controller into choices, the rows and
+                                phone menus draw them; SlideToolbarGroup is
+                                the registry of formatting groups
     slide_editor_body.dart      the slide editor under its bar: reads
                                 SlideEditorController and calls its commands
     slide_editor_bar_bottom.dart
