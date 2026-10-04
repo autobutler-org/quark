@@ -4,15 +4,9 @@
 package healthutil
 
 import (
-	"log/slog"
+	"slices"
 	"sync"
 	"time"
-
-	"github.com/shirou/gopsutil/v4/cpu"
-	"github.com/shirou/gopsutil/v4/disk"
-	"github.com/shirou/gopsutil/v4/load"
-	"github.com/shirou/gopsutil/v4/mem"
-	"github.com/shirou/gopsutil/v4/sensors"
 )
 
 const (
@@ -44,7 +38,17 @@ type HealthStatus struct {
 type Collector struct {
 	mu           sync.Mutex
 	cpuHighSince *time.Time
+	sample       HealthStatus
+	sampledAt    time.Time
+	// now and read stand in for the clock and the host in tests; nil means
+	// time.Now and readHost.
+	now  func() time.Time
+	read func() HealthStatus
 }
+
+// sampleTTL is how long a read of the host is served. Clients poll every
+// 15 s, so a few seconds is never stale to them.
+const sampleTTL = 5 * time.Second
 
 // Register creates a new Collector. Call this once at startup.
 func Register() (*Collector, error) {
@@ -52,68 +56,32 @@ func Register() (*Collector, error) {
 }
 
 // The applyXThreshold helpers hold the alerting rules, split out from the
-// gopsutil sampling in CurrentHealth so they can be tested without a machine
+// gopsutil sampling in readHost so they can be tested without a machine
 // that is genuinely at 95% memory or 80°C. Each mutates status in place,
 // clearing Healthy and appending an alert when its limit is breached.
 
-// CurrentHealth samples system state directly via gopsutil for the health endpoint.
+// CurrentHealth returns the host's state, read at most once per sampleTTL.
+// Every open Files page asks on each refresh, and a read sleeps 100 ms and
+// walks sysfs, which the kernel serializes: read per call, a hundred clients
+// queued for seconds (#2750). Callers that arrive during a read wait for it
+// and share it.
 func (c *Collector) CurrentHealth() HealthStatus {
-	status := HealthStatus{Healthy: true}
-
-	// CPU
-	if cores, err := cpu.Percent(100*time.Millisecond, true); err == nil {
-		status.CPUCorePercents = cores
-	} else {
-		slog.Warn("system metrics: cpu.Percent (per-core) failed", "err", err)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now
+	if c.now != nil {
+		now = c.now
 	}
-	if agg, err := cpu.Percent(0, false); err == nil && len(agg) > 0 {
-		status.CPUPercent = agg[0]
-		c.mu.Lock()
-		c.cpuHighSince = applyCPUThreshold(&status, agg[0], c.cpuHighSince, time.Now())
-		c.mu.Unlock()
-	} else {
-		slog.Warn("system metrics: cpu.Percent (aggregate) failed", "err", err)
-	}
-
-	// Memory
-	if v, err := mem.VirtualMemory(); err == nil {
-		status.MemPercent = v.UsedPercent
-		status.MemUsedBytes = v.Used
-		status.MemTotalBytes = v.Total
-		applyMemThreshold(&status, v.UsedPercent)
-	} else {
-		slog.Warn("system metrics: mem.VirtualMemory failed", "err", err)
-	}
-
-	// Disk (root)
-	if usage, err := disk.Usage("/"); err == nil {
-		status.DiskPercent = usage.UsedPercent
-		status.DiskUsedBytes = usage.Used
-		status.DiskTotalBytes = usage.Total
-		applyDiskThreshold(&status, usage.UsedPercent)
-	} else {
-		slog.Warn("system metrics: disk.Usage failed", "err", err)
-	}
-
-	// Temperature (highest reading across all thermal zones)
-	if temps, err := sensors.SensorsTemperatures(); err == nil {
-		var maxTemp float64
-		for _, t := range temps {
-			if t.Temperature > maxTemp {
-				maxTemp = t.Temperature
-			}
+	if c.sampledAt.IsZero() || now().Sub(c.sampledAt) >= sampleTTL {
+		read := c.readHost
+		if c.read != nil {
+			read = c.read
 		}
-		status.TemperatureCelsius = maxTemp
-		applyTempThreshold(&status, maxTemp)
+		c.sample = read()
+		c.sampledAt = now()
 	}
-	// Temperature failure is non-fatal: not available in all environments.
-
-	// Load averages — informational only, no alert threshold
-	if avg, err := load.Avg(); err != nil {
-		slog.Warn("system metrics: load.Avg failed", "err", err)
-	} else {
-		_ = avg // available if callers want to extend HealthStatus later
-	}
-
+	status := c.sample
+	status.Alerts = slices.Clone(status.Alerts)
+	status.CPUCorePercents = slices.Clone(status.CPUCorePercents)
 	return status
 }

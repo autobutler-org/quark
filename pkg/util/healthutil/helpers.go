@@ -2,7 +2,14 @@ package healthutil
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
+
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/load"
+	"github.com/shirou/gopsutil/v4/mem"
+	"github.com/shirou/gopsutil/v4/sensors"
 )
 
 // applyCPUThreshold implements the sustained-load rule: CPU must stay at or
@@ -50,4 +57,65 @@ func applyTempThreshold(status *HealthStatus, tempCelsius float64) {
 		status.Alerts = append(status.Alerts,
 			fmt.Sprintf("Temperature critical: %.1f°C", tempCelsius))
 	}
+}
+
+// readHost samples the host through gopsutil. The caller holds c.mu, which
+// guards cpuHighSince.
+func (c *Collector) readHost() HealthStatus {
+	status := HealthStatus{Healthy: true}
+
+	// CPU
+	if cores, err := cpu.Percent(100*time.Millisecond, true); err == nil {
+		status.CPUCorePercents = cores
+	} else {
+		slog.Warn("system metrics: cpu.Percent (per-core) failed", "err", err)
+	}
+	if agg, err := cpu.Percent(0, false); err == nil && len(agg) > 0 {
+		status.CPUPercent = agg[0]
+		c.cpuHighSince = applyCPUThreshold(&status, agg[0], c.cpuHighSince, time.Now())
+	} else {
+		slog.Warn("system metrics: cpu.Percent (aggregate) failed", "err", err)
+	}
+
+	// Memory
+	if v, err := mem.VirtualMemory(); err == nil {
+		status.MemPercent = v.UsedPercent
+		status.MemUsedBytes = v.Used
+		status.MemTotalBytes = v.Total
+		applyMemThreshold(&status, v.UsedPercent)
+	} else {
+		slog.Warn("system metrics: mem.VirtualMemory failed", "err", err)
+	}
+
+	// Disk (root)
+	if usage, err := disk.Usage("/"); err == nil {
+		status.DiskPercent = usage.UsedPercent
+		status.DiskUsedBytes = usage.Used
+		status.DiskTotalBytes = usage.Total
+		applyDiskThreshold(&status, usage.UsedPercent)
+	} else {
+		slog.Warn("system metrics: disk.Usage failed", "err", err)
+	}
+
+	// Temperature (highest reading across all thermal zones)
+	if temps, err := sensors.SensorsTemperatures(); err == nil {
+		var maxTemp float64
+		for _, t := range temps {
+			if t.Temperature > maxTemp {
+				maxTemp = t.Temperature
+			}
+		}
+		status.TemperatureCelsius = maxTemp
+		applyTempThreshold(&status, maxTemp)
+	}
+	// Temperature failure is non-fatal: not available in all environments.
+
+	// Load averages — informational only, no alert threshold
+	if avg, err := load.Avg(); err != nil {
+		slog.Warn("system metrics: load.Avg failed", "err", err)
+	} else {
+		_ = avg // available if callers want to extend HealthStatus later
+	}
+
+	return status
 }
