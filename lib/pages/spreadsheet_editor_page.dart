@@ -15,6 +15,7 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
+import 'package:quark/utils/sheet_config.dart';
 import 'package:quark/utils/sheet_tab_names.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/spreadsheet_editor/sheet_tab_view.dart';
@@ -167,8 +168,16 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     final name = (tabMap['name'] as String?) ?? 'Sheet';
     final dataMap = tabMap['data'] as Map<String, dynamic>? ?? {};
     final table = DataTable.fromJson(dataMap);
+    // An empty sheet opens as a blank grid, not a single cell (#2779).
     if (table.rows.isEmpty) {
-      table.rows.add(DataRow([DataCell('')]));
+      table.rows.addAll(
+        List.generate(
+          SheetConfig.startingRows,
+          (_) => DataRow(
+            List.generate(SheetConfig.startingColumns, (_) => DataCell('')),
+          ),
+        ),
+      );
     }
     final columnWidths = (tabMap['columnWidths'] as List<dynamic>?)
         ?.map((v) => (v as num).toDouble())
@@ -184,13 +193,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     return _SheetTab(name: name, table: table, controller: controller);
   }
 
-  _SheetTab _makeEmptyTab(String name) {
-    final table = DataTable([
-      DataRow([DataCell('')]),
-    ]);
-    final controller = DataSheetController.fromTable(table);
-    return _SheetTab(name: name, table: table, controller: controller);
-  }
+  _SheetTab _makeEmptyTab(String name) => _tabFromJson({'name': name});
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
 
