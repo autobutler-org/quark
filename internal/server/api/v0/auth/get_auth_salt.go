@@ -12,7 +12,7 @@ import (
 
 // getAuthSalt godoc
 // @Summary Get the salt for an auth key
-// @Description Returns the salt a client derives the named account's auth key with, as the standard base64 of 16 bytes. Needs no session and is rate-limited per IP. A username with no account gets a salt too, the same one every time, so the answer does not say whether the account exists. legacy is true for an account that has no auth key yet: the client signs in with both password and authKey to give it one. legacyRecovery is true for an account that has no recovery key yet, which recovers with its raw phrase; an unknown username reads false for both, like an account that has moved to keys.
+// @Description Returns the salt a client derives the named account's auth key with, as the standard base64 of 16 bytes. Needs no session and is rate-limited per IP. A username with no account gets a salt too, the same one every time, so the answer does not say whether the account exists. legacy is true for an account that has no auth key yet: the client signs in once with the password beside the key, and the Quark moves the account to the key and forgets the password (#2430). legacyRecovery is true for an account that has no recovery key: the client gives it one at sign-in through PUT /auth/recovery-key, or recovers it once with the raw phrase and a new phrase's key. An unknown username reads false for both, like an account that has moved to keys.
 // @Tags auth
 // @Produce json
 // @Param username query string true "The account's username"

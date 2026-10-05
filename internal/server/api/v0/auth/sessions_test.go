@@ -39,7 +39,7 @@ func newSessionsTestEngine(t *testing.T) (*gin.Engine, *db.Queries, int64) {
 	ctx := context.Background()
 	setup, err := authutil.Setup(ctx, authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
 		Username: "testuser",
-		Password: "TestPassword123!",
+		AuthKey:  dbtest.AuthKey("TestPassword123!"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("authutil.Setup: %v", err)

@@ -31,11 +31,11 @@ func TestDisableUser_EndsSessionsAndKeepsOwnership(t *testing.T) {
 	mkStatusUser(t, q, "bob", authutil.StatusActive)
 	adminID, bobID := userID(t, q, "admin"), userID(t, q, "bob")
 
-	bobLogin, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", Password: "pw-for-status"})
+	bobLogin, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", AuthKey: statusKey})
 	if err != nil {
 		t.Fatal(err)
 	}
-	adminLogin, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "admin", Password: "admin-password"})
+	adminLogin, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "admin", AuthKey: dbtest.AuthKey("admin-password")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestDisableUser_EndsSessionsAndKeepsOwnership(t *testing.T) {
 	if _, _, err := authutil.ValidateSession(ctx, q, bobLogin.SessionToken); err == nil {
 		t.Error("disabled account's session still validates")
 	}
-	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", Password: "pw-for-status"}); !errors.Is(err, authutil.ErrAccountDisabled) {
+	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", AuthKey: statusKey}); !errors.Is(err, authutil.ErrAccountDisabled) {
 		t.Errorf("login after disable = %v, want ErrAccountDisabled", err)
 	}
 	if _, _, err := authutil.ValidateSession(ctx, q, adminLogin.SessionToken); err != nil {
@@ -72,7 +72,7 @@ func TestDisableUser_EndsSessionsAndKeepsOwnership(t *testing.T) {
 	if _, err := authutil.EnableUser(ctx, q, authutil.EnableUserParams{Username: "bob"}); err != nil {
 		t.Fatalf("EnableUser: %v", err)
 	}
-	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", Password: "pw-for-status"}); err != nil {
+	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", AuthKey: statusKey}); err != nil {
 		t.Errorf("login after enable: %v", err)
 	}
 	if _, err := authutil.EnableUser(ctx, q, authutil.EnableUserParams{Username: "bob"}); !errors.Is(err, authutil.ErrUserNotFound) {

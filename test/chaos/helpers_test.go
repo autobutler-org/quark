@@ -4,16 +4,22 @@ package chaos
 
 import (
 	"bytes"
+	"crypto/hkdf"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/argon2"
 )
 
 const (
@@ -246,9 +252,13 @@ func (c *client) loginWithRetry(maxAttempts int) (token, cookie string, err erro
 	if maxAttempts < 1 {
 		maxAttempts = 1
 	}
+	authKey, err := c.deriveAuthKey()
+	if err != nil {
+		return "", "", err
+	}
 	body, _ := json.Marshal(map[string]string{
 		"username": c.user,
-		"password": c.pass,
+		"authKey":  authKey,
 	})
 	var lastStatus int
 	var lastBody string
@@ -303,6 +313,38 @@ func (c *client) loginWithRetry(maxAttempts int) (token, cookie string, err erro
 		return token, cookie, nil
 	}
 	return "", "", fmt.Errorf("login still rate-limited after %d attempts (last %d: %s)", maxAttempts, lastStatus, lastBody)
+}
+
+// deriveAuthKey is what the app sends in the password's place (#2430): the
+// account's salt from GET /auth/salt, Argon2id13 over the password with it
+// (t=3, m=64 MiB, p=1, 32 bytes), then HKDF-SHA256 with an empty salt and info
+// "auth". It must match ChatCrypto.deriveAuthKeys in the app, or the shared
+// session login fails as a wrong password.
+func (c *client) deriveAuthKey() (string, error) {
+	resp, err := c.do(http.MethodGet, "/api/v0/auth/salt?username="+url.QueryEscape(c.user), nil, nil)
+	if err != nil {
+		return "", fmt.Errorf("salt request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("salt returned %d", resp.StatusCode)
+	}
+	var answer struct {
+		Salt string `json:"salt"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&answer); err != nil {
+		return "", fmt.Errorf("salt: decode: %w", err)
+	}
+	salt, err := base64.StdEncoding.DecodeString(answer.Salt)
+	if err != nil {
+		return "", fmt.Errorf("salt %q is not base64: %w", answer.Salt, err)
+	}
+	master := argon2.IDKey([]byte(c.pass), salt, 3, 64*1024, 1, 32)
+	key, err := hkdf.Key(sha256.New, master, nil, "auth", 32)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(key), nil
 }
 
 func (c *client) do(method, path string, body io.Reader, headers map[string]string) (*http.Response, error) {

@@ -16,7 +16,7 @@ exploit harness and does not include attack procedures.
 | --- | --- |
 | `QUARK_BASE_URL` | Base URL (default `http://127.0.0.1:8080`) |
 | `QUARK_USER` or `QUARK_USERNAME` | Optional username for authenticated cases |
-| `QUARK_PASSWORD` | Optional password |
+| `QUARK_PASSWORD` | Optional password; the suite derives the auth key the Quark takes from it, as the app does (#2430) |
 | `QUARK_ACCESS_TOKEN` / `QUARK_TOKEN` | Optional bearer/session token (skips login) |
 | `QUARK_STRESS_TIMEOUT` | Per-request timeout (default `30s`) |
 | `QUARK_STRESS_OVERSIZE_BYTES` | Oversized payload size (default `2097152` ≈ 2 MiB) |

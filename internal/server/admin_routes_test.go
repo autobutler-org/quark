@@ -26,18 +26,18 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
-	admin, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"})
+	admin, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret})
 	if err != nil {
 		t.Fatalf("authutil.Setup: %v", err)
 	}
-	hash, err := authutil.HashPassword("member-password")
+	hash, err := authutil.HashPassword(dbtest.AuthKey("member-password"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.Queries.CreateUser(ctx, db.CreateUserParams{Username: "member", PasswordHash: hash, RecoveryPhraseHash: hash}); err != nil {
+	if _, err := database.Queries.CreateUser(ctx, db.CreateUserParams{Username: "member", AuthKeyHash: hash}); err != nil {
 		t.Fatalf("create member: %v", err)
 	}
-	member, err := authutil.Login(ctx, database.Queries, authutil.LoginParams{Username: "member", Password: "member-password"})
+	member, err := authutil.Login(ctx, database.Queries, authutil.LoginParams{Username: "member", AuthKey: dbtest.AuthKey("member-password")})
 	if err != nil {
 		t.Fatalf("login member: %v", err)
 	}

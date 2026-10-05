@@ -22,6 +22,7 @@ import (
 // @Failure 400 {object} serverutil.Response
 // @Failure 401 {object} serverutil.Response
 // @Failure 423 {object} serverutil.Response
+// @Failure 426 {object} serverutil.Response "password is a raw password, not the auth key: the app is too old"
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /vault/storage-location [put]
@@ -42,6 +43,9 @@ func setVaultStorageLocation(c *gin.Context) *serverutil.Response {
 		return serverutil.Unauthorized(fmt.Errorf("username does not match session"))
 	}
 	if _, _, err := authutil.ValidateBasicAuth(ctx, deps.Database().Queries, req.Username, req.Password); err != nil {
+		if errors.Is(err, authutil.ErrAppTooOld) {
+			return serverutil.UpgradeRequired(err)
+		}
 		return serverutil.Unauthorized(fmt.Errorf("invalid credentials"))
 	}
 

@@ -58,7 +58,7 @@ func (f createUserFixture) create(username string) (authutil.CreateUserResult, e
 	return authutil.CreateUser(context.Background(), authutil.CreateUserParams{
 		Database: f.database,
 		Username: username,
-		Password: "initial-password",
+		AuthKey:  dbtest.AuthKey("initial-password"), SaltSecret: dbtest.SaltSecret,
 		FilesDir: f.filesDir,
 	})
 }
@@ -72,10 +72,11 @@ func (f createUserFixture) userCount(t *testing.T) int {
 	return count
 }
 
-// TestCreateUser_PhraseOnFirstLoginOnly checks an admin-created account is
-// active with no phrase, cannot recover until its first sign-in, gets its
-// phrase on that sign-in and never again, and recovers with it afterwards.
-func TestCreateUser_PhraseOnFirstLoginOnly(t *testing.T) {
+// TestCreateUser_RecoveryKeyFromFirstLogin checks an admin-created account is
+// active with no recovery credential, cannot recover until its client gives it
+// a recovery key, is told so at every sign-in until then, and is handed no
+// phrase by the Quark (#2430).
+func TestCreateUser_RecoveryKeyFromFirstLogin(t *testing.T) {
 	f := newCreateUserFixture(t)
 	ctx := context.Background()
 	q := f.database.Queries
@@ -88,39 +89,31 @@ func TestCreateUser_PhraseOnFirstLoginOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if user.Status != authutil.StatusActive || user.IsAdmin != 0 || user.RecoveryPhraseHash != "" {
-		t.Errorf("created account status=%q admin=%d hash=%q, want active, non-admin, no hash", user.Status, user.IsAdmin, user.RecoveryPhraseHash)
+	if user.Status != authutil.StatusActive || user.IsAdmin != 0 || user.RecoveryPhraseHash != "" || user.RecoveryKeyHash != "" {
+		t.Errorf("created account status=%q admin=%d, want active, non-admin, no recovery credential", user.Status, user.IsAdmin)
 	}
 	if result.FolderPath != "users/bob" {
 		t.Errorf("FolderPath = %q, want users/bob", result.FolderPath)
 	}
 
-	_, recoverErr := authutil.Recover(ctx, f.database, authutil.RecoverParams{Username: "bob", RecoveryPhrase: "apple-bread-cloud-delta-eagle-flame", NewPassword: "another-password"})
-	if recoverErr == nil || recoverErr.Error() != "invalid recovery phrase" {
-		t.Errorf("recover before first sign-in = %v, want invalid recovery phrase", recoverErr)
+	recoverBob := func() error {
+		_, err := authutil.Recover(ctx, f.database, authutil.RecoverParams{Username: "bob", RecoveryKey: dbtest.AuthKey("bob-phrase"), NewAuthKey: dbtest.AuthKey("another-password"), SaltSecret: dbtest.SaltSecret})
+		return err
 	}
-
-	first, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", Password: "initial-password"})
-	if err != nil {
-		t.Fatalf("first login: %v", err)
+	if err := recoverBob(); err == nil || err.Error() != "invalid recovery phrase" {
+		t.Errorf("recover before a recovery key = %v, want invalid recovery phrase", err)
 	}
-	if first.RecoveryPhrase == "" {
-		t.Fatal("first login returned no recovery phrase")
+	for range 2 {
+		login, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", AuthKey: dbtest.AuthKey("initial-password")})
+		if err != nil || !login.LegacyRecovery {
+			t.Fatalf("login before a recovery key = %+v, %v; want legacyRecovery", login, err)
+		}
 	}
-	second, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", Password: "initial-password"})
-	if err != nil {
-		t.Fatalf("second login: %v", err)
+	if _, err := authutil.SetRecoveryKey(ctx, f.database, authutil.SetRecoveryKeyParams{UserID: result.UserID, RecoveryKey: dbtest.AuthKey("bob-phrase")}); err != nil {
+		t.Fatal(err)
 	}
-	if second.RecoveryPhrase != "" {
-		t.Error("second login returned a recovery phrase again")
-	}
-	if _, err := authutil.Recover(ctx, f.database, authutil.RecoverParams{Username: "bob", RecoveryPhrase: first.RecoveryPhrase, NewPassword: "another-password"}); err != nil {
-		t.Errorf("recover with the first login's phrase: %v", err)
-	}
-
-	founder, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "admin", Password: "admin-password"})
-	if err != nil || founder.RecoveryPhrase != "" {
-		t.Errorf("founder login = %+v, %v; want no phrase", founder, err)
+	if err := recoverBob(); err != nil {
+		t.Errorf("recover with the key: %v", err)
 	}
 }
 

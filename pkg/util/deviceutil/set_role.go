@@ -56,6 +56,10 @@ func SetRole(params SetRoleParams) (SetRoleResult, error) {
 
 	// Re-validate master password.
 	if _, _, err := authutil.ValidateBasicAuth(ctx, params.Queries, params.Username, params.Password); err != nil {
+		// A raw password goes back as it is: it carries its own 426.
+		if errors.Is(err, authutil.ErrAppTooOld) {
+			return SetRoleResult{}, err
+		}
 		return SetRoleResult{}, unauthorized(errors.New("invalid credentials"))
 	}
 

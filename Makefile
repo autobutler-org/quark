@@ -1109,11 +1109,18 @@ test/chaos/local: build/backend ## Run the API stress suite against a temporary 
 		exit 1
 	fi
 	# Until setup completes the auth middleware lets every /api route through,
-	# so the suite's 401 checks need a real account first.
-	export QUARK_USER=stress QUARK_PASSWORD=stress-password
-	curl -sSf -o /dev/null -X POST -H 'Content-Type: application/json' \
-		-d "{\"username\":\"$$QUARK_USER\",\"password\":\"$$QUARK_PASSWORD\"}" \
-		$(PERF_BASE_URL)/api/v0/auth/setup
+	# so the suite's 401 checks need a real account first. The Quark takes an
+	# auth key, never the password (#2430), and a shell cannot derive one until
+	# `quark auth-key` exists (#2713), so the account gets a fixed key and the
+	# suite gets setup's session token in place of a password to sign in with.
+	export QUARK_ACCESS_TOKEN="$$(curl -sSf -X POST -H 'Content-Type: application/json' \
+		-d '{"username":"stress","authKey":"c3RyZXNzLWF1dGgta2V5LXN0cmVzcy1hdXRoLWtleS0="}' \
+		$(PERF_BASE_URL)/api/v0/auth/setup | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
+	if [ -z "$$QUARK_ACCESS_TOKEN" ]; then
+		echo "setup on $(PERF_BASE_URL) returned no session token; last lines of $$WORK_DIR/server.log:" >&2
+		tail -n 40 "$$WORK_DIR/server.log" >&2
+		exit 1
+	fi
 	QUARK_BASE_URL=$(PERF_BASE_URL) $(MAKE) test/chaos
 
 .PHONY: test/chaos/powercut

@@ -21,21 +21,33 @@ func authKeyOf(fill byte) string {
 }
 
 // newAuthKeyEngine is a Quark whose founding admin "admin" signs in with the
-// raw password "admin-password", and whose salt secret lives in a temporary
-// settings file.
+// auth key of "admin-password", beside "old", an account from before auth
+// keys with the hashes of the password "old-password" and the phrase
+// "old-phrase", and whose salt secret lives in a temporary settings file.
 func newAuthKeyEngine(t *testing.T) (*gin.Engine, *db.DatabaseSqlc) {
 	t.Helper()
 	settingsutil.ResetForTesting(filepath.Join(t.TempDir(), "settings.json"))
 	t.Cleanup(func() { settingsutil.ResetForTesting("") })
 	database := dbtest.NewDB(t)
-	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
+		t.Fatal(err)
+	}
+	passwordHash, err := authutil.HashPassword("old-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	phraseHash, err := authutil.HashPassword("old-phrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Queries.CreateUser(context.Background(), db.CreateUserParams{Username: "old", PasswordHash: passwordHash, RecoveryPhraseHash: phraseHash}); err != nil {
 		t.Fatal(err)
 	}
 	return newPublicAuthEngine(t, database), database
 }
 
 // saltFor reads GET /auth/salt for username, which must answer 200.
-func saltFor(t *testing.T, engine *gin.Engine, username string) (salt string, legacy bool) {
+func saltFor(t *testing.T, engine *gin.Engine, username string) (salt string, legacy, legacyRecovery bool) {
 	t.Helper()
 	w := getPath(engine, "/api/v0/auth/salt?username="+username)
 	if w.Code != http.StatusOK {
@@ -44,15 +56,17 @@ func saltFor(t *testing.T, engine *gin.Engine, username string) (salt string, le
 	body := decodeBody(t, w)
 	salt, _ = body["salt"].(string)
 	legacy, isBool := body["legacy"].(bool)
-	if raw, err := base64.StdEncoding.DecodeString(salt); err != nil || len(raw) != 16 || !isBool {
-		t.Fatalf("salt for %q = %s, want a base64 16-byte salt and a bool legacy", username, w.Body.String())
+	legacyRecovery, isBoolToo := body["legacyRecovery"].(bool)
+	if raw, err := base64.StdEncoding.DecodeString(salt); err != nil || len(raw) != 16 || !isBool || !isBoolToo {
+		t.Fatalf("salt for %q = %s, want a base64 16-byte salt and two bools", username, w.Body.String())
 	}
-	return salt, legacy
+	return salt, legacy, legacyRecovery
 }
 
-// TestGetAuthSalt drives GET /auth/salt for an unknown, a legacy and an
-// upgraded account. An unknown username is answered like a known one, the
-// salt is the same on every call, and only the legacy account is flagged.
+// TestGetAuthSalt drives GET /auth/salt for an unknown account, one from
+// before auth keys, and one that has moved to them. An unknown username is
+// answered like a moved one, the salt is the same on every call, and only the
+// old account reads as legacy (#2430).
 func TestGetAuthSalt(t *testing.T) {
 	engine, _ := newAuthKeyEngine(t)
 
@@ -62,129 +76,100 @@ func TestGetAuthSalt(t *testing.T) {
 		}
 	}
 
-	unknownSalt, unknownLegacy := saltFor(t, engine, "nobody")
-	legacySalt, legacyLegacy := saltFor(t, engine, "admin")
-	if unknownLegacy || !legacyLegacy {
-		t.Errorf("legacy flags: unknown %v, legacy account %v; want false, true", unknownLegacy, legacyLegacy)
-	}
-	if again, _ := saltFor(t, engine, "nobody"); again != unknownSalt {
-		t.Errorf("unknown salt changed between calls: %q then %q", unknownSalt, again)
-	}
-	if again, _ := saltFor(t, engine, "admin"); again != legacySalt {
-		t.Errorf("legacy salt changed between calls: %q then %q", legacySalt, again)
-	}
-
-	upgrade := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "admin", "password": "admin-password", "authKey": authKeyOf(1)})
-	if upgrade.Code != http.StatusOK {
-		t.Fatalf("upgrade = %d: %s", upgrade.Code, upgrade.Body.String())
-	}
-	if salt, legacy := saltFor(t, engine, "admin"); legacy || salt != legacySalt {
-		t.Errorf("upgraded salt = %q legacy %v, want %q and false", salt, legacy, legacySalt)
+	for _, tc := range []struct {
+		username               string
+		legacy, legacyRecovery bool
+	}{
+		{"nobody", false, false},
+		{"old", true, true},
+		{"admin", false, true},
+	} {
+		salt, legacy, legacyRecovery := saltFor(t, engine, tc.username)
+		if legacy != tc.legacy || legacyRecovery != tc.legacyRecovery {
+			t.Errorf("%s: legacy %v legacyRecovery %v, want %v %v", tc.username, legacy, legacyRecovery, tc.legacy, tc.legacyRecovery)
+		}
+		if again, _, _ := saltFor(t, engine, tc.username); again != salt {
+			t.Errorf("%s: salt changed between calls: %q then %q", tc.username, salt, again)
+		}
 	}
 }
 
-// TestLoginUser_Shapes drives POST /auth/login through its three bodies. A
-// key is a plain 401 before the upgrade, the upgrade keeps the legacy body
-// working, and a malformed key or a body with neither credential is a 400.
-func TestLoginUser_Shapes(t *testing.T) {
+// TestLoginUser_AuthKey drives POST /auth/login with {username, authKey}: the
+// right key signs in, a wrong one or an account with no key is a 401, and a
+// missing or malformed key is a 400.
+func TestLoginUser_AuthKey(t *testing.T) {
 	engine, _ := newAuthKeyEngine(t)
-	key := authKeyOf(1)
+	key := dbtest.AuthKey("admin-password")
 	post := func(body map[string]string) int {
 		return postJSON(engine, "/api/v0/auth/login", body).Code
 	}
 
-	early := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "admin", "authKey": key})
-	wrong := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "admin", "password": "not-it"})
-	if early.Code != http.StatusUnauthorized || early.Body.String() != wrong.Body.String() {
-		t.Errorf("auth key before upgrade = %d %s, want the wrong password's 401 %s", early.Code, early.Body.String(), wrong.Body.String())
+	withKey := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "admin", "authKey": key})
+	if token, _ := decodeBody(t, withKey)["token"].(string); withKey.Code != http.StatusOK || token == "" {
+		t.Errorf("auth key login = %d: %s", withKey.Code, withKey.Body.String())
 	}
 	for name, body := range map[string]map[string]string{
-		"malformed key":            {"username": "admin", "authKey": "not-base64"},
-		"short key":                {"username": "admin", "authKey": base64.StdEncoding.EncodeToString([]byte("short"))},
-		"malformed key in upgrade": {"username": "admin", "password": "admin-password", "authKey": "not-base64"},
-		"no credential":            {"username": "admin"},
-		"no username":              {"password": "admin-password"},
+		"malformed key": {"username": "admin", "authKey": "not-base64"},
+		"short key":     {"username": "admin", "authKey": base64.StdEncoding.EncodeToString([]byte("short"))},
+		"no credential": {"username": "admin"},
+		"no username":   {"authKey": key},
 	} {
 		if code := post(body); code != http.StatusBadRequest {
 			t.Errorf("%s = %d, want 400", name, code)
 		}
 	}
-	if code := post(map[string]string{"username": "admin", "password": "not-it", "authKey": key}); code != http.StatusUnauthorized {
-		t.Errorf("upgrade with a wrong password = %d, want 401", code)
-	}
-
-	upgrade := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "admin", "password": "admin-password", "authKey": key})
-	if upgrade.Code != http.StatusOK || decodeBody(t, upgrade)["token"] == "" {
-		t.Fatalf("upgrade = %d: %s", upgrade.Code, upgrade.Body.String())
-	}
-	withKey := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "admin", "authKey": key})
-	if token, _ := decodeBody(t, withKey)["token"].(string); withKey.Code != http.StatusOK || token == "" {
-		t.Errorf("auth key login = %d: %s", withKey.Code, withKey.Body.String())
-	}
-	if code := post(map[string]string{"username": "admin", "password": "admin-password"}); code != http.StatusOK {
-		t.Errorf("legacy login after upgrade = %d, want 200", code)
-	}
-	if code := post(map[string]string{"username": "admin", "authKey": authKeyOf(2)}); code != http.StatusUnauthorized {
-		t.Errorf("wrong auth key = %d, want 401", code)
+	wrong := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "admin", "authKey": authKeyOf(2)})
+	old := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "old", "authKey": key})
+	if wrong.Code != http.StatusUnauthorized || old.Code != http.StatusUnauthorized || old.Body.String() != wrong.Body.String() {
+		t.Errorf("wrong key = %d %s and an account with no key = %d %s, want the same 401", wrong.Code, wrong.Body.String(), old.Code, old.Body.String())
 	}
 }
 
 // TestRequestAndRecover_AuthKey checks the account-making and recovery bodies
-// take an auth key in place of the password, and refuse both or neither.
+// take keys and refuse malformed ones.
 func TestRequestAndRecover_AuthKey(t *testing.T) {
 	engine, database := newAuthKeyEngine(t)
-	key, newKey := authKeyOf(1), authKeyOf(2)
+	key, newKey, recoveryKey := authKeyOf(1), authKeyOf(2), authKeyOf(9)
 
 	for name, body := range map[string]map[string]string{
-		"both":      {"username": "asker", "password": "long-enough", "authKey": key},
-		"neither":   {"username": "asker"},
-		"malformed": {"username": "asker", "authKey": "not-base64"},
+		"neither":            {"username": "asker"},
+		"malformed":          {"username": "asker", "authKey": "not-base64"},
+		"malformed recovery": {"username": "asker", "authKey": key, "recoveryKey": "not-base64"},
 	} {
 		if w := postJSON(engine, "/api/v0/auth/request-account", body); w.Code != http.StatusBadRequest {
 			t.Errorf("request-account %s = %d, want 400: %s", name, w.Code, w.Body.String())
 		}
 	}
-	offered, _ := saltFor(t, engine, "asker")
-	requested := postJSON(engine, "/api/v0/auth/request-account", map[string]string{"username": "asker", "authKey": key})
-	if requested.Code != http.StatusCreated {
-		t.Fatalf("request-account = %d: %s", requested.Code, requested.Body.String())
+	offered, _, _ := saltFor(t, engine, "asker")
+	requested := postJSON(engine, "/api/v0/auth/request-account", map[string]string{"username": "asker", "authKey": key, "recoveryKey": recoveryKey})
+	if requested.Code != http.StatusCreated || requested.Body.String() != "{}" {
+		t.Fatalf("request-account = %d %s, want 201 and an empty object", requested.Code, requested.Body.String())
 	}
-	phrase, _ := decodeBody(t, requested)["recoveryPhrase"].(string)
 	setUserStatus(t, database.Queries, "asker", authutil.StatusPending, authutil.StatusActive)
-	if salt, legacy := saltFor(t, engine, "asker"); legacy || salt != offered {
-		t.Errorf("salt after request = %q legacy %v, want %q and false", salt, legacy, offered)
+	if salt, legacy, legacyRecovery := saltFor(t, engine, "asker"); legacy || legacyRecovery || salt != offered {
+		t.Errorf("salt after request = %q legacy %v legacyRecovery %v, want %q and false, false", salt, legacy, legacyRecovery, offered)
 	}
 	if w := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "asker", "authKey": key}); w.Code != http.StatusOK {
 		t.Fatalf("login with the requested key = %d: %s", w.Code, w.Body.String())
 	}
 
 	for name, body := range map[string]map[string]string{
-		"both":      {"username": "asker", "recoveryPhrase": phrase, "newPassword": "brand-new-password", "newAuthKey": newKey},
-		"neither":   {"username": "asker", "recoveryPhrase": phrase},
-		"malformed": {"username": "asker", "recoveryPhrase": phrase, "newAuthKey": "not-base64"},
+		"no new key":        {"username": "asker", "recoveryKey": recoveryKey},
+		"malformed new key": {"username": "asker", "recoveryKey": recoveryKey, "newAuthKey": "not-base64"},
+		"no recovery key":   {"username": "asker", "newAuthKey": newKey},
+		"wrong recovery":    {"username": "asker", "recoveryKey": authKeyOf(8), "newAuthKey": newKey},
 	} {
 		if w := postJSON(engine, "/api/v0/auth/recover", body); w.Code != http.StatusBadRequest {
 			t.Errorf("recover %s = %d, want 400: %s", name, w.Code, w.Body.String())
 		}
 	}
-	if w := postJSON(engine, "/api/v0/auth/recover", map[string]string{"username": "asker", "recoveryPhrase": phrase, "newAuthKey": newKey}); w.Code != http.StatusOK {
-		t.Fatalf("recover with an auth key = %d: %s", w.Code, w.Body.String())
+	if w := postJSON(engine, "/api/v0/auth/recover", map[string]string{"username": "asker", "recoveryKey": recoveryKey, "newAuthKey": newKey}); w.Code != http.StatusOK {
+		t.Fatalf("recover = %d: %s", w.Code, w.Body.String())
 	}
 	if w := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "asker", "authKey": key}); w.Code != http.StatusUnauthorized {
 		t.Errorf("old key after recovery = %d, want 401", w.Code)
 	}
 	if w := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "asker", "authKey": newKey}); w.Code != http.StatusOK {
 		t.Errorf("new key after recovery = %d, want 200", w.Code)
-	}
-
-	// A legacy recovery ends the key: it was derived from the old password.
-	if w := postJSON(engine, "/api/v0/auth/recover", map[string]string{"username": "asker", "recoveryPhrase": phrase, "newPassword": "brand-new-password"}); w.Code != http.StatusOK {
-		t.Fatalf("recover with a password = %d: %s", w.Code, w.Body.String())
-	}
-	if w := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "asker", "authKey": newKey}); w.Code != http.StatusUnauthorized {
-		t.Errorf("key after a password recovery = %d, want 401", w.Code)
-	}
-	if w := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "asker", "password": "brand-new-password"}); w.Code != http.StatusOK {
-		t.Errorf("new password after recovery = %d, want 200", w.Code)
 	}
 }

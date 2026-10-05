@@ -1,96 +1,74 @@
 package v0_auth_test
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
-	v0_auth "github.com/autobutler-org/quark/internal/server/api/v0/auth"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
-	"github.com/autobutler-org/quark/pkg/util/ctxutil"
-	"github.com/autobutler-org/quark/pkg/util/deputil"
-	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/gin-gonic/gin"
 )
 
 // TestRecoverAccount_NamedAccount drives POST /auth/recover against a Quark
-// with two accounts. The phrase is checked against the account the request
-// names, and an unknown username is indistinguishable from a wrong phrase.
+// with two accounts. The recovery key is checked against the account the
+// request names, and an unknown username is indistinguishable from a wrong
+// key.
 func TestRecoverAccount_NamedAccount(t *testing.T) {
-	database := dbtest.NewDB(t)
+	engine, database := newAuthKeyEngine(t)
 	ctx := context.Background()
-	founder, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"})
-	if err != nil {
-		t.Fatalf("authutil.Setup: %v", err)
-	}
-	const bobPhrase = "apple-bread-cloud-delta-eagle-flame"
-	createRecoverableUser(t, database.Queries, "bob", bobPhrase)
-
-	deps := deputil.NewDependencies().WithDatabase(database)
-	gin.SetMode(gin.TestMode)
-	engine := gin.New()
-	engine.Use(func(c *gin.Context) {
-		c = ctxutil.With(c, "deps", deps)
-		c.Next()
-	})
-	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_auth.NewRouter())
+	createRecoverableUser(t, database.Queries, "bob", "bob-phrase")
 
 	recoverAs := func(username, phrase string) *httptest.ResponseRecorder {
-		body, _ := json.Marshal(map[string]string{
-			"username":       username,
-			"recoveryPhrase": phrase,
-			"newPassword":    "brand-new-password",
+		return postJSON(engine, "/api/v0/auth/recover", map[string]string{
+			"username":    username,
+			"recoveryKey": dbtest.AuthKey(phrase),
+			"newAuthKey":  dbtest.AuthKey("brand-new-password"),
 		})
-		req := httptest.NewRequest(http.MethodPost, "/api/v0/auth/recover", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		engine.ServeHTTP(w, req)
-		return w
 	}
 
-	wrongUser := recoverAs("bob", founder.RecoveryPhrase)
+	wrongUser := recoverAs("admin", "bob-phrase")
 	if wrongUser.Code != http.StatusBadRequest {
-		t.Errorf("bob with admin's phrase = %d, want 400: %s", wrongUser.Code, wrongUser.Body.String())
+		t.Errorf("admin with bob's key = %d, want 400: %s", wrongUser.Code, wrongUser.Body.String())
 	}
-	unknownUser := recoverAs("nobody", founder.RecoveryPhrase)
+	unknownUser := recoverAs("nobody", "bob-phrase")
 	if unknownUser.Code != http.StatusBadRequest {
 		t.Errorf("unknown user = %d, want 400: %s", unknownUser.Code, unknownUser.Body.String())
 	}
 	if unknownUser.Body.String() != wrongUser.Body.String() {
-		t.Errorf("unknown user body %q differs from wrong phrase body %q", unknownUser.Body.String(), wrongUser.Body.String())
+		t.Errorf("unknown user body %q differs from wrong key body %q", unknownUser.Body.String(), wrongUser.Body.String())
 	}
 
-	rightUser := recoverAs("bob", bobPhrase)
+	rightUser := recoverAs("bob", "bob-phrase")
 	if rightUser.Code != http.StatusOK {
-		t.Fatalf("bob with bob's phrase = %d, want 200: %s", rightUser.Code, rightUser.Body.String())
+		t.Fatalf("bob with bob's key = %d, want 200: %s", rightUser.Code, rightUser.Body.String())
 	}
-	if _, err := authutil.Login(ctx, database.Queries, authutil.LoginParams{Username: "bob", Password: "brand-new-password"}); err != nil {
+	if _, err := authutil.Login(ctx, database.Queries, authutil.LoginParams{Username: "bob", AuthKey: dbtest.AuthKey("brand-new-password")}); err != nil {
 		t.Errorf("bob should log in with the new password: %v", err)
 	}
-	if _, err := authutil.Login(ctx, database.Queries, authutil.LoginParams{Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Login(ctx, database.Queries, authutil.LoginParams{Username: "admin", AuthKey: dbtest.AuthKey("admin-password")}); err != nil {
 		t.Errorf("admin's password must be untouched: %v", err)
 	}
 }
 
+// createRecoverableUser adds an active account that signs in with the auth key
+// of "original-password" and recovers with the recovery key of phrase.
 func createRecoverableUser(t *testing.T, queries *db.Queries, username, phrase string) {
 	t.Helper()
-	passwordHash, err := authutil.HashPassword("original-password")
+	keyHash, err := authutil.HashPassword(dbtest.AuthKey("original-password"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	phraseHash, err := authutil.HashPassword(authutil.NormalizeRecoveryPhrase(phrase))
+	recoveryHash, err := authutil.HashPassword(dbtest.AuthKey(phrase))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := queries.CreateUser(context.Background(), db.CreateUserParams{
-		Username:           username,
-		PasswordHash:       passwordHash,
-		RecoveryPhraseHash: phraseHash,
+		Username:        username,
+		AuthKeyHash:     keyHash,
+		AuthSalt:        "AAAAAAAAAAAAAAAAAAAAAA==",
+		RecoveryKeyHash: recoveryHash,
 	}); err != nil {
 		t.Fatal(err)
 	}

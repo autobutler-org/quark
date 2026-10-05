@@ -19,6 +19,7 @@ import (
 // @Success 200 {object} object
 // @Failure 400 {object} serverutil.Response
 // @Failure 401 {object} serverutil.Response
+// @Failure 426 {object} serverutil.Response "password is a raw password, not the auth key: the app is too old"
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /storage/devices/role [put]

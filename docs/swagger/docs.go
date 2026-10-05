@@ -1161,7 +1161,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates an active account with the given password, or with authKey in its place: the standard base64 of the 32-byte key the admin's client derived from the password and the salt GET /auth/salt returned for the new username. Exactly one of the two is sent. The admin never sees its recovery phrase: the account gets one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it. An existing folder of that name under users/ becomes the home, and a top-level folder of that name does not collide. Admin-only.",
+                "description": "Creates an active account with authKey: the standard base64 of the 32-byte key the admin's client derived from the password and the salt GET /auth/salt returned for the new username. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430). The admin never sees a recovery phrase: the account's client gives it one on its first sign-in. The account's home is made under users/ on the internal device, named after the account, and the account owns it. An existing folder of that name under users/ becomes the home, and a top-level folder of that name does not collide. Admin-only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1191,7 +1191,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "invalid username, password or authKey",
+                        "description": "invalid username or authKey",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1210,6 +1210,12 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "that username is taken",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "426": {
+                        "description": "the body carried a raw password: the app is too old",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1866,7 +1872,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Deletes the selected aspects and logs the caller out everywhere. Pass account=true to delete only the caller's own account, which is what App Store Guideline 5.1.1(v) requires; the other aspects are a factory reset of the appliance. All four are opt-in and a request selecting none is rejected, so a truncated call cannot destroy anything. The JSON body must carry the caller's own password, which is checked before anything is deleted; it travels in the body rather than the URL so it never reaches an access or proxy log. Attempts share the per-IP limit of the sign-in endpoints, so this endpoint cannot be used to guess the password. Databases are dropped and re-migrated in place, so no restart is required. Repeat calls are idempotent while the account exists. External device data is reached only when devices=true; a drive that is not attached at reset time keeps its data. Deleting the last account returns the appliance to first-boot setup by design. Aspects are independent: deleting the account or the database does NOT delete stored files, and files left behind are readable by whoever sets the appliance up next — the response reports filesRetained=true whenever that happens, so pass files=true as well to erase the data itself.",
+                "description": "Deletes the selected aspects and logs the caller out everywhere. Pass account=true to delete only the caller's own account, which is what App Store Guideline 5.1.1(v) requires; the other aspects are a factory reset of the appliance. All four are opt-in and a request selecting none is rejected, so a truncated call cannot destroy anything. The JSON body's password field must carry the caller's own auth key, which is checked before anything is deleted; a raw password, which only an app from before auth keys sends, is refused with 426 (#2430); it travels in the body rather than the URL so it never reaches an access or proxy log. Attempts share the per-IP limit of the sign-in endpoints, so this endpoint cannot be used to guess the password. Databases are dropped and re-migrated in place, so no restart is required. Repeat calls are idempotent while the account exists. External device data is reached only when devices=true; a drive that is not attached at reset time keeps its data. Deleting the last account returns the appliance to first-boot setup by design. Aspects are independent: deleting the account or the database does NOT delete stored files, and files left behind are readable by whoever sets the appliance up next — the response reports filesRetained=true whenever that happens, so pass files=true as well to erase the data itself.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1903,7 +1909,7 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "description": "The caller's own password",
+                        "description": "The caller's own auth key, in the password field",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -1954,13 +1960,19 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "the password is wrong, or database, files or devices were requested by a non-admin",
+                        "description": "the auth key is wrong, or database, files or devices were requested by a non-admin",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
                     "409": {
                         "description": "account=true from the only active admin while other active or disabled accounts exist; nothing is deleted",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "426": {
+                        "description": "password is a raw password: the app is too old",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -1982,7 +1994,7 @@ const docTemplate = `{
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticates and returns a session token. The body takes one of three shapes: {username, password} checks the password; {username, authKey} checks the key the client derived from the password and the salt GET /auth/salt returned, and is a 401 for an account that has no auth key yet; {username, password, authKey} checks the password and gives an account with no auth key that one, keeping its password. authKey is the standard base64 of 32 bytes. On the first sign-in of an account an admin created, the response also carries recoveryPhrase, which is never returned again. legacyRecovery is true for an account that has no recovery key yet: an updated client generates a phrase and sends its key to PUT /auth/recovery-key (#2430). A pending or disabled account with the right password gets 403 with its status, so the app can tell it from a wrong password.",
+                "description": "Authenticates with {username, authKey} and returns a session token. authKey is the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned. {username, password, authKey} is the one-time upgrade of an account GET /auth/salt calls legacy: the password is checked against the stored one, and the key, its salt and a cleared password hash are stored in one write, so the password never signs in again; a failed write refuses the sign-in with 500. An account that already has an auth key is checked by the key, and the password beside it is ignored. A body carrying password with no authKey, which only an app from before auth keys sends, is refused with 426 before anything is checked (#2430). legacyRecovery is true for an account that has no recovery key yet, such as one an admin created: the client generates a phrase and sends its key to PUT /auth/recovery-key. A pending or disabled account with the right key gets 403 with its status, so the app can tell it from a wrong password.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1995,7 +2007,7 @@ const docTemplate = `{
                 "summary": "Login",
                 "parameters": [
                     {
-                        "description": "The username with a password, an authKey, or both",
+                        "description": "The username, the authKey, and for the upgrade the password",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2012,7 +2024,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "no password or authKey, or a malformed authKey",
+                        "description": "a missing or malformed authKey",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2027,6 +2039,18 @@ const docTemplate = `{
                         "description": "status is pending or disabled",
                         "schema": {
                             "$ref": "#/definitions/v0_auth.accountRefusal"
+                        }
+                    },
+                    "426": {
+                        "description": "the body carried a password with no authKey: the app is too old",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "the upgrade's write failed",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
                         }
                     }
                 }
@@ -2059,7 +2083,7 @@ const docTemplate = `{
         },
         "/auth/recover": {
             "post": {
-                "description": "Resets the named account's password using its recovery secret: exactly one of recoveryPhrase, the raw phrase of an account that has no recovery key yet, and recoveryKey, the standard base64 of the 32-byte key the client derived from the phrase and the salt GET /auth/salt returned. A wrong key reads exactly like a wrong phrase, and an account with a recovery key refuses every raw phrase. newRecoveryKey, sent only with newAuthKey, gives the account the key of a phrase the client just generated in the same transaction and clears the old phrase, so a legacy recovery is also the account's move to a recovery key (#2430). The body carries exactly one of newPassword and newAuthKey, the standard base64 of the 32-byte key the client derived from the new password and the salt GET /auth/salt returned. Either one replaces both ways of signing in: a new password clears the account's auth key, and a new auth key clears its password. chatKeys, when sent, replaces the account's chat identity in the same transaction: the client fetched it from /auth/recover/keys, opened it with the phrase and re-wrapped it under the new password (#2416). The body is at most 8 KiB.",
+                "description": "Resets the named account's password using its recoveryKey, the standard base64 of the 32-byte key the client derived from the phrase and the salt GET /auth/salt returned. A wrong key, an unknown username and an account with no recovery key all read as a wrong phrase. newAuthKey, the standard base64 of the 32-byte key the client derived from the new password and the same salt, replaces the account's auth key and clears its password hash. An account GET /auth/salt calls legacyRecovery recovers once with its raw recoveryPhrase in place of recoveryKey, beside newAuthKey and newRecoveryKey, the key of a phrase the client just generated: the reset stores both keys and clears the phrase and password hashes. An account with a recovery key refuses every phrase as a wrong one. A recoveryPhrase without both new keys, or a newPassword, is what only an app from before auth keys sends, and is refused with 426 (#2430). chatKeys, when sent, replaces the account's chat identity in the same transaction: the client fetched it from /auth/recover/keys, opened it with the phrase and re-wrapped it under the new password (#2416). The body is at most 8 KiB.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2072,7 +2096,7 @@ const docTemplate = `{
                 "summary": "Recover account",
                 "parameters": [
                     {
-                        "description": "The account, its recovery phrase or key, the new password or auth key, and optionally a new recovery key and its re-wrapped chat keys",
+                        "description": "The account, its recovery key or legacy phrase, the new keys, and optionally its re-wrapped chat keys",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2099,13 +2123,19 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/v0_auth.accountRefusal"
                         }
+                    },
+                    "426": {
+                        "description": "the body carried newPassword, or a phrase without both new keys: the app is too old",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
                     }
                 }
             }
         },
         "/auth/recover/keys": {
             "post": {
-                "description": "The first step of recovering an account that has chat keys (#2416). Checks the recovery phrase or recovery key exactly as /auth/recover does, changes nothing, and returns the account's wrapped chat identity so the client can open it with the phrase wrap key and send it back re-wrapped under the new password in /auth/recover. Needs no session and shares the sign-in rate limit. The body carries exactly one of recoveryPhrase and recoveryKey (#2430). An unknown username or a wrong key reads as a wrong phrase.",
+                "description": "The first step of recovering an account that has chat keys (#2416). Checks the recovery key exactly as /auth/recover does, changes nothing, and returns the account's wrapped chat identity so the client can open it with the phrase wrap key and send it back re-wrapped under the new password in /auth/recover. Needs no session and shares the sign-in rate limit. An unknown username or a wrong key reads as a wrong phrase. An account GET /auth/salt calls legacyRecovery may send its raw recoveryPhrase in place of recoveryKey, checked against the stored phrase, to fetch the wraps before its one legacy recovery; an account with a recovery key refuses every phrase as a wrong one (#2430).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2118,7 +2148,7 @@ const docTemplate = `{
                 "summary": "Fetch chat keys for account recovery",
                 "parameters": [
                     {
-                        "description": "The account and its recovery phrase or recovery key",
+                        "description": "The account and its recovery key, or a legacy account's phrase",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2135,7 +2165,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "a wrong phrase or key, an unknown username, a malformed key, or neither or both secrets",
+                        "description": "a wrong key or phrase, an unknown username, or a missing or malformed key",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2174,7 +2204,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Re-confirms the caller with password, which carries the auth key for a client that signs in with one, exactly as DELETE /auth/account takes it; a wrong or missing password is a 403 and nothing is written. Then gives the signed-in account the recovery key its client derived from a recovery phrase the client generated, and clears the account's recovery phrase, so the old phrase stops recovering it (#2430). recoveryKey is the standard base64 of the 32-byte key derived from the phrase and the salt GET /auth/salt returned. chatKeys, when sent, replaces the account's chat identity in the same transaction, re-wrapped under the new phrase, exactly as /auth/recover stores it; nothing changes if any part fails. The client calls this after a sign-in whose response says legacyRecovery, after the first sign-in of an account an admin created, and after setup. Shares the sign-in rate limit, and the body is at most 8 KiB.",
+                "description": "Re-confirms the caller with password, which carries the auth key, exactly as DELETE /auth/account takes it; a wrong or missing key is a 403, a raw password is a 426, and nothing is written. Then gives the signed-in account the recovery key its client derived from a recovery phrase the client generated, (#2430). recoveryKey is the standard base64 of the 32-byte key derived from the phrase and the salt GET /auth/salt returned. chatKeys, when sent, replaces the account's chat identity in the same transaction, re-wrapped under the new phrase, exactly as /auth/recover stores it; nothing changes if any part fails. The client calls this after a sign-in whose response says legacyRecovery, such as the first sign-in of an account an admin created. Shares the sign-in rate limit, and the body is at most 8 KiB.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2187,7 +2217,7 @@ const docTemplate = `{
                 "summary": "Set the caller's recovery key",
                 "parameters": [
                     {
-                        "description": "The caller's password or auth key, the new recovery key and optionally the re-wrapped chat keys",
+                        "description": "The caller's auth key, the new recovery key and optionally the re-wrapped chat keys",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2213,13 +2243,19 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "the password or auth key is wrong or missing",
+                        "description": "the auth key is wrong or missing",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
                     "409": {
                         "description": "the account has no auth key yet, so no salt to derive the key with",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "426": {
+                        "description": "password is a raw password: the app is too old",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2241,7 +2277,7 @@ const docTemplate = `{
         },
         "/auth/request-account": {
             "post": {
-                "description": "Creates a pending account that can sign in once an admin approves it, and returns its recovery phrase this once, unless the body carried recoveryKey. Needs no session and is rate-limited per IP. A pending request keeps its username taken until it is denied. The body carries exactly one of password and authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned. recoveryKey, sent only with authKey, is the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt: the Quark then stores that key, makes no phrase, and the response has no recoveryPhrase (#2430).",
+                "description": "Creates a pending account that can sign in once an admin approves it. Needs no session and is rate-limited per IP. A pending request keeps its username taken until it is denied. The body carries authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned, and recoveryKey, the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt; the Quark makes no phrase, and the response is an empty object. Without recoveryKey the account cannot recover until a sign-in gives it one. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2254,7 +2290,7 @@ const docTemplate = `{
                 "summary": "Request an account",
                 "parameters": [
                     {
-                        "description": "The username with a password or an authKey, and optionally a recoveryKey",
+                        "description": "The username, the authKey and the recoveryKey",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2267,11 +2303,11 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/v0_auth.requestAccountResponse"
+                            "type": "object"
                         }
                     },
                     "400": {
-                        "description": "invalid username, password, authKey or recoveryKey, or a recoveryKey without an authKey",
+                        "description": "invalid username, authKey or recoveryKey",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2284,6 +2320,12 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "that username is taken",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "426": {
+                        "description": "the body carried a raw password or phrase: the app is too old",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -2305,7 +2347,7 @@ const docTemplate = `{
         },
         "/auth/salt": {
             "get": {
-                "description": "Returns the salt a client derives the named account's auth key with, as the standard base64 of 16 bytes. Needs no session and is rate-limited per IP. A username with no account gets a salt too, the same one every time, so the answer does not say whether the account exists. legacy is true for an account that has no auth key yet: the client signs in with both password and authKey to give it one. legacyRecovery is true for an account that has no recovery key yet, which recovers with its raw phrase; an unknown username reads false for both, like an account that has moved to keys.",
+                "description": "Returns the salt a client derives the named account's auth key with, as the standard base64 of 16 bytes. Needs no session and is rate-limited per IP. A username with no account gets a salt too, the same one every time, so the answer does not say whether the account exists. legacy is true for an account that has no auth key yet: the client signs in once with the password beside the key, and the Quark moves the account to the key and forgets the password (#2430). legacyRecovery is true for an account that has no recovery key: the client gives it one at sign-in through PUT /auth/recovery-key, or recovers it once with the raw phrase and a new phrase's key. An unknown username reads false for both, like an account that has moved to keys.",
                 "produces": [
                     "application/json"
                 ],
@@ -2494,7 +2536,7 @@ const docTemplate = `{
         },
         "/auth/setup": {
             "post": {
-                "description": "Creates the owner account, with a home under users/ on the internal device that it owns; an existing folder of that name under users/ becomes the home. Can only be called once. The body carries exactly one of password and authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned. The response carries token and, unless the body carried recoveryKey, recoveryPhrase, shown this once. recoveryKey, sent only with authKey, is the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt: the Quark stores that key and makes no phrase (#2430).",
+                "description": "Creates the owner account, with a home under users/ on the internal device that it owns; an existing folder of that name under users/ becomes the home. Can only be called once. The body carries authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned, and recoveryKey, the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt; the Quark makes no phrase. Without recoveryKey the account cannot recover until a sign-in gives it one. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430). The response carries token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2507,7 +2549,7 @@ const docTemplate = `{
                 "summary": "First-boot user setup",
                 "parameters": [
                     {
-                        "description": "The username with a password or an authKey, and optionally a recoveryKey",
+                        "description": "The username, the authKey and the recoveryKey",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2525,6 +2567,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "426": {
+                        "description": "the body carried a raw password or phrase: the app is too old",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -7490,6 +7538,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "426": {
+                        "description": "password is a raw password, not the auth key: the app is too old",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -7543,6 +7597,12 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "426": {
+                        "description": "password is a raw password, not the auth key: the app is too old",
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
@@ -9349,6 +9409,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/serverutil.Response"
                         }
                     },
+                    "426": {
+                        "description": "password is a raw password, not the auth key: the app is too old",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -10906,10 +10972,11 @@ const docTemplate = `{
             ],
             "properties": {
                 "authKey": {
+                    "description": "AuthKey is the standard base64 of the 32-byte key derived from the\npassword (#2430).",
                     "type": "string"
                 },
                 "password": {
-                    "description": "Exactly one of Password and AuthKey is sent. AuthKey is the standard\nbase64 of the 32-byte key derived from the password (#2430).",
+                    "description": "Password is the raw password an app from before auth keys sends. It is\nrefused with 426 (#2430).",
                     "type": "string"
                 },
                 "username": {
@@ -11089,6 +11156,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "password": {
+                    "description": "Password, beside AuthKey, upgrades an account that has no auth key yet,\nonce (#2430). Without AuthKey it is an old app's sign-in, refused with\n426.",
                     "type": "string"
                 },
                 "username": {
@@ -11111,12 +11179,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "legacyRecovery": {
-                    "description": "LegacyRecovery is true for an account that has no recovery key yet: the\nclient generates a phrase and sends its key to PUT /auth/recovery-key.",
+                    "description": "LegacyRecovery is true for an account that has no recovery key yet, such\nas one an admin created: the client generates a phrase and sends its key\nto PUT /auth/recovery-key.",
                     "type": "boolean"
-                },
-                "recoveryPhrase": {
-                    "description": "RecoveryPhrase is present only on the first sign-in of an account an\nadmin created.",
-                    "type": "string"
                 },
                 "token": {
                     "type": "string"
@@ -11134,10 +11198,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "password": {
+                    "description": "Password is the raw password an app from before auth keys sends. It is\nrefused with 426 (#2430).",
                     "type": "string"
                 },
                 "recoveryKey": {
-                    "description": "RecoveryKey is the standard base64 of the 32-byte key the client derived\nfrom its recovery phrase and the same salt. With it the Quark makes no\nphrase (#2430).",
+                    "description": "RecoveryKey is the standard base64 of the 32-byte key the client derived\nfrom its recovery phrase and the same salt (#2430). Without it the\naccount has no recovery credential until a sign-in gives it one.",
                     "type": "string"
                 },
                 "username": {
@@ -11152,7 +11217,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "chatKeys": {
-                    "description": "ChatKeys is the account's chat identity re-wrapped under NewPassword,\nstored in the same transaction as the reset (#2416). Absent leaves the\nstored keys as they are.",
+                    "description": "ChatKeys is the account's chat identity re-wrapped under the new\npassword, stored in the same transaction as the reset (#2416). Absent\nleaves the stored keys as they are.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/chatutil.Keys"
@@ -11160,21 +11225,23 @@ const docTemplate = `{
                     ]
                 },
                 "newAuthKey": {
+                    "description": "NewAuthKey is the standard base64 of the 32-byte key derived from the\nnew password and the salt GET /auth/salt returned (#2430).",
                     "type": "string"
                 },
                 "newPassword": {
-                    "description": "Exactly one of NewPassword and NewAuthKey is sent. NewAuthKey is the\nstandard base64 of the 32-byte key derived from the new password and the\nsalt GET /auth/salt returned (#2430).",
+                    "description": "NewPassword is the raw password an app from before auth keys sends. It\nis refused with 426.",
                     "type": "string"
                 },
                 "newRecoveryKey": {
-                    "description": "NewRecoveryKey, sent only with NewAuthKey, replaces the recovery\ncredential in the same transaction and clears the old phrase.",
+                    "description": "NewRecoveryKey is the standard base64 of the 32-byte key derived from a\nphrase the client just generated and the same salt. A legacy phrase\nrecovery must carry it, so the account leaves the phrase the Quark saw.",
                     "type": "string"
                 },
                 "recoveryKey": {
+                    "description": "RecoveryKey is the standard base64 of the 32-byte key derived from the\nphrase and the salt GET /auth/salt returned (#2430).",
                     "type": "string"
                 },
                 "recoveryPhrase": {
-                    "description": "Exactly one of RecoveryPhrase and RecoveryKey is sent. RecoveryKey is\nthe standard base64 of the 32-byte key derived from the phrase and the\nsalt GET /auth/salt returned (#2430).",
+                    "description": "RecoveryPhrase is a legacy account's raw phrase, taken once in place of\nRecoveryKey beside NewAuthKey and NewRecoveryKey (#2430). Without both it\nis an old app's recovery, refused with 426.",
                     "type": "string"
                 },
                 "username": {
@@ -11192,17 +11259,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "recoveryPhrase": {
+                    "description": "RecoveryPhrase is the raw phrase of an account that has no recovery key\nyet (#2430). An account with one refuses it as a wrong phrase.",
                     "type": "string"
                 },
                 "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "v0_auth.requestAccountResponse": {
-            "type": "object",
-            "properties": {
-                "recoveryPhrase": {
                     "type": "string"
                 }
             }
@@ -11211,11 +11271,11 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "legacy": {
-                    "description": "Legacy is true for an account that has no auth key yet: the client signs\nin with both password and authKey to give it one.",
+                    "description": "Legacy is true for an account that has no auth key yet: the client\nupgrades it by signing in once with the password beside the key (#2430).",
                     "type": "boolean"
                 },
                 "legacyRecovery": {
-                    "description": "LegacyRecovery is true for an account that has no recovery key yet: it\nrecovers with its raw phrase, and the client gives it a new phrase.",
+                    "description": "LegacyRecovery is true for an account that has no recovery key: the\nclient gives it one at sign-in, or recovers it once with the raw phrase\nand a new phrase's key.",
                     "type": "boolean"
                 },
                 "salt": {
@@ -11239,7 +11299,7 @@ const docTemplate = `{
                     ]
                 },
                 "password": {
-                    "description": "Password re-confirms the caller, so a session alone cannot replace the\nrecovery credential. A client that signs in with an auth key sends that\nkey here, as delete-account takes it.",
+                    "description": "Password re-confirms the caller with its auth key, so a session alone\ncannot replace the recovery credential, as delete-account takes it. A\nraw password is refused with 426 (#2430).",
                     "type": "string"
                 },
                 "recoveryKey": {
@@ -12799,7 +12859,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/api/v0",
 	Schemes:          []string{},
 	Title:            "Quark API",
-	Description:      "The REST API a Quark device serves to its Flutter clients. Every endpoint except\n/auth/setup, /auth/login, /auth/recover, /auth/request-account and /auth/status needs a\nsession token. Sign in with POST /auth/login, then click Authorize and enter the word\nBearer, a space, and the token.",
+	Description:      "The REST API a Quark device serves to its Flutter clients. Every endpoint except\n/auth/setup, /auth/login, /auth/salt, /auth/recover, /auth/recover/keys,\n/auth/request-account and /auth/status needs a session token. Sign in with POST /auth/login,\nthen click Authorize and enter the word Bearer, a space, and the token. Login takes the auth\nkey a client derives from the password and the salt GET /auth/salt returns; the password\nalone is refused with 426 (#2430). Deriving that key here by hand is not\npossible yet; sign in with the app, or wait for quark auth-key (#2713).",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
@@ -16,17 +17,21 @@ func setupFounder(t *testing.T, database *db.DatabaseSqlc, filesDir string) {
 	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{
 		Database: database,
 		Username: "admin",
-		Password: "admin-password",
+		AuthKey:  dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret,
 		FilesDir: filesDir,
 	}); err != nil {
 		t.Fatal(err)
 	}
 }
 
+// request asks for username with the auth key of password and the recovery
+// key of "<username>-phrase".
 func request(q *db.Queries, username, password string) (authutil.RequestAccountResult, error) {
 	return authutil.RequestAccount(context.Background(), q, authutil.RequestAccountParams{
 		Username:        username,
-		Password:        password,
+		AuthKey:         dbtest.AuthKey(password),
+		RecoveryKey:     dbtest.AuthKey(username + "-phrase"),
+		SaltSecret:      dbtest.SaltSecret,
 		RequestsEnabled: true,
 	})
 }
@@ -47,27 +52,23 @@ func TestRequestAccount_RefusedWhenOffOrBeforeSetup(t *testing.T) {
 	}
 
 	setupFounder(t, database, t.TempDir())
-	_, err := authutil.RequestAccount(ctx, q, authutil.RequestAccountParams{Username: "bob", Password: "bob-password"})
+	_, err := authutil.RequestAccount(ctx, q, authutil.RequestAccountParams{Username: "bob", AuthKey: dbtest.AuthKey("bob-password"), SaltSecret: dbtest.SaltSecret})
 	if !errors.Is(err, authutil.ErrAccessRequestsOff) {
 		t.Errorf("request with requests off = %v, want ErrAccessRequestsOff", err)
 	}
 }
 
 // TestRequestAccount_PendingUntilApproved walks a request from submission to
-// sign-in: pending and refused, approved, then signing in with the password
-// and recovering with the phrase the request returned.
+// sign-in: pending and refused, approved, then signing in with the auth key
+// and recovering with the recovery key the request carried.
 func TestRequestAccount_PendingUntilApproved(t *testing.T) {
 	database := newTestDB(t)
 	q := database.Queries
 	ctx := context.Background()
 	setupFounder(t, database, t.TempDir())
 
-	result, err := request(q, "bob", "bob-password")
-	if err != nil {
+	if _, err := request(q, "bob", "bob-password"); err != nil {
 		t.Fatalf("request: %v", err)
-	}
-	if result.RecoveryPhrase == "" {
-		t.Fatal("request returned no recovery phrase")
 	}
 	user, err := q.GetUserByUsername(ctx, "bob")
 	if err != nil {
@@ -76,7 +77,7 @@ func TestRequestAccount_PendingUntilApproved(t *testing.T) {
 	if user.Status != authutil.StatusPending || user.IsAdmin != 0 {
 		t.Errorf("requested account status=%q admin=%d, want pending non-admin", user.Status, user.IsAdmin)
 	}
-	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", Password: "bob-password"}); !errors.Is(err, authutil.ErrAccountPending) {
+	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", AuthKey: dbtest.AuthKey("bob-password")}); !errors.Is(err, authutil.ErrAccountPending) {
 		t.Errorf("login while pending = %v, want ErrAccountPending", err)
 	}
 
@@ -87,11 +88,11 @@ func TestRequestAccount_PendingUntilApproved(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
-	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", Password: "bob-password"}); err != nil {
+	if _, err := authutil.Login(ctx, q, authutil.LoginParams{Username: "bob", AuthKey: dbtest.AuthKey("bob-password")}); err != nil {
 		t.Errorf("login after approval: %v", err)
 	}
-	if _, err := authutil.Recover(ctx, database, authutil.RecoverParams{Username: "bob", RecoveryPhrase: result.RecoveryPhrase, NewPassword: "new-bob-password"}); err != nil {
-		t.Errorf("recover with the request's phrase: %v", err)
+	if _, err := authutil.Recover(ctx, database, authutil.RecoverParams{Username: "bob", RecoveryKey: dbtest.AuthKey("bob-phrase"), NewAuthKey: dbtest.AuthKey("new-bob-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
+		t.Errorf("recover with the request's recovery key: %v", err)
 	}
 	if _, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{
 		Database: database,
@@ -135,7 +136,7 @@ func TestRequestAccount_TakenAndDenied(t *testing.T) {
 	}
 }
 
-// TestRequestAccount_Validation checks the username rule and password length.
+// TestRequestAccount_Validation checks the username rule.
 func TestRequestAccount_Validation(t *testing.T) {
 	database := newTestDB(t)
 	q := database.Queries
@@ -145,8 +146,5 @@ func TestRequestAccount_Validation(t *testing.T) {
 		if _, err := request(q, name, "long-enough"); !errors.Is(err, authutil.ErrInvalidUsername) {
 			t.Errorf("request %q = %v, want ErrInvalidUsername", name, err)
 		}
-	}
-	if _, err := request(q, "bob", "short"); !errors.Is(err, authutil.ErrPasswordTooShort) {
-		t.Errorf("short password = %v, want ErrPasswordTooShort", err)
 	}
 }

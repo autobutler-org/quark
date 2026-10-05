@@ -54,7 +54,7 @@ func newFeaturesHarness(t *testing.T) featuresHarness {
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
 	if _, err := authutil.Setup(ctx, authutil.SetupParams{
-		Database: database, Username: "admin", Password: "admin-password", FilesDir: t.TempDir(),
+		Database: database, Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret, FilesDir: t.TempDir(),
 	}); err != nil {
 		t.Fatal(err)
 	}

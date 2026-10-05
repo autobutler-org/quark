@@ -11,13 +11,14 @@ import (
 
 // setupAuth godoc
 // @Summary First-boot user setup
-// @Description Creates the owner account, with a home under users/ on the internal device that it owns; an existing folder of that name under users/ becomes the home. Can only be called once. The body carries exactly one of password and authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned. The response carries token and, unless the body carried recoveryKey, recoveryPhrase, shown this once. recoveryKey, sent only with authKey, is the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt: the Quark stores that key and makes no phrase (#2430).
+// @Description Creates the owner account, with a home under users/ on the internal device that it owns; an existing folder of that name under users/ becomes the home. Can only be called once. The body carries authKey, the standard base64 of the 32-byte key the client derived from the password and the salt GET /auth/salt returned, and recoveryKey, the standard base64 of the 32-byte key the client derived from a recovery phrase it generated and the same salt; the Quark makes no phrase. Without recoveryKey the account cannot recover until a sign-in gives it one. A body carrying password, the raw password an app from before auth keys sends, is refused with 426 before anything is checked (#2430). The response carries token.
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param body body newAccountBody true "The username with a password or an authKey, and optionally a recoveryKey"
+// @Param body body newAccountBody true "The username, the authKey and the recoveryKey"
 // @Success 200 {object} object
 // @Failure 400 {object} serverutil.Response
+// @Failure 426 {object} serverutil.Response "the body carried a raw password or phrase: the app is too old"
 // @Router /auth/setup [post]
 func setupAuth(c *gin.Context) *serverutil.Response {
 	deps, ok := getQueries(c)
@@ -29,6 +30,9 @@ func setupAuth(c *gin.Context) *serverutil.Response {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		return serverutil.BadRequest(err)
 	}
+	if err := authutil.RefuseRawSecrets(req.Password); err != nil {
+		return serverutil.UpgradeRequired(err)
+	}
 
 	filesDir, err := storageutil.GetFilesDir()
 	if err != nil {
@@ -38,7 +42,6 @@ func setupAuth(c *gin.Context) *serverutil.Response {
 	result, err := authutil.Setup(c.Request.Context(), authutil.SetupParams{
 		Database:    (*deps).Database(),
 		Username:    req.Username,
-		Password:    req.Password,
 		AuthKey:     req.AuthKey,
 		RecoveryKey: req.RecoveryKey,
 		SaltSecret:  settingsutil.AuthSaltSecret,
@@ -49,12 +52,7 @@ func setupAuth(c *gin.Context) *serverutil.Response {
 	}
 
 	setSessionCookie(c, result.SessionToken)
-	response := gin.H{"token": result.SessionToken, "message": "Setup complete."}
-	if result.RecoveryPhrase != "" {
-		response["recoveryPhrase"] = result.RecoveryPhrase
-		response["message"] = "Setup complete. Store your recovery phrase somewhere safe — it will not be shown again."
-	}
-	return serverutil.Ok().WithData(response)
+	return serverutil.Ok().WithData(gin.H{"token": result.SessionToken, "message": "Setup complete."})
 }
 
 var setupAuthRoute = serverutil.ApiRoute("POST", "/auth/setup", setupAuth)

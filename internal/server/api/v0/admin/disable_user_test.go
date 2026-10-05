@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
@@ -19,7 +20,7 @@ func TestDisableAndEnableUser_Endpoints(t *testing.T) {
 	h := newAdminHarness(t)
 	ctx := context.Background()
 	h.addUser(t, "member", authutil.StatusActive, false)
-	session, err := authutil.Login(ctx, h.database.Queries, authutil.LoginParams{Username: "member", Password: "user-password"})
+	session, err := authutil.Login(ctx, h.database.Queries, authutil.LoginParams{Username: "member", AuthKey: dbtest.AuthKey("user-password")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +34,7 @@ func TestDisableAndEnableUser_Endpoints(t *testing.T) {
 	if _, _, err := authutil.ValidateSession(ctx, h.database.Queries, session.SessionToken); err == nil {
 		t.Error("disabled account's session still validates")
 	}
-	if _, err := authutil.Login(ctx, h.database.Queries, authutil.LoginParams{Username: "member", Password: "user-password"}); !errors.Is(err, authutil.ErrAccountDisabled) {
+	if _, err := authutil.Login(ctx, h.database.Queries, authutil.LoginParams{Username: "member", AuthKey: dbtest.AuthKey("user-password")}); !errors.Is(err, authutil.ErrAccountDisabled) {
 		t.Errorf("login after disable = %v, want ErrAccountDisabled", err)
 	}
 
@@ -56,7 +57,7 @@ func TestDisableAndEnableUser_Endpoints(t *testing.T) {
 	if n := h.drainEvents(); n != 1 {
 		t.Errorf("enable published %d account_changed events, want 1", n)
 	}
-	if _, err := authutil.Login(ctx, h.database.Queries, authutil.LoginParams{Username: "member", Password: "user-password"}); err != nil {
+	if _, err := authutil.Login(ctx, h.database.Queries, authutil.LoginParams{Username: "member", AuthKey: dbtest.AuthKey("user-password")}); err != nil {
 		t.Errorf("login after enable: %v", err)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
@@ -99,7 +100,7 @@ func TestApproveRequest_MakesTheHomeAndItsGrant(t *testing.T) {
 	if !ownsHome(t, f, bob.ID, "bob") {
 		t.Error("an approved account cannot write to its own home, so every upload it tries is refused")
 	}
-	if _, err := authutil.Login(ctx, f.database.Queries, authutil.LoginParams{Username: "bob", Password: "bob-password"}); err != nil {
+	if _, err := authutil.Login(ctx, f.database.Queries, authutil.LoginParams{Username: "bob", AuthKey: dbtest.AuthKey("bob-password")}); err != nil {
 		t.Errorf("login after approval: %v", err)
 	}
 }

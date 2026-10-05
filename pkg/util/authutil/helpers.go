@@ -8,12 +8,16 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/serverutil"
 )
 
 // inTx runs fn against queries bound to one transaction, committing only if fn
@@ -45,35 +49,6 @@ func ensureAnotherActiveAdmin(ctx context.Context, queries *db.Queries, target d
 		return ErrLastAdmin
 	}
 	return nil
-}
-
-// firstRecoveryPhrase gives an account with no recovery credential a phrase,
-// and returns it; an account that already has a phrase or a recovery key gets
-// "". Only the sign-in whose write lands returns the phrase, so two at once
-// cannot both show it.
-func firstRecoveryPhrase(ctx context.Context, queries *db.Queries, user db.User) (string, error) {
-	if user.RecoveryPhraseHash != "" || user.RecoveryKeyHash != "" {
-		return "", nil
-	}
-	phrase, err := GenerateRecoveryPhrase()
-	if err != nil {
-		return "", err
-	}
-	hash, err := HashPassword(phrase)
-	if err != nil {
-		return "", err
-	}
-	set, err := queries.SetRecoveryPhraseIfUnset(ctx, db.SetRecoveryPhraseIfUnsetParams{
-		RecoveryPhraseHash: hash,
-		ID:                 user.ID,
-	})
-	if err != nil {
-		return "", fmt.Errorf("store recovery phrase: %w", err)
-	}
-	if set == 0 {
-		return "", nil
-	}
-	return phrase, nil
 }
 
 // usernamePattern is what a new account's username must match. A username
@@ -249,15 +224,18 @@ func validateKey(key string, invalid error) error {
 	return nil
 }
 
-// recoveryKeyHashFor validates a new recovery key and returns its hash, or ""
-// when there is none. A recovery key is derived with the auth salt, so it is
-// refused beside anything but an auth key (#2430).
-func recoveryKeyHashFor(authKey, recoveryKey string) (string, error) {
+// isRawSecret reports whether secret, sent where an auth key goes, is a raw
+// password instead: set, but not shaped like a key (#2430). An empty secret is
+// not one, and fails as a wrong key does.
+func isRawSecret(secret string) bool {
+	return secret != "" && validateAuthKey(secret) != nil
+}
+
+// recoveryKeyHashFor validates a new account's recovery key and returns its
+// hash, or "" when there is none (#2430).
+func recoveryKeyHashFor(recoveryKey string) (string, error) {
 	if recoveryKey == "" {
 		return "", nil
-	}
-	if authKey == "" {
-		return "", ErrRecoveryKeyNeedsAuthKey
 	}
 	if err := validateKey(recoveryKey, ErrInvalidRecoveryKey); err != nil {
 		return "", err
@@ -265,68 +243,58 @@ func recoveryKeyHashFor(authKey, recoveryKey string) (string, error) {
 	return HashPassword(recoveryKey)
 }
 
-// newRecovery is the recovery credential a new account starts with: the hash
-// of the recovery key its client sent, or else a phrase the Quark generates,
-// returned to show once, and its hash.
-func newRecovery(authKey, recoveryKey string) (phrase, phraseHash, keyHash string, err error) {
-	if keyHash, err = recoveryKeyHashFor(authKey, recoveryKey); err != nil || keyHash != "" {
-		return "", "", keyHash, err
-	}
-	if phrase, err = GenerateRecoveryPhrase(); err != nil {
-		return "", "", "", err
-	}
-	phraseHash, err = HashPassword(phrase)
-	return phrase, phraseHash, "", err
-}
+// errUpgradeFailed refuses a sign-in whose password was right but whose move
+// to the auth key did not land (#2430). The password hash is cleared only by
+// that write, so signing in anyway would leave the account on its password.
+var errUpgradeFailed error = serverutil.NewHttpError(http.StatusInternalServerError,
+	"couldn't move the account to its auth key; try signing in again")
 
-// newCredentials validates the one credential a new account or a recovery
-// gives and returns what to store for it. A password yields its hash alone; an
-// auth key yields its hash and the deterministic salt for username, and leaves
-// the password hash empty, which no password matches.
-func newCredentials(username, password, authKey string, saltSecret func() ([]byte, error)) (passwordHash, authKeyHash, authSalt string, err error) {
-	switch {
-	case password == "" && authKey == "":
-		return "", "", "", ErrCredentialRequired
-	case password != "" && authKey != "":
-		return "", "", "", ErrCredentialConflict
-	case authKey == "":
-		if len(password) < 8 {
-			return "", "", "", ErrPasswordTooShort
-		}
-		passwordHash, err = HashPassword(password)
-		return passwordHash, "", "", err
-	}
-	if err := validateAuthKey(authKey); err != nil {
-		return "", "", "", err
-	}
-	if authSalt, err = deterministicSalt(saltSecret, username); err != nil {
-		return "", "", "", err
-	}
-	authKeyHash, err = HashPassword(authKey)
-	return "", authKeyHash, authSalt, err
-}
-
-// upgradeToAuthKey gives an account that signs in by password its auth key,
-// with the deterministic salt /auth/salt answered for it. The password hash
-// stays, so a client that still sends the password keeps signing in.
+// upgradeToAuthKey moves an account that signs in by password to authKey,
+// with the deterministic salt /auth/salt answered for it, and clears its
+// password hash in the same write. A write that matches no row is a second
+// sign-in having upgraded the account first. Every failure is logged and
+// returned as errUpgradeFailed, so the cause stays out of the response.
 func upgradeToAuthKey(ctx context.Context, queries *db.Queries, user db.User, authKey string, saltSecret func() ([]byte, error)) error {
-	salt, err := deterministicSalt(saltSecret, user.Username)
+	err := func() error {
+		salt, err := deterministicSalt(saltSecret, user.Username)
+		if err != nil {
+			return err
+		}
+		hash, err := HashPassword(authKey)
+		if err != nil {
+			return err
+		}
+		upgraded, err := queries.UpgradeToAuthKey(ctx, db.UpgradeToAuthKeyParams{AuthKeyHash: hash, AuthSalt: salt, ID: user.ID})
+		if err != nil {
+			return err
+		}
+		if upgraded == 0 {
+			return errors.New("the account already has an auth key")
+		}
+		return nil
+	}()
 	if err != nil {
-		return err
-	}
-	hash, err := HashPassword(authKey)
-	if err != nil {
-		return err
-	}
-	if err := queries.SetAuthKeyIfUnset(ctx, db.SetAuthKeyIfUnsetParams{AuthKeyHash: hash, AuthSalt: salt, ID: user.ID}); err != nil {
-		return fmt.Errorf("store the auth key: %w", err)
+		slog.Warn("auth key upgrade failed", "username", user.Username, "error", err)
+		return errUpgradeFailed
 	}
 	return nil
 }
 
-// matchesCredential reports whether secret is the account's password or its
-// auth key. Re-confirmation and HTTP Basic take either in the one password
-// field (#2430); an empty hash matches nothing.
-func matchesCredential(user db.User, secret string) bool {
-	return CheckPassword(secret, user.PasswordHash) || CheckPassword(secret, user.AuthKeyHash)
+// normalizeRecoveryPhrase lowercases and trims a recovery phrase for
+// comparison.
+func normalizeRecoveryPhrase(phrase string) string {
+	return strings.ToLower(strings.TrimSpace(phrase))
+}
+
+// newCredentials validates the auth key a new account or a recovery gives and
+// returns its hash and the deterministic salt for username.
+func newCredentials(username, authKey string, saltSecret func() ([]byte, error)) (authKeyHash, authSalt string, err error) {
+	if err := validateAuthKey(authKey); err != nil {
+		return "", "", err
+	}
+	if authSalt, err = deterministicSalt(saltSecret, username); err != nil {
+		return "", "", err
+	}
+	authKeyHash, err = HashPassword(authKey)
+	return authKeyHash, authSalt, err
 }

@@ -13,13 +13,13 @@ import (
 
 // recoverChatKeys godoc
 // @Summary Fetch chat keys for account recovery
-// @Description The first step of recovering an account that has chat keys (#2416). Checks the recovery phrase or recovery key exactly as /auth/recover does, changes nothing, and returns the account's wrapped chat identity so the client can open it with the phrase wrap key and send it back re-wrapped under the new password in /auth/recover. Needs no session and shares the sign-in rate limit. The body carries exactly one of recoveryPhrase and recoveryKey (#2430). An unknown username or a wrong key reads as a wrong phrase.
+// @Description The first step of recovering an account that has chat keys (#2416). Checks the recovery key exactly as /auth/recover does, changes nothing, and returns the account's wrapped chat identity so the client can open it with the phrase wrap key and send it back re-wrapped under the new password in /auth/recover. Needs no session and shares the sign-in rate limit. An unknown username or a wrong key reads as a wrong phrase. An account GET /auth/salt calls legacyRecovery may send its raw recoveryPhrase in place of recoveryKey, checked against the stored phrase, to fetch the wraps before its one legacy recovery; an account with a recovery key refuses every phrase as a wrong one (#2430).
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param body body recoverChatKeysBody true "The account and its recovery phrase or recovery key"
+// @Param body body recoverChatKeysBody true "The account and its recovery key, or a legacy account's phrase"
 // @Success 200 {object} chatutil.Keys
-// @Failure 400 {object} serverutil.Response "a wrong phrase or key, an unknown username, a malformed key, or neither or both secrets"
+// @Failure 400 {object} serverutil.Response "a wrong key or phrase, an unknown username, or a missing or malformed key"
 // @Failure 403 {object} accountRefusal "status is pending or disabled"
 // @Failure 404 {object} serverutil.Response "the account has no chat keys yet"
 // @Failure 429 {object} serverutil.Response

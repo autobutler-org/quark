@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	v0_auth "github.com/autobutler-org/quark/internal/server/api/v0/auth"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
@@ -61,111 +62,101 @@ func userByName(t *testing.T, queries *db.Queries, username string) db.User {
 	return user
 }
 
-// TestSetRecoveryKey_Rotation drives the rotation a sign-in from an updated
-// client makes: refused without a session or an auth salt, all-or-nothing with
-// chat keys, and afterwards the old phrase stops recovering the account.
+// TestSetRecoveryKey_Rotation drives what the app does at a sign-in that
+// reads legacyRecovery, such as an admin-created account's first: refused
+// without a session or the caller's auth key, all-or-nothing with chat keys,
+// and afterwards the key recovers the account (#2430).
 func TestSetRecoveryKey_Rotation(t *testing.T) {
 	engine, database := newAuthKeyEngine(t)
 	queries := database.Queries
-	const phrase = "apple-bread-cloud-delta-eagle-flame"
-	createRecoverableUser(t, queries, "bob", phrase)
+	key := dbtest.AuthKey("original-password")
+	if _, err := authutil.CreateUser(context.Background(), authutil.CreateUserParams{Database: database, Username: "bob", AuthKey: key, SaltSecret: dbtest.SaltSecret, FilesDir: t.TempDir()}); err != nil {
+		t.Fatal(err)
+	}
 	bob := userByName(t, queries, "bob")
 	recoveryKey := authKeyOf(9)
 
-	const password = "original-password"
-	if w := putRecoveryKey(t, database, db.User{}, map[string]string{"password": password, "recoveryKey": recoveryKey}); w.Code != http.StatusUnauthorized {
+	if w := putRecoveryKey(t, database, db.User{}, map[string]string{"password": key, "recoveryKey": recoveryKey}); w.Code != http.StatusUnauthorized {
 		t.Errorf("without a session = %d, want 401", w.Code)
 	}
-	if w := putRecoveryKey(t, database, bob, map[string]string{"password": password, "recoveryKey": recoveryKey}); w.Code != http.StatusConflict {
-		t.Errorf("without an auth salt = %d %s, want 409", w.Code, w.Body)
-	}
-
-	login := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "bob", "password": "original-password", "authKey": authKeyOf(1)})
+	login := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "bob", "authKey": key})
 	if login.Code != http.StatusOK || decodeBody(t, login)["legacyRecovery"] != true {
-		t.Fatalf("legacy login = %d %s, want 200 and legacyRecovery true", login.Code, login.Body)
+		t.Fatalf("first login = %d %s, want 200 and legacyRecovery true", login.Code, login.Body)
 	}
-	if _, legacy := saltFor(t, engine, "bob"); legacy {
-		t.Error("bob is upgraded, salt should say legacy false")
-	}
-	if w := getPath(engine, "/api/v0/auth/salt?username=bob"); decodeBody(t, w)["legacyRecovery"] != true {
-		t.Errorf("salt before rotation = %s, want legacyRecovery true", w.Body)
+	if _, legacy, legacyRecovery := saltFor(t, engine, "bob"); legacy || !legacyRecovery {
+		t.Errorf("salt before rotation: legacy %v legacyRecovery %v, want false, true", legacy, legacyRecovery)
 	}
 
 	// A session alone cannot replace the recovery credential: a wrong or
-	// missing re-confirmation gets delete-account's 403 and writes nothing.
-	wrong := putRecoveryKey(t, database, bob, map[string]any{"password": "not-it", "recoveryKey": recoveryKey, "chatKeys": chatKeysOf(3)})
+	// missing re-confirmation gets delete-account's 403, a raw password the
+	// update-the-app 426, and neither writes anything.
+	wrong := putRecoveryKey(t, database, bob, map[string]any{"password": authKeyOf(2), "recoveryKey": recoveryKey, "chatKeys": chatKeysOf(3)})
 	missing := putRecoveryKey(t, database, bob, map[string]any{"recoveryKey": recoveryKey, "chatKeys": chatKeysOf(3)})
-	for name, w := range map[string]*httptest.ResponseRecorder{"wrong password": wrong, "missing password": missing} {
+	for name, w := range map[string]*httptest.ResponseRecorder{"wrong key": wrong, "missing key": missing} {
 		if w.Code != http.StatusForbidden || decodeBody(t, w)["error"] != authutil.ErrIncorrectPassword.Error() {
 			t.Errorf("%s = %d %s, want 403 incorrect password", name, w.Code, w.Body)
 		}
 	}
-	if row := userByName(t, queries, "bob"); row.RecoveryKeyHash != "" || row.RecoveryPhraseHash != bob.RecoveryPhraseHash {
-		t.Error("a refused re-confirmation changed the recovery credentials")
+	raw := putRecoveryKey(t, database, bob, map[string]any{"password": "original-password", "recoveryKey": recoveryKey, "chatKeys": chatKeysOf(3)})
+	if raw.Code != http.StatusUpgradeRequired || decodeBody(t, raw)["error"] != authutil.ErrAppTooOld.Error() {
+		t.Errorf("raw password = %d %s, want 426 with the update-the-app copy", raw.Code, raw.Body)
+	}
+	if row := userByName(t, queries, "bob"); row.RecoveryKeyHash != "" {
+		t.Error("a refused re-confirmation stored a recovery key")
 	}
 	if _, err := chatutil.GetKeys(chatutil.GetKeysParams{Ctx: context.Background(), Queries: queries, UserID: bob.ID}); err == nil {
 		t.Error("a refused re-confirmation stored chat keys")
 	}
 
 	for name, body := range map[string]any{
-		"malformed key":       map[string]string{"password": password, "recoveryKey": "not-base64"},
-		"no key":              map[string]string{"password": password},
-		"malformed chat keys": map[string]any{"password": password, "recoveryKey": recoveryKey, "chatKeys": chatutil.Keys{}},
+		"malformed key":       map[string]string{"password": key, "recoveryKey": "not-base64"},
+		"no key":              map[string]string{"password": key},
+		"malformed chat keys": map[string]any{"password": key, "recoveryKey": recoveryKey, "chatKeys": chatutil.Keys{}},
 	} {
 		if w := putRecoveryKey(t, database, bob, body); w.Code != http.StatusBadRequest {
 			t.Errorf("%s = %d %s, want 400", name, w.Code, w.Body)
 		}
 	}
 
-	// A chat key write that fails inside the transaction leaves both recovery
-	// credentials as they were.
+	// A chat key write that fails inside the transaction leaves the recovery
+	// credential as it was.
 	if _, err := database.Db.Exec(`CREATE TRIGGER refuse_chat_keys BEFORE INSERT ON user_chat_keys BEGIN SELECT RAISE(ABORT, 'refused'); END`); err != nil {
 		t.Fatal(err)
 	}
-	if w := putRecoveryKey(t, database, bob, map[string]any{"password": password, "recoveryKey": recoveryKey, "chatKeys": chatKeysOf(3)}); w.Code != http.StatusInternalServerError {
+	if w := putRecoveryKey(t, database, bob, map[string]any{"password": key, "recoveryKey": recoveryKey, "chatKeys": chatKeysOf(3)}); w.Code != http.StatusInternalServerError {
 		t.Errorf("failing chat keys write = %d %s, want 500", w.Code, w.Body)
 	}
-	if row := userByName(t, queries, "bob"); row.RecoveryKeyHash != "" || row.RecoveryPhraseHash != bob.RecoveryPhraseHash {
-		t.Error("a failed chat keys write changed the recovery credentials")
+	if row := userByName(t, queries, "bob"); row.RecoveryKeyHash != "" {
+		t.Error("a failed chat keys write stored a recovery key")
 	}
 	if _, err := database.Db.Exec(`DROP TRIGGER refuse_chat_keys`); err != nil {
 		t.Fatal(err)
 	}
 
-	// The auth key re-confirms in the password slot too.
-	if w := putRecoveryKey(t, database, bob, map[string]any{"password": authKeyOf(1), "recoveryKey": recoveryKey, "chatKeys": chatKeysOf(3)}); w.Code != http.StatusNoContent {
+	if w := putRecoveryKey(t, database, bob, map[string]any{"password": key, "recoveryKey": recoveryKey, "chatKeys": chatKeysOf(3)}); w.Code != http.StatusNoContent {
 		t.Fatalf("rotation = %d %s, want 204", w.Code, w.Body)
 	}
-	if row := userByName(t, queries, "bob"); row.RecoveryPhraseHash != "" || row.RecoveryKeyHash == "" {
-		t.Error("rotation should store the key and clear the phrase hash")
+	if row := userByName(t, queries, "bob"); row.RecoveryKeyHash == "" {
+		t.Error("rotation should store the key")
 	}
 	got, err := chatutil.GetKeys(chatutil.GetKeysParams{Ctx: context.Background(), Queries: queries, UserID: bob.ID})
 	if err != nil || !bytes.Equal(got.Keys.WrappedByPhrase, bytes.Repeat([]byte{3}, 104)) {
 		t.Errorf("rotation didn't store the re-wrapped chat keys: %v", err)
 	}
-	if w := getPath(engine, "/api/v0/auth/salt?username=bob"); decodeBody(t, w)["legacyRecovery"] != false {
-		t.Errorf("salt after rotation = %s, want legacyRecovery false", w.Body)
+	if _, _, legacyRecovery := saltFor(t, engine, "bob"); legacyRecovery {
+		t.Error("salt after rotation should read legacyRecovery false")
 	}
-	if w := getPath(engine, "/api/v0/auth/salt?username=nobody"); decodeBody(t, w)["legacyRecovery"] != false {
-		t.Errorf("salt for an unknown username = %s, want legacyRecovery false", w.Body)
-	}
-	if w := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "bob", "authKey": authKeyOf(1)}); decodeBody(t, w)["legacyRecovery"] != false {
+	if w := postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "bob", "authKey": key}); decodeBody(t, w)["legacyRecovery"] != false {
 		t.Errorf("login after rotation = %s, want legacyRecovery false", w.Body)
 	}
 
-	wrongPhrase := postJSON(engine, "/api/v0/auth/recover/keys", map[string]string{"username": "bob", "recoveryPhrase": "wrong-phrase"})
-	oldPhrase := postJSON(engine, "/api/v0/auth/recover/keys", map[string]string{"username": "bob", "recoveryPhrase": phrase})
 	wrongKey := postJSON(engine, "/api/v0/auth/recover/keys", map[string]string{"username": "bob", "recoveryKey": authKeyOf(8)})
-	for name, w := range map[string]*httptest.ResponseRecorder{"old phrase": oldPhrase, "wrong key": wrongKey} {
-		if w.Code != http.StatusBadRequest || w.Body.String() != wrongPhrase.Body.String() {
-			t.Errorf("recover/keys with the %s = %d %s, want a wrong phrase's 400 %s", name, w.Code, w.Body, wrongPhrase.Body)
-		}
+	unknown := postJSON(engine, "/api/v0/auth/recover/keys", map[string]string{"username": "nobody", "recoveryKey": recoveryKey})
+	if wrongKey.Code != http.StatusBadRequest || unknown.Body.String() != wrongKey.Body.String() {
+		t.Errorf("recover/keys with a wrong key = %d %s and an unknown user %s, want the same 400", wrongKey.Code, wrongKey.Body, unknown.Body)
 	}
 	if w := postJSON(engine, "/api/v0/auth/recover/keys", map[string]string{"username": "bob", "recoveryKey": recoveryKey}); w.Code != http.StatusOK {
 		t.Errorf("recover/keys with the key = %d %s, want 200", w.Code, w.Body)
-	}
-	if w := postJSON(engine, "/api/v0/auth/recover", map[string]string{"username": "bob", "recoveryPhrase": phrase, "newAuthKey": authKeyOf(2)}); w.Code != http.StatusBadRequest {
-		t.Errorf("recover with the old phrase = %d, want 400", w.Code)
 	}
 	if w := postJSON(engine, "/api/v0/auth/recover", map[string]string{"username": "bob", "recoveryKey": recoveryKey, "newAuthKey": authKeyOf(2)}); w.Code != http.StatusOK {
 		t.Fatalf("recover with the key = %d %s, want 200", w.Code, w.Body)
@@ -175,50 +166,13 @@ func TestSetRecoveryKey_Rotation(t *testing.T) {
 	}
 }
 
-// TestRecover_LegacyPhraseGetsRecoveryKey recovers an account that never
-// rotated with its raw phrase and hands it a recovery key in the same request.
-func TestRecover_LegacyPhraseGetsRecoveryKey(t *testing.T) {
-	engine, database := newAuthKeyEngine(t)
-	const phrase = "apple-bread-cloud-delta-eagle-flame"
-	createRecoverableUser(t, database.Queries, "bob", phrase)
-	recoveryKey := authKeyOf(9)
-
-	for name, body := range map[string]map[string]string{
-		"both secrets":          {"username": "bob", "recoveryPhrase": phrase, "recoveryKey": recoveryKey, "newAuthKey": authKeyOf(2)},
-		"neither secret":        {"username": "bob", "newAuthKey": authKeyOf(2)},
-		"malformed key":         {"username": "bob", "recoveryKey": "not-base64", "newAuthKey": authKeyOf(2)},
-		"malformed new key":     {"username": "bob", "recoveryPhrase": phrase, "newAuthKey": authKeyOf(2), "newRecoveryKey": "not-base64"},
-		"new key with password": {"username": "bob", "recoveryPhrase": phrase, "newPassword": "brand-new-password", "newRecoveryKey": recoveryKey},
-	} {
-		if w := postJSON(engine, "/api/v0/auth/recover", body); w.Code != http.StatusBadRequest {
-			t.Errorf("recover %s = %d %s, want 400", name, w.Code, w.Body)
-		}
-	}
-	if row := userByName(t, database.Queries, "bob"); row.RecoveryKeyHash != "" {
-		t.Fatal("a refused recovery stored a recovery key")
-	}
-
-	if w := postJSON(engine, "/api/v0/auth/recover", map[string]string{"username": "bob", "recoveryPhrase": phrase, "newAuthKey": authKeyOf(2), "newRecoveryKey": recoveryKey}); w.Code != http.StatusOK {
-		t.Fatalf("legacy recover with a new recovery key = %d %s, want 200", w.Code, w.Body)
-	}
-	if w := postJSON(engine, "/api/v0/auth/recover/keys", map[string]string{"username": "bob", "recoveryPhrase": phrase}); w.Code != http.StatusBadRequest {
-		t.Errorf("old phrase after rotation = %d, want 400", w.Code)
-	}
-	if w := postJSON(engine, "/api/v0/auth/recover", map[string]string{"username": "bob", "recoveryKey": recoveryKey, "newAuthKey": authKeyOf(3)}); w.Code != http.StatusOK {
-		t.Errorf("recover with the new recovery key = %d %s, want 200", w.Code, w.Body)
-	}
-}
-
 // TestRequestAccount_RecoveryKey asks for an account with a recovery key: no
-// phrase comes back, a password beside the key is refused, and the key
-// recovers the account once it is approved.
+// phrase comes back, a malformed key is refused, and the key recovers the
+// account once it is approved.
 func TestRequestAccount_RecoveryKey(t *testing.T) {
 	engine, database := newAuthKeyEngine(t)
 	recoveryKey := authKeyOf(9)
 
-	if w := postJSON(engine, "/api/v0/auth/request-account", map[string]string{"username": "asker", "password": "long-enough", "recoveryKey": recoveryKey}); w.Code != http.StatusBadRequest {
-		t.Errorf("recovery key with a password = %d %s, want 400", w.Code, w.Body)
-	}
 	if w := postJSON(engine, "/api/v0/auth/request-account", map[string]string{"username": "asker", "authKey": authKeyOf(1), "recoveryKey": "not-base64"}); w.Code != http.StatusBadRequest {
 		t.Errorf("malformed recovery key = %d %s, want 400", w.Code, w.Body)
 	}

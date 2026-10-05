@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -35,14 +34,14 @@ func TestExtensionContract(t *testing.T) {
 	ctx := context.Background()
 
 	database := dbtest.NewDB(t)
-	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", Password: "admin-password"}); err != nil {
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatalf("authutil.Setup: %v", err)
 	}
-	hash, err := authutil.HashPassword("pending-password")
+	hash, err := authutil.HashPassword(dbtest.AuthKey("pending-password"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.Queries.CreateUser(ctx, db.CreateUserParams{Username: "pending", PasswordHash: hash, RecoveryPhraseHash: hash}); err != nil {
+	if _, err := database.Queries.CreateUser(ctx, db.CreateUserParams{Username: "pending", AuthKeyHash: hash}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := database.Queries.SetUserStatus(ctx, db.SetUserStatusParams{ToStatus: authutil.StatusPending, Username: "pending", FromStatus: authutil.StatusActive}); err != nil {
@@ -100,34 +99,39 @@ func TestExtensionContract(t *testing.T) {
 		return w.Code, decoded
 	}
 
-	code, body := do(http.MethodPost, "/api/v0/auth/login", "", map[string]string{"username": "admin", "password": "admin-password"})
-	expectStatus(t, "login", code, http.StatusOK)
-	token := expectString(t, "login token", body, "token")
-
-	code, _ = do(http.MethodPost, "/api/v0/auth/login", "", map[string]string{"username": "admin", "password": "wrong"})
-	expectStatus(t, "login with a wrong password", code, http.StatusUnauthorized)
-
-	code, body = do(http.MethodPost, "/api/v0/auth/login", "", map[string]string{"username": "pending", "password": "pending-password"})
-	expectStatus(t, "login to a pending account", code, http.StatusForbidden)
-	if status := expectString(t, "refusal status", body, "status"); status != authutil.StatusPending {
-		t.Errorf("refusal status = %q, want %q", status, authutil.StatusPending)
-	}
-	expectString(t, "refusal error", body, "error")
-
-	// The auth key sign-in the extension moves to (#2430): the salt, an
-	// upgrade carrying both credentials, then the key alone.
-	code, body = do(http.MethodGet, "/api/v0/auth/salt?username=admin", "", nil)
+	// The extension signs in with an auth key (#2430): the salt, then the key
+	// the client derived with it. It must ship that before this Quark does,
+	// because the raw password alone, which it used to send, is now a 426
+	// whose error is a sentence to show the user. The password beside the key
+	// is the one-time upgrade of a legacy account, and an account that has a
+	// key is checked by it.
+	code, body := do(http.MethodGet, "/api/v0/auth/salt?username=admin", "", nil)
 	expectStatus(t, "salt", code, http.StatusOK)
 	expectString(t, "salt", body, "salt")
 	expectBool(t, "salt legacy", body, "legacy")
 	expectBool(t, "salt legacyRecovery", body, "legacyRecovery")
 
-	authKey := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
-	code, _ = do(http.MethodPost, "/api/v0/auth/login", "", map[string]string{"username": "admin", "password": "admin-password", "authKey": authKey})
-	expectStatus(t, "login upgrade", code, http.StatusOK)
+	authKey := dbtest.AuthKey("admin-password")
 	code, body = do(http.MethodPost, "/api/v0/auth/login", "", map[string]string{"username": "admin", "authKey": authKey})
 	expectStatus(t, "login with an auth key", code, http.StatusOK)
-	expectString(t, "auth key login token", body, "token")
+	token := expectString(t, "auth key login token", body, "token")
+
+	code, body = do(http.MethodPost, "/api/v0/auth/login", "", map[string]string{"username": "admin", "password": "admin-password"})
+	expectStatus(t, "login with the raw password", code, http.StatusUpgradeRequired)
+	expectString(t, "raw password error", body, "error")
+
+	code, _ = do(http.MethodPost, "/api/v0/auth/login", "", map[string]string{"username": "admin", "password": "admin-password", "authKey": authKey})
+	expectStatus(t, "login with the password beside the auth key", code, http.StatusOK)
+
+	code, _ = do(http.MethodPost, "/api/v0/auth/login", "", map[string]string{"username": "admin", "authKey": dbtest.AuthKey("wrong")})
+	expectStatus(t, "login with a wrong auth key", code, http.StatusUnauthorized)
+
+	code, body = do(http.MethodPost, "/api/v0/auth/login", "", map[string]string{"username": "pending", "authKey": dbtest.AuthKey("pending-password")})
+	expectStatus(t, "login to a pending account", code, http.StatusForbidden)
+	if status := expectString(t, "refusal status", body, "status"); status != authutil.StatusPending {
+		t.Errorf("refusal status = %q, want %q", status, authutil.StatusPending)
+	}
+	expectString(t, "refusal error", body, "error")
 
 	code, body = do(http.MethodGet, "/api/v0/vault/status", "", nil)
 	expectStatus(t, "vault status without a token", code, http.StatusUnauthorized)

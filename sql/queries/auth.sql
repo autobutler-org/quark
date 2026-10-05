@@ -31,15 +31,6 @@ UPDATE users
 SET status = sqlc.arg(to_status)
 WHERE username = sqlc.arg(username) AND status = sqlc.arg(from_status);
 
--- SetRecoveryPhraseIfUnset gives an admin-created account its recovery phrase
--- on its first sign-in (#1873). Only an account with neither a phrase nor a
--- recovery key matches, so two sign-ins at once cannot both hand out a phrase,
--- and one racing a recovery-key rotation cannot undo it (#2430).
--- name: SetRecoveryPhraseIfUnset :execrows
-UPDATE users
-SET recovery_phrase_hash = ?
-WHERE id = ? AND recovery_phrase_hash = '' AND recovery_key_hash = '';
-
 -- SetRecoveryKey gives an account the recovery key its client derived from a
 -- phrase it generated (#2430), and clears the phrase hash so the old phrase,
 -- which the Quark saw, stops recovering the account.
@@ -48,20 +39,21 @@ UPDATE users
 SET recovery_key_hash = ?, recovery_phrase_hash = ''
 WHERE id = ?;
 
--- SetUserCredentials replaces everything an account signs in with (#2430). A
--- recovery writes all three so that whichever of the password and the auth
--- key it did not set is cleared, and the old one stops signing in.
+-- SetUserCredentials replaces what an account signs in with: the auth key a
+-- recovery sets, and the salt it was derived with (#2430). It clears the
+-- password hash, so a password the Quark once saw stops signing in.
 -- name: SetUserCredentials :exec
 UPDATE users
-SET password_hash = ?, auth_key_hash = ?, auth_salt = ?
+SET auth_key_hash = ?, auth_salt = ?, password_hash = ''
 WHERE id = ?;
 
--- SetAuthKeyIfUnset upgrades an account to an auth key on a sign-in that
--- carried both the password and the key (#2430). Only an empty hash matches,
--- so an upgraded account's key is never overwritten.
--- name: SetAuthKeyIfUnset :exec
+-- UpgradeToAuthKey moves an account from its password to the auth key a
+-- sign-in carried beside it (#2430), and clears the password hash in the same
+-- write, so the password crosses the wire at most once. Only an account with
+-- no auth key matches, so an upgraded account's key is never overwritten.
+-- name: UpgradeToAuthKey :execrows
 UPDATE users
-SET auth_key_hash = ?, auth_salt = ?
+SET auth_key_hash = ?, auth_salt = ?, password_hash = ''
 WHERE id = ? AND auth_key_hash = '';
 
 -- name: CreateSession :one

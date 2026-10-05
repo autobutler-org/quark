@@ -54,7 +54,7 @@ func newDeleteAccountFixture(t *testing.T) deleteAccountFixture {
 
 	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
 		Username: "testuser",
-		Password: "TestPassword123!",
+		AuthKey:  dbtest.AuthKey("TestPassword123!"), SaltSecret: dbtest.SaltSecret,
 	}); err != nil {
 		t.Fatalf("Setup: %v", err)
 	}

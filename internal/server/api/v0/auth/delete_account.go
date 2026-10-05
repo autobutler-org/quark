@@ -19,7 +19,7 @@ import (
 
 // deleteAccount godoc
 // @Summary Delete account data (factory reset)
-// @Description Deletes the selected aspects and logs the caller out everywhere. Pass account=true to delete only the caller's own account, which is what App Store Guideline 5.1.1(v) requires; the other aspects are a factory reset of the appliance. All four are opt-in and a request selecting none is rejected, so a truncated call cannot destroy anything. The JSON body must carry the caller's own password, which is checked before anything is deleted; it travels in the body rather than the URL so it never reaches an access or proxy log. Attempts share the per-IP limit of the sign-in endpoints, so this endpoint cannot be used to guess the password. Databases are dropped and re-migrated in place, so no restart is required. Repeat calls are idempotent while the account exists. External device data is reached only when devices=true; a drive that is not attached at reset time keeps its data. Deleting the last account returns the appliance to first-boot setup by design. Aspects are independent: deleting the account or the database does NOT delete stored files, and files left behind are readable by whoever sets the appliance up next — the response reports filesRetained=true whenever that happens, so pass files=true as well to erase the data itself.
+// @Description Deletes the selected aspects and logs the caller out everywhere. Pass account=true to delete only the caller's own account, which is what App Store Guideline 5.1.1(v) requires; the other aspects are a factory reset of the appliance. All four are opt-in and a request selecting none is rejected, so a truncated call cannot destroy anything. The JSON body's password field must carry the caller's own auth key, which is checked before anything is deleted; a raw password, which only an app from before auth keys sends, is refused with 426 (#2430); it travels in the body rather than the URL so it never reaches an access or proxy log. Attempts share the per-IP limit of the sign-in endpoints, so this endpoint cannot be used to guess the password. Databases are dropped and re-migrated in place, so no restart is required. Repeat calls are idempotent while the account exists. External device data is reached only when devices=true; a drive that is not attached at reset time keeps its data. Deleting the last account returns the appliance to first-boot setup by design. Aspects are independent: deleting the account or the database does NOT delete stored files, and files left behind are readable by whoever sets the appliance up next — the response reports filesRetained=true whenever that happens, so pass files=true as well to erase the data itself.
 // @Tags auth
 // @Accept json
 // @Produce json
@@ -27,12 +27,13 @@ import (
 // @Param database query bool false "Delete the appliance databases (quark.db, quark.health.db). Does NOT delete stored files unless files=true is also passed; files left behind stay readable by whoever sets the appliance up next."
 // @Param files query bool false "Delete stored files under the data directory"
 // @Param devices query bool false "Delete the Quark data directory on attached external devices"
-// @Param body body deleteAccountBody true "The caller's own password"
+// @Param body body deleteAccountBody true "The caller's own auth key, in the password field"
 // @Success 200 {object} object{deleted=object{account=bool,database=bool,files=bool,devices=bool},filesRetained=bool}
 // @Failure 400 {object} serverutil.Response
 // @Failure 401 {object} serverutil.Response "no session, or the session's account no longer exists"
-// @Failure 403 {object} serverutil.Response "the password is wrong, or database, files or devices were requested by a non-admin"
+// @Failure 403 {object} serverutil.Response "the auth key is wrong, or database, files or devices were requested by a non-admin"
 // @Failure 409 {object} serverutil.Response "account=true from the only active admin while other active or disabled accounts exist; nothing is deleted"
+// @Failure 426 {object} serverutil.Response "password is a raw password: the app is too old"
 // @Failure 429 {object} serverutil.Response "too many attempts from this address; nothing is deleted"
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth

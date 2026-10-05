@@ -42,7 +42,7 @@ func newSignedInUser(t *testing.T, sqlDB *sql.DB, queries *db.Queries) string {
 		Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries},
 		FilesDir: t.TempDir(),
 		Username: "testuser",
-		Password: "testpassword",
+		AuthKey:  dbtest.AuthKey("testpassword"), SaltSecret: dbtest.SaltSecret,
 	})
 	if err != nil {
 		t.Fatalf("setup: %v", err)
