@@ -239,12 +239,8 @@ void main() {
         // A near-neutral preset has no hue to confuse with anything, and
         // classic is not derived.
         final hues = {
-          for (final preset in _derived)
-            if (!preset.isCustom &&
-                HSLColor.fromColor(
-                      preset.tokensFor(brightness).primary,
-                    ).saturation >
-                    0.5)
+          for (final preset in _chromatic)
+            if (!preset.isCustom)
               preset.name!: _hue(preset.tokensFor(brightness).primary),
         };
         expect(hues.keys, isNot(contains('graphite')));
@@ -498,9 +494,10 @@ void main() {
 }
 
 /// The least colorful the chrome of a hue may be: the spread of its channels,
-/// out of 1. Light chrome is a vivid mid tone. Dark chrome is deep, and a
-/// deep color has less room between its channels, so its floor is lower.
+/// out of 1. The chrome is calm on purpose (#2777), so the floor only keeps
+/// it from going gray. Dark chrome is deep, and a deep color has less room
+/// between its channels, so its floor is lower.
 const Map<Brightness, double> _chromaFloor = {
-  Brightness.light: 0.25,
-  Brightness.dark: 0.15,
+  Brightness.light: 0.12,
+  Brightness.dark: 0.07,
 };

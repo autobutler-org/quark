@@ -32,8 +32,9 @@ class QuarkThemeColor {
   /// A custom theme color derived from [seed], which can be any color at all.
   ///
   /// Only the seed's hue is kept, and how colorful it is up to a point: a
-  /// seed under half saturation yields a proportionally grayer theme, and one
-  /// with no hue yields a gray one. Its lightness and its alpha are ignored.
+  /// weakly saturated seed yields a proportionally grayer theme, one with no
+  /// hue yields a gray one, and a vivid one is held to a calm strength. Its
+  /// lightness and its alpha are ignored.
   QuarkThemeColor.fromSeed(Color seed)
     : this._(
         name: null,
@@ -81,8 +82,9 @@ class QuarkThemeColor {
 
     final hsl = HSLColor.fromColor(seed);
     final hue = hsl.hue;
-    // How colorful: all the way from half saturation up, fading to gray.
-    final k = (hsl.saturation / 0.5).clamp(0.0, 1.0);
+    // How colorful: fading to gray for a weak seed, and never past
+    // [_maxStrength].
+    final k = (hsl.saturation / 0.5).clamp(0.0, _maxStrength);
     HSLColor at(double saturation, double lightness) =>
         HSLColor.fromAHSL(1, hue, saturation * k, lightness);
     // Text and accents move away from the surfaces: darker in light mode,
@@ -108,7 +110,7 @@ class QuarkThemeColor {
         content.every((surface) => contrastRatio(color, surface) >= ratio);
 
     // Colored chrome, lightened to a luminance its text and the accent can
-    // both stand on: a vivid mid tone in light mode, a deep one in dark. A
+    // both stand on: a mid tone in light mode, a deep one in dark. A
     // hue that is already lighter than that in light mode, a yellow, stays.
     final chrome = _moveLightness(
       dark ? at(0.70, 0.10) : at(0.80, 0.62),
@@ -298,6 +300,13 @@ class QuarkThemeColor {
   @override
   String toString() => 'QuarkThemeColor($storageValue)';
 }
+
+/// How colorful a theme gets, as a share of the saturations [tokensFor]
+/// starts each role from. At 1 the chrome and the accent are vivid enough to
+/// tire the eye (#2777); `graphite` sits near a third and is left alone by
+/// anything above that. The classic accent in `QuarkTokens` is written out
+/// to match this value and does not follow a change to it.
+const double _maxStrength = 0.45;
 
 /// WCAG AA for text. Muted text, and the accent, which text buttons, links
 /// and icons are drawn in, are held to it on every surface they sit on.

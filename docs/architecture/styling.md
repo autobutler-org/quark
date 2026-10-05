@@ -55,11 +55,14 @@ for dark, so the light/dark/system toggle keeps working under any color. `QuarkT
 `QuarkTheme.dark(themeColor:)` build from those sets. It is saved as `storageValue` (a preset name or
 `#rrggbb`) and read back with `QuarkThemeColor.parse`.
 
-- **`classic` is Quark as it ships**: `QuarkTokens.light` and `QuarkTokens.dark`, untouched. It is the default,
+- **`classic` is Quark as it ships**: `QuarkTokens.light` and `QuarkTokens.dark`, untouched. Its accent is the
+  blue preset's hue at the same strength, written out as constants. It is the default,
   the first preset, and what `parse` returns for null, empty, malformed, or unknown values.
 - **Every other preset is a fixed seed** run through the same derivation as a custom one. Only the seed's hue
-  is kept, and its saturation below one half, which fades the theme toward gray (that is all `graphite` is).
-- **Colored chrome, tinted content.** The app bar and the drawer take `chrome`, a clearly colored tone of the
+  is kept, and how colorful it is up to a cap: the theme's strength is the seed's saturation over one half, held
+  to 0.45 at most (`_maxStrength`, #2777). A weak seed fades the theme toward gray (that is all `graphite` is, at
+  about a third); the cap keeps a vivid seed from yielding chrome and an accent that tire the eye.
+- **Colored chrome, tinted content.** The app bar and the drawer take `chrome`, a calm but colored tone of the
   hue. `background`, `card`, `input` and `sidebar` keep the classic lightness and carry a faint tint.
 - **"Accent" means only the derived color**: `primary`, and `chromePrimary` where it is drawn on chrome. Nobody
   picks it.
@@ -87,9 +90,9 @@ legible on it too.
 ### How each token is derived
 
 In HSL, at the seed's hue. Each role starts from a saturation and lightness of its own, written `S / L` below
-(saturation is scaled down for a seed under half saturation). Where a row says "until", the lightness is moved
-in one direction, by bisection, only as far as it takes for the condition to hold on the 8-bit color that is
-painted. "Darker" and "lighter" are the direction of that move.
+(every saturation is then multiplied by the theme's strength, 0.45 at most). Where a row says "until", the
+lightness is moved in one direction, by bisection, only as far as it takes for the condition to hold on the
+8-bit color that is painted. "Darker" and "lighter" are the direction of that move.
 
 | Token | Light | Dark |
 | --- | --- | --- |
@@ -111,7 +114,7 @@ painted. "Darker" and "lighter" are the direction of that move.
 
 "Content" is `background`, `card`, `input` and `sidebar`. The light-mode floor of 0.91 is the luminance of the
 classic sidebar: no tinted surface is darker than the darkest classic one, so the fixed status colors score no
-worse on it. In light mode the chrome is a vivid mid tone with dark text, because an accent dark enough to be
+worse on it. In light mode the chrome is a mid tone with dark text, because an accent dark enough to be
 text on near-white content could not also stand out from a dark chrome. In dark mode the chrome is a deep tone
 with light text.
 
@@ -137,7 +140,7 @@ The status row is relative because the shipped `warning` and `success` do not re
 accent pair it already passed; its muted text and borders are #2600.
 
 The same file holds the derivation to the design, so it cannot pass by going gray: the chrome and the accent
-stay within three degrees of the seed's hue, the chrome's channels spread at least 0.25 in light mode and 0.15
+stay within three degrees of the seed's hue, the chrome's channels spread at least 0.12 in light mode and 0.07
 in dark and at least twice the page's, content surfaces stay within 0.03 of the classic lightness, the light
 and dark sets of one color share a hue, and preset hues keep 25 degrees from the status colors and from each
 other.
