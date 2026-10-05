@@ -17,7 +17,7 @@ the client's refresh-on-every-event turns each shared upload into a request stor
 
 | Piece | How it is shared | Bound |
 | --- | --- | --- |
-| HTTP server (`internal/server/server.go`) | gin on a zero-value `http.Server`, one goroutine per connection, HTTP/1.1 only | no header, read or idle timeout (#2755) |
+| HTTP server (`internal/server/server.go`) | gin on `serverutil.NewHTTPServer`, one goroutine per connection, HTTP/2 offered over TLS | 10 s for the handshake and headers, 2 min idle, 64 KiB of headers; no whole-request deadline, so uploads, downloads and the WebSocket are unbounded (#2755) |
 | sqlc queries (`internal/db/connect.go`) | **one pinned `*sql.Conn`** for the whole process; the driver connection's mutex serializes every statement. Callers' cancellation is stripped (#2743), so an abandoned query still runs | none: queue grows without limit (#2766) |
 | Transactions, FTS, VFS metadata | the `*sql.DB` pool, unbounded `MaxOpenConns`, contending with the pinned connection through the file lock | `busy_timeout(5000)` |
 | SQLite settings (`internal/db/dsn.go`) | rollback journal (`DELETE`), `synchronous=FULL`, foreign keys on, 5 s busy timeout. FTS5 runs on the pool. See [durability](durability.md) before changing the journal | — |
@@ -150,7 +150,7 @@ at roughly 0.5–2.5 GB transient, with no `GOMEMLIMIT` to keep the heap near th
   folder's contents (#2754), and search stats every match before checking access (#2758).
 - **Image decoding**: no pixel cap before decode, EXIF rotation at full resolution, and backup copies sharing
   the 8-slot semaphore (#2762). Uncached HEIC view conversion goes away with #2378.
-- **No HTTP timeouts and no HTTP/2** (#2755); **no memory limit** (#2761); **unbounded tables, upload sessions and
+- **No memory limit** (#2761); **unbounded tables, upload sessions and
   access log** (#2756); **deflate on already-compressed zips, uncapped** (#2757); **bcrypt on every Basic-auth
   request** (#2765).
 
@@ -162,9 +162,10 @@ at roughly 0.5–2.5 GB transient, with no `GOMEMLIMIT` to keep the heap near th
 | #2750 | `/health` read the host on every call and queued under load | `TestCurrentHealth_ReusesARecentSample`, `TestCurrentHealth_ConcurrentCallersShareOneRead`, `TestCurrentHealth_CallersGetTheirOwnSlices` |
 | #2751 | the backup job store shared one `*BackupJob` between the running snapshot and status reads | `TestInMemoryBackupJobStore_ReadDuringRun` (race) |
 | #2752 | RAW converters ran without a timeout while holding an IO-semaphore slot | `TestRawViaDcraw_HungToolReturns` |
+| #2755 | the server and the tailnet proxy had no header or idle timeout and spoke only HTTP/1.1; the proxy kept 2 idle loopback connections | `TestNewHTTPServer_ClosesStalledHeaders`, `TestNewHTTPServer_ClosesStalledTLSHandshake`, `TestNewHTTPServer_ClosesIdleKeepAlive`, `TestNewHTTPServer_SlowBodyOutlivesHeaderTimeout`, `TestNewHTTPServer_OffersHTTP2OverTLS`, `TestNewProxy_KeepsEnoughIdleConnections` |
 
 `go test -race` over `./pkg/...`, `./internal/db/...`, `./internal/server/...` and the API packages reported no
-other race; the existing tests rarely run these paths concurrently, which is why the four above needed their own.
+other race; the existing tests rarely run these paths concurrently, which is why the #2749–#2752 fixes above needed their own.
 
 ## Recommendations, ranked
 
@@ -175,8 +176,8 @@ other race; the existing tests rarely run these paths concurrently, which is why
    state only for the accounts a change concerns and encode each event once** (#2764). Together these remove the
    N² request storm that sets the limit once (1) is done.
 3. **Never drop events for internal subscribers** (#2753). A correctness bug at any N.
-4. **Set `GOMEMLIMIT` and a `MemoryHigh` in `quark install`** (#2761) and **harden the HTTP server** (#2755): cheap,
-   and they bound what a burst or a misbehaving client can cost.
+4. **Set `GOMEMLIMIT` and a `MemoryHigh` in `quark install`** (#2761): cheap, and it bounds what a burst can
+   cost. The HTTP server's half of this, timeouts and HTTP/2 (#2755), is done.
 5. **Replace whole-tree walks with an indexed, paged query and move the filename index out of the heap** (#2759,
    #2760, #2754, #2758). These set the limit past ~1,000 accounts, by file count rather than by request rate.
 6. **Bound image work** (#2762, plus #2378) and **folder zips** (#2757).
