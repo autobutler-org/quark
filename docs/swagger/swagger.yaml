@@ -5892,9 +5892,10 @@ paths:
     get:
       description: searches for a file across all managed devices for the given search
         term. If deviceSerial is empty, search across all devices. Otherwise, only
-        for the specified device
+        for the specified device. Returns at most 500 files, only ones the caller
+        can read; an empty search term returns an empty list
       parameters:
-      - description: Search term to find
+      - description: Search term to find; empty finds nothing
         in: query
         name: query
         type: string

@@ -30,7 +30,7 @@ the client's refresh-on-every-event turns each shared upload into a request stor
 | Rate limiters (`pkg/util/ratelimitutil`) | map of IP → limiter behind one mutex, auth and vault paths only, swept every 5 min | ~200 B per IP |
 | Upload sessions (`pkg/util/uploadutil`) | map behind one mutex, O(1) lookups; per-session mutex held for one chunk's `io.CopyN` | one fd each, 24 h TTL, no count cap (#2756) |
 | Health collector (`pkg/util/healthutil`) | one `Collector` for every `/health` call | one host read per 5 s, shared (#2750) |
-| Filename index (`storageutil.FileIndex`) | one map of every file on every device; linear scan per search under `RLock` | ~300–480 B per file (#2760) |
+| Filename index (`storageutil.FileIndex`) | one folder tree per device; linear scan per search under `RLock`, stopping at 500 readable matches | ~300–480 B per file (#2760) |
 
 Streaming is in good shape: uploads, downloads and archive entries go through `io.Copy`/`http.ServeContent`, and
 no handler on a file path buffers a whole body (the one unbounded read is inside `gen2brain/heic`, which #2378
@@ -149,8 +149,9 @@ cover ffmpeg children too: the kernel throttles and then kills inside the servic
   (#2753).
 - **Whole-tree walks per request**: Photos, Recent and folder sizes walk every file on the appliance, so total work
   grows as N² (#2759). By-type is cached between events since #1780, for listings up to 2,048 files.
-- **The filename index lives in the heap** and is scanned linearly (#2760); it also keeps a deleted or moved
-  folder's contents (#2754), and search stats every match before checking access (#2758).
+- **The filename index lives in the heap** and is scanned linearly (#2760). A folder delete or move now reaches
+  its contents in one step (#2754), and a search checks access before it reads anything about a match from disk
+  and stops at 500 (#2758).
 - **Image decoding**: no pixel cap before decode, EXIF rotation at full resolution, and backup copies sharing
   the 8-slot semaphore (#2762). Uncached HEIC view conversion goes away with #2378.
 - **Unbounded tables, upload sessions and
@@ -181,7 +182,7 @@ other race; the existing tests rarely run these paths concurrently, which is why
    N² request storm that sets the limit once (1) is done.
 3. **Never drop events for internal subscribers** (#2753). A correctness bug at any N.
 4. **Replace whole-tree walks with an indexed, paged query and move the filename index out of the heap** (#2759,
-   #2760, #2754, #2758). These set the limit past ~1,000 accounts, by file count rather than by request rate.
+   #2760). These set the limit past ~1,000 accounts, by file count rather than by request rate.
 5. **Bound image work** (#2762, plus #2378) and **folder zips** (#2757).
 6. **Prune and cap what grows** (#2756) and **stop running bcrypt per Basic-auth request** (#2765).
 7. **Measure on a board.** The last open item of #2507: run the harness against an A55 board before and after (1)

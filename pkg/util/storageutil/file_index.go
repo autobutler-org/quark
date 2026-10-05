@@ -70,21 +70,36 @@ func (idx *FileIndex) Build(devices []ManagedDevice) {
 // If query is empty, returns all files.
 // If serials is non-empty, only returns files from those devices.
 func (idx *FileIndex) Search(query string, serials map[string]bool) []IndexedFile {
+	out := make([]IndexedFile, 0)
+	idx.SearchEach(query, serials, func(f IndexedFile) bool {
+		out = append(out, f)
+		return true
+	})
+	return out
+}
+
+// SearchEach calls visit for each file Search would return, stopping as soon
+// as visit returns false, so a caller filtering or capping the matches never
+// builds the full list. visit runs under the index's read lock and must not
+// call back into the index.
+func (idx *FileIndex) SearchEach(query string, serials map[string]bool, visit func(IndexedFile) bool) {
 	lq := strings.ToLower(query)
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
-	out := make([]IndexedFile, 0)
 	for filesDir, root := range idx.roots {
 		if len(serials) > 0 && !serials[root.serial] {
 			continue
 		}
-		root.dir.collect("", func(name, relPath string) {
-			if query == "" || strings.Contains(strings.ToLower(name), lq) {
-				out = append(out, IndexedFile{Name: name, RelPath: relPath, FilesDir: filesDir, DeviceSerial: root.serial})
+		more := root.dir.collect("", func(name, relPath string) bool {
+			if query != "" && !strings.Contains(strings.ToLower(name), lq) {
+				return true
 			}
+			return visit(IndexedFile{Name: name, RelPath: relPath, FilesDir: filesDir, DeviceSerial: root.serial})
 		})
+		if !more {
+			return
+		}
 	}
-	return out
 }
 
 // HandleAdd adds or updates a file in the index.
@@ -332,14 +347,20 @@ func (d *indexDir) adopt(old *indexDir) {
 }
 
 // collect calls visit for every file under d with its path relative to the
-// tree's root, which prefix is the path of d plus a trailing slash.
-func (d *indexDir) collect(prefix string, visit func(name, relPath string)) {
+// tree's root, which prefix is the path of d plus a trailing slash. It stops,
+// and reports false, once visit does.
+func (d *indexDir) collect(prefix string, visit func(name, relPath string) bool) bool {
 	for name := range d.files {
-		visit(name, prefix+name)
+		if !visit(name, prefix+name) {
+			return false
+		}
 	}
 	for name, dir := range d.dirs {
-		dir.collect(prefix+name+"/", visit)
+		if !dir.collect(prefix+name+"/", visit) {
+			return false
+		}
 	}
+	return true
 }
 
 // GetManagedDevicesFunc is the signature of StorageService.GetManagedDevices,
