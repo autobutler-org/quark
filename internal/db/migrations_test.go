@@ -580,3 +580,104 @@ INSERT INTO calendar_events (id, calendar_id, title, starts_at, ends_at) VALUES
 		t.Errorf("events after the down migration = %d, want 2", n)
 	}
 }
+
+// calendarEventChecksVersion is 025_calendar_event_checks, which bounds an
+// event's color and reminder in the schema as well as the app (#2536).
+const calendarEventChecksVersion = 25
+
+// TestCalendarEventChecksMigration clamps the colors and reminders already
+// stored out of range, refuses new ones, and rolls back keeping every event,
+// its owner and both indexes.
+func TestCalendarEventChecksMigration(t *testing.T) {
+	conn, m := migrateTo(t, calendarEventChecksVersion-1)
+	if _, err := conn.Exec(`
+INSERT INTO users (id, username, password_hash, recovery_phrase_hash) VALUES (1, 'maya', 'h', 'r');
+INSERT INTO calendar_events (id, calendar_id, title, starts_at, ends_at, all_day, reminder_minutes, color_index, created_by) VALUES
+	(1, 1, 'Fine',          '2026-09-01T09:00:00Z', '2026-09-01T10:00:00Z', 0, 30,     2,   1),
+	(2, 1, 'Low color',     '2026-09-01T09:00:00Z', '2026-09-01T10:00:00Z', 0, NULL,   -1,  NULL),
+	(3, 1, 'High color',    '2026-09-01T09:00:00Z', '2026-09-01T10:00:00Z', 0, NULL,   99,  NULL),
+	(4, 1, 'Late timed',    '2026-09-01T09:00:00Z', '2026-09-01T10:00:00Z', 0, -1,     0,   NULL),
+	(5, 1, 'Early',         '2026-09-01T09:00:00Z', '2026-09-01T10:00:00Z', 0, 999999, 0,   NULL),
+	(6, 1, 'Late all day',  '2026-09-01T00:00:00Z', '2026-09-02T00:00:00Z', 1, -1440,  0,   NULL),
+	(7, 1, '9 AM on day',   '2026-09-01T00:00:00Z', '2026-09-02T00:00:00Z', 1, -540,   5,   NULL),
+	(8, 1, 'Fractional',    '2026-09-01T09:00:00Z', '2026-09-01T10:00:00Z', 0, 30.7,   2.5, NULL);
+`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := m.Migrate(calendarEventChecksVersion); err != nil {
+		t.Fatalf("migrate to %d: %v", calendarEventChecksVersion, err)
+	}
+	want := map[int64][2]any{
+		1: {int64(2), int64(30)},
+		2: {int64(0), nil},
+		3: {int64(5), nil},
+		4: {int64(0), int64(0)},
+		5: {int64(0), int64(7 * 24 * 60)},
+		6: {int64(0), int64(-1439)},
+		7: {int64(5), int64(-540)},
+		8: {int64(2), int64(30)},
+	}
+	for id, w := range want {
+		var color, reminder any
+		if err := conn.QueryRow(`SELECT color_index, reminder_minutes FROM calendar_events WHERE id = ?`, id).Scan(&color, &reminder); err != nil {
+			t.Fatalf("read event %d: %v", id, err)
+		}
+		if color != w[0] || reminder != w[1] {
+			t.Errorf("event %d color, reminder = %v (%T), %v (%T), want %v, %v", id, color, color, reminder, reminder, w[0], w[1])
+		}
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM calendar_events WHERE id = 1 AND created_by = 1 AND title = 'Fine'`); n != 1 {
+		t.Error("the rebuild lost an event's owner or title")
+	}
+
+	insert := `INSERT INTO calendar_events (calendar_id, title, starts_at, ends_at, all_day, reminder_minutes, color_index) VALUES (1, 'x', 'a', 'b', ?, ?, ?)`
+	for _, ok := range [][3]any{
+		{0, nil, 0}, {0, 0, 5}, {0, 7 * 24 * 60, 3}, {1, -1439, 1}, {1, 7 * 24 * 60, 0},
+	} {
+		if _, err := conn.Exec(insert, ok[0], ok[1], ok[2]); err != nil {
+			t.Errorf("all day %v, reminder %v, color %v refused: %v", ok[0], ok[1], ok[2], err)
+		}
+	}
+	for _, bad := range [][3]any{
+		{0, nil, -1}, {0, nil, 6}, {0, nil, 2.5}, {0, nil, "red"},
+		{0, -1, 0}, {0, 7*24*60 + 1, 0}, {1, -1440, 0}, {0, 30.5, 0}, {0, "soon", 0},
+	} {
+		if _, err := conn.Exec(insert, bad[0], bad[1], bad[2]); err == nil || !strings.Contains(err.Error(), "CHECK constraint failed") {
+			t.Errorf("all day %v, reminder %v, color %v = %v, want a check failure", bad[0], bad[1], bad[2], err)
+		}
+	}
+	if _, err := conn.Exec(`UPDATE calendar_events SET all_day = 0 WHERE id = 7`); err == nil {
+		t.Error("an all-day reminder after midnight survived the event becoming timed")
+	}
+
+	if err := m.Migrate(calendarEventChecksVersion - 1); err != nil {
+		t.Fatalf("migrate down: %v", err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM calendar_events`); n != 13 {
+		t.Errorf("events after the down migration = %d, want 13", n)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM calendar_events WHERE id = 1 AND created_by = 1`); n != 1 {
+		t.Error("the down migration lost an event's owner")
+	}
+	for _, index := range []string{"idx_calendar_events_start", "idx_calendar_events_created_by"} {
+		if n := count(t, conn, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?`, index); n != 1 {
+			t.Errorf("%s missing after the down migration", index)
+		}
+	}
+	if _, err := conn.Exec(insert, 0, nil, 99); err != nil {
+		t.Errorf("color 99 still refused after the down migration: %v", err)
+	}
+	// Up again clamps what the down migration let in.
+	if err := m.Migrate(calendarEventChecksVersion); err != nil {
+		t.Fatalf("migrate up again: %v", err)
+	}
+	if n := count(t, conn, `SELECT COUNT(*) FROM calendar_events WHERE color_index NOT BETWEEN 0 AND 5`); n != 0 {
+		t.Errorf("colors out of range after migrating up again = %d", n)
+	}
+	for _, index := range []string{"idx_calendar_events_start", "idx_calendar_events_created_by"} {
+		if n := count(t, conn, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?`, index); n != 1 {
+			t.Errorf("%s missing after the up migration", index)
+		}
+	}
+}

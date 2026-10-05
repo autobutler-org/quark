@@ -46,7 +46,8 @@ const (
 	MaxNotesLength    = 10000
 	MaxTimeZoneLength = 64
 	// ColorCount is the number of event colors the app offers; ColorIndex
-	// picks one of them.
+	// picks one of them. Migration 025 repeats this and the reminder bounds
+	// below as CHECKs on calendar_events: change them together.
 	ColorCount = 6
 	// MaxReminderMinutes is a week before the start.
 	MaxReminderMinutes = 7 * 24 * 60
