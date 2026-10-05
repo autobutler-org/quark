@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"slices"
 	"strings"
 	"syscall"
@@ -68,9 +67,11 @@ var DefaultUpdateSources = []*UpdateSource{
 
 var client *azblob.Client
 
+// ConstructArchiveName is the release archive name for the running platform,
+// or "" when no release publishes one (see archiveNameFor).
 func ConstructArchiveName() string {
-	goos := fmt.Sprintf("%s%s", strings.ToUpper(string(runtime.GOOS[0])), string(runtime.GOOS[1:]))
-	return fmt.Sprintf("quark_%s_%s.tar.gz", goos, runtime.GOARCH)
+	name, _ := currentArchiveName()
+	return name
 }
 
 func GetLatestVersionFromDefaultSources() (string, error) {
@@ -90,13 +91,17 @@ func GetLatestVersion(source *UpdateSource) (string, error) {
 	}
 	switch source.Kind {
 	case UpdateSourceKindGithub:
+		archiveName, err := currentArchiveName()
+		if err != nil {
+			return "", err
+		}
 		org, repo := source.Account, source.Path
 		release, err := github.FetchLatestRelease(org, repo)
 		if err != nil {
 			return "", fmt.Errorf("failed to fetch releases: %w", err)
 		}
 
-		url := getAssetURLFromRelease(release)
+		url := getAssetURLFromRelease(release, archiveName)
 		if url == "" {
 			return "", errors.New("no suitable asset found in latest release")
 		}
@@ -160,6 +165,11 @@ func ListPossibleUpdates(source *UpdateSource, allVersions bool) (*ListPossibleU
 		return ListPossibleUpdatesFromDefaultSources(allVersions)
 	}
 
+	archiveName, err := currentArchiveName()
+	if err != nil {
+		return nil, err
+	}
+
 	updateReleases := []*UpdateVersion{}
 	switch source.Kind {
 	case UpdateSourceKindGithub:
@@ -169,7 +179,7 @@ func ListPossibleUpdates(source *UpdateSource, allVersions bool) (*ListPossibleU
 			return nil, fmt.Errorf("failed to fetch releases: %w", err)
 		}
 		for _, release := range releases {
-			url := getAssetURLFromRelease(release)
+			url := getAssetURLFromRelease(release, archiveName)
 			if url == "" {
 				continue
 			}
@@ -200,7 +210,7 @@ func ListPossibleUpdates(source *UpdateSource, allVersions bool) (*ListPossibleU
 				if strings.HasSuffix(artifact, ".txt") {
 					continue
 				}
-				if !strings.Contains(artifact, ConstructArchiveName()) {
+				if !strings.Contains(artifact, archiveName) {
 					continue
 				}
 				updateReleases = append(updateReleases, &UpdateVersion{
@@ -295,7 +305,10 @@ func Update(source *UpdateSource, version string) error {
 		return fmt.Errorf("invalid update source: %s", source.Kind)
 	}
 
-	archiveName := ConstructArchiveName()
+	archiveName, err := currentArchiveName()
+	if err != nil {
+		return err
+	}
 	url := fmt.Sprintf("%s/%s/%s", baseUrl, version, archiveName)
 	fmt.Println("Downloading update from", url)
 

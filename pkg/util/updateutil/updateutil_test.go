@@ -460,13 +460,38 @@ func TestConstructArchiveName(t *testing.T) {
 	}
 	// Should contain OS and arch
 	goos := runtime.GOOS
-	goarch := runtime.GOARCH
 	expectedOS := strings.ToUpper(goos[:1]) + goos[1:]
 	if !strings.Contains(name, expectedOS) {
 		t.Errorf("Expected archive name to contain OS %q, got %s", expectedOS, name)
 	}
-	if !strings.Contains(name, goarch) {
-		t.Errorf("Expected archive name to contain arch %q, got %s", goarch, name)
+}
+
+// TestArchiveNameFor pins the archive names to what .goreleaser.yaml publishes:
+// linux on amd64 (labelled x86_64) and arm64 only.
+func TestArchiveNameFor(t *testing.T) {
+	tests := []struct {
+		goos, goarch string
+		want         string
+		wantErr      bool
+	}{
+		{"linux", "amd64", "quark_Linux_x86_64.tar.gz", false},
+		{"linux", "arm64", "quark_Linux_arm64.tar.gz", false},
+		{"darwin", "arm64", "", true},
+		{"darwin", "amd64", "", true},
+		{"windows", "amd64", "", true},
+		{"linux", "386", "", true},
+		{"linux", "arm", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.goos+"/"+tt.goarch, func(t *testing.T) {
+			got, err := archiveNameFor(tt.goos, tt.goarch)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("archiveNameFor error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("archiveNameFor = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
