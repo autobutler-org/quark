@@ -10,6 +10,7 @@ import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/widgets/slides/import/import_power_point.dart';
 import 'package:quark/widgets/slides/import/slides_import_bar_bottom.dart';
 import 'package:quark/widgets/slides/insert/slide_quark_image_dialog.dart';
@@ -66,6 +67,13 @@ class _SlidesPageState extends State<SlidesPage>
     );
     if (renamed != null) manualRefresh();
   }
+
+  Future<void> _share(FileNode node) => showShareSheet(
+    context,
+    deviceSerial: node.deviceSerial,
+    relPath: node.apiPath,
+    name: node.name,
+  );
 
   Future<void> _create() async {
     final name = await promptForNewFileName(
@@ -164,6 +172,7 @@ class _SlidesPageState extends State<SlidesPage>
                 onCreateNew: _create,
                 onOpen: _open,
                 onRename: _rename,
+                onShare: _share,
               ),
             ),
           ),

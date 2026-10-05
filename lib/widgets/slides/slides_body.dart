@@ -31,6 +31,7 @@ class SlidesBody extends StatelessWidget {
     required this.onCreateNew,
     required this.onOpen,
     this.onRename,
+    this.onShare,
     super.key,
   });
 
@@ -66,6 +67,10 @@ class SlidesBody extends StatelessWidget {
   /// Renames a listed presentation. Content-only hits carry no [FileNode],
   /// so their rows have no menu.
   final ValueChanged<FileNode>? onRename;
+
+  /// Opens the share sheet for a listed presentation (#1170); content-only
+  /// hits have no menu.
+  final ValueChanged<FileNode>? onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -126,6 +131,7 @@ class SlidesBody extends StatelessWidget {
       for (final node in files) node.deviceSerial: node.deviceName,
     };
     final onRename = this.onRename;
+    final onShare = this.onShare;
 
     final items = <Widget>[
       for (final node in files)
@@ -137,6 +143,7 @@ class SlidesBody extends StatelessWidget {
               snippets[DocSheetTile.fileKey(node.deviceSerial, node.apiPath)],
           onTap: () => onOpen(node),
           onRename: onRename == null ? null : () => onRename(node),
+          onShare: onShare == null ? null : () => onShare(node),
         ),
       if (contentOnly.isNotEmpty)
         const SearchSectionHeader(

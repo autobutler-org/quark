@@ -76,6 +76,21 @@ void main() {
     });
   }
 
+  testWidgets('a picture the viewer may not read says so, not a spinner', (
+    tester,
+  ) async {
+    final frame = Completer<ImageInfo>();
+    await pumpImage(tester, FakeImage(frame.future));
+    frame.completeError(
+      NetworkImageLoadException(statusCode: 403, uri: Uri.parse('/x.png')),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('slide_image_no_access')), findsOneWidget);
+    expect(find.byKey(const ValueKey('slide_image_error')), findsNothing);
+    expect(find.byKey(const ValueKey('slide_image_loading')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the picture stays out of the semantics tree', (tester) async {
     final handle = tester.ensureSemantics();
     final frame = Completer<ImageInfo>();
