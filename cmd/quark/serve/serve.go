@@ -8,6 +8,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/server"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/memutil"
 	"github.com/autobutler-org/quark/pkg/util/updateutil"
 
 	"github.com/spf13/cobra"
@@ -30,6 +31,14 @@ func Cmd() *cobra.Command {
 			// starts. Failing that is no reason not to serve with this one.
 			if err := updateutil.RunInstalledUpdate(); err != nil {
 				fmt.Printf("Warning: failed to run the installed update: %v\n", err)
+			}
+			// Before anything allocates: the heap collects near its live
+			// set instead of growing to twice it (#2761).
+			if limit, err := memutil.ApplyGoLimit(memutil.ApplyGoLimitParams{}); err != nil {
+				fmt.Printf("Warning: no Go memory limit set: %v\n", err)
+			} else if !limit.FromEnv {
+				fmt.Printf("Go memory limit: %d MiB, %d%% of %d MiB RAM\n",
+					limit.Limit>>20, memutil.GoLimitPercent, limit.TotalRAM>>20)
 			}
 			fmt.Println("Starting Quark server...")
 			deps, err := deputil.DefaultDependencies()

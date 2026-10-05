@@ -132,7 +132,10 @@ on SD, so 25–100 commits/s. Applied to the measurements above:
 
 Memory is not the first limit. The idle server is 50–100 MB, an app costs a few hundred KiB while connected, and
 the filename index costs ~0.3–0.5 KB per file on the appliance (#2760). Decodes are bounded by the 8-slot semaphore
-at roughly 0.5–2.5 GB transient, with no `GOMEMLIMIT` to keep the heap near the live set (#2761).
+at roughly 0.5–2.5 GB transient. `quark serve` sets a Go soft memory limit of 60% of RAM unless `GOMEMLIMIT` is
+set, so the heap collects near its live set, and `quark install` writes a systemd drop-in
+(`/etc/systemd/system/quark.service.d/50-memory.conf`) with `MemoryHigh` at 80% and `MemoryMax` at 90% of RAM, which
+cover ffmpeg children too: the kernel throttles and then kills inside the service before the board swaps (#2761).
 
 ## Known limits
 
@@ -150,7 +153,7 @@ at roughly 0.5–2.5 GB transient, with no `GOMEMLIMIT` to keep the heap near th
   folder's contents (#2754), and search stats every match before checking access (#2758).
 - **Image decoding**: no pixel cap before decode, EXIF rotation at full resolution, and backup copies sharing
   the 8-slot semaphore (#2762). Uncached HEIC view conversion goes away with #2378.
-- **No memory limit** (#2761); **unbounded tables, upload sessions and
+- **Unbounded tables, upload sessions and
   access log** (#2756); **deflate on already-compressed zips, uncapped** (#2757); **bcrypt on every Basic-auth
   request** (#2765).
 
@@ -163,6 +166,7 @@ at roughly 0.5–2.5 GB transient, with no `GOMEMLIMIT` to keep the heap near th
 | #2751 | the backup job store shared one `*BackupJob` between the running snapshot and status reads | `TestInMemoryBackupJobStore_ReadDuringRun` (race) |
 | #2752 | RAW converters ran without a timeout while holding an IO-semaphore slot | `TestRawViaDcraw_HungToolReturns` |
 | #2755 | the server and the tailnet proxy had no header or idle timeout and spoke only HTTP/1.1; the proxy kept 2 idle loopback connections | `TestNewHTTPServer_ClosesStalledHeaders`, `TestNewHTTPServer_ClosesStalledTLSHandshake`, `TestNewHTTPServer_ClosesIdleKeepAlive`, `TestNewHTTPServer_SlowBodyOutlivesHeaderTimeout`, `TestNewHTTPServer_OffersHTTP2OverTLS`, `TestNewProxy_KeepsEnoughIdleConnections` |
+| #2761 | nothing set a Go memory limit or a cgroup ceiling; the OOM killer was the only backstop | `TestApplyGoLimit_DerivesFromRAM`, `TestApplyGoLimit_EnvWins`, `TestInstallDropIn_WritesCeilingAndReloads`, `TestInstallDropIn_Idempotent`, `TestInstallDropIn_FollowsTheRAM`, `TestInstallDropIn_SkipsWithoutSystemd` |
 
 `go test -race` over `./pkg/...`, `./internal/db/...`, `./internal/server/...` and the API packages reported no
 other race; the existing tests rarely run these paths concurrently, which is why the #2749–#2752 fixes above needed their own.
@@ -176,13 +180,11 @@ other race; the existing tests rarely run these paths concurrently, which is why
    state only for the accounts a change concerns and encode each event once** (#2764). Together these remove the
    N² request storm that sets the limit once (1) is done.
 3. **Never drop events for internal subscribers** (#2753). A correctness bug at any N.
-4. **Set `GOMEMLIMIT` and a `MemoryHigh` in `quark install`** (#2761): cheap, and it bounds what a burst can
-   cost. The HTTP server's half of this, timeouts and HTTP/2 (#2755), is done.
-5. **Replace whole-tree walks with an indexed, paged query and move the filename index out of the heap** (#2759,
+4. **Replace whole-tree walks with an indexed, paged query and move the filename index out of the heap** (#2759,
    #2760, #2754, #2758). These set the limit past ~1,000 accounts, by file count rather than by request rate.
-6. **Bound image work** (#2762, plus #2378) and **folder zips** (#2757).
-7. **Prune and cap what grows** (#2756) and **stop running bcrypt per Basic-auth request** (#2765).
-8. **Measure on a board.** The last open item of #2507: run the harness against an A55 board before and after (1)
+5. **Bound image work** (#2762, plus #2378) and **folder zips** (#2757).
+6. **Prune and cap what grows** (#2756) and **stop running bcrypt per Basic-auth request** (#2765).
+7. **Measure on a board.** The last open item of #2507: run the harness against an A55 board before and after (1)
    (`go test -tags stress ./internal/server/stress/` with `QUARK_BASE_URL`, `QUARK_USER` and `QUARK_PASSWORD`
    pointing at it, from a separate machine so the harness does not share its CPU), and replace the scaled
    estimates above.
