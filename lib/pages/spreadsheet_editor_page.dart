@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:data_table/data_sheet.dart';
 import 'package:data_table/data_table.dart';
 import 'package:flutter/material.dart' hide DataTable, DataRow, DataCell;
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/models/file_node.dart';
@@ -403,7 +404,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
 
     if (_loading) {
       page = Scaffold(
-        appBar: AppBar(
+        appBar: ChromeAppBar(
           leading: _backButton(),
           title: Text(title),
           actions: const [AppThemeToggle()],
@@ -412,7 +413,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
       );
     } else if (error != null) {
       page = Scaffold(
-        appBar: AppBar(
+        appBar: ChromeAppBar(
           leading: _backButton(),
           title: Text(title),
           actions: const [AppThemeToggle()],
@@ -427,7 +428,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     } else {
       final tab = _tabs[_selected];
       page = Scaffold(
-        appBar: AppBar(
+        appBar: ChromeAppBar(
           leading: _backButton(),
           title: Tooltip(
             message: 'Rename',

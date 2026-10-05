@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -29,7 +30,10 @@ class SvgViewerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(name), actions: const [AppThemeToggle()]),
+      appBar: ChromeAppBar(
+        title: Text(name),
+        actions: const [AppThemeToggle()],
+      ),
       body: QuarkCheckerboard(
         child: InteractiveViewer(
           child: Center(child: SvgPicture.memory(bytes, fit: BoxFit.contain)),

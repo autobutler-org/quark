@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/widgets/image_viewer/image_viewer_more_menu.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -63,9 +64,10 @@ class ImageViewerAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = QuarkTokens.of(context);
+    // The title is built here, above the bar's QuarkChrome.
+    final tokens = QuarkTokens.of(context).onChrome;
     final showNav = imageCount > 1;
-    return AppBar(
+    return ChromeAppBar(
       leading: Center(
         child: QuarkBarIconButton(
           key: const ValueKey('image_viewer_close'),

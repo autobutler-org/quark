@@ -51,6 +51,25 @@ void main() {
       expect(html, contains('background-color: var(--quark-background);'));
     });
 
+    /// #2740: the classic accent is a darker blue in light mode than in dark, and
+    /// the spinner copies `QuarkTokens.light.primary` and `QuarkTokens.dark.primary`.
+    test('spins in the classic accent of each mode', () {
+      final html = flattened();
+
+      expect('--quark-primary: #0ea5e9;'.allMatches(html), hasLength(1));
+      expect(
+        html,
+        contains(
+          ':root[data-theme="light"] { color-scheme: light; '
+          '--quark-background: #f8fafc; --quark-foreground: #0f172a; '
+          '--quark-muted: #64748b; --quark-border: #e2e8f0; '
+          '--quark-primary: #0369a1; }',
+        ),
+      );
+      // Once for the saved Light theme, once for an OS in light mode.
+      expect('--quark-primary: #0369a1;'.allMatches(html), hasLength(2));
+    });
+
     /// #2341: the splash followed only the OS, so a user who picked Light or
     /// Dark in Settings saw the other one until Flutter painted. The choice
     /// lives in `localStorage` under shared_preferences' `flutter.` prefix,

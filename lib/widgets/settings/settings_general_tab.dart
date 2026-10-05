@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/host_manager.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
-/// The General tab of Settings (#2350): backend hosts, theme, the
-/// auto-refresh interval and demo mode, plus a link to the drives. Beta
-/// switches live on the Features tab (#2542).
+/// The General tab of Settings (#2350): backend hosts, theme, the theme color
+/// color (#2740), the auto-refresh interval and demo mode, plus a link to the
+/// drives. Beta switches live on the Features tab (#2542).
 ///
 /// First because it holds the backend hosts, which every "manage hosts" link
 /// in the app lands on. The page owns the values; this tab renders them and
@@ -14,6 +15,11 @@ class SettingsGeneralTab extends StatelessWidget {
   const SettingsGeneralTab({
     required this.theme,
     required this.onThemeChanged,
+    required this.themeColor,
+    required this.followsQuarkThemeColor,
+    required this.quarkThemeColor,
+    this.onThemeColorChanged,
+    this.onQuarkThemeColorChanged,
     required this.refreshIntervalSeconds,
     required this.onRefreshIntervalChanged,
     required this.demoMode,
@@ -29,6 +35,26 @@ class SettingsGeneralTab extends StatelessWidget {
 
   /// Called with the theme the user picked.
   final ValueChanged<ThemeMode> onThemeChanged;
+
+  /// The theme color the app wears: the user's own, or the Quark's while
+  /// [followsQuarkThemeColor].
+  final QuarkThemeColor themeColor;
+
+  /// Whether the user follows the Quark's default theme color rather than one of
+  /// their own.
+  final bool followsQuarkThemeColor;
+
+  /// The Quark's default theme color, which an admin sets.
+  final QuarkThemeColor quarkThemeColor;
+
+  /// Called with the storage string of the theme color the user picked for
+  /// themselves, empty to follow the Quark's. Null hides the section, as
+  /// when nobody is signed in.
+  final ValueChanged<String>? onThemeColorChanged;
+
+  /// Called with the storage string of the theme color an admin picked as the
+  /// Quark's default. Null hides the section, as it is for a non-admin.
+  final ValueChanged<String>? onQuarkThemeColorChanged;
 
   /// How often pages refresh themselves, in seconds; 0 is off.
   final int refreshIntervalSeconds;
@@ -54,6 +80,8 @@ class SettingsGeneralTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onThemeColorChanged = this.onThemeColorChanged;
+    final onQuarkThemeColorChanged = this.onQuarkThemeColorChanged;
     const heading = TextStyle(fontSize: 16, fontWeight: FontWeight.bold);
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -86,6 +114,33 @@ class SettingsGeneralTab extends StatelessWidget {
             ],
           ),
         ),
+        if (onThemeColorChanged != null) ...[
+          const SizedBox(height: 24),
+          const Text('Theme color', style: heading),
+          const SizedBox(height: 8),
+          QuarkThemeColorPicker(
+            key: const ValueKey('settings_theme_color'),
+            value: themeColor,
+            usingDefault: followsQuarkThemeColor,
+            onChanged: (picked) => onThemeColorChanged(picked.storageValue),
+            onUseDefault: () => onThemeColorChanged(''),
+          ),
+        ],
+        if (onQuarkThemeColorChanged != null) ...[
+          const SizedBox(height: 24),
+          const Text("This Quark's default", style: heading),
+          const SizedBox(height: 4),
+          const Text(
+            'The theme color for everyone who has not picked their own.',
+          ),
+          const SizedBox(height: 8),
+          QuarkThemeColorPicker(
+            key: const ValueKey('settings_quark_theme_color'),
+            value: quarkThemeColor,
+            onChanged: (picked) =>
+                onQuarkThemeColorChanged(picked.storageValue),
+          ),
+        ],
         const SizedBox(height: 24),
         const Text('Auto-refresh interval', style: heading),
         const SizedBox(height: 8),

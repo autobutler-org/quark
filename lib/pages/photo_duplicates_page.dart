@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/controllers/duplicates_controller.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
@@ -61,7 +62,7 @@ class _PhotoDuplicatesPageState extends State<PhotoDuplicatesPage>
         final formats = _controller.formats;
         return Scaffold(
           key: const ValueKey('photo_duplicates_page'),
-          appBar: AppBar(
+          appBar: ChromeAppBar(
             title: const Text('Duplicates'),
             actions: [
               if (formats.isNotEmpty)

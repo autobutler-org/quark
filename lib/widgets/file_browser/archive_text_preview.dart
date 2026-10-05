@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 
 /// Read-only view of a text file previewed from inside an archive, where the
@@ -12,7 +13,10 @@ class ArchiveTextPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(name), actions: const [AppThemeToggle()]),
+      appBar: ChromeAppBar(
+        title: Text(name),
+        actions: const [AppThemeToggle()],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: SelectableText(

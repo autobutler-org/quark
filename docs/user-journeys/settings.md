@@ -7,7 +7,7 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 
 | Tab | URL | Holds |
 | --- | --- | --- |
-| **General** | `/settings/general` | Backend hosts, theme, auto-refresh interval, demo mode, a link to the drives |
+| **General** | `/settings/general` | Backend hosts, theme, theme color, auto-refresh interval, demo mode, a link to the drives |
 | **Account** | `/settings/account` | Sign out, your sessions, then an **Account and data** row at the bottom that leads to Delete account and (admins) Reset this Quark |
 | **Network** | `/settings/network` | Remote access, connected devices, SSH access (admins) |
 | **Updates** | `/settings/updates` | The Quark's version, updates and automatic updates (admins), Repair installation (admins) |
@@ -545,3 +545,36 @@ The Quark has at least one feature in beta, such as Chat.
 - An IP address, a public name and `localhost` are tried exactly as typed.
 - When no name answers, the form says it couldn't connect and keeps what was typed, so the user can enter the IP
   address shown on the device instead.
+
+---
+
+### JN-ST-031: Pick a theme color
+
+**Preconditions:** Logged in as an admin (JN-AUTH-002). A second, non-admin account is signed in on another device.
+
+**Steps:**
+
+1. As the member, navigate to `/settings/general` and find **Theme color**, below **Theme**.
+2. Tap a swatch, then drag the hue slider for a custom color.
+3. As the admin, find **This Quark's default** on the same tab and tap a swatch.
+4. As the member, tap **Use this Quark's default**.
+5. Sign out as the member.
+
+**Expected result:**
+
+- The whole theme follows the picked color at once, in light and dark mode: the app bar and the drawer take a
+  clearly colored tone of it, page backgrounds and cards a faint tint, and buttons, selection, focus rings and
+  switches a stronger tone of the same hue. Only the hue of a custom color is kept, so every surface stays legible.
+- **Classic**, the first swatch, is Quark as it ships: neutral surfaces with the blue accent. A Quark where nobody
+  has picked a color looks that way.
+- After step 3 the member's color does not change: their own choice wins. After step 4 it becomes the admin's
+  choice, and later changes to the Quark's default reach them without a reload.
+- The sign-in page keeps the color the member last saw on this Quark. A Quark the app has never signed in to shows
+  that Quark's default.
+- The theme color belongs to the account and the Quark: the same account on another device gets the same color, and
+  switching hosts (JN-ST-003) switches color with it. Light, dark and system mode stay per device (JN-ST-006).
+
+**Notes:**
+
+- Non-admins get no **This Quark's default** section, and the Quark refuses the change from them.
+- A refused change says so ("Couldn't save your theme color…") and puts the previous color back.

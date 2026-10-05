@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/services/vault_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/quark_widget.dart';
@@ -61,7 +62,7 @@ class _EntryDetailPageState extends State<EntryDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: ChromeAppBar(
         title: Text(_editing ? 'Edit Entry' : widget.entry.name),
         actions: [
           Row(

@@ -9,6 +9,7 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark/services/feature_flags_service.dart';
+import 'package:quark/services/settings_service.dart';
 import 'package:quark/utils/error_text.dart';
 
 /// Result of a successful [AuthService.checkStatus] call.
@@ -246,14 +247,17 @@ class AuthService {
 
   /// Fetches the signed-in user's admin flag again into [AppSettings.isAdmin],
   /// their id and picture version into [AppSettings.userId] and
-  /// [AppSettings.avatarUpdatedAt], and the beta feature flags into
-  /// [AppSettings.featureFlags].
+  /// [AppSettings.avatarUpdatedAt], the beta feature flags into
+  /// [AppSettings.featureFlags], and the Quark's theme color and the user's own
+  /// into [AppSettings.themeColor] (#2740). The Quark's theme color needs no session,
+  /// so it is fetched for the sign-in page too.
   ///
   /// Without a session there is no admin and no account. A failed call keeps the last known
   /// value: it only decides what the app shows, and the Quark still refuses
   /// admin-only requests from a non-admin.
   static Future<void> refreshAccount() async {
     final settings = AppSettings.instance;
+    unawaited(SettingsService.refreshThemeColor());
     if (settings.sessionToken == null) {
       settings.isAdmin.value = false;
       settings.userId.value = null;
@@ -284,10 +288,19 @@ class AuthService {
   /// sending it that event, so every reconnect refreshes too.
   static void watchAccount() {
     AppSettings.instance.sessionTokenNotifier.addListener(refreshAccount);
+    // Switching between two Quarks that are both signed out moves no session,
+    // and the sign-in page still wants the new Quark's theme color (#2740).
+    AppSettings.instance.activeHostNotifier.addListener(
+      SettingsService.refreshThemeColor,
+    );
     EventsService.instance.events.listen((event) {
       if (event.kind == 'account_changed') refreshAccount();
       // An admin flipped a beta on or off; members follow it live (#2542).
       if (event.kind == 'feature_flag_changed') FeatureFlagsService.refresh();
+      // An admin changed the Quark's default theme color (#2740).
+      if (event.kind == 'public_settings_changed') {
+        SettingsService.refreshThemeColor();
+      }
     });
     EventsService.instance.connections.listen((_) => refreshAccount());
     EventsService.instance.start();

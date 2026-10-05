@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/pages/generic_file_viewer_open_stub.dart'
     if (dart.library.io) 'package:quark/pages/generic_file_viewer_open_native.dart'
@@ -110,7 +111,7 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: ChromeAppBar(
         title: Text(widget.node.name),
         actions: const [AppThemeToggle()],
       ),

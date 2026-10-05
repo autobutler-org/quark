@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/services/vault_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
@@ -38,7 +39,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: ChromeAppBar(
         title: const Text('New Entry'),
         actions: [
           Row(

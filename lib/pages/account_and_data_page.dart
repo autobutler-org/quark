@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/account_actions_controller.dart';
 import 'package:quark/services/app_settings.dart';
@@ -44,7 +45,7 @@ class _AccountAndDataPageState extends State<AccountAndDataPage> {
     final error = Theme.of(context).colorScheme.error;
     return Scaffold(
       key: const ValueKey('account_and_data_page'),
-      appBar: AppBar(title: const Text('Account and data')),
+      appBar: ChromeAppBar(title: const Text('Account and data')),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: Listenable.merge([
