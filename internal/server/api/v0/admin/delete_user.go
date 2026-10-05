@@ -53,12 +53,13 @@ func deleteUser(c *gin.Context) *serverutil.Response {
 		return accountErrorResponse(err)
 	}
 	// After the account: SQLite can hand its id out again, and the next
-	// account must not inherit its picture.
-	if _, err := avatarutil.Remove(avatarutil.RemoveParams{DataDir: storageutil.GetDataDir(), UserID: result.UserID}); err != nil {
-		return serverutil.InternalServerError(err)
-	}
-	// Nor its settings.
-	if _, err := usersettingsutil.Remove(usersettingsutil.RemoveParams{DataDir: storageutil.GetDataDir(), UserID: result.UserID}); err != nil {
+	// account must not inherit its picture or its settings. Both are tried
+	// whatever the other does, because the account is gone and a retry would
+	// not get this far.
+	dataDir := storageutil.GetDataDir()
+	_, avatarErr := avatarutil.Remove(avatarutil.RemoveParams{DataDir: dataDir, UserID: result.UserID})
+	_, settingsErr := usersettingsutil.Remove(usersettingsutil.RemoveParams{DataDir: dataDir, UserID: result.UserID})
+	if err := errors.Join(avatarErr, settingsErr); err != nil {
 		return serverutil.InternalServerError(err)
 	}
 	if bus := deps.EventBus(); bus != nil {
