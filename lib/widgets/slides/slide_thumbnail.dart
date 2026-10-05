@@ -37,8 +37,12 @@ class SlideThumbnail extends StatefulWidget {
     this.onMoveEarlier,
     this.onMoveLater,
     this.onPresent,
+    this.theme,
     super.key,
   });
+
+  /// The presentation's theme, which the slide is drawn in; null for none.
+  final SlideTheme? theme;
 
   /// The slide to draw.
   final Slide slide;
@@ -196,6 +200,7 @@ class _SlideThumbnailState extends State<SlideThumbnail> {
                       child: SlideCanvas.readOnly(
                         slide: slide,
                         size: size,
+                        theme: widget.theme,
                         imageBuilder: imageBuilder,
                         style: SlideEditorCanvas.styleOf(context),
                       ),

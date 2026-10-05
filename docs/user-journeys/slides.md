@@ -570,3 +570,70 @@ same drive as the presentation (`photos/cover.jpg`).
 - The entry is offered only on PowerPoint files the Quark can import: not on a legacy `.ppt`, a folder, or a file
   inside an archive.
 - Tapping the PowerPoint file itself still opens it in the generic viewer, as before.
+
+---
+
+### JN-SL-030: Choose a theme
+
+**Preconditions:** A presentation is open (JN-SL-004).
+
+**Steps:**
+
+1. Tap **Theme** in the toolbar, or scroll the properties panel to **Theme** (on a phone: **Format** › **Theme**, which
+   opens a sheet).
+2. Tap one of the previews: Light, Dark, Warm, Cool or High contrast.
+3. Undo.
+
+**Expected result:**
+
+- Each preview is the same sample slide drawn in that theme's fonts and colors; the theme in use is outlined and
+  checked, and a screen reader hears it as selected.
+- Picking one restyles every slide at once — backgrounds, title and body text, and any color picked from the theme's
+  colors — as one undo step, and it is autosaved (JN-SL-009). Colors typed as hex or picked from **More colors** stay
+  as they are.
+- The slide panel's thumbnails and the presentation (JN-SL-016) are drawn in the theme too.
+- A presentation made before themes, or one with none, reads **No theme** above the previews with an **Apply a theme**
+  button, which applies Light. Until then it opens, edits and saves as before, drawn in the app's colors.
+
+---
+
+### JN-SL-031: Slide layouts
+
+**Preconditions:** A presentation is open (JN-SL-004).
+
+**Steps:**
+
+1. With a slide selected, tap **Layout** in the toolbar, or scroll the properties panel to **Slide layout** (on a phone:
+   **Format** › **Slide layout**), and tap one of Title slide, Title and content, Section header, Two content or Blank.
+2. Move a title placeholder, then tap **Reset slide to layout**.
+3. Tap **+** in the slide panel.
+4. Long-press **+**, or tap the chevron beside it, and pick a layout (on a phone, also **Insert** › **New slide**).
+
+**Expected result:**
+
+- The layout in use is outlined and checked. Changing it keeps what was typed: text moves into the matching slots, and
+  text with no slot left stays on the slide as an ordinary box. Empty slots read their prompt ("Click to add title").
+- Reset puts the placeholders back where the layout has them and returns their text to the theme's style.
+- **+** adds a slide after the selected one on the same layout; the menu adds one on the layout picked. Each is one
+  undo step.
+
+---
+
+### JN-SL-032: Theme colors in the color controls
+
+**Preconditions:** A presentation is open with a shape or text box selected (JN-SL-021).
+
+**Steps:**
+
+1. Open **Fill color**, **Outline color**, **Text color**, or the properties panel's **Slide background**.
+2. Pick a swatch under **Theme colors**, such as Accent 1.
+3. Choose another theme (JN-SL-030).
+
+**Expected result:**
+
+- **Theme colors** lists the theme's ten roles — Background, Text, Background 2, Text 2 and Accent 1 to 6 — drawn in
+  the current theme, before **More colors** and the hex field.
+- A theme color follows the theme: after step 3 the shape or text takes the new theme's Accent 1. The hex field shows
+  the color's value in the current theme.
+- In a presentation with no theme, the theme colors are the app's own, as the slide is drawn.
+

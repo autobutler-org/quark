@@ -123,6 +123,11 @@ enum SlideSaveState {
 /// which the canvas's keys share; plain text pasted becomes a text box.
 /// [setSlideBackgroundColor] colors the selected slide, one undo step.
 ///
+/// **Themes and layouts** (#1163). [applyTheme] restyles the deck and
+/// [setSlideLayout] and [resetSlideToLayout] rebuild the selected slide on
+/// a layout, one undo step each. [addSlide] builds the new slide on the
+/// selected slide's layout unless it is given one.
+///
 /// **Pictures** (#1158). [insertImageFromDevice] picks a file, streams it up
 /// beside the presentation and puts it on the slide at the size its header
 /// gives; [insertImageFromQuark] does the same for a file already on the
@@ -476,13 +481,19 @@ class SlideEditorController extends ChangeNotifier {
     }
   }
 
-  /// Adds a blank slide after the selected one and selects it.
-  void addSlide() {
+  /// Adds a slide after the selected one, built on [layoutId] or else on
+  /// the selected slide's layout, and selects it.
+  void addSlide({String? layoutId}) {
     final doc = _doc;
     if (doc == null) return;
     _commitNotes();
     final at = selectedIndex + 1;
-    _showSlide(doc.controller.addSlide(index: at == 0 ? slides.length : at));
+    _showSlide(
+      doc.controller.insertSlideWithLayout(
+        layoutId ?? selectedLayoutId ?? SlideLayout.blankId,
+        index: at == 0 ? slides.length : at,
+      ),
+    );
     _notify();
   }
 
@@ -739,6 +750,45 @@ class SlideEditorController extends ChangeNotifier {
     final ids = await clipboard.paste(doc.controller, slideId);
     if (_disposed || ids.isEmpty || slideId != _selectedSlideId) return;
     selectElements(ids.toSet());
+  }
+
+  // ── Theme and layouts ─────────────────────────────────────────────────────
+
+  /// The presentation's theme; null for a deck with none, which the canvas
+  /// draws in the app's colors.
+  SlideTheme? get theme => presentation?.theme;
+
+  /// The layouts a slide can be built on, in picker order.
+  List<SlideLayout> get layouts => SlideMaster.standard.layouts;
+
+  /// The selected slide's layout id, or null with no slide selected.
+  String? get selectedLayoutId => selectedSlide?.layoutId;
+
+  /// Gives the presentation [theme], or none with null, restyling every
+  /// slide as one undo step.
+  void applyTheme(SlideTheme? theme) {
+    textEditing.commit();
+    _doc?.controller.setTheme(theme);
+  }
+
+  /// Moves the selected slide onto the layout [layoutId], keeping its
+  /// text, as one undo step.
+  void setSlideLayout(String layoutId) {
+    final doc = _doc;
+    final slideId = _selectedSlideId;
+    if (doc == null || slideId == null) return;
+    textEditing.commit();
+    doc.controller.setSlideLayout(slideId, layoutId);
+  }
+
+  /// Puts the selected slide's placeholders back where its layout has
+  /// them, as one undo step.
+  void resetSlideToLayout() {
+    final doc = _doc;
+    final slideId = _selectedSlideId;
+    if (doc == null || slideId == null) return;
+    textEditing.commit();
+    doc.controller.resetSlideToLayout(slideId);
   }
 
   // ── Slide background ──────────────────────────────────────────────────────

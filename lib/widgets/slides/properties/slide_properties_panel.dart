@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/widgets/slides/properties/slide_alt_text_field.dart';
 import 'package:quark/widgets/slides/properties/slide_number_field.dart';
+import 'package:quark/widgets/slides/theme/slide_layout_control.dart';
+import 'package:quark/widgets/slides/theme/slide_theme_control.dart';
 import 'package:quark/widgets/slides/toolbar/slide_color_palette.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_choice.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -12,7 +14,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// position, size and rotation as numbers, a selected picture's alt text,
 /// and the slide's background color (#1174) from the toolbar's swatches or
 /// a hex code — "Theme background" clears it so the slide follows the
-/// theme.
+/// theme — then the slide's layout and the presentation's theme (#1163):
+/// [SlideLayoutControl] and [SlideThemeControl].
 ///
 /// A wide screen shows it down the right of the canvas, collapsible from
 /// the toolbar; a phone opens it as a bottom sheet from the toolbar's
@@ -28,7 +31,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// `slide_prop_hint` on the note shown without exactly one element
 /// selected; `slide_background` on the background palette, with its
 /// swatches `slide_background_<index>`, `slide_background_none` and
-/// `slide_background_hex`.
+/// `slide_background_hex`; the layout and theme pickers' own.
 class SlidePropertiesPanel extends StatelessWidget {
   /// The properties of [controller]'s selection.
   const SlidePropertiesPanel({required this.controller, super.key});
@@ -143,10 +146,20 @@ class SlidePropertiesPanel extends StatelessWidget {
                   icon: QuarkIcons.slide_background,
                   current: controller.slideBackgroundColor,
                   noneLabel: 'Theme background',
+                  theme: controller.theme,
                   onChanged: controller.setSlideBackgroundColor,
                 ),
               ),
             ),
+          if (controller.selectedSlide != null)
+            QuarkSection(
+              title: 'Slide layout',
+              child: SlideLayoutControl(controller: controller),
+            ),
+          QuarkSection(
+            title: 'Theme',
+            child: SlideThemeControl(controller: controller),
+          ),
         ],
       ),
     );

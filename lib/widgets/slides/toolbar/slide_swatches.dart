@@ -15,6 +15,24 @@ class SlideSwatch {
   final SlideColor color;
 }
 
+/// The ten theme color roles as swatches (#1163), each a
+/// `SlideColor.theme` named for a person — "Text", "Background 2",
+/// "Accent 1" — for the palettes to offer before any literal color.
+List<SlideSwatch> themeSwatches() => [
+  for (final role in ThemeColor.values)
+    SlideSwatch(themeColorName(role), SlideColor.theme(role)),
+];
+
+/// What a palette calls the theme color [role]: "Background", "Text 2",
+/// "Accent 3".
+String themeColorName(ThemeColor role) {
+  final words = role.name.replaceAllMapped(
+    RegExp(r'(\d+)$'),
+    (m) => ' ${m[1]}',
+  );
+  return '${words[0].toUpperCase()}${words.substring(1)}';
+}
+
 /// The colors the slide editor's palettes offer: black and white, then the
 /// colors of [tokens] in the order the sheets formatting toolbar lists them
 /// (`sheetTextSwatches`), so a deck's colors match the rest of Quark.

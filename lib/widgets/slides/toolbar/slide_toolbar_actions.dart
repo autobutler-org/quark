@@ -18,7 +18,8 @@ import 'package:quark_slides/quark_slides.dart';
 ///
 /// Keys: the tools are `slide_tool_select`, `slide_tool_text`,
 /// `slide_tool_shape_<kind>`, `slide_tool_line` and `slide_tool_arrow`; the
-/// picture sources `slide_image_device` and `slide_image_quark`. Formatting
+/// picture sources `slide_image_device` and `slide_image_quark`; a new slide
+/// on a layout `slide_new_slide_<layout id>`. Formatting
 /// is `slide_format_<name>` (`bold`, `align_center`, `list_bullet`,
 /// `font_<family>`, `font_default`, `stroke_width_<n>`, `dash_<name>`,
 /// `opacity_<percent>`, `corner_<n>`), and the colors `slide_text_color`,
@@ -112,6 +113,19 @@ class SlideToolbarActions {
       icon: QuarkIcons.folder_outlined,
       onSelected: controller.imageUpload == null ? onImageFromQuark : null,
     ),
+  ];
+
+  /// A new slide after the selected one, on each layout (#1163).
+  List<SlideToolbarChoice> get newSlideLayouts => [
+    for (final layout in controller.layouts)
+      SlideToolbarChoice(
+        key: 'slide_new_slide_${layout.id}',
+        label: layout.name,
+        icon: QuarkIcons.slide_layout,
+        onSelected: controller.presentation == null
+            ? null
+            : () => controller.addSlide(layoutId: layout.id),
+      ),
   ];
 
   // ── Text ──────────────────────────────────────────────────────────────────
@@ -221,6 +235,7 @@ class SlideToolbarActions {
     icon: QuarkIcons.format_text_color,
     current: _format.color is SlideColor ? _format.color as SlideColor : null,
     noneLabel: 'Default color',
+    theme: controller.theme,
     onChanged: canFormatText
         ? (color) => _text.format(TextFormat(color: color))
         : null,
@@ -281,6 +296,7 @@ class SlideToolbarActions {
     icon: QuarkIcons.format_fill,
     current: _style.fill is SlideColor ? _style.fill as SlideColor : null,
     noneLabel: 'No fill',
+    theme: controller.theme,
     onChanged: _hasShapes
         ? (color) => controller.styleSelection(ElementStyle(fill: color))
         : null,
@@ -293,6 +309,7 @@ class SlideToolbarActions {
     icon: QuarkIcons.stroke_color,
     current: _style.stroke == null ? null : _style.strokeColor,
     noneLabel: 'No outline',
+    theme: controller.theme,
     onChanged: canStyle
         ? (color) => controller.styleSelection(
             color == null

@@ -36,8 +36,12 @@ class SlidePresentStage extends StatefulWidget {
     this.onNext,
     this.onPrevious,
     this.imageBuilder,
+    this.theme,
     super.key,
   });
+
+  /// The presentation's theme, which the slide is drawn in; null for none.
+  final SlideTheme? theme;
 
   /// The slide on screen.
   final Slide slide;
@@ -99,6 +103,7 @@ class _SlidePresentStageState extends State<SlidePresentStage>
       child: SlideCanvas.readOnly(
         slide: widget.slide,
         size: widget.size,
+        theme: widget.theme,
         imageBuilder: widget.imageBuilder,
         style: SlideEditorCanvas.styleOf(context),
       ),

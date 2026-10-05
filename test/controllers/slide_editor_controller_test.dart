@@ -1064,4 +1064,71 @@ void main() {
       expect(c.selectedSlide!.background?.color, isNull);
     });
   });
+
+  group('themes and layouts (#1163)', () {
+    Presentation titled() => Presentation(
+      title: 'Deck',
+      slides: [
+        Slide(id: 's1', layoutId: SlideLayout.title.id),
+        Slide(id: 's2'),
+      ],
+    );
+
+    test('applies a theme as one undo step that autosaves', () async {
+      final c = controllerFor(titled());
+      await c.load();
+      expect(c.theme, isNull);
+      c.applyTheme(SlideThemes.dark);
+      expect(c.theme, SlideThemes.dark);
+      expect(c.saveState, SlideSaveState.dirty);
+      c.applyTheme(null);
+      expect(c.theme, isNull);
+      c.undo();
+      expect(c.theme, SlideThemes.dark);
+      c.undo();
+      expect(c.theme, isNull);
+      expect(c.canUndo, isFalse);
+    });
+
+    test('add copies the selected slide\'s layout', () async {
+      final c = controllerFor(titled());
+      await c.load();
+      c.addSlide();
+      expect(c.selectedSlide!.layoutId, SlideLayout.title.id);
+      expect(c.selectedSlide!.elements, hasLength(2));
+      expect(ids(c), ['s1', c.selectedSlideId, 's2']);
+
+      c.selectSlide('s2');
+      c.addSlide();
+      expect(c.selectedSlide!.layoutId, SlideLayout.blankId);
+      expect(c.selectedSlide!.elements, isEmpty);
+    });
+
+    test('add with a layout builds the slide on it', () async {
+      final c = controllerFor(titled());
+      await c.load();
+      c.addSlide(layoutId: SlideLayout.twoContent.id);
+      expect(c.selectedIndex, 1);
+      expect(c.selectedLayoutId, SlideLayout.twoContent.id);
+      c.undo();
+      expect(ids(c), ['s1', 's2']);
+    });
+
+    test('changes and resets the selected slide\'s layout', () async {
+      final c = controllerFor(titled());
+      await c.load();
+      c.setSlideLayout(SlideLayout.titleAndContent.id);
+      expect(c.selectedLayoutId, SlideLayout.titleAndContent.id);
+      final body = c.selectedSlide!.elements.whereType<TextBox>().last;
+      c.document!.controller.moveElements('s1', {body.id}, 50, 50);
+      c.resetSlideToLayout();
+      expect(c.selectedSlide!.findElement(body.id)!.frame, body.frame);
+      c
+        ..undo()
+        ..undo()
+        ..undo();
+      expect(c.selectedLayoutId, SlideLayout.title.id);
+      expect(c.canUndo, isFalse);
+    });
+  });
 }

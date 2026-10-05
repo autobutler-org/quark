@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/slides/toolbar/slide_color_palette.dart';
 import 'package:quark/widgets/slides/toolbar/slide_hex_field.dart';
+import 'package:quark/widgets/slides/toolbar/slide_swatch_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_swatches.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_choice.dart';
 import 'package:quark_icons/quark_icons.dart';
@@ -18,6 +19,7 @@ void main() {
     WidgetTester tester, {
     SlideColor? current,
     bool enabled = true,
+    SlideTheme? theme,
   }) => tester.pumpWidget(
     MaterialApp(
       theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
@@ -30,6 +32,7 @@ void main() {
               icon: QuarkIcons.format_fill,
               current: current,
               noneLabel: 'No fill',
+              theme: theme,
               onChanged: enabled ? picked.add : null,
             ),
           ),
@@ -87,6 +90,63 @@ void main() {
       await tap.expectTapTargetGuidelines(tester);
     });
   }
+
+  test('names the theme roles for people', () {
+    expect(themeSwatches().map((s) => s.name), [
+      'Background',
+      'Text',
+      'Background 2',
+      'Text 2',
+      for (var i = 1; i <= 6; i++) 'Accent $i',
+    ]);
+    expect(
+      themeSwatches().map((s) => s.color),
+      everyElement(predicate<SlideColor>((c) => c.isThemeColor)),
+    );
+  });
+
+  testWidgets('offers the theme\'s colors first, writing the role (#1163)', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      theme: SlideThemes.dark,
+      current: const SlideColor.theme(ThemeColor.accent2),
+    );
+    final accent1 = find.byKey(const ValueKey('fill_theme_accent1'));
+    // Drawn in the deck's theme, not the role's light fallback.
+    final swatch = tester.widget<SlideSwatchButton>(accent1);
+    expect(swatch.color, Color(SlideThemes.dark.colors[ThemeColor.accent1]));
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('fill_theme_accent2'))),
+      isSemantics(label: 'Accent 2', isSelected: true, isButton: true),
+    );
+    expect(
+      tester.getTopLeft(accent1).dy,
+      lessThan(tester.getTopLeft(find.byKey(const ValueKey('fill_0'))).dy),
+    );
+    // The hex field reads the role's value in the theme.
+    final hex = SlideHexField.format(
+      SlideColor(SlideThemes.dark.colors[ThemeColor.accent2]),
+    );
+    expect(find.text(hex), findsOneWidget);
+
+    await tester.tap(accent1);
+    expect(picked, [const SlideColor.theme(ThemeColor.accent1)]);
+  });
+
+  testWidgets('a deck with no theme draws roles in the app\'s colors', (
+    tester,
+  ) async {
+    await pump(tester);
+    final swatch = tester.widget<SlideSwatchButton>(
+      find.byKey(const ValueKey('fill_theme_accent1')),
+    );
+    expect(
+      swatch.color,
+      QuarkTheme.light(themeColor: QuarkThemeColor.classic).colorScheme.primary,
+    );
+  });
 
   testWidgets('does nothing while the color does not apply', (tester) async {
     await pump(tester, enabled: false);

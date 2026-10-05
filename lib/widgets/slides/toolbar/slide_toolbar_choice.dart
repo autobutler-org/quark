@@ -42,11 +42,13 @@ class SlideColorChoice {
     required this.icon,
     required this.current,
     required this.noneLabel,
+    this.theme,
     this.onChanged,
   });
 
-  /// The control's `ValueKey`; its swatches are `<key>_<index>`, its none
-  /// option `<key>_none` and its hex field `<key>_hex`.
+  /// The control's `ValueKey`; its theme swatches are `<key>_theme_<role>`,
+  /// its other swatches `<key>_<index>`, its none option `<key>_none` and
+  /// its hex field `<key>_hex`.
   final String key;
 
   /// Its tooltip, and its heading in a menu.
@@ -61,6 +63,10 @@ class SlideColorChoice {
 
   /// What the none option is called: "No fill", "Default", "Theme".
   final String noneLabel;
+
+  /// The presentation's theme, which its role swatches are drawn in; null
+  /// for a deck with none, drawn in the canvas's fallback.
+  final SlideTheme? theme;
 
   /// Sets the color, null for none; null while the control does not apply.
   final ValueChanged<SlideColor?>? onChanged;

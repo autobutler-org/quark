@@ -72,6 +72,7 @@ class SlidePresentBody extends StatelessWidget {
       onNext: c.isLast ? null : c.next,
       onPrevious: c.isFirst ? null : c.previous,
       imageBuilder: imageBuilder,
+      theme: presentation.theme,
     );
     final controls = SlidePresentControls(
       visible: speaker || c.controlsVisible,
@@ -103,6 +104,7 @@ class SlidePresentBody extends StatelessWidget {
                       notes: slide.notes,
                       elapsed: c.elapsed,
                       imageBuilder: imageBuilder,
+                      theme: presentation.theme,
                     ),
                   ),
                   Center(child: controls),

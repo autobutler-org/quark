@@ -92,6 +92,12 @@ lib/widgets/
                                 and the upload progress strip
     properties/                 the properties panel and its fields: reads
                                 SlideEditorController and calls its commands
+    theme/                      the theme and layout pickers (#1163):
+                                SlideThemePicker and SlideLayoutPicker are
+                                data in, callbacks out; SlideThemeControl,
+                                SlideLayoutControl and SlidePickerMenuButton
+                                read SlideEditorController and call its
+                                commands
     toolbar/                    the slide toolbar: SlideToolbarActions maps
                                 the controller into choices, the rows and
                                 phone menus draw them; SlideToolbarGroup is

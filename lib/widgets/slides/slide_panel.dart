@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quark/widgets/slides/slide_thumbnail.dart';
+import 'package:quark/widgets/slides/theme/slide_new_slide_button.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// The slide panel: every slide as a numbered thumbnail in show order, with a
-/// button to add one (#1161).
+/// The slide panel: every slide as a numbered thumbnail in show order, drawn
+/// in the presentation's [theme], with a button to add one (#1161). Given
+/// [layouts] and [onAddWithLayout], the button is a [SlideNewSlideButton]
+/// (#1163): a tap adds a slide as before, a long press or its chevron picks
+/// the new slide's layout.
 ///
 /// It runs down the side of the editor on a wide window ([Axis.vertical]) and
 /// across the top on a phone ([Axis.horizontal]). A thumbnail is dragged to a
@@ -19,8 +23,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// Every change is reported out by slide id; the panel holds no state but
 /// its focus.
 ///
-/// Key prefixes: `slide_panel_add` on the add button, `slide_panel_list` on
-/// the list, and [SlideThumbnail]'s on each slide.
+/// Key prefixes: `slide_panel_add` on the add button, the
+/// [SlideNewSlideButton]'s, `slide_panel_list` on the list, and [SlideThumbnail]'s on each slide.
 class SlidePanel extends StatefulWidget {
   /// Creates the panel over [slides].
   const SlidePanel({
@@ -38,8 +42,21 @@ class SlidePanel extends StatefulWidget {
     required this.onSelectNext,
     this.imageBuilder,
     this.onPresent,
+    this.theme,
+    this.layouts = const [],
+    this.onAddWithLayout,
     super.key,
   });
+
+  /// The presentation's theme, which the thumbnails are drawn in.
+  final SlideTheme? theme;
+
+  /// The layouts a new slide can be built on.
+  final List<SlideLayout> layouts;
+
+  /// Called with the id of the layout a new slide is to be built on; null
+  /// leaves the add button plain.
+  final ValueChanged<String>? onAddWithLayout;
 
   /// The slides, in show order.
   final List<Slide> slides;
@@ -133,16 +150,26 @@ class _SlidePanelState extends State<SlidePanel> {
       :onMove,
       :imageBuilder,
       :onPresent,
+      :theme,
+      :layouts,
+      :onAddWithLayout,
     ) = widget;
     final tokens = QuarkTokens.of(context);
     final vertical = axis == Axis.vertical;
     final last = slides.length - 1;
-    final add = QuarkBarIconButton(
-      key: const ValueKey('slide_panel_add'),
-      icon: QuarkIcons.add_rounded,
-      tooltip: 'New slide',
-      onPressed: onAdd,
-    );
+    final Widget add = onAddWithLayout == null || layouts.isEmpty
+        ? QuarkBarIconButton(
+            key: const ValueKey('slide_panel_add'),
+            icon: QuarkIcons.add_rounded,
+            tooltip: 'New slide',
+            onPressed: onAdd,
+          )
+        : SlideNewSlideButton(
+            layouts: layouts,
+            onAdd: onAdd,
+            onAddWithLayout: onAddWithLayout,
+            direction: vertical ? Axis.horizontal : Axis.vertical,
+          );
     final list = ReorderableListView.builder(
       key: const ValueKey('slide_panel_list'),
       scrollDirection: axis,
@@ -154,6 +181,7 @@ class _SlidePanelState extends State<SlidePanel> {
         final thumbnail = SlideThumbnail(
           slide: slide,
           size: size,
+          theme: theme,
           number: index + 1,
           selected: slide.id == selectedSlideId,
           onSelect: () => onSelect(slide.id),
