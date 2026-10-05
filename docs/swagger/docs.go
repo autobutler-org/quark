@@ -5626,7 +5626,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped.",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting a .qslide, .qsheet or .qdoc first snapshots its old content into its version history. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -5924,7 +5924,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped.",
+                "description": "Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting a .qslide, .qsheet or .qdoc first snapshots its old content into its version history. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -9851,6 +9851,314 @@ const docTemplate = `{
                 }
             }
         },
+        "/versions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "List the snapshots in a file's version history, newest first. A file with no history has none. Needs read access on the file.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "versions"
+                ],
+                "summary": "List a file's versions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Files-relative path of the file",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_versions.ListVersionsJSON"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Copy a file's current content into its version history. A named version needs a label of up to 100 characters; an auto version within 10 minutes of the file's last one is skipped. Content identical to the newest version is not copied again: the answer names that version with created false, and naming it labels it. Needs write access on the file.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "versions"
+                ],
+                "summary": "Snapshot a file",
+                "parameters": [
+                    {
+                        "description": "File and label",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_versions.createVersionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_versions.SnapshotJSON"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "413": {
+                        "description": "Version history is full",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/versions/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a named version from a file's history. Auto versions are removed by retention only. Needs write access on the file.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "versions"
+                ],
+                "summary": "Delete a named version",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Version id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Files-relative path of the file",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Ok",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/versions/{id}/content": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stream one version's content, typed by the file's extension. Needs read access on the file.",
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "versions"
+                ],
+                "summary": "Download a version",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Version id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Files-relative path of the file",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The version's content",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/versions/{id}/restore": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Put a version's content back in the file. The file's current content is snapshotted first, labeled \"Before restore\", so restoring that snapshot undoes this. The file is replaced atomically, and an upload event announces it. Needs write access on the file.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "versions"
+                ],
+                "summary": "Restore a version",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Version id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Files-relative path of the file",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_versions.RestoreJSON"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/videos/metadata": {
             "get": {
                 "security": [
@@ -10809,6 +11117,17 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "fileversionutil.Kind": {
+            "type": "string",
+            "enum": [
+                "auto",
+                "named"
+            ],
+            "x-enum-varnames": [
+                "KindAuto",
+                "KindNamed"
+            ]
         },
         "grouputil.Group": {
             "type": "object",
@@ -12793,6 +13112,102 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "semver": {
+                    "type": "string"
+                }
+            }
+        },
+        "v0_versions.ListVersionsJSON": {
+            "type": "object",
+            "properties": {
+                "versions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v0_versions.VersionJSON"
+                    }
+                }
+            }
+        },
+        "v0_versions.RestoreJSON": {
+            "type": "object",
+            "properties": {
+                "backup": {
+                    "description": "Backup holds what the file held before; restoring it undoes this one.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v0_versions.VersionJSON"
+                        }
+                    ]
+                },
+                "restored": {
+                    "description": "Restored is the version the file now holds.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v0_versions.VersionJSON"
+                        }
+                    ]
+                }
+            }
+        },
+        "v0_versions.SnapshotJSON": {
+            "type": "object",
+            "properties": {
+                "created": {
+                    "description": "Created is false when the content matched the newest snapshot, or an\nauto snapshot came too soon after the last.",
+                    "type": "boolean"
+                },
+                "version": {
+                    "description": "Version holds the file's content: the new snapshot, or the existing one\nthat already did when nothing was copied.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v0_versions.VersionJSON"
+                        }
+                    ]
+                }
+            }
+        },
+        "v0_versions.VersionJSON": {
+            "type": "object",
+            "properties": {
+                "authorId": {
+                    "description": "AuthorID is the account that took the snapshot, zero for the system.",
+                    "type": "integer"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/fileversionutil.Kind"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "sha256": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v0_versions.createVersionRequest": {
+            "type": "object",
+            "required": [
+                "path"
+            ],
+            "properties": {
+                "kind": {
+                    "description": "Kind is \"named\" (the default) or \"auto\".",
+                    "type": "string"
+                },
+                "label": {
+                    "description": "Label names a named version, and is required for one.",
+                    "type": "string"
+                },
+                "path": {
+                    "description": "Path is the file, files-relative.",
                     "type": "string"
                 }
             }

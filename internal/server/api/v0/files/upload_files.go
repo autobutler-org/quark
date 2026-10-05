@@ -4,6 +4,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/fileversionutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
@@ -13,7 +14,7 @@ import (
 
 // uploadFiles godoc
 // @Summary Upload files to the top-level directory
-// @Description Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped.
+// @Description Upload one or more files via multipart/form-data. Needs write access on the top-level directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting a .qslide, .qsheet or .qdoc first snapshots its old content into its version history. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped.
 // @Tags files
 // @Accept multipart/form-data
 // @Produce json
@@ -35,7 +36,7 @@ func uploadFiles(c *gin.Context) *serverutil.Response {
 
 // uploadFiles godoc
 // @Summary Upload files to a nested directory
-// @Description Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped.
+// @Description Upload one or more files via multipart/form-data. Needs write access on the directory; the caller owns each file the upload creates. A name already in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting a .qslide, .qsheet or .qdoc first snapshots its old content into its version history. Answers with the files-relative path each file landed at, after any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail whose filename is the file's; one that names no earlier file, or is not a valid JPEG, is skipped.
 // @Tags files
 // @Accept multipart/form-data
 // @Produce json
@@ -92,6 +93,10 @@ func uploadFilesNested(c *gin.Context, rootDir string) *serverutil.Response {
 			Overwrite: overwrite,
 			KeepBoth:  keepBoth,
 			Sidecar:   sidecars.Attach,
+			// An editor's save snapshots what it replaces (#1173).
+			BeforeOverwrite: deps.FileVersions().BeforeSave(fileversionutil.BeforeSaveParams{
+				Ctx: c.Request.Context(), FS: fsys, AuthorID: callerID(c),
+			}),
 		})
 		// Files that landed before a failure are the caller's too, and the
 		// clients have to hear about them however the request ended.

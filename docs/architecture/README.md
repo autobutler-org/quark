@@ -10,6 +10,7 @@ repository root; everything here expands on it. Diagrams are Mermaid, so GitHub 
 | [Request flows](request-flows.md)     | auth, streaming upload, live events, background jobs           |
 | [Data](data.md)                       | SQLite databases, schema, VFS, the vault                       |
 | [Durability](durability.md)           | what survives a crash or power cut, and the residual risk      |
+| [Version history](versions.md)        | file snapshots: storage, retention, restore, following moves   |
 | [Capacity](capacity.md)               | concurrency model, measured load limits, what to fix first     |
 | [Frontend](frontend.md)               | Flutter app layers, routing, the widget package                |
 | [Styling](styling.md)                 | design tokens, the theme, and what keeps pages visually consistent |
