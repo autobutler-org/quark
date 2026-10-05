@@ -178,4 +178,31 @@ void main() {
     expect(settings.quarkThemeColor.value, 'lime');
     expect(picker(tester, quarkPicker).value, QuarkThemeColor.lime);
   });
+
+  // #2773: with the previous value unknown, putting null back resolved to the
+  // per-host cache, which the rejected pick had already overwritten.
+  testWidgets('a refused save is undone when the previous value was unknown', (
+    tester,
+  ) async {
+    await pumpSettings(tester, isAdmin: true, saveStatus: 400);
+    // Neither fetch has answered: only the cached lime stands.
+    await settings.setUserThemeColor(null);
+    await settings.setQuarkThemeColor(null);
+    await tester.pump();
+    expect(settings.themeColor.value, QuarkThemeColor.lime);
+
+    await tester.tap(within(userPicker, 'theme_color_swatch_violet'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(settings.userThemeColor.value, isNull);
+    expect(settings.themeColor.value, QuarkThemeColor.lime);
+
+    await tester.tap(within(quarkPicker, 'theme_color_swatch_pink'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(settings.quarkThemeColor.value, isNull);
+    expect(settings.themeColor.value, QuarkThemeColor.lime);
+  });
 }
