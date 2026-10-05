@@ -294,9 +294,14 @@ func (im *importer) readSlide(name string) (outSlide, []string, error) {
 	}
 
 	slide := outSlide{Elements: []outElement{}}
-	if part.Timing != nil || part.Transition != nil {
-		s.warn("Animations and transitions are not imported.")
+	if part.Timing != nil {
+		s.warn("Animations are not imported.")
 	}
+	transition, mapped := readTransition(part)
+	if !mapped {
+		s.warn("This slide's transition has no match in the editor, so it was left out.")
+	}
+	slide.Transition = transition
 	// The master's shapes show unless the layout or slide hides them, and the
 	// layout's unless the slide does.
 	if layout != nil && showsMasterShapes(part.ShowMasterShapes) {

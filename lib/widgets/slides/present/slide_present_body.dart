@@ -69,6 +69,8 @@ class SlidePresentBody extends StatelessWidget {
       slide: slide,
       size: presentation.size,
       label: c.position,
+      transition: c.transition,
+      reverse: c.movedBack,
       onNext: c.isLast ? null : c.next,
       onPrevious: c.isFirst ? null : c.previous,
       imageBuilder: imageBuilder,

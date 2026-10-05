@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "title": "Written by a newer Quark",
   "size": {"width": 1024, "height": 768, "unit": "pt"},
   "theme": {
@@ -85,7 +85,7 @@
           ]
         }
       ],
-      "transition": {"kind": "fade", "duration": 0.3}
+      "animations": [{"element": "e1", "effect": "flyIn", "durationMs": 300}]
     }
   ],
   "comments": [{"author": "ada", "text": "Nice"}]

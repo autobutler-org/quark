@@ -466,7 +466,7 @@ func TestImportSkipsWhatTheEditorCannotShowWithWarnings(t *testing.T) {
 		messages = append(messages, w.Message)
 	}
 	want := []string{
-		"Animations and transitions are not imported.",
+		"Animations are not imported.",
 		"Tables are not imported.",
 		"Charts are not imported.",
 		"SmartArt graphics are not imported.",

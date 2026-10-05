@@ -17,6 +17,7 @@ import '../model/stroke.dart';
 import '../model/text_format.dart';
 import '../model/text_paragraph.dart';
 import '../model/text_run.dart';
+import '../model/slide_transition_spec.dart';
 import '../layout/layout_flow.dart';
 import '../layout/slide_layout.dart';
 import '../layout/slide_master.dart';
@@ -357,6 +358,38 @@ class SlideDocumentController {
       _updateSlide(
         slideId,
         (slide) => slide.copyWith(background: background),
+      );
+
+  // ---------------------------------------------------------------------------
+  // Transitions
+  // ---------------------------------------------------------------------------
+
+  /// Gives the slide [slideId] its own [transition], or with `null` lets it
+  /// follow the deck's `Presentation.defaultTransition`, as one step.
+  ///
+  /// ```dart
+  /// doc.setSlideTransition(slideId, const SlideTransitionSpec.fade());
+  /// ```
+  void setSlideTransition(String slideId, SlideTransitionSpec? transition) =>
+      _updateSlide(
+        slideId,
+        (slide) => slide.copyWith(transition: transition),
+      );
+
+  /// Makes [transition] the deck's default and clears every slide's own, so
+  /// every slide — and every slide added later — plays it, as one step.
+  ///
+  /// ```dart
+  /// doc.applyTransitionToAll(const SlideTransitionSpec.fade());
+  /// ```
+  void applyTransitionToAll(SlideTransitionSpec transition) => _commit(
+        _presentation.copyWith(
+          defaultTransition: transition,
+          slides: [
+            for (final slide in _presentation.slides)
+              slide.copyWith(transition: null),
+          ],
+        ),
       );
 
   // ---------------------------------------------------------------------------

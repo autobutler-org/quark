@@ -292,7 +292,10 @@ same drive as the presentation (`photos/cover.jpg`).
   slides stop there.
 - A control bar reads "Slide N of M" with previous and next; it fades when the pointer rests and comes back when it moves
   or the screen is touched. With a screen reader running it stays.
-- Slides cross-fade, unless reduced motion is on.
+- Each slide comes on with its transition — its own, or the presentation's default: a cut, fade, push, wipe or zoom
+  over 0.2 to 2 seconds (#1164). Stepping back plays it the other way; a presentation without transitions cuts. Under
+  reduced motion every transition is a short fade with no movement. The presenter view's next-slide preview never
+  animates.
 - Escape or **End the presentation** returns to the editor.
 
 ---
@@ -448,8 +451,8 @@ same drive as the presentation (`photos/cover.jpg`).
 - The file is named after the presentation (`Talk.qslide` saves as `Talk.pptx`), and the button shows a spinner and
   ignores taps until the export ends.
 - It opens in PowerPoint, Keynote, LibreOffice and Google Slides at the presentation's aspect ratio, with its shapes,
-  lines and arrows, text and its formatting, pictures, groups, rotation, stacking order, backgrounds and speaker
-  notes.
+  lines and arrows, text and its formatting, pictures, groups, rotation, stacking order, backgrounds, speaker
+  notes and slide transitions (fade, push, wipe and zoom, at their durations).
 - Pictures are embedded from the files they name. One that is missing, in a folder the user cannot read, or not a
   PNG, JPEG, GIF or BMP is a gray box carrying its alt text, so the slide keeps its layout.
 - Exporting changes nothing in the presentation's folder. A failed export reads "Couldn't export the presentation."
@@ -543,7 +546,9 @@ same drive as the presentation (`photos/cover.jpg`).
 - "Importing Talk.pptx…" shows with a spinner until the Quark answers. The presentation is written beside the
   PowerPoint file as `Talk.qslide` (or `Talk_(1).qslide` when that is taken) with its pictures in `Talk_media`; the
   PowerPoint file itself is unchanged.
-- When anything could not come across — charts, tables, SmartArt, video, animations, unusual shapes — a summary lists
+- Fade, push, wipe and zoom transitions come across with their direction and duration.
+- When anything could not come across — charts, tables, SmartArt, video, animations, other transitions, unusual
+  shapes — a summary lists
   each kind once with the slides it was on ("Slides 2 and 5", or "Whole presentation"), before the presentation opens.
   Closing it any way opens the presentation.
 - The new presentation opens in the editor at its URL (JN-SL-004).

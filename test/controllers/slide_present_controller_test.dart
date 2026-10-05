@@ -94,6 +94,43 @@ void main() {
     c.dispose();
   });
 
+  test('each slide plays its own transition, or the deck\'s', () async {
+    const fade = SlideTransitionSpec.fade();
+    const push = SlideTransitionSpec(kind: SlideTransitionKind.push);
+    final d = deck(3);
+    final c = controllerFor(
+      initial: d.copyWith(
+        defaultTransition: fade,
+        slides: [
+          d.slides[0],
+          d.slides[1].copyWith(transition: push),
+          d.slides[2],
+        ],
+      ),
+    );
+    expect(c.transition, fade);
+    expect(c.movedBack, isFalse);
+    c.next();
+    expect(c.transition, push);
+    expect(c.movedBack, isFalse);
+    c.last();
+    expect(c.transition, fade);
+    c.previous();
+    expect(c.transition, push);
+    expect(c.movedBack, isTrue);
+    c.goTo(1);
+    expect(c.movedBack, isTrue, reason: 'no step, so nothing changes');
+    c.next();
+    expect(c.movedBack, isFalse);
+    c.dispose();
+  });
+
+  test('before loading there is no transition', () {
+    final c = controllerFor();
+    expect(c.transition, SlideTransitionSpec.none);
+    c.dispose();
+  });
+
   testWidgets('the clock counts from the start and the controls idle out', (
     tester,
   ) async {

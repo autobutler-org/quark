@@ -11,7 +11,7 @@ import 'qslide_format_exception.dart';
 /// `schemaVersion` beside the fields of [Presentation.toJson].
 ///
 /// ```json
-/// {"schemaVersion": 2, "title": "Demo",
+/// {"schemaVersion": 3, "title": "Demo",
 ///  "size": {"width": 1920, "height": 1080},
 ///  "slides": [{"id": "s1", "elements": []}]}
 /// ```
@@ -30,13 +30,15 @@ import 'qslide_format_exception.dart';
 ///   up to it one version at a time as it is read, and saved at the new
 ///   version. Version 1 named its theme by a string and had no layouts or
 ///   theme colors: its theme becomes the built-in one of that id, or none,
-///   and every slide is blank-layout.
+///   and every slide is blank-layout. Version 2 had no transitions: every
+///   slide cuts, which is what a version 3 file without them means too.
 abstract final class QslideCodec {
   /// The schema version this package writes and the newest it reads.
   ///
   /// Version 2 added the inline theme, theme role colors (`theme:accent1`),
-  /// slide layouts and text box slots.
-  static const schemaVersion = 2;
+  /// slide layouts and text box slots. Version 3 added slide transitions:
+  /// a slide's own `transition` and the deck's default one.
+  static const schemaVersion = 3;
 
   /// The file extension, including the dot.
   static const fileExtension = '.qslide';
@@ -83,6 +85,7 @@ abstract final class QslideCodec {
   /// Upgrades a root object from the version it is keyed by to the next.
   static final Map<int, JsonMap Function(JsonMap)> _migrations = {
     1: _fromVersion1,
+    2: _fromVersion2,
   };
 
   /// Version 1 to 2: the `theme` string — "its id or file path", which no
@@ -97,6 +100,12 @@ abstract final class QslideCodec {
       'theme': builtIn?.toJson(),
     }..removeWhere((key, value) => key == 'theme' && value == null);
   }
+
+  /// Version 2 to 3: transitions are new, and a deck without any cuts from
+  /// slide to slide as version 2 did, so only the version changes. A
+  /// `transition` a version 2 file carried as an unknown field is read as
+  /// one from here on.
+  static JsonMap _fromVersion2(JsonMap json) => {...json, 'schemaVersion': 3};
 
   /// The `.qslide` root object for [presentation].
   static JsonMap toJson(Presentation presentation) => {

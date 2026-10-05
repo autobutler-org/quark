@@ -47,11 +47,12 @@ void main() {
     WidgetTester tester, {
     int start = 0,
     int slides = 3,
+    Presentation? presentation,
   }) async {
     final controller = SlidePresentController(
       filePath: 'talks/Deck.qslide',
       startIndex: start,
-      loadPresentation: (path, {serial}) async => deck(slides),
+      loadPresentation: (path, {serial}) async => presentation ?? deck(slides),
       fullscreen: screen,
     );
     router = GoRouter(
@@ -254,18 +255,155 @@ void main() {
     await finish(tester, c);
   });
 
-  testWidgets('no cross-fade under reduced motion', (tester) async {
+  /// A deck that pushes from slide to slide, except the last, which wipes.
+  Presentation transitioning() {
+    final d = deck(3);
+    return d.copyWith(
+      defaultTransition: const SlideTransitionSpec(
+        kind: SlideTransitionKind.push,
+        durationMs: 1000,
+      ),
+      slides: [
+        ...d.slides.take(2),
+        d.slides[2].copyWith(
+          transition: const SlideTransitionSpec(
+            kind: SlideTransitionKind.wipe,
+            direction: SlideTransitionDirection.up,
+            durationMs: 600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Finder layer(int n) => find.byKey(ValueKey('slide_transition_s$n'));
+
+  Offset offsetOf(WidgetTester tester, int n) =>
+      tester.widget<FractionalTranslation>(layer(n)).translation;
+
+  for (final (name, size) in [
+    ('narrow', tap.narrowViewport),
+    ('wide', tap.wideViewport),
+  ]) {
+    testWidgets('each step plays the transition of the slide it reaches '
+        '($name)', (tester) async {
+      tap.setViewport(tester, size);
+      final c = await pumpPresent(tester, presentation: transitioning());
+      expect(layer(1), findsOneWidget);
+
+      // Forward: slide 2 pushes in from the right.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(showing(1), findsOneWidget);
+      expect(showing(2), findsOneWidget);
+      expect(offsetOf(tester, 1).dx, closeTo(-0.5, 1e-9));
+      expect(offsetOf(tester, 2).dx, closeTo(0.5, 1e-9));
+      await tester.pumpAndSettle();
+      expect(showing(1), findsNothing);
+
+      // Back: the same push, the other way.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(c.movedBack, isTrue);
+      expect(offsetOf(tester, 1).dx, closeTo(-0.5, 1e-9));
+      expect(offsetOf(tester, 2).dx, closeTo(0.5, 1e-9));
+      await tester.pumpAndSettle();
+
+      // A jump to the end plays the last slide's own wipe.
+      await tester.sendKeyEvent(LogicalKeyboardKey.end);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      final view = tester.widget<SlideTransitionView>(
+        find.byType(SlideTransitionView),
+      );
+      expect(view.transition.kind, SlideTransitionKind.wipe);
+      expect(view.reverse, isFalse);
+      expect(offsetOf(tester, 3), Offset.zero);
+      expect(showing(1), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(showing(1), findsNothing);
+      expect(showing(3), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await finish(tester, c);
+    });
+  }
+
+  testWidgets('the next-slide preview does not transition', (tester) async {
     tap.setViewport(tester, tap.wideViewport);
-    tester.platformDispatcher.accessibilityFeaturesTestValue =
-        const FakeAccessibilityFeatures(disableAnimations: true);
-    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    final c = await pumpPresent(tester, presentation: transitioning());
+    await tester.tap(
+      find.byKey(const ValueKey('slide_present_presenter_view')),
+    );
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    final preview = find.byKey(const ValueKey('slide_presenter_next'));
+    expect(
+      find.descendant(of: preview, matching: find.byType(SlideTransitionView)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: preview,
+        matching: find.text('Slide text 3', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(SlideTransitionView), findsOneWidget);
+    await tester.pumpAndSettle();
+    await finish(tester, c);
+  });
+
+  testWidgets('a deck with no transitions cuts from slide to slide', (
+    tester,
+  ) async {
+    tap.setViewport(tester, tap.wideViewport);
     final c = await pumpPresent(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
-    expect(showing(1), findsNothing, reason: 'no old slide fading out');
+    expect(showing(1), findsNothing, reason: 'no old slide lingering');
     expect(showing(2), findsOneWidget);
     await finish(tester, c);
   });
+
+  for (final reduced in [true, false]) {
+    testWidgets('reduced motion ${reduced ? 'on' : 'off'}: '
+        '${reduced ? 'a push becomes a short fade' : 'the push moves'}', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      if (reduced) {
+        tester.platformDispatcher.accessibilityFeaturesTestValue =
+            const FakeAccessibilityFeatures(disableAnimations: true);
+        addTearDown(
+          tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+        );
+      }
+      final c = await pumpPresent(tester, presentation: transitioning());
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(showing(1), findsOneWidget);
+      if (reduced) {
+        expect(offsetOf(tester, 2), Offset.zero, reason: 'no movement');
+        final opacity = tester.widget<Opacity>(
+          find.descendant(of: layer(2), matching: find.byType(Opacity)).first,
+        );
+        expect(opacity.opacity, closeTo(0.5, 1e-9));
+        await tester.pump(const Duration(milliseconds: 101));
+        expect(showing(1), findsNothing, reason: 'over in 200 ms');
+      } else {
+        expect(offsetOf(tester, 2).dx, greaterThan(0.9));
+        await tester.pump(const Duration(milliseconds: 101));
+        expect(showing(1), findsOneWidget, reason: 'still pushing');
+        await tester.pumpAndSettle();
+      }
+      await finish(tester, c);
+    });
+  }
 
   testLargeText('presents without overflow', (tester, size) async {
     final c = await pumpPresent(tester);

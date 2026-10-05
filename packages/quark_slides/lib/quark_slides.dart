@@ -16,7 +16,11 @@
 /// colors (`SlideColor.theme(ThemeColor.accent1)`), and the `SlideLayout`s
 /// of `SlideMaster.standard` whose placeholders slides are built from; and
 /// find and replace: `SlideSearch` over a presentation, its `SlideMatch`es,
-/// and the controller's `replaceCurrent` and `replaceAll`.
+/// and the controller's `replaceCurrent` and `replaceAll`; and
+/// slide transitions: `SlideTransitionSpec` on a slide and as the deck's
+/// default, the controller's `setSlideTransition` and `applyTransitionToAll`,
+/// and `SlideTransitionView`, which plays one between two slides, over the
+/// pure `SlideTransitionFrame` math.
 library;
 
 export 'src/clipboard/slide_clipboard.dart';
@@ -59,6 +63,9 @@ export 'src/model/slide_background.dart';
 export 'src/model/slide_color.dart';
 export 'src/model/slide_element.dart';
 export 'src/model/slide_size.dart';
+export 'src/model/slide_transition_direction.dart';
+export 'src/model/slide_transition_kind.dart';
+export 'src/model/slide_transition_spec.dart';
 export 'src/model/stroke.dart';
 export 'src/model/text_format.dart';
 export 'src/model/text_paragraph.dart';
@@ -75,3 +82,6 @@ export 'src/theme/theme_palette.dart';
 export 'src/theme/theme_shape_style.dart';
 export 'src/theme/theme_text_role.dart';
 export 'src/theme/theme_text_style.dart';
+export 'src/transition/slide_transition_frame.dart';
+export 'src/transition/slide_transition_layer.dart';
+export 'src/transition/slide_transition_view.dart';

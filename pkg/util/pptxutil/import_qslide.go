@@ -37,6 +37,15 @@ type outSlide struct {
 	Background *outBackground `json:"background,omitempty"`
 	Elements   []outElement   `json:"elements"`
 	Notes      string         `json:"notes,omitempty"`
+	Transition *outTransition `json:"transition,omitempty"`
+}
+
+// outTransition is a slide's transition; the direction is left out when left
+// and the duration when 500 ms, as the codec leaves its defaults out.
+type outTransition struct {
+	Kind      string `json:"kind"`
+	Direction string `json:"direction,omitempty"`
+	Duration  int    `json:"duration,omitempty"`
 }
 
 // outBackground is a slide's background color, image, or both.
