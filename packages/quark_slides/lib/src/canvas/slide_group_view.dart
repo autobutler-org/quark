@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../model/slide_element.dart';
+import '../theme/slide_theme.dart';
 import 'slide_canvas_style.dart';
 import 'slide_element_label.dart';
 import 'slide_element_view.dart';
@@ -21,6 +22,7 @@ class SlideGroupView extends StatelessWidget {
     super.key,
     required this.group,
     required this.style,
+    required this.theme,
     required this.elementLabel,
     this.imageBuilder,
     this.editingId,
@@ -32,8 +34,12 @@ class SlideGroupView extends StatelessWidget {
   /// The group to draw.
   final GroupElement group;
 
-  /// Supplies text defaults and the placeholder color.
+  /// Supplies the placeholder colors.
   final SlideCanvasStyle style;
+
+  /// The theme the slide's role colors and unset text styles resolve
+  /// against: the deck's, or `slideFallbackTheme`.
+  final SlideTheme theme;
 
   /// Names each child for a screen reader.
   final SlideElementLabel elementLabel;
@@ -61,6 +67,7 @@ class SlideGroupView extends StatelessWidget {
             SlideElementView(
               element: child,
               style: style,
+              theme: theme,
               label: elementLabel(child),
               elementLabel: elementLabel,
               imageBuilder: imageBuilder,

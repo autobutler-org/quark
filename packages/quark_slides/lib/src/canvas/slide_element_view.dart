@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 
 import '../model/slide_element.dart';
+import '../theme/slide_theme.dart';
 import 'slide_canvas_style.dart';
 import 'slide_element_label.dart';
 import 'slide_group_view.dart';
@@ -34,6 +35,7 @@ class SlideElementView extends StatelessWidget {
     super.key,
     required this.element,
     required this.style,
+    required this.theme,
     required this.label,
     this.imageBuilder,
     this.selected = false,
@@ -48,8 +50,12 @@ class SlideElementView extends StatelessWidget {
   /// The element to draw.
   final SlideElement element;
 
-  /// Supplies text defaults and the placeholder color.
+  /// Supplies the placeholder colors.
   final SlideCanvasStyle style;
+
+  /// The theme the slide's role colors and unset text styles resolve
+  /// against: the deck's, or `slideFallbackTheme`.
+  final SlideTheme theme;
 
   /// What a screen reader announces.
   final String label;
@@ -100,12 +106,13 @@ class SlideElementView extends StatelessWidget {
       final TextBox box => SlideTextBoxView(
           box: box,
           style: style,
+          theme: theme,
           showPlaceholder: showPlaceholder,
         ),
-      final ShapeElement shape =>
-        CustomPaint(painter: SlideShapePainter(shape), size: Size.infinite),
-      final LineElement line =>
-        CustomPaint(painter: SlideLinePainter(line), size: Size.infinite),
+      final ShapeElement shape => CustomPaint(
+          painter: SlideShapePainter(shape, theme), size: Size.infinite),
+      final LineElement line => CustomPaint(
+          painter: SlideLinePainter(line, theme), size: Size.infinite),
       ImageElement(:final source, :final fit) when imageBuilder != null =>
         ClipRect(
           child: imageBuilder!(
@@ -117,6 +124,7 @@ class SlideElementView extends StatelessWidget {
       final GroupElement group => SlideGroupView(
           group: group,
           style: style,
+          theme: theme,
           elementLabel: elementLabel,
           imageBuilder: imageBuilder,
           editingId: editingId,

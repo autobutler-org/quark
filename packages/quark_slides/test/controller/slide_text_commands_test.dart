@@ -29,7 +29,7 @@ Presentation deck() => Presentation(
     );
 
 /// Measures 40 slide units per paragraph.
-double lines(TextBox box) => box.paragraphs.length * 40.0;
+double lines(TextBox box, SlideTheme? theme) => box.paragraphs.length * 40.0;
 
 void main() {
   late SlideDocumentController doc;

@@ -54,4 +54,31 @@ void main() {
     expect(deck.slides[1].elementById('e4'), isA<LineElement>());
     expect(deck.slides[1].indexOfElement('nope'), -1);
   });
+
+  test('a text box fills a layout slot until made ordinary', () {
+    final box = TextBox(
+      id: 't',
+      frame: ElementFrame(x: 0, y: 0, width: 10, height: 10),
+      slot: 'title',
+      textRole: ThemeTextRole.title,
+    );
+    expect(box.copyWith(placeholder: 'x').slot, 'title');
+    final ordinary = box.copyWith(slot: null);
+    expect(ordinary.slot, isNull);
+    expect(ordinary.textRole, ThemeTextRole.title);
+    expect(ordinary, isNot(box));
+    expect(box.toJson(), containsPair('slot', 'title'));
+    expect(ordinary.copyWith(textRole: ThemeTextRole.body).toJson(),
+        isNot(contains('textRole')));
+  });
+
+  test('a slide is blank-layout unless it says otherwise', () {
+    const slide = Slide(id: 's');
+    expect(slide.layoutId, SlideLayout.blankId);
+    expect(slide.toJson(), isNot(contains('layout')));
+    final titled = slide.copyWith(layoutId: 'title');
+    expect(titled.toJson()['layout'], 'title');
+    expect(Slide.fromJson(titled.toJson(), r'$'), titled);
+    expect(titled, isNot(slide));
+  });
 }

@@ -1,12 +1,70 @@
 import 'package:quark_slides/quark_slides.dart';
 
 /// A presentation that uses every element type — groups nested in groups
-/// among them — and every optional field, so
-/// that a round trip through `.qslide` exercises the whole model.
-/// `test/fixtures/sample.qslide` is its golden encoding.
+/// among them — and every optional field, a theme, a layout and role
+/// colors among them, so that a round trip through `.qslide` exercises the
+/// whole model. `test/fixtures/sample.qslide` is its golden encoding.
 Presentation samplePresentation() => Presentation(
       title: 'Sample deck',
-      theme: 'themes/default',
+      theme: sampleTheme(),
+      slides: [
+        ...legacySamplePresentation().slides,
+        Slide(
+          id: 's4',
+          layoutId: SlideLayout.titleAndContent.id,
+          elements: [
+            TextBox(
+              id: 'e13',
+              frame: ElementFrame(x: 115.2, y: 54, width: 1689.6, height: 162),
+              paragraphs: const [
+                TextParagraph([
+                  TextRun(
+                    'Agenda',
+                    color: SlideColor.theme(ThemeColor.accent2),
+                  ),
+                ]),
+              ],
+              anchor: TextAnchor.middle,
+              autoFit: TextAutoFit.shrink,
+              placeholder: 'Click to add title',
+              slot: 'title',
+              textRole: ThemeTextRole.title,
+            ),
+            TextBox(
+              id: 'e14',
+              frame: ElementFrame(
+                  x: 115.2, y: 259.2, width: 1689.6, height: 734.4),
+              paragraphs: const [TextParagraph([])],
+              autoFit: TextAutoFit.shrink,
+              placeholder: 'Click to add text',
+              slot: 'body',
+            ),
+            ShapeElement(
+              id: 'e15',
+              frame: ElementFrame(x: 1500, y: 800, width: 200, height: 200),
+              fill: const SlideColor.theme(ThemeColor.accent1),
+              stroke: Stroke(color: const SlideColor.theme(ThemeColor.text)),
+            ),
+          ],
+        ),
+      ],
+    );
+
+/// A theme that sets every field, for [samplePresentation].
+SlideTheme sampleTheme() => SlideThemes.warm.copyWith(
+      id: 'sample',
+      name: 'Sample',
+      bodyFont: 'Inter',
+      shapes: ThemeShapeStyle(
+        stroke: Stroke(color: const SlideColor.theme(ThemeColor.accent2)),
+      ),
+    );
+
+/// What `test/fixtures/v1_sample.qslide`, the sample deck as schema version
+/// 1 wrote it, reads as: its theme reference named no built-in theme, so
+/// the deck has none, and its slides are blank-layout.
+Presentation legacySamplePresentation() => Presentation(
+      title: 'Sample deck',
       slides: [
         Slide(
           id: 's1',

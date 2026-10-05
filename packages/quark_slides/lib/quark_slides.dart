@@ -11,7 +11,10 @@
 /// and the pure path and drag geometry behind shapes and lines; grouping
 /// (`GroupElement`, `SlideTree`, the group geometry), alignment
 /// (`alignFrames`, `distributeFrames`, `matchFrameSizes`), and copy and
-/// paste through a `SlideClipboard` and its `SlideClipboardCodec`.
+/// paste through a `SlideClipboard` and its `SlideClipboardCodec`; and
+/// themes and layouts: `SlideTheme` and the built-in `SlideThemes`, role
+/// colors (`SlideColor.theme(ThemeColor.accent1)`), and the `SlideLayout`s
+/// of `SlideMaster.standard` whose placeholders slides are built from.
 library;
 
 export 'src/clipboard/slide_clipboard.dart';
@@ -20,6 +23,7 @@ export 'src/canvas/slide_canvas.dart';
 export 'src/canvas/slide_canvas_style.dart';
 export 'src/canvas/slide_canvas_tool.dart';
 export 'src/canvas/slide_element_label.dart';
+export 'src/canvas/slide_fallback_theme.dart';
 export 'src/canvas/slide_image_source.dart';
 export 'src/canvas/slide_shape_paths.dart';
 export 'src/canvas/slide_text_editing_controller.dart';
@@ -39,6 +43,10 @@ export 'src/geometry/slide_handle.dart';
 export 'src/geometry/slide_snapping.dart';
 export 'src/geometry/slide_tree.dart';
 export 'src/geometry/slide_viewport.dart';
+export 'src/layout/layout_flow.dart';
+export 'src/layout/layout_placeholder.dart';
+export 'src/layout/slide_layout.dart';
+export 'src/layout/slide_master.dart';
 export 'src/model/element_frame.dart';
 export 'src/model/element_style.dart';
 export 'src/model/image_source.dart';
@@ -54,3 +62,10 @@ export 'src/model/text_format.dart';
 export 'src/model/text_paragraph.dart';
 export 'src/model/text_run.dart';
 export 'src/model/unset.dart';
+export 'src/theme/slide_theme.dart';
+export 'src/theme/slide_themes.dart';
+export 'src/theme/theme_color.dart';
+export 'src/theme/theme_palette.dart';
+export 'src/theme/theme_shape_style.dart';
+export 'src/theme/theme_text_role.dart';
+export 'src/theme/theme_text_style.dart';

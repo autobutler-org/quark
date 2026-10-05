@@ -1,7 +1,29 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "title": "Written by a newer Quark",
   "size": {"width": 1024, "height": 768, "unit": "pt"},
+  "theme": {
+    "id": "ours",
+    "name": "Ours",
+    "colors": {
+      "background": "#FFFFFF",
+      "text": "#000000",
+      "background2": "#EEEEEE",
+      "text2": "#444444",
+      "accent1": "#3366FF",
+      "accent2": "#00A3A3",
+      "accent3": "#F59E0B",
+      "accent4": "#E5484D",
+      "accent5": "#8B5CF6",
+      "accent6": "#22C55E",
+      "accent7": "#123456"
+    },
+    "title": {"fontSize": 60, "color": "theme:text", "heading": true, "letterSpacing": 2},
+    "subtitle": {"fontSize": 40, "color": "theme:text2"},
+    "body": {"fontSize": 36, "color": "theme:text"},
+    "shapes": {"fill": "theme:accent1", "line": {"color": "theme:text", "width": 4}, "shadow": true},
+    "gradients": [{"from": "accent1", "to": "accent2"}]
+  },
   "slides": [
     {
       "id": "s1",

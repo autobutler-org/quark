@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../model/slide.dart';
 import '../model/slide_element.dart';
 import '../model/slide_size.dart';
+import '../theme/slide_theme.dart';
 import 'slide_background_view.dart';
 import 'slide_canvas_style.dart';
 import 'slide_element_label.dart';
@@ -28,6 +29,7 @@ class SlideStage extends StatelessWidget {
     required this.slide,
     required this.size,
     required this.style,
+    required this.theme,
     required this.elementLabel,
     this.imageBuilder,
     this.selection = const {},
@@ -43,8 +45,12 @@ class SlideStage extends StatelessWidget {
   /// The slide's size in slide units.
   final SlideSize size;
 
-  /// Supplies colors and text defaults.
+  /// Supplies the placeholder color.
   final SlideCanvasStyle style;
+
+  /// The theme the slide's role colors and unset text styles resolve
+  /// against: the deck's, or `slideFallbackTheme`.
+  final SlideTheme theme;
 
   /// Names each element for a screen reader.
   final SlideElementLabel elementLabel;
@@ -81,7 +87,7 @@ class SlideStage extends StatelessWidget {
                 Positioned.fill(
                   child: SlideBackgroundView(
                     background: slide.background,
-                    style: style,
+                    theme: theme,
                     imageBuilder: imageBuilder,
                   ),
                 ),
@@ -89,6 +95,7 @@ class SlideStage extends StatelessWidget {
                   SlideElementView(
                     element: element,
                     style: style,
+                    theme: theme,
                     label: elementLabel(element),
                     imageBuilder: imageBuilder,
                     selected: selection.contains(element.id),
@@ -103,6 +110,7 @@ class SlideStage extends StatelessWidget {
                   SlideElementView(
                     element: preview,
                     style: style,
+                    theme: theme,
                     label: '',
                     excluded: true,
                   ),

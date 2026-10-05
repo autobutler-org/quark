@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../model/presentation.dart';
+import '../theme/slide_themes.dart';
 import 'json_fields.dart';
 import 'qslide_format_exception.dart';
 
@@ -10,7 +11,7 @@ import 'qslide_format_exception.dart';
 /// `schemaVersion` beside the fields of [Presentation.toJson].
 ///
 /// ```json
-/// {"schemaVersion": 1, "title": "Demo",
+/// {"schemaVersion": 2, "title": "Demo",
 ///  "size": {"width": 1920, "height": 1080},
 ///  "slides": [{"id": "s1", "elements": []}]}
 /// ```
@@ -25,9 +26,17 @@ import 'qslide_format_exception.dart';
 /// - **Breaking changes bump it.** A file whose `schemaVersion` is above
 ///   [schemaVersion] is refused with a [QslideFormatException] rather than
 ///   misread, so the host can tell the user to update.
+/// - **Older files are migrated.** A file below [schemaVersion] is brought
+///   up to it one version at a time as it is read, and saved at the new
+///   version. Version 1 named its theme by a string and had no layouts or
+///   theme colors: its theme becomes the built-in one of that id, or none,
+///   and every slide is blank-layout.
 abstract final class QslideCodec {
   /// The schema version this package writes and the newest it reads.
-  static const schemaVersion = 1;
+  ///
+  /// Version 2 added the inline theme, theme role colors (`theme:accent1`),
+  /// slide layouts and text box slots.
+  static const schemaVersion = 2;
 
   /// The file extension, including the dot.
   static const fileExtension = '.qslide';
@@ -64,7 +73,29 @@ abstract final class QslideCodec {
         path: r'$.schemaVersion',
       );
     }
-    return Presentation.fromJson(json);
+    var migrated = json;
+    for (var v = version; v < schemaVersion; v++) {
+      migrated = _migrations[v]!(migrated);
+    }
+    return Presentation.fromJson(migrated);
+  }
+
+  /// Upgrades a root object from the version it is keyed by to the next.
+  static final Map<int, JsonMap Function(JsonMap)> _migrations = {
+    1: _fromVersion1,
+  };
+
+  /// Version 1 to 2: the `theme` string — "its id or file path", which no
+  /// version 1 reader drew — becomes the built-in theme with that id, or no
+  /// theme. Slides without a `layout` are already blank-layout.
+  static JsonMap _fromVersion1(JsonMap json) {
+    final theme = json['theme'];
+    final builtIn = theme is String ? SlideThemes.byId(theme) : null;
+    return {
+      ...json,
+      'schemaVersion': 2,
+      'theme': builtIn?.toJson(),
+    }..removeWhere((key, value) => key == 'theme' && value == null);
   }
 
   /// The `.qslide` root object for [presentation].

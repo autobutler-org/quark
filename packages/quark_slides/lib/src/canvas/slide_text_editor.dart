@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../model/rich_text.dart';
+import '../theme/slide_theme.dart';
 import 'slide_canvas_style.dart';
 import 'slide_paragraph_field.dart';
 import 'slide_text_box_view.dart';
@@ -22,6 +23,7 @@ class SlideTextEditor extends StatelessWidget {
     super.key,
     required this.session,
     required this.style,
+    required this.theme,
     required this.scale,
     this.onDone,
   });
@@ -29,8 +31,12 @@ class SlideTextEditor extends StatelessWidget {
   /// The open editing session.
   final SlideTextEditingController session;
 
-  /// Supplies text defaults and the caret and selection colors.
+  /// Supplies the caret and selection colors.
   final SlideCanvasStyle style;
+
+  /// The theme the slide's role colors and unset text styles resolve
+  /// against: the deck's, or `slideFallbackTheme`.
+  final SlideTheme theme;
 
   /// Screen pixels per slide unit.
   final double scale;
@@ -47,7 +53,7 @@ class SlideTextEditor extends StatelessWidget {
         builder: (context, _) {
           final draft = session.draft;
           if (draft == null) return const SizedBox.shrink();
-          final layout = SlideTextLayout.fromStyle(style);
+          final layout = SlideTextLayout.forBox(draft, theme);
           final fit = layout.shrinkScale(draft);
           session.configureFields(layout, fit);
           final paragraphs = draft.paragraphs;

@@ -267,7 +267,7 @@ void main() {
     test('a text box that grows refits after a match', () {
       final grow = SlideDocumentController(
         deck(),
-        measureText: (box) => 400,
+        measureText: (box, theme) => 400,
       );
       grow.matchSize('s', {'t', 'b'}, SizeMatch.width, reference: 'b');
       expect(grow.presentation.slideById('s')!.elementById('t')!.frame.height,

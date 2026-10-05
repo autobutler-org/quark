@@ -2,9 +2,10 @@ import '../format/json_fields.dart';
 import 'slide_background.dart';
 import 'slide_element.dart';
 import 'unset.dart';
+import '../layout/slide_layout.dart';
 
-/// One slide: a [background], the [elements] drawn on it, and the
-/// speaker [notes].
+/// One slide: a [background], the [elements] drawn on it, the speaker
+/// [notes], and the [layoutId] of the `SlideLayout` it is built on.
 ///
 /// [elements] is in stacking order, first at the back. [id] is unique
 /// within the presentation and stays with the slide as it is reordered.
@@ -15,6 +16,7 @@ class Slide {
     this.background,
     this.elements = const [],
     this.notes = '',
+    this.layoutId = SlideLayout.blankId,
     this.extra = const {},
   });
 
@@ -30,6 +32,11 @@ class Slide {
   /// Speaker notes, plain text.
   final String notes;
 
+  /// The id of the slide's layout in `SlideMaster.standard`;
+  /// [SlideLayout.blankId] by default. An id this version does not know is
+  /// kept, and the slide is treated as having no placeholder slots.
+  final String layoutId;
+
   /// Fields a newer writer added that this version does not read.
   final JsonMap extra;
 
@@ -43,7 +50,7 @@ class Slide {
     return index < 0 ? null : elements[index];
   }
 
-  static const _known = {'id', 'background', 'elements', 'notes'};
+  static const _known = {'id', 'background', 'elements', 'notes', 'layout'};
 
   /// Reads a slide from its `.qslide` object at [path].
   factory Slide.fromJson(Object? value, String path) {
@@ -59,6 +66,7 @@ class Slide {
           SlideElement.fromJson(elements[i], '$path.elements[$i]'),
       ]),
       notes: optionalString(json, 'notes', path) ?? '',
+      layoutId: optionalString(json, 'layout', path) ?? SlideLayout.blankId,
       extra: unknownFields(json, _known),
     );
   }
@@ -70,6 +78,7 @@ class Slide {
         if (background != null) 'background': background!.toJson(),
         'elements': [for (final e in elements) e.toJson()],
         if (notes.isNotEmpty) 'notes': notes,
+        if (layoutId != SlideLayout.blankId) 'layout': layoutId,
       };
 
   /// Returns a copy with the given fields replaced; pass `null` as
@@ -79,6 +88,7 @@ class Slide {
     Object? background = unset,
     List<SlideElement>? elements,
     String? notes,
+    String? layoutId,
   }) =>
       Slide(
         id: id ?? this.id,
@@ -88,6 +98,7 @@ class Slide {
         elements:
             elements == null ? this.elements : List.unmodifiable(elements),
         notes: notes ?? this.notes,
+        layoutId: layoutId ?? this.layoutId,
         extra: extra,
       );
 
@@ -97,6 +108,7 @@ class Slide {
       other.id == id &&
       other.background == background &&
       other.notes == notes &&
+      other.layoutId == layoutId &&
       listEquals(other.elements, elements) &&
       jsonEquals(other.extra, extra);
 
@@ -106,6 +118,7 @@ class Slide {
         background,
         Object.hashAll(elements),
         notes,
+        layoutId,
         jsonHash(extra),
       );
 
