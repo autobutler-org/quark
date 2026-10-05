@@ -5,6 +5,7 @@ package deputil
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/backup"
@@ -36,6 +37,10 @@ const (
 
 type Dependencies interface {
 	AuthRateLimiter() *ratelimitutil.Limiter
+	// Background owns work a request starts and leaves running after its
+	// response, such as the connected-device record. Wait on it before
+	// closing the database (#2772).
+	Background() *sync.WaitGroup
 	BackupJobStore() backup.BackupJobStore
 	// ChatRateLimiter limits chat writes per account; keys are the account
 	// and route.

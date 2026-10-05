@@ -136,7 +136,8 @@ func inject(deps deputil.Dependencies) gin.HandlerFunc {
 
 // trackDevice records the client IP and User-Agent in connected_devices,
 // which deviceutil keeps bounded.
-// Runs asynchronously so it never blocks the request.
+// Runs asynchronously so it never blocks the request, under
+// deps.Background() so whoever closes the database can wait for it (#2772).
 func trackDevice(deps deputil.Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
@@ -145,7 +146,7 @@ func trackDevice(deps deputil.Dependencies) gin.HandlerFunc {
 		}
 		ip := c.ClientIP()
 		ua := c.Request.UserAgent()
-		go func() {
+		deps.Background().Go(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			if _, err := deviceutil.RecordConnectedDevice(ctx, deviceutil.RecordConnectedDeviceParams{
@@ -155,7 +156,7 @@ func trackDevice(deps deputil.Dependencies) gin.HandlerFunc {
 			}); err != nil {
 				slog.Debug("trackDevice: upsert failed", "err", err)
 			}
-		}()
+		})
 	}
 }
 

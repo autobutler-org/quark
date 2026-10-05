@@ -67,6 +67,10 @@ func TestAlbums_ConcurrentClientsSurviveCanceledNeighbors(t *testing.T) {
 	engine := gin.New()
 	middleware.Use(engine, deps)
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_albums.NewRouter())
+	// Each request leaves a connected-device record running behind it. Once
+	// the server has closed, wait for those before the database closes and
+	// HOME is removed, or a late write races the TempDir cleanup (#2772).
+	t.Cleanup(deps.Background().Wait)
 	server := httptest.NewServer(engine)
 	t.Cleanup(server.Close)
 
