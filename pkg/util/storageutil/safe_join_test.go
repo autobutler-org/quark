@@ -1,8 +1,10 @@
 package storageutil
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -85,6 +87,31 @@ func TestSafeJoin_DanglingSymlinkRefused(t *testing.T) {
 	assert.Error(t, err)
 	_, err = SafeJoin(base, "dangling-dir/file.txt")
 	assert.Error(t, err)
+}
+
+// A folder upload sends many files into one new directory at once, so one
+// request creates it while another is still checking it. A directory that
+// appears mid-check is not a dangling link.
+func TestSafeJoin_DirectoryCreatedMidCheckAllowed(t *testing.T) {
+	base, _ := symlinkFixture(t)
+	for round := range 200 {
+		dir := fmt.Sprintf("new%d", round)
+		var wg sync.WaitGroup
+		errs := make([]error, 8)
+		for i := range errs {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if _, errs[i] = SafeJoin(base, dir, "deep", "file.txt"); errs[i] == nil {
+					errs[i] = os.MkdirAll(filepath.Join(base, dir, "deep"), 0o755)
+				}
+			}()
+		}
+		wg.Wait()
+		for _, err := range errs {
+			require.NoError(t, err)
+		}
+	}
 }
 
 func TestSafeJoin_SymlinkInsideBaseAllowed(t *testing.T) {
