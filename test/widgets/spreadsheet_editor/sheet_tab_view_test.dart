@@ -4,10 +4,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide DataTable, DataRow, DataCell;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark/widgets/spreadsheet_editor/sheet_format_palette.dart';
 import 'package:quark/widgets/spreadsheet_editor/sheet_tab_view.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// #2692: a sheet tab copies and pastes through the system clipboard, so
-/// cells move to and from Google Sheets and Excel.
+/// cells move to and from Google Sheets and Excel. #2693: it carries the
+/// formatting toolbar.
 void main() {
   late String? systemClipboard;
 
@@ -91,6 +94,49 @@ void main() {
       expect(controller.cellAt(2, 1).value, 'w');
       expect(controller.rowCount, 3);
     });
+
+    // #2693: formatting survives a copy and paste through the system
+    // clipboard within the sheet.
+    testWidgets('Ctrl+C then Ctrl+V carries cell formats ($name)', (
+      tester,
+    ) async {
+      final controller = await pumpTab(tester, size);
+      await tester.tap(find.byKey(const ValueKey('r0c0')));
+      await tester.pump();
+      controller.applyFormat(
+        controller.selection.range!,
+        (f) => f.withBold(true),
+      );
+
+      await ctrl(tester, LogicalKeyboardKey.keyC);
+      controller.selection.setHighlighted(1, 1);
+      await ctrl(tester, LogicalKeyboardKey.keyV);
+
+      expect(controller.cellAt(1, 1).value, 'a');
+      expect(controller.formatAt(1, 1).bold, isTrue);
+    });
+
+    testWidgets('offers the formatting toolbar in theme colors ($name)', (
+      tester,
+    ) async {
+      final controller = await pumpTab(tester, size);
+      controller.selection.setHighlighted(0, 1);
+      await tester.pump();
+      final tokens = QuarkTokens.of(tester.element(find.byType(SheetTabView)));
+
+      // No phone menu here: the scroller keeps the toolbar a row (#2770).
+      expect(find.byKey(const ValueKey('format_menu')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('format_fill')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('format_fill_2')));
+      await tester.pumpAndSettle();
+
+      expect(
+        controller.formatAt(0, 1).fillColor,
+        tokens.warning.withValues(alpha: fillAlpha).toARGB32(),
+      );
+      expect(tester.takeException(), isNull);
+    });
   }
 
   // The control bar scrolls sideways on a phone, and a mouse user with no
@@ -106,7 +152,8 @@ void main() {
 
     expect(find.byKey(const ValueKey('toolbar_scroll_left')), findsNothing);
     final before = tester.getTopLeft(find.byType(DataSheetControlBar)).dx;
-    await tester.tap(find.byKey(const ValueKey('toolbar_scroll_right')));
+    // Each bar has its own scroller; the control bar's is the first.
+    await tester.tap(find.byKey(const ValueKey('toolbar_scroll_right')).first);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);

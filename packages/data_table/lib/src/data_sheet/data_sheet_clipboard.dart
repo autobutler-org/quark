@@ -34,27 +34,29 @@ class DataSheetClipboard {
     write: (text) async => _memoryText = text,
   );
 
-  /// Writes [range], or the selected range (the edited cell when nothing is selected) when
-  /// omitted, to the clipboard as
-  /// TSV.
+  /// Writes [range], or the selected range (the edited cell when nothing is
+  /// selected) when omitted, to the clipboard as TSV, through
+  /// [DataSheetController.copyRange] so a paste back into the sheet keeps
+  /// the cells' formats.
   Future<void> copySelection(
     DataSheetController controller, [
     CellRange? range,
   ]) async {
     range ??= controller.selection.contextRange;
     if (range == null) return;
-    await write(controller.rangeToTsv(range));
+    await write(controller.copyRange(range));
   }
 
-  /// Copies [range], or the selected range, then clears it as one undo step.
+  /// Copies [range], or the selected range, then clears its values and
+  /// formats as one undo step; pasting it back in this sheet restores both.
   Future<void> cutSelection(
     DataSheetController controller, [
     CellRange? range,
   ]) async {
     range ??= controller.selection.contextRange;
     if (range == null) return;
-    await write(controller.rangeToTsv(range));
-    controller.clearRange(range);
+    await write(controller.copyRange(range));
+    controller.clearRange(range, formats: true);
   }
 
   /// Pastes the clipboard's TSV into [range], or the selected range.

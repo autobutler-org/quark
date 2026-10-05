@@ -79,6 +79,32 @@ to memory where the browser blocks the clipboard.
 - ✅ Clear filters — `data_sheet_clear_filters`, `clearFilters()`, one undo step. A badge counts the filtered columns.
 - 🔜 Apply column transformations (trim, case, parse)
 
+## Formatting
+
+`DataSheetFormatBar` is the formatting toolbar, a row of its own beside the control bar. Narrower than its
+`compactBreakpoint` (600 px) it folds into one labeled "Format" menu (`format_menu`), never an anonymous overflow.
+
+- ✅ Per-cell format — `CellFormat` (bold, italic, text color, fill, alignment, number format and decimals), kept
+  sparsely by cell: `formatAt(row, col)`, `formats`, and only cells that have one are stored
+- ✅ Apply to a range — `applyFormat(range, (f) => f.withBold(true))`, one undo step over the visible rows; the toggles
+  show the highlighted cell's format, and Bold on a range whose first cell is bold turns it off everywhere
+- ✅ Bold / Italic — `format_bold`, `format_italic`
+- ✅ Text color / Fill — `format_text_color`, `format_fill`; menus of `DataSheetSwatch`es plus Default / None. The app
+  supplies the colors (Quark derives them from `QuarkTokens`); `DataSheetPalette` is the package's documented default
+- ✅ Alignment — `format_align_left`, `format_align_center`, `format_align_right`; choosing the current one restores the
+  default
+- ✅ Number format — `format_number`: Automatic, Number (`1,234.56`), Currency (`$1,234.56`), Percent (`12.34%`), Date
+  (a serial day as `yyyy-mm-dd`); `format_decimals_decrease` / `format_decimals_increase` step 0–10 places.
+  `formatCellValue` / `formattedValueAt` change only the text shown: the stored value, `displayValueAt`, formulas, sort
+  and filters all read the raw value, and text or errors show as they are
+- ✅ Clear formatting — `format_clear`, `clearFormats(range)`; values are kept
+- ✅ Formats follow their cells — insert, delete and duplicate row or column, sort, and remove duplicates move them;
+  filters leave them in place; CSV import clears them. Delete empties values and keeps formats, as in Google Sheets
+- ✅ Copy / paste within the sheet — `copyRange` remembers the copied cells' formats, and pasting that same text back
+  (`pasteTsv`) applies them, tiled like the values; text from anywhere else pastes values only. Cut clears the source's
+  formats along with its values
+- 🔜 Conditional formatting rules
+
 ## Find & Replace
 
 - ✅ Find — `findCells(query)` on controller
@@ -106,7 +132,8 @@ to memory where the browser blocks the clipboard.
   Inserting or deleting inside the frozen band moves its edge.
 - ✅ Layout persistence — `layoutToJson()` / `DataSheetController.fromLayoutJson()`: `columnWidths`, `rowHeights`,
   `frozenRows`, `frozenColumns` and `filters` (a list of `{column, hidden, condition}`), saved beside the data in each
-  `.qsheet` tab. Missing keys load as defaults, so older sheets load unfiltered; unreadable filter entries are skipped.
+  `.qsheet` tab, and `formats` (a list of `{row, col, ...format}`, one per formatted cell). Missing keys load as
+  defaults, so older sheets load unfiltered and unformatted; unreadable filter and format entries are skipped.
 - 🔜 Toggle gridlines visibility
 - 🔜 Column type / format metadata (text, number, date)
 
@@ -114,8 +141,6 @@ to memory where the browser blocks the clipboard.
 
 - 🔜 Formula bar / expression evaluation
 - 🔜 Per-cell validation rules
-- 🔜 Cell formatting (font weight, alignment, number format)
-- 🔜 Conditional formatting rules
 
 ## UX / Accessibility
 
