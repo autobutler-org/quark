@@ -2080,4 +2080,297 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('charts (#1160)', () {
+    Finder key(String k) => find.byKey(ValueKey(k));
+
+    /// Taps [k], scrolling to it first.
+    Future<void> press(WidgetTester tester, String k) async {
+      await tester.ensureVisible(key(k));
+      await tester.pumpAndSettle();
+      await tester.tap(key(k));
+      await tester.pumpAndSettle();
+    }
+
+    Future<SlideEditorController> pumpCharts(
+      WidgetTester tester, {
+      bool withChart = false,
+      bool readOnly = false,
+    }) async {
+      var next = 0;
+      final controller = SlideEditorController(
+        filePath: 'talks/Deck.qslide',
+        loadPresentation: (_, {serial}) async => Presentation(
+          title: 'Deck',
+          slides: [
+            Slide(
+              id: 's1',
+              elements: [
+                TextBox(
+                  id: 'tb',
+                  frame: ElementFrame(x: 100, y: 60, width: 800, height: 120),
+                  paragraphs: [TextParagraph.plain('Words')],
+                ),
+                if (withChart)
+                  ChartElement(
+                    id: 'ch',
+                    frame: ElementFrame(
+                      x: 360,
+                      y: 300,
+                      width: 1200,
+                      height: 700,
+                    ),
+                    data: SlideDocumentController.sampleChartData(
+                      ChartKind.bar,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+        savePresentation: (_, p, {serial}) async => saved.add(p),
+        newId: () => 'n${next++}',
+        readOnly: readOnly,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
+          home: SlideEditorPage(
+            filePath: 'talks/Deck.qslide',
+            controller: controller,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return controller;
+    }
+
+    ChartElement chart(SlideEditorController c) =>
+        c.selectedSlide!.elements.whereType<ChartElement>().single;
+
+    testWidgets('a wide window inserts a chart and edits it from the Chart '
+        'group, one undo step each', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpCharts(tester);
+      expect(key(SlideToolbarGroup.chart.key), findsNothing);
+
+      await tester.tap(key('slide_tool_chart'));
+      await tester.pumpAndSettle();
+      expect(key('slide_chart_picker'), findsOneWidget);
+      await tester.tap(key('slide_chart_pick_line'));
+      await tester.pump();
+      await tester.tap(key('slide_chart_insert'));
+      await tester.pumpAndSettle();
+      expect(key('slide_chart_picker'), findsNothing, reason: 'it closed');
+      expect(chart(c).kind, ChartKind.line);
+      expect(c.selectedElementIds, {chart(c).id});
+      expect(c.saveState, SlideSaveState.dirty);
+
+      expect(key(SlideToolbarGroup.chart.key), findsOneWidget);
+      expect(key('slide_prop_chart_kind'), findsOneWidget);
+      expect(find.text('Line chart, 3 series × 4 categories'), findsOneWidget);
+
+      await press(tester, 'slide_chart_kind');
+      await tester.tap(key('slide_chart_kind_pie'));
+      await tester.pumpAndSettle();
+      expect(chart(c).kind, ChartKind.pie);
+      expect(
+        tester
+            .widget<QuarkBarIconButton>(key('slide_chart_gridlines'))
+            .onPressed,
+        isNull,
+        reason: 'a pie has no gridlines',
+      );
+
+      await press(tester, 'slide_chart_legend');
+      expect(chart(c).options.showLegend, isFalse);
+      await press(tester, 'slide_chart_data_labels');
+      expect(chart(c).options.showDataLabels, isTrue);
+
+      await tester.enterText(key('slide_chart_title'), 'Sales');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(chart(c).options.title, 'Sales');
+
+      await press(tester, 'slide_chart_colors');
+      await tester.tap(key('slide_chart_color_1_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_chart_color_1_theme_accent4'));
+      await tester.pumpAndSettle();
+      expect(chart(c).colorOf(1), const SlideColor.theme(ThemeColor.accent4));
+
+      c.undo();
+      await tester.pump();
+      expect(chart(c).colors, isEmpty);
+      expect(chart(c).options.title, 'Sales', reason: 'one step at a time');
+      c.undo();
+      await tester.pump();
+      expect(chart(c).options.title, isEmpty);
+
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+      expect(saved, isNotEmpty);
+    });
+
+    testWidgets('Edit data applies the sheet as one undo step', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpCharts(tester, withChart: true);
+      c.selectElements({'ch'});
+      await tester.pumpAndSettle();
+      await press(tester, 'slide_chart_edit_data');
+      expect(key('slide_chart_data_dialog'), findsOneWidget);
+      await tester.enterText(key('slide_chart_cell_1_1'), '99');
+      await tester.tap(key('slide_chart_add_category'));
+      await tester.pump();
+      await press(tester, 'slide_chart_data_ok');
+      expect(key('slide_chart_data_dialog'), findsNothing);
+      expect(chart(c).data.series.first.values.first, 99);
+      expect(chart(c).data.categories, hasLength(5));
+      c.undo();
+      await tester.pump();
+      expect(
+        chart(c).data,
+        SlideDocumentController.sampleChartData(ChartKind.bar),
+      );
+      expect(c.canUndo, isFalse);
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('Enter on a selected chart opens its data', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpCharts(tester, withChart: true);
+      c.selectElements({'ch'});
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_editor_canvas'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      c.selectElements({'ch'});
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(key('slide_chart_data_dialog'), findsOneWidget);
+    });
+
+    testWidgets('the picker arms the chart tool with the kind picked', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpCharts(tester);
+      await tester.tap(key('slide_tool_chart'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_chart_pick_area'));
+      await tester.pump();
+      await tester.tap(key('slide_chart_draw'));
+      await tester.pumpAndSettle();
+      expect(c.tools.tool, const SlideCanvasTool.chart(ChartKind.area));
+      expect(
+        tester.widget<QuarkBarIconButton>(key('slide_tool_chart')).selected,
+        isTrue,
+      );
+    });
+
+    testWidgets('a phone inserts from the Insert menu\'s sheet and edits '
+        'from Format > Chart', (tester) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final c = await pumpCharts(tester);
+      await tester.tap(key('slide_insert_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_insert_chart'));
+      await tester.pumpAndSettle();
+      expect(find.text('Insert chart'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tap.expectTapTargetGuidelines(tester);
+      await tester.tap(key('slide_chart_pick_horizontalBar'));
+      await tester.pump();
+      await press(tester, 'slide_chart_insert');
+      expect(key('slide_chart_picker'), findsNothing);
+      expect(chart(c).kind, ChartKind.horizontalBar);
+
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key(SlideToolbarGroup.chart.key));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_chart_gridlines'));
+      await tester.pumpAndSettle();
+      expect(chart(c).options.showGridlines, isFalse);
+
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key(SlideToolbarGroup.chart.key));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_chart_edit_data'));
+      await tester.pumpAndSettle();
+      expect(key('slide_chart_data_dialog'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await press(tester, 'slide_chart_data_cancel');
+      await letAutosaveRun(tester);
+    });
+
+    for (final (name, size) in [
+      ('narrow', tap.narrowViewport),
+      ('wide', tap.wideViewport),
+    ]) {
+      testWidgets('view only selects on the canvas but edits nothing '
+          '($name)', (tester) async {
+        tap.setViewport(tester, size);
+        final c = await pumpCharts(tester, withChart: true, readOnly: true);
+        final canvas = tester.widget<SlideCanvas>(
+          find.descendant(
+            of: key('slide_editor_stage'),
+            matching: find.byType(SlideCanvas),
+          ),
+        );
+        expect(canvas.interaction, SlideCanvasInteraction.selectOnly);
+        expect(
+          tester
+              .widgetList<IgnorePointer>(
+                find.ancestor(
+                  of: key('slide_editor_canvas'),
+                  matching: find.byType(IgnorePointer),
+                ),
+              )
+              .where((w) => w.ignoring),
+          isEmpty,
+          reason: 'the canvas takes pointers to select',
+        );
+
+        // A tap on the chart selects it.
+        await tester.tap(
+          find.descendant(
+            of: key('slide_editor_canvas'),
+            matching: key('slide_element_ch'),
+          ),
+          warnIfMissed: false,
+        );
+        await tester.pumpAndSettle();
+        expect(c.selectedElementIds, {'ch'});
+        expect(c.charts.hasChart, isTrue);
+        expect(c.canEditChart, isFalse);
+
+        final before = c.presentation;
+        await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pumpAndSettle();
+        expect(key('slide_chart_data_dialog'), findsNothing);
+        expect(c.presentation, same(before));
+        expect(key('slide_tool_chart'), findsNothing);
+        expect(key(SlideToolbarGroup.chart.key), findsNothing);
+        if (size == tap.wideViewport) {
+          expect(
+            tester.widget<TextField>(key('slide_prop_chart_title')).readOnly,
+            isTrue,
+          );
+        }
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testLargeText('the chart controls fit', (tester, size) async {
+      final c = await pumpCharts(tester, withChart: true);
+      c.selectElements({'ch'});
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

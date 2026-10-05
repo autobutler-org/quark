@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
+import 'package:quark/widgets/slides/chart/slide_chart_properties_section.dart';
 import 'package:quark/widgets/slides/properties/slide_alt_text_field.dart';
 import 'package:quark/widgets/slides/properties/slide_number_field.dart';
 import 'package:quark/widgets/slides/table/slide_table_properties_section.dart';
@@ -15,6 +16,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The slide editor's properties (#1167): the one selected element's
 /// position, size and rotation as numbers, a selected picture's alt text,
 /// a selected table's size and style (#1160, [SlideTablePropertiesSection]),
+/// a selected chart's kind, size of data and title
+/// ([SlideChartPropertiesSection]),
 /// and the slide's background color (#1174) from the toolbar's swatches or
 /// a hex code — "Theme background" clears it so the slide follows the
 /// theme — then the slide's layout, its transition (#1164) and the presentation's
@@ -158,6 +161,13 @@ class SlidePropertiesPanel extends StatelessWidget {
               onBandedRowsChanged: readOnly
                   ? null
                   : (on) => controller.setTableStyle(bandedRows: on),
+            ),
+          if (element is ChartElement)
+            SlideChartPropertiesSection(
+              chart: element,
+              onTitleChanged: readOnly
+                  ? null
+                  : (title) => controller.setChartOptions(title: title),
             ),
           if (!readOnly && controller.selectedSlide != null)
             QuarkSection(

@@ -52,6 +52,37 @@ Live while a text box is being edited.
 | Mod+Z                | Undo typing                  |
 | Mod+Shift+Z, Mod+Y   | Redo typing                  |
 
+## Tables
+
+Live with a table selected on the canvas; they come before the canvas's own
+keys. The arrows, Tab, Delete and Esc need cells selected; with only the table
+selected they move, cycle, delete and deselect the table as above.
+
+| Keys                 | Action                                          |
+| -------------------- | ----------------------------------------------- |
+| Enter / F2           | Edit the selected cell (the first, with none)   |
+| Arrow keys           | Move to the next cell in that direction         |
+| Shift+Arrow keys     | Grow or shrink the cell selection               |
+| Tab                  | Select the next cell                            |
+| Shift+Tab            | Select the previous cell                        |
+| Delete / Backspace   | Empty the selected cells                        |
+| Esc                  | Let go of the cells, keeping the table selected |
+
+While a cell is being edited:
+
+| Keys       | Action                  |
+| ---------- | ----------------------- |
+| Tab        | Edit the next cell      |
+| Shift+Tab  | Edit the previous cell  |
+
+## Charts
+
+Live with a chart selected on the canvas, in a deck you can edit.
+
+| Keys   | Action                         |
+| ------ | ------------------------------ |
+| Enter  | Edit the selected chart's data |
+
 ## Arrange
 
 | Keys          | Action        |

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
+import 'package:quark/widgets/slides/chart/slide_chart_data_dialog.dart';
 import 'package:quark/widgets/slides/find/slide_find_provider.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -16,9 +18,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// arrow, Delete, Tab and stacking keys work at once; Ctrl or Cmd Z is not
 /// one of them, so it reaches the editor's undo shortcut above.
 ///
-/// The toolbar's drawing tool, text formatting and table commands reach it
-/// through the controller's `tools`, `textEditing` and `tables` (#1160),
-/// which it shares; its copy, cut
+/// The toolbar's drawing tool, text formatting, table and chart commands
+/// reach it through the controller's `tools`, `textEditing`, `tables` and
+/// `charts` (#1160), which it shares. Enter with a chart selected — a key
+/// the canvas leaves alone — opens the chart's `SlideChartDataDialog`. Its
+/// copy, cut
 /// and paste keys use the controller's `clipboard`, as the toolbar does.
 ///
 /// Find and replace's matches (#1176) come from the `SlideFindProvider`
@@ -26,8 +30,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// and centered.
 ///
 /// In a view-only presentation ([SlideEditorController.isReadOnly]) the canvas
-/// takes no pointer or keyboard input, so nothing on it can be dragged,
-/// resized or typed into.
+/// is [SlideCanvasInteraction.selectOnly]: elements and table cells can be
+/// selected, text copied, and the slide panned and zoomed, but nothing on
+/// it can be moved, resized, inserted, deleted or typed into.
 ///
 /// The bar's second row says which slide it is; the canvas names each
 /// element to a screen reader. Colors come from [styleOf].
@@ -84,21 +89,33 @@ class SlideEditorCanvas extends StatelessWidget {
       tools: controller.tools,
       textEditing: controller.textEditing,
       tableEditing: controller.tables,
+      chartEditing: controller.charts,
       clipboard: controller.clipboard,
-      autofocus: !controller.isReadOnly,
+      autofocus: true,
       highlights: find?.highlights ?? const [],
       currentHighlight: find?.current,
+      interaction: controller.isReadOnly
+          ? SlideCanvasInteraction.selectOnly
+          : SlideCanvasInteraction.editable,
     );
-    // The canvas edits whatever it is dragged or typed into, so a view-only
-    // deck keeps it from taking pointer or keyboard input; the zoom buttons,
-    // the slide panel and find still drive it. The focus node above it
-    // stands in for the canvas, so the editor's shortcuts (find, zoom) still
-    // have somewhere to start from.
-    return controller.isReadOnly
-        ? Focus(
-            autofocus: true,
-            child: ExcludeFocus(child: IgnorePointer(child: canvas)),
-          )
-        : canvas;
+    // The canvas ignores Enter on a chart, so it reaches here.
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (node, event) {
+        final enter =
+            event.logicalKey == LogicalKeyboardKey.enter ||
+            event.logicalKey == LogicalKeyboardKey.numpadEnter;
+        if (event is! KeyDownEvent ||
+            !enter ||
+            !controller.canEditChart ||
+            controller.tools.tool.draws) {
+          return KeyEventResult.ignored;
+        }
+        SlideChartDataDialog.edit(context, controller);
+        return KeyEventResult.handled;
+      },
+      child: canvas,
+    );
   }
 }

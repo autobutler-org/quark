@@ -143,6 +143,15 @@ enum SlideSaveState {
 /// no cell being typed in, the text controls ([formatText], [toggleText],
 /// [setFontSize]) format the cells' text through [formatTableCells].
 ///
+/// **Charts** (#1160). [insertChart] puts a chart of sample data in the
+/// middle of the slide, selected; the chart tool on [tools] draws one
+/// instead. [charts] is the package's chart controller, shared with the
+/// canvas and kept pointed at the selection here, so the toolbar reads the
+/// chart before the canvas has built. [setChartKind], [setChartOptions],
+/// [setChartColors], [setChartSeriesColor] and [setChartDataGrid] change
+/// the selected chart ([selectedChart]), one undo step each; a view-only
+/// deck ([canEditChart] false) still reports the chart but changes nothing.
+///
 /// **Pictures** (#1158). [insertImageFromDevice] picks a file, streams it up
 /// beside the presentation and puts it on the slide at the size its header
 /// gives; [insertImageFromQuark] does the same for a file already on the
@@ -178,6 +187,7 @@ class SlideEditorController extends ChangeNotifier {
   }) : _readOnly = readOnly,
        clipboard = clipboard ?? systemClipboard {
     tables.addListener(_notify);
+    charts.addListener(_notify);
   }
 
   /// The presentation's path, relative to the device's files root.
@@ -256,6 +266,10 @@ class SlideEditorController extends ChangeNotifier {
   /// The table cells selected on the canvas, which the table commands act
   /// on; shared with the canvas.
   final SlideTableEditingController tables = SlideTableEditingController();
+
+  /// The chart selected on the canvas and the chart commands; shared with
+  /// the canvas.
+  final SlideChartEditingController charts = SlideChartEditingController();
 
   /// The families the toolbar offers by default: the generic ones every
   /// platform can draw.
@@ -515,6 +529,12 @@ class SlideEditorController extends ChangeNotifier {
     if (doc != null && slideId != null) {
       textEditing.attach(doc.controller, slideId, _selectedElementIds);
       tables.attach(doc.controller, slideId);
+      charts.attach(
+        doc.controller,
+        slideId,
+        _selectedElementIds,
+        editable: !_readOnly,
+      );
     }
   }
 
@@ -1160,6 +1180,90 @@ class SlideEditorController extends ChangeNotifier {
     });
   });
 
+  // ── Charts ────────────────────────────────────────────────────────────────
+
+  /// The one element selected, when it is a chart; null otherwise.
+  ChartElement? get selectedChart {
+    final element = singleSelected;
+    return element is ChartElement ? element : null;
+  }
+
+  /// Whether the chart commands apply: a chart is selected in an editable
+  /// presentation.
+  bool get canEditChart => !_readOnly && selectedChart != null;
+
+  /// Puts a [kind] chart of `SlideDocumentController.sampleChartData` in
+  /// the middle of the selected slide and selects it, as one undo step.
+  /// The tool goes back to select.
+  void insertChart(ChartKind kind) {
+    final doc = _doc;
+    final slideId = _selectedSlideId;
+    if (_readOnly || doc == null || slideId == null) return;
+    textEditing.commit();
+    final id = doc.controller.insertChart(slideId, kind);
+    tools.use(SlideCanvasTool.select);
+    selectElements({id});
+  }
+
+  /// Runs [command] on [charts] when the selected chart may be changed.
+  void _onChart(void Function(SlideChartEditingController charts) command) {
+    if (!canEditChart) return;
+    textEditing.commit();
+    // The canvas may not have built since the selection changed.
+    _attachText();
+    command(charts);
+  }
+
+  /// Makes the selected chart a [kind] chart, keeping its numbers.
+  void setChartKind(ChartKind kind) => _onChart((c) => c.setKind(kind));
+
+  /// Sets the selected chart's title, legend, value labels and gridlines;
+  /// what is left out is kept.
+  void setChartOptions({
+    String? title,
+    bool? showLegend,
+    bool? showDataLabels,
+    bool? showGridlines,
+  }) => _onChart(
+    (c) => c.setOptions(
+      title: title,
+      showLegend: showLegend,
+      showDataLabels: showDataLabels,
+      showGridlines: showGridlines,
+    ),
+  );
+
+  /// Colors the selected chart's series in order; an empty list goes back
+  /// to the theme's accents.
+  void setChartColors(List<SlideColor> colors) =>
+      _onChart((c) => c.setColors(colors));
+
+  /// Colors series [index] — slice [index] of a pie — of the selected
+  /// chart, the others keeping theirs; null gives it back its theme accent.
+  /// Colors that only repeat the theme accents are dropped, so a chart with
+  /// none of its own keeps following the theme.
+  void setChartSeriesColor(int index, SlideColor? color) {
+    final chart = selectedChart;
+    if (chart == null) return;
+    final count = math.max(index + 1, chart.colors.length);
+    SlideColor theme(int i) =>
+        ChartElement.defaultPalette[i % ChartElement.defaultPalette.length];
+    final colors = [
+      for (var i = 0; i < count; i++)
+        i == index ? color ?? theme(i) : chart.colorOf(i),
+    ];
+    while (colors.isNotEmpty && colors.last == theme(colors.length - 1)) {
+      colors.removeLast();
+    }
+    setChartColors(colors);
+  }
+
+  /// Replaces the selected chart's data with a data sheet's [grid] (see
+  /// `ChartData.fromGrid`), as one undo step. Throws an [ArgumentError]
+  /// past the chart limits, changing nothing.
+  void setChartDataGrid(List<List<String>> grid) =>
+      _onChart((c) => c.setDataGrid(grid));
+
   // ── Pictures ──────────────────────────────────────────────────────────────
 
   /// Asks for a picture on this device, uploads it beside the presentation
@@ -1335,6 +1439,7 @@ class SlideEditorController extends ChangeNotifier {
         // screen to look at.
         _readOnly = true;
         _saveError = null;
+        _attachText();
       } else {
         _saveError = e;
         onSaveFailed?.call(e);
@@ -1375,6 +1480,7 @@ class SlideEditorController extends ChangeNotifier {
     tools.dispose();
     textEditing.dispose();
     tables.dispose();
+    charts.dispose();
     super.dispose();
   }
 }

@@ -1451,4 +1451,164 @@ void main() {
       expect(c.canUndo, isFalse);
     });
   });
+
+  group('charts (#1160)', () {
+    // The chart editing controller schedules its notices after a frame.
+    TestWidgetsFlutterBinding.ensureInitialized();
+
+    Future<SlideEditorController> withChart({
+      ChartKind kind = ChartKind.bar,
+    }) async {
+      final c = controllerFor(deck(1));
+      await c.load();
+      c.insertChart(kind);
+      return c;
+    }
+
+    ChartElement chart(SlideEditorController c) =>
+        c.selectedSlide!.elements.whereType<ChartElement>().single;
+
+    test('inserting a chart puts sample data in the middle, selected, as '
+        'one undo step that starts the autosave', () async {
+      final c = await withChart(kind: ChartKind.line);
+      final ch = chart(c);
+      expect(ch.kind, ChartKind.line);
+      expect(ch.data, SlideDocumentController.sampleChartData(ChartKind.line));
+      expect(c.selectedElementIds, {ch.id});
+      expect(c.selectedChart, same(ch));
+      expect(c.canEditChart, isTrue);
+      expect(c.charts.chart, same(ch), reason: 'the toolbar sees it at once');
+      expect(c.charts.canEdit, isTrue);
+      expect(c.tools.tool, SlideCanvasTool.select);
+      expect(c.saveState, SlideSaveState.dirty);
+      final slide = c.presentation!.size;
+      expect(ch.frame.x + ch.frame.width / 2, closeTo(slide.width / 2, 1));
+      expect(ch.frame.y + ch.frame.height / 2, closeTo(slide.height / 2, 1));
+      c.undo();
+      expect(c.selectedSlide!.elements, isEmpty);
+      expect(c.selectedChart, isNull);
+      expect(c.canUndo, isFalse);
+    });
+
+    test('kind, title, legend, labels and gridlines are one undo step '
+        'each', () async {
+      final c = await withChart();
+      c.setChartKind(ChartKind.pie);
+      expect(chart(c).kind, ChartKind.pie);
+      c.setChartOptions(title: 'Sales');
+      c.setChartOptions(showLegend: false);
+      c.setChartOptions(showDataLabels: true);
+      c.setChartOptions(showGridlines: false);
+      final options = chart(c).options;
+      expect(options.title, 'Sales');
+      expect(options.showLegend, isFalse);
+      expect(options.showDataLabels, isTrue);
+      expect(options.showGridlines, isFalse);
+
+      c.undo();
+      expect(chart(c).options.showGridlines, isTrue);
+      expect(chart(c).options.showDataLabels, isTrue);
+      c.undo();
+      c.undo();
+      c.undo();
+      expect(chart(c).options.title, isEmpty);
+      expect(chart(c).kind, ChartKind.pie);
+      c.undo();
+      expect(chart(c).kind, ChartKind.bar);
+    });
+
+    test('a series color is set by index, the rest keep theirs, and the '
+        'theme colors come back', () async {
+      final c = await withChart();
+      const red = SlideColor(0xFFFF0000);
+      c.setChartSeriesColor(1, red);
+      expect(chart(c).colorOf(1), red);
+      expect(chart(c).colorOf(0), ChartElement.defaultPalette[0]);
+      c.setChartSeriesColor(1, null);
+      expect(chart(c).colors, isEmpty, reason: 'back to the theme accents');
+      c.setChartSeriesColor(0, red);
+      c.setChartColors(const []);
+      expect(chart(c).colors, isEmpty);
+      c.undo();
+      expect(chart(c).colorOf(0), red);
+    });
+
+    test('a data grid replaces the numbers as one undo step', () async {
+      final c = await withChart();
+      final before = chart(c).data;
+      c.setChartDataGrid(const [
+        ['', 'Revenue', 'Costs'],
+        ['Q1', '12', '8'],
+        ['Q2', '30', ''],
+        ['Q3', '1,200', '9'],
+      ]);
+      final data = chart(c).data;
+      expect(data.categories, ['Q1', 'Q2', 'Q3']);
+      expect(data.series.map((s) => s.name), ['Revenue', 'Costs']);
+      expect(data.series[1].values, [8, 0, 9]);
+      expect(data.series[0].values.last, 1200);
+      c.undo();
+      expect(chart(c).data, before);
+    });
+
+    test('a grid past the limits throws and changes nothing', () async {
+      final c = await withChart();
+      final before = c.presentation;
+      expect(
+        () => c.setChartDataGrid([
+          ['', for (var i = 0; i <= ChartData.maxSeries; i++) 'S$i'],
+          ['Q1', for (var i = 0; i <= ChartData.maxSeries; i++) '1'],
+        ]),
+        throwsArgumentError,
+      );
+      expect(c.presentation, same(before));
+    });
+
+    test('a view-only deck reports the chart but changes nothing', () async {
+      final c = controllerFor(
+        Presentation(
+          title: 'Deck',
+          slides: [
+            Slide(
+              id: 's1',
+              elements: [
+                ChartElement(
+                  id: 'ch',
+                  frame: ElementFrame(x: 0, y: 0, width: 600, height: 400),
+                  data: SlideDocumentController.sampleChartData(ChartKind.bar),
+                ),
+              ],
+            ),
+          ],
+        ),
+        readOnly: true,
+      );
+      await c.load();
+      c.selectElements({'ch'});
+      expect(c.selectedChart, isNotNull);
+      expect(c.charts.chart, isNotNull);
+      expect(c.canEditChart, isFalse);
+      expect(c.charts.canEdit, isFalse);
+      final before = c.presentation;
+      c
+        ..insertChart(ChartKind.pie)
+        ..setChartKind(ChartKind.pie)
+        ..setChartOptions(title: 'x')
+        ..setChartSeriesColor(0, const SlideColor(0xFF000000))
+        ..setChartDataGrid(const [
+          ['', 'A'],
+          ['Q1', '1'],
+        ]);
+      expect(c.presentation, same(before));
+      expect(c.canUndo, isFalse);
+    });
+
+    test('selecting something else lets go of the chart', () async {
+      final c = await withChart();
+      c.selectElements(const {});
+      expect(c.selectedChart, isNull);
+      expect(c.charts.hasChart, isFalse);
+      expect(c.canEditChart, isFalse);
+    });
+  });
 }

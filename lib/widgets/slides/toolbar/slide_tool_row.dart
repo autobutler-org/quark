@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/slides/chart/slide_chart_menu_button.dart';
 import 'package:quark/widgets/slides/find/slide_find_button.dart';
 import 'package:quark/widgets/slides/table/slide_table_menu_button.dart';
 import 'package:quark/widgets/slides/theme/slide_picker_menu_button.dart';
@@ -10,12 +11,13 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The wide slide toolbar's first row: the drawing tools — select, text,
-/// the shape menu, line and arrow — the table and picture menus, and the Theme and
+/// the shape menu, line and arrow — the table, chart and picture menus, and the Theme and
 /// Layout pickers (#1163), with the keyboard shortcuts button and the properties panel's toggle at the far
 /// end. The active tool is lit.
 ///
 /// Key prefixes: `slide_tool_shape` on the shape menu, `slide_tool_table`
-/// on the table menu (#1160), `slide_tool_image`
+/// on the table menu (#1160), `slide_tool_chart` on the chart menu,
+/// `slide_tool_image`
 /// on the picture menu, `slide_theme_button` and `slide_layout_button` on
 /// the pickers' chips, `slide_transition_button` on the Transition chip, `slide_find_open` on the find button,
 /// `slide_shortcuts_button` on the shortcuts button,
@@ -80,6 +82,7 @@ class SlideToolRow extends StatelessWidget {
                 SlideChoiceButton(choice: actions.line),
                 SlideChoiceButton(choice: actions.arrow),
                 SlideTableMenuButton(actions: actions),
+                SlideChartMenuButton(actions: actions),
                 SlideChoiceMenuButton(
                   buttonKey: 'slide_tool_image',
                   icon: QuarkIcons.add_image,

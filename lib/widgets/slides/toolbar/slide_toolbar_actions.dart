@@ -31,7 +31,11 @@ import 'package:quark_slides/quark_slides.dart';
 /// (`row_above`, `row_below`, `column_left`, `column_right`, `delete_row`,
 /// `delete_column`, `merge`, `unmerge`, `header_row`, `banded_rows`,
 /// `borders_<preset>`, `distribute_rows`, `distribute_columns`) and its
-/// cell color `slide_table_fill`.
+/// cell color `slide_table_fill`. A chart's (#1160) are
+/// `slide_chart_kind_<kind>`, `slide_chart_legend`,
+/// `slide_chart_data_labels`, `slide_chart_gridlines`,
+/// `slide_chart_edit_data`, `slide_chart_colors_reset` and the series
+/// colors `slide_chart_color_<index>`.
 class SlideToolbarActions {
   /// The toolbar for [controller]; [onImageFromDevice] and
   /// [onImageFromQuark] start the page's picture pickers.
@@ -39,6 +43,7 @@ class SlideToolbarActions {
     this.controller, {
     this.onImageFromDevice,
     this.onImageFromQuark,
+    this.onEditChartData,
   });
 
   /// The editor the toolbar acts on.
@@ -49,6 +54,9 @@ class SlideToolbarActions {
 
   /// Picks a picture already on the Quark to put on the slide.
   final VoidCallback? onImageFromQuark;
+
+  /// Opens the selected chart's data sheet.
+  final VoidCallback? onEditChartData;
 
   SlideCanvasTool get _tool => controller.tools.tool;
 
@@ -557,6 +565,121 @@ class SlideToolbarActions {
       controller.distributeTableColumns,
     ),
   ];
+
+  // ── Chart ─────────────────────────────────────────────────────────────────
+
+  /// Whether a chart is selected in an editable presentation.
+  bool get canEditChart => controller.canEditChart;
+
+  /// Whether the chart tool is the active one, which lights the chart menu.
+  bool get chartToolActive => _tool.mode == SlideToolMode.chart;
+
+  /// The kind the chart tool draws, or bars when another tool is active.
+  ChartKind get chartToolKind => _tool.chartKind ?? ChartKind.bar;
+
+  /// Arms the chart tool to draw a [kind] chart.
+  void drawChart(ChartKind kind) =>
+      controller.useTool(SlideCanvasTool.chart(kind));
+
+  /// Puts a [kind] chart in the middle of the slide.
+  void insertChart(ChartKind kind) => controller.insertChart(kind);
+
+  /// Each kind of chart, the selected chart's lit.
+  List<SlideToolbarChoice> get chartKinds => [
+    for (final kind in ChartKind.values)
+      SlideToolbarChoice(
+        key: 'slide_chart_kind_${kind.name}',
+        label: chartKindName(kind),
+        selected: controller.selectedChart?.kind == kind,
+        onSelected: canEditChart ? () => controller.setChartKind(kind) : null,
+      ),
+  ];
+
+  /// The selected chart's kind, as the kind menu reads it.
+  String get chartKindLabel {
+    final chart = controller.selectedChart;
+    return chart == null ? 'Chart' : chartKindName(chart.kind);
+  }
+
+  /// The legend, value labels and gridlines, lit while on; a pie has no
+  /// gridlines to show.
+  List<SlideToolbarChoice> get chartToggles {
+    final chart = controller.selectedChart;
+    final options = chart?.options ?? const ChartOptions();
+    return [
+      for (final (key, label, icon, on, enabled, set) in [
+        (
+          'legend',
+          'Legend',
+          QuarkIcons.chart_legend,
+          options.showLegend,
+          true,
+          (bool v) => controller.setChartOptions(showLegend: v),
+        ),
+        (
+          'data_labels',
+          'Data labels',
+          QuarkIcons.chart_data_labels,
+          options.showDataLabels,
+          true,
+          (bool v) => controller.setChartOptions(showDataLabels: v),
+        ),
+        (
+          'gridlines',
+          'Gridlines',
+          QuarkIcons.chart_gridlines,
+          options.showGridlines,
+          chart?.kind.hasAxes ?? false,
+          (bool v) => controller.setChartOptions(showGridlines: v),
+        ),
+      ])
+        SlideToolbarChoice(
+          key: 'slide_chart_$key',
+          label: label,
+          icon: icon,
+          selected: on,
+          onSelected: canEditChart && enabled ? () => set(!on) : null,
+        ),
+    ];
+  }
+
+  /// One color per series — per slice, in a pie — theme colors first.
+  List<SlideColorChoice> get chartColors {
+    final chart = controller.selectedChart;
+    if (chart == null) return const [];
+    return [
+      for (final (i, entry) in chart.legendEntries.indexed)
+        SlideColorChoice(
+          key: 'slide_chart_color_$i',
+          label: entry.name.trim().isEmpty
+              ? 'Series ${i + 1}'
+              : entry.name.trim(),
+          icon: QuarkIcons.chart_colors,
+          current: entry.color,
+          noneLabel: 'Theme color',
+          theme: controller.theme,
+          onChanged: canEditChart
+              ? (color) => controller.setChartSeriesColor(i, color)
+              : null,
+        ),
+    ];
+  }
+
+  /// Every series back to the theme's accents.
+  SlideToolbarChoice get chartThemeColors => SlideToolbarChoice(
+    key: 'slide_chart_colors_reset',
+    label: 'Use theme colors',
+    icon: QuarkIcons.slide_theme,
+    onSelected: canEditChart ? () => controller.setChartColors(const []) : null,
+  );
+
+  /// Opens the data sheet.
+  SlideToolbarChoice get chartEditData => SlideToolbarChoice(
+    key: 'slide_chart_edit_data',
+    label: 'Edit data',
+    icon: QuarkIcons.chart_data,
+    onSelected: canEditChart ? onEditChartData : null,
+  );
 
   // ── Arrange ───────────────────────────────────────────────────────────────
 
