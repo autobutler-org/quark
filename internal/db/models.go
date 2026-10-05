@@ -239,6 +239,8 @@ type User struct {
 	CreatedAt          time.Time
 	IsAdmin            int64
 	Status             string
+	AuthSalt           string
+	AuthKeyHash        string
 }
 
 type UserChatKey struct {

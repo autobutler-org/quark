@@ -2,7 +2,10 @@ package authutil
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -203,4 +206,89 @@ func pruneMountPoints(dataDir string) error {
 		_ = os.Remove(filepath.Join(mountsDir, entry.Name()))
 	}
 	return nil
+}
+
+// authSaltSize and authKeySize are the decoded lengths, in bytes, of a
+// key-derivation salt and of the auth key a client derives with it (#2430).
+const (
+	authSaltSize = 16
+	authKeySize  = 32
+)
+
+// deterministicSalt is the salt for a username that has none stored: the
+// first 16 bytes of HMAC-SHA256(secret, username), as standard base64. The
+// username is used exactly as Login looks it up, with no folding.
+func deterministicSalt(saltSecret func() ([]byte, error), username string) (string, error) {
+	if saltSecret == nil {
+		return "", errors.New("salt secret not available")
+	}
+	secret, err := saltSecret()
+	if err != nil {
+		return "", fmt.Errorf("read the salt secret: %w", err)
+	}
+	mac := hmac.New(sha256.New, secret)
+	mac.Write([]byte(username))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil)[:authSaltSize]), nil
+}
+
+// validateAuthKey returns ErrInvalidAuthKey unless authKey is the standard
+// base64 of exactly 32 bytes. That is 44 characters, under bcrypt's 72-byte
+// limit, so the encoded key is what gets hashed.
+func validateAuthKey(authKey string) error {
+	if decoded, err := base64.StdEncoding.DecodeString(authKey); err != nil || len(decoded) != authKeySize {
+		return ErrInvalidAuthKey
+	}
+	return nil
+}
+
+// newCredentials validates the one credential a new account or a recovery
+// gives and returns what to store for it. A password yields its hash alone; an
+// auth key yields its hash and the deterministic salt for username, and leaves
+// the password hash empty, which no password matches.
+func newCredentials(username, password, authKey string, saltSecret func() ([]byte, error)) (passwordHash, authKeyHash, authSalt string, err error) {
+	switch {
+	case password == "" && authKey == "":
+		return "", "", "", ErrCredentialRequired
+	case password != "" && authKey != "":
+		return "", "", "", ErrCredentialConflict
+	case authKey == "":
+		if len(password) < 8 {
+			return "", "", "", ErrPasswordTooShort
+		}
+		passwordHash, err = HashPassword(password)
+		return passwordHash, "", "", err
+	}
+	if err := validateAuthKey(authKey); err != nil {
+		return "", "", "", err
+	}
+	if authSalt, err = deterministicSalt(saltSecret, username); err != nil {
+		return "", "", "", err
+	}
+	authKeyHash, err = HashPassword(authKey)
+	return "", authKeyHash, authSalt, err
+}
+
+// upgradeToAuthKey gives an account that signs in by password its auth key,
+// with the deterministic salt /auth/salt answered for it. The password hash
+// stays, so a client that still sends the password keeps signing in.
+func upgradeToAuthKey(ctx context.Context, queries *db.Queries, user db.User, authKey string, saltSecret func() ([]byte, error)) error {
+	salt, err := deterministicSalt(saltSecret, user.Username)
+	if err != nil {
+		return err
+	}
+	hash, err := HashPassword(authKey)
+	if err != nil {
+		return err
+	}
+	if err := queries.SetAuthKeyIfUnset(ctx, db.SetAuthKeyIfUnsetParams{AuthKeyHash: hash, AuthSalt: salt, ID: user.ID}); err != nil {
+		return fmt.Errorf("store the auth key: %w", err)
+	}
+	return nil
+}
+
+// matchesCredential reports whether secret is the account's password or its
+// auth key. Re-confirmation and HTTP Basic take either in the one password
+// field (#2430); an empty hash matches nothing.
+func matchesCredential(user db.User, secret string) bool {
+	return CheckPassword(secret, user.PasswordHash) || CheckPassword(secret, user.AuthKeyHash)
 }
