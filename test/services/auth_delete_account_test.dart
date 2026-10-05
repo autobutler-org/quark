@@ -127,15 +127,22 @@ void main() {
     });
   });
 
-  test('an account with no auth key yet confirms with its password', () async {
+  test('an account with no auth key is refused before anything is sent, '
+      'never sent its password (#2430)', () async {
     final client = serve();
     salts.legacy = true;
 
-    await AuthService.deleteAccount(password: 'hunter2hunter2');
-
-    expect(jsonDecode((client.requests.single as http.Request).body), {
-      'password': 'hunter2hunter2',
-    });
+    await expectLater(
+      AuthService.deleteAccount(password: 'hunter2hunter2'),
+      throwsA(
+        isA<MessageException>().having(
+          (e) => e.message,
+          'message',
+          Errors.accountTooOld,
+        ),
+      ),
+    );
+    expect(client.requests, isEmpty);
   });
 
   test('resetting selects the appliance and never the account', () async {

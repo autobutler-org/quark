@@ -13,9 +13,12 @@ import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/events_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../support/auth_salt.dart';
 
 /// Records where every request went and answers each one with an empty JSON
 /// listing, so nothing under test hangs waiting for a Quark.
@@ -141,6 +144,9 @@ void main() {
     'plugins.it_nomads.com/flutter_secure_storage',
   );
 
+  // Loaded outside the fake clock, so setup can derive its keys.
+  setUpAll(ChatCrypto.load);
+
   setUpAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(secureStorage, (_) async => null);
@@ -239,13 +245,9 @@ void main() {
       await AppSettings.instance.setUsername(null);
       await AppSettings.instance.acceptTerms();
       authStatusProbe = () async => const AuthStatus(setupComplete: false);
-      authHttpClientFactory = () => MockClient(
-        (_) async => http.Response(
-          jsonEncode({
-            'token': 'owner-token',
-            'recoveryPhrase': 'apple banana cherry',
-          }),
-          200,
+      authHttpClientFactory = () => AuthSaltClient(
+        MockClient(
+          (_) async => http.Response(jsonEncode({'token': 'owner-token'}), 200),
         ),
       );
       addTearDown(() async {
@@ -263,6 +265,7 @@ void main() {
         await tester.enterText(fields.at(1), 'correct-horse-battery');
         await tester.enterText(fields.at(2), 'correct-horse-battery');
         await tester.tap(find.text('Create account'));
+        await pumpWhileDeriving(tester);
         await tester.pumpAndSettle();
 
         // Mid-wizard: the account exists, but nothing is owed yet.

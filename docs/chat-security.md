@@ -25,7 +25,8 @@ it) in the browser.
 
 ### Split keys (#2430)
 
-The app never sends the Quark a secret that opens a wrap. Each secret goes through one Argon2id run over the
+The app never sends the Quark a secret that opens a wrap, apart from the one move of a legacy account to keys (see
+[The legacy claim](#what-it-doesnt-protect-against)). Each secret goes through one Argon2id run over the
 account's 16-byte auth salt (`GET /api/v0/auth/salt`), and HKDF-SHA256 splits the result into a key the Quark is
 sent and a key that wraps the identity and stays on the device:
 
@@ -84,9 +85,9 @@ stored with each wrap, so it can go up later without breaking existing ones.
 | Setup                         | Generates the phrase and sends only its `recoveryKey`, then generates the identity, wraps it under the password and the phrase it shows, and uploads it |
 | Sign-in, no keys yet          | An account from before chat: generates and uploads, wrapped under the password only    |
 | Sign-in                       | Downloads the wraps and opens the password one with the password from the form. A first-scheme password wrap is re-wrapped under `wrapKey` |
-| Sign-in, Quark-made phrase    | The Quark answers `legacyRecovery: true`: the app opens the identity, generates a phrase, re-wraps the phrase wrap under it, and sends `recoveryKey` and the new row to `PUT /api/v0/auth/recovery-key`. Only after its 204 does it show the phrase |
-| Recovery, app-made phrase     | Sends `recoveryKey`, never the phrase, to fetch the wraps and to reset the password; opens the phrase wrap with `phraseKey` and sends both re-wrapped |
-| Recovery, Quark-made phrase   | Has to send the phrase, once. Generates a new one, sends its key as `newRecoveryKey` with the reset, wraps the identity under it, and shows it after the reset |
+| Sign-in, no recovery key      | The Quark answers `legacyRecovery: true`, as for an admin-created account's first sign-in: the app opens or makes the identity, generates a phrase, wraps the identity under it, and sends `recoveryKey` and the new row to `PUT /api/v0/auth/recovery-key`. Only after its 204 does it show the phrase |
+| Recovery                      | Sends `recoveryKey`, never the phrase, to fetch the wraps and to reset the password; opens the phrase wrap with the phrase's `wrapKey`, or an older one with Argon2id of the phrase, and sends both re-wrapped |
+| Recovery, Quark-made phrase   | The Quark answers `legacyRecovery: true`, so the app has to send the phrase, once. Generates a new one, sends its key as `newRecoveryKey` with the reset, wraps the identity under it, and shows it after the reset |
 | Restart on a phone or desktop | Reads the unwrapped seeds back from the platform keystore (`flutter_secure_storage`)  |
 | Reload on the web             | Nothing is kept, so chat asks for the password again before it can read               |
 | Sign-out                      | Forgets the identity and deletes the cached seeds                                    |
@@ -96,9 +97,9 @@ Keys made at a later sign-in have no phrase wrap, because the app has no phrase 
 someone requested (#1908) from an app that generates the phrase: it is shown at the request, before there is a
 session to upload keys with, and nothing keeps it until the first sign-in. If such an account is recovered, nothing
 can open its old identity, so recovery makes a new one and its earlier messages stay sealed. Accounts from setup
-get their keys while the phrase is on screen. Every account whose phrase the Quark made, an admin-created or
-requested one or one from before #2430, is given a new phrase at its next sign-in, and that rotation adds the phrase
-wrap it was missing.
+get their keys while the phrase is on screen. An account with no recovery key, an admin-created one or one whose
+phrase the Quark made before #2430, is given a phrase at its next sign-in, and that adds the phrase wrap it was
+missing.
 
 ### Routes
 
@@ -330,20 +331,22 @@ Quark restarts.
 
 ### What it doesn't protect against
 
-- **A malicious running Quark.** Since #2430 the app sends the Quark `authKey` and `recoveryKey` and never the
-  password or a phrase it generated, so recording a sign-in, a recovery or a rotation no longer gives a Quark
-  anything that opens a wrap. Once a host has accepted an account's auth key or recovery key, the app refuses to
-  send that host the raw password or phrase again. What is still open, and why chat is still a beta:
+- **A malicious running Quark.** Since #2430 the app sends the Quark `authKey` and `recoveryKey`, so recording a
+  sign-in, a recovery or a rotation gives a Quark nothing that opens a wrap. The raw password or phrase goes out
+  only to move an account the Quark marks `legacy` or `legacyRecovery` to keys, once each. A Quark too old for keys
+  is refused before anything goes out, and the Quark refuses a raw password or phrase from an old app with 426. What
+  is still open, and why chat is still a beta:
   - **Public keys.** The Quark serves every member's public keys and the granter's signing key, and nothing checks
     them. A Quark that hands out a key of its own in place of a member's can be granted channel keys and read what
     follows. #2430 does not fix this; it needs keys verified out of band.
   - **The web app comes from the Quark.** In a browser, the code doing the crypto is served by the Quark it
     protects against, so a malicious one can serve code that sends the password. Only the native apps are
     outside its reach.
-  - **The first answer.** The refusal starts after the first key a host accepts. Until then, a Quark that
-    claims an account is `legacy` or `legacyRecovery`, or has no salt endpoint, is believed and gets the raw
-    password or phrase; so does the one legacy recovery an account with a Quark-made phrase needs. That ends only
-    when the Quark stops accepting the legacy flows.
+  - **The legacy claim.** The app believes the Quark's `legacy` and `legacyRecovery` answers every time, because it
+    cannot tell a Quark that was reset or reinstalled from one that was compromised. So a compromised Quark can
+    claim that any account is `legacy` or `legacyRecovery`, on any device and at any time, and get the password at
+    that sign-in or the phrase at that recovery, that once. The password opens the password wrap and the phrase the
+    phrase wrap. A key the app derived still opens nothing.
   - **48 bits.** A phrase is six words from 256, 48 bits. Argon2id makes each guess cost about 100 ms of a fast
     machine's time, but a Quark holding the phrase wrap can guess offline, without the sign-in rate limit.
 - **Metadata.** The Quark sees who is in which channel, when each message was sent, and how big it is, and

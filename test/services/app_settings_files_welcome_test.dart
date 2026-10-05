@@ -4,10 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../support/auth_salt.dart';
 
 /// #2022: Files greets a new owner with a card that stays until dismissed,
 /// and greets an explicit sign-in once. The first is a persisted per-host
@@ -119,8 +122,11 @@ void main() {
     test(
       'AuthService.login asks for the greeting, name already stored',
       () async {
-        authHttpClientFactory = () => MockClient(
-          (_) async => http.Response(jsonEncode({'token': 'plain-token'}), 200),
+        authHttpClientFactory = () => AuthSaltClient(
+          MockClient(
+            (_) async =>
+                http.Response(jsonEncode({'token': 'plain-token'}), 200),
+          ),
         );
         String? nameWhenGreeted;
         void record() {
@@ -142,10 +148,37 @@ void main() {
     test(
       'a first sign-in is not greeted until its phrase is accepted',
       () async {
-        authHttpClientFactory = () => MockClient(
-          (_) async => http.Response(
-            jsonEncode({'token': 't', 'recoveryPhrase': 'apple banana cherry'}),
-            200,
+        // An account with no recovery key is given a phrase to show, once
+        // its chat keys are wrapped under it.
+        chatKeysOnSignIn =
+            ({
+              required password,
+              phraseWrapKey,
+              required sessionToken,
+              authSalt,
+            }) async => null;
+        addTearDown(
+          () => chatKeysOnSignIn =
+              ({
+                required password,
+                phraseWrapKey,
+                required sessionToken,
+                authSalt,
+              }) => ChatKeysController.instance.signedIn(
+                password: password,
+                phraseWrapKey: phraseWrapKey,
+                sessionToken: sessionToken,
+                authSalt: authSalt,
+              ),
+        );
+        authHttpClientFactory = () => AuthSaltClient(
+          MockClient(
+            (request) async => request.url.path == '/api/v0/auth/recovery-key'
+                ? http.Response('', 204)
+                : http.Response(
+                    jsonEncode({'token': 't', 'legacyRecovery': true}),
+                    200,
+                  ),
           ),
         );
 

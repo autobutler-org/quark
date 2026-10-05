@@ -8,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/models/chat_keys.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/auth_secret.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/chat_crypto.dart';
@@ -21,9 +22,8 @@ import '../support/auth_salt.dart';
 
 const _password = 'correct horse battery staple';
 
-/// A Quark that records every request it is sent, answers the salt endpoint
-/// as configured, and gives a legacy account its auth key when a sign-in
-/// carries both credentials.
+/// A Quark that records every request it is sent and answers the salt
+/// endpoint as configured.
 class _FakeQuark {
   final requests = <http.Request>[];
 
@@ -38,20 +38,13 @@ class _FakeQuark {
   /// Whether the account has no recovery key yet, reported by the salt
   /// endpoint and the sign-in; null leaves the field out, as a Quark from
   /// before #2430 does.
-  bool? legacyRecovery;
-
-  /// The phrase a sign-in hands back, as an admin-created account's first
-  /// one does.
-  String? serverPhrase;
+  bool? legacyRecovery = false;
 
   /// What `PUT /auth/recovery-key` answers.
   int rotationStatus = 204;
 
   /// The account's stored chat keys, as `/chat/keys/me` keeps them.
   Map<String, dynamic>? chatKeys;
-
-  /// Whether a sign-in carrying both credentials stores the auth key.
-  bool upgrades = true;
 
   late final http.Client client = MockClient((request) async {
     final path = request.url.path;
@@ -72,17 +65,9 @@ class _FakeQuark {
         : jsonDecode(request.body) as Map<String, dynamic>;
     switch (path) {
       case '/api/v0/auth/login':
-        if (sent.containsKey('password') &&
-            sent.containsKey('authKey') &&
-            upgrades) {
-          legacy = false;
-        }
+        if (sent.containsKey('password')) legacy = false;
         return http.Response(
-          jsonEncode({
-            'token': 'session',
-            'recoveryPhrase': ?serverPhrase,
-            'legacyRecovery': ?legacyRecovery,
-          }),
+          jsonEncode({'token': 'session', 'legacyRecovery': ?legacyRecovery}),
           200,
         );
       case '/api/v0/auth/recover':
@@ -107,22 +92,10 @@ class _FakeQuark {
         return chatKeys == null
             ? http.Response('{}', 404)
             : http.Response(jsonEncode(chatKeys), 200);
-      // A Quark that took the recovery key makes no phrase.
       case '/api/v0/auth/setup':
-        return http.Response(
-          jsonEncode({
-            'token': 'session',
-            if (!sent.containsKey('recoveryKey')) 'recoveryPhrase': 'a-b-c',
-          }),
-          200,
-        );
+        return http.Response('{"token":"session"}', 200);
       case '/api/v0/auth/request-account':
-        return http.Response(
-          jsonEncode({
-            if (!sent.containsKey('recoveryKey')) 'recoveryPhrase': 'a-b-c',
-          }),
-          201,
-        );
+        return http.Response('{}', 201);
       case '/api/v0/admin/users':
         return http.Response(
           jsonEncode({
@@ -149,8 +122,10 @@ class _FakeQuark {
       jsonDecode(sent.last.body) as Map<String, dynamic>;
 }
 
-/// #2430: the app sends a key derived from the password, never the password,
-/// and nothing it sends opens the chat keys.
+/// #2430: the app sends a key derived from the password, and the password or
+/// the phrase only once, to move a legacy account to keys. Nothing else it
+/// sends opens the chat keys, and what it cannot sign in to without them it
+/// refuses before sending anything.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -165,8 +140,8 @@ void main() {
   /// The auth salts [chatKeysOnSignIn] was handed, null for the first scheme.
   final chatSalts = <Uint8List?>[];
 
-  /// What each [chatKeysOnSignIn] was handed for the phrase wrap: the
-  /// Quark's phrase, `key` for a generated phrase's wrap key, or null.
+  /// What each [chatKeysOnSignIn] was handed for the phrase wrap: `key` for
+  /// a generated phrase's wrap key, or null.
   final chatPhrases = <String?>[];
 
   setUpAll(() async {
@@ -199,13 +174,12 @@ void main() {
     chatKeysOnSignIn =
         ({
           required password,
-          recoveryPhrase,
           phraseWrapKey,
           required sessionToken,
           authSalt,
         }) async {
           chatSalts.add(authSalt);
-          chatPhrases.add(phraseWrapKey == null ? recoveryPhrase : 'key');
+          chatPhrases.add(phraseWrapKey == null ? null : 'key');
           return null;
         };
   });
@@ -216,12 +190,8 @@ void main() {
     authHttpClientFactory = () => sharedHttpClient;
   });
 
-  Matcher refusesTheDowngrade() => throwsA(
-    isA<MessageException>().having(
-      (e) => e.message,
-      'message',
-      Errors.passwordDowngradeRefused,
-    ),
+  Matcher refusesWith(String message) => throwsA(
+    isA<MessageException>().having((e) => e.message, 'message', message),
   );
 
   Future<LoginResult> signIn() =>
@@ -241,24 +211,18 @@ void main() {
     );
     final unlocked = Completer<void>();
     chatKeysOnSignIn =
-        ({
-          required password,
-          recoveryPhrase,
-          phraseWrapKey,
-          required sessionToken,
-          authSalt,
-        }) => keysController
-            .signedIn(
-              password: password,
-              recoveryPhrase: recoveryPhrase,
-              phraseWrapKey: phraseWrapKey,
-              sessionToken: sessionToken,
-              authSalt: authSalt,
-            )
-            .then((keys) {
-              unlocked.complete();
-              return keys;
-            }, onError: unlocked.completeError);
+        ({required password, phraseWrapKey, required sessionToken, authSalt}) =>
+            keysController
+                .signedIn(
+                  password: password,
+                  phraseWrapKey: phraseWrapKey,
+                  sessionToken: sessionToken,
+                  authSalt: authSalt,
+                )
+                .then((keys) {
+                  unlocked.complete();
+                  return keys;
+                }, onError: unlocked.completeError);
 
     await signIn();
     await unlocked.future;
@@ -328,98 +292,85 @@ void main() {
       persist: false,
     );
     chatKeysOnSignIn =
-        ({
-          required password,
-          recoveryPhrase,
-          phraseWrapKey,
-          required sessionToken,
-          authSalt,
-        }) => keysController.signedIn(
-          password: password,
-          recoveryPhrase: recoveryPhrase,
-          phraseWrapKey: phraseWrapKey,
-          sessionToken: sessionToken,
-          authSalt: authSalt,
-        );
+        ({required password, phraseWrapKey, required sessionToken, authSalt}) =>
+            keysController.signedIn(
+              password: password,
+              phraseWrapKey: phraseWrapKey,
+              sessionToken: sessionToken,
+              authSalt: authSalt,
+            );
     chatKeysForRecovery = keysController.keysForRecovery;
     addTearDown(
       () => chatKeysForRecovery = ChatKeysController.instance.keysForRecovery,
     );
-    const serverPhrase = 'abandon-ability-able-about-above-absent';
     const second = 'second password, after a recovery';
-    const third = 'third password, after another';
 
-    // An account whose phrase the Quark made, chat keys wrapped under it.
+    // 1. A sign-in the Quark says has no recovery key, as an admin-created
+    // account's first is, makes the chat keys and gives the account a
+    // phrase.
     quark.legacyRecovery = true;
-    await keysController.signedIn(
-      password: _password,
-      recoveryPhrase: serverPhrase,
-      sessionToken: 'session',
-      authSalt: testAuthSalt,
-    );
-    quark.requests.clear();
-
-    // 1. A legacy recovery, which has to send that phrase, gives a new one.
-    final first = await AuthService.recover(
+    final p1 = (await AuthService.login(
       username: 'grace',
-      recoveryPhrase: serverPhrase,
+      password: _password,
+    )).recoveryPhrase!;
+    final p1Keys = WrappedChatKeys.fromJson(quark.chatKeys!);
+    // 2. A recovery with that phrase sends only its key.
+    quark.legacyRecovery = false;
+    await AuthService.recover(
+      username: 'grace',
+      recoveryPhrase: p1,
       newPassword: second,
     );
-    final p1 = first.recoveryPhrase!;
     await pumpEventQueue();
-    // 2. A recovery with that one sends only its key.
-    expect(
-      (await AuthService.recover(
-        username: 'grace',
-        recoveryPhrase: p1,
-        newPassword: third,
-      )).recoveryPhrase,
-      isNull,
-    );
-    await pumpEventQueue();
-    final p1Keys = WrappedChatKeys.fromJson(quark.chatKeys!);
-    // 3. A sign-in the Quark says has no recovery key rotates it.
+    // 3. A sign-in the Quark again says has no recovery key rotates it.
     quark.legacyRecovery = true;
     final p2 = (await AuthService.login(
       username: 'grace',
-      password: third,
+      password: second,
     )).recoveryPhrase!;
     final p2Keys = WrappedChatKeys.fromJson(quark.chatKeys!);
 
-    Map<String, dynamic> body(String path, bool Function(Map) where) => quark
-        .sent
+    List<Map<String, dynamic>> bodies(String path) => quark.sent
         .where((r) => r.url.path == path)
         .map((r) => jsonDecode(r.body) as Map<String, dynamic>)
-        .singleWhere(where);
+        .toList();
     final p1Key = await testRecoveryKey(p1);
     final p2Key = await testRecoveryKey(p2);
-    final thirdKey = await testAuthKey(third);
-    expect(
-      body('/api/v0/auth/recover', (b) => b.containsKey('recoveryPhrase')),
-      containsPair('newRecoveryKey', p1Key),
-    );
-    expect(
-      body('/api/v0/auth/recover/keys', (b) => b.containsKey('recoveryKey')),
+    final secondKey = await testAuthKey(second);
+    expect(bodies('/api/v0/auth/recover/keys'), [
       {'username': 'grace', 'recoveryKey': p1Key},
-    );
-    expect(
-      body('/api/v0/auth/recover', (b) => b.containsKey('recoveryKey')),
-      containsPair('recoveryKey', p1Key),
-    );
-    final rotation = body('/api/v0/auth/recovery-key', (_) => true);
-    expect(rotation['password'], thirdKey);
-    expect(rotation['recoveryKey'], p2Key);
-    expect(rotation['chatKeys'], quark.chatKeys);
+    ]);
+    final recovery = bodies('/api/v0/auth/recover').single;
+    expect(recovery.keys, {
+      'username',
+      'recoveryKey',
+      'newAuthKey',
+      'chatKeys',
+    });
+    expect(recovery['recoveryKey'], p1Key);
+    expect(recovery['newAuthKey'], secondKey);
+    final rotations = bodies('/api/v0/auth/recovery-key');
+    expect([for (final r in rotations) r['password']], [authKey, secondKey]);
+    expect([for (final r in rotations) r['recoveryKey']], [p1Key, p2Key]);
+    expect(rotations.last['chatKeys'], quark.chatKeys);
     expect(p2Keys.kdfParams.alg, KdfParams.phraseSplitAlgorithm);
-    expect(settings.hasRecoveryKey('grace'), isTrue);
 
-    // Neither generated phrase nor any password ever went out. The Quark's
-    // own phrase did, once: the legacy recovery cannot avoid it.
+    // No phrase or password ever went out, in any field of any request.
     for (final request in quark.requests) {
       final all = '${request.url} ${request.headers} ${request.body}';
-      for (final secret in [p1, p2, _password, second, third]) {
+      for (final secret in [p1, p2, _password, second]) {
         expect(all, isNot(contains(secret)), reason: request.url.path);
       }
+      // The re-confirmation's field is named password, and carries a key.
+      if (request.body.isNotEmpty &&
+          request.url.path != '/api/v0/auth/recovery-key') {
+        expect(
+          (jsonDecode(request.body) as Map).keys,
+          isNot(anyOf(contains('password'), contains('newPassword'))),
+          reason: request.url.path,
+        );
+      }
+      expect(request.body, isNot(contains('recoveryPhrase')));
     }
 
     // Every value the Quark was sent, tried every way a wrap could open: as a
@@ -438,7 +389,7 @@ void main() {
         ],
       ],
     };
-    expect(seen, containsAll([p1Key, p2Key, thirdKey, serverPhrase]));
+    expect(seen, containsAll([p1Key, p2Key, authKey, secondKey]));
     final wrong = throwsA(isA<MessageException>());
     final params = p2Keys.kdfParams;
     for (final value in seen) {
@@ -471,7 +422,7 @@ void main() {
       addTearDown(mine.dispose);
       expect(crypto.unwrapWithKey(wrap, mine.wrapKey).box.publicKey, box);
     }
-    final mine = crypto.deriveAuthKeys(third, testAuthSalt, params);
+    final mine = crypto.deriveAuthKeys(second, testAuthSalt, params);
     addTearDown(mine.dispose);
     expect(
       crypto.unwrapWithKey(p2Keys.byPassword, mine.wrapKey).box.publicKey,
@@ -479,7 +430,9 @@ void main() {
     );
   }, timeout: const Timeout(Duration(minutes: 3)));
 
-  group('rotating at sign-in (#2430)', () {
+  group('giving an account with no recovery key one at sign-in (#2430)', () {
+    // An account an admin created has none until its first sign-in, and one
+    // whose phrase the Quark made has none either.
     setUp(() => quark.legacyRecovery = true);
 
     List<http.Request> rotations() => quark.sent
@@ -501,10 +454,10 @@ void main() {
         'recoveryKey': await testRecoveryKey(phrase),
       });
       expect(put.body, isNot(contains(phrase)));
+      expect(put.body, isNot(contains(_password)));
       expect(chatPhrases, ['key']);
       // Held for the phrase step, as a first sign-in is.
       expect(settings.sessionToken, isNull);
-      expect(settings.hasRecoveryKey('grace'), isTrue);
     });
 
     test('a refused one returns nothing, keeps the session, and is tried '
@@ -515,52 +468,10 @@ void main() {
 
       expect(result.recoveryPhrase, isNull);
       expect(settings.sessionToken, 'session');
-      expect(settings.hasRecoveryKey('grace'), isFalse);
 
       quark.rotationStatus = 204;
       expect((await signIn()).recoveryPhrase, isNotNull);
       expect(rotations(), hasLength(2));
-    });
-
-    test("an admin-created account's first sign-in shows the app's phrase, "
-        "never the Quark's", () async {
-      quark.serverPhrase = 'server-made-phrase';
-
-      final result = await signIn();
-
-      expect(result.recoveryPhrase, isNot('server-made-phrase'));
-      expect(result.recoveryPhrase, isNotNull);
-      // Nor are the chat keys wrapped under it.
-      expect(chatPhrases, ['key']);
-
-      quark
-        ..requests.clear()
-        ..rotationStatus = 403
-        ..legacyRecovery = true;
-      expect((await signIn()).recoveryPhrase, isNull);
-    });
-
-    test('a legacy password account rotates with its auth key', () async {
-      quark.legacy = true;
-
-      await signIn();
-
-      expect(jsonDecode(rotations().single.body)['password'], authKey);
-      expect(rotations().single.body, isNot(contains(_password)));
-    });
-
-    test('a Quark that does not report recovery keys gets no rotation, and '
-        'its phrase is the one shown', () async {
-      quark
-        ..legacyRecovery = null
-        ..serverPhrase = 'server-made-phrase';
-
-      final result = await signIn();
-
-      expect(rotations(), isEmpty);
-      expect(result.recoveryPhrase, 'server-made-phrase');
-      await pumpEventQueue();
-      expect(chatPhrases, ['server-made-phrase']);
     });
   });
 
@@ -571,60 +482,9 @@ void main() {
 
       expect(quark.requests.first.url.queryParameters, {'username': 'Grace'});
       expect(quark.lastBody, {'username': 'Grace', 'authKey': authKey});
-      expect(settings.signsInWithAuthKey('Grace'), isTrue);
-      expect(settings.signsInWithAuthKey('grace'), isFalse);
       await pumpEventQueue();
       expect(chatSalts, [testAuthSalt]);
     });
-
-    test('a legacy account is upgraded with both credentials, once', () async {
-      quark.legacy = true;
-
-      await signIn();
-      expect(quark.lastBody, {
-        'username': 'grace',
-        'password': _password,
-        'authKey': authKey,
-      });
-      expect(settings.signsInWithAuthKey('grace'), isTrue);
-
-      await signIn();
-      expect(quark.sent, hasLength(2));
-      expect(quark.lastBody, {'username': 'grace', 'authKey': authKey});
-    });
-
-    test('an upgrade the Quark did not store is not remembered', () async {
-      quark
-        ..legacy = true
-        ..upgrades = false;
-
-      await signIn();
-      expect(settings.signsInWithAuthKey('grace'), isFalse);
-
-      await signIn();
-      expect(quark.lastBody, containsPair('password', _password));
-    });
-
-    for (final (name, status, body) in [
-      ('a 404', 404, null),
-      ('the 401 an older Quark gives an unknown API path', 401, null),
-      ('the web fallback page', 200, '<!DOCTYPE html><html></html>'),
-    ]) {
-      test('a Quark with no salt endpoint ($name) gets the password, with '
-          'nothing remembered', () async {
-        quark
-          ..saltStatus = status
-          ..saltBody = body;
-
-        await signIn();
-
-        expect(quark.lastBody, {'username': 'grace', 'password': _password});
-        expect(settings.signsInWithAuthKey('grace'), isFalse);
-        await pumpEventQueue();
-        // The chat keys stay in the first scheme.
-        expect(chatSalts, [null]);
-      });
-    }
 
     test(
       'a failing salt endpoint fails the sign-in and sends nothing',
@@ -637,63 +497,150 @@ void main() {
     );
   });
 
-  group('once an account has signed in with its auth key', () {
+  group('refused before anything but the salt goes out:', () {
     setUp(() async {
-      await signIn();
-      expect(settings.signsInWithAuthKey('grace'), isTrue);
-      quark.requests.clear();
+      await settings.setSessionToken('session');
+      await settings.setUsername('grace');
     });
 
-    void claim(String what) {
-      switch (what) {
-        case 'legacy':
+    /// Every flow that sends a password's key, each by [use].
+    final flows = <String, (AuthSecretUse, Future<void> Function())>{
+      'sign-in': (AuthSecretUse.signIn, signIn),
+      'deleting the account': (
+        AuthSecretUse.reconfirm,
+        () => AuthService.deleteAccount(password: _password),
+      ),
+      "a drive's role": (
+        AuthSecretUse.reconfirm,
+        () => StorageService.setDeviceRole(
+          serial: 'S1',
+          role: 'default-storage',
+          username: 'grace',
+          password: _password,
+        ),
+      ),
+      'a snapshot backup': (
+        AuthSecretUse.reconfirm,
+        () => StorageService.startSnapshotBackup(
+          targetDeviceSerial: 'S1',
+          username: 'grace',
+          password: _password,
+        ),
+      ),
+      "the vault's storage location": (
+        AuthSecretUse.reconfirm,
+        () => VaultService.setStorageLocation(
+          targetDeviceSerial: 'S1',
+          username: 'grace',
+          password: _password,
+        ),
+      ),
+      'setup': (
+        AuthSecretUse.newCredential,
+        () => AuthService.setup(username: 'grace', password: _password),
+      ),
+      'an account request': (
+        AuthSecretUse.newCredential,
+        () =>
+            AuthService.requestAccount(username: 'grace', password: _password),
+      ),
+      'an admin creating one': (
+        AuthSecretUse.newCredential,
+        () => UsersService.create(username: 'grace', password: _password),
+      ),
+      'a recovery': (
+        AuthSecretUse.newCredential,
+        () => AuthService.recover(
+          username: 'grace',
+          recoveryPhrase: 'a-b-c',
+          newPassword: _password,
+        ),
+      ),
+    };
+
+    for (final MapEntry(key: name, value: (use, call)) in flows.entries) {
+      for (final (why, status, body, missing) in [
+        ('a 404', 404, null, false),
+        ('the 401 an older Quark gives an unknown API path', 401, null, false),
+        ('the web fallback page', 200, '<!DOCTYPE html><html></html>', false),
+        ('no legacyRecovery', 200, null, true),
+      ]) {
+        test('$name, on a Quark with $why: update the Quark', () async {
+          quark
+            ..saltStatus = status
+            ..saltBody = body;
+          if (missing) quark.legacyRecovery = null;
+
+          await expectLater(call(), refusesWith(Errors.quarkTooOld));
+          expect(quark.sent, isEmpty);
+        });
+      }
+
+      if (use == AuthSecretUse.reconfirm) {
+        test('$name, for an account with no auth key: sign in again', () async {
           quark.legacy = true;
-        case '404':
-          quark.saltStatus = 404;
-        case '401':
-          quark.saltStatus = 401;
-        default:
-          quark.saltBody = '<!DOCTYPE html><html></html>';
+
+          await expectLater(call(), refusesWith(Errors.accountTooOld));
+          expect(quark.sent, isEmpty);
+        });
       }
     }
 
-    for (final what in ['legacy', '404', '401', 'no salt in a 200']) {
-      test('a Quark claiming $what is refused the password', () async {
-        claim(what);
+    test('a new credential for a username the Quark marks legacy is still '
+        'set: the Quark decides whether the name is taken', () async {
+      quark.legacy = true;
 
-        await expectLater(signIn(), refusesTheDowngrade());
-        await expectLater(
-          AuthService.deleteAccount(password: _password),
-          refusesTheDowngrade(),
+      await UsersService.create(username: 'grace', password: _password);
+
+      expect(quark.lastBody, {'username': 'grace', 'authKey': authKey});
+    });
+  });
+
+  group('the one-time upgrade of a legacy account', () {
+    test(
+      'sends the password beside the key once, then the key alone',
+      () async {
+        quark.legacy = true;
+
+        await signIn();
+        expect(quark.lastBody, {
+          'username': 'grace',
+          'password': _password,
+          'authKey': authKey,
+        });
+
+        await signIn();
+        expect(quark.lastBody, {'username': 'grace', 'authKey': authKey});
+        // The password went out in exactly one request.
+        expect(
+          quark.requests.where((r) => r.body.contains(_password)),
+          hasLength(1),
         );
+      },
+    );
 
-        expect(quark.sent, isEmpty);
-        for (final request in quark.requests) {
-          expect(request.url.toString(), isNot(contains(_password)));
-        }
-      });
-    }
-
-    test('the refusal is per Quark and per account', () async {
-      claim('404');
-
-      await AuthService.login(username: 'ada', password: _password);
-      expect(quark.lastBody, {'username': 'ada', 'password': _password});
-
-      await settings.setActiveIndex(1);
+    test('a later legacy claim from a Quark the account signed in to with '
+        'its key still gets the upgrade, as a reset Quark needs', () async {
       await signIn();
-      expect(quark.lastBody, {'username': 'grace', 'password': _password});
+      expect(quark.lastBody, {'username': 'grace', 'authKey': authKey});
+      quark.legacy = true;
+
+      await signIn();
+
+      expect(quark.lastBody, {
+        'username': 'grace',
+        'password': _password,
+        'authKey': authKey,
+      });
     });
+  });
 
-    test('it survives a restart', () async {
-      await settings.load();
-      claim('legacy');
+  group('the one legacy-phrase recovery', () {
+    late List<Map<String, dynamic>> fetches;
 
-      await expectLater(signIn(), refusesTheDowngrade());
-    });
-
-    test('a recovery still sets a new auth key on a legacy claim', () async {
-      claim('legacy');
+    setUp(() {
+      quark.legacyRecovery = true;
+      fetches = [];
       chatKeysForRecovery =
           ({
             required username,
@@ -701,28 +648,75 @@ void main() {
             recoveryKeys,
             newPhraseWrapKey,
             required newPassword,
-            authSalt,
-          }) async => WrappedChatKeys(
-            publicKeys: ChatPublicKeys(
-              boxPublicKey: Uint8List(32),
-              signPublicKey: Uint8List(32),
-            ),
-            byPassword: WrappedSecret(wrapped: Uint8List(104), salt: authSalt!),
-            byPhrase: null,
-            kdfParams: KdfParams.standard.split,
-          );
-      addTearDown(
-        () => chatKeysForRecovery = ChatKeysController.instance.keysForRecovery,
-      );
+            required authSalt,
+          }) async {
+            fetches.add({
+              'recoveryKeys': recoveryKeys != null,
+              'newPhraseWrapKey': newPhraseWrapKey != null,
+            });
+            return WrappedChatKeys(
+              publicKeys: ChatPublicKeys(
+                boxPublicKey: Uint8List(32),
+                signPublicKey: Uint8List(32),
+              ),
+              byPassword: WrappedSecret(
+                wrapped: Uint8List(104),
+                salt: authSalt,
+              ),
+              byPhrase: null,
+              kdfParams: KdfParams.standard.split,
+            );
+          };
+    });
+    tearDown(
+      () => chatKeysForRecovery = ChatKeysController.instance.keysForRecovery,
+    );
 
-      await AuthService.recover(
-        username: 'grace',
-        recoveryPhrase: 'a-b-c',
-        newPassword: _password,
-      );
+    Future<LoginResult> recover() => AuthService.recover(
+      username: 'grace',
+      recoveryPhrase: 'old-quark-phrase',
+      newPassword: _password,
+    );
 
+    test('sends the phrase once beside both new keys, and returns the new '
+        'phrase', () async {
+      final result = await recover();
+
+      final phrase = result.recoveryPhrase!;
+      expect(phrase.split('-'), hasLength(6));
+      expect(quark.lastBody.keys, {
+        'username',
+        'recoveryPhrase',
+        'newAuthKey',
+        'newRecoveryKey',
+        'chatKeys',
+      });
+      expect(quark.lastBody['recoveryPhrase'], 'old-quark-phrase');
       expect(quark.lastBody['newAuthKey'], authKey);
-      expect(quark.lastBody.containsKey('newPassword'), isFalse);
+      expect(quark.lastBody['newRecoveryKey'], await testRecoveryKey(phrase));
+      expect(quark.lastBody.toString(), isNot(contains(phrase)));
+      expect(fetches, [
+        {'recoveryKeys': false, 'newPhraseWrapKey': true},
+      ]);
+      expect(settings.sessionToken, 'session');
+    });
+
+    test('an account with a recovery key is sent only the key', () async {
+      quark.legacyRecovery = false;
+
+      final result = await recover();
+
+      expect(result.recoveryPhrase, isNull);
+      expect(quark.lastBody.keys, {
+        'username',
+        'recoveryKey',
+        'newAuthKey',
+        'chatKeys',
+      });
+      expect(fetches, [
+        {'recoveryKeys': true, 'newPhraseWrapKey': false},
+      ]);
+      expect(quark.lastBody.toString(), isNot(contains('old-quark-phrase')));
     });
   });
 
@@ -743,8 +737,7 @@ void main() {
       });
       expect(result.recoveryPhrase.split('-'), hasLength(6));
       expect(quark.sent.single.body, isNot(contains(result.recoveryPhrase)));
-      expect(settings.signsInWithAuthKey('grace'), isTrue);
-      expect(settings.hasRecoveryKey('grace'), isTrue);
+      expect(quark.sent.single.body, isNot(contains(_password)));
       await pumpEventQueue();
       expect(chatSalts, [testAuthSalt]);
       // The chat keys' phrase wrap is under the generated phrase's key.
@@ -764,6 +757,7 @@ void main() {
         'recoveryKey': await testRecoveryKey(phrase),
       });
       expect(phrase.split('-'), hasLength(6));
+      expect(quark.sent.single.body, isNot(contains(phrase)));
     });
 
     test('an admin creating one', () async {
@@ -775,22 +769,6 @@ void main() {
       expect(quark.lastBody, {'username': 'grace', 'authKey': authKey});
       // The salt was asked for the new account, not the admin.
       expect(quark.requests.first.url.queryParameters, {'username': 'grace'});
-    });
-
-    test('a Quark with no salt endpoint is still sent the password, and its '
-        'phrase is the one shown', () async {
-      quark.saltStatus = 404;
-
-      final result = await AuthService.setup(
-        username: 'grace',
-        password: _password,
-      );
-
-      expect(quark.lastBody, {'username': 'grace', 'password': _password});
-      expect(result.recoveryPhrase, 'a-b-c');
-      expect(settings.hasRecoveryKey('grace'), isFalse);
-      await pumpEventQueue();
-      expect(chatPhrases, ['a-b-c']);
     });
   });
 
@@ -808,23 +786,14 @@ void main() {
       expect(quark.sent.single.url.path, path);
       expect(quark.lastBody['password'], authKey);
       expect(quark.sent.single.body, isNot(contains(_password)));
-
-      // An account with no auth key yet can only be checked by its password.
-      quark
-        ..requests.clear()
-        ..legacy = true;
-      await call();
-      expect(quark.lastBody['password'], _password);
     }
 
     test(
       'deleting the account',
-      () => expectAuthKey('/api/v0/auth/account', () async {
-        await AuthService.deleteAccount(password: _password);
-        // A deletion signs the app out; the next call needs its session.
-        await settings.setSessionToken('session');
-        await settings.setUsername('grace');
-      }),
+      () => expectAuthKey(
+        '/api/v0/auth/account',
+        () => AuthService.deleteAccount(password: _password),
+      ),
     );
 
     test(
@@ -851,6 +820,15 @@ void main() {
         ),
       ),
     );
+
+    test('a snapshot backup with no username sends no password', () async {
+      await StorageService.startSnapshotBackup(
+        targetDeviceSerial: 'S1',
+        password: _password,
+      );
+
+      expect(quark.lastBody, {'targetDeviceSerial': 'S1'});
+    });
 
     test(
       "the vault's storage location",

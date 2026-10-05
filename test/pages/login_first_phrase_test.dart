@@ -16,10 +16,11 @@ import 'package:quark/widgets/setup/recovery_phrase_step.dart';
 
 import '../support/auth_salt.dart';
 
-/// #1873: the first sign-in of an account an admin created returns its
-/// recovery phrase, once. The router sends a token-holding user from /login to
-/// /files, so storing the token before the phrase is acknowledged would tear
-/// the phrase step down and lose the phrase for good.
+/// #1873, #2430: a sign-in to an account with no recovery key, as an admin
+/// created one's first is, gives it a phrase the app makes and shows it once.
+/// The router sends a token-holding user from /login to /files, so storing the
+/// token before the phrase is acknowledged would tear the phrase step down and
+/// lose the phrase for good.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -34,7 +35,6 @@ void main() {
     chatKeysOnSignIn =
         ({
           required password,
-          recoveryPhrase,
           phraseWrapKey,
           required sessionToken,
           authSalt,
@@ -87,14 +87,12 @@ void main() {
     authHttpClientFactory = () => sharedHttpClient;
   });
 
-  /// Signs in against a Quark that answers the sign-in with [loginBody].
-  /// With [rotation], it has a salt endpoint and answers
-  /// `PUT /auth/recovery-key` with that status; without, it is a Quark from
-  /// before #2430.
+  /// Signs in against a Quark that answers the sign-in with [loginBody] and
+  /// `PUT /auth/recovery-key` with [rotation].
   Future<void> pumpLoginAndSignIn(
     WidgetTester tester,
     Map<String, Object?> loginBody, {
-    int? rotation,
+    int rotation = 204,
   }) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
@@ -102,10 +100,9 @@ void main() {
     authHttpClientFactory = () => AuthSaltClient(
       MockClient(
         (request) async => request.url.path == '/api/v0/auth/recovery-key'
-            ? http.Response('', rotation!)
+            ? http.Response('', rotation)
             : http.Response(jsonEncode(loginBody), 200),
       ),
-      status: rotation == null ? 404 : 200,
     );
 
     final router = GoRouter(
@@ -138,13 +135,7 @@ void main() {
       'hunter2hunter2',
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
-    // Deriving keys needs the real event loop as well as the fake clock.
-    for (var i = 0; rotation != null && i < 20; i++) {
-      await tester.runAsync(
-        () => Future.delayed(const Duration(milliseconds: 20)),
-      );
-      await tester.pump(const Duration(milliseconds: 100));
-    }
+    await pumpWhileDeriving(tester);
     await tester.pumpAndSettle();
   }
 
@@ -153,12 +144,15 @@ void main() {
   ) async {
     await pumpLoginAndSignIn(tester, {
       'token': 'first-token',
-      'recoveryPhrase': 'apple banana cherry',
+      'legacyRecovery': true,
     });
 
     // The phrase is on screen, and nothing is stored yet, so the router has
     // no reason to leave the login page.
-    expect(find.byType(RecoveryPhraseStep), findsOneWidget);
+    final step = tester.widget<RecoveryPhraseStep>(
+      find.byType(RecoveryPhraseStep),
+    );
+    expect(step.phrase.split('-'), hasLength(6));
     expect(settings.sessionToken, isNull);
     expect(find.text('files'), findsNothing);
 
@@ -181,53 +175,26 @@ void main() {
   testWidgets('an ordinary sign-in stores the session straight away', (
     tester,
   ) async {
-    await pumpLoginAndSignIn(tester, {'token': 'plain-token'});
+    await pumpLoginAndSignIn(tester, {
+      'token': 'plain-token',
+      'legacyRecovery': false,
+    });
 
     expect(find.byType(RecoveryPhraseStep), findsNothing);
     expect(settings.sessionToken, 'plain-token');
     expect(find.text('files'), findsOneWidget);
   });
 
-  group('a phrase the Quark made is replaced (#2430):', () {
-    const serverPhrase = 'server-made-phrase';
+  testWidgets('a rotation the Quark refused shows nothing and signs in', (
+    tester,
+  ) async {
+    await pumpLoginAndSignIn(tester, {
+      'token': 'plain-token',
+      'legacyRecovery': true,
+    }, rotation: 403);
 
-    testWidgets('the new one is shown once the Quark has taken it, and the '
-        "Quark's never is", (tester) async {
-      await pumpLoginAndSignIn(tester, {
-        'token': 'first-token',
-        'recoveryPhrase': serverPhrase,
-        'legacyRecovery': true,
-      }, rotation: 204);
-
-      final step = tester.widget<RecoveryPhraseStep>(
-        find.byType(RecoveryPhraseStep),
-      );
-      expect(step.phrase.split('-'), hasLength(6));
-      expect(step.phrase, isNot(serverPhrase));
-      expect(find.textContaining(serverPhrase), findsNothing);
-      expect(settings.sessionToken, isNull);
-
-      await tester.tap(find.byType(CheckboxListTile));
-      await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
-      await tester.pumpAndSettle();
-      expect(settings.sessionToken, 'first-token');
-      expect(find.text('files'), findsOneWidget);
-    });
-
-    for (final serverMade in [true, false]) {
-      testWidgets('a rotation the Quark refused shows nothing and signs in'
-          '${serverMade ? ', even on a first sign-in' : ''}', (tester) async {
-        await pumpLoginAndSignIn(tester, {
-          'token': 'plain-token',
-          if (serverMade) 'recoveryPhrase': serverPhrase,
-          'legacyRecovery': true,
-        }, rotation: 403);
-
-        expect(find.byType(RecoveryPhraseStep), findsNothing);
-        expect(settings.sessionToken, 'plain-token');
-        expect(find.text('files'), findsOneWidget);
-      });
-    }
+    expect(find.byType(RecoveryPhraseStep), findsNothing);
+    expect(settings.sessionToken, 'plain-token');
+    expect(find.text('files'), findsOneWidget);
   });
 }

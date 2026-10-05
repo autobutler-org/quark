@@ -55,8 +55,7 @@ class SetupResult {
   final String sessionToken;
 
   /// Recovery phrase shown exactly once. Store it somewhere safe. The app
-  /// generated it, unless the Quark is too old to take a recovery key and
-  /// made its own (#2430).
+  /// generated it and sent the Quark only its recovery key (#2430).
   final String recoveryPhrase;
 
   const SetupResult({required this.sessionToken, required this.recoveryPhrase});
@@ -69,17 +68,11 @@ class LoginResult {
   /// The account the session is for.
   final String username;
 
-  /// A recovery phrase to show the user once.
-  ///
-  /// From [AuthService.login]: the phrase the app just gave the account in
-  /// place of one the Quark made (#2430), or, from a Quark too old for that,
-  /// the Quark's own phrase on the first sign-in of an account an admin
-  /// created (#1873). Non-null means the session has not been stored yet: the
-  /// caller shows the phrase, then calls [AuthService.acceptSession] once it
-  /// has been acknowledged.
-  ///
-  /// From [AuthService.recover]: the new phrase a recovery with an old,
-  /// Quark-made phrase gave the account. That session is stored already.
+  /// A recovery phrase to show the user once, from [AuthService.login]: the
+  /// phrase the app just gave an account that had no recovery key, such as
+  /// one an admin created (#1873, #2430). Non-null means the session has not
+  /// been stored yet: the caller shows the phrase, then calls
+  /// [AuthService.acceptSession] once it has been acknowledged.
   final String? recoveryPhrase;
 
   const LoginResult({
@@ -140,33 +133,24 @@ Future<bool> Function(String hostAddress) hostReachabilityProbe =
 /// What a sign-in does with chat keys once it has the password (#2416):
 /// unwrap them, or make them when the account has none. Overridable in tests.
 ///
-/// [recoveryPhrase] is set at a first sign-in, and [sessionToken] is the new
-/// session, which the app may not have stored yet. [authSalt] is the salt the
-/// sign-in's auth key was derived with, null on a Quark that still takes the
-/// raw password (#2430). [phraseWrapKey] is the wrap key of a phrase the app
-/// generated, and the result is the keys re-wrapped under it; see
-/// [ChatKeysController.signedIn].
+/// [sessionToken] is the new session, which the app may not have stored yet.
+/// [authSalt] is the salt the sign-in's auth key was derived with (#2430).
+/// [phraseWrapKey] is the wrap key of a phrase the app generated, and the
+/// result is the keys re-wrapped under it; see [ChatKeysController.signedIn].
 Future<WrappedChatKeys?> Function({
   required String password,
-  String? recoveryPhrase,
   SecureKey? phraseWrapKey,
   required String sessionToken,
   Uint8List? authSalt,
 })
 chatKeysOnSignIn =
-    ({
-      required password,
-      recoveryPhrase,
-      phraseWrapKey,
-      required sessionToken,
-      authSalt,
-    }) => ChatKeysController.instance.signedIn(
-      password: password,
-      recoveryPhrase: recoveryPhrase,
-      phraseWrapKey: phraseWrapKey,
-      sessionToken: sessionToken,
-      authSalt: authSalt,
-    );
+    ({required password, phraseWrapKey, required sessionToken, authSalt}) =>
+        ChatKeysController.instance.signedIn(
+          password: password,
+          phraseWrapKey: phraseWrapKey,
+          sessionToken: sessionToken,
+          authSalt: authSalt,
+        );
 
 /// Opens the account's chat keys with the recovery phrase and re-wraps them
 /// under the new password, for [AuthService.recover] to send (#2416). See
@@ -177,7 +161,7 @@ Future<WrappedChatKeys> Function({
   AuthKeys? recoveryKeys,
   SecureKey? newPhraseWrapKey,
   required String newPassword,
-  Uint8List? authSalt,
+  required Uint8List authSalt,
 })
 chatKeysForRecovery = ChatKeysController.instance.keysForRecovery;
 
@@ -187,16 +171,14 @@ chatKeysForRecovery = ChatKeysController.instance.keysForRecovery;
 /// the phrase wrap and disposed once the unlock is done.
 void _unlockChatKeys({
   required String password,
-  String? recoveryPhrase,
   AuthKeys? recovery,
   required String sessionToken,
-  required Uint8List? authSalt,
+  required Uint8List authSalt,
 }) {
   unawaited(
     Future(
           () => chatKeysOnSignIn(
             password: password,
-            recoveryPhrase: recoveryPhrase,
             phraseWrapKey: recovery?.wrapKey,
             sessionToken: sessionToken,
             authSalt: authSalt,
@@ -359,8 +341,9 @@ class AuthService {
   }
 
   /// Creates the owner account on first boot.
-  /// Returns a [SetupResult] containing the session token and recovery phrase.
-  /// The recovery phrase is shown exactly once — the caller must surface it.
+  /// Returns a [SetupResult] containing the session token and the recovery
+  /// phrase the app generated, which is shown exactly once — the caller must
+  /// surface it.
   static Future<SetupResult> setup({
     required String username,
     required String password,
@@ -371,7 +354,7 @@ class AuthService {
       password: password,
       use: AuthSecretUse.newCredential,
     );
-    final mine = await _newPhraseFor(secret);
+    final mine = await _newRecoveryPhrase(secret.salt);
     final Map<String, dynamic> body;
     try {
       body = await _postNewAccount(
@@ -382,36 +365,27 @@ class AuthService {
         context: 'Setup failed',
       );
     } catch (_) {
-      mine?.keys.dispose();
+      mine.keys.dispose();
       rethrow;
     }
     final token = body['token'] as String;
-    // A Quark too old to take the recovery key made its own phrase, and that
-    // is the one that works.
-    final theirs = body['recoveryPhrase'] as String?;
-    final ours = theirs == null ? mine : null;
-    if (ours == null) mine?.keys.dispose();
-    await secret.accepted(username);
-    if (ours != null) await AppSettings.instance.rememberRecoveryKey(username);
     await AppSettings.instance.setSessionToken(token);
     await AppSettings.instance.setUsername(username);
     _unlockChatKeys(
       password: password,
-      recoveryPhrase: theirs,
-      recovery: ours?.keys,
+      recovery: mine.keys,
       sessionToken: token,
       authSalt: secret.salt,
     );
-    return SetupResult(
-      sessionToken: token,
-      recoveryPhrase: theirs ?? ours!.phrase,
-    );
+    return SetupResult(sessionToken: token, recoveryPhrase: mine.phrase);
   }
 
   /// Authenticates with username and password, returns a session token.
   ///
-  /// The Quark is sent an auth key derived from [password], not the password
-  /// (#2430); see [AuthSecret] for the accounts and Quarks that still get it.
+  /// The Quark is sent an auth key derived from [password] (#2430). The
+  /// password goes beside it only once, to move an account the Quark marks
+  /// `legacy` to the key; see [AuthSecret] for that and for the Quarks and
+  /// accounts that are refused instead.
   static Future<LoginResult> login({
     required String username,
     required String password,
@@ -426,7 +400,11 @@ class AuthService {
         .post(
           uri,
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'username': username, ...secret.fields()}),
+          body: jsonEncode({
+            'username': username,
+            'password': ?secret.password,
+            'authKey': secret.authKey,
+          }),
         )
         .timeout(kAuthRequestTimeout);
     if (response.statusCode == 401) {
@@ -441,26 +419,21 @@ class AuthService {
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final token = body['token'] as String;
-    await secret.accepted(username);
     final String? phrase;
-    // An account whose phrase the Quark made, and so has seen, is given one
-    // the app makes (#2430). That waits for the chat keys, which have to be
-    // re-wrapped under it; any other sign-in leaves them to finish on their
-    // own. A Quark that does not say gets no rotation.
-    if (body['legacyRecovery'] == true &&
-        secret.authKey != null &&
-        secret.salt != null) {
+    // An account with no recovery key, such as one an admin created, is
+    // given a phrase the app makes (#2430). That waits for the chat keys,
+    // which have to be wrapped under it; any other sign-in leaves them to
+    // finish on their own.
+    if (body['legacyRecovery'] == true) {
       phrase = await _rotateRecoveryPhrase(
-        username: username,
         password: password,
         secret: secret,
         sessionToken: token,
       );
     } else {
-      phrase = body['recoveryPhrase'] as String?;
+      phrase = null;
       _unlockChatKeys(
         password: password,
-        recoveryPhrase: phrase,
         sessionToken: token,
         authSalt: secret.salt,
       );
@@ -478,25 +451,24 @@ class AuthService {
     return result;
   }
 
-  /// Gives [username] a recovery phrase the app generated, in place of one
-  /// the Quark made (#2430), and returns it, or null when that failed.
+  /// Gives the account a recovery phrase the app generated, for one that has
+  /// no recovery key (#2430), and returns it, or null when that failed.
   ///
   /// Unlocks the chat keys first, since their phrase wrap has to move to the
   /// new phrase, then registers the phrase's recovery key with
   /// `PUT /auth/recovery-key`, which stores the re-wrapped keys in the same
   /// transaction. The phrase is returned only once the Quark answers 204;
-  /// until then the old one still works. A failure is logged and nothing
-  /// else: the sign-in stands, and the next one tries again. So does one
-  /// whose chat keys would not open, since only they can be re-wrapped.
+  /// until then the account has none. A failure is logged and nothing else:
+  /// the sign-in stands, and the next one tries again. So does one whose chat
+  /// keys would not open, since only they can be re-wrapped.
   static Future<String?> _rotateRecoveryPhrase({
-    required String username,
     required String password,
     required AuthSecret secret,
     required String sessionToken,
   }) async {
     final NewRecoveryPhrase mine;
     try {
-      mine = await _newRecoveryPhrase(secret.salt!);
+      mine = await _newRecoveryPhrase(secret.salt);
     } catch (e) {
       debugPrint('[auth_service.dart] recovery phrase not rotated: $e');
       return null;
@@ -530,7 +502,6 @@ class AuthService {
         );
         return null;
       }
-      await AppSettings.instance.rememberRecoveryKey(username);
       return mine.phrase;
     } catch (e) {
       debugPrint('[auth_service.dart] recovery phrase not rotated: $e');
@@ -563,71 +534,66 @@ class AuthService {
   /// chat history (#2416). A phrase that opens nothing fails here, before the
   /// password changes.
   ///
-  /// What stands in for the phrase follows `GET /auth/salt` (#2430). An
+  /// The Quark is sent the new password's auth key, never the password
+  /// (#2430). What stands in for the phrase follows `GET /auth/salt`. An
   /// account with a recovery key is sent the key derived from
-  /// [recoveryPhrase], never the phrase. One without (`legacyRecovery`) has to
-  /// be sent the phrase, so it is given a new one the app generates, sent as
-  /// `newRecoveryKey`, and the result's [LoginResult.recoveryPhrase] carries
-  /// it to show. A Quark that does not say gets the phrase, as before; once
-  /// this Quark has a recovery key for [username]
-  /// ([AppSettings.hasRecoveryKey]), anything but a key is refused with
-  /// [Errors.recoveryPhraseDowngradeRefused].
+  /// [recoveryPhrase], never the phrase. One without (`legacyRecovery`) can
+  /// only be checked by the phrase, so it is sent once, beside the recovery
+  /// key of a new phrase the app generates, and the result's
+  /// [LoginResult.recoveryPhrase] carries that phrase to show. The app
+  /// believes a `legacyRecovery` answer every time, so a compromised Quark can
+  /// collect the phrase this way (docs/chat-security.md).
   static Future<LoginResult> recover({
     required String username,
     required String recoveryPhrase,
     required String newPassword,
   }) async {
-    // The salt asked for now is the one the Quark stores with the new key: it
-    // keeps the account's salt, or assigns the one it answers here.
+    // The salt asked for now is the one the Quark keeps with the new key.
     final secret = await AuthSecret.resolve(
       username: username,
       password: newPassword,
       use: AuthSecretUse.newCredential,
     );
-    final salt = secret.salt;
-    final legacyRecovery = salt == null ? null : secret.legacyRecovery;
-    if (legacyRecovery != false &&
-        AppSettings.instance.hasRecoveryKey(username)) {
-      throw const MessageException(Errors.recoveryPhraseDowngradeRefused);
-    }
+    final legacy = secret.legacyRecovery;
     final crypto = await ChatCrypto.load();
-    final typed = legacyRecovery == false
-        ? crypto.deriveRecoveryKeys(recoveryPhrase, salt!, KdfParams.standard)
-        : null;
-    final NewRecoveryPhrase? next;
+    final typed = legacy
+        ? null
+        : crypto.deriveRecoveryKeys(
+            recoveryPhrase,
+            secret.salt,
+            KdfParams.standard,
+          );
+    NewRecoveryPhrase? next;
     final http.Response response;
     try {
-      next = legacyRecovery == true ? await _newRecoveryPhrase(salt!) : null;
-      try {
-        final chatKeys = await chatKeysForRecovery(
-          username: username,
-          recoveryPhrase: recoveryPhrase,
-          recoveryKeys: typed,
-          newPhraseWrapKey: next?.keys.wrapKey,
-          newPassword: newPassword,
-          authSalt: salt,
-        );
-        response = await authHttpClientFactory()
-            .post(
-              _baseUri.resolve('/api/v0/auth/recover'),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({
-                'username': username,
-                ..._recoveryCredential(recoveryPhrase, typed),
-                ...secret.fields(
-                  passwordField: 'newPassword',
-                  authKeyField: 'newAuthKey',
-                ),
-                'newRecoveryKey': ?next?.keys.authKey,
-                'chatKeys': chatKeys.toJson(),
-              }),
-            )
-            .timeout(kAuthRequestTimeout);
-      } finally {
-        next?.keys.dispose();
-      }
+      next = legacy ? await _newRecoveryPhrase(secret.salt) : null;
+      final chatKeys = await chatKeysForRecovery(
+        username: username,
+        recoveryPhrase: recoveryPhrase,
+        recoveryKeys: typed,
+        newPhraseWrapKey: next?.keys.wrapKey,
+        newPassword: newPassword,
+        authSalt: secret.salt,
+      );
+      response = await authHttpClientFactory()
+          .post(
+            _baseUri.resolve('/api/v0/auth/recover'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'username': username,
+              if (typed != null)
+                'recoveryKey': typed.authKey
+              else
+                'recoveryPhrase': recoveryPhrase,
+              'newAuthKey': secret.authKey,
+              'newRecoveryKey': ?next?.keys.authKey,
+              'chatKeys': chatKeys.toJson(),
+            }),
+          )
+          .timeout(kAuthRequestTimeout);
     } finally {
       typed?.dispose();
+      next?.keys.dispose();
     }
     // A pending or disabled account is refused like a sign-in (#1908).
     if (response.statusCode == 403) {
@@ -639,10 +605,6 @@ class AuthService {
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final token = body['token'] as String;
-    await secret.accepted(username);
-    if (legacyRecovery != null) {
-      await AppSettings.instance.rememberRecoveryKey(username);
-    }
     await AppSettings.instance.setSessionToken(token);
     await AppSettings.instance.setUsername(username);
     // ponytail: unwraps again under the new password (one more Argon2id run)
@@ -660,9 +622,10 @@ class AuthService {
   }
 
   /// [username]'s wrapped chat identity, for recovery, which has no session
-  /// (#2416). The Quark checks the credential first, as `/auth/recover`
-  /// does, and changes nothing. Exactly one of [recoveryPhrase] and
-  /// [recoveryKey] is sent (#2430). Null when the account has no chat keys.
+  /// (#2416). The Quark checks the credential first, as `/auth/recover` does,
+  /// and changes nothing. Exactly one of [recoveryKey], the key derived from
+  /// the phrase, and [recoveryPhrase], for an account with no recovery key
+  /// yet, is sent (#2430). Null when the account has no chat keys.
   ///
   /// A wrong phrase throws the Quark's own text; a pending or disabled
   /// account is refused as a sign-in is.
@@ -696,18 +659,9 @@ class AuthService {
     );
   }
 
-  /// The recovery fields of `/auth/recover`: the key of [phrase] when there
-  /// is one, else the phrase itself.
-  static Map<String, String> _recoveryCredential(
-    String phrase,
-    AuthKeys? keys,
-  ) =>
-      keys == null ? {'recoveryPhrase': phrase} : {'recoveryKey': keys.authKey};
-
   /// Asks this Quark for an account (#1908) and returns the new account's
   /// recovery phrase, which is shown once. The app generates it and sends
-  /// only its recovery key (#2430), unless the Quark is too old for that and
-  /// makes its own.
+  /// only its recovery key (#2430).
   ///
   /// No session comes back: an admin approves the account before it can sign
   /// in. A Quark that is not taking requests, or has not been set up, answers
@@ -723,9 +677,9 @@ class AuthService {
       password: password,
       use: AuthSecretUse.newCredential,
     );
-    final mine = await _newPhraseFor(secret);
+    final mine = await _newRecoveryPhrase(secret.salt);
     try {
-      final body = await _postNewAccount(
+      await _postNewAccount(
         uri,
         username: username,
         secret: secret,
@@ -733,30 +687,22 @@ class AuthService {
         context: 'Account request failed',
         notFound: Errors.accessRequestsOff,
       );
-      return body['recoveryPhrase'] as String? ?? mine!.phrase;
+      return mine.phrase;
     } finally {
       // The account's chat keys are made at its first sign-in, which has no
       // phrase to wrap them under.
-      mine?.keys.dispose();
+      mine.keys.dispose();
     }
   }
 
-  /// A phrase for a new account whose auth key [secret] carries, or null for
-  /// a Quark that still takes the password and so makes its own phrase.
-  static Future<NewRecoveryPhrase?> _newPhraseFor(AuthSecret secret) async {
-    final salt = secret.salt;
-    if (secret.authKey == null || salt == null) return null;
-    return _newRecoveryPhrase(salt);
-  }
-
   /// Posts a new account's credentials to [uri] and returns the 2xx body:
-  /// [secret]'s fields, and [mine]'s recovery key when there is one. A 404
-  /// throws [notFound] when it is set.
+  /// [secret]'s auth key and [mine]'s recovery key. A 404 throws [notFound]
+  /// when it is set.
   static Future<Map<String, dynamic>> _postNewAccount(
     Uri uri, {
     required String username,
     required AuthSecret secret,
-    required NewRecoveryPhrase? mine,
+    required NewRecoveryPhrase mine,
     required String context,
     String? notFound,
   }) async {
@@ -766,8 +712,8 @@ class AuthService {
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'username': username,
-            ...secret.fields(),
-            'recoveryKey': ?mine?.keys.authKey,
+            'authKey': secret.authKey,
+            'recoveryKey': mine.keys.authKey,
           }),
         )
         .timeout(kAuthRequestTimeout);
@@ -887,9 +833,9 @@ class AuthService {
 
   /// Issues the delete with [aspects] selected, and forgets the local session.
   ///
-  /// [password], or the auth key that stands in for it ([AuthSecret]), travels
-  /// in the JSON body, never the URL: query strings end up in access and
-  /// proxy logs.
+  /// The auth key that stands in for [password] ([AuthSecret]) travels in
+  /// the JSON body, never the URL: query strings end up in access and proxy
+  /// logs.
   ///
   /// The Quark revokes the session either way, so the token is dropped on
   /// success and the caller routes the user out. Failure keeps it: nothing was
@@ -920,7 +866,7 @@ class AuthService {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
           },
-          body: jsonEncode({'password': secret.confirmation}),
+          body: jsonEncode({'password': secret.authKey}),
         )
         .timeout(kAuthRequestTimeout);
     // A session the Quark no longer honors is handled the way the rest of the

@@ -257,8 +257,6 @@ class AppSettings {
   /// Hosts whose new owner has not dismissed the welcome card yet, keyed by
   /// [_hostKey]. Persisted, so the card survives a reload.
   Set<String> _ownerWelcomeHosts = {};
-  Set<String> _authKeyAccounts = {};
-  Set<String> _recoveryKeyAccounts = {};
 
   /// The host an explicit sign-in just happened on, keyed by [_hostKey].
   /// Memory only: a reload or a launch on a stored session greets nobody.
@@ -278,14 +276,6 @@ class AppSettings {
   static const _sessionTokenKey = 'session_token';
   static const _acceptedTermsHostsKey = 'acceptedTermsHosts';
   static const _ownerWelcomeHostsKey = 'ownerWelcomeHosts';
-
-  /// Holds one JSON `[host key, username]` per account that has signed in
-  /// with an auth key (#2430). See [signsInWithAuthKey].
-  static const _authKeyAccountsKey = 'authKeyAccounts';
-
-  /// The same, per account that has a recovery key on that Quark. See
-  /// [hasRecoveryKey].
-  static const _recoveryKeyAccountsKey = 'recoveryKeyAccounts';
   static const _demoModeKey = 'demoMode';
   static const _photoSortFieldKey = 'photoSortField';
   static const _photoSortOrderKey = 'photoSortOrder';
@@ -363,10 +353,6 @@ class AppSettings {
     _acceptedTermsHosts = storedTermsHosts?.toSet() ?? {};
     _ownerWelcomeHosts =
         _prefs!.getStringList(_ownerWelcomeHostsKey)?.toSet() ?? {};
-    _authKeyAccounts =
-        _prefs!.getStringList(_authKeyAccountsKey)?.toSet() ?? {};
-    _recoveryKeyAccounts =
-        _prefs!.getStringList(_recoveryKeyAccountsKey)?.toSet() ?? {};
     _signInGreetingHost = null;
 
     _usernames = _decodeHostMap(_prefs!.getString(_usernamesKey));
@@ -482,53 +468,6 @@ class AppSettings {
     }
     await _prefs?.setString(_usernamesKey, jsonEncode(_usernames));
   }
-
-  /// Whether [username] has signed in to the current [activeHost] with an
-  /// auth key in place of its password (#2430).
-  ///
-  /// Once true, the app never sends that account's raw password to that Quark
-  /// again: a Quark that then claims the account is still on passwords, or
-  /// that it has no salt endpoint, is refused rather than believed. Removing
-  /// the host does not forget this, so a Quark cannot be re-added to undo it.
-  bool signsInWithAuthKey(String username) =>
-      _hasAccount(_authKeyAccounts, username);
-
-  /// Records that [username] signed in to the current [activeHost] with an
-  /// auth key. See [signsInWithAuthKey].
-  Future<void> rememberAuthKeySignIn(String username) =>
-      _rememberAccount(_authKeyAccounts, _authKeyAccountsKey, username);
-
-  /// Whether the current [activeHost] has registered a recovery key the app
-  /// derived for [username] (#2430).
-  ///
-  /// Once true, the app never sends that account's raw recovery phrase to
-  /// that Quark again, as [signsInWithAuthKey] does for the password.
-  bool hasRecoveryKey(String username) =>
-      _hasAccount(_recoveryKeyAccounts, username);
-
-  /// Records that the current [activeHost] accepted a recovery key for
-  /// [username]. See [hasRecoveryKey].
-  Future<void> rememberRecoveryKey(String username) =>
-      _rememberAccount(_recoveryKeyAccounts, _recoveryKeyAccountsKey, username);
-
-  bool _hasAccount(Set<String> accounts, String username) {
-    final host = activeHost;
-    return host != null && accounts.contains(_authKeyAccount(host, username));
-  }
-
-  Future<void> _rememberAccount(
-    Set<String> accounts,
-    String prefsKey,
-    String username,
-  ) async {
-    final host = activeHost;
-    if (host == null || !accounts.add(_authKeyAccount(host, username))) return;
-    await _prefs?.setStringList(prefsKey, accounts.toList());
-  }
-
-  /// Usernames are matched exactly by the Quark, so they are not folded here.
-  static String _authKeyAccount(String hostAddress, String username) =>
-      jsonEncode([_hostKey(hostAddress), username]);
 
   /// Reads a stored JSON object of host key -> string, empty when there is
   /// none or it cannot be read.

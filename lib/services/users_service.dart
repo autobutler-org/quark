@@ -123,8 +123,8 @@ class UsersService with AuthenticatedService {
   /// (#1873), sent as the auth key derived from it ([AuthSecret]), and a home at `users/<username>` that only it and the admins
   /// can open. Returns the new account.
   ///
-  /// The account has no recovery phrase until its first sign-in, which is
-  /// when the Quark returns one. A taken username or an existing home is a
+  /// The account has no recovery phrase until its first sign-in, when the
+  /// app there gives it one (#2430). A taken username or an existing home is a
   /// 409 whose text the Quark writes, passed on as is.
   static Future<UserAccount> create({
     required String username,
@@ -138,7 +138,7 @@ class UsersService with AuthenticatedService {
     final response = await instance.authenticatedPost(
       apiBaseUri.resolve('/api/v0/admin/users'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, ...secret.fields()}),
+      body: jsonEncode({'username': username, 'authKey': secret.authKey}),
     );
     _check(response, 'create $username');
     return UserAccount.fromJson(

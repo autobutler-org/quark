@@ -239,20 +239,18 @@ abstract final class Errors {
   static const String incorrectPassword =
       "That password isn't right. Nothing was deleted.";
 
-  /// A Quark that wants the raw password of an account this app has already
-  /// signed in to with a derived key (#2430). The app refuses, because a
-  /// Quark that has been tampered with could ask for it to learn the password.
-  static const String passwordDowngradeRefused =
-      'This Quark asked for your password in a form this app no longer '
-      'sends. Update the Quark, or reset your password with your recovery '
-      'phrase.';
+  /// A Quark with no `GET /auth/salt`, or one that does not report
+  /// `legacyRecovery`: it predates auth keys and recovery keys, and this app
+  /// never sends the raw password or phrase it would want (#2430).
+  static const String quarkTooOld =
+      'This Quark needs an update before this app can sign in to it. '
+      'Update the Quark, then try again.';
 
-  /// A Quark asking for the raw recovery phrase of an account it has already
-  /// registered a derived recovery key for (#2430). Refused for the same
-  /// reason as [passwordDowngradeRefused]: the phrase opens the chat keys.
-  static const String recoveryPhraseDowngradeRefused =
-      'This Quark asked for your recovery phrase in a form this app no longer '
-      'sends. Update the Quark, then try again.';
+  /// Re-confirming the password of an account the Quark marks `legacy`, from
+  /// a session an older app made: the Quark checks only an auth key there,
+  /// and the account gets one at its next sign-in through the form (#2430).
+  static const String accountTooOld =
+      'Sign out and sign in again, then try this again.';
 
   /// Unlocking chat with a password that doesn't open the account's chat
   /// keys (#2416). Nothing is sent to the Quark to check it; the keys simply

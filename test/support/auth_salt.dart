@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/models/chat_keys.dart';
 import 'package:quark/services/chat_crypto.dart';
@@ -36,15 +37,15 @@ Future<String> testRecoveryKey(String phrase) async {
 /// every other request and so records none of the salt lookups.
 ///
 /// [status] other than 200 is a Quark that has not updated: 404, or the 401
-/// it gives an unknown API path. [legacy] is an account with no auth key yet,
-/// and [legacyRecovery] one with no recovery key yet; null leaves the field
-/// out, as a Quark from before recovery keys does.
+/// it gives an unknown API path. [legacy] is an account with no auth key, and
+/// [legacyRecovery] one with no recovery key; null leaves the field out, as a
+/// Quark from before recovery keys does.
 class AuthSaltClient extends http.BaseClient {
   /// Fronts [inner].
   AuthSaltClient(
     this.inner, {
     this.legacy = false,
-    this.legacyRecovery,
+    this.legacyRecovery = false,
     this.status = 200,
   });
 
@@ -79,5 +80,18 @@ class AuthSaltClient extends http.BaseClient {
       status,
       request: request,
     );
+  }
+}
+
+/// Pumps [tester] while a sign-in, setup or recovery derives its keys, which
+/// needs the real event loop as well as the fake clock (#2430). Call it after
+/// the tap that starts the request and before `pumpAndSettle`, which would
+/// otherwise time out on the spinner.
+Future<void> pumpWhileDeriving(WidgetTester tester) async {
+  for (var i = 0; i < 20; i++) {
+    await tester.runAsync(
+      () => Future.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
   }
 }

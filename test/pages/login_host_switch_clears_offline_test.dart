@@ -8,8 +8,11 @@ import 'package:quark/services/app_settings.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+
+import '../support/auth_salt.dart';
 
 /// A Quark that never answers, which is what an address with nothing behind
 /// it looks like to the app.
@@ -23,6 +26,8 @@ class _SilentClient extends http.BaseClient {
 /// page, and switching to a healthy Quark kept showing it until the user
 /// pressed Try again — so the new host looked broken too.
 void main() {
+  // Loaded once outside the fake clock, so a sign-in can derive its key.
+  setUpAll(ChatCrypto.load);
   final settings = AppSettings.instance;
 
   setUp(() async {
@@ -68,6 +73,7 @@ void main() {
     await tester.enterText(fields.first, 'ada');
     await tester.enterText(fields.last, 'hunter2');
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await pumpWhileDeriving(tester);
     await tester.pumpAndSettle();
   }
 
@@ -99,7 +105,7 @@ void main() {
     await pumpLogin(tester);
     // A Quark that answers, and refuses. The probe never answered, so this is
     // not "not set up" — the refusal names the host that rejected it.
-    authHttpClientFactory = () => _RefusingClient();
+    authHttpClientFactory = () => AuthSaltClient(_RefusingClient());
     await failSignIn(tester);
     final refused = Errors.invalidCredentialsOn(
       'Broken (http://localhost:8099)',
@@ -121,7 +127,7 @@ void main() {
       HostEntry(name: 'Virgin', hostAddress: 'http://localhost:8081'),
     );
     authStatusProbe = () async => const AuthStatus(setupComplete: true);
-    authHttpClientFactory = () => _RefusingClient();
+    authHttpClientFactory = () => AuthSaltClient(_RefusingClient());
 
     await pumpLogin(tester);
     await failSignIn(tester);
@@ -144,7 +150,7 @@ void main() {
       HostEntry(name: '', hostAddress: 'http://localhost:8081'),
     );
     authStatusProbe = () async => const AuthStatus(setupComplete: true);
-    authHttpClientFactory = () => _RefusingClient();
+    authHttpClientFactory = () => AuthSaltClient(_RefusingClient());
 
     await pumpLogin(tester);
     await failSignIn(tester);
@@ -159,7 +165,7 @@ void main() {
     tester,
   ) async {
     authStatusProbe = () async => const AuthStatus(setupComplete: false);
-    authHttpClientFactory = () => _RefusingClient();
+    authHttpClientFactory = () => AuthSaltClient(_RefusingClient());
 
     await pumpLogin(tester);
     await failSignIn(tester);
@@ -171,7 +177,8 @@ void main() {
 }
 
 /// A Quark that answers 401, which is a rejected sign-in rather than an
-/// unreachable host.
+/// unreachable host. Tests front it with [AuthSaltClient], since a Quark with
+/// no salt endpoint is refused before any sign-in (#2430).
 class _RefusingClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
