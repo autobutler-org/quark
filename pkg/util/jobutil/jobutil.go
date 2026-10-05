@@ -23,6 +23,17 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 )
 
+// Job history is bounded (#2756): Prune keeps each account's newest
+// MaxFinishedJobsPerAccount finished jobs, none older than FinishedJobMaxAge.
+// Pending and running jobs are never pruned.
+const (
+	// MaxFinishedJobsPerAccount is how many completed, failed and canceled
+	// jobs each account keeps, newest first.
+	MaxFinishedJobsPerAccount = 100
+	// FinishedJobMaxAge is how long a finished job is kept at all.
+	FinishedJobMaxAge = 30 * 24 * time.Hour
+)
+
 // Status is where a Job is in its lifecycle.
 type Status string
 
@@ -259,6 +270,9 @@ func (q *Queue) Get(ctx context.Context, params GetParams) (GetResult, error) {
 // must be a registered kind.
 type ListParams struct {
 	Kinds []string
+	// UserID lists only the jobs that account queued. 0 lists every
+	// account's, which only an admin may see.
+	UserID int64
 }
 
 // ListResult carries the matching jobs, newest first. Jobs is never nil.
@@ -266,14 +280,24 @@ type ListResult struct {
 	Jobs []Job
 }
 
-// List returns every job of the given kinds, newest first. It returns
+// List returns every job of the given kinds, newest first, queued by UserID
+// unless it is 0. It returns
 // ErrKindRequired when Kinds is empty or holds an empty string, and
 // ErrUnknownKind, naming the known kinds, for a kind nothing registered.
 func (q *Queue) List(ctx context.Context, params ListParams) (ListResult, error) {
 	if err := q.checkKinds(params.Kinds); err != nil {
 		return ListResult{}, err
 	}
-	rows, err := q.database.Queries.ListJobs(ctx, params.Kinds)
+	var rows []db.Job
+	var err error
+	if params.UserID == 0 {
+		rows, err = q.database.Queries.ListJobs(ctx, params.Kinds)
+	} else {
+		rows, err = q.database.Queries.ListUserJobs(ctx, db.ListUserJobsParams{
+			UserID: sql.NullInt64{Int64: params.UserID, Valid: true},
+			Kinds:  params.Kinds,
+		})
+	}
 	if err != nil {
 		return ListResult{}, fmt.Errorf("list jobs: %w", err)
 	}
@@ -370,6 +394,36 @@ func (q *Queue) Retry(ctx context.Context, params RetryParams) (RetryResult, err
 	job := jobFromRow(reset)
 	q.queued(job)
 	return RetryResult{Job: job}, nil
+}
+
+// PruneParams configures Prune.
+type PruneParams struct {
+	// Now is the clock the max age is measured from. Zero means time.Now.
+	Now time.Time
+}
+
+// PruneResult reports how many finished jobs Prune deleted.
+type PruneResult struct {
+	Removed int64
+}
+
+// Prune deletes finished jobs older than FinishedJobMaxAge and every finished
+// job past each account's newest MaxFinishedJobsPerAccount. A pruned job is
+// one clients already show as over, so nothing is published: their next
+// listing simply leaves it out.
+func (q *Queue) Prune(ctx context.Context, params PruneParams) (PruneResult, error) {
+	now := params.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	removed, err := q.database.Queries.PruneFinishedJobs(ctx, db.PruneFinishedJobsParams{
+		Cutoff: sql.NullTime{Time: now.Add(-FinishedJobMaxAge), Valid: true},
+		Keep:   MaxFinishedJobsPerAccount,
+	})
+	if err != nil {
+		return PruneResult{}, fmt.Errorf("prune jobs: %w", err)
+	}
+	return PruneResult{Removed: removed}, nil
 }
 
 // Run is the dispatcher. It first marks jobs a previous process left running

@@ -449,6 +449,21 @@ func TestUnknownUploadSessionIsNotFound(t *testing.T) {
 	}
 }
 
+// Past the per-user cap a new session is answered 429, the status the client
+// already reads as "wait and try again" (#2756).
+func TestOpenUploadSessionPastTheCapIsTooManyRequests(t *testing.T) {
+	t.Parallel()
+
+	engine, _, _ := newUploadSessionEngine(t)
+	for i := range uploadutil.MaxSessionsPerUser {
+		openSessionOK(t, engine, "", fmt.Sprintf("f%d.bin", i), 16)
+	}
+	w := openSession(t, engine, map[string]any{"fileName": "one-too-many.bin", "totalSize": 16})
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("session past the cap returned %d, want %d: %s", w.Code, http.StatusTooManyRequests, w.Body.String())
+	}
+}
+
 // The invariant the whole staging dance exists for: half a file must never be
 // visible as a real file. A client listing the folder mid-upload sees nothing,
 // and nothing partial is on disk under the target name either.

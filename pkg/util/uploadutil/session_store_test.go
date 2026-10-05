@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -1032,5 +1033,105 @@ func TestCommitWithOverwriteReplacesTheFile(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(existing); string(got) != "replacement" {
 		t.Errorf("file reads %q, want the replacement", got)
+	}
+}
+
+func openAs(store *uploadutil.SessionStore, dest uploadutil.Destination, userID int64, name string) (string, error) {
+	result, err := store.CreateSession(uploadutil.CreateSessionParams{
+		Destination: dest,
+		FileName:    name,
+		TotalSize:   16,
+		UserID:      userID,
+	})
+	return result.SessionID, err
+}
+
+// Every session holds an open file and a staged temp file for up to the TTL,
+// and nothing capped how many one client could open (#2756). Past the
+// per-user cap a new session is refused before anything is staged, without
+// touching anyone else's.
+func TestCreateSessionCapsSessionsPerUser(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, _ := newTestDestination(t)
+	const alice, bob = 1, 2
+	var first string
+	for i := range uploadutil.MaxSessionsPerUser {
+		id, err := openAs(store, dest, alice, fmt.Sprintf("f%d.bin", i))
+		if err != nil {
+			t.Fatalf("session %d: %v", i, err)
+		}
+		if i == 0 {
+			first = id
+		}
+	}
+	if _, err := openAs(store, dest, alice, "one-too-many.bin"); !errors.Is(err, uploadutil.ErrTooManySessions) {
+		t.Fatalf("session past the cap = %v, want ErrTooManySessions", err)
+	}
+	if got := stagedCount(t, store.StagingDir()); got != uploadutil.MaxSessionsPerUser {
+		t.Errorf("staged %d files, want %d: the refused session left one behind", got, uploadutil.MaxSessionsPerUser)
+	}
+	if _, err := openAs(store, dest, bob, "bob.bin"); err != nil {
+		t.Errorf("another user's session was refused: %v", err)
+	}
+
+	// Ending a session gives its slot back.
+	if _, err := store.DeleteSession(uploadutil.DeleteSessionParams{SessionID: first, UserID: alice}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := openAs(store, dest, alice, "again.bin"); err != nil {
+		t.Errorf("a session after one ended was refused: %v", err)
+	}
+}
+
+// The process holds at most MaxSessions open files, however many accounts
+// share it.
+func TestCreateSessionCapsSessionsOverall(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	dest, _ := newTestDestination(t)
+	for i := range uploadutil.MaxSessions {
+		if _, err := openAs(store, dest, int64(1+i/uploadutil.MaxSessionsPerUser), fmt.Sprintf("f%d.bin", i)); err != nil {
+			t.Fatalf("session %d: %v", i, err)
+		}
+	}
+	if _, err := openAs(store, dest, 1_000_000, "fresh-user.bin"); !errors.Is(err, uploadutil.ErrTooManySessions) {
+		t.Errorf("session past the overall cap = %v, want ErrTooManySessions", err)
+	}
+}
+
+// An expired session holds no slot even before the sweeper's next tick: it is
+// dropped, staged bytes and all, when its owner opens another.
+func TestExpiredSessionsDoNotCountTowardTheCap(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	var clock sync.Mutex
+	store := uploadutil.NewSessionStore(uploadutil.NewSessionStoreParams{
+		StagingDir: filepath.Join(t.TempDir(), "upload-sessions"),
+		Now: func() time.Time {
+			clock.Lock()
+			defer clock.Unlock()
+			return now
+		},
+	})
+	t.Cleanup(func() { _ = store.Close() })
+	dest, _ := newTestDestination(t)
+	for i := range uploadutil.MaxSessionsPerUser {
+		if _, err := openAs(store, dest, 1, fmt.Sprintf("f%d.bin", i)); err != nil {
+			t.Fatalf("session %d: %v", i, err)
+		}
+	}
+
+	clock.Lock()
+	now = now.Add(uploadutil.DefaultSessionTTL + time.Minute)
+	clock.Unlock()
+	if _, err := openAs(store, dest, 1, "after-expiry.bin"); err != nil {
+		t.Fatalf("a session after every other one expired was refused: %v", err)
+	}
+	if got := stagedCount(t, store.StagingDir()); got != 1 {
+		t.Errorf("staged %d files, want only the new session's", got)
 	}
 }

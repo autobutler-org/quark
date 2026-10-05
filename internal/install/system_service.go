@@ -48,6 +48,11 @@ const (
 	// that ends every self-update. The `-` lets Quark start even when the setup
 	// fails: a device serving with outdated setup beats one not serving.
 	//
+	// Both streams go to the journal (#2756): stdout carries the access log,
+	// one line per request, and journald caps and rotates what it keeps where
+	// a file appended under /var/log grew until the boot media filled. Read it
+	// from the journal, filtered to the quark unit.
+	//
 	// Security tradeoff: root runs a binary the quark user can overwrite, which
 	// self-update needs, so a compromised quark account gets root on the next
 	// restart. That is close to true already through the NOPASSWD mount rule;
@@ -66,8 +71,8 @@ Environment="HTTPS_PORT=443"
 Environment="GIN_MODE=release"
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 Restart=always
-StandardOutput=append:/var/log/quark.app
-StandardError=append:/var/log/quark.err
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target`

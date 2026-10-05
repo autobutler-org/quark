@@ -36,3 +36,21 @@ SELECT
     COUNT(*)
 FROM
     connected_devices;
+
+-- Drops peers not seen since the cutoff, and every peer past the newest keep
+-- by last_seen_at, so the table holds at most keep rows (#2756).
+-- name: PruneConnectedDevices :execrows
+DELETE FROM connected_devices
+WHERE
+    connected_devices.last_seen_at < sqlc.arg(cutoff)
+    OR connected_devices.id NOT IN (
+        SELECT
+            newest.id
+        FROM
+            connected_devices AS newest
+        ORDER BY
+            newest.last_seen_at DESC,
+            newest.id DESC
+        LIMIT
+            sqlc.arg(keep)
+    );

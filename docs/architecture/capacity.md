@@ -21,14 +21,14 @@ the client's refresh-on-every-event turns each shared upload into a request stor
 | sqlc queries (`internal/db/connect.go`) | **one pinned `*sql.Conn`** for the whole process; the driver connection's mutex serializes every statement. Callers' cancellation is stripped (#2743), so an abandoned query still runs | none: queue grows without limit (#2766) |
 | Transactions, FTS, VFS metadata | the `*sql.DB` pool, unbounded `MaxOpenConns`, contending with the pinned connection through the file lock | `busy_timeout(5000)` |
 | SQLite settings (`internal/db/dsn.go`) | rollback journal (`DELETE`), `synchronous=FULL`, foreign keys on, 5 s busy timeout. FTS5 runs on the pool. See [durability](durability.md) before changing the journal | — |
-| Per-request writes | `trackDevice` upserts `connected_devices` in a new goroutine after **every** request; `RenewSession` at most hourly per session | none (#2766, #2756) |
+| Per-request writes | `trackDevice` upserts `connected_devices` in a new goroutine after **every** request; `RenewSession` at most hourly per session | none (#2766); the table itself holds at most 500 peers, none unseen for 30 days (#2756) |
 | Event bus (`pkg/util/eventbus`) | `Publish` loops every subscriber under an `RLock`; each subscriber has a 16-slot channel and a full one **drops** the event silently | 16 per subscriber (#2753) |
 | Events WebSocket (`/api/v0/events`) | two goroutines per socket; filters, re-encodes and writes each event on its own goroutine; `account_changed` and `access_changed` make **every** socket query the database | none (#2764) |
 | Internal subscribers | file index, content indexer and backup sync, each one goroutine doing its work inline | share the drop policy (#2753) |
 | IO semaphores (`pkg/util/iosemutil`) | one per class of work, 30 s wait then 503: **decode** (thumbnails, JPEG conversion, hash backfill), **video** (ffmpeg frame grabs), **raw** (RAW conversion), **copy** (backup sync and snapshot); held through the response write. One class running flat out never takes another's slots (#2762) | from `runtime.NumCPU()` (n): decode max(2, n/2), video max(1, n/2), raw max(1, n/4), copy 2 — 2/2/1/2 on a 4-core board |
-| Job queue (`pkg/util/jobutil`) | SQLite-backed, 1 encode lane and 2 copy lanes, FIFO across users; `q.mu` held across the claim queries | lanes; queue depth unbounded |
+| Job queue (`pkg/util/jobutil`) | SQLite-backed, 1 encode lane and 2 copy lanes, FIFO across users; `q.mu` held across the claim queries | lanes; queue depth unbounded; history pruned hourly to each account's newest 100 finished jobs, none older than 30 days (#2756) |
 | Rate limiters (`pkg/util/ratelimitutil`) | map of IP → limiter behind one mutex, auth and vault paths only, swept every 5 min | ~200 B per IP |
-| Upload sessions (`pkg/util/uploadutil`) | map behind one mutex, O(1) lookups; per-session mutex held for one chunk's `io.CopyN` | one fd each, 24 h TTL, no count cap (#2756) |
+| Upload sessions (`pkg/util/uploadutil`) | map behind one mutex, O(1) lookups; per-session mutex held for one chunk's `io.CopyN` | one fd each, 24 h TTL, 32 per account and 256 overall, then 429 (#2756) |
 | Health collector (`pkg/util/healthutil`) | one `Collector` for every `/health` call | one host read per 5 s, shared (#2750) |
 | Filename index (`storageutil.FileIndex`) | one folder tree per device; linear scan per search under `RLock`, stopping at 500 readable matches | ~300–480 B per file (#2760) |
 
@@ -154,9 +154,7 @@ cover ffmpeg children too: the kernel throttles and then kills inside the servic
   its contents in one step (#2754), and a search checks access before it reads anything about a match from disk
   and stops at 500 (#2758).
 - **Uncached HEIC view conversion** goes away with #2378.
-- **Unbounded tables, upload sessions and
-  access log** (#2756); **deflate on already-compressed zips, uncapped** (#2757); **bcrypt on every Basic-auth
-  request** (#2765).
+- **Deflate on already-compressed zips, uncapped** (#2757); **bcrypt on every Basic-auth request** (#2765).
 
 ## Fixed in this audit
 
@@ -167,6 +165,7 @@ cover ffmpeg children too: the kernel throttles and then kills inside the servic
 | #2751 | the backup job store shared one `*BackupJob` between the running snapshot and status reads | `TestInMemoryBackupJobStore_ReadDuringRun` (race) |
 | #2752 | RAW converters ran without a timeout while holding an IO-semaphore slot | `TestRawViaDcraw_HungToolReturns` |
 | #2755 | the server and the tailnet proxy had no header or idle timeout and spoke only HTTP/1.1; the proxy kept 2 idle loopback connections | `TestNewHTTPServer_ClosesStalledHeaders`, `TestNewHTTPServer_ClosesStalledTLSHandshake`, `TestNewHTTPServer_ClosesIdleKeepAlive`, `TestNewHTTPServer_SlowBodyOutlivesHeaderTimeout`, `TestNewHTTPServer_OffersHTTP2OverTLS`, `TestNewProxy_KeepsEnoughIdleConnections` |
+| #2756 | `connected_devices` and `jobs` grew a row per peer and per job and were never pruned; upload sessions had no count cap; the access log was appended to `/var/log/quark.app` and never rotated, so it now goes to the journal | `TestRecord_NewPeersNeverGrowPastTheCap`, `TestPrune_DropsPeersNotSeenForTheMaxAge`, `TestPruneKeepsEachAccountsNewestFinishedJobs`, `TestPruneDropsOldFinishedJobsButNeverActiveOnes`, `TestListFiltersByOwner`, `TestCreateSessionCapsSessionsPerUser`, `TestCreateSessionCapsSessionsOverall`, `TestExpiredSessionsDoNotCountTowardTheCap`, `TestOpenUploadSessionPastTheCapIsTooManyRequests`, `TestSystemdUnit_LogsToTheJournal` |
 | #2761 | nothing set a Go memory limit or a cgroup ceiling; the OOM killer was the only backstop | `TestApplyGoLimit_DerivesFromRAM`, `TestApplyGoLimit_EnvWins`, `TestInstallDropIn_WritesCeilingAndReloads`, `TestInstallDropIn_Idempotent`, `TestInstallDropIn_FollowsTheRAM`, `TestInstallDropIn_SkipsWithoutSystemd` |
 | #2762 | images were decoded with no pixel cap, a thumbnail's EXIF rotation copied the full-size image, and backup copies held the same 8 slots as decodes | `TestDecodeImage_RefusesPixelsOverTheCap`, `TestThumbnailPaths_RefusePixelsOverTheCap`, `TestGetThumbnail_ImageOverPixelCapIsNotFound`, `TestUprightThumbnailMatchesRotatingFirst`, `TestUprightThumbnailDoesNotCopyTheSource`, `TestUprightDHashMatchesRotatedImage`, `TestOrientationTransformsHandleSubImages`, `TestNew_ClassesAreIsolated`, `TestClassSlots_FollowCPUs` |
 
@@ -185,7 +184,7 @@ other race; the existing tests rarely run these paths concurrently, which is why
 4. **Replace whole-tree walks with an indexed, paged query and move the filename index out of the heap** (#2759,
    #2760). These set the limit past ~1,000 accounts, by file count rather than by request rate.
 5. **Bound folder zips** (#2757) and drop server-side HEIC conversion (#2378).
-6. **Prune and cap what grows** (#2756) and **stop running bcrypt per Basic-auth request** (#2765).
+6. **Stop running bcrypt per Basic-auth request** (#2765).
 7. **Measure on a board.** The last open item of #2507: run the harness against an A55 board before and after (1)
    (`go test -tags stress ./internal/server/stress/` with `QUARK_BASE_URL`, `QUARK_USER` and `QUARK_PASSWORD`
    pointing at it, from a separate machine so the harness does not share its CPU), and replace the scaled

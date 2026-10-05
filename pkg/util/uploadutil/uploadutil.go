@@ -30,6 +30,16 @@ const (
 
 	// DefaultSweepInterval is how often StartSweeper looks for expired sessions.
 	DefaultSweepInterval = time.Hour
+
+	// MaxSessionsPerUser is how many sessions one account may hold open at
+	// once (#2756). Each holds an open file and its staged bytes until it
+	// commits, is deleted or expires. The app uploads 4 files at a time, so
+	// this leaves room for several devices and abandoned sessions.
+	MaxSessionsPerUser = 32
+
+	// MaxSessions is how many sessions the process holds open at once,
+	// across every account, which bounds the open files they cost.
+	MaxSessions = 256
 )
 
 // contentRangeUnit is the only unit the chunk endpoint accepts. RFC 7233 allows
@@ -49,6 +59,11 @@ var (
 
 	// ErrInvalidRequest marks a session that cannot be opened as described.
 	ErrInvalidRequest = errors.New("uploadutil: invalid upload session request")
+
+	// ErrTooManySessions refuses a session past MaxSessionsPerUser or
+	// MaxSessions. The client finishes or cancels one first, or waits for an
+	// abandoned one to expire.
+	ErrTooManySessions = errors.New("uploadutil: too many upload sessions open")
 
 	// ErrNoDestination means there is nowhere for the finished file to land, so
 	// there is no point collecting bytes for it.
@@ -220,6 +235,7 @@ type SessionStore struct {
 
 	stagingDir string
 	ttl        time.Duration
+	now        func() time.Time
 }
 
 // NewSessionStoreParams configures a store. Both fields have production
@@ -231,6 +247,8 @@ type NewSessionStoreParams struct {
 	StagingDir string
 	// TTL overrides DefaultSessionTTL. Zero means the default.
 	TTL time.Duration
+	// Now is the clock sessions expire by. Nil means time.Now.
+	Now func() time.Time
 }
 
 // NewSessionStore builds an empty store. It starts no goroutine and touches no
@@ -246,10 +264,15 @@ func NewSessionStore(params NewSessionStoreParams) *SessionStore {
 	if ttl <= 0 {
 		ttl = DefaultSessionTTL
 	}
+	now := params.Now
+	if now == nil {
+		now = time.Now
+	}
 	return &SessionStore{
 		sessions:   make(map[string]*session),
 		stagingDir: stagingDir,
 		ttl:        ttl,
+		now:        now,
 	}
 }
 
