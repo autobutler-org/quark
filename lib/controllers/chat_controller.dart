@@ -1140,6 +1140,12 @@ class ChatController extends ChangeNotifier {
         // A deleted account drops out of channels and members, and a changed
         // picture comes with the members' avatarUpdatedAt (#2563).
         channelId = null;
+      case 'resync':
+        // The socket dropped events, so anything may have changed: the
+        // channels, the members, and messages the open timeline missed
+        // (#2763).
+        unawaited(refresh());
+        return;
       default:
         return;
     }

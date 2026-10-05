@@ -228,8 +228,13 @@ class JobsController extends ChangeNotifier {
   void _onEvent(FileEvent event) {
     // The Quark shows an account only the jobs it queued on files it can
     // still read, so a sharing change or an account change can add or remove
-    // jobs without any job event.
-    if (event.kind == 'access_changed' || event.kind == 'account_changed') {
+    // jobs without any job event. A resync means the socket dropped events,
+    // job events among them (#2763).
+    if (const {
+      'access_changed',
+      'account_changed',
+      'resync',
+    }.contains(event.kind)) {
       unawaited(load());
       return;
     }

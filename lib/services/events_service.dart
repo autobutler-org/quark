@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/utils/events_config.dart';
 import 'package:quark/services/ws_connect_stub.dart'
     if (dart.library.io) 'package:quark/services/ws_connect_io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -103,8 +105,30 @@ class EventsService {
   /// The address the last [_connect] aimed at.
   String? _connectedTo;
 
-  static const _baseReconnectDelay = Duration(seconds: 2);
-  static const _maxReconnectDelay = Duration(minutes: 1);
+  /// Rolls the reconnect jitter. A test swaps in a fixed one.
+  @visibleForTesting
+  static Random random = Random();
+
+  /// How long to wait before reconnect attempt [attempt], counting from 0.
+  ///
+  /// The delay doubles from [EventsConfig.reconnectBase] up to
+  /// [EventsConfig.reconnectCap], so a Quark that is down, or a token it
+  /// rejects, is not retried every second forever. Each delay is then spread
+  /// by [EventsConfig.reconnectJitter] either way: after a restart every app
+  /// loses its socket in the same instant, and without the spread they all
+  /// reconnect, and refresh, in the same instant too (#2763).
+  @visibleForTesting
+  static Duration reconnectDelay(int attempt, Random random) {
+    final base = EventsConfig.reconnectBase.inMilliseconds;
+    final cap = EventsConfig.reconnectCap.inMilliseconds;
+    // Doubling stops at the cap, which also keeps the shift from overflowing.
+    var delay = base;
+    for (var i = 0; i < attempt && delay < cap; i++) {
+      delay *= 2;
+    }
+    final spread = EventsConfig.reconnectJitter * (2 * random.nextDouble() - 1);
+    return Duration(milliseconds: (min(delay, cap) * (1 + spread)).round());
+  }
 
   /// Start the WebSocket connection. Safe to call multiple times — no-ops if
   /// already connected. Call [stop] first if you want to force a reconnect.
@@ -197,7 +221,6 @@ class EventsService {
       channel.ready
           .then((_) {
             if (!identical(channel, _channel)) return;
-            _attempt = 0;
             debugPrint('[EventsService] connected to ${_redact(wsUri)}');
             _connections.add(null);
             if (_hasConnected) _reconnects.add(null);
@@ -210,6 +233,9 @@ class EventsService {
 
       _sub = channel.stream.listen(
         (data) {
+          // A message, not just an open socket, proves the Quark is serving
+          // this connection, so only then does the backoff start over.
+          _attempt = 0;
           try {
             final json = jsonDecode(data as String) as Map<String, dynamic>;
             _controller.add(FileEvent.fromJson(json));
@@ -239,18 +265,8 @@ class EventsService {
 
   void _scheduleReconnect() {
     if (_disposed) return;
-    // Back off exponentially — a quark that is down, or a token the server
-    // rejects, shouldn't be retried twelve times a minute forever.
-    final delayMs = _baseReconnectDelay.inMilliseconds * (1 << _attempt);
-    final delay = Duration(
-      milliseconds: delayMs.clamp(
-        _baseReconnectDelay.inMilliseconds,
-        _maxReconnectDelay.inMilliseconds,
-      ),
-    );
-    if (delayMs < _maxReconnectDelay.inMilliseconds) _attempt++;
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(delay, _connect);
+    _reconnectTimer = Timer(reconnectDelay(_attempt++, random), _connect);
   }
 
   /// Strips the token from a URI so it never reaches the logs.

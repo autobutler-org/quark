@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/file_browser_controller.dart';
+import 'package:quark/controllers/file_browser_events_controller.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/path_grant.dart';
 import 'package:quark/pages/image_viewer_page.dart';
@@ -130,9 +131,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   bool _noHostSelected = false;
   Timer? _folderDragExitTimer;
 
-  // WebSocket event subscription for real-time file updates
-  StreamSubscription<FileEvent>? _eventSub;
-  StreamSubscription<void>? _reconnectSub;
+  // Refreshes for events in the open folder, debounced (#2763).
+  late final FileBrowserEventsController _events;
   StreamSubscription<UploadBatchResult>? _uploadResultSub;
 
   // Search state
@@ -320,22 +320,16 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         }
       });
     }
-    _eventSub = EventsService.instance.events.listen((evt) {
-      // Any file mutation on the server triggers a refresh — except our own
-      // uploads. Every uploaded file publishes one of these, so a folder
-      // upload would fire a refresh per file, each one a devices call and a
-      // listing call, all competing with the uploads for the few connections
-      // a browser allows per host. The batch refreshes once when it drains.
-      if (UploadManager.instance.isUploading) {
-        return;
-      }
-      if (evt.changesListing) manualRefresh();
-    });
-    // Whatever changed while the socket was down sent no event we saw. An
-    // upload in progress refreshes once when it drains, as above.
-    _reconnectSub = EventsService.instance.reconnects.listen((_) {
-      if (!UploadManager.instance.isUploading) manualRefresh();
-    });
+    // A change in the open folder refreshes, and so does a reconnect, since
+    // whatever changed while the socket was down sent no event we saw. Our
+    // own upload does not: every file publishes an event, each refresh would
+    // compete with the upload for the few connections a browser allows per
+    // host, and the batch refreshes once when it drains.
+    _events = FileBrowserEventsController(
+      currentFolder: () => _currentPath,
+      isBusy: () => UploadManager.instance.isUploading,
+      onRefresh: manualRefresh,
+    );
 
     UploadManager.instance.addListener(_onUploadProgress);
     // The queue outlives this page, but the question it has to ask needs a
@@ -581,8 +575,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
   @override
   void dispose() {
     _coveredAnimation?.removeStatusListener(_onCoveredChanged);
-    _eventSub?.cancel();
-    _reconnectSub?.cancel();
+    _events.dispose();
     _uploadResultSub?.cancel();
     // Detaching only stops us watching — the upload itself keeps running.
     UploadManager.instance.removeListener(_onUploadProgress);
