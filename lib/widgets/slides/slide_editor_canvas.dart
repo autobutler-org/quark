@@ -24,6 +24,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// above it: every match is highlighted and the current one is selected
 /// and centered.
 ///
+/// In a view-only presentation ([SlideEditorController.isReadOnly]) the canvas
+/// takes no pointer or keyboard input, so nothing on it can be dragged,
+/// resized or typed into.
+///
 /// The bar's second row says which slide it is; the canvas names each
 /// element to a screen reader. Colors come from [styleOf].
 ///
@@ -64,7 +68,7 @@ class SlideEditorCanvas extends StatelessWidget {
     final slideId = controller.selectedSlideId;
     if (document == null || slideId == null) return const SizedBox.expand();
     final find = SlideFindProvider.maybeOf(context);
-    return SlideCanvas(
+    final canvas = SlideCanvas(
       key: const ValueKey('slide_editor_canvas'),
       document: document,
       slideId: slideId,
@@ -77,9 +81,20 @@ class SlideEditorCanvas extends StatelessWidget {
       tools: controller.tools,
       textEditing: controller.textEditing,
       clipboard: controller.clipboard,
-      autofocus: true,
+      autofocus: !controller.isReadOnly,
       highlights: find?.highlights ?? const [],
       currentHighlight: find?.current,
     );
+    // The canvas edits whatever it is dragged or typed into, so a view-only
+    // deck keeps it from taking pointer or keyboard input; the zoom buttons,
+    // the slide panel and find still drive it. The focus node above it
+    // stands in for the canvas, so the editor's shortcuts (find, zoom) still
+    // have somewhere to start from.
+    return controller.isReadOnly
+        ? Focus(
+            autofocus: true,
+            child: ExcludeFocus(child: IgnorePointer(child: canvas)),
+          )
+        : canvas;
   }
 }

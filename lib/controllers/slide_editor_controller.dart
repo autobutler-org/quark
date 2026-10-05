@@ -394,10 +394,11 @@ class SlideEditorController extends ChangeNotifier {
 
   /// Whether [undo] would do anything.
   bool get canUndo =>
-      _pendingNotes != null || (_doc?.controller.canUndo ?? false);
+      !_readOnly &&
+      (_pendingNotes != null || (_doc?.controller.canUndo ?? false));
 
   /// Whether [redo] would do anything.
-  bool get canRedo => _doc?.controller.canRedo ?? false;
+  bool get canRedo => !_readOnly && (_doc?.controller.canRedo ?? false);
 
   /// Whether a slide can be deleted. The last one cannot: a presentation
   /// always keeps a slide to show.
@@ -500,7 +501,7 @@ class SlideEditorController extends ChangeNotifier {
   /// the selected slide's layout, and selects it.
   void addSlide({String? layoutId}) {
     final doc = _doc;
-    if (doc == null) return;
+    if (doc == null || _readOnly) return;
     _commitNotes();
     final at = selectedIndex + 1;
     _showSlide(
@@ -515,7 +516,7 @@ class SlideEditorController extends ChangeNotifier {
   /// Copies the slide [slideId] in after itself and selects the copy.
   void duplicateSlide(String slideId) {
     final doc = _doc;
-    if (doc == null) return;
+    if (doc == null || _readOnly) return;
     _commitNotes();
     _showSlide(doc.controller.duplicateSlide(slideId));
     _notify();
@@ -525,7 +526,7 @@ class SlideEditorController extends ChangeNotifier {
   /// moves to the slide that took its place, or the one before at the end.
   void deleteSlide(String slideId) {
     final doc = _doc;
-    if (doc == null || !canDeleteSlide) return;
+    if (doc == null || !canDeleteSlide || _readOnly) return;
     final index = presentation!.indexOfSlide(slideId);
     if (index < 0) return;
     _commitNotes();
@@ -539,7 +540,9 @@ class SlideEditorController extends ChangeNotifier {
   /// Moves the slide [slideId] to [toIndex] in show order.
   void moveSlide(String slideId, int toIndex) {
     final doc = _doc;
-    if (doc == null || presentation!.indexOfSlide(slideId) < 0) return;
+    if (doc == null || _readOnly || presentation!.indexOfSlide(slideId) < 0) {
+      return;
+    }
     _commitNotes();
     doc.controller.moveSlide(slideId, toIndex.clamp(0, slides.length - 1));
   }
@@ -548,6 +551,7 @@ class SlideEditorController extends ChangeNotifier {
 
   /// Takes back the last edit.
   void undo() {
+    if (_readOnly) return;
     _commitNotes();
     textEditing.commit();
     final selected = selectedIndex;
@@ -556,6 +560,7 @@ class SlideEditorController extends ChangeNotifier {
 
   /// Puts back the last edit [undo] took back.
   void redo() {
+    if (_readOnly) return;
     _commitNotes();
     textEditing.commit();
     final selected = selectedIndex;
@@ -617,7 +622,12 @@ class SlideEditorController extends ChangeNotifier {
   ) {
     final doc = _doc;
     final slideId = _selectedSlideId;
-    if (doc == null || slideId == null || _selectedElementIds.isEmpty) return;
+    if (_readOnly ||
+        doc == null ||
+        slideId == null ||
+        _selectedElementIds.isEmpty) {
+      return;
+    }
     edit(doc.controller, slideId);
   }
 
@@ -628,9 +638,12 @@ class SlideEditorController extends ChangeNotifier {
 
   /// Sets the selected text's size, kept within [minFontSize] and
   /// [maxFontSize].
-  void setFontSize(double size) => textEditing.format(
-    TextFormat(fontSize: size.clamp(minFontSize, maxFontSize).toDouble()),
-  );
+  void setFontSize(double size) {
+    if (_readOnly) return;
+    textEditing.format(
+      TextFormat(fontSize: size.clamp(minFontSize, maxFontSize).toDouble()),
+    );
+  }
 
   /// Moves the selected text's size to the next of [fontSizes] up
   /// ([direction] 1) or down (-1).
@@ -752,7 +765,12 @@ class SlideEditorController extends ChangeNotifier {
   Future<void> cutSelection() async {
     final doc = _doc;
     final slideId = _selectedSlideId;
-    if (doc == null || slideId == null || _selectedElementIds.isEmpty) return;
+    if (_readOnly ||
+        doc == null ||
+        slideId == null ||
+        _selectedElementIds.isEmpty) {
+      return;
+    }
     await clipboard.cut(doc.controller, slideId, _selectedElementIds);
   }
 
@@ -761,7 +779,7 @@ class SlideEditorController extends ChangeNotifier {
   Future<void> paste() async {
     final doc = _doc;
     final slideId = _selectedSlideId;
-    if (doc == null || slideId == null) return;
+    if (_readOnly || doc == null || slideId == null) return;
     final ids = await clipboard.paste(doc.controller, slideId);
     if (_disposed || ids.isEmpty || slideId != _selectedSlideId) return;
     selectElements(ids.toSet());
@@ -782,6 +800,7 @@ class SlideEditorController extends ChangeNotifier {
   /// Gives the presentation [theme], or none with null, restyling every
   /// slide as one undo step.
   void applyTheme(SlideTheme? theme) {
+    if (_readOnly) return;
     textEditing.commit();
     _doc?.controller.setTheme(theme);
   }
@@ -791,7 +810,7 @@ class SlideEditorController extends ChangeNotifier {
   void setSlideLayout(String layoutId) {
     final doc = _doc;
     final slideId = _selectedSlideId;
-    if (doc == null || slideId == null) return;
+    if (_readOnly || doc == null || slideId == null) return;
     textEditing.commit();
     doc.controller.setSlideLayout(slideId, layoutId);
   }
@@ -801,7 +820,7 @@ class SlideEditorController extends ChangeNotifier {
   void resetSlideToLayout() {
     final doc = _doc;
     final slideId = _selectedSlideId;
-    if (doc == null || slideId == null) return;
+    if (_readOnly || doc == null || slideId == null) return;
     textEditing.commit();
     doc.controller.resetSlideToLayout(slideId);
   }
@@ -817,7 +836,7 @@ class SlideEditorController extends ChangeNotifier {
   void setSlideBackgroundColor(SlideColor? color) {
     final doc = _doc;
     final slide = selectedSlide;
-    if (doc == null || slide == null) return;
+    if (_readOnly || doc == null || slide == null) return;
     final next = (slide.background ?? const SlideBackground()).copyWith(
       color: color,
     );
@@ -917,7 +936,7 @@ class SlideEditorController extends ChangeNotifier {
     Future<SlideImageUpload?> Function() fetch,
   ) async {
     final slideId = _selectedSlideId;
-    if (_doc == null || slideId == null) return;
+    if (_readOnly || _doc == null || slideId == null) return;
     try {
       final picture = await fetch();
       final doc = _doc;
@@ -945,7 +964,7 @@ class SlideEditorController extends ChangeNotifier {
   /// slide once typing pauses for [notesDelay].
   void editNotes(String text) {
     final slideId = _selectedSlideId;
-    if (_doc == null || slideId == null) return;
+    if (_readOnly || _doc == null || slideId == null) return;
     final wasPending = _pendingNotes != null;
     _pendingNotes = (slideId: slideId, text: text);
     _notesTimer?.cancel();

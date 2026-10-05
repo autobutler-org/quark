@@ -116,7 +116,7 @@ class SlideFindBar extends StatelessWidget {
                               ? controller.next
                               : null,
                         ),
-                        if (!compact)
+                        if (!compact && !controller.isReadOnly())
                           QuarkBarIconButton(
                             key: const ValueKey('slide_find_toggle_replace'),
                             icon: QuarkIcons.find_replace,
@@ -136,13 +136,14 @@ class SlideFindBar extends StatelessWidget {
                       Row(
                         children: [
                           Expanded(child: status),
-                          QuarkBarIconButton(
-                            key: const ValueKey('slide_find_toggle_replace'),
-                            icon: QuarkIcons.find_replace,
-                            tooltip: 'Replace',
-                            selected: controller.showReplace,
-                            onPressed: controller.toggleReplace,
-                          ),
+                          if (!controller.isReadOnly())
+                            QuarkBarIconButton(
+                              key: const ValueKey('slide_find_toggle_replace'),
+                              icon: QuarkIcons.find_replace,
+                              tooltip: 'Replace',
+                              selected: controller.showReplace,
+                              onPressed: controller.toggleReplace,
+                            ),
                           QuarkBarIconButton(
                             key: const ValueKey('slide_find_toggle_options'),
                             icon: QuarkIcons.tune_rounded,

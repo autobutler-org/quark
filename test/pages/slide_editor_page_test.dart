@@ -2,13 +2,20 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/pages/slide_editor_page.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/authenticated_service.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_group.dart';
 import 'package:quark/widgets/slides/slide_panel.dart';
+import 'package:quark/widgets/slides/export/slide_export_button.dart';
+import 'package:quark/widgets/slides/slide_share_button.dart';
+import 'package:quark/widgets/slides/slide_view_only_badge.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -52,6 +59,7 @@ void main() {
   Future<SlideEditorController> pumpEditor(
     WidgetTester tester, {
     int slides = 2,
+    bool readOnly = false,
   }) async {
     var next = 0;
     final controller = SlideEditorController(
@@ -67,6 +75,7 @@ void main() {
         saved.add(p);
       },
       newId: () => 'n${next++}',
+      readOnly: readOnly,
     );
     addTearDown(controller.dispose);
     await tester.pumpWidget(
@@ -1349,5 +1358,309 @@ void main() {
       expect(status(tester), '1 of 2');
       expect(tester.takeException(), isNull);
     });
+  });
+  group('sharing and view only (#1170)', () {
+    Finder key(String k) => find.byKey(ValueKey(k));
+
+    testWidgets('the wide bar has Share, and it opens the share sheet', (
+      tester,
+    ) async {
+      resetSharedHttpClient();
+      sharedHttpClientFactory = () =>
+          MockClient((_) async => http.Response('{}', 500));
+      addTearDown(resetSharedHttpClient);
+      tap.setViewport(tester, tap.wideViewport);
+      await pumpEditor(tester);
+      expect(find.byTooltip('Share'), findsOneWidget);
+      await tester.tap(key('slide_editor_share'));
+      await tester.pumpAndSettle();
+      expect(find.text('Share Deck'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the phone bar leaves Share to the Format menu', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      await pumpEditor(tester);
+      expect(key('slide_editor_share'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final (name, size) in [
+      ('narrow', tap.narrowViewport),
+      ('wide', tap.wideViewport),
+    ]) {
+      testWidgets('a deck that can be edited has no View only ($name)', (
+        tester,
+      ) async {
+        tap.setViewport(tester, size);
+        await pumpEditor(tester);
+        expect(key('slide_editor_view_only'), findsNothing);
+        expect(key('slide_editor_save'), findsOneWidget);
+      });
+
+      testWidgets(
+        'read-only says View only, in place of the save chip ($name)',
+        (tester) async {
+          tap.setViewport(tester, size);
+          await pumpEditor(tester, readOnly: true);
+          expect(key('slide_editor_view_only'), findsOneWidget);
+          // A phone's bar has only the lock; its words follow the position.
+          expect(
+            find.text(
+              size == tap.wideViewport
+                  ? 'View only'
+                  : 'Slide 1 of 2 · View only',
+            ),
+            findsOneWidget,
+          );
+          expect(find.byTooltip(SlideViewOnlyBadge.tooltip), findsOneWidget);
+          expect(
+            find.bySemanticsLabel(RegExp('^View only\\.')),
+            findsOneWidget,
+          );
+          expect(key('slide_editor_save'), findsNothing);
+          expect(tester.takeException(), isNull);
+          await tap.expectTapTargetGuidelines(tester);
+        },
+      );
+
+      testWidgets('read-only keeps Present, Export, Share and zoom ($name)', (
+        tester,
+      ) async {
+        tap.setViewport(tester, size);
+        final c = await pumpEditor(tester, readOnly: true);
+        QuarkBarChip present() => tester.widget(key('slide_editor_present'));
+        expect(present().onPressed, isNotNull);
+        expect(
+          tester
+              .widget<SlideExportButton>(key('slide_editor_export_pptx'))
+              .onPressed,
+          isNotNull,
+        );
+        if (size == tap.wideViewport) {
+          expect(
+            tester
+                .widget<SlideShareButton>(key('slide_editor_share'))
+                .onPressed,
+            isNotNull,
+          );
+          await tester.tap(key('slide_zoom_in'));
+        } else {
+          // A phone's bar keeps Share and zoom in the Format menu.
+          await tester.tap(key('slide_format_menu'));
+          await tester.pumpAndSettle();
+          expect(key('slide_format_share'), findsOneWidget);
+          await tester.tap(key('slide_zoom_menu'));
+          await tester.pumpAndSettle();
+          await tester.tap(key('slide_menu_zoom_in'));
+        }
+        await tester.pumpAndSettle();
+        expect(c.zoom, greaterThan(1));
+        await tester.tap(thumb('s2'));
+        await tester.pumpAndSettle();
+        expect(c.selectedSlideId, 's2');
+      });
+
+      testWidgets(
+        'read-only turns undo, redo and the panel edits off ($name)',
+        (tester) async {
+          tap.setViewport(tester, size);
+          final c = await pumpEditor(tester, readOnly: true);
+          expect(
+            tester
+                .widget<QuarkBarIconButton>(key('slide_editor_undo'))
+                .onPressed,
+            isNull,
+          );
+          expect(
+            tester
+                .widget<QuarkBarIconButton>(key('slide_editor_redo'))
+                .onPressed,
+            isNull,
+          );
+          expect(
+            tester.widget<QuarkBarIconButton>(key('slide_panel_add')).onPressed,
+            isNull,
+          );
+          await tester.tap(key('slide_menu_s1'));
+          await tester.pumpAndSettle();
+          for (final row in ['duplicate', 'move_later', 'delete']) {
+            expect(
+              tester.widget<PopupMenuItem<int>>(key('slide_${row}_s1')).enabled,
+              isFalse,
+              reason: row,
+            );
+          }
+          expect(key('slide_present_s1'), findsOneWidget);
+          await tester.tapAt(const Offset(1, 1));
+          await tester.pumpAndSettle();
+          expect(c.slides.length, 2);
+        },
+      );
+
+      testWidgets('read-only notes can be read but not typed in ($name)', (
+        tester,
+      ) async {
+        tap.setViewport(tester, size);
+        final c = await pumpEditor(tester, readOnly: true);
+        c.toggleNotes();
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextField>(key('slide_notes_field')).readOnly,
+          isTrue,
+        );
+        c.editNotes('typed');
+        expect(c.isDirty, isFalse);
+        expect(c.notes, isEmpty);
+      });
+
+      testWidgets('read-only canvas ignores edits and keys ($name)', (
+        tester,
+      ) async {
+        tap.setViewport(tester, size);
+        final c = await pumpEditor(tester, readOnly: true);
+        final before = c.presentation;
+        c.selectElements({'t1'});
+        await tester.pumpAndSettle();
+        await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+        await tester.drag(key('slide_editor_canvas'), const Offset(80, 40));
+        await tester.pumpAndSettle();
+        expect(c.presentation, same(before));
+        c
+          ..deleteSelection()
+          ..addSlide()
+          ..applyTheme(null)
+          ..setFrame(x: 5);
+        await tester.pumpAndSettle();
+        expect(c.presentation, same(before));
+        expect(c.isDirty, isFalse);
+        await tester.pump(const Duration(seconds: 3));
+        expect(saved, isEmpty);
+      });
+
+      testWidgets('read-only find searches without replace ($name)', (
+        tester,
+      ) async {
+        tap.setViewport(tester, size);
+        await pumpEditor(tester, readOnly: true);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        await tester.pumpAndSettle();
+        expect(key('slide_find_bar'), findsOneWidget);
+        await tester.enterText(key('slide_find_query'), 'text');
+        await tester.pumpAndSettle();
+        expect(find.text('1 of 2'), findsOneWidget);
+        expect(key('slide_find_toggle_replace'), findsNothing);
+        expect(key('slide_find_replace_all'), findsNothing);
+        expect(key('slide_find_next'), findsOneWidget);
+      });
+    }
+
+    testWidgets('wide read-only toolbar drops the tools, keeps find', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      await pumpEditor(tester, readOnly: true);
+      for (final gone in [
+        'slide_tool_shape',
+        'slide_tool_image',
+        'slide_theme_button',
+        'slide_layout_button',
+        'slide_format_hint',
+      ]) {
+        expect(key(gone), findsNothing, reason: gone);
+      }
+      expect(key('slide_find_open'), findsOneWidget);
+      expect(key('slide_shortcuts_button'), findsOneWidget);
+    });
+
+    testWidgets('wide read-only properties show values, take no input', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpEditor(tester, readOnly: true);
+      c.selectElements({'t1'});
+      await tester.pumpAndSettle();
+      expect(key('slide_properties'), findsOneWidget);
+      for (final field in ['x', 'y', 'width', 'height', 'rotation']) {
+        expect(
+          tester
+              .widget<TextField>(
+                find.descendant(
+                  of: key('slide_prop_$field'),
+                  matching: find.byType(TextField),
+                ),
+              )
+              .readOnly,
+          isTrue,
+          reason: field,
+        );
+      }
+      expect(key('slide_background'), findsNothing);
+      expect(key('slide_theme_picker'), findsNothing);
+    });
+
+    testWidgets('phone read-only menus: no Insert, Format has Share and Find', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      await pumpEditor(tester, readOnly: true);
+      expect(key('slide_insert_menu'), findsNothing);
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      expect(key('slide_format_find'), findsOneWidget);
+      expect(key('slide_format_share'), findsOneWidget);
+      expect(key('slide_format_properties'), findsOneWidget);
+      expect(key('slide_zoom_menu'), findsOneWidget);
+      expect(key('slide_format_theme'), findsNothing);
+      expect(key('slide_format_layout'), findsNothing);
+      for (final group in SlideToolbarGroup.values) {
+        expect(key(group.key), findsNothing, reason: group.key);
+      }
+    });
+
+    testWidgets('phone Format menu shares too', (tester) async {
+      resetSharedHttpClient();
+      sharedHttpClientFactory = () =>
+          MockClient((_) async => http.Response('{}', 500));
+      addTearDown(resetSharedHttpClient);
+      tap.setViewport(tester, tap.narrowViewport);
+      await pumpEditor(tester);
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_format_share'));
+      await tester.pumpAndSettle();
+      expect(find.text('Share Deck'), findsOneWidget);
+    });
+
+    for (final (name, size) in [
+      ('narrow', tap.narrowViewport),
+      ('wide', tap.wideViewport),
+    ]) {
+      testWidgets(
+        'a 403 on save flips to View only without a snack bar ($name)',
+        (tester) async {
+          tap.setViewport(tester, size);
+          saveFailure = const ApiException(403, 'save');
+          final c = await pumpEditor(tester);
+          expect(key('slide_editor_view_only'), findsNothing);
+          c.addSlide();
+          await tester.pump();
+          await letAutosaveRun(tester);
+          expect(c.isReadOnly, isTrue);
+          expect(key('slide_editor_view_only'), findsOneWidget);
+          expect(key('slide_editor_save'), findsNothing);
+          expect(find.byType(SnackBar), findsNothing);
+          expect(find.textContaining(Errors.couldNot('save')), findsNothing);
+          expect(saved, isEmpty);
+          // Nothing keeps retrying.
+          await tester.pump(const Duration(seconds: 5));
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
   });
 }

@@ -28,8 +28,13 @@ class SlideToolRow extends StatelessWidget {
     required this.onShowShortcuts,
     required this.findOpen,
     required this.onToggleFind,
+    this.readOnly = false,
     super.key,
   });
+
+  /// Whether the presentation is view only: the editing tools give way to
+  /// the find, shortcuts and properties buttons.
+  final bool readOnly;
 
   /// What the tools do.
   final SlideToolbarActions actions;
@@ -52,40 +57,43 @@ class SlideToolRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      Expanded(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              SlideChoiceButton(choice: actions.select),
-              SlideChoiceButton(choice: actions.text),
-              SlideChoiceMenuButton(
-                buttonKey: 'slide_tool_shape',
-                icon: QuarkIcons.shapes,
-                tooltip: 'Insert shape',
-                selected: actions.shapeToolActive,
-                choices: actions.shapes,
-              ),
-              SlideChoiceButton(choice: actions.line),
-              SlideChoiceButton(choice: actions.arrow),
-              SlideChoiceMenuButton(
-                buttonKey: 'slide_tool_image',
-                icon: QuarkIcons.add_image,
-                tooltip: 'Insert image',
-                choices: actions.imageSources,
-              ),
-              SlidePickerMenuButton(
-                controller: actions.controller,
-                kind: SlidePickerKind.theme,
-              ),
-              SlidePickerMenuButton(
-                controller: actions.controller,
-                kind: SlidePickerKind.layout,
-              ),
-            ],
+      if (readOnly)
+        const Spacer()
+      else
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                SlideChoiceButton(choice: actions.select),
+                SlideChoiceButton(choice: actions.text),
+                SlideChoiceMenuButton(
+                  buttonKey: 'slide_tool_shape',
+                  icon: QuarkIcons.shapes,
+                  tooltip: 'Insert shape',
+                  selected: actions.shapeToolActive,
+                  choices: actions.shapes,
+                ),
+                SlideChoiceButton(choice: actions.line),
+                SlideChoiceButton(choice: actions.arrow),
+                SlideChoiceMenuButton(
+                  buttonKey: 'slide_tool_image',
+                  icon: QuarkIcons.add_image,
+                  tooltip: 'Insert image',
+                  choices: actions.imageSources,
+                ),
+                SlidePickerMenuButton(
+                  controller: actions.controller,
+                  kind: SlidePickerKind.theme,
+                ),
+                SlidePickerMenuButton(
+                  controller: actions.controller,
+                  kind: SlidePickerKind.layout,
+                ),
+              ],
+            ),
           ),
         ),
-      ),
       SlideFindButton(isOpen: findOpen, onPressed: onToggleFind),
       QuarkBarIconButton(
         key: const ValueKey('slide_shortcuts_button'),

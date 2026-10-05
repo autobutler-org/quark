@@ -36,6 +36,7 @@ class SlideFindController extends ChangeNotifier {
     required this.document,
     required this.currentSlideId,
     required this.showSlide,
+    this.isReadOnly = _never,
   }) {
     source.addListener(_onSourceChanged);
     query.addListener(_onQueryChanged);
@@ -49,7 +50,10 @@ class SlideFindController extends ChangeNotifier {
         document: () => editor.document,
         currentSlideId: () => editor.selectedSlideId,
         showSlide: editor.selectSlide,
+        isReadOnly: () => editor.isReadOnly,
       );
+
+  static bool _never() => false;
 
   /// Notifies when the presentation or the slide on the canvas may have
   /// changed.
@@ -63,6 +67,10 @@ class SlideFindController extends ChangeNotifier {
 
   /// Puts the slide with this id on the canvas.
   final ValueChanged<String> showSlide;
+
+  /// Whether the presentation is view only: the bar then only searches, with
+  /// no replace row and no replacing.
+  final bool Function() isReadOnly;
 
   /// The text to find, typed in the bar.
   final TextEditingController query = TextEditingController();
@@ -90,7 +98,7 @@ class SlideFindController extends ChangeNotifier {
   bool get isOpen => _isOpen;
 
   /// Whether the bar shows its replace row.
-  bool get showReplace => _showReplace;
+  bool get showReplace => _showReplace && !isReadOnly();
 
   /// Whether a phone's bar shows its option chips; a wide bar always does.
   bool get showOptions => _showOptions;
@@ -129,7 +137,7 @@ class SlideFindController extends ChangeNotifier {
   bool get canStep => _result.matches.isNotEmpty;
 
   /// Whether there is a match to replace.
-  bool get canReplace => current != null;
+  bool get canReplace => current != null && !isReadOnly();
 
   /// What the counter reads: `3 of 12`, `No results`, `1000+ results` when
   /// the search stopped early, or why a regular expression did not run.
@@ -215,7 +223,7 @@ class SlideFindController extends ChangeNotifier {
   void replaceCurrent() {
     final match = current;
     final doc = document();
-    if (match == null || doc == null) return;
+    if (match == null || doc == null || isReadOnly()) return;
     final text = replacement.text;
     doc.controller.replaceCurrent(match, text);
     // Picks up after the replacement, so one containing the query is not
@@ -240,7 +248,7 @@ class SlideFindController extends ChangeNotifier {
   /// Replaces every match as one undo step, and returns how many were.
   int replaceAll() {
     final doc = document();
-    if (doc == null || _result.isEmpty) return 0;
+    if (doc == null || _result.isEmpty || isReadOnly()) return 0;
     final count = doc.controller.replaceAll(_result.matches, replacement.text);
     _search(keepFrom: current);
     notifyListeners();

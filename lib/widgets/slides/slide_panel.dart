@@ -45,8 +45,13 @@ class SlidePanel extends StatefulWidget {
     this.theme,
     this.layouts = const [],
     this.onAddWithLayout,
+    this.readOnly = false,
     super.key,
   });
+
+  /// Whether the presentation is view only: adding, duplicating, deleting
+  /// and reordering slides are off; selecting, presenting stay.
+  final bool readOnly;
 
   /// The presentation's theme, which the thumbnails are drawn in.
   final SlideTheme? theme;
@@ -153,16 +158,17 @@ class _SlidePanelState extends State<SlidePanel> {
       :theme,
       :layouts,
       :onAddWithLayout,
+      :readOnly,
     ) = widget;
     final tokens = QuarkTokens.of(context);
     final vertical = axis == Axis.vertical;
     final last = slides.length - 1;
-    final Widget add = onAddWithLayout == null || layouts.isEmpty
+    final Widget add = readOnly || onAddWithLayout == null || layouts.isEmpty
         ? QuarkBarIconButton(
             key: const ValueKey('slide_panel_add'),
             icon: QuarkIcons.add_rounded,
             tooltip: 'New slide',
-            onPressed: onAdd,
+            onPressed: readOnly ? null : onAdd,
           )
         : SlideNewSlideButton(
             layouts: layouts,
@@ -173,6 +179,7 @@ class _SlidePanelState extends State<SlidePanel> {
     final list = ReorderableListView.builder(
       key: const ValueKey('slide_panel_list'),
       scrollDirection: axis,
+      buildDefaultDragHandles: !readOnly,
       padding: EdgeInsets.all(tokens.spacingSm),
       itemCount: slides.length,
       onReorderItem: (from, to) => onMove(slides[from].id, to),
@@ -185,11 +192,15 @@ class _SlidePanelState extends State<SlidePanel> {
           number: index + 1,
           selected: slide.id == selectedSlideId,
           onSelect: () => onSelect(slide.id),
-          onDuplicate: () => onDuplicate(slide.id),
+          onDuplicate: readOnly ? null : () => onDuplicate(slide.id),
           imageBuilder: imageBuilder,
-          onDelete: canDelete ? () => onDelete(slide.id) : null,
-          onMoveEarlier: index > 0 ? () => onMove(slide.id, index - 1) : null,
-          onMoveLater: index < last ? () => onMove(slide.id, index + 1) : null,
+          onDelete: canDelete && !readOnly ? () => onDelete(slide.id) : null,
+          onMoveEarlier: index > 0 && !readOnly
+              ? () => onMove(slide.id, index - 1)
+              : null,
+          onMoveLater: index < last && !readOnly
+              ? () => onMove(slide.id, index + 1)
+              : null,
           onPresent: onPresent == null ? null : () => onPresent(slide.id),
         );
         return Padding(

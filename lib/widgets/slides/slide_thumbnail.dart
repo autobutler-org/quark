@@ -60,7 +60,7 @@ class SlideThumbnail extends StatefulWidget {
   final VoidCallback onSelect;
 
   /// Called from the menu's Duplicate row.
-  final VoidCallback onDuplicate;
+  final VoidCallback? onDuplicate;
 
   /// Draws image elements and background images.
   final SlideImageBuilder? imageBuilder;

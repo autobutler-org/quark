@@ -1,7 +1,7 @@
 # Slides Journeys
 
 Covers the Slides page (`/slides`), the slide editor for `.qslide` presentations, its toolbar and properties panel,
-inserting pictures, its speaker notes, and presenting (#1152, #1153, #1158, #1161, #1165, #1166, #1167).
+inserting pictures, its speaker notes, and presenting (#1152, #1153, #1158, #1161, #1165, #1166, #1167, #1170).
 
 ---
 
@@ -667,3 +667,30 @@ same drive as the presentation (`photos/cover.jpg`).
 - **Replace** changes the current match and moves to the next; **Replace all** changes every match on every slide. Each
   is one undo step, and the presentation autosaves.
 - Closing the bar clears the highlights.
+
+---
+
+### JN-SL-034: Share a presentation, and open one that is view only
+
+**Preconditions:** A presentation is open in the editor (JN-SL-004), or listed on `/slides`.
+
+**Steps:**
+
+1. On `/slides`, open a presentation row's menu and choose **Share**, or in the editor tap **Share** in the bar (on a
+   phone, **Format** › **Share**).
+2. Pick a person or group and a level: **Can view**, **Can edit** or **Owner**.
+3. As a person with **Can view**, open the presentation from your Slides list and make an edit.
+
+**Expected result:**
+
+- The share sheet is the one Files uses, titled with the presentation's name.
+- The person sees the presentation in their Slides list. With **Can edit** they edit as the owner does.
+- With **Can view** the editor opens, and the first save the Quark refuses turns it view only, with no error message:
+  the bar shows a lock and **View only** (on a phone the lock, and "View only" after the slide position) in place of the
+  save chip, and nothing is saved again.
+- In view-only mode the toolbar's tools and formatting, undo and redo, the properties fields, the slide panel's add,
+  duplicate, delete and reorder, the speaker notes field and editing on the canvas are off, and Insert, Theme and Slide
+  layout are gone from a phone's menus.
+- Selecting slides, zoom, **Find** (without replace), **Present** and **Export** keep working.
+- Pictures from folders the viewer cannot read show a lock instead of the image.
+- If two people edit at once, the last save wins; there is no merge.

@@ -10,6 +10,9 @@ import 'package:quark/widgets/slides/toolbar/slide_toolbar_actions.dart';
 /// end of "Format". It sits in the bar's second row
 /// beside the slide position, so a phone's slide keeps its height.
 ///
+/// A view-only presentation has no "Insert" menu, and "Format" holds only
+/// what still works.
+///
 /// It listens to [controller], its tools and its text editing session, so
 /// the menus follow the selection.
 ///
@@ -25,6 +28,7 @@ class SlidePhoneToolbar extends StatelessWidget {
     required this.onOpenTheme,
     required this.onOpenLayout,
     required this.onFind,
+    this.onShare,
     super.key,
   });
 
@@ -36,6 +40,9 @@ class SlidePhoneToolbar extends StatelessWidget {
 
   /// Opens the find bar.
   final VoidCallback onFind;
+
+  /// Opens the share sheet; null leaves "Share" out of the "Format" menu.
+  final VoidCallback? onShare;
 
   /// The open presentation.
   final SlideEditorController controller;
@@ -68,7 +75,7 @@ class SlidePhoneToolbar extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SlidePhoneInsertMenu(actions: actions),
+          if (!controller.isReadOnly) SlidePhoneInsertMenu(actions: actions),
           SlidePhoneFormatMenu(
             actions: actions,
             onOpenProperties: onOpenProperties,
@@ -76,6 +83,8 @@ class SlidePhoneToolbar extends StatelessWidget {
             onOpenTheme: onOpenTheme,
             onOpenLayout: onOpenLayout,
             onFind: onFind,
+            onShare: onShare,
+            readOnly: controller.isReadOnly,
           ),
         ],
       );

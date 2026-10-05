@@ -15,6 +15,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// "Insert" and "Format" menus of the `SlidePhoneToolbar` in the bar's
 /// second row, never an anonymous overflow.
 ///
+/// A view-only presentation ([SlideEditorController.isReadOnly]) keeps only
+/// the find, shortcuts and properties buttons: the tools and the formatting
+/// row are gone.
+///
 /// It listens to [controller], its tools and its text editing session, so
 /// the toggles follow the selection and the caret. Every control acts
 /// through [controller]: one undo step each, and the autosave.
@@ -95,13 +99,16 @@ class SlideToolbar extends StatelessWidget {
                     onShowShortcuts: onShowShortcuts,
                     findOpen: findOpen,
                     onToggleFind: onToggleFind,
+                    readOnly: controller.isReadOnly,
                   ),
                 ),
-                Divider(height: 1, color: tokens.border),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: rowHeight),
-                  child: SlideFormatRow(actions: actions),
-                ),
+                if (!controller.isReadOnly) ...[
+                  Divider(height: 1, color: tokens.border),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: rowHeight),
+                    child: SlideFormatRow(actions: actions),
+                  ),
+                ],
               ],
             ),
           ),
