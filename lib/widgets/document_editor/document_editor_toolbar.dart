@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The formatting toolbar shown above the document in edit mode.
+///
+/// Always one row high: on a viewport too narrow for every button it scrolls
+/// sideways inside a [QuarkToolbarScroller] rather than wrapping (#2770).
 ///
 /// The indent pair reads decrease, then increase, keyed
 /// `document_editor_indent_decrease` and `document_editor_indent_increase`.
@@ -86,31 +90,36 @@ class DocumentEditorToolbar extends StatelessWidget {
           color: cs.surfaceContainer,
           border: Border(bottom: BorderSide(color: cs.outline)),
         ),
-        child: QuillSimpleToolbar(
-          controller: controller,
-          config: QuillSimpleToolbarConfig(
-            toolbarIconAlignment: WrapAlignment.center,
-            buttonOptions: QuillSimpleToolbarButtonOptions(
-              base: baseOptions,
-              indentIncrease: indentSlot(isIncrease: false),
-              indentDecrease: indentSlot(isIncrease: true),
-              selectHeaderStyleDropdownButton:
-                  QuillToolbarSelectHeaderStyleDropdownButtonOptions(
-                    textStyle: TextStyle(color: cs.onSurface, fontSize: 13),
-                  ),
-              backgroundColor: QuillToolbarColorButtonOptions(
-                customOnPressedCallback: onPickBackgroundColor,
+        // Centered while every button fits. Quill lays its buttons out in a
+        // `Wrap`, which the scroller's unbounded width holds to one line.
+        alignment: Alignment.center,
+        child: QuarkToolbarScroller(
+          child: QuillSimpleToolbar(
+            controller: controller,
+            config: QuillSimpleToolbarConfig(
+              toolbarIconAlignment: WrapAlignment.center,
+              buttonOptions: QuillSimpleToolbarButtonOptions(
+                base: baseOptions,
+                indentIncrease: indentSlot(isIncrease: false),
+                indentDecrease: indentSlot(isIncrease: true),
+                selectHeaderStyleDropdownButton:
+                    QuillToolbarSelectHeaderStyleDropdownButtonOptions(
+                      textStyle: TextStyle(color: cs.onSurface, fontSize: 13),
+                    ),
+                backgroundColor: QuillToolbarColorButtonOptions(
+                  customOnPressedCallback: onPickBackgroundColor,
+                ),
               ),
+              showFontFamily: false,
+              showFontSize: false,
+              showInlineCode: true,
+              showCodeBlock: true,
+              showQuote: true,
+              showLink: false,
+              showSearchButton: false,
+              showSubscript: false,
+              showSuperscript: false,
             ),
-            showFontFamily: false,
-            showFontSize: false,
-            showInlineCode: true,
-            showCodeBlock: true,
-            showQuote: true,
-            showLink: false,
-            showSearchButton: false,
-            showSubscript: false,
-            showSuperscript: false,
           ),
         ),
       ),

@@ -97,13 +97,14 @@ void main() {
     expect(QuarkSection.slug('SBOM (v2)'), 'sbom_v2');
   });
 
-  testWidgets('narrow: the actions wrap rather than overflow the heading', (
+  testWidgets('narrow: the actions drop under the heading on one row', (
     tester,
   ) async {
+    const title = 'A section with a heading long enough to crowd its actions';
     await pumpAt(
       tester,
       QuarkSection(
-        title: 'A section with a heading long enough to crowd its actions',
+        title: title,
         actions: [
           for (final label in const ['Refresh', 'Add', 'Remove everything'])
             FilledButton(
@@ -122,25 +123,14 @@ void main() {
     for (final label in const ['Refresh', 'Add', 'Remove everything']) {
       expect(find.byKey(ValueKey('section_action_$label')), findsOneWidget);
     }
-    // Wrapped, not clipped and not scrolled: the last action sits on a later
-    // line than the first.
-    expect(
-      tester
-          .getRect(
-            find.byKey(
-              const ValueKey(
-                'section_action_Remove '
-                'everything',
-              ),
-            ),
-          )
-          .top,
-      greaterThan(
-        tester
-            .getRect(find.byKey(const ValueKey('section_action_Refresh')))
-            .top,
-      ),
+    final first = tester.getRect(
+      find.byKey(const ValueKey('section_action_Refresh')),
     );
+    final last = tester.getRect(
+      find.byKey(const ValueKey('section_action_Remove everything')),
+    );
+    expect(first.top, greaterThan(tester.getRect(find.text(title)).bottom - 1));
+    expect(last.top, first.top, reason: 'a toolbar is one row high (#2770)');
   });
 
   testWidgets('a small action set leaves the heading its own width', (

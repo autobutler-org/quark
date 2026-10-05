@@ -76,6 +76,7 @@ export 'src/layout/quark_sheet.dart';
 export 'src/layout/quark_split_view.dart';
 export 'src/layout/quark_tab_view.dart';
 export 'src/layout/quark_toolbar.dart';
+export 'src/layout/quark_toolbar_scroller.dart';
 export 'src/layout/refresh_icon_button.dart';
 export 'src/layout/theme_toggle_button.dart';
 export 'src/layout/welcome_card.dart';

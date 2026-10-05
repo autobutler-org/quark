@@ -722,31 +722,19 @@ final List<GalleryEntry> registry = [
     build: (context, log) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('wrap: grows taller instead of overflowing'),
-        const SizedBox(height: 8),
-        FramedViewport(
-          width: 360,
-          height: 120,
-          child: QuarkToolbar(
-            actions: [
-              for (final label in const ['Select all', 'Download', 'Delete'])
-                FilledButton(
-                  onPressed: () => log('QuarkToolbar action: $label'),
-                  child: Text(label),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        const Text('scroll: stays one line tall in a fixed-height bar'),
+        const Text('Stays one row high and scrolls sideways'),
         const SizedBox(height: 8),
         FramedViewport(
           width: 360,
           height: 72,
           child: QuarkToolbar(
-            overflow: QuarkToolbarOverflow.scroll,
             actions: [
-              for (final label in const ['Select all', 'Download', 'Delete'])
+              for (final label in const [
+                'Select all',
+                'Download',
+                'Move to folder',
+                'Delete',
+              ])
                 FilledButton(
                   onPressed: () => log('QuarkToolbar action: $label'),
                   child: Text(label),
@@ -756,6 +744,50 @@ final List<GalleryEntry> registry = [
         ),
       ],
     ),
+  ),
+  GalleryEntry(
+    name: 'QuarkToolbarScroller',
+    group: 'Layout',
+    build: (context, log) {
+      final scroller = QuarkToolbarScroller(
+        child: Row(
+          children: [
+            for (final label in const [
+              'Bold',
+              'Italic',
+              'Underline',
+              'Strikethrough',
+              'Heading',
+              'Quote',
+              'Code block',
+            ])
+              TextButton(
+                onPressed: () => log('QuarkToolbarScroller action: $label'),
+                child: Text(label),
+              ),
+          ],
+        ),
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Drag, wheel, or click a chevron (shown with a mouse)'),
+          const SizedBox(height: 8),
+          FramedViewport(width: 360, height: 72, child: scroller),
+          const SizedBox(height: 24),
+          const Text('Reduced motion: a chevron jumps instead of sliding'),
+          const SizedBox(height: 8),
+          FramedViewport(
+            width: 360,
+            height: 72,
+            child: MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: scroller,
+            ),
+          ),
+        ],
+      );
+    },
   ),
   GalleryEntry(
     name: 'RefreshIconButton',
