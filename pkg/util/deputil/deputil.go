@@ -52,6 +52,10 @@ type Dependencies interface {
 	HealthDatabase() *db.DatabaseRaw
 	IOSemaphore() *iosemutil.Semaphore
 	JobQueue() *jobutil.Queue
+	// LoginGuard locks out an address or account after repeated failed
+	// sign-ins. It is in memory only, so no lockout travels with a drive
+	// (#1861).
+	LoginGuard() *ratelimitutil.LoginGuard
 	RepairSystem() repairutil.System
 	SSHSystem() sshutil.System
 	StorageService() *storageutil.StorageService
@@ -71,6 +75,7 @@ type Dependencies interface {
 	WithHealthDatabase(healthDatabase *db.DatabaseRaw) Dependencies
 	WithIOSemaphore(sem *iosemutil.Semaphore) Dependencies
 	WithJobQueue(q *jobutil.Queue) Dependencies
+	WithLoginGuard(guard *ratelimitutil.LoginGuard) Dependencies
 	WithRepairSystem(system repairutil.System) Dependencies
 	WithSSHSystem(system sshutil.System) Dependencies
 	MetadataStore() vfs.MetadataStore
@@ -115,6 +120,9 @@ func NewDependencies() Dependencies {
 		// Combined with Argon2id (~300 ms/attempt), sustained guessing is limited to
 		// ≈ 30 attempts/minute per IP — well below what any offline attack would need.
 		vaultRateLimiter: ratelimitutil.NewWithRate(0.5, 5),
+		// loginGuard locks out repeated failed sign-ins; see
+		// ratelimitutil.DefaultPairThreshold for the policy.
+		loginGuard: ratelimitutil.NewLoginGuard(ratelimitutil.LoginGuardParams{}),
 		// chatRateLimiter caps chat writes per account, well above the app's
 		// own traffic; see ChatWriteRate.
 		chatRateLimiter: ratelimitutil.NewWithRate(ChatWriteRate, ChatWriteBurst),

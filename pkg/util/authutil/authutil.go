@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/sqlutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -264,6 +265,23 @@ type LoginParams struct {
 	// SaltSecret returns the install's salt secret. It is called only for an
 	// upgrade, to store the salt the key was derived with.
 	SaltSecret func() ([]byte, error)
+	// Guard locks out an address or account after repeated failures (#1861);
+	// nil checks nothing.
+	Guard *ratelimitutil.LoginGuard
+	// ClientIP is the address the attempt came from, which Guard keys on.
+	ClientIP string
+}
+
+// TooManyAttemptsError refuses a sign-in while Guard has its address or
+// account locked out, before the password is checked. It reads the same
+// whether or not the username exists.
+type TooManyAttemptsError struct {
+	// RetryAfter is how long until the lockout lifts.
+	RetryAfter time.Duration
+}
+
+func (e *TooManyAttemptsError) Error() string {
+	return "too many failed sign-in attempts, try again later"
 }
 
 // GetSaltParams names the account whose key-derivation salt is asked for.
@@ -708,6 +726,10 @@ func GetSalt(ctx context.Context, queries *db.Queries, params GetSaltParams) (Ge
 // password hash land in one write, so the password stops signing in and is
 // never taken again. A failed upgrade refuses the sign-in rather than leave
 // the account on its password. A password with no key is ErrAppTooOld.
+//
+// With a Guard, a locked-out attempt gets *TooManyAttemptsError without its
+// credential being checked, and every wrong username or credential is counted
+// toward a lockout and logged with its address.
 func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*LoginResult, error) {
 	if params.AuthKey == "" {
 		if err := RefuseRawSecrets(params.Password); err != nil {
@@ -717,10 +739,14 @@ func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*Login
 	if err := validateAuthKey(params.AuthKey); err != nil {
 		return nil, err
 	}
+	attempt := ratelimitutil.LoginAttempt{Account: params.Username, IP: params.ClientIP}
+	if wait := params.Guard.Check(attempt).RetryAfter; wait > 0 {
+		return nil, &TooManyAttemptsError{RetryAfter: wait}
+	}
 	user, err := queries.GetUserByUsername(ctx, params.Username)
 	if err != nil {
 		// Don't leak whether the username exists
-		return nil, fmt.Errorf("invalid credentials")
+		return nil, loginFailed(params.Guard, attempt)
 	}
 	upgrade := user.AuthKeyHash == "" && params.Password != ""
 	secret, hash := params.AuthKey, user.AuthKeyHash
@@ -728,7 +754,7 @@ func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*Login
 		secret, hash = params.Password, user.PasswordHash
 	}
 	if !CheckPassword(secret, hash) {
-		return nil, fmt.Errorf("invalid credentials")
+		return nil, loginFailed(params.Guard, attempt)
 	}
 	if err := statusError(user.Status); err != nil {
 		return nil, err
@@ -743,6 +769,7 @@ func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*Login
 	if err != nil {
 		return nil, err
 	}
+	params.Guard.RecordSuccess(attempt)
 
 	return &LoginResult{
 		SessionToken:   token,
