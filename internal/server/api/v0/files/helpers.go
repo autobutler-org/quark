@@ -14,6 +14,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
@@ -150,6 +151,22 @@ func zipError(c *gin.Context, p string, err error) *serverutil.Response {
 	return serverutil.InternalServerError(err)
 }
 
+// acquireZipSlot takes one of the folder-zip slots (#2757) before any of the
+// archive is written. When none frees up within the wait, or the client goes
+// away first, it answers 503 with a Retry-After itself and reports false; the
+// caller then writes nothing. On true the caller must call release once the
+// zip ends, however it ends.
+func acquireZipSlot(c *gin.Context, deps deputil.Dependencies, p string) (release func(), ok bool) {
+	slots := deps.ZipSlots()
+	release, ok = slots.Acquire(c.Request.Context())
+	if !ok {
+		slog.Warn("download: no folder zip slot free", "path", p, "cap", slots.Cap())
+		c.Header("Retry-After", downloadutil.ZipRetryAfter)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "server busy, please retry"})
+	}
+	return release, ok
+}
+
 // downloadFileVFS handles file downloads via the VFS layer.
 // RAW files (needing OS path for dcraw/LibRaw) are excluded before calling this.
 func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, access accessutil.Access, filePath string, wantsJPEG bool) *serverutil.Response {
@@ -167,6 +184,11 @@ func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, ac
 
 	switch opened.Kind {
 	case fileutil.DownloadFolder:
+		release, ok := acquireZipSlot(c, deps, filePath)
+		if !ok {
+			return nil
+		}
+		defer release()
 		// Zip and stream the directory contents.
 		c.Writer.Header().Set("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("attachment; filename=%q", opened.FileName)))
 		c.Writer.Header().Set("Content-Type", "application/octet-stream")

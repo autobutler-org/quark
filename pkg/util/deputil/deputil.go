@@ -55,6 +55,9 @@ type Dependencies interface {
 	VaultRateLimiter() *ratelimitutil.Limiter
 	VaultSession() *vaultcrypto.VaultSession
 	Worker() workerutil.Worker
+	// ZipSlots caps how many folder zips are built at once (#2757). Nil
+	// caps nothing.
+	ZipSlots() *downloadutil.ZipSlots
 	WithChatRateLimiter(limiter *ratelimitutil.Limiter) Dependencies
 	WithDatabase(database *db.DatabaseSqlc) Dependencies
 	WithDownloadTokens(store *downloadutil.TokenStore) Dependencies
@@ -75,6 +78,7 @@ type Dependencies interface {
 	ClearVaultDB()
 	WithVaultSession(session *vaultcrypto.VaultSession) Dependencies
 	WithWorker(worker workerutil.Worker) Dependencies
+	WithZipSlots(slots *downloadutil.ZipSlots) Dependencies
 }
 
 func NewDependencies() Dependencies {
@@ -94,6 +98,9 @@ func NewDependencies() Dependencies {
 		// downloadTokens is built here for the same reason: a map and nothing
 		// else, swept lazily on each issue (#2226).
 		downloadTokens: downloadutil.NewTokenStore(downloadutil.NewTokenStoreParams{}),
+		// zipSlots is a channel and nothing else, sized from the cores; see
+		// downloadutil.DefaultZipSlots (#2757).
+		zipSlots: downloadutil.NewZipSlots(downloadutil.ZipSlotsParams{}),
 		// authRateLimiter protects auth endpoints (login, setup, recover) from
 		// brute-force attacks. Shared across all requests — 5 req/s per IP, burst 10.
 		authRateLimiter: ratelimitutil.New(),

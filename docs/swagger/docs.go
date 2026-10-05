@@ -4827,6 +4827,18 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
+                    },
+                    "503": {
+                        "description": "Every folder zip slot is busy, or no JPEG conversion slot came free; retry after the Retry-After header",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        },
+                        "headers": {
+                            "Retry-After": {
+                                "type": "integer",
+                                "description": "seconds to wait before retrying"
+                            }
+                        }
                     }
                 }
             }
