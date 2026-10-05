@@ -77,6 +77,7 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 		{http.MethodPost, "/api/v0/settings"},
 		// No body, so the admin stops at a 400 and the setting is untouched.
 		{http.MethodPut, "/api/v0/settings/access-requests"},
+		{http.MethodPut, "/api/v0/settings/theme-color"},
 		// No body, so the admin stops at a 400 and no account is created.
 		{http.MethodPost, "/api/v0/admin/users"},
 		// Nobody has requested an account, so the admin gets a 404.
@@ -143,6 +144,7 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 
 	open := []struct{ method, path string }{
 		{http.MethodGet, "/api/v0/settings"},
+		{http.MethodGet, "/api/v0/settings/me"},
 		{http.MethodGet, "/api/v0/version"},
 		{http.MethodGet, "/api/v0/version/available"},
 		{http.MethodGet, "/api/v0/devices"},
@@ -156,6 +158,38 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 	for _, r := range open {
 		if got := do(r.method, r.path, member.SessionToken); got == http.StatusUnauthorized || got == http.StatusForbidden || got == http.StatusNotFound {
 			t.Errorf("member %s %s = %d, want it open to every account", r.method, r.path, got)
+		}
+	}
+
+	// The public settings answer with no session at all (#2740), and that
+	// exemption is the one path: every other route under /settings, the
+	// account's own settings included, still wants one.
+	anonymous := func(method, path string) int {
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, httptest.NewRequest(method, path, nil))
+		return w.Code
+	}
+	if got := anonymous(http.MethodGet, "/api/v0/settings/public"); got != http.StatusOK {
+		t.Errorf("anonymous GET /api/v0/settings/public = %d, want 200", got)
+	}
+	for _, r := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v0/settings"},
+		{http.MethodGet, "/api/v0/settings/me"},
+		{http.MethodPut, "/api/v0/settings/me"},
+		{http.MethodPut, "/api/v0/settings/theme-color"},
+		{http.MethodGet, "/api/v0/settings/features"},
+		{http.MethodGet, "/api/v0/settings/remote-access"},
+		{http.MethodGet, "/api/v0/settings/public/"},
+		{http.MethodGet, "/api/v0/settings/public/extra"},
+		{http.MethodPut, "/api/v0/settings/public"},
+	} {
+		if got := anonymous(r.method, r.path); got == http.StatusOK {
+			t.Errorf("anonymous %s %s = 200, want it refused", r.method, r.path)
+		}
+	}
+	for _, path := range []string{"/api/v0/settings", "/api/v0/settings/me", "/api/v0/settings/features"} {
+		if got := anonymous(http.MethodGet, path); got != http.StatusUnauthorized {
+			t.Errorf("anonymous GET %s = %d, want 401", path, got)
 		}
 	}
 }

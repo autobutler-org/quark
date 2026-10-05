@@ -107,7 +107,9 @@ var downloadTokenPaths = map[string]bool{
 	"/api/v0/files/download-archive-file": true,
 }
 
-// authExemptPaths are API paths that don't require a valid session.
+// authExemptPaths are API paths that don't require a valid session. A path is
+// matched whole, so exempting /settings/public opens nothing else under
+// /settings.
 var authExemptPaths = map[string]bool{
 	"/api/v0/auth/setup":           true,
 	"/api/v0/auth/login":           true,
@@ -115,6 +117,9 @@ var authExemptPaths = map[string]bool{
 	"/api/v0/auth/recover/keys":    true,
 	"/api/v0/auth/request-account": true,
 	"/api/v0/auth/status":          true,
+	// The sign-in page reads the Quark's theme color before anyone has a session
+	// (#2740). The handler serializes an allowlist, never settings.json.
+	"/api/v0/settings/public": true,
 }
 
 func inject(deps deputil.Dependencies) gin.HandlerFunc {

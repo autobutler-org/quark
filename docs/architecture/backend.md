@@ -169,3 +169,4 @@ events, so clients treat events as a hint to refresh and the REST endpoints as t
 | Backup     | `backup_started`, `backup_progress`, `backup_completed`, `backup_failed`                   |
 | Vault      | `vault_device_disconnected`, `vault_device_reconnected`, `vault_storage_changed`           |
 | Accounts   | `account_changed`, `access_changed`                                                       |
+| Settings   | `feature_flag_changed`, `public_settings_changed`                                         |

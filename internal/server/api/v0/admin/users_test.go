@@ -20,6 +20,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/usersettingsutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
@@ -227,7 +228,8 @@ func TestPromoteUser_OnlyActive(t *testing.T) {
 }
 
 // TestDeleteUser_RemovesProfilePicture verifies an admin's delete takes the
-// account's picture with it, so a recycled id does not inherit it.
+// account's picture and its settings with it, so a recycled id does not
+// inherit them.
 func TestDeleteUser_RemovesProfilePicture(t *testing.T) {
 	h := newAdminHarness(t)
 	h.addUser(t, "bob", authutil.StatusActive, false)
@@ -244,10 +246,18 @@ func TestDeleteUser_RemovesProfilePicture(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	settings := usersettingsutil.SaveParams{DataDir: storageutil.GetDataDir(), UserID: bob.ID, Settings: usersettingsutil.Settings{ThemeColor: "teal"}}
+	if _, err := usersettingsutil.Save(settings); err != nil {
+		t.Fatal(err)
+	}
+
 	if w := h.do(http.MethodDelete, "/api/v0/admin/users/bob"); w.Code != http.StatusOK {
 		t.Fatalf("DELETE = %d: %s", w.Code, w.Body.String())
 	}
 	if _, err := os.Stat(picture); !os.IsNotExist(err) {
 		t.Errorf("bob's picture is still there (stat err %v)", err)
+	}
+	if _, err := os.Stat(usersettingsutil.Path(settings.DataDir, bob.ID)); !os.IsNotExist(err) {
+		t.Errorf("bob's settings are still there (stat err %v)", err)
 	}
 }

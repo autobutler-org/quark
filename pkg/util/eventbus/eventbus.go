@@ -44,6 +44,11 @@ const (
 	// hides or shows the feature. Path is empty.
 	EventFeatureFlagChanged EventKind = "feature_flag_changed"
 
+	// EventPublicSettingsChanged fires when an admin changes something
+	// GET /settings/public reports, such as the Quark's theme color (#2740), so
+	// every signed-in app fetches it again. Path and Data are empty.
+	EventPublicSettingsChanged EventKind = "public_settings_changed"
+
 	// EventAccessChanged fires when access rows moved with a path or were
 	// deleted with it (#1905). Path and DeviceSerial name where the rows are
 	// now, or where they were deleted from.

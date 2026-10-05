@@ -40,6 +40,15 @@ type PairDeviceResponse struct {
 	QuarkAddress string `json:"quarkAddress"`
 }
 
+// PublicSettingsResponse is what GET /settings/public tells someone with no
+// session. It is an allowlist: a field is added here on purpose, never by
+// serializing settingsutil.Settings, which holds the household token and the
+// device id.
+type PublicSettingsResponse struct {
+	// ThemeColor is the Quark's theme color, or empty when no admin has chosen.
+	ThemeColor string `json:"themeColor"`
+}
+
 type router struct{}
 
 func (r *router) Routes() []*serverutil.Route {
@@ -48,6 +57,9 @@ func (r *router) Routes() []*serverutil.Route {
 		getRemoteAccessRoute,
 		pairDeviceRoute,
 		listFeaturesRoute,
+		getPublicSettingsRoute,
+		getMySettingsRoute,
+		updateMySettingsRoute,
 	}
 }
 
@@ -62,6 +74,7 @@ func (r *adminRouter) Routes() []*serverutil.Route {
 		disableRemoteAccessRoute,
 		updateAccessRequestsRoute,
 		updateFeatureRoute,
+		updateThemeColorRoute,
 	}
 }
 
@@ -75,4 +88,10 @@ type accessRequestsSetting struct {
 // leaves it out is refused rather than read as off.
 type featureSetting struct {
 	Enabled *bool `json:"enabled" binding:"required"`
+}
+
+// themeColorSetting is the Quark's theme color. A pointer, so a body that leaves it
+// out is refused rather than read as clearing it.
+type themeColorSetting struct {
+	ThemeColor *string `json:"themeColor" binding:"required"`
 }
