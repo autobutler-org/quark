@@ -11,6 +11,7 @@ import '../../data_table.dart';
 import 'cell/heading/heading_cells.dart'
     show kDefaultColumnWidth, kDefaultRowHeight, kMinColumnWidth, kMinRowHeight;
 import 'cell_range.dart';
+import 'column_filter.dart';
 import 'data_sheet_selection.dart';
 
 // ---------------------------------------------------------------------------
@@ -23,6 +24,8 @@ class _TableSnapshot {
   final List<double> rowHeights;
   final int frozenRows;
   final int frozenColumns;
+  final Map<int, ColumnFilter> filters;
+  final List<bool> hidden;
 
   _TableSnapshot(
     this.cells,
@@ -30,6 +33,8 @@ class _TableSnapshot {
     this.rowHeights,
     this.frozenRows,
     this.frozenColumns,
+    this.filters,
+    this.hidden,
   );
 
   factory _TableSnapshot.capture(DataSheetController c) {
@@ -42,6 +47,8 @@ class _TableSnapshot {
       List<double>.from(c.rowHeights),
       c._frozenRows,
       c._frozenColumns,
+      Map<int, ColumnFilter>.from(c._filters),
+      List<bool>.from(c._hidden),
     );
   }
 
@@ -62,6 +69,8 @@ class _TableSnapshot {
     c.rowHeights = List<double>.from(rowHeights);
     c._frozenRows = frozenRows;
     c._frozenColumns = frozenColumns;
+    c._filters = Map<int, ColumnFilter>.from(filters);
+    c._hidden = List<bool>.from(hidden);
   }
 }
 
@@ -70,11 +79,15 @@ class _TableSnapshot {
 // ---------------------------------------------------------------------------
 
 /// The state behind a `DataSheet`: the table, column widths and row heights, the frozen header rows and columns,
-/// the evaluated value of each cell, and undo and redo.
+/// the column filters and the rows they hide, the evaluated value of each cell, and undo and redo.
 ///
 /// Sizes are pixels. [layoutToJson] and [DataSheetController.fromLayoutJson] are the layout's saved form, and
 /// loading tolerates anything older or broken: missing keys, a legacy `columnFlex` list, lists of the wrong
 /// length, and values that are not numbers all fall back to defaults.
+///
+/// Filters hide rows without deleting them: row indexes never change, and range operations (copy, clear, paste,
+/// fill, delete row) skip hidden rows. Frozen rows are headers and are never hidden. Filters apply when they are
+/// set, so a row edited to a value the filter excludes stays visible until the filters next change.
 class DataSheetController extends ChangeNotifier {
   final DataTable table;
   final List<ValueNotifier<List<DataCell>>> _rows;
@@ -87,6 +100,16 @@ class DataSheetController extends ChangeNotifier {
 
   int _frozenRows;
   int _frozenColumns;
+
+  /// Filters by column index; only active filters are kept.
+  Map<int, ColumnFilter> _filters;
+
+  /// Which rows the filters hid when they were last applied, by row index.
+  /// Rows past its end are visible.
+  List<bool> _hidden = [];
+
+  /// [visibleRows], built on first read after a change.
+  List<int>? _visibleRows;
 
   /// How many rows, from the top, stay put while the grid scrolls vertically.
   int get frozenRows => _frozenRows;
@@ -125,9 +148,11 @@ class DataSheetController extends ChangeNotifier {
     this.rowHeights,
     this._frozenRows,
     this._frozenColumns,
+    this._filters,
   ) {
     selection.addListener(_onSelectionChanged);
     _recompute();
+    _applyFilters();
   }
 
   void _onSelectionChanged() => notifyListeners();
@@ -144,6 +169,7 @@ class DataSheetController extends ChangeNotifier {
       colCount,
       (r, c) => cellAt(r, c).value.toString(),
     );
+    _visibleRows = null;
   }
 
   /// Returns the display value for a cell.
@@ -191,7 +217,8 @@ class DataSheetController extends ChangeNotifier {
   /// [columnFlex] is the flex factor layout sheets used before pixel widths;
   /// each factor becomes that many default widths, and only when
   /// [columnWidths] is absent. [frozenRows] and [frozenColumns] are clamped to
-  /// the table.
+  /// the table. [filters] maps a column index to its filter; entries for
+  /// columns the table lacks, and inactive filters, are dropped.
   factory DataSheetController.fromTable(
     DataTable table, {
     List<double>? columnWidths,
@@ -199,6 +226,7 @@ class DataSheetController extends ChangeNotifier {
     List<num>? columnFlex,
     int frozenRows = 0,
     int frozenColumns = 0,
+    Map<int, ColumnFilter> filters = const {},
   }) {
     final rows = table.rows
         .map((r) => ValueNotifier<List<DataCell>>(List<DataCell>.from(r.cells)))
@@ -214,6 +242,10 @@ class DataSheetController extends ChangeNotifier {
       _fitSizes(rowHeights, rowCount, kDefaultRowHeight, kMinRowHeight),
       frozenRows.clamp(0, rowCount),
       frozenColumns.clamp(0, colCount),
+      {
+        for (final MapEntry(key: col, value: filter) in filters.entries)
+          if (col >= 0 && col < colCount && filter.isActive) col: filter,
+      },
     );
   }
 
@@ -230,6 +262,7 @@ class DataSheetController extends ChangeNotifier {
         ? [for (final v in value) v is num ? v.toDouble() : double.nan]
         : null;
     int count(Object? value) => value is int ? value : 0;
+    final filters = json?['filters'];
     return DataSheetController.fromTable(
       table,
       columnWidths: numbers(json?['columnWidths']),
@@ -237,16 +270,26 @@ class DataSheetController extends ChangeNotifier {
       columnFlex: numbers(json?['columnFlex']),
       frozenRows: count(json?['frozenRows']),
       frozenColumns: count(json?['frozenColumns']),
+      filters: {
+        if (filters is List)
+          for (final entry in filters)
+            if (entry is Map && entry['column'] is int)
+              entry['column'] as int: ColumnFilter.fromJson(entry)!,
+      },
     );
   }
 
   /// The sheet's layout in the form [DataSheetController.fromLayoutJson]
-  /// reads: pixel sizes and the frozen counts.
+  /// reads: pixel sizes, the frozen counts, and the column filters.
   Map<String, Object> layoutToJson() => {
         'columnWidths': List<double>.from(columnWidths),
         'rowHeights': List<double>.from(rowHeights),
         'frozenRows': _frozenRows,
         'frozenColumns': _frozenColumns,
+        'filters': [
+          for (final MapEntry(key: col, value: filter) in _filters.entries)
+            {'column': col, ...filter.toJson()},
+        ],
       };
 
   static List<double> _fitSizes(
@@ -315,29 +358,40 @@ class DataSheetController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The raw values inside [range], row by row.
+  /// The rows of [range] the filters leave visible, clamped to the sheet.
+  List<int> _visibleIn(CellRange range) => [
+        for (var r = max(range.top, 0);
+            r <= min(range.bottom, rowCount - 1);
+            r++)
+          if (!isRowHidden(r)) r,
+      ];
+
+  /// The raw values inside [range], row by row, skipping hidden rows.
   List<List<String>> valuesIn(CellRange range) => [
-        for (var r = range.top; r <= range.bottom; r++)
+        for (final r in _visibleIn(range))
           [
             for (var c = range.left; c <= range.right; c++)
               cellAt(r, c).value.toString(),
           ],
       ];
 
-  /// Writes [values] with its top-left corner at [top]/[left] as one undo
-  /// step, or as part of the caller's when [snapshot] is false. Whatever falls
-  /// outside the sheet is dropped; the sheet never grows.
+  /// Writes [values] into [rows], one value row per sheet row, starting at
+  /// column [left], as one undo step, or as part of the caller's when
+  /// [snapshot] is false. Whatever falls outside the sheet is dropped; the
+  /// sheet never grows.
   void _setCells(
-    int top,
+    List<int> rows,
     int left,
     List<List<String>> values, {
     bool snapshot = true,
   }) {
-    final bottom = min(top + values.length, rowCount);
-    if (top < 0 || left < 0 || top >= bottom || left >= colCount) return;
+    final count = min(rows.length, values.length);
+    if (count == 0 || left < 0 || left >= colCount) return;
     if (snapshot) _pushSnapshot();
-    for (var r = top; r < bottom; r++) {
-      final row = values[r - top];
+    for (var i = 0; i < count; i++) {
+      final r = rows[i];
+      if (r < 0 || r >= rowCount) continue;
+      final row = values[i];
       final updated = List<DataCell>.from(_rows[r].value);
       for (var c = left; c < min(left + row.length, colCount); c++) {
         updated[c] = DataCell(row[c - left]);
@@ -356,33 +410,46 @@ class DataSheetController extends ChangeNotifier {
       range.top < rowCount &&
       range.left < colCount;
 
-  /// Clear every cell value in [range] as one undo step.
-  void clearRange(CellRange range) => _setCells(
-        range.top,
-        range.left,
-        List.generate(range.rowCount, (_) => List.filled(range.colCount, '')),
-      );
+  /// Clear every visible cell value in [range] as one undo step.
+  void clearRange(CellRange range) {
+    final rows = _visibleIn(range);
+    _setCells(
+      rows,
+      range.left,
+      List.generate(rows.length, (_) => List.filled(range.colCount, '')),
+    );
+  }
 
   /// Paste [values] into [target] as one undo step, then select what was
   /// written.
   ///
-  /// The block lands at the target's top-left corner. When the target is a
-  /// whole number of blocks tall and wide the block repeats to fill it, so a
-  /// single value fills the whole target; otherwise it is pasted once at its
-  /// own size, adding rows and columns if it runs past the sheet's edge.
+  /// The block lands at the target's top-left corner and runs down the
+  /// visible rows, skipping hidden ones. When the target's visible rows and
+  /// its columns are a whole number of blocks the block repeats to fill them,
+  /// so a single value fills the whole target; otherwise it is pasted once at
+  /// its own size, adding rows and columns if it runs past the sheet's edge.
   void pasteValues(CellRange target, List<List<String>> values) {
     if (values.isEmpty || values.first.isEmpty) return;
     if (target.top < 0 || target.left < 0) return;
     final blockRows = values.length;
     final blockCols = values.first.length;
-    final tiles =
-        target.rowCount % blockRows == 0 && target.colCount % blockCols == 0;
-    final rows = tiles ? target.rowCount : blockRows;
+    final targetRows = _visibleIn(target).length;
+    final tiles = targetRows > 0 &&
+        targetRows % blockRows == 0 &&
+        target.colCount % blockCols == 0;
+    final rows = tiles ? targetRows : blockRows;
     final cols = tiles ? target.colCount : blockCols;
+    final dest = <int>[
+      for (var r = target.top; r < rowCount; r++)
+        if (!isRowHidden(r)) r,
+    ].take(rows).toList();
+    final start = max(rowCount, target.top);
+    final missing = rows - dest.length;
     _pushSnapshot();
-    _growTo(target.top + rows, target.left + cols);
+    _growTo(start + missing, target.left + cols);
+    dest.addAll([for (var i = 0; i < missing; i++) start + i]);
     _setCells(
-      target.top,
+      dest,
       target.left,
       List.generate(
         rows,
@@ -397,7 +464,7 @@ class DataSheetController extends ChangeNotifier {
     selection.selectRange(
       target.top,
       target.left,
-      target.top + rows - 1,
+      dest.last,
       target.left + cols - 1,
     );
   }
@@ -409,23 +476,27 @@ class DataSheetController extends ChangeNotifier {
   /// Clear all cell values in [count] rows starting at [rowIndex].
   void clearRow(int rowIndex, {int count = 1}) {
     if (colCount == 0) return;
-    clearRange(CellRange(
-      top: rowIndex,
-      left: 0,
-      bottom: rowIndex + count - 1,
-      right: colCount - 1,
-    ));
+    clearRange(
+      CellRange(
+        top: rowIndex,
+        left: 0,
+        bottom: rowIndex + count - 1,
+        right: colCount - 1,
+      ),
+    );
   }
 
   /// Clear all cell values in [count] columns starting at [colIndex].
   void clearColumn(int colIndex, {int count = 1}) {
     if (rowCount == 0) return;
-    clearRange(CellRange(
-      top: 0,
-      left: colIndex,
-      bottom: rowCount - 1,
-      right: colIndex + count - 1,
-    ));
+    clearRange(
+      CellRange(
+        top: 0,
+        left: colIndex,
+        bottom: rowCount - 1,
+        right: colIndex + count - 1,
+      ),
+    );
   }
 
   /// After rows or columns are removed, collapse the selection to one cell
@@ -464,28 +535,42 @@ class DataSheetController extends ChangeNotifier {
     final clamped = index.clamp(0, _rows.length);
     table.rows.insert(clamped, DataRow(List<DataCell>.from(newCells)));
     _rows.insert(
-        clamped, ValueNotifier<List<DataCell>>(List<DataCell>.from(newCells)));
+      clamped,
+      ValueNotifier<List<DataCell>>(List<DataCell>.from(newCells)),
+    );
     rowHeights.insert(clamped, kDefaultRowHeight);
+    if (clamped < _hidden.length) _hidden.insert(clamped, false);
     if (clamped < _frozenRows) _frozenRows++;
     _recompute();
     notifyListeners();
   }
 
-  /// Delete [count] rows starting at [index] as one undo step.
+  /// Delete [count] rows starting at [index] as one undo step. Rows the
+  /// filters hide inside that span are kept.
   void deleteRowAt(int index, {int count = 1}) {
     if (index < 0 || index >= rowCount) return;
-    _pushSnapshot();
     final end = min(index + count, rowCount);
-    for (var i = end - 1; i >= index; i--) {
-      table.rows.removeAt(i);
-      _rows[i].dispose();
-      _rows.removeAt(i);
-      if (i < rowHeights.length) rowHeights.removeAt(i);
+    final doomed = _visibleIn(
+      CellRange(top: index, left: 0, bottom: end - 1, right: 0),
+    );
+    if (doomed.isEmpty) return;
+    _pushSnapshot();
+    for (final i in doomed.reversed) {
+      _removeRow(i);
     }
     _frozenRows -= max(0, min(end, _frozenRows) - index);
     _recompute();
     _collapseSelectionTo(index, selection.highlightedCol);
     notifyListeners();
+  }
+
+  /// Removes row [i] and everything kept beside it, with no undo step.
+  void _removeRow(int i) {
+    table.rows.removeAt(i);
+    _rows[i].dispose();
+    _rows.removeAt(i);
+    if (i < rowHeights.length) rowHeights.removeAt(i);
+    if (i < _hidden.length) _hidden.removeAt(i);
   }
 
   /// Duplicate the row at [index], inserting the copy immediately after.
@@ -495,11 +580,14 @@ class DataSheetController extends ChangeNotifier {
     final sourceCells =
         _rows[index].value.map((c) => DataCell(c.value.toString())).toList();
     table.rows.insert(index + 1, DataRow(List<DataCell>.from(sourceCells)));
-    _rows.insert(index + 1,
-        ValueNotifier<List<DataCell>>(List<DataCell>.from(sourceCells)));
+    _rows.insert(
+      index + 1,
+      ValueNotifier<List<DataCell>>(List<DataCell>.from(sourceCells)),
+    );
     final srcH =
         index < rowHeights.length ? rowHeights[index] : kDefaultRowHeight;
     rowHeights.insert(index + 1, srcH);
+    if (index < _hidden.length) _hidden.insert(index + 1, false);
     if (index < _frozenRows) _frozenRows++;
     _recompute();
     notifyListeners();
@@ -549,6 +637,7 @@ class DataSheetController extends ChangeNotifier {
       columnWidths.add(kDefaultColumnWidth);
     }
     if (clamped < _frozenColumns) _frozenColumns++;
+    _shiftFilters(clamped, 1);
     _recompute();
     notifyListeners();
   }
@@ -567,7 +656,11 @@ class DataSheetController extends ChangeNotifier {
       columnWidths.removeRange(index, min(end, columnWidths.length));
     }
     _frozenColumns -= max(0, min(end, _frozenColumns) - index);
+    final hadFilters = _filters.length;
+    _filters.removeWhere((col, _) => col >= index && col < end);
+    _shiftFilters(end, index - end);
     _recompute();
+    if (_filters.length != hadFilters) _applyFilters();
     _collapseSelectionTo(selection.highlightedRow, index);
     notifyListeners();
   }
@@ -591,8 +684,17 @@ class DataSheetController extends ChangeNotifier {
       columnWidths.add(srcWidth);
     }
     if (index < _frozenColumns) _frozenColumns++;
+    _shiftFilters(index + 1, 1);
     _recompute();
     notifyListeners();
+  }
+
+  /// Moves every filter on column [from] or later by [by] columns.
+  void _shiftFilters(int from, int by) {
+    _filters = {
+      for (final MapEntry(key: col, value: filter) in _filters.entries)
+        col >= from ? col + by : col: filter,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -695,6 +797,7 @@ class DataSheetController extends ChangeNotifier {
     if (clamped == _frozenRows) return;
     _pushSnapshot();
     _frozenRows = clamped;
+    if (_filters.isNotEmpty) _applyFilters();
     notifyListeners();
   }
 
@@ -709,42 +812,151 @@ class DataSheetController extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------------------
+  // Filters
+  // -------------------------------------------------------------------------
+
+  /// The active filter on each filtered column, by column index.
+  Map<int, ColumnFilter> get filters => Map.unmodifiable(_filters);
+
+  /// Column [col]'s filter, or null when it has none.
+  ColumnFilter? filterFor(int col) => _filters[col];
+
+  /// True when any column is filtered.
+  bool get hasFilters => _filters.isNotEmpty;
+
+  /// The indexes of the rows the filters leave visible, top to bottom. Frozen
+  /// rows are always among them.
+  List<int> get visibleRows => _visibleRows ??= List.unmodifiable([
+        for (var r = 0; r < rowCount; r++)
+          if (!isRowHidden(r)) r,
+      ]);
+
+  /// True when the filters hide row [row].
+  bool isRowHidden(int row) => row >= 0 && row < _hidden.length && _hidden[row];
+
+  /// The first visible row after [from] stepping by [step] (1 down, -1 up),
+  /// or [from] itself when there is none.
+  int nextVisibleRow(int from, int step) {
+    for (var r = from + step; r >= 0 && r < rowCount; r += step) {
+      if (!isRowHidden(r)) return r;
+    }
+    return from;
+  }
+
+  /// The distinct values column [col] displays below the frozen rows, as a
+  /// filter checklist lists them: numbers in order, then text ignoring case,
+  /// then `''` for blanks when there are any.
+  List<String> filterValuesFor(int col) {
+    if (col < 0 || col >= colCount) return const [];
+    final values = {
+      for (var r = _frozenRows; r < rowCount; r++)
+        ColumnFilter.valueOf(displayValueAt(r, col)),
+    };
+    final blank = values.remove('');
+    return [...values.toList()..sort(_compareValues), if (blank) ''];
+  }
+
+  static int _compareValues(String a, String b) {
+    final x = num.tryParse(a.trim());
+    final y = num.tryParse(b.trim());
+    if (x != null && y != null) return x.compareTo(y);
+    if (x != null) return -1;
+    if (y != null) return 1;
+    return a.toLowerCase().compareTo(b.toLowerCase());
+  }
+
+  /// Filters column [col] by [filter] and re-applies every filter, as one
+  /// undo step. A null or inactive filter removes the column's filter.
+  void setColumnFilter(int col, ColumnFilter? filter) {
+    if (col < 0 || col >= colCount) return;
+    final next = filter != null && filter.isActive ? filter : null;
+    if (_filters[col] == next) return;
+    _pushSnapshot();
+    if (next != null) {
+      _filters[col] = next;
+    } else {
+      _filters.remove(col);
+    }
+    _applyFilters();
+    notifyListeners();
+  }
+
+  /// Removes every column filter, showing all rows, as one undo step.
+  void clearFilters() {
+    if (_filters.isEmpty) return;
+    _pushSnapshot();
+    _filters.clear();
+    _applyFilters();
+    notifyListeners();
+  }
+
+  /// Decides afresh which rows the filters hide. A selection anchored on a
+  /// row that becomes hidden is cleared.
+  void _applyFilters() {
+    _hidden = [
+      for (var r = 0; r < rowCount; r++)
+        r >= _frozenRows &&
+            _filters.entries.any(
+              (f) => !f.value.accepts(displayValueAt(r, f.key)),
+            ),
+    ];
+    _visibleRows = null;
+    final sel = selection;
+    if (isRowHidden(sel.highlightedRow) || isRowHidden(sel.activeRow)) {
+      sel.clear();
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Fill operations
   // -------------------------------------------------------------------------
 
   /// Copy the value of cell `(fromRow, col)` to all rows below it in the same
   /// column.
   void fillDown(int fromRow, int col) => fillDownRange(
-      CellRange(top: fromRow, left: col, bottom: fromRow, right: col));
+        CellRange(top: fromRow, left: col, bottom: fromRow, right: col),
+      );
 
   /// Copy the value of cell `(row, fromCol)` to all columns to the right of it
   /// in the same row.
   void fillRight(int row, int fromCol) => fillRightRange(
-      CellRange(top: row, left: fromCol, bottom: row, right: fromCol));
+        CellRange(top: row, left: fromCol, bottom: row, right: fromCol),
+      );
 
-  /// Copy [range]'s top row down through the rest of the range, as one undo
-  /// step. A range one row tall fills its columns to the bottom of the sheet.
+  /// Copy [range]'s top visible row down through the rest of the range's
+  /// visible rows, as one undo step. A range one row tall fills its columns
+  /// to the bottom of the sheet.
   void fillDownRange(CellRange range) {
     if (!_inSheet(range)) return;
-    final source = valuesIn(CellRange(
-      top: range.top,
-      left: range.left,
-      bottom: range.top,
-      right: min(range.right, colCount - 1),
-    )).first;
-    final last = range.rowCount == 1 ? rowCount - 1 : range.bottom;
-    _setCells(range.top + 1, range.left,
-        List.generate(last - range.top, (_) => source));
+    final rows = _visibleIn(
+      CellRange(
+        top: range.top,
+        left: range.left,
+        bottom: range.rowCount == 1 ? rowCount - 1 : range.bottom,
+        right: range.right,
+      ),
+    );
+    if (rows.isEmpty) return;
+    final source = [
+      for (var c = range.left; c <= min(range.right, colCount - 1); c++)
+        cellAt(rows.first, c).value.toString(),
+    ];
+    _setCells(
+      rows.sublist(1),
+      range.left,
+      List.generate(rows.length - 1, (_) => source),
+    );
   }
 
-  /// Copy [range]'s left column right through the rest of the range, as one
-  /// undo step. A range one column wide fills its rows to the sheet's right
-  /// edge.
+  /// Copy [range]'s left column right through the rest of the range, in each
+  /// visible row, as one undo step. A range one column wide fills its rows to
+  /// the sheet's right edge.
   void fillRightRange(CellRange range) {
     if (!_inSheet(range)) return;
     final last = range.colCount == 1 ? colCount - 1 : range.right;
-    _setCells(range.top, range.left + 1, [
-      for (var r = range.top; r <= min(range.bottom, rowCount - 1); r++)
+    final rows = _visibleIn(range);
+    _setCells(rows, range.left + 1, [
+      for (final r in rows)
         List.filled(last - range.left, cellAt(r, range.left).value.toString()),
     ]);
   }
@@ -767,9 +979,9 @@ class DataSheetController extends ChangeNotifier {
         range.right >= colCount) {
       return '';
     }
-    return valuesIn(range)
-        .map((row) => row.map(_tsvField).join('\t'))
-        .join('\n');
+    return valuesIn(
+      range,
+    ).map((row) => row.map(_tsvField).join('\t')).join('\n');
   }
 
   static String _tsvField(String v) =>
@@ -889,6 +1101,7 @@ class DataSheetController extends ChangeNotifier {
     final sortedHeights = indices
         .map((i) => i < rowHeights.length ? rowHeights[i] : kDefaultRowHeight)
         .toList();
+    _hidden = [for (final i in indices) isRowHidden(i)];
     table.rows
       ..clear()
       ..addAll(sortedTableRows);
@@ -914,10 +1127,7 @@ class DataSheetController extends ChangeNotifier {
       if (!seen.add(key)) toRemove.add(i);
     }
     for (final i in toRemove.reversed) {
-      table.rows.removeAt(i);
-      _rows[i].dispose();
-      _rows.removeAt(i);
-      if (i < rowHeights.length) rowHeights.removeAt(i);
+      _removeRow(i);
       if (i < _frozenRows) _frozenRows--;
     }
     _recompute();
@@ -1020,12 +1230,20 @@ class DataSheetController extends ChangeNotifier {
       _rows.add(ValueNotifier<List<DataCell>>(List<DataCell>.from(cells)));
     }
     final newColCount = _rows.isNotEmpty ? _rows[0].value.length : 0;
-    columnWidths =
-        List<double>.filled(newColCount, kDefaultColumnWidth, growable: true);
-    rowHeights =
-        List<double>.filled(_rows.length, kDefaultRowHeight, growable: true);
+    columnWidths = List<double>.filled(
+      newColCount,
+      kDefaultColumnWidth,
+      growable: true,
+    );
+    rowHeights = List<double>.filled(
+      _rows.length,
+      kDefaultRowHeight,
+      growable: true,
+    );
     _frozenRows = _frozenRows.clamp(0, _rows.length);
     _frozenColumns = _frozenColumns.clamp(0, newColCount);
+    _filters.clear();
+    _hidden = [];
     _recompute();
     notifyListeners();
   }

@@ -17,11 +17,13 @@ import 'cell/heading/heading_cells.dart'
         kFrozenDividerThickness,
         kGutterWidth,
         kHeaderHeight,
-        kMaxFrozenFraction;
+        kMaxFrozenFraction,
+        kMinFilterButtonColumnWidth;
 import 'cell/heading/util.dart';
 import 'data_sheet_clipboard.dart';
 import 'data_sheet_control_scheme.dart';
 import 'data_sheet_controller.dart';
+import 'filter/column_filter_popover.dart';
 import 'formula_bar.dart';
 import 'selection_gestures.dart';
 import 'view/frozen_pane_divider.dart';
@@ -45,12 +47,18 @@ import 'view/linked_scroll_controllers.dart';
 /// one undo step. Copied cells go to [clipboard] as tab-separated text, the
 /// format Google Sheets and Excel use, so cells paste between them.
 ///
+/// Each column header carries a funnel that opens the column's filter
+/// popover. Rows the filters hide are left out of the grid, the rest keep
+/// their row numbers, and the arrow keys step over hidden rows. A filtered
+/// column's header is tinted and its funnel filled.
+///
 /// The controller's `frozenRows` and `frozenColumns` pin that many rows and
 /// columns, with the column headers and row numbers, while the rest scrolls;
 /// a divider in the theme's outline color marks the edge. Frozen panes never
 /// cover more than [kMaxFrozenFraction] of the grid.
 ///
-/// Keys: cells are `r<row>c<col>`, column headers `col_header_<col>`, row
+/// Keys: cells are `r<row>c<col>`, column headers `col_header_<col>`, their
+/// filter buttons `col_filter_<col>`, row
 /// numbers `row_num_<row>`, resize handles `col_resize_<col>` and
 /// `row_resize_<row>`, and the freeze dividers `frozen_rows_divider` and
 /// `frozen_columns_divider`.
@@ -496,8 +504,12 @@ class _DataSheetViewState extends State<_DataSheetView> {
   Widget _buildGrid(BuildContext context, Size size) {
     final fr = controller.frozenRows;
     final fc = controller.frozenColumns;
-    final rows = controller.rowCount;
     final cols = controller.colCount;
+    // Frozen rows are never hidden, so the scrolling pane gets the rest.
+    final body = [
+      for (final r in controller.visibleRows)
+        if (r >= fr) r,
+    ];
     final fullLeft = _gutterWidth + _span(0, fc, _colWidth);
     final fullTop = _headerHeight + _span(0, fr, _rowHeight);
     final (:left, :top) = _frozenExtent(size);
@@ -601,9 +613,9 @@ class _DataSheetViewState extends State<_DataSheetView> {
                       clipWidth(
                         ListView.builder(
                           controller: _verticalScroll.first,
-                          itemCount: rows - fr,
+                          itemCount: body.length,
                           itemBuilder: (context, i) =>
-                              row(fr + i, frozenSide: true),
+                              row(body[i], frozenSide: true),
                         ),
                       ),
                       Expanded(
@@ -614,9 +626,9 @@ class _DataSheetViewState extends State<_DataSheetView> {
                             width: rightWidth,
                             child: ListView.builder(
                               controller: _verticalScroll.second,
-                              itemCount: rows - fr,
+                              itemCount: body.length,
                               itemBuilder: (context, i) =>
-                                  row(fr + i, frozenSide: false),
+                                  row(body[i], frozenSide: false),
                             ),
                           ),
                         ),
@@ -689,45 +701,47 @@ class _DataSheetViewState extends State<_DataSheetView> {
       );
 
   /// The cell under [global], clamped to the sheet's edges so a drag past
-  /// the last row or column selects up to it.
+  /// the last row or column selects up to it. Hidden rows are skipped.
   ({int row, int col})? _cellAtGlobal(Offset global) {
     final box = _gridBodyKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null || controller.rowCount == 0 || controller.colCount == 0) {
+    final visible = controller.visibleRows;
+    if (box == null || visible.isEmpty || controller.colCount == 0) {
       return null;
     }
     final local = box.globalToLocal(global);
     final (:left, :top) = _frozenExtent(box.size);
     double offset(ScrollController c) => c.hasClients ? c.offset : 0.0;
 
-    // Before [paneEnd] a position falls in the frozen pane, measured from
-    // [lead]; past it, in the scrolling pane, shifted by [scroll].
+    // Before [paneEnd] a position falls among the [frozen] indexes, measured
+    // from [lead]; past it, among the [scrolling] ones, shifted by [scroll].
     int indexAt(
       double pos, {
       required double paneEnd,
       required double lead,
-      required int frozen,
-      required int count,
+      required List<int> frozen,
+      required List<int> scrolling,
       required double scroll,
       required double Function(int) size,
     }) {
-      final inFrozen = frozen > 0 && pos < paneEnd || frozen == count;
-      final from = inFrozen ? 0 : frozen;
-      final to = inFrozen ? frozen : count;
+      final inFrozen = frozen.isNotEmpty && pos < paneEnd || scrolling.isEmpty;
+      final indexes = inFrozen ? frozen : scrolling;
       var edge = inFrozen ? lead : paneEnd - scroll;
-      for (var i = from; i < to; i++) {
+      for (final i in indexes) {
         edge += size(i);
         if (pos < edge) return i;
       }
-      return to - 1;
+      return indexes.last;
     }
 
+    final fr = controller.frozenRows;
+    final fc = controller.frozenColumns;
     return (
       row: indexAt(
         local.dy,
         paneEnd: top,
         lead: _headerHeight,
-        frozen: controller.frozenRows,
-        count: controller.rowCount,
+        frozen: visible.take(fr).toList(),
+        scrolling: visible.skip(fr).toList(),
         scroll: offset(_verticalScroll.second),
         size: _rowHeight,
       ),
@@ -735,8 +749,8 @@ class _DataSheetViewState extends State<_DataSheetView> {
         local.dx,
         paneEnd: left,
         lead: _gutterWidth,
-        frozen: controller.frozenColumns,
-        count: controller.colCount,
+        frozen: List.generate(fc, (c) => c),
+        scrolling: [for (var c = fc; c < controller.colCount; c++) c],
         scroll: offset(_horizontalScroll.second),
         size: _colWidth,
       ),
@@ -746,6 +760,7 @@ class _DataSheetViewState extends State<_DataSheetView> {
   /// Column headers [from] (inclusive) to [to] (exclusive), led by the corner
   /// cell when [corner].
   Widget _buildHeaderRow(int from, int to, {bool corner = false}) {
+    final shown = controller.visibleRows.length;
     return Row(
       children: [
         if (corner) const HeaderCornerCell(),
@@ -755,8 +770,18 @@ class _DataSheetViewState extends State<_DataSheetView> {
             child: ColumnHeaderCell(
               key: ValueKey('col_header_$c'),
               resizeHandleKey: ValueKey('col_resize_$c'),
+              filterButtonKey: ValueKey('col_filter_$c'),
               label: columnLabel(c),
               isSelected: controller.selection.range?.containsCol(c) ?? false,
+              isFiltered: controller.filterFor(c) != null,
+              filterTooltip: controller.filterFor(c) != null
+                  ? 'Column ${columnLabel(c)} is filtered: '
+                      '$shown of ${controller.rowCount} rows shown'
+                  : 'Filter column ${columnLabel(c)}',
+              onFilter: controller.filterFor(c) != null ||
+                      _colWidth(c) >= kMinFilterButtonColumnWidth
+                  ? (anchor) => _openFilter(c, anchor)
+                  : null,
               onSelect: () => _selectColumn(c),
               onResizeStart: controller.beginResize,
               onResizeDelta: (delta) {
@@ -941,13 +966,27 @@ class _DataSheetViewState extends State<_DataSheetView> {
   }
 
   void _jumpToFirst() {
-    if (controller.rowCount == 0 || controller.colCount == 0) return;
-    controller.selection.goTo(0, 0);
+    final rows = controller.visibleRows;
+    if (rows.isEmpty || controller.colCount == 0) return;
+    controller.selection.goTo(rows.first, 0);
   }
 
   void _jumpToLast() {
-    if (controller.rowCount == 0 || controller.colCount == 0) return;
-    controller.selection.goTo(controller.rowCount - 1, controller.colCount - 1);
+    final rows = controller.visibleRows;
+    if (rows.isEmpty || controller.colCount == 0) return;
+    controller.selection.goTo(rows.last, controller.colCount - 1);
+  }
+
+  /// Opens column [c]'s filter popover beside [anchor], committing any edit
+  /// first.
+  void _openFilter(int c, Rect anchor) {
+    _commitEdit();
+    showColumnFilterPopover(
+      context: context,
+      controller: controller,
+      column: c,
+      anchor: anchor,
+    );
   }
 
   void _insertRow() {
@@ -998,7 +1037,9 @@ class _DataSheetViewState extends State<_DataSheetView> {
     final sel = controller.selection;
     if (!sel.hasHighlight) return;
     sel.extendTo(
-      (sel.extentRow + dRow).clamp(0, controller.rowCount - 1),
+      dRow == 0
+          ? sel.extentRow
+          : controller.nextVisibleRow(sel.extentRow, dRow),
       (sel.extentCol + dCol).clamp(0, controller.colCount - 1),
     );
   }
@@ -1040,15 +1081,16 @@ class _DataSheetViewState extends State<_DataSheetView> {
     keyboardFocus.requestFocus();
   }
 
-  void _moveUp() {
-    if (highlightedRow > 0) {
-      controller.selection.setHighlighted(highlightedRow - 1, highlightedCol);
-    }
-  }
+  void _moveUp() => _moveVertically(-1);
 
-  void _moveDown() {
-    if (highlightedRow < controller.rowCount - 1) {
-      controller.selection.setHighlighted(highlightedRow + 1, highlightedCol);
+  void _moveDown() => _moveVertically(1);
+
+  /// Moves the highlight to the next visible row in direction [step].
+  void _moveVertically(int step) {
+    if (highlightedRow < 0) return;
+    final row = controller.nextVisibleRow(highlightedRow, step);
+    if (row != highlightedRow) {
+      controller.selection.setHighlighted(row, highlightedCol);
     }
   }
 

@@ -13,7 +13,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// #2691: column widths, row heights and frozen panes live in the `.qsheet`
-/// tab beside its data, and sheets saved before them still open.
+/// tab beside its data, and sheets saved before them still open. #2694: so do
+/// column filters.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -95,7 +96,32 @@ void main() {
       expect(controller.columnWidths, [100.0, 100.0]);
       expect(controller.rowHeights, [40.0, 40.0, 40.0]);
       expect(controller.frozenRows, 0);
+      expect(controller.hasFilters, isFalse);
       expect(find.byKey(const ValueKey('frozen_rows_divider')), findsNothing);
+    });
+
+    testWidgets('saved filters hide their rows ($name)', (tester) async {
+      await pumpEditor(tester, {
+        'name': 'Sheet 1',
+        'data': rows,
+        'frozenRows': 1,
+        'filters': [
+          {
+            'column': 0,
+            'hidden': ['Food'],
+          },
+        ],
+      }, size: size);
+
+      final controller = sheetController(tester);
+      expect(
+        controller.filterFor(0),
+        const ColumnFilter(hiddenValues: {'Food'}),
+      );
+      expect(find.text('Rent'), findsOneWidget);
+      expect(find.text('Food'), findsNothing);
+      expect(find.byKey(const ValueKey('row_num_1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('row_num_2')), findsNothing);
     });
 
     testWidgets('saved sizes and freeze are applied ($name)', (tester) async {
@@ -138,7 +164,7 @@ void main() {
     expect(controller.rowHeights, [30.0, 40.0, 40.0]);
   });
 
-  testWidgets('the saved form carries the freeze', (tester) async {
+  testWidgets('the saved form carries the freeze and filters', (tester) async {
     // The autosave's upload opens its own client; refuse it so nothing
     // depends on a live Quark.
     final previous = HttpOverrides.current;
@@ -148,7 +174,13 @@ void main() {
 
     sheetController(tester)
       ..setFrozenRows(1)
-      ..setColumnWidth(1, 175);
+      ..setColumnWidth(1, 175)
+      ..setColumnFilter(
+        1,
+        const ColumnFilter(
+          condition: FilterCondition(FilterConditionKind.lessThan, '1000'),
+        ),
+      );
     await tester.pump();
 
     // Duplicating a tab round-trips it through the form it is saved in.
@@ -160,6 +192,7 @@ void main() {
     final copy = sheetController(tester);
     expect(copy.frozenRows, 1);
     expect(copy.columnWidths, [100.0, 175.0]);
+    expect(copy.visibleRows, [0, 2]);
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
   });
