@@ -9,7 +9,10 @@ import 'package:quark_icons/quark_icons.dart';
 
 /// One [SlideToolbarGroup]'s controls laid out in the wide formatting row:
 /// for text, the font menu, the size stepper, the style toggles and the
-/// color; for a paragraph, the alignments and lists; for a shape, fill,
+/// color; for a paragraph, the alignments and lists; for a table, the row
+/// and column inserts and deletes, merge and unmerge, the header row and
+/// banded rows toggles, the cell color, and the borders and distribute
+/// menus; for a shape, fill,
 /// outline color, width and dash, corner radius and opacity; for arrange,
 /// the stacking-order and align menus, the distribute and match-size menus,
 /// group and ungroup while the selection allows them, and delete; for the
@@ -58,6 +61,27 @@ class SlideFormatGroupControls extends StatelessWidget {
       SlideToolbarGroup.paragraph => [
         for (final c in [...a.alignments, ...a.lists])
           SlideChoiceButton(choice: c),
+      ],
+      SlideToolbarGroup.table => [
+        for (final c in [
+          ...a.tableRowsAndColumns,
+          ...a.tableMerges,
+          ...a.tableStyles,
+        ])
+          SlideChoiceButton(choice: c),
+        SlideColorMenuButton(choice: a.cellFill),
+        SlideChoiceMenuButton(
+          buttonKey: 'slide_table_borders',
+          icon: QuarkIcons.border_all,
+          tooltip: 'Borders',
+          choices: a.cellBorders,
+        ),
+        SlideChoiceMenuButton(
+          buttonKey: 'slide_table_distribute',
+          icon: QuarkIcons.distribute_vertical,
+          tooltip: 'Distribute rows and columns',
+          choices: a.tableDistributions,
+        ),
       ],
       SlideToolbarGroup.shape => [
         SlideColorMenuButton(choice: a.fill),

@@ -10,7 +10,7 @@ import 'package:quark_slides/quark_slides.dart';
 /// [SlideColorChoice]s built from [controller]'s state: the tools, the
 /// text, paragraph and shape formatting the selection allows, the arrange
 /// commands — stacking, aligning, distributing, matching sizes and grouping
-/// — and the clipboard. The wide rows and the phone menus draw the same
+/// — the table commands (#1160), and the clipboard. The wide rows and the phone menus draw the same
 /// choices.
 ///
 /// Every choice acts through [controller], so each is one undo step on the
@@ -27,7 +27,11 @@ import 'package:quark_slides/quark_slides.dart';
 /// `slide_align_<alignment>`, `slide_distribute_<axis>`,
 /// `slide_match_size_<match>`, `slide_group`, `slide_ungroup` and
 /// `slide_delete`; the clipboard `slide_copy`, `slide_cut`, `slide_paste`
-/// and `slide_duplicate`.
+/// and `slide_duplicate`. A table's are `slide_table_<name>`
+/// (`row_above`, `row_below`, `column_left`, `column_right`, `delete_row`,
+/// `delete_column`, `merge`, `unmerge`, `header_row`, `banded_rows`,
+/// `borders_<preset>`, `distribute_rows`, `distribute_columns`) and its
+/// cell color `slide_table_fill`.
 class SlideToolbarActions {
   /// The toolbar for [controller]; [onImageFromDevice] and
   /// [onImageFromQuark] start the page's picture pickers.
@@ -46,7 +50,6 @@ class SlideToolbarActions {
   /// Picks a picture already on the Quark to put on the slide.
   final VoidCallback? onImageFromQuark;
 
-  SlideTextEditingController get _text => controller.textEditing;
   SlideCanvasTool get _tool => controller.tools.tool;
 
   // ── Tools ─────────────────────────────────────────────────────────────────
@@ -130,13 +133,13 @@ class SlideToolbarActions {
 
   // ── Text ──────────────────────────────────────────────────────────────────
 
-  /// Whether a text box is selected or being edited.
-  bool get canFormatText => _text.canFormat;
+  /// Whether a text box or table is selected, or text is being edited.
+  bool get canFormatText => controller.canFormatText;
 
-  TextFormat get _format => _text.selectionFormat;
+  TextFormat get _format => controller.textFormat;
 
   VoidCallback? _formatting(TextFormat format) =>
-      canFormatText ? () => _text.format(format) : null;
+      canFormatText ? () => controller.formatText(format) : null;
 
   /// The family the selection shares, as the family menu reads it.
   String get fontFamilyLabel => switch (_format.fontFamily) {
@@ -153,7 +156,7 @@ class SlideToolbarActions {
       selected: _format.fontFamily == null,
       onSelected: _formatting(const TextFormat(fontFamily: null)),
     ),
-    for (final family in _text.fontFamilies)
+    for (final family in controller.textEditing.fontFamilies)
       SlideToolbarChoice(
         key: 'slide_format_font_$family',
         label: family,
@@ -207,7 +210,7 @@ class SlideToolbarActions {
     label: label,
     icon: icon,
     selected: toggle.isOn(_format),
-    onSelected: canFormatText ? () => _text.toggle(toggle) : null,
+    onSelected: canFormatText ? () => controller.toggleText(toggle) : null,
   );
 
   /// Bold, italic, underline and strikethrough.
@@ -237,7 +240,7 @@ class SlideToolbarActions {
     noneLabel: 'Default color',
     theme: controller.theme,
     onChanged: canFormatText
-        ? (color) => _text.format(TextFormat(color: color))
+        ? (color) => controller.formatText(TextFormat(color: color))
         : null,
   );
 
@@ -385,6 +388,174 @@ class SlideToolbarActions {
         selected: _style.opacity == opacity,
         onSelected: _styling(ElementStyle(opacity: opacity)),
       ),
+  ];
+
+  // ── Table ─────────────────────────────────────────────────────────────────
+
+  /// Whether a table is selected in an editable presentation.
+  bool get canEditTable => controller.canEditTable;
+
+  /// Whether the table tool is the active one, which lights the table menu.
+  bool get tableToolActive => _tool.mode == SlideToolMode.table;
+
+  /// The size the table tool draws, or 3 by 3 when another tool is active.
+  ({int rows, int columns}) get tableToolSize => tableToolActive
+      ? (rows: _tool.rows, columns: _tool.columns)
+      : (rows: 3, columns: 3);
+
+  /// Arms the table tool to draw a [rows] by [columns] table.
+  void drawTable(int rows, int columns) =>
+      controller.useTool(SlideCanvasTool.table(rows, columns));
+
+  /// Puts a [rows] by [columns] table in the middle of the slide.
+  void insertTable(int rows, int columns) =>
+      controller.insertTable(rows, columns);
+
+  SlideToolbarChoice _tableAction(
+    String key,
+    String label,
+    IconData icon,
+    VoidCallback action, {
+    bool enabled = true,
+  }) => SlideToolbarChoice(
+    key: 'slide_table_$key',
+    label: label,
+    icon: icon,
+    onSelected: canEditTable && enabled ? action : null,
+  );
+
+  /// Insert a row above or below, a column left or right, and delete the
+  /// selected cells' rows or columns.
+  List<SlideToolbarChoice> get tableRowsAndColumns {
+    final c = controller;
+    return [
+      _tableAction(
+        'row_above',
+        'Insert row above',
+        QuarkIcons.insert_row_above,
+        c.insertTableRowAbove,
+      ),
+      _tableAction(
+        'row_below',
+        'Insert row below',
+        QuarkIcons.insert_row_below,
+        c.insertTableRowBelow,
+      ),
+      _tableAction(
+        'column_left',
+        'Insert column left',
+        QuarkIcons.insert_column_left,
+        c.insertTableColumnLeft,
+      ),
+      _tableAction(
+        'column_right',
+        'Insert column right',
+        QuarkIcons.insert_column_right,
+        c.insertTableColumnRight,
+      ),
+      _tableAction(
+        'delete_row',
+        'Delete row',
+        QuarkIcons.delete_row,
+        c.deleteTableRows,
+        enabled: c.canDeleteTableRows,
+      ),
+      _tableAction(
+        'delete_column',
+        'Delete column',
+        QuarkIcons.delete_column,
+        c.deleteTableColumns,
+        enabled: c.canDeleteTableRows,
+      ),
+    ];
+  }
+
+  /// Merge the selected cells, and split merged ones.
+  List<SlideToolbarChoice> get tableMerges => [
+    _tableAction(
+      'merge',
+      'Merge cells',
+      QuarkIcons.merge_cells,
+      controller.mergeTableCells,
+      enabled: controller.canMergeTableCells,
+    ),
+    _tableAction(
+      'unmerge',
+      'Unmerge cells',
+      QuarkIcons.unmerge_cells,
+      controller.unmergeTableCells,
+      enabled: controller.canUnmergeTableCells,
+    ),
+  ];
+
+  /// The header row and banded rows, lit while on.
+  List<SlideToolbarChoice> get tableStyles {
+    final table = controller.selectedTable;
+    return [
+      SlideToolbarChoice(
+        key: 'slide_table_header_row',
+        label: 'Header row',
+        icon: QuarkIcons.table_header_row,
+        selected: table?.headerRow ?? false,
+        onSelected: canEditTable
+            ? () => controller.setTableStyle(headerRow: !table!.headerRow)
+            : null,
+      ),
+      SlideToolbarChoice(
+        key: 'slide_table_banded_rows',
+        label: 'Banded rows',
+        icon: QuarkIcons.table_banded_rows,
+        selected: table?.bandedRows ?? false,
+        onSelected: canEditTable
+            ? () => controller.setTableStyle(bandedRows: !table!.bandedRows)
+            : null,
+      ),
+    ];
+  }
+
+  /// The selected cells' fill, or the table's own.
+  SlideColorChoice get cellFill => SlideColorChoice(
+    key: 'slide_table_fill',
+    label: 'Cell color',
+    icon: QuarkIcons.format_fill,
+    current: controller.tableCellFill,
+    noneLabel: 'Table color',
+    theme: controller.theme,
+    onChanged: canEditTable
+        ? (color) => controller.formatTableCells(CellFormat(fill: color))
+        : null,
+  );
+
+  /// The border presets: every edge, the outside, the bottom, or none.
+  List<SlideToolbarChoice> get cellBorders => [
+    for (final (preset, label, icon) in [
+      (CellBorderPreset.all, 'All borders', QuarkIcons.border_all),
+      (CellBorderPreset.outside, 'Outside borders', QuarkIcons.border_outside),
+      (CellBorderPreset.bottom, 'Bottom border', QuarkIcons.border_bottom),
+      (CellBorderPreset.none, 'No borders', QuarkIcons.border_none),
+    ])
+      _tableAction(
+        'borders_${preset.name}',
+        label,
+        icon,
+        () => controller.formatTableCells(CellFormat(borders: preset)),
+      ),
+  ];
+
+  /// Even out the rows' heights or the columns' widths.
+  List<SlideToolbarChoice> get tableDistributions => [
+    _tableAction(
+      'distribute_rows',
+      'Distribute rows evenly',
+      QuarkIcons.distribute_vertical,
+      controller.distributeTableRows,
+    ),
+    _tableAction(
+      'distribute_columns',
+      'Distribute columns evenly',
+      QuarkIcons.distribute_horizontal,
+      controller.distributeTableColumns,
+    ),
   ];
 
   // ── Arrange ───────────────────────────────────────────────────────────────

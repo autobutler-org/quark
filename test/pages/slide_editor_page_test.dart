@@ -1813,4 +1813,271 @@ void main() {
       );
     }
   });
+
+  group('tables (#1160)', () {
+    Finder key(String k) => find.byKey(ValueKey(k));
+
+    /// Taps [k], scrolling the format row to it first.
+    Future<void> press(WidgetTester tester, String k) async {
+      await tester.ensureVisible(key(k));
+      await tester.pumpAndSettle();
+      await tester.tap(key(k));
+      await tester.pumpAndSettle();
+    }
+
+    Future<SlideEditorController> pumpTables(
+      WidgetTester tester, {
+      bool withTable = false,
+      bool readOnly = false,
+    }) async {
+      var next = 0;
+      final controller = SlideEditorController(
+        filePath: 'talks/Deck.qslide',
+        loadPresentation: (_, {serial}) async => Presentation(
+          title: 'Deck',
+          slides: [
+            Slide(
+              id: 's1',
+              elements: [
+                if (withTable)
+                  newTable(
+                    id: 'tbl',
+                    frame: ElementFrame(
+                      x: 360,
+                      y: 300,
+                      width: 900,
+                      height: 240,
+                    ),
+                    rows: 3,
+                    columns: 3,
+                  ),
+              ],
+            ),
+          ],
+        ),
+        savePresentation: (_, p, {serial}) async => saved.add(p),
+        newId: () => 'n${next++}',
+        readOnly: readOnly,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
+          home: SlideEditorPage(
+            filePath: 'talks/Deck.qslide',
+            controller: controller,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return controller;
+    }
+
+    TableElement table(SlideEditorController c) =>
+        c.selectedSlide!.elements.whereType<TableElement>().single;
+
+    testWidgets('a wide window inserts a table and edits it from the Table '
+        'group, one undo step each', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpTables(tester);
+      expect(key(SlideToolbarGroup.table.key), findsNothing);
+
+      await tester.tap(key('slide_tool_table'));
+      await tester.pumpAndSettle();
+      expect(key('slide_table_picker'), findsOneWidget);
+      await tester.tap(key('slide_table_rows_more'));
+      await tester.pump();
+      await tester.tap(key('slide_table_insert'));
+      await tester.pumpAndSettle();
+      expect(key('slide_table_picker'), findsNothing, reason: 'it closed');
+      expect((table(c).rowCount, table(c).columnCount), (4, 3));
+      expect(c.selectedElementIds, {table(c).id});
+      expect(c.saveState, SlideSaveState.dirty);
+
+      expect(key(SlideToolbarGroup.table.key), findsOneWidget);
+      expect(key('slide_prop_table_size'), findsOneWidget);
+      expect(find.text('4 rows × 3 columns'), findsOneWidget);
+
+      await press(tester, 'slide_table_row_below');
+      expect(table(c).rowCount, 5);
+      await press(tester, 'slide_table_column_left');
+      expect(table(c).columnCount, 4);
+      expect(find.text('5 rows × 4 columns'), findsOneWidget);
+
+      await press(tester, 'slide_table_header_row');
+      expect(table(c).headerRow, isFalse);
+      await press(tester, 'slide_prop_table_banded_rows');
+      expect(table(c).bandedRows, isFalse);
+
+      await press(tester, 'slide_table_fill');
+      await tester.tap(key('slide_table_fill_theme_accent2'));
+      await tester.pumpAndSettle();
+      expect(
+        table(c).cell(2, 2).fill,
+        const SlideColor.theme(ThemeColor.accent2),
+      );
+
+      await press(tester, 'slide_table_borders');
+      await tester.tap(key('slide_table_borders_none'));
+      await tester.pumpAndSettle();
+      expect(table(c).cell(1, 1).borders, const CellBorders());
+
+      // The text controls format the cells.
+      await press(tester, 'slide_format_align_center');
+      expect(
+        textFormatOf(table(c).cell(0, 0).paragraphs).alignment,
+        TextAlignment.center,
+      );
+
+      c.undo();
+      await tester.pump();
+      expect(
+        textFormatOf(table(c).cell(0, 0).paragraphs).alignment,
+        isNot(TextAlignment.center),
+      );
+      expect(
+        table(c).cell(1, 1).borders,
+        const CellBorders(),
+        reason: 'one step at a time',
+      );
+      c.undo();
+      await tester.pump();
+      expect(table(c).cell(1, 1).borders, isNot(const CellBorders()));
+
+      expect(tester.takeException(), isNull);
+      await tap.expectTapTargetGuidelines(tester);
+      await letAutosaveRun(tester);
+      expect(saved, isNotEmpty);
+    });
+
+    testWidgets('the grid arms the table tool at the size picked', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpTables(tester);
+      await tester.tap(key('slide_tool_table'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_table_grid_2_4'));
+      await tester.pumpAndSettle();
+      expect(c.tools.tool, const SlideCanvasTool.table(2, 4));
+      expect(
+        tester.widget<QuarkBarIconButton>(key('slide_tool_table')).selected,
+        isTrue,
+      );
+      expect(key('slide_table_picker'), findsNothing);
+    });
+
+    testWidgets('cells picked on the canvas are what the controls act on', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpTables(tester, withTable: true);
+      c.selectElements({'tbl'});
+      await tester.pump();
+      // The canvas's gesture layer lies over the cell and takes the tap.
+      await tester.tap(
+        find.descendant(
+          of: key('slide_editor_canvas'),
+          matching: key('slide_table_cell_tbl_1_1'),
+        ),
+        warnIfMissed: false,
+      );
+      await tester.pump();
+      expect(c.tables.range, const CellRange.single(1, 1));
+      expect(
+        tester
+            .widget<QuarkBarIconButton>(key('slide_table_delete_row'))
+            .onPressed,
+        isNotNull,
+      );
+
+      c.tables.select(
+        'tbl',
+        const CellRange(top: 1, left: 0, bottom: 1, right: 1),
+      );
+      await tester.pump();
+      await press(tester, 'slide_table_merge');
+      expect(table(c).cell(1, 0).colSpan, 2);
+      await press(tester, 'slide_table_unmerge');
+      expect(table(c).cell(1, 0).colSpan, 1);
+      await press(tester, 'slide_table_delete_row');
+      expect(table(c).rowCount, 2);
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('a phone inserts from the Insert menu\'s sheet and edits '
+        'from Format > Table', (tester) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final c = await pumpTables(tester);
+      await tester.tap(key('slide_insert_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_insert_table'));
+      await tester.pumpAndSettle();
+      expect(find.text('Insert table'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tap.expectTapTargetGuidelines(tester);
+      await tester.tap(key('slide_table_insert'));
+      await tester.pumpAndSettle();
+      expect(key('slide_table_picker'), findsNothing);
+      expect(table(c).columnCount, 3);
+
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key(SlideToolbarGroup.table.key));
+      await tester.pumpAndSettle();
+      expect(find.text('Table'), findsWidgets);
+      await tester.tap(key('slide_table_column_right'));
+      await tester.pumpAndSettle();
+      expect(table(c).columnCount, 4);
+
+      // Draw from the sheet arms the tool.
+      await tester.tap(key('slide_insert_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_insert_table'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_table_draw'));
+      await tester.pumpAndSettle();
+      expect(c.tools.tool, const SlideCanvasTool.table(3, 3));
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+    });
+
+    for (final (name, size) in [
+      ('narrow', tap.narrowViewport),
+      ('wide', tap.wideViewport),
+    ]) {
+      testWidgets('view only offers no table edits ($name)', (tester) async {
+        tap.setViewport(tester, size);
+        final c = await pumpTables(tester, withTable: true, readOnly: true);
+        c.selectElements({'tbl'});
+        await tester.pump();
+        expect(key('slide_tool_table'), findsNothing);
+        expect(key(SlideToolbarGroup.table.key), findsNothing);
+        expect(c.canEditTable, isFalse);
+        if (size == tap.wideViewport) {
+          expect(
+            tester
+                .widget<SwitchListTile>(key('slide_prop_table_header_row'))
+                .onChanged,
+            isNull,
+          );
+        } else {
+          expect(key('slide_insert_menu'), findsNothing);
+          await tester.tap(key('slide_format_menu'));
+          await tester.pumpAndSettle();
+          expect(key(SlideToolbarGroup.table.key), findsNothing);
+        }
+        expect(table(c).headerRow, isTrue);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testLargeText('the table controls fit', (tester, size) async {
+      final c = await pumpTables(tester, withTable: true);
+      c.selectElements({'tbl'});
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

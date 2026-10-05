@@ -1235,4 +1235,220 @@ void main() {
       c.applyTransitionToAll(fade);
     });
   });
+
+  group('tables (#1160)', () {
+    Future<SlideEditorController> withTable({bool readOnly = false}) async {
+      final c = controllerFor(deck(1), readOnly: readOnly);
+      await c.load();
+      if (!readOnly) c.insertTable(3, 3);
+      return c;
+    }
+
+    TableElement table(SlideEditorController c) =>
+        c.selectedSlide!.elements.whereType<TableElement>().single;
+
+    test('inserting a table puts it in the middle, selected, as one '
+        'undo step that starts the autosave', () async {
+      final c = await withTable();
+      final t = table(c);
+      expect((t.rowCount, t.columnCount), (3, 3));
+      expect(c.selectedElementIds, {t.id});
+      expect(c.selectedTable, same(t));
+      expect(c.tools.tool, SlideCanvasTool.select);
+      expect(c.saveState, SlideSaveState.dirty);
+      final slide = c.presentation!.size;
+      expect(t.frame.x + t.frame.width / 2, closeTo(slide.width / 2, 1));
+      c.undo();
+      expect(c.selectedSlide!.elements, isEmpty);
+      expect(c.selectedTable, isNull);
+      expect(c.canUndo, isFalse);
+    });
+
+    test('the insert size is kept within 1 and the table limits', () async {
+      final c = controllerFor(deck(1));
+      await c.load();
+      c.insertTable(0, 200);
+      final t = table(c);
+      expect(t.rowCount, 1);
+      expect(t.columnCount, TableElement.maxColumns);
+    });
+
+    test(
+      'with the whole table selected, the commands act on all of it',
+      () async {
+        final c = await withTable();
+        expect(c.tables.hasSelection, isFalse);
+        expect(c.canEditTable, isTrue);
+
+        c.insertTableRowBelow();
+        expect(table(c).rowCount, 4);
+        c.insertTableColumnRight();
+        expect(table(c).columnCount, 4);
+        expect(c.canDeleteTableRows, isFalse, reason: 'the Delete key does');
+        expect(c.canMergeTableCells, isFalse);
+
+        c.setTableStyle(headerRow: false, bandedRows: false);
+        expect(table(c).headerRow, isFalse);
+        expect(table(c).bandedRows, isFalse);
+
+        const red = SlideColor(0xFFFF0000);
+        c.formatTableCells(const CellFormat(fill: red));
+        expect(c.tableCellFill, red);
+        for (final row in table(c).cells) {
+          expect(row.every((cell) => cell.fill == red), isTrue);
+        }
+
+        c.formatTableCells(const CellFormat(borders: CellBorderPreset.none));
+        expect(table(c).cell(1, 1).borders, const CellBorders());
+
+        c.undo();
+        expect(table(c).cell(1, 1).borders, isNot(const CellBorders()));
+        await c.save();
+      },
+    );
+
+    test(
+      'distributing evens the rows and columns as one undo step each',
+      () async {
+        final c = await withTable();
+        final id = table(c).id;
+        final slideId = c.selectedSlideId!;
+        c.document!.controller.setTableColumnWidth(slideId, id, 0, 500);
+        c.document!.controller.setTableRowHeight(slideId, id, 2, 200);
+        final width = table(c).frame.width;
+        final height = table(c).frame.height;
+
+        c.distributeTableColumns();
+        for (final w in table(c).columnWidths) {
+          expect(w, closeTo(width / 3, 0.01));
+        }
+        expect(table(c).frame.width, closeTo(width, 0.01));
+        c.distributeTableRows();
+        for (final h in table(c).rowHeights) {
+          expect(h, closeTo(height / 3, 0.01));
+        }
+        c.undo();
+        expect(table(c).rowHeights[2], 200);
+        expect(table(c).columnWidths.first, closeTo(width / 3, 0.01));
+        c.undo();
+        expect(table(c).columnWidths.first, 500);
+        await c.save();
+      },
+    );
+
+    test('with cells selected, the commands act on those cells', () async {
+      final c = await withTable();
+      final id = table(c).id;
+      c.tables.select(
+        id,
+        const CellRange(top: 1, left: 0, bottom: 1, right: 1),
+      );
+      expect(c.canDeleteTableRows, isTrue);
+      expect(c.canMergeTableCells, isTrue);
+      expect(c.canUnmergeTableCells, isFalse);
+
+      c.mergeTableCells();
+      expect(table(c).cell(1, 0).colSpan, 2);
+      expect(c.canUnmergeTableCells, isTrue);
+      c.unmergeTableCells();
+      expect(table(c).cell(1, 0).colSpan, 1);
+
+      c.insertTableRowAbove();
+      expect(table(c).rowCount, 4);
+      expect(c.tables.range?.top, 2, reason: 'the selection moved down');
+      c.insertTableColumnLeft();
+      expect(table(c).columnCount, 4);
+      c.deleteTableColumns();
+      expect(table(c).columnCount, 2, reason: 'both selected columns');
+      expect(c.tables.range, const CellRange.single(2, 1));
+      c.deleteTableRows();
+      expect(table(c).rowCount, 3);
+
+      final slideId = c.selectedSlideId!;
+      c.document!.controller.setTableColumnWidth(slideId, id, 0, 100);
+      c.tables.select(id, const CellRange.single(0, 0));
+      c.distributeTableColumns();
+      final widths = table(c).columnWidths;
+      expect(
+        widths.first,
+        closeTo(widths.last, 0.01),
+        reason: 'one column selected evens the whole table',
+      );
+      await c.save();
+    });
+
+    test('the text controls format the selected cells', () async {
+      final c = await withTable();
+      final id = table(c).id;
+      c.document!.controller.setCellText(c.selectedSlideId!, id, 1, 1, [
+        TextParagraph.plain('Revenue'),
+      ]);
+      c.tables.select(id, const CellRange.single(1, 1));
+      expect(c.canFormatText, isTrue);
+      expect(TextToggle.bold.isOn(c.textFormat), isFalse);
+
+      c.toggleText(TextToggle.bold);
+      expect(table(c).cell(1, 1).paragraphs.single.runs.single.bold, isTrue);
+      expect(TextToggle.bold.isOn(c.textFormat), isTrue);
+      expect(
+        table(c).cell(1, 2).paragraphs.isEmpty ||
+            table(c).cell(1, 2).plainText.isEmpty,
+        isTrue,
+      );
+
+      c.formatText(const TextFormat(alignment: TextAlignment.center));
+      expect(
+        table(c).cell(1, 1).paragraphs.single.alignment,
+        TextAlignment.center,
+      );
+      c.setFontSize(40);
+      expect(c.fontSize, 40);
+      await c.save();
+    });
+
+    test('a table selection only counts while the table is selected', () async {
+      final c = await withTable();
+      final id = table(c).id;
+      c.tables.select(id, const CellRange.single(0, 0));
+      c.selectElements({});
+      expect(c.tables.hasSelection, isFalse);
+      expect(c.canEditTable, isFalse);
+      expect(c.selectedTable, isNull);
+      await c.save();
+    });
+
+    test('a view-only deck changes no table', () async {
+      final c = controllerFor(
+        Presentation(
+          title: 'Deck',
+          slides: [
+            Slide(
+              id: 's1',
+              elements: [
+                newTable(
+                  id: 't',
+                  frame: ElementFrame(x: 0, y: 0, width: 600, height: 240),
+                  rows: 3,
+                  columns: 2,
+                ),
+              ],
+            ),
+          ],
+        ),
+        readOnly: true,
+      );
+      await c.load();
+      c.selectElements({'t'});
+      expect(c.canEditTable, isFalse);
+      c.insertTable(2, 2);
+      c.insertTableRowBelow();
+      c.setTableStyle(headerRow: false);
+      c.formatTableCells(const CellFormat(fill: SlideColor(0xFF000000)));
+      c.distributeTableRows();
+      expect(c.selectedSlide!.elements, hasLength(1));
+      expect(table(c).rowCount, 3);
+      expect(table(c).headerRow, isTrue);
+      expect(c.canUndo, isFalse);
+    });
+  });
 }

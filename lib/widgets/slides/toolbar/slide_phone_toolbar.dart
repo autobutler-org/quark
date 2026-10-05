@@ -29,9 +29,13 @@ class SlidePhoneToolbar extends StatelessWidget {
     required this.onOpenLayout,
     required this.onOpenTransition,
     required this.onFind,
+    required this.onOpenTable,
     this.onShare,
     super.key,
   });
+
+  /// Opens the table picker sheet.
+  final VoidCallback onOpenTable;
 
   /// Opens the theme picker sheet.
   final VoidCallback onOpenTheme;
@@ -79,7 +83,8 @@ class SlidePhoneToolbar extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (!controller.isReadOnly) SlidePhoneInsertMenu(actions: actions),
+          if (!controller.isReadOnly)
+            SlidePhoneInsertMenu(actions: actions, onOpenTable: onOpenTable),
           SlidePhoneFormatMenu(
             actions: actions,
             onOpenProperties: onOpenProperties,

@@ -21,11 +21,13 @@ import 'package:quark/widgets/slides/slide_editor_body.dart';
 import 'package:quark/widgets/slides/slide_save_status.dart';
 import 'package:quark/widgets/slides/slide_share_bar_button.dart';
 import 'package:quark/widgets/slides/slide_view_only_badge.dart';
+import 'package:quark/widgets/slides/table/slide_table_picker.dart';
 import 'package:quark/widgets/slides/theme/slide_layout_control.dart';
 import 'package:quark/widgets/slides/theme/slide_theme_control.dart';
 import 'package:quark/widgets/slides/transition/slide_transition_control.dart';
 import 'package:quark/widgets/slides/toolbar/slide_phone_toolbar.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The editor for one presentation, at `/slides/<path>?serial=` (#1161): the
@@ -69,6 +71,14 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// the edit tools, the properties fields, the slide panel's add, delete and
 /// reorder, the notes field and the canvas's editing are off. Selecting
 /// slides, zoom, find (without replace), Present and Export keep working.
+///
+/// Tables (#1160): the tool row's table button, or "Table" in a phone's
+/// Insert menu (a sheet), picks a size on a grid or with steppers, then
+/// draws the table on the slide or inserts it in the middle. With a table
+/// selected the toolbar's Table group — a phone's Format > Table — edits
+/// its rows, columns, merges, style, cell color and borders, the text
+/// controls format its cells, and the properties panel shows its size and
+/// style.
 ///
 /// `?` or F1 anywhere in the editor, the toolbar's keyboard button, or
 /// "Keyboard shortcuts" in a phone's Format menu opens the shortcuts dialog
@@ -192,6 +202,24 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
     () => SlidePropertiesPanel(controller: _controller),
   );
 
+  /// The table picker in a sheet, for a phone's Insert menu (#1160): a
+  /// pick closes the sheet, then arms the table tool or inserts the table.
+  Future<void> _openTableSheet() async {
+    final pick = await showQuarkSheet<(bool, int, int)>(
+      context,
+      title: 'Insert table',
+      builder: (sheet) => SlideTablePicker(
+        onDraw: (r, c) => Navigator.of(sheet).pop((false, r, c)),
+        onInsert: (r, c) => Navigator.of(sheet).pop((true, r, c)),
+      ),
+    );
+    if (pick == null) return;
+    final (insert, rows, columns) = pick;
+    insert
+        ? _controller.insertTable(rows, columns)
+        : _controller.useTool(SlideCanvasTool.table(rows, columns));
+  }
+
   void _openThemeSheet() =>
       _openSheet('Theme', () => SlideThemeControl(controller: _controller));
 
@@ -298,6 +326,7 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                       onOpenLayout: _openLayoutSheet,
                       onOpenTransition: _openTransitionSheet,
                       onFind: _find.open,
+                      onOpenTable: _openTableSheet,
                       onShare: _controller.presentation == null ? null : _share,
                     ),
                   ),

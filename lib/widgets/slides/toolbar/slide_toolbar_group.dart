@@ -7,7 +7,8 @@ import 'package:quark_icons/quark_icons.dart';
 ///
 /// Each group shows only when [appliesTo] the selection — the clipboard
 /// always, so paste works with nothing selected, the text groups for a text
-/// box or an open editing session, the shape group for shapes and lines,
+/// box, a table or an open editing session, the table group for a table,
+/// the shape group for shapes and lines,
 /// arrange for any element — so the row is driven by what is selected. On a
 /// phone each group is a submenu of "Format" named [label].
 ///
@@ -21,6 +22,10 @@ import 'package:quark_icons/quark_icons.dart';
 enum SlideToolbarGroup {
   /// Copy, cut, paste and duplicate (#1175).
   clipboard('Clipboard', QuarkIcons.content_paste),
+
+  /// Rows and columns, merging, the header row and bands, cell color and
+  /// borders, and distributing rows and columns (#1160).
+  table('Table', QuarkIcons.insert_table),
 
   /// Font family, size, bold, italic, underline, strikethrough and color.
   text('Text', QuarkIcons.format_menu),
@@ -50,6 +55,7 @@ enum SlideToolbarGroup {
   bool appliesTo(SlideToolbarActions actions) => switch (this) {
     clipboard => true,
     text || paragraph => actions.canFormatText,
+    table => actions.canEditTable,
     shape => actions.canStyle,
     arrange => actions.hasSelection,
   };
