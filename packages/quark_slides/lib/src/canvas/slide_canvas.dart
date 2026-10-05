@@ -20,6 +20,7 @@ import '../model/presentation.dart';
 import '../model/slide.dart';
 import '../model/slide_element.dart';
 import '../model/slide_size.dart';
+import '../search/slide_match.dart';
 import '../theme/slide_theme.dart';
 import 'slide_canvas_style.dart';
 import 'slide_fallback_theme.dart';
@@ -32,6 +33,7 @@ import 'slide_selection_overlay.dart';
 import 'slide_stage.dart';
 import 'slide_text_editing_controller.dart';
 import 'slide_text_editor.dart';
+import 'slide_text_highlight_painter.dart';
 import 'slide_text_layout.dart';
 
 /// Shows one slide scaled to fit its box, with letterbox bars, at the presentation's
@@ -115,6 +117,14 @@ import 'slide_text_layout.dart';
 /// Plain text from another app pastes as a new text box. Each cut, paste,
 /// duplicate, group and ungroup is one undo step.
 ///
+/// **Find.** [highlights] — a `SlideSearch`'s matches — are painted behind
+/// their text on this slide in [SlideCanvasStyle.highlightColor], and
+/// [currentHighlight] in [SlideCanvasStyle.currentHighlightColor]. Each
+/// time [currentHighlight] changes to a match in a text box on this slide,
+/// the canvas reveals it: it enters the group holding the box, selects the
+/// box (through [onSelectionChanged]) and pans a zoomed slide to center it.
+/// Matches in speaker notes, or on other slides, are not drawn here.
+///
 /// Images are drawn by [imageBuilder]; the package never loads one. The
 /// canvas needs a bounded box when editing and handles pointers itself, so
 /// do not put it in a scroll view. Keys: each element is
@@ -158,6 +168,8 @@ class SlideCanvas extends StatefulWidget {
     this.editingAnnouncement = 'Editing text',
     this.editingDoneAnnouncement = 'Done editing text',
     this.clipboard,
+    this.highlights = const [],
+    this.currentHighlight,
   })  : slide = null,
         size = null,
         theme = null;
@@ -188,7 +200,9 @@ class SlideCanvas extends StatefulWidget {
         toolLabel = defaultSlideToolLabel,
         editingAnnouncement = '',
         editingDoneAnnouncement = '',
-        clipboard = null;
+        clipboard = null,
+        highlights = const [],
+        currentHighlight = null;
 
   /// The smallest zoom, half the fitted size.
   static const minZoom = 0.5;
@@ -272,6 +286,14 @@ class SlideCanvas extends StatefulWidget {
   /// Where copy and cut write and paste reads; [SlideClipboard.memory],
   /// inside the app only, when none is given.
   final SlideClipboard? clipboard;
+
+  /// Search matches to highlight; those on other slides or in notes are
+  /// ignored.
+  final List<SlideMatch> highlights;
+
+  /// The match a search is on, emphasized and revealed when it changes;
+  /// `null` for none.
+  final SlideMatch? currentHighlight;
 
   /// Whether the canvas only draws.
   bool get readOnly => document == null;
@@ -415,6 +437,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
     _editing.addListener(_onEditingChanged);
     _tools.addListener(_onToolChanged);
     widget.document!.addListener(_onDocumentChanged);
+    _revealLater();
   }
 
   @override
@@ -441,6 +464,10 @@ class _SlideCanvasState extends State<SlideCanvas> {
     if (widget.document != oldWidget.document) {
       oldWidget.document?.removeListener(_onDocumentChanged);
       widget.document?.addListener(_onDocumentChanged);
+    }
+    if (widget.currentHighlight != oldWidget.currentHighlight ||
+        widget.slideId != oldWidget.slideId) {
+      _revealLater();
     }
     final oldTools = oldWidget.tools ?? _ownTools;
     if (oldTools != _tools) {
@@ -588,6 +615,56 @@ class _SlideCanvasState extends State<SlideCanvas> {
     if (setEquals(ids, _selection)) return;
     setState(() => _selection = ids);
     widget.onSelectionChanged?.call(ids);
+  }
+
+  /// Reveals [SlideCanvas.currentHighlight] once this frame is laid out,
+  /// when it is in a text box on this slide.
+  void _revealLater() {
+    final match = widget.currentHighlight;
+    if (widget.readOnly || match == null) return;
+    if (match.slideId != widget.slideId || match.elementId == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.currentHighlight == match) _reveal(match);
+    });
+  }
+
+  /// Enters the group holding [match]'s text box, selects the box, and
+  /// pans to center it.
+  void _reveal(SlideMatch match) {
+    final slide = _slide;
+    final id = match.elementId!;
+    final frame = slide?.frameOnSlide(id);
+    if (slide == null || frame == null) return;
+    if (_editing.isEditing && _editing.elementId != id) _editing.commit();
+    setState(() => _entered = match.groupId);
+    _select({id});
+    final viewport = _viewport;
+    if (viewport == null) return;
+    _viewTo(
+      viewport.panToPlace(
+        frame.rect.center,
+        viewport.viewportSize.center(Offset.zero),
+        widget.zoom,
+      ),
+      widget.zoom,
+    );
+  }
+
+  /// [SlideCanvas.highlights] on [slide], by text box id.
+  Map<String, List<SlideTextHighlight>> _highlightsOn(Slide slide) {
+    final current = widget.currentHighlight;
+    final byBox = <String, List<SlideTextHighlight>>{};
+    for (final m in widget.highlights) {
+      final id = m.elementId;
+      if (m.slideId != slide.id || id == null) continue;
+      (byBox[id] ??= []).add((
+        paragraph: m.paragraph,
+        start: m.start,
+        end: m.end,
+        current: m == current,
+      ));
+    }
+    return byBox;
   }
 
   /// The entered group, when it is still a group on the slide.
@@ -1404,6 +1481,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
                                 },
                                 editingId: editingId,
                                 preview: _preview,
+                                highlights: _highlightsOn(slide),
                                 editor: editingId == null
                                     ? null
                                     : SlideTextEditor(

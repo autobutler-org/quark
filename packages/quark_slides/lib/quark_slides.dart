@@ -14,7 +14,9 @@
 /// paste through a `SlideClipboard` and its `SlideClipboardCodec`; and
 /// themes and layouts: `SlideTheme` and the built-in `SlideThemes`, role
 /// colors (`SlideColor.theme(ThemeColor.accent1)`), and the `SlideLayout`s
-/// of `SlideMaster.standard` whose placeholders slides are built from.
+/// of `SlideMaster.standard` whose placeholders slides are built from; and
+/// find and replace: `SlideSearch` over a presentation, its `SlideMatch`es,
+/// and the controller's `replaceCurrent` and `replaceAll`.
 library;
 
 export 'src/clipboard/slide_clipboard.dart';
@@ -62,6 +64,10 @@ export 'src/model/text_format.dart';
 export 'src/model/text_paragraph.dart';
 export 'src/model/text_run.dart';
 export 'src/model/unset.dart';
+export 'src/search/slide_match.dart';
+export 'src/search/slide_replace.dart';
+export 'src/search/slide_search.dart';
+export 'src/search/slide_search_query.dart';
 export 'src/theme/slide_theme.dart';
 export 'src/theme/slide_themes.dart';
 export 'src/theme/theme_color.dart';

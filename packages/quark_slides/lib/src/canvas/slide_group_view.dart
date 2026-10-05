@@ -6,6 +6,7 @@ import 'slide_canvas_style.dart';
 import 'slide_element_label.dart';
 import 'slide_element_view.dart';
 import 'slide_image_source.dart';
+import 'slide_text_highlight_painter.dart';
 
 /// The inside of a [GroupElement]: its children, back to front, each a
 /// [SlideElementView] at its group-local frame in a box the size of the
@@ -29,6 +30,7 @@ class SlideGroupView extends StatelessWidget {
     this.editor,
     this.showPlaceholder = false,
     this.excluded = false,
+    this.highlights = const {},
   });
 
   /// The group to draw.
@@ -59,6 +61,9 @@ class SlideGroupView extends StatelessWidget {
   /// Whether the children are left out of the semantics tree.
   final bool excluded;
 
+  /// Search highlights by text box id.
+  final Map<String, List<SlideTextHighlight>> highlights;
+
   @override
   Widget build(BuildContext context) => Stack(
         clipBehavior: Clip.none,
@@ -75,6 +80,7 @@ class SlideGroupView extends StatelessWidget {
               editor: editor,
               showPlaceholder: showPlaceholder,
               excluded: excluded,
+              highlights: highlights,
             ),
         ],
       );

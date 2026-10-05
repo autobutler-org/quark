@@ -5,6 +5,7 @@ import '../model/slide_element.dart';
 import '../model/text_paragraph.dart';
 import '../theme/slide_theme.dart';
 import 'slide_canvas_style.dart';
+import 'slide_text_highlight_painter.dart';
 import 'slide_text_layout.dart';
 import 'slide_text_paragraph_view.dart';
 
@@ -21,6 +22,9 @@ import 'slide_text_paragraph_view.dart';
 /// With [showPlaceholder], an empty box shows its [TextBox.placeholder] in
 /// [SlideCanvasStyle.placeholderColor], as an editor does and a slideshow
 /// does not.
+///
+/// [highlights] — search matches — are painted behind their characters by
+/// a [SlideTextHighlightPainter] laid out exactly as the paragraph is.
 class SlideTextBoxView extends StatelessWidget {
   /// Creates the view of [box].
   const SlideTextBoxView({
@@ -29,6 +33,7 @@ class SlideTextBoxView extends StatelessWidget {
     required this.style,
     required this.theme,
     this.showPlaceholder = false,
+    this.highlights = const [],
   });
 
   /// The text box to draw.
@@ -43,6 +48,9 @@ class SlideTextBoxView extends StatelessWidget {
 
   /// Whether an empty box shows its placeholder.
   final bool showPlaceholder;
+
+  /// The characters to highlight, in [style]'s highlight colors.
+  final List<SlideTextHighlight> highlights;
 
   /// The alignment that holds text against [anchor]'s edge.
   static Alignment alignmentOf(TextAnchor anchor) => switch (anchor) {
@@ -79,21 +87,46 @@ class SlideTextBoxView extends StatelessWidget {
               layout: layout,
               marker: markers[i],
               scale: scale,
-              child: RichText(
-                text: placeholder
-                    ? TextSpan(
-                        text: box.placeholder,
-                        style: layout
-                            .rootStyle(
-                                box.paragraphs.firstOrNull ?? paragraphs.first)
-                            .copyWith(color: style.placeholderColor),
-                      )
-                    : layout.paragraphSpan(paragraphs[i], scale: scale),
-                textAlign: layout.textAlign(paragraphs[i]),
+              child: CustomPaint(
+                painter: placeholder ? null : _painter(i, layout, scale),
+                child: RichText(
+                  text: placeholder
+                      ? TextSpan(
+                          text: box.placeholder,
+                          style: layout
+                              .rootStyle(box.paragraphs.firstOrNull ??
+                                  paragraphs.first)
+                              .copyWith(color: style.placeholderColor),
+                        )
+                      : layout.paragraphSpan(paragraphs[i], scale: scale),
+                  textAlign: layout.textAlign(paragraphs[i]),
+                ),
               ),
             ),
         ],
       ),
+    );
+  }
+
+  /// The painter of paragraph [index]'s highlights, laid out as [layout]
+  /// draws it at [scale]; `null` when it has none.
+  SlideTextHighlightPainter? _painter(
+    int index,
+    SlideTextLayout layout,
+    double scale,
+  ) {
+    final mine = [
+      for (final h in highlights)
+        if (h.paragraph == index) h,
+    ];
+    if (mine.isEmpty) return null;
+    final paragraph = box.paragraphs[index];
+    return SlideTextHighlightPainter(
+      span: layout.paragraphSpan(paragraph, scale: scale),
+      textAlign: layout.textAlign(paragraph),
+      highlights: mine,
+      color: style.highlightColor,
+      currentColor: style.currentHighlightColor,
     );
   }
 }

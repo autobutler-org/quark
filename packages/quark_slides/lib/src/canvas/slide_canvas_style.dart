@@ -31,6 +31,8 @@ class SlideCanvasStyle {
     this.handleHitSize = 48,
     this.rotateHandleOffset = 32,
     this.snapDistance = 8,
+    this.highlightColor = const Color(0x66FFC107),
+    this.currentHighlightColor = const Color(0xCCFF9800),
   });
 
   /// A style in the colors of [theme]'s [ColorScheme]: the primary color
@@ -86,6 +88,14 @@ class SlideCanvasStyle {
   /// a guide to snap to it.
   final double snapDistance;
 
+  /// The fill behind text a search found: translucent amber by default,
+  /// readable over light and dark slides alike.
+  final Color highlightColor;
+
+  /// The fill and outline of the match a search is on: a stronger orange
+  /// by default.
+  final Color currentHighlightColor;
+
   /// Returns a copy with the given fields replaced.
   SlideCanvasStyle copyWith({
     Color? selectionColor,
@@ -100,6 +110,8 @@ class SlideCanvasStyle {
     double? handleHitSize,
     double? rotateHandleOffset,
     double? snapDistance,
+    Color? highlightColor,
+    Color? currentHighlightColor,
   }) =>
       SlideCanvasStyle(
         selectionColor: selectionColor ?? this.selectionColor,
@@ -114,5 +126,8 @@ class SlideCanvasStyle {
         handleHitSize: handleHitSize ?? this.handleHitSize,
         rotateHandleOffset: rotateHandleOffset ?? this.rotateHandleOffset,
         snapDistance: snapDistance ?? this.snapDistance,
+        highlightColor: highlightColor ?? this.highlightColor,
+        currentHighlightColor:
+            currentHighlightColor ?? this.currentHighlightColor,
       );
 }

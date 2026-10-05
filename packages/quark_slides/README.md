@@ -164,6 +164,8 @@ history of earlier presentations:
   alignment](#groups-and-alignment--for-a-toolbar))
 - clipboard: `copyElements`, `pasteElements`, `duplicateElements`,
   `pasteText` (see [Copy and paste](#copy-and-paste))
+- find and replace: `replaceCurrent`, `replaceAll` (see [Find and
+  replace](#find-and-replace--for-a-find-bar))
 - history: `undo`, `redo`, `load`, and `batch` / `beginBatch` / `endBatch`
 
 A command that changes nothing records no step. Commands inside a batch apply
@@ -537,6 +539,56 @@ final copies = doc.controller.duplicateElements(slideId, selection);
 child inside it keeps its own `slide_element_<id>`. A group reads to a
 screen reader as `elementLabel` names it ("Group of 2"), with its children
 inside.
+
+## Find and replace — for a find bar
+
+`SlideSearch.find` is a pure function over a `Presentation`. It looks
+through every text box, inside groups too, and — when the scope asks — each
+slide's speaker notes, one paragraph (or notes line) at a time: a match
+spans runs of different styles but never a line break, and matches do not
+overlap.
+
+```dart
+final result = SlideSearch.find(
+  doc.presentation,
+  const SlideSearchQuery('q3', caseSensitive: false, wholeWord: true),
+  scope: SlideSearchScope(slideId: null, includeNotes: true), // all slides
+);
+result.matches; // SlideMatch, in reading order
+final i = result.next(current); // wraps; previous(current) too
+doc.controller.replaceCurrent(result.matches[i!], 'Q4'); // one undo step
+doc.controller.replaceAll(result.matches, 'Q4');          // one undo step
+```
+
+| `SlideMatch` field | What it is |
+| --- | --- |
+| `slideId`, `slideIndex` | the slide |
+| `field` | `SlideMatchField.text` or `.notes` |
+| `elementPath` | ids from the outermost group down to the text box; empty for notes |
+| `paragraph`, `start`, `end` | the paragraph (or notes line) and UTF-16 offsets in its plain text |
+| `text` | what matched, so a replace skips a match the document has moved past |
+
+Reading order is slide order, then the slide's text boxes back to front (a
+group's children in its place), then the notes. **Regular expressions**
+are off by default; with `regex: true` the query runs in Dart's Unicode
+mode. A pattern that does not parse, or that repeats a repeating group
+(`(a+)+`) and could backtrack for exponential time, comes back as a
+`SlideSearchError` instead of running, and one search stops at
+`SlideSearch.maxMatches` or after `SlideSearch.timeBudget`, marking the
+result `truncated`. Whole word treats letters and digits of every script
+as word characters.
+
+**Replacing.** The replacement takes the formatting of the run holding the
+match's first character; runs are split at the match's edges and merged
+with same-styled neighbors (`replaceInParagraphs`, `replaceInNotes`). A
+placeholder keeps its slot, role and prompt, and a growing box refits.
+
+**On the canvas.** Pass the matches as `highlights` and the one the bar is
+on as `currentHighlight`. The canvas paints them behind their text, laid
+out exactly as the paragraph is, in `SlideCanvasStyle.highlightColor` and
+`currentHighlightColor`; each time `currentHighlight` changes to a text box
+on the slide it enters the box's group, selects it and pans to center it.
+The app moves to the match's slide itself.
 
 ## Development
 

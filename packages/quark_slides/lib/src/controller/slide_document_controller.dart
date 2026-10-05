@@ -25,6 +25,8 @@ import '../theme/slide_themes.dart';
 import '../theme/theme_color.dart';
 import '../theme/theme_shape_style.dart';
 import '../model/unset.dart';
+import '../search/slide_match.dart';
+import '../search/slide_replace.dart';
 
 /// Measures how tall, in slide units, a [TextBox]'s text lays out at its
 /// frame's width, its unset styles taken from [theme] (`null` for none).
@@ -292,6 +294,57 @@ class SlideDocumentController {
   /// Replaces the speaker notes of the slide [slideId].
   void setSlideNotes(String slideId, String notes) =>
       _updateSlide(slideId, (slide) => slide.copyWith(notes: notes));
+
+  /// Replaces [match], found by `SlideSearch`, with [replacement] as one
+  /// step, and returns whether it was still there to replace. See
+  /// [replaceAll].
+  bool replaceCurrent(SlideMatch match, String replacement) =>
+      replaceAll([match], replacement) == 1;
+
+  /// Replaces every one of [matches], found by `SlideSearch`, with
+  /// [replacement] as one step, and returns how many were replaced.
+  ///
+  /// In a text box the replacement takes the formatting of the run holding
+  /// a match's first character, and the runs around it are split and
+  /// merged as typing would; the box keeps its placeholder slot, text role
+  /// and everything else, and grows to fit as after any text edit. A match
+  /// whose text is no longer where the search found it is skipped, as is
+  /// one on a slide or in a box that has gone. See `replaceInParagraphs`
+  /// and `replaceInNotes`.
+  ///
+  /// ```dart
+  /// final found = SlideSearch.find(doc.presentation, const SlideSearchQuery('Q3'));
+  /// doc.replaceAll(found.matches, 'Q4'); // one undo step
+  /// ```
+  int replaceAll(Iterable<SlideMatch> matches, String replacement) {
+    final targets = <(String, SlideMatchField, String?), List<SlideMatch>>{};
+    for (final m in matches) {
+      targets.putIfAbsent((m.slideId, m.field, m.elementId), () => []).add(m);
+    }
+    var count = 0;
+    batch(() {
+      for (final MapEntry(key: (slideId, field, elementId), value: found)
+          in targets.entries) {
+        final slide = _presentation.slideById(slideId);
+        if (slide == null) continue;
+        if (field == SlideMatchField.notes) {
+          final replaced = replaceInNotes(slide.notes, found, replacement);
+          if (replaced.count > 0) setSlideNotes(slideId, replaced.notes);
+          count += replaced.count;
+          continue;
+        }
+        final box = slide.findElement(elementId!);
+        if (box is! TextBox) continue;
+        final replaced =
+            replaceInParagraphs(box.paragraphs, found, replacement);
+        if (replaced.count > 0) {
+          editText(slideId, box.id, replaced.paragraphs);
+        }
+        count += replaced.count;
+      }
+    });
+    return count;
+  }
 
   /// Sets the slide [slideId]'s own background, or clears it with `null`
   /// so the slide falls back to the theme's. Setting the background it
