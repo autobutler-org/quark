@@ -1,4 +1,4 @@
-import 'dart:math' show min;
+import 'dart:math' show max, min;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show ChangeNotifier, ValueNotifier;
@@ -21,8 +21,16 @@ class _TableSnapshot {
   final List<List<String>> cells; // [row][col] as strings
   final List<double> columnWidths;
   final List<double> rowHeights;
+  final int frozenRows;
+  final int frozenColumns;
 
-  _TableSnapshot(this.cells, this.columnWidths, this.rowHeights);
+  _TableSnapshot(
+    this.cells,
+    this.columnWidths,
+    this.rowHeights,
+    this.frozenRows,
+    this.frozenColumns,
+  );
 
   factory _TableSnapshot.capture(DataSheetController c) {
     return _TableSnapshot(
@@ -32,6 +40,8 @@ class _TableSnapshot {
       ),
       List<double>.from(c.columnWidths),
       List<double>.from(c.rowHeights),
+      c._frozenRows,
+      c._frozenColumns,
     );
   }
 
@@ -50,6 +60,8 @@ class _TableSnapshot {
     }
     c.columnWidths = List<double>.from(columnWidths);
     c.rowHeights = List<double>.from(rowHeights);
+    c._frozenRows = frozenRows;
+    c._frozenColumns = frozenColumns;
   }
 }
 
@@ -57,8 +69,12 @@ class _TableSnapshot {
 // Controller
 // ---------------------------------------------------------------------------
 
-/// The state behind a `DataSheet`: the table, column widths and row heights, the evaluated value of each cell,
-/// and undo and redo.
+/// The state behind a `DataSheet`: the table, column widths and row heights, the frozen header rows and columns,
+/// the evaluated value of each cell, and undo and redo.
+///
+/// Sizes are pixels. [layoutToJson] and [DataSheetController.fromLayoutJson] are the layout's saved form, and
+/// loading tolerates anything older or broken: missing keys, a legacy `columnFlex` list, lists of the wrong
+/// length, and values that are not numbers all fall back to defaults.
 class DataSheetController extends ChangeNotifier {
   final DataTable table;
   final List<ValueNotifier<List<DataCell>>> _rows;
@@ -68,6 +84,16 @@ class DataSheetController extends ChangeNotifier {
 
   /// Per-row pixel heights. Length equals [rowCount].
   List<double> rowHeights;
+
+  int _frozenRows;
+  int _frozenColumns;
+
+  /// How many rows, from the top, stay put while the grid scrolls vertically.
+  int get frozenRows => _frozenRows;
+
+  /// How many columns, from the left, stay put while the grid scrolls
+  /// horizontally.
+  int get frozenColumns => _frozenColumns;
 
   /// Selection state shared between the sheet view and the control bar.
   final DataSheetSelectionModel selection = DataSheetSelectionModel();
@@ -93,7 +119,13 @@ class DataSheetController extends ChangeNotifier {
   static const int _maxUndoDepth = 100;
 
   DataSheetController._(
-      this.table, this._rows, this.columnWidths, this.rowHeights) {
+    this.table,
+    this._rows,
+    this.columnWidths,
+    this.rowHeights,
+    this._frozenRows,
+    this._frozenColumns,
+  ) {
     selection.addListener(_onSelectionChanged);
     _recompute();
   }
@@ -151,26 +183,82 @@ class DataSheetController extends ChangeNotifier {
         ErrorValue(:final code) => code,
       };
 
+  /// A controller over [table].
+  ///
+  /// [columnWidths] and [rowHeights] are pixels, fitted to the table: a
+  /// missing entry gets the default, an extra one is dropped, a value that is
+  /// not finite gets the default, and one under the minimum is raised to it.
+  /// [columnFlex] is the flex factor layout sheets used before pixel widths;
+  /// each factor becomes that many default widths, and only when
+  /// [columnWidths] is absent. [frozenRows] and [frozenColumns] are clamped to
+  /// the table.
   factory DataSheetController.fromTable(
     DataTable table, {
     List<double>? columnWidths,
     List<double>? rowHeights,
-    // Deprecated: kept for call-site compatibility only.
-    List<int>? columnFlex,
+    List<num>? columnFlex,
+    int frozenRows = 0,
+    int frozenColumns = 0,
   }) {
     final rows = table.rows
         .map((r) => ValueNotifier<List<DataCell>>(List<DataCell>.from(r.cells)))
         .toList();
     final colCount = table.rows.isNotEmpty ? table.rows.first.cells.length : 0;
     final rowCount = table.rows.length;
-    final widths = columnWidths != null
-        ? List<double>.from(columnWidths, growable: true)
-        : List<double>.filled(colCount, kDefaultColumnWidth, growable: true);
-    final heights = rowHeights != null
-        ? List<double>.from(rowHeights, growable: true)
-        : List<double>.filled(rowCount, kDefaultRowHeight, growable: true);
-    return DataSheetController._(table, rows, widths, heights);
+    final widths = columnWidths ??
+        columnFlex?.map((f) => f * kDefaultColumnWidth).toList();
+    return DataSheetController._(
+      table,
+      rows,
+      _fitSizes(widths, colCount, kDefaultColumnWidth, kMinColumnWidth),
+      _fitSizes(rowHeights, rowCount, kDefaultRowHeight, kMinRowHeight),
+      frozenRows.clamp(0, rowCount),
+      frozenColumns.clamp(0, colCount),
+    );
   }
+
+  /// A controller over [table] with the layout saved by [layoutToJson].
+  ///
+  /// [json] is usually a whole `.qsheet` tab; keys other than the layout's are
+  /// ignored. Sheets saved before a key existed, or with a value of the wrong
+  /// type, load with the default for it.
+  factory DataSheetController.fromLayoutJson(
+    DataTable table,
+    Map<String, dynamic>? json,
+  ) {
+    List<double>? numbers(Object? value) => value is List
+        ? [for (final v in value) v is num ? v.toDouble() : double.nan]
+        : null;
+    int count(Object? value) => value is int ? value : 0;
+    return DataSheetController.fromTable(
+      table,
+      columnWidths: numbers(json?['columnWidths']),
+      rowHeights: numbers(json?['rowHeights']),
+      columnFlex: numbers(json?['columnFlex']),
+      frozenRows: count(json?['frozenRows']),
+      frozenColumns: count(json?['frozenColumns']),
+    );
+  }
+
+  /// The sheet's layout in the form [DataSheetController.fromLayoutJson]
+  /// reads: pixel sizes and the frozen counts.
+  Map<String, Object> layoutToJson() => {
+        'columnWidths': List<double>.from(columnWidths),
+        'rowHeights': List<double>.from(rowHeights),
+        'frozenRows': _frozenRows,
+        'frozenColumns': _frozenColumns,
+      };
+
+  static List<double> _fitSizes(
+    List<double>? sizes,
+    int count,
+    double fallback,
+    double min,
+  ) =>
+      List<double>.generate(count, (i) {
+        final size = sizes != null && i < sizes.length ? sizes[i] : fallback;
+        return size.isFinite ? size.clamp(min, double.infinity) : fallback;
+      }, growable: true);
 
   // -------------------------------------------------------------------------
   // Read-only accessors
@@ -237,11 +325,17 @@ class DataSheetController extends ChangeNotifier {
       ];
 
   /// Writes [values] with its top-left corner at [top]/[left] as one undo
-  /// step. Whatever falls outside the sheet is dropped; the sheet never grows.
-  void _setCells(int top, int left, List<List<String>> values) {
+  /// step, or as part of the caller's when [snapshot] is false. Whatever falls
+  /// outside the sheet is dropped; the sheet never grows.
+  void _setCells(
+    int top,
+    int left,
+    List<List<String>> values, {
+    bool snapshot = true,
+  }) {
     final bottom = min(top + values.length, rowCount);
     if (top < 0 || left < 0 || top >= bottom || left >= colCount) return;
-    _pushSnapshot();
+    if (snapshot) _pushSnapshot();
     for (var r = top; r < bottom; r++) {
       final row = values[r - top];
       final updated = List<DataCell>.from(_rows[r].value);
@@ -269,21 +363,42 @@ class DataSheetController extends ChangeNotifier {
         List.generate(range.rowCount, (_) => List.filled(range.colCount, '')),
       );
 
-  /// Paste [values] into [target] as one undo step. A single value fills the
-  /// whole target; a block lands with its top-left at the target's top-left
-  /// and is clipped at the sheet edge.
+  /// Paste [values] into [target] as one undo step, then select what was
+  /// written.
+  ///
+  /// The block lands at the target's top-left corner. When the target is a
+  /// whole number of blocks tall and wide the block repeats to fill it, so a
+  /// single value fills the whole target; otherwise it is pasted once at its
+  /// own size, adding rows and columns if it runs past the sheet's edge.
   void pasteValues(CellRange target, List<List<String>> values) {
     if (values.isEmpty || values.first.isEmpty) return;
-    final single = values.length == 1 && values.first.length == 1;
+    if (target.top < 0 || target.left < 0) return;
+    final blockRows = values.length;
+    final blockCols = values.first.length;
+    final tiles =
+        target.rowCount % blockRows == 0 && target.colCount % blockCols == 0;
+    final rows = tiles ? target.rowCount : blockRows;
+    final cols = tiles ? target.colCount : blockCols;
+    _pushSnapshot();
+    _growTo(target.top + rows, target.left + cols);
     _setCells(
       target.top,
       target.left,
-      single
-          ? List.generate(
-              target.rowCount,
-              (_) => List.filled(target.colCount, values.first.first),
-            )
-          : values,
+      List.generate(
+        rows,
+        (r) => List.generate(cols, (c) {
+          final row = values[r % blockRows];
+          final i = c % blockCols;
+          return i < row.length ? row[i] : '';
+        }),
+      ),
+      snapshot: false,
+    );
+    selection.selectRange(
+      target.top,
+      target.left,
+      target.top + rows - 1,
+      target.left + cols - 1,
     );
   }
 
@@ -351,6 +466,7 @@ class DataSheetController extends ChangeNotifier {
     _rows.insert(
         clamped, ValueNotifier<List<DataCell>>(List<DataCell>.from(newCells)));
     rowHeights.insert(clamped, kDefaultRowHeight);
+    if (clamped < _frozenRows) _frozenRows++;
     _recompute();
     notifyListeners();
   }
@@ -359,12 +475,14 @@ class DataSheetController extends ChangeNotifier {
   void deleteRowAt(int index, {int count = 1}) {
     if (index < 0 || index >= rowCount) return;
     _pushSnapshot();
-    for (var i = min(index + count, rowCount) - 1; i >= index; i--) {
+    final end = min(index + count, rowCount);
+    for (var i = end - 1; i >= index; i--) {
       table.rows.removeAt(i);
       _rows[i].dispose();
       _rows.removeAt(i);
       if (i < rowHeights.length) rowHeights.removeAt(i);
     }
+    _frozenRows -= max(0, min(end, _frozenRows) - index);
     _recompute();
     _collapseSelectionTo(index, selection.highlightedCol);
     notifyListeners();
@@ -382,6 +500,7 @@ class DataSheetController extends ChangeNotifier {
     final srcH =
         index < rowHeights.length ? rowHeights[index] : kDefaultRowHeight;
     rowHeights.insert(index + 1, srcH);
+    if (index < _frozenRows) _frozenRows++;
     _recompute();
     notifyListeners();
   }
@@ -429,6 +548,7 @@ class DataSheetController extends ChangeNotifier {
     } else {
       columnWidths.add(kDefaultColumnWidth);
     }
+    if (clamped < _frozenColumns) _frozenColumns++;
     _recompute();
     notifyListeners();
   }
@@ -446,6 +566,7 @@ class DataSheetController extends ChangeNotifier {
     if (index < columnWidths.length) {
       columnWidths.removeRange(index, min(end, columnWidths.length));
     }
+    _frozenColumns -= max(0, min(end, _frozenColumns) - index);
     _recompute();
     _collapseSelectionTo(selection.highlightedRow, index);
     notifyListeners();
@@ -469,6 +590,7 @@ class DataSheetController extends ChangeNotifier {
     } else {
       columnWidths.add(srcWidth);
     }
+    if (index < _frozenColumns) _frozenColumns++;
     _recompute();
     notifyListeners();
   }
@@ -476,6 +598,12 @@ class DataSheetController extends ChangeNotifier {
   // -------------------------------------------------------------------------
   // Column width configuration
   // -------------------------------------------------------------------------
+
+  /// Marks the start of a drag resize, so the whole drag undoes as one step.
+  ///
+  /// [setColumnWidth] and [setRowHeight] do not record undo history
+  /// themselves, since a drag calls them once a frame.
+  void beginResize() => _pushSnapshot();
 
   void setColumnWidths(List<double> widths) {
     columnWidths = List<double>.from(widths, growable: true);
@@ -491,6 +619,7 @@ class DataSheetController extends ChangeNotifier {
   /// Auto-size column [col] to tightly fit the longest cell value.
   void autoSizeColumn(int col, {TextStyle? textStyle}) {
     if (col < 0 || col >= colCount) return;
+    _pushSnapshot();
     // Horizontal overhead per side: 1px border + 1px container padding +
     // 8px TextField contentPadding = 10px → 20px total.
     // An extra 4px safety margin handles subpixel rendering variance.
@@ -530,6 +659,7 @@ class DataSheetController extends ChangeNotifier {
   /// current column widths.
   void autoSizeRow(int row, {TextStyle? textStyle}) {
     if (row < 0 || row >= rowCount) return;
+    _pushSnapshot();
     // Horizontal overhead: same as autoSizeColumn (20px) — used to constrain
     // text wrapping to the actual available width inside the cell.
     const horizontalOverhead = 20.0;
@@ -552,6 +682,29 @@ class DataSheetController extends ChangeNotifier {
       if (h > maxH) maxH = h;
     }
     if (row < rowHeights.length) rowHeights[row] = maxH;
+    notifyListeners();
+  }
+
+  // -------------------------------------------------------------------------
+  // Frozen panes
+  // -------------------------------------------------------------------------
+
+  /// Freezes the top [count] rows, clamped to the sheet; 0 unfreezes them.
+  void setFrozenRows(int count) {
+    final clamped = count.clamp(0, rowCount);
+    if (clamped == _frozenRows) return;
+    _pushSnapshot();
+    _frozenRows = clamped;
+    notifyListeners();
+  }
+
+  /// Freezes the leftmost [count] columns, clamped to the sheet; 0 unfreezes
+  /// them.
+  void setFrozenColumns(int count) {
+    final clamped = count.clamp(0, colCount);
+    if (clamped == _frozenColumns) return;
+    _pushSnapshot();
+    _frozenColumns = clamped;
     notifyListeners();
   }
 
@@ -594,6 +747,122 @@ class DataSheetController extends ChangeNotifier {
       for (var r = range.top; r <= min(range.bottom, rowCount - 1); r++)
         List.filled(last - range.left, cellAt(r, range.left).value.toString()),
     ]);
+  }
+
+  // -------------------------------------------------------------------------
+  // TSV: the clipboard format Google Sheets and Excel share
+  // -------------------------------------------------------------------------
+
+  /// [range], or the selected range when omitted, as tab-separated text.
+  ///
+  /// Cells keep their raw text, so formulas copy as formulas. A value holding
+  /// a tab, newline or double quote is wrapped in quotes with its quotes
+  /// doubled, which is what Google Sheets and Excel write and read. Returns an
+  /// empty string when there is no range.
+  String rangeToTsv([CellRange? range]) {
+    range ??= selection.range;
+    if (range == null ||
+        !_inSheet(range) ||
+        range.bottom >= rowCount ||
+        range.right >= colCount) {
+      return '';
+    }
+    return valuesIn(range)
+        .map((row) => row.map(_tsvField).join('\t'))
+        .join('\n');
+  }
+
+  static String _tsvField(String v) =>
+      v.contains(RegExp('[\t\n\r"]')) ? '"${v.replaceAll('"', '""')}"' : v;
+
+  /// Parses tab-separated text, as Google Sheets and Excel put it on the
+  /// clipboard, into rows of equal length.
+  ///
+  /// A field that starts with a double quote is quoted: it runs to the next
+  /// lone quote and may hold tabs and newlines, and `""` inside it is one
+  /// quote. A quote anywhere else is literal. LF and CRLF both end a row, one
+  /// trailing line ending is dropped, and short rows are padded with empty
+  /// strings.
+  static List<List<String>> parseTsv(String tsv) {
+    final rows = <List<String>>[];
+    var fields = <String>[];
+    final field = StringBuffer();
+    var i = 0;
+    final n = tsv.length;
+    var atFieldStart = true;
+    while (i < n) {
+      final ch = tsv[i];
+      if (atFieldStart && ch == '"') {
+        i++;
+        while (i < n) {
+          if (tsv[i] == '"') {
+            if (i + 1 < n && tsv[i + 1] == '"') {
+              field.write('"');
+              i += 2;
+              continue;
+            }
+            i++;
+            break;
+          }
+          field.write(tsv[i++]);
+        }
+        atFieldStart = false;
+      } else if (ch == '\t') {
+        fields.add(field.toString());
+        field.clear();
+        atFieldStart = true;
+        i++;
+      } else if (ch == '\n' ||
+          (ch == '\r' && i + 1 < n && tsv[i + 1] == '\n')) {
+        fields.add(field.toString());
+        field.clear();
+        rows.add(fields);
+        fields = [];
+        atFieldStart = true;
+        i += ch == '\r' ? 2 : 1;
+      } else {
+        field.write(ch);
+        atFieldStart = false;
+        i++;
+      }
+    }
+    // Text that does not end with a line ending still has a last row.
+    if (!atFieldStart || fields.isNotEmpty) {
+      fields.add(field.toString());
+      rows.add(fields);
+    }
+    final width = rows.fold(0, (w, r) => r.length > w ? r.length : w);
+    return [
+      for (final r in rows) [...r, ...List.filled(width - r.length, '')],
+    ];
+  }
+
+  /// Pastes tab-separated text into [target], or the selected range when
+  /// omitted, through [pasteValues].
+  void pasteTsv(String tsv, [CellRange? target]) {
+    target ??= selection.range;
+    if (target != null) pasteValues(target, parseTsv(tsv));
+  }
+
+  /// Adds empty rows and columns until the sheet is at least [rows] by
+  /// [cols]. Records no undo history.
+  void _growTo(int rows, int cols) {
+    final addCols = cols - colCount;
+    if (addCols > 0) {
+      for (var r = 0; r < rowCount; r++) {
+        final extra = List.generate(addCols, (_) => DataCell(''));
+        table.rows[r].cells.addAll(extra);
+        _rows[r].value = [..._rows[r].value, ...extra];
+      }
+      columnWidths.addAll(List.filled(addCols, kDefaultColumnWidth));
+    }
+    final width = max(cols, colCount);
+    while (rowCount < rows) {
+      final cells = List.generate(width, (_) => DataCell(''));
+      table.rows.add(DataRow(List<DataCell>.from(cells)));
+      _rows.add(ValueNotifier<List<DataCell>>(cells));
+      rowHeights.add(kDefaultRowHeight);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -649,6 +918,7 @@ class DataSheetController extends ChangeNotifier {
       _rows[i].dispose();
       _rows.removeAt(i);
       if (i < rowHeights.length) rowHeights.removeAt(i);
+      if (i < _frozenRows) _frozenRows--;
     }
     _recompute();
     notifyListeners();
@@ -754,6 +1024,8 @@ class DataSheetController extends ChangeNotifier {
         List<double>.filled(newColCount, kDefaultColumnWidth, growable: true);
     rowHeights =
         List<double>.filled(_rows.length, kDefaultRowHeight, growable: true);
+    _frozenRows = _frozenRows.clamp(0, _rows.length);
+    _frozenColumns = _frozenColumns.clamp(0, newColCount);
     _recompute();
     notifyListeners();
   }

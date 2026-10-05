@@ -692,7 +692,7 @@ void main() {
         c.dispose();
       });
 
-      test('pasteValues lands a block at the top-left, clipped', () {
+      test('pasteValues lands a block at the top-left, growing the sheet', () {
         final c = _grid();
         c.pasteValues(
           const CellRange(top: 1, left: 1, bottom: 1, right: 1),
@@ -703,9 +703,10 @@ void main() {
           ],
         );
         expect(_values(c), [
-          ['a', 'b', 'c'],
-          ['d', '1', '2'],
-          ['g', '4', '5'],
+          ['a', 'b', 'c', ''],
+          ['d', '1', '2', '3'],
+          ['g', '4', '5', '6'],
+          ['', '7', '8', '9'],
         ]);
         c.dispose();
       });
