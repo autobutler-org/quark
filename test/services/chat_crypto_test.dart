@@ -108,6 +108,45 @@ void main() {
     });
   });
 
+  group('the recovery key and the phrase wrap key (#2430)', () {
+    final salt = Uint8List.fromList(List.generate(16, (i) => i));
+
+    // Computed the same way as the auth key's vector above, with info
+    // "recovery-auth" and "recovery-wrap". The Quark stores only a hash of
+    // the recovery key, so accounts depend on this never changing.
+    test('the construction is pinned by a fixed vector', () {
+      final keys = crypto.deriveRecoveryKeys(
+        'abandon-ability-able-about-above-absent',
+        salt,
+        KdfParams.standard,
+      );
+      addTearDown(keys.dispose);
+
+      expect(keys.authKey, 'mvSfNFyawdUYP8Sp/ldQ6Zg+ka7XSRpmfJyOYFcprBQ=');
+      expect(
+        base64Encode(keys.wrapKey.extractBytes()),
+        'CbygRxFkwv/F4MG7jK/3wAgXqQt6CXwXlehXx4HYWO0=',
+      );
+    });
+
+    test('the phrase is normalized, and the keys are not the password '
+        "construction's", () {
+      final typed = crypto.deriveRecoveryKeys('  Apple-Bread ', salt, _cheap);
+      final clean = crypto.deriveRecoveryKeys('apple-bread', salt, _cheap);
+      final asPassword = crypto.deriveAuthKeys('apple-bread', salt, _cheap);
+      addTearDown(typed.dispose);
+      addTearDown(clean.dispose);
+      addTearDown(asPassword.dispose);
+
+      expect(typed.authKey, clean.authKey);
+      expect(clean.authKey, isNot(asPassword.authKey));
+      expect(
+        clean.wrapKey.extractBytes(),
+        isNot(asPassword.wrapKey.extractBytes()),
+      );
+    });
+  });
+
   test('each wrap draws a fresh salt and nonce', () {
     final identity = crypto.generateIdentity();
     final a = crypto.wrap(identity, 'same', _cheap);

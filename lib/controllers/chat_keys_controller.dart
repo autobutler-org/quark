@@ -8,16 +8,20 @@ import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/chat_key_service.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/recovery_phrase.dart';
+import 'package:sodium/sodium_sumo.dart';
 
 /// Holds the signed-in account's unlocked chat identity for the whole app
 /// (#2416).
 ///
 /// The identity's private seeds leave the client only wrapped: under a key
-/// derived from the login password, and under Argon2id of the recovery phrase
-/// when one was to hand. The password's key is the `wrapKey` of
+/// derived from the login password, and under one derived from the recovery
+/// phrase when one was to hand. The password's key is the `wrapKey` of
 /// [ChatCrypto.deriveAuthKeys] (#2430), which the Quark is never sent; an
 /// account on a Quark that still takes the raw password keeps the first
-/// scheme, Argon2id of the password itself.
+/// scheme, Argon2id of the password itself. The phrase's is the `wrapKey` of
+/// [ChatCrypto.deriveRecoveryKeys] for a phrase the app generated, and
+/// Argon2id of the phrase for one the Quark made.
 /// [signedIn] runs at every sign-in with the password the form already has:
 /// it unwraps the stored identity, or makes and uploads one when there is
 /// none. [keysForRecovery] opens it with the phrase and re-wraps it under the
@@ -41,7 +45,8 @@ class ChatKeysController extends ChangeNotifier {
     putMine,
     Future<WrappedChatKeys?> Function({
       required String username,
-      required String recoveryPhrase,
+      String? recoveryPhrase,
+      String? recoveryKey,
     })?
     fetchForRecovery,
     Future<String?> Function(String key)? readCache,
@@ -70,7 +75,8 @@ class ChatKeysController extends ChangeNotifier {
   _putMine;
   final Future<WrappedChatKeys?> Function({
     required String username,
-    required String recoveryPhrase,
+    String? recoveryPhrase,
+    String? recoveryKey,
   })
   _fetchForRecovery;
   final Future<String?> Function(String key) _readCache;
@@ -129,21 +135,35 @@ class ChatKeysController extends ChangeNotifier {
   /// new keys are wrapped under the split scheme, and a stored wrap still in
   /// the first scheme is re-wrapped and uploaded once it has opened. Without
   /// it, on a Quark that still takes the raw password, the first scheme stays.
-  Future<void> signedIn({
+  ///
+  /// [phraseWrapKey], with [authSalt], is the `wrapKey` of a phrase the app
+  /// generated ([ChatCrypto.deriveRecoveryKeys]), and stands in for
+  /// [recoveryPhrase]. New keys are uploaded with their phrase wrap under it.
+  /// Stored keys are not: they come back re-wrapped under it, for the request
+  /// that registers the phrase to store, since the phrase the stored wrap is
+  /// under still works until then. The result is null without it.
+  Future<WrappedChatKeys?> signedIn({
     required String password,
     String? recoveryPhrase,
+    SecureKey? phraseWrapKey,
     String? sessionToken,
     Uint8List? authSalt,
   }) async {
     final crypto = await _cryptoLoaded();
     final stored = await _fetchMine(sessionToken: sessionToken);
     final ChatIdentity identity;
+    var current = stored;
     if (stored == null) {
       identity = crypto.generateIdentity();
-      await _putMine(
-        _wrapAll(crypto, identity, password, recoveryPhrase, authSalt),
-        sessionToken: sessionToken,
+      current = _wrapAll(
+        crypto,
+        identity,
+        password,
+        recoveryPhrase,
+        authSalt,
+        phraseWrapKey: phraseWrapKey,
       );
+      await _putMine(current, sessionToken: sessionToken);
     } else if (stored.kdfParams.isSplit) {
       final keys = crypto.deriveAuthKeys(
         password,
@@ -161,32 +181,49 @@ class ChatKeysController extends ChangeNotifier {
         // The phrase wrap is kept as it is, so the cost it records has to
         // stay the one it was made with.
         final params = stored.kdfParams.split;
-        await _putMine(
-          WrappedChatKeys(
-            publicKeys: stored.publicKeys,
-            byPassword: _wrapByPassword(
-              crypto,
-              identity,
-              password,
-              authSalt,
-              params,
-            ),
-            byPhrase: stored.byPhrase,
-            kdfParams: params,
+        current = WrappedChatKeys(
+          publicKeys: stored.publicKeys,
+          byPassword: _wrapByPassword(
+            crypto,
+            identity,
+            password,
+            authSalt,
+            params,
           ),
-          sessionToken: sessionToken,
+          byPhrase: stored.byPhrase,
+          kdfParams: params,
         );
+        await _putMine(current, sessionToken: sessionToken);
       }
     }
+    final rewrapped = phraseWrapKey == null || authSalt == null
+        ? null
+        : stored == null
+        ? current
+        : WrappedChatKeys(
+            publicKeys: current!.publicKeys,
+            byPassword: current.byPassword,
+            byPhrase: crypto.wrapWithKey(identity, phraseWrapKey, authSalt),
+            kdfParams: current.kdfParams.phraseSplit,
+          );
     await _adopt(identity);
+    return rewrapped;
   }
 
   /// Recovery's half of the work, before `/auth/recover` resets the password:
-  /// fetches the identity with [recoveryPhrase], opens it, and returns it
-  /// re-wrapped under [newPassword] and the phrase, to send in that request.
+  /// fetches the identity, opens it with [recoveryPhrase], and returns it
+  /// re-wrapped under [newPassword] and a phrase, to send in that request.
   ///
   /// [authSalt] is the salt the new auth key was derived with; with it the
   /// password wrap is in the split scheme, as in [signedIn].
+  ///
+  /// [recoveryKeys] are [recoveryPhrase]'s keys under [authSalt], for an
+  /// account the Quark checks by recovery key: the fetch sends their
+  /// `authKey` in place of the phrase, and a phrase-split wrap opens under
+  /// their `wrapKey`. Without them the raw phrase is sent and a phrase-split
+  /// wrap derives its own key. The result's phrase wrap is under
+  /// [newPhraseWrapKey], the key of a phrase this recovery gives the account,
+  /// else under [recoveryKeys]' `wrapKey`, else under Argon2id of the phrase.
   ///
   /// An account with no keys, or keys made without a phrase wrap, gets a new
   /// identity, since nothing else can open the old one; its old messages stay
@@ -194,6 +231,8 @@ class ChatKeysController extends ChangeNotifier {
   Future<WrappedChatKeys> keysForRecovery({
     required String username,
     required String recoveryPhrase,
+    AuthKeys? recoveryKeys,
+    SecureKey? newPhraseWrapKey,
     required String newPassword,
     Uint8List? authSalt,
   }) async {
@@ -201,21 +240,60 @@ class ChatKeysController extends ChangeNotifier {
     final phrase = normalizeRecoveryPhrase(recoveryPhrase);
     final stored = await _fetchForRecovery(
       username: username,
-      recoveryPhrase: recoveryPhrase,
+      recoveryPhrase: recoveryKeys == null ? recoveryPhrase : null,
+      recoveryKey: recoveryKeys?.authKey,
     );
     final byPhrase = stored?.byPhrase;
     final identity = stored == null || byPhrase == null
         ? crypto.generateIdentity()
-        : crypto.unwrap(
+        : _openByPhrase(
+            crypto,
+            stored.kdfParams,
             byPhrase,
             phrase,
-            stored.kdfParams,
-            wrongSecret: Errors.chatKeysWrongPhrase,
+            recoveryKeys,
           );
     try {
-      return _wrapAll(crypto, identity, newPassword, phrase, authSalt);
+      return _wrapAll(
+        crypto,
+        identity,
+        newPassword,
+        phrase,
+        authSalt,
+        phraseWrapKey: newPhraseWrapKey ?? recoveryKeys?.wrapKey,
+      );
     } finally {
       identity.dispose();
+    }
+  }
+
+  /// Opens a phrase wrap in whichever scheme [params] records.
+  static ChatIdentity _openByPhrase(
+    ChatCrypto crypto,
+    KdfParams params,
+    WrappedSecret byPhrase,
+    String phrase,
+    AuthKeys? recoveryKeys,
+  ) {
+    if (!params.isPhraseSplit) {
+      return crypto.unwrap(
+        byPhrase,
+        phrase,
+        params,
+        wrongSecret: Errors.chatKeysWrongPhrase,
+      );
+    }
+    final keys =
+        recoveryKeys ??
+        crypto.deriveRecoveryKeys(phrase, byPhrase.salt, params);
+    try {
+      return crypto.unwrapWithKey(
+        byPhrase,
+        keys.wrapKey,
+        wrongSecret: Errors.chatKeysWrongPhrase,
+      );
+    } finally {
+      if (recoveryKeys == null) keys.dispose();
     }
   }
 
@@ -227,26 +305,30 @@ class ChatKeysController extends ChangeNotifier {
     if (forget && _persist && host != null) await _deleteCache(_cacheKey(host));
   }
 
-  /// The phrase as the Quark checks it: trimmed and lowercased, as
-  /// `authutil.NormalizeRecoveryPhrase` does, so a phrase typed with capitals
-  /// still opens its wrap.
-  static String normalizeRecoveryPhrase(String phrase) =>
-      phrase.trim().toLowerCase();
-
+  /// [identity] wrapped under [password] and, when there is one, a phrase:
+  /// [phraseWrapKey] with [authSalt], else Argon2id of [recoveryPhrase].
   WrappedChatKeys _wrapAll(
     ChatCrypto crypto,
     ChatIdentity identity,
     String password,
     String? recoveryPhrase,
-    Uint8List? authSalt,
-  ) {
-    final params = authSalt == null ? kdfParams : kdfParams.split;
+    Uint8List? authSalt, {
+    SecureKey? phraseWrapKey,
+  }) {
+    final phraseSplit = authSalt != null && phraseWrapKey != null;
+    final params = authSalt == null
+        ? kdfParams
+        : phraseSplit
+        ? kdfParams.phraseSplit
+        : kdfParams.split;
     return WrappedChatKeys(
       publicKeys: identity.publicKeys,
       byPassword: authSalt == null
           ? crypto.wrap(identity, password, params)
           : _wrapByPassword(crypto, identity, password, authSalt, params),
-      byPhrase: recoveryPhrase == null
+      byPhrase: phraseSplit
+          ? crypto.wrapWithKey(identity, phraseWrapKey, authSalt)
+          : recoveryPhrase == null
           ? null
           : crypto.wrap(
               identity,

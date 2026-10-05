@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:quark/models/chat_keys.dart';
 import 'package:quark/utils/error_text.dart';
+import 'package:quark/utils/recovery_phrase.dart';
 import 'package:sodium/sodium_sumo.dart';
 
 /// Every cryptographic operation chat needs, on libsodium (#2416).
@@ -12,8 +13,9 @@ import 'package:sodium/sodium_sumo.dart';
 /// sumo-only there. The Quark never runs any of this: it stores what [wrap]
 /// produces and hands it back.
 ///
-/// - Identity: [generateIdentity], [wrap] and [unwrap], and for the password
-///   wrap [deriveAuthKeys], [wrapWithKey] and [unwrapWithKey] (#2430).
+/// - Identity: [generateIdentity], [wrap] and [unwrap], and for the split
+///   wraps [deriveAuthKeys], [deriveRecoveryKeys], [wrapWithKey] and
+///   [unwrapWithKey] (#2430). [generateRecoveryPhrase] makes the phrase.
 /// - Key grants (#2417): [seal] and [openSealed] for `crypto_box_seal` to a
 ///   member's X25519 key, and [sign] and [verify] for Ed25519.
 /// - Messages (#2418): [newChannelKey], [channelKeyFromBytes], [encrypt] and
@@ -91,15 +93,59 @@ class ChatCrypto {
   /// HKDF is RFC 5869 extract-then-expand, with the empty salt the RFC reads
   /// as 32 zero bytes. [salt] is the account's 16-byte auth salt from
   /// `GET /auth/salt`. The caller disposes the result.
-  AuthKeys deriveAuthKeys(String password, Uint8List salt, KdfParams params) {
+  AuthKeys deriveAuthKeys(String password, Uint8List salt, KdfParams params) =>
+      _deriveSplit(password, salt, params, 'auth', 'chat-wrap');
+
+  /// The same construction over a recovery phrase (#2430): `authKey` is the
+  /// `recoveryKey` the Quark is sent in the phrase's place, and `wrapKey`
+  /// opens the chat identity's phrase wrap.
+  ///
+  /// ```text
+  /// phraseMaster = Argon2id13(normalize(phrase), salt, params), 32 bytes
+  /// recoveryKey  = HKDF-SHA256(phraseMaster, info = "recovery-auth"), 32 bytes
+  /// wrapKey      = HKDF-SHA256(phraseMaster, info = "recovery-wrap"), 32 bytes
+  /// ```
+  ///
+  /// [phrase] is normalized here ([normalizeRecoveryPhrase]), so a phrase
+  /// typed with capitals derives the same keys. [salt] is the account's auth
+  /// salt. The caller disposes the result.
+  AuthKeys deriveRecoveryKeys(
+    String phrase,
+    Uint8List salt,
+    KdfParams params,
+  ) => _deriveSplit(
+    normalizeRecoveryPhrase(phrase),
+    salt,
+    params,
+    'recovery-auth',
+    'recovery-wrap',
+  );
+
+  /// A new recovery phrase: [recoveryPhraseWords] words of [recoveryWords]
+  /// joined by hyphens, the Quark's own format. The list has 256 words, so
+  /// each random byte picks one with no bias.
+  String generateRecoveryPhrase() => [
+    for (final byte in sodium.randombytes.buf(recoveryPhraseWords))
+      recoveryWords[byte],
+  ].join('-');
+
+  /// One Argon2id run over [secret], split by HKDF-SHA256 into a key sent
+  /// under [authInfo] and a wrap key under [wrapInfo].
+  AuthKeys _deriveSplit(
+    String secret,
+    Uint8List salt,
+    KdfParams params,
+    String authInfo,
+    String wrapInfo,
+  ) {
     final hkdf = sodium.crypto.kdfHkdfSha256;
-    final master = _derive(password, salt, params);
+    final master = _derive(secret, salt, params);
     try {
       final prk = master.runUnlockedSync((ikm) => hkdf.extract(ikm: ikm));
       try {
         final authKey = hkdf.expand(
           masterKey: prk,
-          context: 'auth',
+          context: authInfo,
           outLen: 32,
         );
         try {
@@ -107,7 +153,7 @@ class ChatCrypto {
             authKey: base64Encode(authKey.extractBytes()),
             wrapKey: hkdf.expand(
               masterKey: prk,
-              context: 'chat-wrap',
+              context: wrapInfo,
               outLen: _aead.keyBytes,
             ),
           );
@@ -435,8 +481,9 @@ class ChatIdentity {
   }
 }
 
-/// What [ChatCrypto.deriveAuthKeys] makes of a password (#2430): the key the
-/// Quark is sent in the password's place, and the key that wraps the chat
+/// What [ChatCrypto.deriveAuthKeys] makes of a password, or
+/// [ChatCrypto.deriveRecoveryKeys] of a recovery phrase (#2430): the key the
+/// Quark is sent in the secret's place, and the key that wraps the chat
 /// identity and never leaves the client.
 ///
 /// Neither is to be logged or kept past the request it was derived for.
@@ -445,10 +492,12 @@ class AuthKeys {
   /// Pairs the two keys.
   AuthKeys({required this.authKey, required this.wrapKey});
 
-  /// The standard padded base64 of 32 bytes: `authKey` on the wire.
+  /// The standard padded base64 of 32 bytes: `authKey`, or `recoveryKey`, on
+  /// the wire.
   final String authKey;
 
-  /// The XChaCha20-Poly1305 key of the chat identity's password wrap.
+  /// The XChaCha20-Poly1305 key of the chat identity's password wrap, or its
+  /// phrase wrap.
   final SecureKey wrapKey;
 
   /// Frees the wrap key.

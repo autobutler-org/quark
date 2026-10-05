@@ -88,33 +88,48 @@ void main() {
   final rewraps = <String>[];
   final unlocks = <String>[];
 
+  /// The recovery keys each re-wrap was handed, null for none.
+  final recoveryKeysSeen = <String?>[];
+
+  /// How many re-wraps were handed a new phrase's wrap key.
+  var newPhraseKeys = 0;
+
   setUp(() {
     rewraps.clear();
     unlocks.clear();
+    recoveryKeysSeen.clear();
+    newPhraseKeys = 0;
     chatKeysForRecovery =
         ({
           required username,
           required recoveryPhrase,
+          recoveryKeys,
+          newPhraseWrapKey,
           required newPassword,
           authSalt,
         }) {
           rewraps.add('$username/$recoveryPhrase/$newPassword/$authSalt');
+          recoveryKeysSeen.add(recoveryKeys?.authKey);
+          if (newPhraseWrapKey != null) newPhraseKeys++;
           return Future.value(rewrapped);
         };
     chatKeysOnSignIn =
         ({
           required password,
           recoveryPhrase,
+          phraseWrapKey,
           required sessionToken,
           authSalt,
         }) async {
           unlocks.add('$password/$sessionToken/$authSalt');
+          return null;
         };
   });
 
   tearDown(() => authHttpClientFactory = () => sharedHttpClient);
 
-  test('recovery names the account the phrase belongs to', () async {
+  test('recovery names the account the phrase belongs to, and a Quark that '
+      'does not report recovery keys still gets the phrase', () async {
     final client = _RecordingClient();
     final salts = AuthSaltClient(client);
     authHttpClientFactory = () => salts;
@@ -159,6 +174,8 @@ void main() {
           ({
             required username,
             required recoveryPhrase,
+            recoveryKeys,
+            newPhraseWrapKey,
             required newPassword,
             authSalt,
           }) => Future.error(const MessageException('invalid recovery phrase'));
@@ -174,6 +191,109 @@ void main() {
       expect(client.requests, isEmpty);
     },
   );
+
+  group('recovery keys (#2430):', () {
+    const phrase = 'apple-bread-cloud-delta-eagle-flame';
+    late _RecordingClient client;
+    late AuthSaltClient salts;
+
+    setUp(() {
+      client = _RecordingClient();
+      salts = AuthSaltClient(client);
+      authHttpClientFactory = () => salts;
+    });
+
+    Future<LoginResult> recover() => AuthService.recover(
+      username: 'grace',
+      recoveryPhrase: phrase,
+      newPassword: 'brand-new-password',
+    );
+
+    Map<String, dynamic> sent() =>
+        jsonDecode(client.requests.single.body) as Map<String, dynamic>;
+
+    test('an account with a recovery key is sent the key, not the phrase, '
+        'and keeps its phrase', () async {
+      salts.legacyRecovery = false;
+
+      final result = await recover();
+
+      final recoveryKey = await testRecoveryKey(phrase);
+      expect(sent(), {
+        'username': 'grace',
+        'recoveryKey': recoveryKey,
+        'newAuthKey': await testAuthKey('brand-new-password'),
+        'chatKeys': rewrapped.toJson(),
+      });
+      expect(client.requests.single.body, isNot(contains('apple')));
+      // The re-wrap fetched and opened with the same key.
+      expect(recoveryKeysSeen, [recoveryKey]);
+      expect(newPhraseKeys, 0);
+      expect(result.recoveryPhrase, isNull);
+      expect(AppSettings.instance.hasRecoveryKey('grace'), isTrue);
+    });
+
+    test('an account without one sends its phrase once, and is given a new '
+        'one', () async {
+      salts.legacyRecovery = true;
+
+      final result = await recover();
+
+      final body = sent();
+      expect(body['recoveryPhrase'], phrase);
+      expect(body['newAuthKey'], await testAuthKey('brand-new-password'));
+      expect(body.containsKey('recoveryKey'), isFalse);
+      final next = result.recoveryPhrase!;
+      expect(next, isNot(phrase));
+      expect(body['newRecoveryKey'], await testRecoveryKey(next));
+      expect(client.requests.single.body, isNot(contains(next)));
+      expect(newPhraseKeys, 1);
+      expect(AppSettings.instance.hasRecoveryKey('grace'), isTrue);
+    });
+
+    for (final claim in [true, null]) {
+      test('once this Quark has a recovery key, a claim of '
+          '${claim == null ? 'no field' : 'legacyRecovery'} is refused the '
+          'phrase', () async {
+        salts.legacyRecovery = false;
+        await recover();
+        client.requests.clear();
+        salts.legacyRecovery = claim;
+
+        await expectLater(
+          recover(),
+          throwsA(
+            isA<MessageException>().having(
+              (e) => e.message,
+              'message',
+              Errors.recoveryPhraseDowngradeRefused,
+            ),
+          ),
+        );
+        expect(client.requests, isEmpty);
+        expect(rewraps, hasLength(1));
+      });
+    }
+
+    test('a Quark with no salt endpoint is refused it too', () async {
+      await AppSettings.instance.rememberRecoveryKey('grace');
+      salts.status = 404;
+
+      await expectLater(recover(), throwsA(isA<MessageException>()));
+      expect(client.requests, isEmpty);
+    });
+
+    test('a failed recovery remembers nothing', () async {
+      salts.legacyRecovery = true;
+      authHttpClientFactory = () => AuthSaltClient(
+        MockClient((_) async => http.Response('{"error":"nope"}', 400)),
+        legacyRecovery: true,
+      );
+
+      await expectLater(recover(), throwsA(isA<MessageException>()));
+      expect(AppSettings.instance.hasRecoveryKey('grace'), isFalse);
+    });
+  });
 
   test('the recovery key fetch sends no session and passes on the Quark\'s '
       'text', () async {
