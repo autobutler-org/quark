@@ -1,6 +1,6 @@
 // Package v0_files serves /api/v0/files: listing, searching and stat-ing files, uploads (including resumable upload
 // sessions), downloads and archive views, moves, deletes and new folders, spreadsheet conversions between .xlsx
-// and .qsheet (the .xlsx export streamed back as a download), and a presentation's .pptx export.
+// and .qsheet (the .xlsx export streamed back as a download), and a presentation's .pptx export and import.
 package v0_files
 
 import (
@@ -24,6 +24,26 @@ type ConvertXlsxJSON struct {
 	Tabs  int    `json:"tabs"`
 	Rows  int    `json:"rows"`
 	Cells int    `json:"cells"`
+}
+
+// ImportPptxJSON reports the .qslide a PowerPoint file was imported as. The
+// client opens Path and shows the warnings: what the import left out or
+// approximated.
+type ImportPptxJSON struct {
+	Path string `json:"path"`
+	// MediaDir is the folder the pictures were stored in, empty when the
+	// presentation has none.
+	MediaDir string              `json:"mediaDir,omitempty"`
+	Slides   int                 `json:"slides"`
+	Pictures int                 `json:"pictures"`
+	Warnings []ImportWarningJSON `json:"warnings"`
+}
+
+// ImportWarningJSON is one thing an import left out or approximated, on the
+// slide numbered Slide from 1; 0 is the whole presentation.
+type ImportWarningJSON struct {
+	Slide   int    `json:"slide"`
+	Message string `json:"message"`
 }
 
 func NewRouter() serverutil.Router {

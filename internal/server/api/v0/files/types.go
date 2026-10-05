@@ -18,6 +18,7 @@ func (r *router) Routes() []*serverutil.Route {
 		exportPptxRoute,
 		exportXlsxRoute,
 		extractFileRoute,
+		importPptxRoute,
 		listArchiveRoute,
 		listFilesByTypeRoute,
 		listFilesRoute,

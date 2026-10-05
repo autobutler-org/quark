@@ -5268,6 +5268,76 @@
                 }
             }
         },
+        "/files/import/pptx": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Reads a .pptx (or .pptm or .ppsx) and writes it as a .qslide, the format the Slides editor opens, in rootDir — the PowerPoint file's own folder when rootDir is left out. Its pictures are copied into a \u003cname\u003e_media folder beside the presentation. Nothing is overwritten: a name already taken is kept, and the import lands under the next free numbered name, as Talk_(1).qslide. What the editor cannot show — charts, tables, SmartArt, video, animations — is skipped and listed in the warnings, slide by slide. The PowerPoint file itself is left untouched. Needs read access on it and write access on rootDir; the caller owns what the import created.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Import a PowerPoint file as a Quark presentation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Path to the .pptx file to import",
+                        "name": "filePath",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Folder to write the presentation into; defaults to the .pptx's folder",
+                        "name": "rootDir",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Device serial number",
+                        "name": "serial",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_files.ImportPptxJSON"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/files/list-archive": {
             "get": {
                 "security": [
@@ -11908,6 +11978,41 @@
                     "type": "string"
                 },
                 "size": {
+                    "type": "integer"
+                }
+            }
+        },
+        "v0_files.ImportPptxJSON": {
+            "type": "object",
+            "properties": {
+                "mediaDir": {
+                    "description": "MediaDir is the folder the pictures were stored in, empty when the\npresentation has none.",
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "pictures": {
+                    "type": "integer"
+                },
+                "slides": {
+                    "type": "integer"
+                },
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v0_files.ImportWarningJSON"
+                    }
+                }
+            }
+        },
+        "v0_files.ImportWarningJSON": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "slide": {
                     "type": "integer"
                 }
             }

@@ -1415,6 +1415,31 @@ definitions:
       size:
         type: integer
     type: object
+  v0_files.ImportPptxJSON:
+    properties:
+      mediaDir:
+        description: |-
+          MediaDir is the folder the pictures were stored in, empty when the
+          presentation has none.
+        type: string
+      path:
+        type: string
+      pictures:
+        type: integer
+      slides:
+        type: integer
+      warnings:
+        items:
+          $ref: '#/definitions/v0_files.ImportWarningJSON'
+        type: array
+    type: object
+  v0_files.ImportWarningJSON:
+    properties:
+      message:
+        type: string
+      slide:
+        type: integer
+    type: object
   v0_files.StatFileJSON:
     properties:
       fileType:
@@ -5954,6 +5979,60 @@ paths:
       security:
       - BearerAuth: []
       summary: Create a new folder
+      tags:
+      - files
+  /files/import/pptx:
+    post:
+      description: 'Reads a .pptx (or .pptm or .ppsx) and writes it as a .qslide,
+        the format the Slides editor opens, in rootDir — the PowerPoint file''s own
+        folder when rootDir is left out. Its pictures are copied into a <name>_media
+        folder beside the presentation. Nothing is overwritten: a name already taken
+        is kept, and the import lands under the next free numbered name, as Talk_(1).qslide.
+        What the editor cannot show — charts, tables, SmartArt, video, animations
+        — is skipped and listed in the warnings, slide by slide. The PowerPoint file
+        itself is left untouched. Needs read access on it and write access on rootDir;
+        the caller owns what the import created.'
+      parameters:
+      - description: Path to the .pptx file to import
+        in: query
+        name: filePath
+        required: true
+        type: string
+      - description: Folder to write the presentation into; defaults to the .pptx's
+          folder
+        in: query
+        name: rootDir
+        type: string
+      - description: Device serial number
+        in: query
+        name: serial
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_files.ImportPptxJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Import a PowerPoint file as a Quark presentation
       tags:
       - files
   /files/list-archive:

@@ -1,5 +1,7 @@
-// Package pptxutil writes a .qslide presentation out as a PowerPoint (.pptx)
-// package for export (#1172), using nothing but archive/zip and XML text.
+// Package pptxutil converts between .qslide presentations and PowerPoint
+// (.pptx) packages, using nothing but archive/zip and encoding/xml: it writes
+// a .qslide out as a .pptx for export (#1172), and reads a .pptx back in as a
+// .qslide for import (#1171).
 //
 // A .pptx is a zip of PresentationML parts: the content types, the package and
 // presentation relationships, docProps, ppt/presentation.xml with the slide
@@ -16,6 +18,14 @@
 // backgrounds; and speaker notes. An element type this writer does not know is
 // left out, as is a picture it cannot embed — see [ExportQslideParams].
 //
+// Import reads the same features back, from any PowerPoint file rather than
+// only this package's own: placeholders take their position and text style
+// from their layout and master, theme colors resolve to the theme's RGB, and
+// the master's and layout's own shapes are drawn behind each slide's. What the
+// editor has no model for — charts, tables, SmartArt, embedded objects, video
+// and audio, ink, animations and transitions — is skipped and named in the
+// slide's warnings; see [ImportPptx].
+//
 // # Units
 //
 // A slide is laid out in abstract slide units (1920×1080 for 16:9). The
@@ -25,6 +35,12 @@
 // same factor: a 72-unit heading on a 1920-wide slide is 36 pt. Only when that
 // would make the slide's height fall outside what PowerPoint accepts
 // (1 in to 56 in) is the scale taken from the height instead.
+//
+// Import takes its units from the slide size: a 16:9 or 4:3 slide becomes the
+// editor's 1920×1080 or 1024×768 preset, so a deck exported here comes back in
+// the units it left in, and any other shape is 1920 units wide and as tall as
+// its aspect makes it. Lengths, stroke widths and font sizes divide by the
+// same EMU-per-unit factor, and are kept to two decimals.
 //
 // # Streaming
 //
@@ -61,14 +77,42 @@ const (
 	MaxMediaBytes = 1 << 30 // 1 GiB
 )
 
+// Import limits. A .pptx is user-supplied, and a zip says what it holds before
+// it is read, so each limit is checked against what is actually read.
+const (
+	// MaxImportEntries bounds the entries of one package, checked against its
+	// directory before the directory is read.
+	MaxImportEntries = 20_000
+	// MaxImportBytes bounds what a package unpacks to, every part together.
+	MaxImportBytes = 2 << 30 // 2 GiB
+	// MaxXMLPartBytes bounds one XML part unpacked: a slide, a layout, a
+	// theme.
+	MaxXMLPartBytes = 32 << 20 // 32 MiB
+	// MaxXMLElements bounds the elements of one XML part, which is what a
+	// decoded part costs in memory.
+	MaxXMLElements = 250_000
+	// MaxTemplateElements bounds the elements of every layout and master
+	// together: they are read once and kept for the slides that use them.
+	MaxTemplateElements = 1_000_000
+	// MaxXMLDepth bounds how deeply a part's elements nest.
+	MaxXMLDepth = 256
+	// maxCentralDirectoryBytes bounds the zip directory archive/zip reads
+	// whole before anything else.
+	maxCentralDirectoryBytes = 16 << 20 // 16 MiB
+)
+
 var (
+	// ErrNotPptx reports a source that is not a PowerPoint package, or one
+	// whose entry names climb out of it. The caller's file is at fault, so
+	// callers answer 400 for it.
+	ErrNotPptx = errors.New("pptxutil: not a pptx")
 	// ErrNotQslide reports a source that is not a .qslide presentation, or
 	// one written by a newer schema than this writer reads. The file is at
 	// fault, not the server, so callers answer 400 for it.
 	ErrNotQslide = errors.New("pptxutil: not a qslide")
 	// ErrTooLarge reports a presentation past one of the limits above. Also
 	// the caller's file, and also a 400.
-	ErrTooLarge = errors.New("pptxutil: presentation exceeds export limits")
+	ErrTooLarge = errors.New("pptxutil: presentation exceeds the size limits")
 )
 
 // OpenImageFunc opens the picture a slide names by source — the reference an
@@ -112,4 +156,64 @@ func ExportQslide(params ExportQslideParams) (ExportQslideResult, error) {
 		return ExportQslideResult{}, errors.New("pptxutil: Source and Out are required")
 	}
 	return writePptx(params.Out, &cappedReader{r: params.Source, remaining: MaxQslideBytes}, params.OpenImage)
+}
+
+// StoreMediaFunc stores a picture an import found, under a name like
+// image1.png whose extension matches its content, and returns the reference
+// the .qslide names it by. It reads r to EOF; r fails with [ErrTooLarge] past
+// [MaxImageBytes], and a picture that fails that way is skipped with a
+// warning. Any other error fails the import.
+type StoreMediaFunc func(name string, r io.Reader) (string, error)
+
+// ImportPptxParams is one .pptx on its way to becoming a .qslide.
+type ImportPptxParams struct {
+	// Source is the package, read in place: a zip's directory is at its end.
+	Source io.ReaderAt
+	// Size is Source's length in bytes.
+	Size int64
+	// Out receives the .qslide JSON, a slide at a time.
+	Out io.Writer
+	// StoreMedia stores the pictures the slides show. Each is stored once,
+	// however many slides show it. Nil skips every picture, with a warning.
+	StoreMedia StoreMediaFunc
+	// Title is the presentation's title when the package names none.
+	Title string
+}
+
+// ImportPptxResult reports what the imported presentation came to.
+type ImportPptxResult struct {
+	// Slides is the number of slides written.
+	Slides int
+	// Pictures is the number of distinct pictures stored.
+	Pictures int
+	// Warnings lists what was left out or approximated, slide by slide.
+	Warnings []ImportWarning
+}
+
+// ImportWarning is one thing an import left out or approximated.
+type ImportWarning struct {
+	// Slide is the slide's number in show order, from 1; 0 is the deck.
+	Slide int
+	// Message says what, in a sentence a user can read.
+	Message string
+}
+
+// ImportPptx reads the .pptx in params.Source and writes the equivalent
+// .qslide to params.Out, one slide per slide in show order.
+//
+// What the editor cannot show is skipped and reported in the result's
+// warnings — a chart, a table, an unknown shape drawn as a rectangle — and is
+// never a failure. Errors wrap [ErrNotPptx] when the source is not a
+// PowerPoint package and [ErrTooLarge] past the import limits; anything else
+// is a read, write or StoreMedia failure. Out may hold part of a .qslide when
+// an error is returned.
+func ImportPptx(params ImportPptxParams) (ImportPptxResult, error) {
+	if params.Source == nil || params.Out == nil {
+		return ImportPptxResult{}, errors.New("pptxutil: Source and Out are required")
+	}
+	archive, err := openArchive(params.Source, params.Size)
+	if err != nil {
+		return ImportPptxResult{}, err
+	}
+	return readPptx(archive, params)
 }
