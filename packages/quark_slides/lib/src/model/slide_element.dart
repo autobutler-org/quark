@@ -1,17 +1,23 @@
 import 'dart:math' as math;
 
 import '../format/json_fields.dart';
+import '../format/qslide_format_exception.dart';
+import '../theme/theme_color.dart';
+import 'cell_range.dart';
 import 'element_frame.dart';
 import 'image_source.dart';
 import 'slide_color.dart';
 import 'stroke.dart';
 import '../theme/theme_text_role.dart';
+import 'slide_table_cell.dart';
 import 'text_paragraph.dart';
 import 'unset.dart';
 
+part 'table_element.dart';
+
 /// Something placed on a slide: a [TextBox], [ShapeElement], [ImageElement],
-/// [LineElement] or [GroupElement], or an [UnknownElement] a newer version
-/// wrote.
+/// [LineElement], [TableElement] or [GroupElement], or an [UnknownElement] a
+/// newer version wrote.
 ///
 /// Every element has an [id], unique within its presentation and stable for
 /// the element's life — moving, restyling or reordering it keeps the id —
@@ -139,6 +145,8 @@ sealed class SlideElement {
           opacity: _opacity(json, path),
           extra: unknownFields(json, LineElement._known),
         );
+      case TableElement.typeName:
+        return TableElement._fromJson(json, id, frame, path);
       case GroupElement.typeName:
         final children = optionalList(json, 'children', path);
         return GroupElement(

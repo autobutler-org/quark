@@ -108,7 +108,11 @@ class ElementStyle {
           endCap: endCap,
           opacity: opacity,
         );
-      case TextBox() || ImageElement() || GroupElement() || UnknownElement():
+      case TextBox() ||
+            ImageElement() ||
+            TableElement() ||
+            GroupElement() ||
+            UnknownElement():
         return element;
     }
   }

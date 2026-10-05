@@ -3,16 +3,19 @@ import 'package:flutter/widgets.dart';
 import '../geometry/frame_geometry.dart';
 import '../geometry/slide_handle.dart';
 import '../geometry/slide_snapping.dart';
+import '../geometry/slide_table_grip.dart';
 import '../geometry/slide_viewport.dart';
 import '../model/element_frame.dart';
 import 'slide_canvas_style.dart';
 import 'slide_selection_handle.dart';
 import 'slide_selection_painter.dart';
+import 'slide_table_grip_view.dart';
 
 /// The editing chrome over a slide, sized to the whole viewport: selection
 /// outlines, the faint outline of an entered group, snap guides and the
 /// marquee, and — when exactly one element is selected — its eight resize
-/// handles and its rotate handle.
+/// handles and its rotate handle, and a selected table's grips between its
+/// columns and rows (see [SlideTableGripView]).
 ///
 /// It sits in screen space rather than in the scaled slide, so handles keep
 /// their size at every zoom. Handles are keyed `slide_handle_<id>`; see
@@ -27,6 +30,8 @@ class SlideSelectionOverlay extends StatelessWidget {
     this.guides = const [],
     this.marquee,
     this.groupFrame,
+    this.tableGrips = const [],
+    this.tableRotation = 0,
   });
 
   /// Maps slide units to the viewport.
@@ -46,6 +51,13 @@ class SlideSelectionOverlay extends StatelessWidget {
 
   /// The frame of the group whose children are being edited, or `null`.
   final ElementFrame? groupFrame;
+
+  /// The grips of a selected table and the slide points they sit on (see
+  /// [SlideTableGrip.gripsOf]); empty for none.
+  final List<(SlideTableGrip, Offset)> tableGrips;
+
+  /// The selected table's rotation, which turns its grips.
+  final double tableRotation;
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +100,19 @@ class SlideSelectionOverlay extends StatelessWidget {
                 rotation: single.rotation,
               ),
             ),
+        for (final (grip, at) in tableGrips)
+          Positioned.fromRect(
+            rect: Rect.fromCenter(
+              center: viewport.toView(at),
+              width: hit,
+              height: hit,
+            ),
+            child: SlideTableGripView(
+              grip: grip,
+              style: style,
+              rotation: tableRotation,
+            ),
+          ),
       ],
     );
   }

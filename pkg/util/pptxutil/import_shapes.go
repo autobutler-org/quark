@@ -123,7 +123,7 @@ func (s *slideReader) convertChildren(items []xTreeItem, t transform, depth int,
 		case item.Group != nil:
 			converted, err = s.convertGroup(item.Group, t, depth, template)
 		case item.Frame != nil:
-			s.warn(graphicFrameWarning(item.Frame.Data.URI))
+			converted, err = s.convertGraphicFrame(item.Frame, t, template)
 		case item.Other == "contentPart":
 			s.warn("Ink drawings are not imported.")
 		}
@@ -139,7 +139,7 @@ func (s *slideReader) convertChildren(items []xTreeItem, t transform, depth int,
 func graphicFrameWarning(uri string) string {
 	switch {
 	case strings.HasSuffix(uri, "/table"):
-		return "Tables are not imported."
+		return "A table that could not be read was left out."
 	case strings.HasSuffix(uri, "/chart") || strings.Contains(uri, "chartex"):
 		return "Charts are not imported."
 	case strings.HasSuffix(uri, "/diagram"):

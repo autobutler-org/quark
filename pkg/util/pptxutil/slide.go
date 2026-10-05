@@ -97,6 +97,8 @@ func (s *slideWriter) writeElement(el qslideElement) {
 		s.writeLine(el)
 	case typeGroup:
 		s.writeGroup(el)
+	case typeTable:
+		s.writeTable(el)
 	}
 }
 
@@ -121,14 +123,20 @@ func (s *slideWriter) nonVisual(id int, name, descr string) {
 // xfrm writes a frame's position, size, rotation and flips. extra goes inside
 // the element after ext, for a group's child extents.
 func (s *slideWriter) xfrm(f qslideFrame, attrs, extra string) {
-	s.out.put(`<a:xfrm`)
+	s.transform("a:xfrm", f, attrs, extra)
+}
+
+// transform writes a frame as xfrm does, in the element tag: a graphic
+// frame's is p:xfrm.
+func (s *slideWriter) transform(tag string, f qslideFrame, attrs, extra string) {
+	s.out.put(`<` + tag)
 	if rot := rotation(f.Rotation); rot != 0 {
 		s.out.printf(` rot="%d"`, rot)
 	}
 	s.out.put(attrs)
 	s.out.printf(`><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/>`,
 		s.emu(f.X), s.emu(f.Y), s.size(f.Width), s.size(f.Height))
-	s.out.put(extra + `</a:xfrm>`)
+	s.out.put(extra + `</` + tag + `>`)
 }
 
 // size is a non-negative extent in EMU.
@@ -159,7 +167,7 @@ func (s *slideWriter) writeShape(el qslideElement, prst string) {
 		s.out.put(`<a:noFill/>`)
 	}
 	if el.Stroke != nil {
-		s.writeLineProps(*el.Stroke, opacity, "", "")
+		s.writeLineProps("a:ln", *el.Stroke, opacity, "", "")
 	} else {
 		s.out.put(`<a:ln><a:noFill/></a:ln>`)
 	}
@@ -196,9 +204,10 @@ func (s *slideWriter) adjustments(el qslideElement) string {
 	return ""
 }
 
-// writeLineProps writes an outline: its width, color at opacity, dash, and the
-// given head and tail ends.
-func (s *slideWriter) writeLineProps(stroke qslideStroke, opacity float64, head, tail string) {
+// writeLineProps writes an outline as the element tag — a:ln, or a table
+// cell's a:lnL, a:lnR, a:lnT or a:lnB: its width, color at opacity, dash,
+// and the given head and tail ends.
+func (s *slideWriter) writeLineProps(tag string, stroke qslideStroke, opacity float64, head, tail string) {
 	width := 2.0
 	if stroke.Width != nil {
 		width = math.Max(*stroke.Width, 0)
@@ -211,7 +220,7 @@ func (s *slideWriter) writeLineProps(stroke qslideStroke, opacity float64, head,
 	}
 	dash, _ := stroke.Dash.(string)
 	prstDash, dashed := strokeDash[dash]
-	s.out.printf(`<a:ln w="%d"`, clampEMU(math.Round(width*s.scale), 0, 20_116_800))
+	s.out.printf(`<%s w="%d"`, tag, clampEMU(math.Round(width*s.scale), 0, 20_116_800))
 	if dash == "dot" {
 		// The editor draws dots round.
 		s.out.put(` cap="rnd"`)
@@ -220,7 +229,7 @@ func (s *slideWriter) writeLineProps(stroke qslideStroke, opacity float64, head,
 	if dashed {
 		s.out.put(`<a:prstDash val="` + prstDash + `"/>`)
 	}
-	s.out.put(head + tail + `</a:ln>`)
+	s.out.put(head + tail + `</` + tag + `>`)
 }
 
 // writeLine writes a straight line or arrow across its frame's diagonal: top
@@ -239,7 +248,7 @@ func (s *slideWriter) writeLine(el qslideElement) {
 	s.out.put(`<p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr>`)
 	s.xfrm(el.Frame, flip, "")
 	s.out.put(`<a:prstGeom prst="line"><a:avLst/></a:prstGeom>`)
-	s.writeLineProps(stroke, opacityOf(el.Opacity), lineEnd("headEnd", el.StartCap), lineEnd("tailEnd", el.EndCap))
+	s.writeLineProps("a:ln", stroke, opacityOf(el.Opacity), lineEnd("headEnd", el.StartCap), lineEnd("tailEnd", el.EndCap))
 	s.out.put(`</p:spPr></p:cxnSp>`)
 }
 

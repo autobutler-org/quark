@@ -4,6 +4,8 @@ import '../format/json_fields.dart';
 import '../geometry/group_geometry.dart';
 import '../geometry/slide_alignment.dart';
 import '../geometry/slide_tree.dart';
+import '../model/cell_format.dart';
+import '../model/cell_range.dart';
 import '../model/element_frame.dart';
 import '../model/element_style.dart';
 import '../model/image_source.dart';
@@ -28,6 +30,7 @@ import '../theme/theme_shape_style.dart';
 import '../model/unset.dart';
 import '../search/slide_match.dart';
 import '../search/slide_replace.dart';
+import '../table/table_edits.dart';
 
 /// Measures how tall, in slide units, a [TextBox]'s text lays out at its
 /// frame's width, its unset styles taken from [theme] (`null` for none).
@@ -946,22 +949,246 @@ class SlideDocumentController {
       : throw ArgumentError.value(e.id, 'elementId', 'is not a text box');
 
   /// [element] grown to fit its text under [theme] (the deck's by
-  /// default), when it is a text box that grows and there is a
-  /// [measureText].
+  /// default), when it is a text box that grows, or a table, and there is
+  /// a [measureText].
   T _fitted<T extends SlideElement>(T element, [Object? theme = unset]) {
     final measure = measureText;
+    final resolved =
+        identical(theme, unset) ? _presentation.theme : theme as SlideTheme?;
+    if (element is TableElement && measure != null) {
+      return fitTableRows(element, (box) => measure(box, resolved)) as T;
+    }
     if (element is! TextBox ||
         element.autoFit != TextAutoFit.grow ||
         measure == null) {
       return element;
     }
-    final height = measure(
-      element,
-      identical(theme, unset) ? _presentation.theme : theme as SlideTheme?,
-    );
+    final height = measure(element, resolved);
     if (height <= element.frame.height + 1e-6) return element;
     return element.withFrame(element.frame.copyWith(height: height)) as T;
   }
+
+  // ---------------------------------------------------------------------------
+  // Tables
+  // ---------------------------------------------------------------------------
+
+  /// Inserts a [rows] × [columns] table on the slide [slideId] and returns
+  /// its id.
+  ///
+  /// It fills [frame] in equal columns and rows, or — left out — is
+  /// [defaultTableColumnWidth] per column (narrowed to fit 80% of the slide)
+  /// by [defaultTableRowHeight] per row, centered on the slide. It has a
+  /// header row and banded rows in the theme's colors and every edge drawn
+  /// with `TableElement.defaultBorder`, and goes in front of everything, or
+  /// at stacking position [index]. Throws an [ArgumentError] for a size
+  /// past `TableElement.maxRows`, `maxColumns` or `maxCells`.
+  ///
+  /// ```dart
+  /// final id = doc.insertTable(slideId, 3, 4);
+  /// ```
+  String insertTable(
+    String slideId,
+    int rows,
+    int columns, {
+    ElementFrame? frame,
+    int? index,
+  }) {
+    final size = defaultTableSize(rows, columns);
+    final table = newTable(
+      id: newId(),
+      frame: frame ?? _centered(size.width, size.height),
+      rows: rows,
+      columns: columns,
+    );
+    addElement(slideId, _fitted(table), index: index);
+    return table.id;
+  }
+
+  /// The size of a [rows] × [columns] table [insertTable] makes with no
+  /// frame: [defaultTableColumnWidth] per column, narrowed to fit 80% of
+  /// the slide's width, by [defaultTableRowHeight] per row.
+  ({double width, double height}) defaultTableSize(int rows, int columns) => (
+        width: min(
+          columns * defaultTableColumnWidth,
+          _presentation.size.width * 0.8,
+        ),
+        height: rows * defaultTableRowHeight,
+      );
+
+  /// The width of each column of a table [insertTable] makes with no frame.
+  static const defaultTableColumnWidth = 300.0;
+
+  /// The height of each row of a table [insertTable] makes with no frame.
+  static const defaultTableRowHeight = 80.0;
+
+  /// Inserts a blank row above [row] of the table [tableId], or below it
+  /// with [after], as one step; it copies that row's height and its cells'
+  /// fill, borders and anchor. See [insertTableRows].
+  void insertTableRow(
+    String slideId,
+    String tableId,
+    int row, {
+    bool after = false,
+  }) =>
+      _updateTable(
+        slideId,
+        tableId,
+        (t) => insertTableRows(t, after ? row + 1 : row),
+      );
+
+  /// Inserts a blank column left of [column] of the table [tableId], or
+  /// right of it with [after], as one step. See [insertTableColumns].
+  void insertTableColumn(
+    String slideId,
+    String tableId,
+    int column, {
+    bool after = false,
+  }) =>
+      _updateTable(
+        slideId,
+        tableId,
+        (t) => insertTableColumns(t, after ? column + 1 : column),
+      );
+
+  /// Deletes [count] rows from [first] of the table [tableId], as one
+  /// step; deleting every row deletes the table. See [deleteTableRows].
+  void deleteTableRow(
+    String slideId,
+    String tableId,
+    int first, {
+    int count = 1,
+  }) {
+    final table = _tableOf(slideId, tableId);
+    final next = deleteTableRows(table, first, count: count);
+    next == null
+        ? deleteElements(slideId, [tableId])
+        : _updateTable(slideId, tableId, (_) => next);
+  }
+
+  /// Deletes [count] columns from [first] of the table [tableId], as one
+  /// step; deleting every column deletes the table. See
+  /// [deleteTableColumns].
+  void deleteTableColumn(
+    String slideId,
+    String tableId,
+    int first, {
+    int count = 1,
+  }) {
+    final table = _tableOf(slideId, tableId);
+    final next = deleteTableColumns(table, first, count: count);
+    next == null
+        ? deleteElements(slideId, [tableId])
+        : _updateTable(slideId, tableId, (_) => next);
+  }
+
+  /// Makes [column] of the table [tableId] [width] wide, as one step; the
+  /// column to its right makes up the difference. See [resizeTableColumn].
+  void setTableColumnWidth(
+    String slideId,
+    String tableId,
+    int column,
+    double width,
+  ) =>
+      _updateTable(
+        slideId,
+        tableId,
+        (t) => resizeTableColumn(t, column, width),
+      );
+
+  /// Makes [row] of the table [tableId] [height] tall, but never shorter
+  /// than its text, as one step; the table grows or shrinks with it. See
+  /// [resizeTableRow].
+  void setTableRowHeight(
+    String slideId,
+    String tableId,
+    int row,
+    double height,
+  ) =>
+      _updateTable(slideId, tableId, (t) => resizeTableRow(t, row, height));
+
+  /// Replaces the text of the cell at [row], [column] of the table
+  /// [tableId] — the anchor's, when the cell is merged — as one step; the
+  /// row grows to fit it.
+  void setCellText(
+    String slideId,
+    String tableId,
+    int row,
+    int column,
+    List<TextParagraph> paragraphs,
+  ) =>
+      _updateTable(
+        slideId,
+        tableId,
+        (t) => setTableCellText(t, row, column, paragraphs),
+      );
+
+  /// Applies [format] to the cells of [range] in the table [tableId], as
+  /// one step. See [CellFormat].
+  ///
+  /// ```dart
+  /// doc.formatCells(slideId, tableId, range, const CellFormat(text: TextFormat(bold: true)));
+  /// doc.formatCells(slideId, tableId, range, const CellFormat(borders: CellBorderPreset.outside));
+  /// ```
+  void formatCells(
+    String slideId,
+    String tableId,
+    CellRange range,
+    CellFormat format,
+  ) =>
+      _updateTable(
+        slideId,
+        tableId,
+        (t) => formatTableCells(t, range, format),
+      );
+
+  /// Merges the cells of [range] in the table [tableId] into one, as one
+  /// step. See [mergeTableCells].
+  void mergeCells(String slideId, String tableId, CellRange range) =>
+      _updateTable(slideId, tableId, (t) => mergeTableCells(t, range));
+
+  /// Splits every merge touching [range] in the table [tableId] back into
+  /// its cells, as one step. See [unmergeTableCells].
+  void unmergeCells(String slideId, String tableId, CellRange range) =>
+      _updateTable(slideId, tableId, (t) => unmergeTableCells(t, range));
+
+  /// Turns the table [tableId]'s header row and banded rows on or off and
+  /// sets its header [accent], as one step; what is left out is kept.
+  void setTableStyle(
+    String slideId,
+    String tableId, {
+    bool? headerRow,
+    bool? bandedRows,
+    SlideColor? accent,
+  }) =>
+      _updateTable(
+        slideId,
+        tableId,
+        (t) => styleTable(
+          t,
+          headerRow: headerRow,
+          bandedRows: bandedRows,
+          accent: accent,
+        ),
+      );
+
+  TableElement _tableOf(String slideId, String tableId) {
+    final slide = _slideOf(slideId);
+    _checkIds(slide, {tableId});
+    return _table(slide.findElement(tableId)!);
+  }
+
+  static TableElement _table(SlideElement e) => e is TableElement
+      ? e
+      : throw ArgumentError.value(e.id, 'tableId', 'is not a table');
+
+  /// Replaces the table [tableId] with what [update] makes of it, refitted
+  /// to its text, as one step.
+  void _updateTable(
+    String slideId,
+    String tableId,
+    TableElement Function(TableElement table) update,
+  ) =>
+      _updateTree(slideId, [tableId], (e, _) => _fitted(update(_table(e))));
 
   // ---------------------------------------------------------------------------
   // Grouping

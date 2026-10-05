@@ -16,11 +16,12 @@ import 'slide_text_editing_controller.dart';
 /// It lays its text out at exactly the width the paragraph's view does
 /// (giving the caret its margin beyond it), so lines break in the same
 /// places while editing. Keys the field takes over from the platform:
-/// Escape calls [onDone]; Ctrl or Cmd with Z, Shift+Z or Y step through the
-/// session's history, with B, I or U toggle bold, italic or underline, and
-/// with A select every paragraph; the arrow keys and Delete cross into the
-/// neighboring paragraph at an edge; Tab is swallowed rather than moving
-/// focus between paragraphs.
+/// Escape calls [onDone]; Ctrl or Cmd with Z, Shift+Z or Y step through
+/// the session's history, with B, I or U toggle bold, italic or underline,
+/// and with A select every paragraph; the arrow keys and Delete cross into
+/// the neighboring paragraph at an edge; Tab calls [onTab] — moving to the
+/// next table cell — and otherwise is swallowed rather than moving focus
+/// between paragraphs.
 class SlideParagraphField extends StatefulWidget {
   /// Creates the field of paragraph [index].
   const SlideParagraphField({
@@ -33,6 +34,7 @@ class SlideParagraphField extends StatefulWidget {
     required this.cursorColor,
     required this.selectionColor,
     this.onDone,
+    this.onTab,
   });
 
   /// The editing session the paragraph belongs to.
@@ -59,6 +61,10 @@ class SlideParagraphField extends StatefulWidget {
 
   /// Ends editing: Escape.
   final VoidCallback? onDone;
+
+  /// Called on Tab, with whether Shift was held, instead of Tab doing
+  /// nothing; the canvas moves to the next or previous table cell with it.
+  final ValueChanged<bool>? onTab;
 
   /// The caret width on screen, in logical pixels.
   static const cursorScreenWidth = 2.0;
@@ -156,7 +162,7 @@ class _SlideParagraphFieldState extends State<SlideParagraphField>
     final caret = selection.isCollapsed ? selection.extentOffset : -1;
     final VoidCallback? action = switch (key) {
       LogicalKeyboardKey.escape => widget.onDone,
-      LogicalKeyboardKey.tab => () {},
+      LogicalKeyboardKey.tab => () => widget.onTab?.call(keys.isShiftPressed),
       LogicalKeyboardKey.keyZ when command =>
         keys.isShiftPressed ? session.redo : session.undo,
       LogicalKeyboardKey.keyY when command => session.redo,

@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../model/cell_range.dart';
 import '../model/slide.dart';
 import '../model/slide_element.dart';
 import '../model/slide_size.dart';
@@ -39,6 +40,8 @@ class SlideStage extends StatelessWidget {
     this.editor,
     this.preview,
     this.highlights = const {},
+    this.cellLabel = defaultSlideTableCellLabel,
+    this.selectedCells,
   });
 
   /// The slide to draw.
@@ -80,6 +83,12 @@ class SlideStage extends StatelessWidget {
   /// Search highlights by text box id, at any depth.
   final Map<String, List<SlideTextHighlight>> highlights;
 
+  /// Names a table's cells for a screen reader.
+  final SlideTableCellLabel cellLabel;
+
+  /// The table cells selected on the canvas, or `null`.
+  final ({String tableId, CellRange range})? selectedCells;
+
   @override
   Widget build(BuildContext context) => MediaQuery.withNoTextScaling(
         child: SizedBox(
@@ -111,6 +120,8 @@ class SlideStage extends StatelessWidget {
                     editor: editor,
                     showPlaceholder: onSelect != null,
                     highlights: highlights,
+                    cellLabel: cellLabel,
+                    selectedCells: selectedCells,
                   ),
                 if (preview case final preview?)
                   SlideElementView(

@@ -26,6 +26,7 @@ class SlideTextEditor extends StatelessWidget {
     required this.theme,
     required this.scale,
     this.onDone,
+    this.onTab,
   });
 
   /// The open editing session.
@@ -43,6 +44,10 @@ class SlideTextEditor extends StatelessWidget {
 
   /// Ends editing, on Escape.
   final VoidCallback? onDone;
+
+  /// Moves to the next table cell — the previous with `true` — on Tab,
+  /// while a cell is edited; `null` leaves Tab doing nothing.
+  final ValueChanged<bool>? onTab;
 
   /// The [ValueKey] value of paragraph [index]'s field.
   static String keyName(int index) => 'slide_text_paragraph_$index';
@@ -85,6 +90,7 @@ class SlideTextEditor extends StatelessWidget {
                         alpha: 0.35,
                       ),
                       onDone: onDone,
+                      onTab: onTab,
                     ),
                   ),
               ],

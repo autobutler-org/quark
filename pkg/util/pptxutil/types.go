@@ -81,6 +81,36 @@ type qslideElement struct {
 
 	// A group, its children in group-local frames.
 	Children []qslideElement `json:"children"`
+
+	// A table: column widths and row heights in slide units, its cells a
+	// row at a time, whether its first row is a header and its body rows
+	// banded, and the header's fill.
+	Columns    []float64      `json:"columns"`
+	Rows       []float64      `json:"rows"`
+	Cells      [][]qslideCell `json:"cells"`
+	HeaderRow  bool           `json:"headerRow"`
+	BandedRows bool           `json:"bandedRows"`
+	Accent     string         `json:"accent"`
+}
+
+// qslideCell is one table cell: rich text like a text box's, held to an
+// anchor edge, a fill, the lines along its edges, and — on the anchor of a
+// merged area — how many rows and columns it spans (1 when left out).
+type qslideCell struct {
+	Paragraphs []qslideParagraph `json:"paragraphs"`
+	Fill       string            `json:"fill"`
+	Anchor     string            `json:"anchor"`
+	RowSpan    int               `json:"rowSpan"`
+	ColSpan    int               `json:"colSpan"`
+	Borders    qslideBorders     `json:"borders"`
+}
+
+// qslideBorders are a cell's lines, nil where a side has none.
+type qslideBorders struct {
+	Top    *qslideStroke `json:"top"`
+	Right  *qslideStroke `json:"right"`
+	Bottom *qslideStroke `json:"bottom"`
+	Left   *qslideStroke `json:"left"`
 }
 
 // qslideStroke is an outline. Dash is any: a custom pattern a newer writer

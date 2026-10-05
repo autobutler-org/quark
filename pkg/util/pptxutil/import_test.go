@@ -467,7 +467,7 @@ func TestImportSkipsWhatTheEditorCannotShowWithWarnings(t *testing.T) {
 	}
 	want := []string{
 		"Animations are not imported.",
-		"Tables are not imported.",
+		"A table that could not be read was left out.",
 		"Charts are not imported.",
 		"SmartArt graphics are not imported.",
 		"Embedded objects are not imported.",
