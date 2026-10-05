@@ -822,7 +822,6 @@ class _SettingsPageState extends State<SettingsPage> {
   /// Saves the user's own theme color, empty to follow the Quark's.
   Future<void> _setThemeColor(String themeColor) => _saveThemeColor(
     themeColor,
-    previous: AppSettings.instance.userThemeColor.value,
     apply: AppSettings.instance.setUserThemeColor,
     save: SettingsService.setMyThemeColor,
     action: 'save your theme color',
@@ -831,28 +830,27 @@ class _SettingsPageState extends State<SettingsPage> {
   /// Saves the Quark's default theme color, as an admin.
   Future<void> _setQuarkThemeColor(String themeColor) => _saveThemeColor(
     themeColor,
-    previous: AppSettings.instance.quarkThemeColor.value,
     apply: AppSettings.instance.setQuarkThemeColor,
     save: SettingsService.setQuarkThemeColor,
     action: "save this Quark's theme color",
   );
 
-  /// Applies [themeColor] at once and saves it, putting [previous] back if the
-  /// Quark refuses.
+  /// Applies [themeColor] at once and saves it, putting the theme color back as
+  /// it was if the Quark refuses.
   Future<void> _saveThemeColor(
     String themeColor, {
-    required String? previous,
     required Future<void> Function(String?) apply,
     required Future<void> Function(String) save,
     required String action,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
+    final restore = AppSettings.instance.snapshotThemeColor();
     await apply(themeColor);
     try {
       await save(themeColor);
     } catch (e) {
       debugPrint('[settings_page.dart] Error saving theme color: $e');
-      await apply(previous);
+      await restore();
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(content: Text(Errors.message(e, action))),

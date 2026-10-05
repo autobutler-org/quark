@@ -121,6 +121,21 @@ void main() {
       expect(await cached(), isEmpty);
     });
 
+    // #2773: undoing a pick has to undo what it cached too, or the cache
+    // keeps a color the Quark never accepted.
+    test('is put back with the rest when a pick is undone', () async {
+      await loadWith({'http://one.local': 'lime'});
+      final restore = settings.snapshotThemeColor();
+
+      await settings.setUserThemeColor('violet');
+      expect(await cached(), {'http://one.local': 'violet'});
+
+      await restore();
+      expect(settings.userThemeColor.value, isNull);
+      expect(settings.themeColor.value, QuarkThemeColor.lime);
+      expect(await cached(), {'http://one.local': 'lime'});
+    });
+
     test("stands until the user's own theme color is known", () async {
       await loadWith({'http://one.local': 'violet'});
 

@@ -497,6 +497,36 @@ class AppSettings {
     return _resolveThemeColor();
   }
 
+  /// Captures the current [activeHost]'s theme color state and returns a
+  /// function that puts it back: both stored values and what the host has
+  /// cached.
+  ///
+  /// For undoing a pick that was applied before its save failed. Setting the
+  /// previous value back is not enough when that value was null, because
+  /// resolving then falls back to the cache, which the pick already overwrote
+  /// (#2773). After a change of host only the old host's cache is put back.
+  Future<void> Function() snapshotThemeColor() {
+    final host = activeHost;
+    final key = host == null ? null : _hostKey(host);
+    final user = _userThemeColor.value;
+    final quark = _quarkThemeColor.value;
+    final cached = _themeColors[key];
+    return () async {
+      if (key != null) {
+        if (cached == null) {
+          _themeColors.remove(key);
+        } else {
+          _themeColors[key] = cached;
+        }
+        await _persistThemeColors();
+      }
+      if (activeHost != host) return;
+      _userThemeColor.value = user;
+      _quarkThemeColor.value = quark;
+      await _resolveThemeColor();
+    };
+  }
+
   /// Recomputes [themeColor] for the current [activeHost] and caches what it
   /// resolved to against that host.
   ///
