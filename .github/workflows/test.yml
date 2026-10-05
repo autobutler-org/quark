@@ -118,6 +118,9 @@ jobs:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    # A leg takes about six minutes; a stuck `flutter test` would otherwise
+    # hold the runner for the six-hour default (#2768).
+    timeout-minutes: 20
     name: test-frontend (${{ matrix.name }})
     strategy:
       fail-fast: false
