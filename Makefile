@@ -919,9 +919,10 @@ serve/frontend/mobile: generate/frontend ## Serve mobile frontend
 	flutter run $(FLUTTER_RUN_DEFINES)
 
 .PHONY: serve/frontend/web
-serve/frontend/web: generate/frontend ## Serve web frontend
+serve/frontend/web: generate/frontend ## Serve web frontend (FLUTTER_BUILD_MODE=release for a remote host)
 	flutter run \
 		-d web-server \
+		--$(FLUTTER_BUILD_MODE) \
 		$(FLUTTER_RUN_DEFINES)
 
 KNOWLEDGE_PORT ?= 5173
