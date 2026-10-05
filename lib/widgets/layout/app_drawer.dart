@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:quark/models/feature_flag.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/plugin_state.dart';
+import 'package:quark/utils/plugin_icons.dart';
 import 'package:quark/utils/host_display.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -24,16 +26,26 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// [AppSettings.featureFlags]; the router asks the Quark again before it opens
 /// the page.
 ///
+/// Every installed plugin with a nav item gets a row below the pages,
+/// following [PluginState]; [activePluginId] marks the one on screen.
+///
 /// The header names the active Quark (#2033) and, with more than one saved,
 /// switches between them (#2230). Switching goes through login: the router's
 /// gate forwards a Quark you are signed in to on to Files, and one you are
 /// not to its sign-in or setup page.
 class AppDrawer extends StatelessWidget {
   /// Creates the drawer for the page [activeSection] names.
-  const AppDrawer({required this.activeSection, super.key});
+  const AppDrawer({
+    required this.activeSection,
+    this.activePluginId,
+    super.key,
+  });
 
   /// The page the drawer is opened from.
   final QuarkDrawerSection activeSection;
+
+  /// The plugin whose page the drawer is opened from, if it is one.
+  final String? activePluginId;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +70,7 @@ class AppDrawer extends StatelessWidget {
         settings.isAdmin,
         settings.featureFlags,
         settings.activeHostNotifier,
+        PluginState.instance,
       ]),
       builder: (context, _) => QuarkDrawer(
         activeSection: activeSection,
@@ -89,6 +102,23 @@ class AppDrawer extends StatelessWidget {
             ? goTo(QuarkDrawerSection.users, AppRoutes.users)
             : null,
         onTapSettings: goTo(QuarkDrawerSection.settings, AppRoutes.settings),
+        // A plugin's page sits under Plugins, so from there the row navigates.
+        onTapPlugins: activePluginId == null
+            ? goTo(QuarkDrawerSection.plugins, AppRoutes.plugins)
+            : () => context.go(AppRoutes.plugins),
+        plugins: [
+          for (final plugin in PluginState.instance.plugins)
+            if (plugin.contributes.navItem case final navItem?)
+              DrawerPluginItem(
+                id: plugin.id,
+                label: navItem.label,
+                icon: pluginIcon(navItem.icon),
+              ),
+        ],
+        activePluginId: activePluginId,
+        onTapPlugin: (id) => id == activePluginId
+            ? Navigator.of(context).pop()
+            : context.go(AppRoutes.pluginPath(id)),
       ),
     );
   }

@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/models/feature_flag.dart';
+import 'package:quark/models/plugin_manifest.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
+import 'package:quark/services/plugin_state.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,6 +38,7 @@ void main() {
   tearDown(() {
     settings.isAdmin.value = false;
     settings.featureFlags.value = const [];
+    PluginState.instance.setPlugins(const []);
   });
 
   Widget page(String name, QuarkDrawerSection section) => Scaffold(
@@ -136,6 +139,44 @@ void main() {
     expect(find.byKey(const ValueKey('drawer_vault')), findsNothing);
     expect(find.byKey(const ValueKey('drawer_users')), findsNothing);
     expect(find.byKey(const ValueKey('drawer_settings')), findsOneWidget);
+  });
+
+  testWidgets('lists an installed plugin that has a nav item', (tester) async {
+    await pumpDrawer(tester);
+    expect(find.byKey(const ValueKey('drawer_plugins')), findsOneWidget);
+    expect(find.byKey(const ValueKey('drawer_plugin_hello')), findsNothing);
+
+    PluginState.instance.setPlugins(const [
+      PluginManifest(
+        id: 'hello',
+        name: 'Hello World',
+        version: '1.0.0',
+        description: '',
+        author: '',
+        enabled: true,
+        contributes: PluginContributes(
+          navItem: PluginNavItem(
+            label: 'Hello',
+            icon: 'waving_hand',
+            route: '/plugins/hello',
+          ),
+        ),
+      ),
+      PluginManifest(
+        id: 'quiet',
+        name: 'No nav item',
+        version: '1.0.0',
+        description: '',
+        author: '',
+        enabled: true,
+        contributes: PluginContributes(),
+      ),
+    ]);
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('drawer_plugin_hello')), findsOneWidget);
+    expect(find.text('Hello'), findsOneWidget);
+    expect(find.byKey(const ValueKey('drawer_plugin_quiet')), findsNothing);
   });
 
   testWidgets('follows the admin flag while the drawer is open', (

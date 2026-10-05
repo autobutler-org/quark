@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
 import '../core/quark_beta_badge.dart';
+import '../models/drawer_plugin_item.dart';
 import '../models/host_item.dart';
 import '../theme/quark_tokens.dart';
 import 'quark_chrome.dart';
@@ -43,6 +44,9 @@ enum QuarkDrawerSection {
 
   /// App settings.
   settings,
+
+  /// The plugin marketplace, and the pages of the plugins installed from it.
+  plugins,
 }
 
 /// The sections still in beta, whose rows carry a [QuarkBetaBadge].
@@ -69,8 +73,13 @@ const _betaSections = {QuarkDrawerSection.calendar, QuarkDrawerSection.chat};
 /// A section still in beta, Calendar and Chat for now, carries a
 /// [QuarkBetaBadge] beside its label.
 ///
+/// Each of [plugins] gets a row of its own below the sections, and
+/// [activePluginId] marks the one whose page is open, in place of the
+/// Plugins row.
+///
 /// Key prefixes: `drawer_<section>` on each row, for example `drawer_photos`
-/// and `drawer_users`; `drawer_host` on the header when it names a Quark;
+/// and `drawer_users`; `drawer_plugin_<id>` on each plugin's row;
+/// `drawer_host` on the header when it names a Quark;
 /// `drawer_host_header` on the button that opens the switcher, and
 /// `drawer_host_<index>` on each Quark in it.
 ///
@@ -105,6 +114,10 @@ class QuarkDrawer extends StatelessWidget {
     this.onTapVault,
     this.onTapUsers,
     this.onTapSettings,
+    this.onTapPlugins,
+    this.plugins = const [],
+    this.activePluginId,
+    this.onTapPlugin,
     super.key,
   });
 
@@ -158,6 +171,19 @@ class QuarkDrawer extends StatelessWidget {
 
   /// Called when the Settings row is tapped. Null hides the row.
   final FutureOr<void> Function()? onTapSettings;
+
+  /// Called when the Plugins row is tapped. Null hides the row.
+  final FutureOr<void> Function()? onTapPlugins;
+
+  /// The installed plugins that have a page, one row each after the sections.
+  final List<DrawerPluginItem> plugins;
+
+  /// The id of the plugin whose page the drawer was opened from, drawn as
+  /// selected. Null when the page is not a plugin's.
+  final String? activePluginId;
+
+  /// Called with the id of the plugin whose row was tapped.
+  final ValueChanged<String>? onTapPlugin;
 
   @override
   Widget build(BuildContext context) {
@@ -215,6 +241,12 @@ class QuarkDrawer extends StatelessWidget {
         'Settings',
         onTapSettings,
       ),
+      (
+        QuarkDrawerSection.plugins,
+        QuarkIcons.extension_outlined,
+        'Plugins',
+        onTapPlugins,
+      ),
     ];
 
     return QuarkChrome(
@@ -249,9 +281,20 @@ class QuarkDrawer extends StatelessWidget {
                             ],
                           )
                         : Text(label),
-                    selected: activeSection == section,
+                    selected:
+                        activeSection == section &&
+                        (section != QuarkDrawerSection.plugins ||
+                            activePluginId == null),
                     onTap: onTap,
                   ),
+              for (final plugin in plugins)
+                ListTile(
+                  key: ValueKey('drawer_plugin_${plugin.id}'),
+                  leading: Icon(plugin.icon),
+                  title: Text(plugin.label),
+                  selected: activePluginId == plugin.id,
+                  onTap: () => onTapPlugin?.call(plugin.id),
+                ),
             ],
           ),
         ),

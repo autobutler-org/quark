@@ -394,6 +394,11 @@ class QuarkIcons {
   static const IconData dark_mode_rounded = Icons.dark_mode_rounded;
   static const IconData bug_report_outlined = Icons.bug_report_outlined;
 
+  // ── Plugins ──────────────────────────────────────────────────────────────────────
+  static const IconData extension = Icons.extension;
+  static const IconData extension_outlined = Icons.extension_outlined;
+  static const IconData waving_hand = Icons.waving_hand;
+
   // ── Chat ─────────────────────────────────────────────────────────────────────────
   static const IconData tag = Icons.tag;
   static const IconData send_rounded = Icons.send_rounded;

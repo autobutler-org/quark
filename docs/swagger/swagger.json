@@ -6453,6 +6453,166 @@
                 }
             }
         },
+        "/plugins": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all installed plugins from the plugins directory",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "plugins"
+                ],
+                "summary": "List installed plugins",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/pluginutil.Manifest"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/plugins/marketplace": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all plugins available for installation, annotated with installed status",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "plugins"
+                ],
+                "summary": "List available plugins in the marketplace",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/pluginutil.MarketplaceEntry"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/plugins/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes an installed plugin from disk",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "plugins"
+                ],
+                "summary": "Uninstall a plugin",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Plugin ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Plugin not installed",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/plugins/{id}/install": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Installs a plugin from the marketplace by writing its manifest to disk",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "plugins"
+                ],
+                "summary": "Install a plugin",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Plugin ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Plugin not found in marketplace",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/sbom": {
             "get": {
                 "security": [
@@ -10766,6 +10926,136 @@
                 "takenAt": {
                     "description": "TakenAt is the EXIF capture date in Unix seconds, set under SortTaken\nfor a photo whose date is known (#2592).",
                     "type": "integer"
+                }
+            }
+        },
+        "pluginutil.Contributes": {
+            "type": "object",
+            "properties": {
+                "navItem": {
+                    "$ref": "#/definitions/pluginutil.NavItem"
+                },
+                "page": {
+                    "$ref": "#/definitions/pluginutil.PluginNode"
+                },
+                "settingsPanel": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "pluginutil.Manifest": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "contributes": {
+                    "$ref": "#/definitions/pluginutil.Contributes"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "minAppVersion": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "pluginutil.MarketplaceEntry": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "contributes": {
+                    "$ref": "#/definitions/pluginutil.Contributes"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "installed": {
+                    "type": "boolean"
+                },
+                "minAppVersion": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "pluginutil.NavItem": {
+            "type": "object",
+            "properties": {
+                "icon": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "route": {
+                    "type": "string"
+                }
+            }
+        },
+        "pluginutil.PluginNode": {
+            "type": "object",
+            "properties": {
+                "attrs": {
+                    "description": "future extension bag",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "children": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/pluginutil.PluginNode"
+                    }
+                },
+                "padding": {
+                    "description": "padding: all-sides shorthand",
+                    "type": "number"
+                },
+                "size": {
+                    "description": "icon size / sized_box dimension",
+                    "type": "number"
+                },
+                "style": {
+                    "description": "text: headline|title|body|caption",
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "url": {
+                    "description": "button: launch URL",
+                    "type": "string"
+                },
+                "value": {
+                    "description": "text content / icon name",
+                    "type": "string"
                 }
             }
         },

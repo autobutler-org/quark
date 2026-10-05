@@ -104,6 +104,8 @@ lib/widgets/
   host_manager.dart             edits AppSettings hosts
   nearby_quarks.dart            hosts DiscoveredQuarkList around a
                                 QuarkDiscoveryController browsing mDNS
+  plugin_renderer.dart          draws a plugin's declared page tree; a button
+                                opens its link through url_launcher
   quark_connect_form.dart       calls the connection services
   search_section_header.dart    labels a group of docs/sheets search results,
                                 shared by both pages' bodies

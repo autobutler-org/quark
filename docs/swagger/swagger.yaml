@@ -695,6 +695,93 @@ definitions:
           for a photo whose date is known (#2592).
         type: integer
     type: object
+  pluginutil.Contributes:
+    properties:
+      navItem:
+        $ref: '#/definitions/pluginutil.NavItem'
+      page:
+        $ref: '#/definitions/pluginutil.PluginNode'
+      settingsPanel:
+        type: boolean
+    type: object
+  pluginutil.Manifest:
+    properties:
+      author:
+        type: string
+      contributes:
+        $ref: '#/definitions/pluginutil.Contributes'
+      description:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: string
+      minAppVersion:
+        type: string
+      name:
+        type: string
+      version:
+        type: string
+    type: object
+  pluginutil.MarketplaceEntry:
+    properties:
+      author:
+        type: string
+      contributes:
+        $ref: '#/definitions/pluginutil.Contributes'
+      description:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: string
+      installed:
+        type: boolean
+      minAppVersion:
+        type: string
+      name:
+        type: string
+      version:
+        type: string
+    type: object
+  pluginutil.NavItem:
+    properties:
+      icon:
+        type: string
+      label:
+        type: string
+      route:
+        type: string
+    type: object
+  pluginutil.PluginNode:
+    properties:
+      attrs:
+        additionalProperties:
+          type: string
+        description: future extension bag
+        type: object
+      children:
+        items:
+          $ref: '#/definitions/pluginutil.PluginNode'
+        type: array
+      padding:
+        description: 'padding: all-sides shorthand'
+        type: number
+      size:
+        description: icon size / sized_box dimension
+        type: number
+      style:
+        description: 'text: headline|title|body|caption'
+        type: string
+      type:
+        type: string
+      url:
+        description: 'button: launch URL'
+        type: string
+      value:
+        description: text content / icon name
+        type: string
+    type: object
   serverutil.ContentType:
     enum:
     - text/html
@@ -6744,6 +6831,108 @@ paths:
       summary: Save the rotation for a photo
       tags:
       - photos
+  /plugins:
+    get:
+      description: Returns all installed plugins from the plugins directory
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/pluginutil.Manifest'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: List installed plugins
+      tags:
+      - plugins
+  /plugins/{id}:
+    delete:
+      description: Removes an installed plugin from disk
+      parameters:
+      - description: Plugin ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "400":
+          description: Plugin not installed
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Uninstall a plugin
+      tags:
+      - plugins
+  /plugins/{id}/install:
+    post:
+      description: Installs a plugin from the marketplace by writing its manifest
+        to disk
+      parameters:
+      - description: Plugin ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "400":
+          description: Plugin not found in marketplace
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Install a plugin
+      tags:
+      - plugins
+  /plugins/marketplace:
+    get:
+      description: Returns all plugins available for installation, annotated with
+        installed status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/pluginutil.MarketplaceEntry'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: List available plugins in the marketplace
+      tags:
+      - plugins
   /sbom:
     get:
       description: Returns the Go version and all embedded dependency information

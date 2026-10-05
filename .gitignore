@@ -140,3 +140,7 @@ ios/ExportOptions.ci.plist
 # home is ~/.config/quark/play-service-account.json, outside the repo.
 *service-account*.json
 quark-[0-9]*-*.json
+
+# Agent logs and scratch memory
+logs
+memory/
