@@ -27,6 +27,8 @@ class SlideToolbar extends StatelessWidget {
     required this.onImageFromDevice,
     required this.onImageFromQuark,
     required this.onShowShortcuts,
+    required this.findOpen,
+    required this.onToggleFind,
     super.key,
   });
 
@@ -41,6 +43,12 @@ class SlideToolbar extends StatelessWidget {
 
   /// Opens the keyboard shortcuts dialog.
   final VoidCallback onShowShortcuts;
+
+  /// Whether the find bar is showing.
+  final bool findOpen;
+
+  /// Opens the find bar, or closes it when it is open.
+  final VoidCallback onToggleFind;
 
   /// Whether a window [width] wide folds the toolbar into the phone menus.
   static bool isCompact(double width) =>
@@ -85,6 +93,8 @@ class SlideToolbar extends StatelessWidget {
                     propertiesOpen: controller.propertiesOpen,
                     onToggleProperties: controller.toggleProperties,
                     onShowShortcuts: onShowShortcuts,
+                    findOpen: findOpen,
+                    onToggleFind: onToggleFind,
                   ),
                 ),
                 Divider(height: 1, color: tokens.border),

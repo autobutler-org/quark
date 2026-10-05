@@ -1207,4 +1207,147 @@ void main() {
       await letAutosaveRun(tester);
     });
   });
+
+  group('find and replace (#1176)', () {
+    Finder key(String name) => find.byKey(ValueKey(name));
+
+    Future<void> chord(WidgetTester tester, LogicalKeyboardKey k) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(k);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+    }
+
+    String status(WidgetTester tester) =>
+        tester.widget<Text>(key('slide_find_status')).data!;
+
+    String textOf(SlideEditorController c, int slide) =>
+        (c.slides[slide - 1].elements.single as TextBox).paragraphs.single.runs
+            .map((r) => r.text)
+            .join();
+
+    Future<void> search(WidgetTester tester, String query) async {
+      await chord(tester, LogicalKeyboardKey.keyF);
+      await tester.enterText(key('slide_find_query'), query);
+      await tester.pump();
+    }
+
+    for (final (name, size) in [
+      ('narrow', tap.narrowViewport),
+      ('wide', tap.wideViewport),
+    ]) {
+      testWidgets('Ctrl F opens the bar, the counter and Next wrap, Escape '
+          'closes and clears the highlights ($name)', (tester) async {
+        tap.setViewport(tester, size);
+        await pumpEditor(tester);
+        expect(key('slide_find_bar'), findsNothing);
+        SlideCanvas canvas() => tester.widget<SlideCanvas>(
+          find.byKey(const ValueKey('slide_editor_canvas')),
+        );
+
+        await search(tester, 'text');
+        expect(key('slide_find_bar'), findsOneWidget);
+        expect(status(tester), '1 of 2');
+        expect(canvas().highlights, hasLength(2));
+        expect(canvas().currentHighlight?.slideId, 's1');
+
+        await tester.tap(key('slide_find_next'));
+        await tester.pump();
+        expect(status(tester), '2 of 2');
+        expect(canvas().currentHighlight?.slideId, 's2');
+
+        await tester.tap(key('slide_find_next'));
+        await tester.pump();
+        expect(status(tester), '1 of 2');
+        expect(canvas().currentHighlight?.slideId, 's1');
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(key('slide_find_bar'), findsNothing);
+        expect(canvas().highlights, isEmpty);
+        expect(canvas().currentHighlight, isNull);
+      });
+
+      testWidgets('replacing one match is one undo step ($name)', (
+        tester,
+      ) async {
+        tap.setViewport(tester, size);
+        final c = await pumpEditor(tester);
+        await chord(tester, LogicalKeyboardKey.keyH);
+        await tester.enterText(key('slide_find_query'), 'text');
+        await tester.enterText(key('slide_find_replacement'), 'word');
+        await tester.pump();
+
+        await tester.tap(key('slide_find_replace'));
+        await tester.pump();
+        expect(textOf(c, 1), 'Slide word 1');
+        expect(textOf(c, 2), 'Slide text 2');
+        expect(status(tester), '1 of 1');
+
+        await tester.tap(key('slide_editor_undo'));
+        await tester.pump();
+        expect(textOf(c, 1), 'Slide text 1');
+        expect(textOf(c, 2), 'Slide text 2');
+        expect(c.canUndo, isFalse);
+        await letAutosaveRun(tester);
+      });
+
+      testWidgets('Replace all changes every match in one undo ($name)', (
+        tester,
+      ) async {
+        tap.setViewport(tester, size);
+        final c = await pumpEditor(tester);
+        await chord(tester, LogicalKeyboardKey.keyH);
+        await tester.enterText(key('slide_find_query'), 'text');
+        await tester.enterText(key('slide_find_replacement'), 'word');
+        await tester.pump();
+
+        await tester.tap(key('slide_find_replace_all'));
+        await tester.pump();
+        expect(textOf(c, 1), 'Slide word 1');
+        expect(textOf(c, 2), 'Slide word 2');
+        expect(status(tester), 'No results');
+
+        await tester.tap(key('slide_editor_undo'));
+        await tester.pump();
+        expect(textOf(c, 1), 'Slide text 1');
+        expect(textOf(c, 2), 'Slide text 2');
+        expect(c.canUndo, isFalse);
+        await letAutosaveRun(tester);
+      });
+    }
+
+    testWidgets('the wide tool row button opens and closes the bar', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      await pumpEditor(tester);
+      await tester.tap(key('slide_find_open'));
+      await tester.pumpAndSettle();
+      expect(key('slide_find_bar'), findsOneWidget);
+      await tester.tap(key('slide_find_open'));
+      await tester.pumpAndSettle();
+      expect(key('slide_find_bar'), findsNothing);
+    });
+
+    testWidgets("the phone Format menu's Find and replace opens the bar", (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      await pumpEditor(tester);
+      expect(key('slide_find_open'), findsNothing);
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_format_find'));
+      await tester.pumpAndSettle();
+      expect(key('slide_find_bar'), findsOneWidget);
+    });
+
+    testLargeText('the bar fits', (tester, size) async {
+      await pumpEditor(tester);
+      await search(tester, 'text');
+      expect(status(tester), '1 of 2');
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

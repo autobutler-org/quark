@@ -8,6 +8,8 @@ import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/slides/find/slide_find_controller.dart';
+import 'package:quark/widgets/slides/find/slide_find_layout.dart';
 import 'package:quark/widgets/slides/export/slide_export_button.dart';
 import 'package:quark/widgets/slides/insert/slide_quark_image_dialog.dart';
 import 'package:quark/widgets/slides/properties/slide_properties_panel.dart';
@@ -50,6 +52,12 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// layout; on a phone, "Theme" and "Slide layout" in the Format menu open
 /// the same pickers in a bottom sheet.
 ///
+/// Find and replace (#1176): Ctrl or Cmd F opens the find bar along the
+/// bottom of the editor and Ctrl or Cmd H opens it with the replace row; the
+/// tool row's Find and replace button and a phone's "Find and replace" in
+/// the Format menu open it too. Matches are highlighted on the canvas and
+/// Escape closes the bar.
+///
 /// `?` or F1 anywhere in the editor, the toolbar's keyboard button, or
 /// "Keyboard shortcuts" in a phone's Format menu opens the shortcuts dialog
 /// (#1168).
@@ -88,6 +96,10 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
         deviceSerial: widget.deviceSerial,
       );
 
+  late final SlideFindController _find = SlideFindController.forEditor(
+    _controller,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -103,6 +115,7 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
     _controller.onSaveFailed = null;
     _controller.onImageInsertFailed = null;
     _controller.onExportFailed = null;
+    _find.dispose();
     if (widget.controller == null) _controller.dispose();
     super.dispose();
   }
@@ -252,18 +265,22 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                       onShowShortcuts: _showShortcuts,
                       onOpenTheme: _openThemeSheet,
                       onOpenLayout: _openLayoutSheet,
+                      onFind: _find.open,
                     ),
                   ),
           ),
           body: SafeArea(
             top: false,
             child: SlideShortcutsHelp(
-              child: SlideEditorBody(
-                controller: _controller,
-                onPresent: _present,
-                onImageFromDevice: _controller.insertImageFromDevice,
-                onImageFromQuark: _insertImageFromQuark,
-                onShowShortcuts: _showShortcuts,
+              child: SlideFindLayout(
+                controller: _find,
+                child: SlideEditorBody(
+                  controller: _controller,
+                  onPresent: _present,
+                  onImageFromDevice: _controller.insertImageFromDevice,
+                  onImageFromQuark: _insertImageFromQuark,
+                  onShowShortcuts: _showShortcuts,
+                ),
               ),
             ),
           ),

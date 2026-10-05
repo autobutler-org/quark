@@ -642,3 +642,28 @@ same drive as the presentation (`photos/cover.jpg`).
   the color's value in the current theme.
 - In a presentation with no theme, the theme colors are the app's own, as the slide is drawn.
 
+
+---
+
+### JN-SL-033: Find and replace
+
+**Preconditions:** A presentation with text on several slides is open (JN-SL-004).
+
+**Steps:**
+
+1. Press **Ctrl/Cmd F**, tap **Find and replace** in the toolbar, or on a phone tap **Format** › **Find and replace**.
+2. Type a word. Press **Enter** or tap **Next** to step through the matches, and **Shift Enter** or **Previous** to
+   step back.
+3. Press **Ctrl/Cmd H**, or tap the replace toggle, type a replacement, then tap **Replace** and **Replace all**.
+4. Press **Undo** after each.
+5. Press **Escape**, or tap **Close**.
+
+**Expected result:**
+
+- The bar sits along the bottom of the editor, above the keyboard on a phone, and the counter reads "1 of N", or "No
+  results".
+- Every match is highlighted on the canvas, and the current one is selected; stepping to a match on another slide shows
+  that slide, and past the last match wraps to the first.
+- **Replace** changes the current match and moves to the next; **Replace all** changes every match on every slide. Each
+  is one undo step, and the presentation autosaves.
+- Closing the bar clears the highlights.
