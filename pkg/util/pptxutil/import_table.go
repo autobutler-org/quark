@@ -43,9 +43,13 @@ type outBorders struct {
 	Left   *outStroke `json:"left,omitempty"`
 }
 
-// convertGraphicFrame converts a table, and skips — with a warning — any
-// other graphic frame: a chart, SmartArt, an embedded object.
+// convertGraphicFrame converts a table, and a chart as a summary and a table
+// (see convertChart), and skips — with a warning — any other graphic frame:
+// SmartArt, an embedded object.
 func (s *slideReader) convertGraphicFrame(f *xGraphicFrame, t transform, template bool) ([]outElement, error) {
+	if f.Data.URI == chartURI && f.Data.Chart != nil {
+		return s.convertChart(f, t, template)
+	}
 	if f.Data.URI != tableURI || f.Data.Table == nil {
 		s.warn(graphicFrameWarning(f.Data.URI))
 		return nil, nil

@@ -141,7 +141,7 @@ func graphicFrameWarning(uri string) string {
 	case strings.HasSuffix(uri, "/table"):
 		return "A table that could not be read was left out."
 	case strings.HasSuffix(uri, "/chart") || strings.Contains(uri, "chartex"):
-		return "Charts are not imported."
+		return "Charts whose data could not be read were left out."
 	case strings.HasSuffix(uri, "/diagram"):
 		return "SmartArt graphics are not imported."
 	}

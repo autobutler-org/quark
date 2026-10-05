@@ -11,7 +11,7 @@ import 'qslide_format_exception.dart';
 /// `schemaVersion` beside the fields of [Presentation.toJson].
 ///
 /// ```json
-/// {"schemaVersion": 4, "title": "Demo",
+/// {"schemaVersion": 5, "title": "Demo",
 ///  "size": {"width": 1920, "height": 1080},
 ///  "slides": [{"id": "s1", "elements": []}]}
 /// ```
@@ -32,7 +32,8 @@ import 'qslide_format_exception.dart';
 ///   theme colors: its theme becomes the built-in one of that id, or none,
 ///   and every slide is blank-layout. Version 2 had no transitions: every
 ///   slide cuts, which is what a version 3 file without them means too.
-///   Version 3 had no tables, so it reads as it is.
+///   Version 3 had no tables, and version 4 no charts, so each reads as it
+///   is.
 abstract final class QslideCodec {
   /// The schema version this package writes and the newest it reads.
   ///
@@ -41,8 +42,9 @@ abstract final class QslideCodec {
   /// a slide's own `transition` and the deck's default one. Version 4 added
   /// tables (`TableElement`); it is a new version rather than an additive
   /// change so that a reader that would draw a table as an unknown
-  /// placeholder asks to be updated instead.
-  static const schemaVersion = 4;
+  /// placeholder asks to be updated instead. Version 5 added charts
+  /// (`ChartElement`), a new version for the same reason.
+  static const schemaVersion = 5;
 
   /// The file extension, including the dot.
   static const fileExtension = '.qslide';
@@ -91,6 +93,7 @@ abstract final class QslideCodec {
     1: _fromVersion1,
     2: _fromVersion2,
     3: _fromVersion3,
+    4: _fromVersion4,
   };
 
   /// Version 1 to 2: the `theme` string — "its id or file path", which no
@@ -117,6 +120,12 @@ abstract final class QslideCodec {
   /// `table` that a version 3 file carried — none was ever written — is
   /// read as a table from here on.
   static JsonMap _fromVersion3(JsonMap json) => {...json, 'schemaVersion': 4};
+
+  /// Version 4 to 5: charts are new, and nothing a version 4 file holds
+  /// changes meaning, so only the version changes. An element of `type`
+  /// `chart` that a version 4 file carried — none was ever written — is
+  /// read as a chart from here on.
+  static JsonMap _fromVersion4(JsonMap json) => {...json, 'schemaVersion': 5};
 
   /// The `.qslide` root object for [presentation].
   static JsonMap toJson(Presentation presentation) => {

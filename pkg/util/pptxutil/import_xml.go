@@ -420,6 +420,10 @@ type xGraphicFrame struct {
 	Data  struct {
 		URI   string  `xml:"uri,attr"`
 		Table *xTable `xml:"tbl"`
+		// Chart names the chart part by relationship id.
+		Chart *struct {
+			ID string `xml:"id,attr"`
+		} `xml:"chart"`
 	} `xml:"graphic>graphicData"`
 }
 

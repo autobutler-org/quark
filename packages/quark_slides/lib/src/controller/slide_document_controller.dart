@@ -6,6 +6,10 @@ import '../geometry/slide_alignment.dart';
 import '../geometry/slide_tree.dart';
 import '../model/cell_format.dart';
 import '../model/cell_range.dart';
+import '../model/chart_data.dart';
+import '../model/chart_kind.dart';
+import '../model/chart_options.dart';
+import '../model/chart_series.dart';
 import '../model/element_frame.dart';
 import '../model/element_style.dart';
 import '../model/image_source.dart';
@@ -1189,6 +1193,187 @@ class SlideDocumentController {
     TableElement Function(TableElement table) update,
   ) =>
       _updateTree(slideId, [tableId], (e, _) => _fitted(update(_table(e))));
+
+  // ---------------------------------------------------------------------------
+  // Charts
+  // ---------------------------------------------------------------------------
+
+  /// The width of the chart [insertChart] makes with no frame, narrowed to
+  /// fit 80% of the slide.
+  static const defaultChartWidth = 1200.0;
+
+  /// The height of the chart [insertChart] makes with no frame.
+  static const defaultChartHeight = 700.0;
+
+  /// The data a new chart of [kind] starts with, for the user to replace:
+  /// four quarters by three series, or one series for a pie.
+  static ChartData sampleChartData(ChartKind kind) => ChartData(
+        categories: const ['Q1', 'Q2', 'Q3', 'Q4'],
+        series: kind == ChartKind.pie
+            ? [
+                ChartSeries(name: 'Series 1', values: const [40, 25, 20, 15])
+              ]
+            : [
+                ChartSeries(name: 'Series 1', values: const [12, 19, 15, 24]),
+                ChartSeries(name: 'Series 2', values: const [8, 11, 14, 17]),
+                ChartSeries(name: 'Series 3', values: const [5, 9, 7, 12]),
+              ],
+      );
+
+  /// Inserts a chart of [kind] on the slide [slideId] and returns its id.
+  ///
+  /// It draws [data], or [sampleChartData] when left out, and fills
+  /// [frame], or — left out — is [defaultChartWidth] by
+  /// [defaultChartHeight] (narrowed to fit 80% of the slide), centered. It
+  /// goes in front of everything, or at stacking position [index]. Throws
+  /// an [ArgumentError] for data past the `ChartData` limits.
+  ///
+  /// ```dart
+  /// final id = doc.insertChart(slideId, ChartKind.line);
+  /// ```
+  String insertChart(
+    String slideId,
+    ChartKind kind, {
+    ElementFrame? frame,
+    ChartData? data,
+    int? index,
+  }) {
+    final chart = ChartElement(
+      id: newId(),
+      frame:
+          frame ?? _centered(defaultChartSize.width, defaultChartSize.height),
+      kind: kind,
+      data: _checkedChartData(data ?? sampleChartData(kind)),
+    );
+    addElement(slideId, chart, index: index);
+    return chart.id;
+  }
+
+  /// The size of a chart [insertChart] makes with no frame.
+  ({double width, double height}) get defaultChartSize => (
+        width: min(defaultChartWidth, _presentation.size.width * 0.8),
+        height: defaultChartHeight,
+      );
+
+  /// Replaces the chart [chartId]'s data, as one step. Throws an
+  /// [ArgumentError] past the `ChartData` limits.
+  void setChartData(String slideId, String chartId, ChartData data) =>
+      _updateChart(
+        slideId,
+        chartId,
+        (c) => c.copyWith(data: _checkedChartData(data)),
+      );
+
+  /// Makes the chart [chartId] a [kind] chart of the same data, as one
+  /// step.
+  void setChartKind(String slideId, String chartId, ChartKind kind) =>
+      _updateChart(slideId, chartId, (c) => c.copyWith(kind: kind));
+
+  /// Sets the chart [chartId]'s title, legend, value labels, gridlines and
+  /// axis titles, as one step; what is left out is kept, and an empty
+  /// title is none. See [ChartOptions].
+  void setChartOptions(
+    String slideId,
+    String chartId, {
+    String? title,
+    bool? showLegend,
+    bool? showDataLabels,
+    bool? showGridlines,
+    String? categoryAxisTitle,
+    String? valueAxisTitle,
+  }) =>
+      _updateChart(
+        slideId,
+        chartId,
+        (c) => c.copyWith(
+          options: c.options.copyWith(
+            title: title,
+            showLegend: showLegend,
+            showDataLabels: showDataLabels,
+            showGridlines: showGridlines,
+            categoryAxisTitle: categoryAxisTitle,
+            valueAxisTitle: valueAxisTitle,
+          ),
+        ),
+      );
+
+  /// Adds a series after the chart [chartId]'s last, as one step: [name],
+  /// or "Series N", with [values], or zeros, fitted to its categories.
+  /// Throws an [ArgumentError] past the `ChartData` limits.
+  void addChartSeries(
+    String slideId,
+    String chartId, {
+    String? name,
+    List<double>? values,
+  }) =>
+      _updateChart(slideId, chartId, (c) {
+        final series = c.data.series;
+        return c.copyWith(
+          data: _checkedChartData(
+            c.data.copyWith(series: [
+              ...series,
+              ChartSeries(
+                name: name ?? 'Series ${series.length + 1}',
+                values: values ?? const [],
+              ),
+            ]),
+          ),
+        );
+      });
+
+  /// Removes series [index] of the chart [chartId], as one step, and the
+  /// color it had of its own (see `ChartElement.colors`), so the series
+  /// after it keep theirs. Throws a [RangeError] for an index out of range
+  /// and an [ArgumentError] for a chart's only series.
+  void removeChartSeries(String slideId, String chartId, int index) =>
+      _updateChart(slideId, chartId, (c) {
+        final series = c.data.series;
+        RangeError.checkValidIndex(index, series, 'index');
+        if (series.length == 1) {
+          throw ArgumentError.value(index, 'index', 'is the only series');
+        }
+        return c.copyWith(
+          data: c.data.copyWith(series: [...series]..removeAt(index)),
+          colors: [...c.colors]..removeRange(
+              min(index, c.colors.length),
+              min(index + 1, c.colors.length),
+            ),
+        );
+      });
+
+  /// Sets the colors of the chart [chartId]'s series — of a pie's slices —
+  /// in order, as one step; those past the end take the theme's accents
+  /// (see `ChartElement.defaultPalette`). An empty list goes back to them
+  /// all.
+  void setChartColors(
+    String slideId,
+    String chartId,
+    List<SlideColor> colors,
+  ) {
+    if (colors.length > ChartData.maxCategories) {
+      throw ArgumentError.value(colors.length, 'colors', 'too many');
+    }
+    _updateChart(slideId, chartId, (c) => c.copyWith(colors: colors));
+  }
+
+  static ChartData _checkedChartData(ChartData data) => data.withinLimits
+      ? data
+      : throw ArgumentError.value(data, 'data', 'is past the chart limits');
+
+  /// Replaces the chart [chartId] with what [update] makes of it, as one
+  /// step.
+  void _updateChart(
+    String slideId,
+    String chartId,
+    ChartElement Function(ChartElement chart) update,
+  ) =>
+      _updateTree(
+        slideId,
+        [chartId],
+        (e, _) => e is ChartElement
+            ? update(e)
+            : throw ArgumentError.value(chartId, 'chartId', 'is not a chart'),
+      );
 
   // ---------------------------------------------------------------------------
   // Grouping

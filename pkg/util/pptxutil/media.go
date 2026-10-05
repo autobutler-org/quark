@@ -60,6 +60,12 @@ func (e *exporter) embedElements(elements []qslideElement, depth int) error {
 			if e.elements > MaxElements {
 				return fmt.Errorf("%w: the presentation holds more than %d elements", ErrTooLarge, MaxElements)
 			}
+		case typeChart:
+			// Written as a group, a text box and a table of its data.
+			e.elements += 2 + min((len(el.Categories)+1)*(len(el.Series)+1), maxTableCells)
+			if e.elements > MaxElements {
+				return fmt.Errorf("%w: the presentation holds more than %d elements", ErrTooLarge, MaxElements)
+			}
 		}
 	}
 	return nil

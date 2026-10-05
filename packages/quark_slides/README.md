@@ -17,7 +17,7 @@ Everything is immutable and compares by value. An edit makes a new
 | `Presentation`   | `title`, `size` (a `SlideSize`), `theme` (a `SlideTheme` or none), `defaultTransition`, `slides` |
 | `Slide`          | stable `id`, `background`, `elements` back to front, speaker `notes`, `layoutId`, `transition` (or none, to follow the deck) |
 | `SlideTransitionSpec` | `kind` (none, fade, push, wipe, zoom), `direction` (left, right, up, down), `durationMs` (200–2000) |
-| `SlideElement`   | sealed: `TextBox`, `ShapeElement`, `ImageElement`, `LineElement`, `TableElement`, `GroupElement`, `UnknownElement` |
+| `SlideElement`   | sealed: `TextBox`, `ShapeElement`, `ImageElement`, `LineElement`, `TableElement`, `ChartElement`, `GroupElement`, `UnknownElement` |
 | `ElementFrame`   | `x`, `y`, `width`, `height` in slide units, `rotation` in degrees       |
 | `TextBox`        | paragraphs, vertical `anchor`, `autoFit` (grow, fixed, shrink), `placeholder`, layout `slot`, `textRole` |
 | `TextParagraph`  | styled `TextRun`s, alignment, `lineSpacing`, `list` (none, bullet, numbered) |
@@ -28,6 +28,7 @@ Everything is immutable and compares by value. An edit makes a new
 | `GroupElement`   | `children`, back to front, in group-local frames; groups nest          |
 | `TableElement`   | `columnWidths`, `rowHeights`, `cells` (a full grid of `SlideTableCell`s), `headerRow`, `bandedRows`, `accent` |
 | `SlideTableCell` | `paragraphs` (as a `TextBox`'s), `fill`, `borders` (`CellBorders`), `anchor`, `rowSpan`, `colSpan` |
+| `ChartElement`   | `kind` (`ChartKind`: bar, horizontalBar, line, pie, area), `data` (`ChartData`: `categories` × `ChartSeries`), `options` (`ChartOptions`), `colors` |
 | `Stroke`         | `color`, `width`, `dash` (solid, dash, dot, dash-dot)                  |
 | `SlideColor`     | a literal 32-bit color value, or a theme role: `SlideColor.theme(ThemeColor.accent1)` |
 
@@ -43,7 +44,7 @@ A presentation is saved as a file, as sheets (`.qsheet`) and documents
 
 ```json
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "title": "Demo",
   "size": { "width": 1920, "height": 1080 },
   "slides": [
@@ -171,6 +172,9 @@ history of earlier presentations:
   `deleteTableRow`, `deleteTableColumn`, `setTableColumnWidth`,
   `setTableRowHeight`, `setCellText`, `formatCells`, `mergeCells`,
   `unmergeCells`, `setTableStyle` (see [Tables](#tables--for-a-table-toolbar))
+- charts: `insertChart`, `setChartData`, `setChartKind`, `setChartOptions`,
+  `addChartSeries`, `removeChartSeries`, `setChartColors` (see
+  [Charts](#charts--for-a-chart-toolbar))
 - groups and layout: `groupElements`, `ungroupElements`, `alignElements`,
   `distributeElements`, `matchSize` (see [Groups and
   alignment](#groups-and-alignment--for-a-toolbar))
@@ -247,6 +251,16 @@ reader through `elementLabel` (`defaultSlideElementLabel` in English); each
 handle is keyed `slide_handle_<id>`, `slide_handle_bottom_right` and so on.
 The math behind the gestures — `FrameGeometry`, `snapMove`,
 `SlideViewport` — is exported and tested on its own.
+
+**Locked canvases.** A deck the user may only read keeps its canvas live
+rather than hiding it from pointers: pass
+`interaction: SlideCanvasInteraction.selectOnly` and taps, the marquee, Tab,
+Escape, entering groups, selecting table cells, Ctrl/Cmd C, pan, zoom and
+every screen reader label still work, while nothing moves, resizes,
+rotates, inserts, deletes, pastes or opens for editing, and the selection
+is outlined without handles. `SlideCanvasInteraction.viewOnly` keeps only
+pan and zoom (a drag pans) and the labels. Leaving `editable` commits a
+text edit in progress.
 
 ## Text editing
 
@@ -633,8 +647,76 @@ holding an `a:tbl` — its grid, rows, and cells with their text, fills,
 every edge, and merges as `gridSpan`, `rowSpan`, `hMerge` and `vMerge` —
 and imports one back, within the same size limits.
 
-Find and replace does not look inside tables yet, and charts (#1160) are
-not built.
+Find and replace does not look inside tables yet.
+
+## Charts — for a chart toolbar
+
+A `ChartElement` draws its own small table of numbers: `ChartData` holds
+`categories` (the labels along the category axis, or a pie's slices) and
+`ChartSeries`, each a name and one value per category. `ChartKind` is bar,
+horizontalBar, line, pie (its first series only) or area. `ChartOptions`
+holds the `title`, `showLegend`, `showDataLabels`, `showGridlines`,
+`categoryAxisTitle` and `valueAxisTitle`. Series — a pie's slices — are
+colored by `colors` in order and then the theme's accents in turn
+(`ChartElement.defaultPalette`), resolved as the chart is painted, so a
+theme change recolors it. A chart past `ChartData.maxSeries` (50),
+`maxCategories` (500) or `maxValues` (5,000) is refused.
+
+```json
+{"id": "c1", "type": "chart", "kind": "bar",
+ "frame": {"x": 360, "y": 200, "width": 1200, "height": 700},
+ "categories": ["Q1", "Q2", "Q3"],
+ "series": [{"name": "Revenue", "values": [12, 30, 42]}],
+ "colors": ["theme:accent2"], "title": "Sales", "dataLabels": true}
+```
+
+The controller's chart commands are each one undo step:
+
+| Command | What it does |
+| --- | --- |
+| `insertChart(slideId, kind, frame:, data:)` | a chart of `sampleChartData(kind)`, 1200 × 700 centered unless framed; returns its id |
+| `setChartData(…, data)` | replaces the numbers |
+| `setChartKind(…, kind)` | keeps the numbers |
+| `setChartOptions(…, title:, showLegend:, showDataLabels:, showGridlines:, categoryAxisTitle:, valueAxisTitle:)` | what is left out is kept |
+| `addChartSeries(…, name:, values:)`, `removeChartSeries(…, index)` | the only series cannot be removed; a removed series takes its own color with it |
+| `setChartColors(…, colors)` | an empty list goes back to the theme's accents |
+
+`SlideCanvasTool.chart(kind)` inserts one with a click or a drag. A chart
+selects, moves, resizes and rotates with the ordinary handles; inside its
+frame `SlideChartPainter` lays it out as it paints, over pure, separately
+tested geometry: `ChartAxisScale.nice` (round-number ticks),
+`ChartPieSlice.of`, `chartBars`, `chartLinePoints`, `chartVisibleLabels`
+and `chartPlaceLabels` (label collision), `chartFlow` (the legend) and
+`ChartLayout`. It reads to a screen reader as a summary — "Bar chart, 3
+series, 5 categories; highest value 42 in Q3" (`defaultSlideChartSummary`)
+— with its numbers as the value, "Q1: Revenue 12, Costs 8. …"
+(`chartDataLabel`, `defaultSlideChartDataLabel` in English).
+
+`SlideChartEditingController` is the toolbar API. Give one to
+`SlideCanvas.chartEditing` and to the toolbar; while a single chart is
+selected `hasChart` is true and its commands change it:
+
+```dart
+final charts = SlideChartEditingController();
+SlideCanvas(document: doc, slideId: slideId, chartEditing: charts, ...);
+
+charts.setKind(ChartKind.line);
+charts.setOptions(title: 'Sales', showDataLabels: true);
+charts.addSeries(name: 'Costs');
+charts.removeSeries(0); // not the only one: see canRemoveSeries
+charts.setColors(const [SlideColor.theme(ThemeColor.accent3)]);
+final grid = charts.grid; // [['', 'Revenue'], ['Q1', '12'], …]
+charts.setDataGrid(editedGrid); // ChartData.fromGrid: blanks read as 0
+```
+
+On a `selectOnly` canvas it still reports the chart, but `canEdit` is false
+and every command does nothing.
+
+**PowerPoint.** `pkg/util/pptxutil` does not write native chart parts, which
+need an embedded workbook. Export writes a chart as a group of a text box
+holding its summary over a table of its data, and warns the slide; import
+reads a PowerPoint chart's cached data the same way, as a summary and a
+table, so what the chart says survives either way.
 
 ## Copy and paste
 

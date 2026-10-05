@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 5,
+  "title": "Charts",
+  "size": {
+    "width": 1920,
+    "height": 1080
+  },
+  "slides": [
+    {
+      "id": "s1",
+      "elements": [
+        {
+          "id": "chart",
+          "type": "chart",
+          "frame": {
+            "x": 360,
+            "y": 200,
+            "width": 1200,
+            "height": 700
+          },
+          "kind": "bar",
+          "categories": [
+            "Q1",
+            "Q2",
+            "Q3"
+          ],
+          "series": [
+            {
+              "name": "Revenue",
+              "values": [
+                12,
+                30,
+                42
+              ]
+            },
+            {
+              "name": "Costs",
+              "values": [
+                8,
+                12.5,
+                20
+              ]
+            }
+          ],
+          "colors": [
+            "#224488"
+          ],
+          "title": "Sales",
+          "dataLabels": true,
+          "categoryAxisTitle": "Quarter",
+          "valueAxisTitle": "USD"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "elements": [
+        {
+          "id": "g",
+          "type": "group",
+          "frame": {
+            "x": 0,
+            "y": 0,
+            "width": 400,
+            "height": 500
+          },
+          "children": [
+            {
+              "id": "pie",
+              "type": "chart",
+              "frame": {
+                "x": 0,
+                "y": 0,
+                "width": 400,
+                "height": 400
+              },
+              "kind": "pie",
+              "categories": [
+                "North",
+                "South"
+              ],
+              "series": [
+                {
+                  "values": [
+                    3,
+                    1
+                  ]
+                }
+              ],
+              "legend": false,
+              "gridlines": false
+            },
+            {
+              "id": "sh",
+              "type": "shape",
+              "frame": {
+                "x": 0,
+                "y": 400,
+                "width": 400,
+                "height": 100
+              },
+              "kind": "rectangle"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

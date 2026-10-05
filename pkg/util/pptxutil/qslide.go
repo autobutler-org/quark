@@ -15,9 +15,10 @@ const (
 	// exportSchemaVersion is the newest schema an export reads, the one
 	// quark_slides' QslideCodec writes: version 2 added the stored theme,
 	// role colors, slide layouts and placeholder text boxes, version 3
-	// slide transitions, a slide's own and the deck's default, and version 4
-	// tables. Older files read too, as the codec migrates them.
-	exportSchemaVersion = 4
+	// slide transitions, a slide's own and the deck's default, version 4
+	// tables, and version 5 charts. Older files read too, as the codec
+	// migrates them.
+	exportSchemaVersion = 5
 	// importSchemaVersion is the schema an import writes. A PowerPoint theme
 	// does not map onto a .qslide theme without loss — its fonts per script,
 	// its color transforms, its master's own text styles — so an import keeps
@@ -37,6 +38,7 @@ const (
 	typeLine  = "line"
 	typeGroup = "group"
 	typeTable = "table"
+	typeChart = "chart"
 )
 
 // hexColor is a .qslide color: #RRGGBB, or #RRGGBBAA with alpha.
@@ -176,15 +178,23 @@ func emitAll(header qslideHeader, pending *[]qslideSlide, emit func(qslideHeader
 // only its type, as quark_slides keeps one it does not know verbatim.
 func (e *qslideElement) UnmarshalJSON(b []byte) error {
 	var head struct {
-		Type string `json:"type"`
+		Type  string      `json:"type"`
+		Frame qslideFrame `json:"frame"`
 	}
 	if err := json.Unmarshal(b, &head); err != nil {
 		return err
 	}
+	type plain qslideElement
 	switch head.Type {
 	case typeText, typeShape, typeImage, typeLine, typeGroup, typeTable:
-		type plain qslideElement
 		return json.Unmarshal(b, (*plain)(e))
+	case typeChart:
+		// A chart a newer writer shaped differently still has a frame to
+		// put its summary in.
+		if err := json.Unmarshal(b, (*plain)(e)); err != nil {
+			*e = qslideElement{Type: head.Type, Frame: head.Frame}
+		}
+		return nil
 	}
 	*e = qslideElement{Type: head.Type}
 	return nil

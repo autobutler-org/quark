@@ -23,13 +23,23 @@
 /// `SlideTransitionFrame` math; and tables: `TableElement` and its
 /// `SlideTableCell`s, the controller's table commands over the pure
 /// `table_edits` functions, the `SlideCanvasTool.table` tool, and the
-/// `SlideTableEditingController` a toolbar works on selected cells through.
+/// `SlideTableEditingController` a toolbar works on selected cells through;
+/// and charts: `ChartElement` over its `ChartData` of `ChartSeries`, its
+/// `ChartOptions`, the controller's chart commands, the
+/// `SlideCanvasTool.chart` tool, `SlideChartPainter` over the pure chart
+/// geometry (`ChartAxisScale`, `ChartPieSlice`, `ChartLayout`,
+/// `chartBars` and the rest), and the `SlideChartEditingController` a
+/// toolbar works on the selected chart through; and the canvas's
+/// `SlideCanvasInteraction`, which locks it to selecting or viewing.
 library;
 
 export 'src/clipboard/slide_clipboard.dart';
 
 export 'src/canvas/slide_canvas.dart';
+export 'src/canvas/slide_canvas_interaction.dart';
+export 'src/canvas/slide_chart_editing_controller.dart';
 export 'src/canvas/slide_canvas_style.dart';
+export 'src/canvas/slide_chart_painter.dart';
 export 'src/canvas/slide_canvas_tool.dart';
 export 'src/canvas/slide_element_label.dart';
 export 'src/canvas/slide_fallback_theme.dart';
@@ -41,6 +51,10 @@ export 'src/canvas/slide_text_editing_controller.dart';
 export 'src/canvas/slide_text_layout.dart';
 export 'src/canvas/slide_tool_controller.dart';
 export 'src/canvas/slide_tool_label.dart';
+export 'src/chart/chart_axis_scale.dart';
+export 'src/chart/chart_geometry.dart';
+export 'src/chart/chart_layout.dart';
+export 'src/chart/chart_pie_slice.dart';
 export 'src/controller/slide_document_controller.dart';
 export 'src/controller/slide_document_notifier.dart';
 export 'src/format/qslide_codec.dart';
@@ -63,6 +77,10 @@ export 'src/model/cell_border_preset.dart';
 export 'src/model/cell_borders.dart';
 export 'src/model/cell_format.dart';
 export 'src/model/cell_range.dart';
+export 'src/model/chart_data.dart';
+export 'src/model/chart_kind.dart';
+export 'src/model/chart_options.dart';
+export 'src/model/chart_series.dart';
 export 'src/model/element_frame.dart';
 export 'src/model/element_style.dart';
 export 'src/model/image_source.dart';

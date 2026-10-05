@@ -4,6 +4,9 @@ import '../format/json_fields.dart';
 import '../format/qslide_format_exception.dart';
 import '../theme/theme_color.dart';
 import 'cell_range.dart';
+import 'chart_data.dart';
+import 'chart_kind.dart';
+import 'chart_options.dart';
 import 'element_frame.dart';
 import 'image_source.dart';
 import 'slide_color.dart';
@@ -13,11 +16,12 @@ import 'slide_table_cell.dart';
 import 'text_paragraph.dart';
 import 'unset.dart';
 
+part 'chart_element.dart';
 part 'table_element.dart';
 
 /// Something placed on a slide: a [TextBox], [ShapeElement], [ImageElement],
-/// [LineElement], [TableElement] or [GroupElement], or an [UnknownElement] a
-/// newer version wrote.
+/// [LineElement], [TableElement], [ChartElement] or [GroupElement], or an
+/// [UnknownElement] a newer version wrote.
 ///
 /// Every element has an [id], unique within its presentation and stable for
 /// the element's life — moving, restyling or reordering it keeps the id —
@@ -69,10 +73,10 @@ sealed class SlideElement {
 
   /// Reads an element from its `.qslide` object at [path].
   ///
-  /// An element whose `type` this version does not know — or a shape whose
-  /// `kind` it does not know — reads as an [UnknownElement] that keeps the
-  /// object verbatim, so a newer writer's elements survive being opened,
-  /// moved and saved here.
+  /// An element whose `type` this version does not know — or a shape or
+  /// chart whose `kind` it does not know — reads as an [UnknownElement]
+  /// that keeps the object verbatim, so a newer writer's elements survive
+  /// being opened, moved and saved here.
   factory SlideElement.fromJson(Object? value, String path) {
     final json = asObject(value, path);
     final id = requireString(json, 'id', path);
@@ -147,6 +151,10 @@ sealed class SlideElement {
         );
       case TableElement.typeName:
         return TableElement._fromJson(json, id, frame, path);
+      case ChartElement.typeName:
+        final kind = ChartKind.values.asNameMap()[json['kind']];
+        if (kind == null) break;
+        return ChartElement._fromJson(json, id, frame, kind, path);
       case GroupElement.typeName:
         final children = optionalList(json, 'children', path);
         return GroupElement(

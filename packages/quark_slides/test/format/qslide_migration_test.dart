@@ -9,9 +9,9 @@ import '../support/sample_presentation.dart';
 String fixture(String name) => File('test/fixtures/$name').readAsStringSync();
 
 void main() {
-  test('this version writes schema 4', () {
-    expect(QslideCodec.schemaVersion, 4);
-    expect(QslideCodec.toJson(Presentation())['schemaVersion'], 4);
+  test('this version writes schema 5', () {
+    expect(QslideCodec.schemaVersion, 5);
+    expect(QslideCodec.toJson(Presentation())['schemaVersion'], 5);
   });
 
   group('from schema version 1', () {
@@ -22,11 +22,11 @@ void main() {
       expect(deck.slides.map((s) => s.layoutId), everyElement('blank'));
     });
 
-    test('it saves as version 4, without the old theme reference', () {
+    test('it saves as version 5, without the old theme reference', () {
       final json = QslideCodec.toJson(
         QslideCodec.decode(fixture('v1_sample.qslide')),
       );
-      expect(json['schemaVersion'], 4);
+      expect(json['schemaVersion'], 5);
       expect(json, isNot(contains('theme')));
       expect(json, isNot(contains('transition')));
       final again = QslideCodec.decode(jsonEncode(json));
@@ -74,11 +74,11 @@ void main() {
       );
     });
 
-    test('it saves as version 4 with no transition written', () {
+    test('it saves as version 5 with no transition written', () {
       final json = QslideCodec.toJson(
         QslideCodec.decode(fixture('v2_sample.qslide')),
       );
-      expect(json['schemaVersion'], 4);
+      expect(json['schemaVersion'], 5);
       expect(json, isNot(contains('transition')));
       expect(
         (json['slides'] as List).cast<Map>(),
@@ -124,7 +124,7 @@ void main() {
   group('schema version 3', () {
     test('the golden sample carries its transitions', () {
       final json = jsonDecode(fixture('sample.qslide')) as Map;
-      expect(json['schemaVersion'], 4);
+      expect(json['schemaVersion'], 5);
       expect(json['transition'], {'kind': 'fade', 'duration': 700});
       final deck = QslideCodec.decode(fixture('sample.qslide'));
       expect(
@@ -178,7 +178,7 @@ void main() {
           samplePresentation());
     });
 
-    test('it saves as version 4 and otherwise byte for byte as before', () {
+    test('it saves as version 5 and otherwise byte for byte as before', () {
       final saved = QslideCodec.encode(
         QslideCodec.decode(fixture('v3_sample.qslide')),
       );
@@ -187,7 +187,7 @@ void main() {
         saved,
         fixture('v3_sample.qslide').replaceFirst(
           '"schemaVersion": 3',
-          '"schemaVersion": 4',
+          '"schemaVersion": 5',
         ),
       );
     });
@@ -202,7 +202,7 @@ void main() {
             'elements': [
               {
                 'id': 'c',
-                'type': 'chart',
+                'type': 'diagram',
                 'frame': {'x': 0, 'y': 0, 'width': 10, 'height': 10},
                 'series': [1, 2],
               },
@@ -221,7 +221,7 @@ void main() {
   group('schema version 2 features', () {
     test('the golden sample carries its theme, layouts and role colors', () {
       final json = jsonDecode(fixture('sample.qslide')) as Map;
-      expect(json['schemaVersion'], 4);
+      expect(json['schemaVersion'], 5);
       expect((json['theme'] as Map)['id'], 'sample');
       final deck = QslideCodec.decode(fixture('sample.qslide'));
       expect(deck.theme, sampleTheme());

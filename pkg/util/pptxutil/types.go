@@ -91,6 +91,19 @@ type qslideElement struct {
 	HeaderRow  bool           `json:"headerRow"`
 	BandedRows bool           `json:"bandedRows"`
 	Accent     string         `json:"accent"`
+
+	// A chart, whose Kind is bar, horizontalBar, line, pie or area: its
+	// category labels (strings, or numbers a lenient writer left), its
+	// series, and its title.
+	Categories []any          `json:"categories"`
+	Series     []qslideSeries `json:"series"`
+	Title      string         `json:"title"`
+}
+
+// qslideSeries is one row of a chart's numbers; a null value is 0.
+type qslideSeries struct {
+	Name   string     `json:"name"`
+	Values []*float64 `json:"values"`
 }
 
 // qslideCell is one table cell: rich text like a text box's, held to an
@@ -177,6 +190,9 @@ type exporter struct {
 	notes    []bool
 	elements int
 	result   ExportQslideResult
+	// chartWarned is the last slide number warned about a chart, so each
+	// slide is warned once.
+	chartWarned int
 }
 
 // slideWriter writes one slide's shape tree.

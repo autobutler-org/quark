@@ -6,6 +6,7 @@ import '../model/cell_range.dart';
 import '../model/slide_element.dart';
 import '../theme/slide_theme.dart';
 import 'slide_canvas_style.dart';
+import 'slide_chart_painter.dart';
 import 'slide_element_label.dart';
 import 'slide_group_view.dart';
 import 'slide_image_source.dart';
@@ -35,7 +36,9 @@ import 'slide_text_box_view.dart';
 /// named by [elementLabel]. A text box paints its [highlights] behind its
 /// text. A table draws its cells (see [SlideTableView]), each named by
 /// [cellLabel], with [selectedCells] tinted when they are its own; while
-/// one of its cells is edited, [editor] is drawn in that cell.
+/// one of its cells is edited, [editor] is drawn in that cell. A chart is
+/// drawn by [SlideChartPainter] and reads its summary as [label] and its
+/// numbers, as [chartDataLabel] puts them, as its value.
 class SlideElementView extends StatelessWidget {
   /// Creates the view of [element].
   const SlideElementView({
@@ -55,6 +58,7 @@ class SlideElementView extends StatelessWidget {
     this.highlights = const {},
     this.cellLabel = defaultSlideTableCellLabel,
     this.selectedCells,
+    this.chartDataLabel = defaultSlideChartDataLabel,
   });
 
   /// The element to draw.
@@ -109,6 +113,9 @@ class SlideElementView extends StatelessWidget {
   /// range — or `null` for none.
   final ({String tableId, CellRange range})? selectedCells;
 
+  /// Reads a chart's numbers to a screen reader.
+  final SlideChartDataLabel chartDataLabel;
+
   /// The [ValueKey] value of the element with [id]: `slide_element_<id>`.
   static String keyName(String id) => 'slide_element_$id';
 
@@ -156,6 +163,8 @@ class SlideElementView extends StatelessWidget {
           },
           editor: editor,
         ),
+      final ChartElement chart => CustomPaint(
+          painter: SlideChartPainter(chart, theme), size: Size.infinite),
       final GroupElement group => SlideGroupView(
           group: group,
           style: style,
@@ -169,6 +178,7 @@ class SlideElementView extends StatelessWidget {
           highlights: highlights,
           cellLabel: cellLabel,
           selectedCells: selectedCells,
+          chartDataLabel: chartDataLabel,
         ),
     };
     final opacity = switch (element) {
@@ -192,6 +202,10 @@ class SlideElementView extends StatelessWidget {
                 : Semantics(
                     container: true,
                     label: label,
+                    value: switch (element) {
+                      final ChartElement chart => chartDataLabel(chart),
+                      _ => null,
+                    },
                     selected: onSelect == null ? null : selected,
                     onTap: onSelect,
                     // A group's children and a table's cells read on their

@@ -55,7 +55,7 @@ const sampleDeck = `{
         {"id": "e11", "type": "shape", "frame": {"x": 0, "y": 0, "width": 100, "height": 100, "rotation": -90},
          "kind": "rectangle"},
         {"id": "e12", "type": "shape", "frame": {"x": 0, "y": 0, "width": 100, "height": 100}, "kind": "hexagon"},
-        {"id": "e13", "type": "chart", "frame": {"x": 0, "y": 0, "width": 100, "height": 100}, "paragraphs": 7},
+        {"id": "e13", "type": "diagram", "frame": {"x": 0, "y": 0, "width": 100, "height": 100}, "paragraphs": 7},
         {"id": "e7", "type": "image", "frame": {"x": 1500, "y": 100, "width": 200, "height": 100},
          "source": "asset:logo-1", "altText": "Our logo"}
       ],
@@ -314,7 +314,7 @@ func TestExportDrawsShapesWithTheirFillOutlineAndRotation(t *testing.T) {
 	)
 	// A dash written as an array draws solid; an unknown kind and an unknown
 	// type are left out.
-	lacks(t, "slide 1", slide, `prstDash val="[`, "hexagon", "chart")
+	lacks(t, "slide 1", slide, `prstDash val="[`, "hexagon", "diagram")
 	if got := strings.Count(slide, "<p:sp>"); got != 8 {
 		t.Errorf("slide 1 has %d shapes, want 8 (6 shapes, a text box, a placeholder)", got)
 	}
@@ -471,7 +471,7 @@ func TestExportRefusesWhatIsNotAQslide(t *testing.T) {
 		"empty":         ``,
 		"not json":      `hello`,
 		"no version":    `{"slides":[]}`,
-		"newer version": `{"schemaVersion":5,"slides":[]}`,
+		"newer version": `{"schemaVersion":6,"slides":[]}`,
 		"bad size":      `{"schemaVersion":1,"size":{"width":0,"height":10},"slides":[]}`,
 		"bad slide":     `{"schemaVersion":1,"slides":[{"elements":"no"}]}`,
 	} {
