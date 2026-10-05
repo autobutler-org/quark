@@ -62,11 +62,18 @@ func (w *SyncWorker) loop(ctx context.Context, ch <-chan eventbus.Event) {
 }
 
 func (w *SyncWorker) handleEvent(ctx context.Context, evt eventbus.Event) {
+	// Live sync mirrors the internal drive onto the default-storage drive and
+	// nothing else. An event from another drive names a path on that drive; the
+	// same relative path anywhere else is an unrelated file (#2791).
+	if evt.DeviceSerial != "" {
+		return
+	}
+	// A delete is not mirrored. The user's delete moved the file into the
+	// internal drive's Trash, where it can be restored; the mirror keeps its
+	// copy rather than destroying a file nobody asked to delete (#2791).
 	switch evt.Kind {
 	case eventbus.EventUpload, eventbus.EventNewFolder:
 		w.syncPath(ctx, evt.Path)
-	case eventbus.EventDelete:
-		w.deletePath(ctx, evt.Path, evt.DeviceSerial)
 	case eventbus.EventMove:
 		w.movePath(ctx, evt.Path, evt.NewPath)
 	}
@@ -95,13 +102,6 @@ func (w *SyncWorker) defaultResolveTarget(ctx context.Context) (string, error) {
 
 func (w *SyncWorker) defaultResolveInternalDir() (string, error) {
 	return storageutil.GetFilesDir()
-}
-
-func (w *SyncWorker) defaultGetManagedDevices() ([]storageutil.ManagedDevice, error) {
-	if w.storage == nil {
-		return nil, nil
-	}
-	return w.storage.GetManagedDevices()
 }
 
 func (w *SyncWorker) syncPath(ctx context.Context, relPath string) {
@@ -141,37 +141,6 @@ func (w *SyncWorker) syncPath(ctx context.Context, relPath string) {
 	}
 }
 
-func (w *SyncWorker) deletePath(ctx context.Context, relPath string, sourceSerial string) {
-	// 1. Delete from internal Files (if source was a USB device, not internal).
-	if sourceSerial != "" {
-		internalDir, err := w.resolveInternalDir()
-		if err == nil && internalDir != "" {
-			os.RemoveAll(filepath.Join(internalDir, relPath))
-		}
-	}
-
-	// 2. Delete from all managed USB devices except the source device.
-	managed, err := w.getManagedDevices()
-	if err != nil {
-		return
-	}
-	for _, dev := range managed {
-		// Skip internal devices — already handled above (or is the source).
-		if dev.IsInternal {
-			continue
-		}
-		var devSerial string
-		if dev.UsbInfo != nil {
-			devSerial = dev.UsbInfo.GetSerial()
-		}
-		// Skip the source device (only relevant when source is a USB device).
-		if sourceSerial != "" && devSerial == sourceSerial {
-			continue
-		}
-		os.RemoveAll(filepath.Join(dev.FilesDir, relPath))
-	}
-}
-
 func (w *SyncWorker) movePath(ctx context.Context, oldPath, newPath string) {
 	targetDir, err := w.resolveTarget(ctx)
 	if err != nil || targetDir == "" {
@@ -181,6 +150,12 @@ func (w *SyncWorker) movePath(ctx context.Context, oldPath, newPath string) {
 	oldDst := filepath.Join(targetDir, oldPath)
 	newDst := filepath.Join(targetDir, newPath)
 
+	// os.Rename replaces an existing file, and what sits at the new name on
+	// the target may be a file the mirror never wrote.
+	if _, err := os.Lstat(newDst); !os.IsNotExist(err) {
+		log.Printf("sync: move %s → %s: destination exists on target, leaving both", oldPath, newPath)
+		return
+	}
 	// A failure here surfaces as the rename error just below.
 	_ = os.MkdirAll(filepath.Dir(newDst), 0755)
 	if err := os.Rename(oldDst, newDst); err != nil {
