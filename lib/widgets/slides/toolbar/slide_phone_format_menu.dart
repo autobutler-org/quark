@@ -10,20 +10,22 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The phone slide toolbar's "Format" menu: the wide formatting row folded
 /// into a labeled chip, one submenu per [SlideToolbarGroup] that applies to
 /// the selection, holding every control the row has, then "Properties",
-/// which opens the properties sheet, and "Zoom", which the phone's bar has
-/// no room for otherwise.
+/// which opens the properties sheet, "Zoom", which the phone's bar has
+/// no room for otherwise, and "Keyboard shortcuts".
 ///
 /// Key prefixes: `slide_format_menu` on the chip, [SlideToolbarGroup.key]
 /// on each group's submenu, `<key>_menu` on the font, color, width, style,
 /// corner and opacity submenus; items keep the keys the wide row gives
 /// them; `slide_format_properties` on "Properties", `slide_zoom_menu` on
 /// "Zoom" and `slide_menu_zoom_out`, `slide_menu_zoom_fit` and
-/// `slide_menu_zoom_in` on its items.
+/// `slide_menu_zoom_in` on its items, `slide_format_shortcuts` on
+/// "Keyboard shortcuts".
 class SlidePhoneFormatMenu extends StatelessWidget {
   /// The menu for [actions].
   const SlidePhoneFormatMenu({
     required this.actions,
     required this.onOpenProperties,
+    required this.onShowShortcuts,
     super.key,
   });
 
@@ -32,6 +34,9 @@ class SlidePhoneFormatMenu extends StatelessWidget {
 
   /// Opens the properties sheet: position, size and alt text.
   final VoidCallback onOpenProperties;
+
+  /// Opens the keyboard shortcuts dialog.
+  final VoidCallback onShowShortcuts;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +59,10 @@ class SlidePhoneFormatMenu extends StatelessWidget {
       child: Text(choice.label),
     );
     List<Widget> controls(SlideToolbarGroup group) => switch (group) {
+      SlideToolbarGroup.clipboard => [
+        for (final c in [a.copy, a.cut, a.paste, a.duplicate])
+          SlideChoiceMenuItem(choice: c),
+      ],
       SlideToolbarGroup.text => [
         choices(
           'slide_format_font',
@@ -99,8 +108,30 @@ class SlidePhoneFormatMenu extends StatelessWidget {
         ),
       ],
       SlideToolbarGroup.arrange => [
-        for (final c in [...a.arrange, a.duplicate, a.delete])
-          SlideChoiceMenuItem(choice: c),
+        for (final c in a.arrange) SlideChoiceMenuItem(choice: c),
+        choices(
+          'slide_align',
+          'Align',
+          QuarkIcons.align_elements_left,
+          a.elementAlignments,
+        ),
+        if (a.canDistribute)
+          choices(
+            'slide_distribute',
+            'Distribute',
+            QuarkIcons.distribute_horizontal,
+            a.distributions,
+          ),
+        if (a.canMatchSize)
+          choices(
+            'slide_match_size',
+            'Match size',
+            QuarkIcons.match_size,
+            a.sizeMatches,
+          ),
+        if (a.canGroup) SlideChoiceMenuItem(choice: a.group),
+        if (a.canUngroup) SlideChoiceMenuItem(choice: a.ungroup),
+        SlideChoiceMenuItem(choice: a.delete),
       ],
     };
     final groups = [
@@ -129,6 +160,12 @@ class SlidePhoneFormatMenu extends StatelessWidget {
             for (final c in a.zoom) SlideChoiceMenuItem(choice: c),
           ],
           child: const Text('Zoom'),
+        ),
+        MenuItemButton(
+          key: const ValueKey('slide_format_shortcuts'),
+          leadingIcon: const Icon(QuarkIcons.keyboard_shortcuts),
+          onPressed: onShowShortcuts,
+          child: const Text('Keyboard shortcuts'),
         ),
       ],
       builder: (context, menu, _) => QuarkBarChip(

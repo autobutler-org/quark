@@ -16,7 +16,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// one of them, so it reaches the editor's undo shortcut above.
 ///
 /// The toolbar's drawing tool and text formatting reach it through the
-/// controller's `tools` and `textEditing`, which it shares.
+/// controller's `tools` and `textEditing`, which it shares; its copy, cut
+/// and paste keys use the controller's `clipboard`, as the toolbar does.
 ///
 /// The bar's second row says which slide it is; the canvas names each
 /// element to a screen reader. Colors come from [styleOf].
@@ -69,6 +70,7 @@ class SlideEditorCanvas extends StatelessWidget {
       style: styleOf(context),
       tools: controller.tools,
       textEditing: controller.textEditing,
+      clipboard: controller.clipboard,
       autofocus: true,
     );
   }

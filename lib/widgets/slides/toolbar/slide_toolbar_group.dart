@@ -5,19 +5,23 @@ import 'package:quark_icons/quark_icons.dart';
 /// The groups of the slide editor's contextual formatting row, in order:
 /// the registry the wide row and the phone "Format" menu both read.
 ///
-/// Each group shows only when [appliesTo] the selection — the text groups
-/// for a text box or an open editing session, the shape group for shapes
-/// and lines, arrange for any element — so the row is driven by what is
-/// selected. On a phone each group is a submenu of "Format" named [label].
+/// Each group shows only when [appliesTo] the selection — the clipboard
+/// always, so paste works with nothing selected, the text groups for a text
+/// box or an open editing session, the shape group for shapes and lines,
+/// arrange for any element — so the row is driven by what is selected. On a
+/// phone each group is a submenu of "Format" named [label].
 ///
-/// This is the seam for commands the `quark_slides` package grows: aligning
-/// and distributing, grouping, and the clipboard (#1174, #1175) each become
-/// a value here, the choices they offer a getter on [SlideToolbarActions],
-/// and a case in `SlideFormatGroupControls` and `SlidePhoneFormatMenu`.
+/// This is the seam for commands the `quark_slides` package grows: each
+/// becomes a value here, the choices it offers a getter on
+/// [SlideToolbarActions], and a case in `SlideFormatGroupControls` and
+/// `SlidePhoneFormatMenu`.
 ///
 /// Key prefixes: `slide_format_group_<name>` on each group's run of
 /// controls in the wide row, and on its submenu on a phone.
 enum SlideToolbarGroup {
+  /// Copy, cut, paste and duplicate (#1175).
+  clipboard('Clipboard', QuarkIcons.content_paste),
+
   /// Font family, size, bold, italic, underline, strikethrough and color.
   text('Text', QuarkIcons.format_menu),
 
@@ -27,7 +31,8 @@ enum SlideToolbarGroup {
   /// Fill, outline color, width and dash, corner radius and opacity.
   shape('Shape', QuarkIcons.format_fill),
 
-  /// Stacking order, duplicate and delete.
+  /// Stacking order; aligning, distributing and matching sizes; grouping
+  /// and ungrouping (#1174); delete.
   arrange('Arrange', QuarkIcons.arrange);
 
   const SlideToolbarGroup(this.label, this.icon);
@@ -43,6 +48,7 @@ enum SlideToolbarGroup {
 
   /// Whether the group has anything to offer for [actions]' selection.
   bool appliesTo(SlideToolbarActions actions) => switch (this) {
+    clipboard => true,
     text || paragraph => actions.canFormatText,
     shape => actions.canStyle,
     arrange => actions.hasSelection,

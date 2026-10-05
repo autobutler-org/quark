@@ -6,7 +6,7 @@ import 'package:quark/widgets/slides/toolbar/slide_toolbar_actions.dart';
 
 /// The slide toolbar on a phone (#1167): the labeled "Insert" and "Format"
 /// menus, which hold everything the wide `SlideToolbar`'s two rows do, with
-/// "Properties" at the end of "Format". It sits in the bar's second row
+/// "Properties" and "Keyboard shortcuts" at the end of "Format". It sits in the bar's second row
 /// beside the slide position, so a phone's slide keeps its height.
 ///
 /// It listens to [controller], its tools and its text editing session, so
@@ -20,6 +20,7 @@ class SlidePhoneToolbar extends StatelessWidget {
     required this.onImageFromDevice,
     required this.onImageFromQuark,
     required this.onOpenProperties,
+    required this.onShowShortcuts,
     super.key,
   });
 
@@ -34,6 +35,9 @@ class SlidePhoneToolbar extends StatelessWidget {
 
   /// Opens the properties sheet.
   final VoidCallback onOpenProperties;
+
+  /// Opens the keyboard shortcuts dialog.
+  final VoidCallback onShowShortcuts;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -55,6 +59,7 @@ class SlidePhoneToolbar extends StatelessWidget {
           SlidePhoneFormatMenu(
             actions: actions,
             onOpenProperties: onOpenProperties,
+            onShowShortcuts: onShowShortcuts,
           ),
         ],
       );

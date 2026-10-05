@@ -549,11 +549,17 @@ void main() {
 
     late List<String> uploads;
     late Object? uploadFailure;
+    late String? clipboardText;
 
     Future<SlideEditorController> pumpDrawn(WidgetTester tester) async {
       uploads = [];
       uploadFailure = null;
+      clipboardText = null;
       final controller = SlideEditorController(
+        clipboard: SlideClipboard(
+          read: () async => clipboardText,
+          write: (text) async => clipboardText = text,
+        ),
         filePath: 'talks/Deck.qslide',
         loadPresentation: (_, {serial}) async => drawn(),
         savePresentation: (_, p, {serial}) async => saved.add(p),
@@ -817,7 +823,7 @@ void main() {
       await tester.pump();
       await tester.tap(key('slide_format_menu'));
       await tester.pumpAndSettle();
-      await tester.tap(key(SlideToolbarGroup.arrange.key));
+      await tester.tap(key(SlideToolbarGroup.clipboard.key));
       await tester.pumpAndSettle();
       await tester.tap(key('slide_duplicate'));
       await tester.pumpAndSettle();
@@ -840,6 +846,242 @@ void main() {
       expect(tester.takeException(), isNull);
       c.selectElements({'shape'});
       await tester.pump();
+      expect(tester.takeException(), isNull);
+      c.selectElements({'text', 'shape', 'pic'});
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a wide window arranges the selection: group, ungroup, '
+        'align, distribute and match size, one undo step each', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpDrawn(tester);
+
+      c.selectElements({'shape'});
+      await tester.pump();
+      expect(key(SlideToolbarGroup.arrange.key), findsOneWidget);
+      expect(key('slide_group'), findsNothing);
+      expect(key('slide_distribute'), findsNothing);
+      expect(key('slide_match_size'), findsNothing);
+      // One element lines up with the slide.
+      await tester.tap(key('slide_align'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_align_top'));
+      await tester.pumpAndSettle();
+      expect(element(c, 'shape').frame.y, 0);
+
+      c.selectElements({'shape', 'pic'});
+      await tester.pump();
+      expect(key('slide_distribute'), findsNothing);
+      await tester.tap(key('slide_align'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_align_left'));
+      await tester.pumpAndSettle();
+      expect(element(c, 'pic').frame.x, 200);
+      await tester.tap(key('slide_match_size'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_match_size_height'));
+      await tester.pumpAndSettle();
+      expect(element(c, 'pic').frame.height, 300);
+
+      await tester.tap(key('slide_group'));
+      await tester.pump();
+      final group = c.singleSelected;
+      expect(group, isA<GroupElement>());
+      expect(key('slide_group'), findsNothing);
+      await tester.tap(key('slide_ungroup'));
+      await tester.pump();
+      expect(c.selectedElementIds, {'shape', 'pic'});
+
+      c.selectElements({'text', 'shape', 'pic'});
+      await tester.pump();
+      // The row holds every group now, so arrange scrolls into view.
+      await tester.ensureVisible(key('slide_distribute'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_distribute'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_distribute_vertical'));
+      await tester.pumpAndSettle();
+
+      // Distribute, ungroup, group, match size, align left, align top.
+      for (var i = 0; i < 6; i++) {
+        c.undo();
+      }
+      await tester.pump();
+      expect(c.canUndo, isFalse);
+      expect(element(c, 'shape').frame.y, 500);
+      expect(tester.takeException(), isNull);
+      await tap.expectTapTargetGuidelines(tester);
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('the toolbar copies, cuts and pastes through the clipboard, '
+        'and pastes plain text as a text box', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpDrawn(tester);
+      // Paste is offered with nothing selected; copy and cut are not.
+      expect(key(SlideToolbarGroup.clipboard.key), findsOneWidget);
+      expect(key('slide_format_hint'), findsOneWidget);
+
+      c.selectElements({'shape'});
+      await tester.pump();
+      await tester.tap(key('slide_copy'));
+      await tester.pumpAndSettle();
+      expect(clipboardText, isNotNull);
+      await tester.tap(key('slide_paste'));
+      await tester.pumpAndSettle();
+      expect(c.selectedSlide!.elements, hasLength(4));
+      final pasted = c.singleSelected!;
+      expect(pasted.id, isNot('shape'));
+      expect(pasted.frame.x, 200 + SlideDocumentController.pasteOffset);
+
+      await tester.tap(key('slide_cut'));
+      await tester.pumpAndSettle();
+      expect(c.selectedSlide!.elements, hasLength(3));
+      expect(c.selectedElementIds, isEmpty);
+
+      clipboardText = 'From another app';
+      await tester.tap(key('slide_paste'));
+      await tester.pumpAndSettle();
+      final box = c.singleSelected;
+      expect(box, isA<TextBox>());
+      expect((box! as TextBox).plainText, 'From another app');
+
+      c
+        ..undo()
+        ..undo()
+        ..undo();
+      await tester.pump();
+      expect(c.canUndo, isFalse);
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('the canvas copy and paste keys use the same clipboard', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpDrawn(tester);
+      c.selectElements({'shape'});
+      await tester.pump();
+      // The canvas has focus from the start.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(clipboardText, isNotNull);
+      expect(c.canUndo, isFalse);
+      await letAutosaveRun(tester);
+    });
+
+    for (final (name, size) in [
+      ('narrow', tap.narrowViewport),
+      ('wide', tap.wideViewport),
+    ]) {
+      testWidgets('the properties set the slide background color ($name)', (
+        tester,
+      ) async {
+        tap.setViewport(tester, size);
+        final c = await pumpDrawn(tester);
+        if (size == tap.narrowViewport) {
+          await tester.tap(key('slide_format_menu'));
+          await tester.pumpAndSettle();
+          await tester.tap(key('slide_format_properties'));
+          await tester.pumpAndSettle();
+        }
+        await tester.ensureVisible(key('slide_background_hex'));
+        await tester.enterText(key('slide_background_hex'), '#102030');
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pumpAndSettle();
+        expect(
+          c.selectedSlide!.background?.color,
+          const SlideColor(0xFF102030),
+        );
+        expect(c.saveState, SlideSaveState.dirty);
+
+        await tester.ensureVisible(key('slide_background_none'));
+        await tester.tap(key('slide_background_none'));
+        await tester.pumpAndSettle();
+        expect(c.selectedSlide!.background, isNull);
+        c
+          ..undo()
+          ..undo();
+        expect(c.canUndo, isFalse);
+        expect(tester.takeException(), isNull);
+        await letAutosaveRun(tester);
+      });
+    }
+
+    testWidgets('a phone arranges and pastes from the Format menu', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final c = await pumpDrawn(tester);
+      c.selectElements({'shape', 'pic'});
+      await tester.pump();
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key(SlideToolbarGroup.arrange.key));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_group'));
+      await tester.pumpAndSettle();
+      expect(c.singleSelected, isA<GroupElement>());
+
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key(SlideToolbarGroup.clipboard.key));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_copy'));
+      await tester.pumpAndSettle();
+      expect(clipboardText, isNotNull);
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+    });
+  });
+
+  group('keyboard shortcuts help (#1168)', () {
+    Finder dialog() => find.byKey(const ValueKey('slide_shortcuts_dialog'));
+
+    testWidgets('? opens the shortcuts dialog from the canvas', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      await pumpEditor(tester);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.slash, character: '?');
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+      expect(dialog(), findsOneWidget);
+    });
+
+    testWidgets('F1 opens it too', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      await pumpEditor(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+      await tester.pumpAndSettle();
+      expect(dialog(), findsOneWidget);
+    });
+
+    testWidgets('the toolbar\'s keyboard button opens it (wide)', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      await pumpEditor(tester);
+      final button = find.byKey(const ValueKey('slide_shortcuts_button'));
+      expect(find.byTooltip('Keyboard shortcuts'), findsOneWidget);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(dialog(), findsOneWidget);
+      await tap.expectTapTargetGuidelines(tester);
+    });
+
+    testWidgets('a phone opens it from the Format menu (narrow)', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      await pumpEditor(tester);
+      await tester.tap(find.byKey(const ValueKey('slide_format_menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('slide_format_shortcuts')));
+      await tester.pumpAndSettle();
+      expect(dialog(), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

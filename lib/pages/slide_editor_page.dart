@@ -11,6 +11,8 @@ import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/slides/export/slide_export_button.dart';
 import 'package:quark/widgets/slides/insert/slide_quark_image_dialog.dart';
 import 'package:quark/widgets/slides/properties/slide_properties_panel.dart';
+import 'package:quark/widgets/slides/shortcuts/slide_shortcuts_dialog.dart';
+import 'package:quark/widgets/slides/shortcuts/slide_shortcuts_help.dart';
 import 'package:quark/widgets/slides/slide_editor_bar_bottom.dart';
 import 'package:quark/widgets/slides/slide_editor_body.dart';
 import 'package:quark/widgets/slides/slide_save_status.dart';
@@ -40,6 +42,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// The bar's export button saves the presentation as a PowerPoint file
 /// (#1172), saving unsaved edits first; a failure is a snack bar.
+///
+/// `?` or F1 anywhere in the editor, the toolbar's keyboard button, or
+/// "Keyboard shortcuts" in a phone's Format menu opens the shortcuts dialog
+/// (#1168).
 ///
 /// Nothing is pushed underneath it when it opens at its own URL, so its back
 /// button and a system back land in the folder that holds the file, as the
@@ -129,6 +135,8 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
     );
     if (path != null) await _controller.insertImageFromQuark(path);
   }
+
+  void _showShortcuts() => SlideShortcutsDialog.show(context);
 
   void _openPropertiesSheet() => showQuarkSheet<void>(
     context,
@@ -220,16 +228,20 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                       onImageFromDevice: _controller.insertImageFromDevice,
                       onImageFromQuark: _insertImageFromQuark,
                       onOpenProperties: _openPropertiesSheet,
+                      onShowShortcuts: _showShortcuts,
                     ),
                   ),
           ),
           body: SafeArea(
             top: false,
-            child: SlideEditorBody(
-              controller: _controller,
-              onPresent: _present,
-              onImageFromDevice: _controller.insertImageFromDevice,
-              onImageFromQuark: _insertImageFromQuark,
+            child: SlideShortcutsHelp(
+              child: SlideEditorBody(
+                controller: _controller,
+                onPresent: _present,
+                onImageFromDevice: _controller.insertImageFromDevice,
+                onImageFromQuark: _insertImageFromQuark,
+                onShowShortcuts: _showShortcuts,
+              ),
             ),
           ),
         ),

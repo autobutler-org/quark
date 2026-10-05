@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_choice.dart';
@@ -6,8 +8,9 @@ import 'package:quark_slides/quark_slides.dart';
 
 /// What the slide editor's toolbar offers, as [SlideToolbarChoice]s and
 /// [SlideColorChoice]s built from [controller]'s state: the tools, the
-/// text, paragraph and shape formatting the selection allows, and the
-/// arrange commands. The wide rows and the phone menus draw the same
+/// text, paragraph and shape formatting the selection allows, the arrange
+/// commands — stacking, aligning, distributing, matching sizes and grouping
+/// — and the clipboard. The wide rows and the phone menus draw the same
 /// choices.
 ///
 /// Every choice acts through [controller], so each is one undo step on the
@@ -20,7 +23,10 @@ import 'package:quark_slides/quark_slides.dart';
 /// `font_<family>`, `font_default`, `stroke_width_<n>`, `dash_<name>`,
 /// `opacity_<percent>`, `corner_<n>`), and the colors `slide_text_color`,
 /// `slide_fill` and `slide_stroke_color`. Arrange is `slide_arrange_<move>`,
-/// `slide_duplicate` and `slide_delete`.
+/// `slide_align_<alignment>`, `slide_distribute_<axis>`,
+/// `slide_match_size_<match>`, `slide_group`, `slide_ungroup` and
+/// `slide_delete`; the clipboard `slide_copy`, `slide_cut`, `slide_paste`
+/// and `slide_duplicate`.
 class SlideToolbarActions {
   /// The toolbar for [controller]; [onImageFromDevice] and
   /// [onImageFromQuark] start the page's picture pickers.
@@ -388,12 +394,116 @@ class SlideToolbarActions {
       ),
   ];
 
-  /// Copy the selection.
-  SlideToolbarChoice get duplicate => SlideToolbarChoice(
-    key: 'slide_duplicate',
-    label: 'Duplicate',
-    icon: QuarkIcons.content_copy,
-    onSelected: _whenSelected(controller.duplicateSelection),
+  /// Line the selection up: left, center, right, top, middle, bottom. One
+  /// element lines up with the slide.
+  List<SlideToolbarChoice> get elementAlignments {
+    final within = controller.selectedElementIds.length == 1
+        ? 'to the slide'
+        : '';
+    return [
+      for (final (alignment, label, icon) in [
+        (ElementAlignment.left, 'Align left', QuarkIcons.align_elements_left),
+        (
+          ElementAlignment.center,
+          'Align center',
+          QuarkIcons.align_elements_center,
+        ),
+        (
+          ElementAlignment.right,
+          'Align right',
+          QuarkIcons.align_elements_right,
+        ),
+        (ElementAlignment.top, 'Align top', QuarkIcons.align_elements_top),
+        (
+          ElementAlignment.middle,
+          'Align middle',
+          QuarkIcons.align_elements_middle,
+        ),
+        (
+          ElementAlignment.bottom,
+          'Align bottom',
+          QuarkIcons.align_elements_bottom,
+        ),
+      ])
+        SlideToolbarChoice(
+          key: 'slide_align_${alignment.name}',
+          label: within.isEmpty ? label : '$label $within',
+          icon: icon,
+          onSelected: controller.canAlign
+              ? () => controller.alignSelection(alignment)
+              : null,
+        ),
+    ];
+  }
+
+  /// Whether the selection can be spaced out: three or more elements.
+  bool get canDistribute => controller.canDistribute;
+
+  /// Space the selection out with equal gaps, across or down.
+  List<SlideToolbarChoice> get distributions => [
+    for (final (axis, label, icon) in [
+      (
+        DistributeAxis.horizontal,
+        'Distribute horizontally',
+        QuarkIcons.distribute_horizontal,
+      ),
+      (
+        DistributeAxis.vertical,
+        'Distribute vertically',
+        QuarkIcons.distribute_vertical,
+      ),
+    ])
+      SlideToolbarChoice(
+        key: 'slide_distribute_${axis.name}',
+        label: label,
+        icon: icon,
+        onSelected: canDistribute
+            ? () => controller.distributeSelection(axis)
+            : null,
+      ),
+  ];
+
+  /// Whether the selection can share a size: two or more elements.
+  bool get canMatchSize => controller.canMatchSize;
+
+  /// Give the selection the width, height or both of its largest element.
+  List<SlideToolbarChoice> get sizeMatches => [
+    for (final (match, label, icon) in [
+      (SizeMatch.width, 'Same width', QuarkIcons.match_width),
+      (SizeMatch.height, 'Same height', QuarkIcons.match_height),
+      (SizeMatch.both, 'Same size', QuarkIcons.match_size),
+    ])
+      SlideToolbarChoice(
+        key: 'slide_match_size_${match.name}',
+        label: label,
+        icon: icon,
+        onSelected: canMatchSize
+            ? () => controller.matchSelectionSize(match)
+            : null,
+      ),
+  ];
+
+  /// Whether the selection can be grouped: two or more elements side by
+  /// side.
+  bool get canGroup => controller.canGroup;
+
+  /// Whether a group is selected.
+  bool get canUngroup => controller.canUngroup;
+
+  /// Group the selection.
+  SlideToolbarChoice get group => SlideToolbarChoice(
+    key: 'slide_group',
+    label: 'Group',
+    icon: QuarkIcons.group_elements,
+    onSelected: canGroup ? controller.groupSelection : null,
+  );
+
+  /// Break the selected groups up.
+  SlideToolbarChoice get ungroup => SlideToolbarChoice(
+    key: 'slide_ungroup',
+    label: 'Ungroup',
+    icon: QuarkIcons.ungroup_elements,
+    onSelected: canUngroup ? controller.ungroupSelection : null,
   );
 
   /// Delete the selection.
@@ -402,6 +512,43 @@ class SlideToolbarActions {
     label: 'Delete',
     icon: QuarkIcons.delete_outline,
     onSelected: _whenSelected(controller.deleteSelection),
+  );
+
+  // ── Clipboard ───────────────────────────────────────────────────────────
+
+  /// Copy the selection to the clipboard.
+  SlideToolbarChoice get copy => SlideToolbarChoice(
+    key: 'slide_copy',
+    label: 'Copy',
+    icon: QuarkIcons.content_copy,
+    onSelected: _whenSelected(() => unawaited(controller.copySelection())),
+  );
+
+  /// Cut the selection to the clipboard.
+  SlideToolbarChoice get cut => SlideToolbarChoice(
+    key: 'slide_cut',
+    label: 'Cut',
+    icon: QuarkIcons.content_cut,
+    onSelected: _whenSelected(() => unawaited(controller.cutSelection())),
+  );
+
+  /// Paste the clipboard onto the slide: copied elements, or text as a
+  /// text box.
+  SlideToolbarChoice get paste => SlideToolbarChoice(
+    key: 'slide_paste',
+    label: 'Paste',
+    icon: QuarkIcons.content_paste,
+    onSelected: controller.selectedSlideId == null
+        ? null
+        : () => unawaited(controller.paste()),
+  );
+
+  /// Copy the selection in place.
+  SlideToolbarChoice get duplicate => SlideToolbarChoice(
+    key: 'slide_duplicate',
+    label: 'Duplicate',
+    icon: QuarkIcons.duplicate,
+    onSelected: _whenSelected(controller.duplicateSelection),
   );
 
   // ── Zoom (the phone's Format menu) ──────────────────────────────────────

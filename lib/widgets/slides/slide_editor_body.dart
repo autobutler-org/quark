@@ -48,6 +48,7 @@ class SlideEditorBody extends StatelessWidget {
     required this.controller,
     required this.onImageFromDevice,
     required this.onImageFromQuark,
+    required this.onShowShortcuts,
     this.onPresent,
     super.key,
   });
@@ -64,6 +65,9 @@ class SlideEditorBody extends StatelessWidget {
 
   /// Picks a picture already on the Quark for the selected slide.
   final VoidCallback onImageFromQuark;
+
+  /// Opens the keyboard shortcuts dialog.
+  final VoidCallback onShowShortcuts;
 
   @override
   Widget build(BuildContext context) {
@@ -165,6 +169,7 @@ class SlideEditorBody extends StatelessWidget {
             controller: c,
             onImageFromDevice: onImageFromDevice,
             onImageFromQuark: onImageFromQuark,
+            onShowShortcuts: onShowShortcuts,
           ),
           Expanded(
             // The canvas stays the first child whether or not the panel

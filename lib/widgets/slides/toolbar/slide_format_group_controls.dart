@@ -11,7 +11,9 @@ import 'package:quark_icons/quark_icons.dart';
 /// for text, the font menu, the size stepper, the style toggles and the
 /// color; for a paragraph, the alignments and lists; for a shape, fill,
 /// outline color, width and dash, corner radius and opacity; for arrange,
-/// the stacking-order menu, duplicate and delete.
+/// the stacking-order and align menus, the distribute and match-size menus,
+/// group and ungroup while the selection allows them, and delete; for the
+/// clipboard, copy, cut, paste and duplicate.
 ///
 /// Key prefixes: [SlideToolbarGroup.key] on the run, and the controls' own
 /// keys (see [SlideToolbarActions]).
@@ -33,6 +35,10 @@ class SlideFormatGroupControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final a = actions;
     final children = switch (group) {
+      SlideToolbarGroup.clipboard => [
+        for (final c in [a.copy, a.cut, a.paste, a.duplicate])
+          SlideChoiceButton(choice: c),
+      ],
       SlideToolbarGroup.text => [
         SlideChoiceMenuButton(
           buttonKey: 'slide_format_font',
@@ -88,7 +94,28 @@ class SlideFormatGroupControls extends StatelessWidget {
           tooltip: 'Arrange',
           choices: a.arrange,
         ),
-        SlideChoiceButton(choice: a.duplicate),
+        SlideChoiceMenuButton(
+          buttonKey: 'slide_align',
+          icon: QuarkIcons.align_elements_left,
+          tooltip: 'Align',
+          choices: a.elementAlignments,
+        ),
+        if (a.canDistribute)
+          SlideChoiceMenuButton(
+            buttonKey: 'slide_distribute',
+            icon: QuarkIcons.distribute_horizontal,
+            tooltip: 'Distribute',
+            choices: a.distributions,
+          ),
+        if (a.canMatchSize)
+          SlideChoiceMenuButton(
+            buttonKey: 'slide_match_size',
+            icon: QuarkIcons.match_size,
+            tooltip: 'Match size',
+            choices: a.sizeMatches,
+          ),
+        if (a.canGroup) SlideChoiceButton(choice: a.group),
+        if (a.canUngroup) SlideChoiceButton(choice: a.ungroup),
         SlideChoiceButton(choice: a.delete),
       ],
     };

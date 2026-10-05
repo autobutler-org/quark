@@ -20,6 +20,7 @@ void main() {
     Presentation presentation, {
     Completer<void>? saveGate,
     bool disposeAtEnd = true,
+    SlideClipboard? clipboard,
   }) {
     var next = 0;
     final controller = SlideEditorController(
@@ -37,6 +38,7 @@ void main() {
         saved.add(p);
       },
       newId: () => 'n${next++}',
+      clipboard: clipboard,
     );
     // No autosave timer outlives its test.
     if (disposeAtEnd) addTearDown(controller.dispose);
@@ -536,7 +538,14 @@ void main() {
       final copies = elements.sublist(4);
       expect({for (final e in copies) e.id}, c.selectedElementIds);
       expect(c.selectedElementIds.intersection({'shape', 'line'}), isEmpty);
-      expect(copies.first.frame.x, greaterThan(100));
+      expect(copies.first.frame.x, 100 + SlideDocumentController.pasteOffset);
+      // A second duplicate lands past the first, not on top of it.
+      c.duplicateSelection();
+      expect(
+        c.selectedElements.first.frame.x,
+        100 + 2 * SlideDocumentController.pasteOffset,
+      );
+      c.undo();
       c.undo();
       expect(c.selectedSlide!.elements, hasLength(4));
       expect(c.canUndo, isFalse);
@@ -843,6 +852,216 @@ void main() {
       await first;
       expect(calls, 1);
       expect(c.isExporting, isFalse);
+    });
+  });
+
+  group('arrange, clipboard and background (#1174, #1175)', () {
+    ElementFrame box(double x, double y) =>
+        ElementFrame(x: x, y: y, width: 200, height: 100);
+
+    Presentation drawn() => Presentation(
+      title: 'Deck',
+      slides: [
+        Slide(
+          id: 's1',
+          elements: [
+            ShapeElement(id: 'a', frame: box(100, 100)),
+            ShapeElement(id: 'b', frame: box(400, 300)),
+            ShapeElement(id: 'c', frame: box(1000, 600)),
+          ],
+        ),
+        Slide(id: 's2'),
+      ],
+    );
+
+    ElementFrame frameOf(SlideEditorController c, String id) =>
+        c.selectedSlide!.findElement(id)!.frame;
+
+    test('says what the selection can be arranged with', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      expect(
+        [c.canGroup, c.canUngroup, c.canAlign, c.canDistribute, c.canMatchSize],
+        [false, false, false, false, false],
+      );
+      c.selectElements({'a'});
+      expect(
+        [c.canGroup, c.canAlign, c.canDistribute, c.canMatchSize],
+        [false, true, false, false],
+      );
+      c.selectElements({'a', 'b'});
+      expect(
+        [c.canGroup, c.canAlign, c.canDistribute, c.canMatchSize],
+        [true, true, false, true],
+      );
+      c.selectElements({'a', 'b', 'c'});
+      expect(c.canDistribute, isTrue);
+    });
+
+    test('groups and ungroups the selection, each as one step', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      c.selectElements({'a', 'b'});
+      c.groupSelection();
+
+      final group = c.singleSelected;
+      expect(group, isA<GroupElement>());
+      expect(c.canUngroup, isTrue);
+      expect(
+        [for (final e in c.selectedSlide!.elements) e.id],
+        [group!.id, 'c'],
+      );
+      expect(c.saveState, SlideSaveState.dirty);
+
+      c.ungroupSelection();
+      expect(c.selectedElementIds, {'a', 'b'});
+      expect(frameOf(c, 'b'), box(400, 300));
+      c.undo();
+      expect(c.selectedSlide!.elements, hasLength(2));
+      c.undo();
+      expect(c.selectedSlide!.elements, hasLength(3));
+      expect(c.canUndo, isFalse);
+    });
+
+    test('aligns the selection, and one element to the slide', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      c.selectElements({'a', 'b'});
+      c.alignSelection(ElementAlignment.left);
+      expect(frameOf(c, 'b').x, 100);
+      c.alignSelection(ElementAlignment.bottom);
+      expect(frameOf(c, 'a').y, 300);
+
+      c.selectElements({'c'});
+      c.alignSelection(ElementAlignment.top);
+      expect(frameOf(c, 'c').y, 0);
+
+      c
+        ..undo()
+        ..undo()
+        ..undo();
+      expect(frameOf(c, 'b'), box(400, 300));
+      expect(c.canUndo, isFalse);
+    });
+
+    test('distributes and matches sizes as one step each', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      c.selectElements({'a', 'b', 'c'});
+      c.distributeSelection(DistributeAxis.horizontal);
+      // Gaps of 250 between 100..300, 550..750 and 1000..1200.
+      expect(frameOf(c, 'b').x, 550);
+
+      final wide = c.selectedSlide!.findElement('a')!;
+      c.document!.controller.resizeElement(
+        's1',
+        wide.id,
+        width: 500,
+        height: 100,
+      );
+      c.matchSelectionSize(SizeMatch.width);
+      expect(frameOf(c, 'c').width, 500);
+      c.undo();
+      expect(frameOf(c, 'c').width, 200);
+    });
+
+    test(
+      'copies to and pastes from the clipboard, selecting the paste',
+      () async {
+        String? text;
+        final clipboard = SlideClipboard(
+          read: () async => text,
+          write: (t) async => text = t,
+        );
+        final c = controllerFor(drawn(), clipboard: clipboard);
+        await c.load();
+        c.selectElements({'a'});
+        await c.copySelection();
+        expect(text, isNotNull);
+        expect(c.canUndo, isFalse);
+
+        c.selectSlide('s2');
+        await c.paste();
+        expect(c.selectedSlide!.elements, hasLength(1));
+        expect(c.selectedElementIds, {c.selectedSlide!.elements.single.id});
+        expect(c.selectedElements.single.frame, box(100, 100));
+        c.undo();
+        expect(c.selectedSlide!.elements, isEmpty);
+      },
+    );
+
+    test('cuts the selection as one step', () async {
+      String? text;
+      final c = controllerFor(
+        drawn(),
+        clipboard: SlideClipboard(
+          read: () async => text,
+          write: (t) async => text = t,
+        ),
+      );
+      await c.load();
+      c.selectElements({'a', 'b'});
+      await c.cutSelection();
+      expect([for (final e in c.selectedSlide!.elements) e.id], ['c']);
+      expect(c.selectedElementIds, isEmpty);
+      await c.paste();
+      expect(c.selectedElementIds, hasLength(2));
+      c.undo();
+      c.undo();
+      expect(c.selectedSlide!.elements, hasLength(3));
+    });
+
+    test('pastes plain text as a text box', () async {
+      final c = controllerFor(
+        drawn(),
+        clipboard: SlideClipboard(
+          read: () async => 'Hello\nworld',
+          write: (_) async {},
+        ),
+      );
+      await c.load();
+      await c.paste();
+      final pasted = c.singleSelected;
+      expect(pasted, isA<TextBox>());
+      expect((pasted! as TextBox).paragraphs, hasLength(2));
+    });
+
+    test('sets the slide background color as one step', () async {
+      final c = controllerFor(drawn());
+      await c.load();
+      expect(c.slideBackgroundColor, isNull);
+      c.setSlideBackgroundColor(const SlideColor(0xFF112233));
+      expect(c.slideBackgroundColor, const SlideColor(0xFF112233));
+      expect(c.selectedSlide!.background?.color, const SlideColor(0xFF112233));
+      expect(c.saveState, SlideSaveState.dirty);
+
+      c.setSlideBackgroundColor(null);
+      expect(c.selectedSlide!.background, isNull);
+      c.undo();
+      c.undo();
+      expect(c.selectedSlide!.background, isNull);
+      expect(c.canUndo, isFalse);
+    });
+
+    test('clearing the color keeps a background picture', () async {
+      final c = controllerFor(
+        Presentation(
+          title: 'Deck',
+          slides: [
+            Slide(
+              id: 's1',
+              background: const SlideBackground(
+                color: SlideColor(0xFF000000),
+                image: 'sky.png',
+              ),
+            ),
+          ],
+        ),
+      );
+      await c.load();
+      c.setSlideBackgroundColor(null);
+      expect(c.selectedSlide!.background?.image, 'sky.png');
+      expect(c.selectedSlide!.background?.color, isNull);
     });
   });
 }

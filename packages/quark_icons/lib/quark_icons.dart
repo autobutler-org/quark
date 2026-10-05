@@ -252,6 +252,54 @@ class QuarkIcons {
   /// The menu of things to insert on a slide.
   static const IconData insert_menu = Icons.add_box_outlined;
 
+  /// Line up the selected elements' left edges.
+  static const IconData align_elements_left = Icons.align_horizontal_left;
+
+  /// Line up the selected elements' vertical center lines.
+  static const IconData align_elements_center = Icons.align_horizontal_center;
+
+  /// Line up the selected elements' right edges.
+  static const IconData align_elements_right = Icons.align_horizontal_right;
+
+  /// Line up the selected elements' top edges.
+  static const IconData align_elements_top = Icons.align_vertical_top;
+
+  /// Line up the selected elements' horizontal center lines.
+  static const IconData align_elements_middle = Icons.align_vertical_center;
+
+  /// Line up the selected elements' bottom edges.
+  static const IconData align_elements_bottom = Icons.align_vertical_bottom;
+
+  /// Space the selected elements out left to right.
+  static const IconData distribute_horizontal = Icons.horizontal_distribute;
+
+  /// Space the selected elements out top to bottom.
+  static const IconData distribute_vertical = Icons.vertical_distribute;
+
+  /// Give the selected elements one size.
+  static const IconData match_size = Icons.aspect_ratio;
+
+  /// Give the selected elements one width.
+  static const IconData match_width = Icons.width_normal;
+
+  /// Give the selected elements one height.
+  static const IconData match_height = Icons.height;
+
+  /// Group the selected elements.
+  static const IconData group_elements = Icons.join_full;
+
+  /// Break a group into its elements.
+  static const IconData ungroup_elements = Icons.join_left;
+
+  /// Copy the selection in place.
+  static const IconData duplicate = Icons.control_point_duplicate;
+
+  /// A slide's background.
+  static const IconData slide_background = Icons.wallpaper;
+
+  /// The list of keyboard shortcuts.
+  static const IconData keyboard_shortcuts = Icons.keyboard_outlined;
+
   // ── Import / Export ────────────────────────────────────────────────────────────────
   /// Export data as a CSV file.
   static const IconData export_csv = Icons.file_download;

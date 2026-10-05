@@ -7,11 +7,13 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The wide slide toolbar's first row: the drawing tools — select, text,
 /// the shape menu, line and arrow — and the picture menu, with the
-/// properties panel's toggle at the far end. The active tool is lit.
+/// keyboard shortcuts button and the properties panel's toggle at the far
+/// end. The active tool is lit.
 ///
 /// Key prefixes: `slide_tool_shape` on the shape menu, `slide_tool_image`
-/// on the picture menu, `slide_properties_toggle` on the toggle; the tools'
-/// own keys (see [SlideToolbarActions]).
+/// on the picture menu, `slide_shortcuts_button` on the shortcuts button,
+/// `slide_properties_toggle` on the toggle; the tools' own keys (see
+/// [SlideToolbarActions]).
 class SlideToolRow extends StatelessWidget {
   /// The tools of [actions]; [propertiesOpen] lights the toggle, which
   /// calls [onToggleProperties].
@@ -19,6 +21,7 @@ class SlideToolRow extends StatelessWidget {
     required this.actions,
     required this.propertiesOpen,
     required this.onToggleProperties,
+    required this.onShowShortcuts,
     super.key,
   });
 
@@ -30,6 +33,9 @@ class SlideToolRow extends StatelessWidget {
 
   /// Shows or hides the properties panel.
   final VoidCallback onToggleProperties;
+
+  /// Opens the keyboard shortcuts dialog.
+  final VoidCallback onShowShortcuts;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -59,6 +65,12 @@ class SlideToolRow extends StatelessWidget {
             ],
           ),
         ),
+      ),
+      QuarkBarIconButton(
+        key: const ValueKey('slide_shortcuts_button'),
+        icon: QuarkIcons.keyboard_shortcuts,
+        tooltip: 'Keyboard shortcuts',
+        onPressed: onShowShortcuts,
       ),
       QuarkBarIconButton(
         key: const ValueKey('slide_properties_toggle'),

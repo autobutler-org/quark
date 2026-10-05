@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/slides_service.dart';
+import 'package:quark/utils/clipboard_utils.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark_slides/quark_slides.dart';
@@ -113,6 +114,15 @@ enum SlideSaveState {
 /// Undo and redo write an open text editing session first, so the step it
 /// makes exists before history moves.
 ///
+/// **Arrange and clipboard** (#1174, #1175). [groupSelection],
+/// [ungroupSelection], [alignSelection], [distributeSelection] and
+/// [matchSelectionSize] are one undo step each, offered when [canGroup],
+/// [canUngroup], [canAlign], [canDistribute] and [canMatchSize] say the
+/// selection allows them. [copySelection], [cutSelection] and [paste] go
+/// through [clipboard], the system clipboard where the platform allows it,
+/// which the canvas's keys share; plain text pasted becomes a text box.
+/// [setSlideBackgroundColor] colors the selected slide, one undo step.
+///
 /// **Pictures** (#1158). [insertImageFromDevice] picks a file, streams it up
 /// beside the presentation and puts it on the slide at the size its header
 /// gives; [insertImageFromQuark] does the same for a file already on the
@@ -143,7 +153,8 @@ class SlideEditorController extends ChangeNotifier {
     this.readImageSize = SlidesService.readImageSize,
     this.listFolder = _listFolder,
     this.exportPresentation = FilesService.savePresentationAsPptx,
-  });
+    SlideClipboard? clipboard,
+  }) : clipboard = clipboard ?? systemClipboard;
 
   /// The presentation's path, relative to the device's files root.
   final String filePath;
@@ -179,6 +190,17 @@ class SlideEditorController extends ChangeNotifier {
 
   /// Saves the presentation as a PowerPoint file.
   final ExportPresentationFn exportPresentation;
+
+  /// Where copy and cut write and paste reads, for the toolbar and the
+  /// canvas's keys alike.
+  final SlideClipboard clipboard;
+
+  /// The system clipboard as plain text (see `clipboard_utils`), or
+  /// [SlideClipboard.memory] where the browser blocks it, so copy and paste
+  /// still work inside the app.
+  static SlideClipboard get systemClipboard => isClipboardAvailable
+      ? const SlideClipboard(read: readClipboardText, write: writeClipboardText)
+      : SlideClipboard.memory;
 
   /// Called with the thrown object when a save fails.
   void Function(Object error)? onSaveFailed;
@@ -231,9 +253,6 @@ class SlideEditorController extends ChangeNotifier {
 
   /// The largest font size the toolbar sets.
   static final double maxFontSize = fontSizes.last;
-
-  /// How far [duplicateSelection] offsets a copy, in slide units.
-  static const duplicateOffset = 16.0;
 
   /// The shape a picture goes in at when its header gives no size; the
   /// picture is fitted inside it, so it is never stretched.
@@ -607,24 +626,140 @@ class SlideEditorController extends ChangeNotifier {
     (doc, slideId) => doc.deleteElements(slideId, _selectedElementIds),
   );
 
-  /// Copies the selected elements in front of everything, offset by
-  /// [duplicateOffset], and selects the copies.
-  void duplicateSelection() => _onSelection((doc, slideId) {
-    final ids = doc.batch(
-      () => [for (final e in selectedElements) _addCopy(doc, slideId, e)],
-    );
-    selectElements(ids.toSet());
-  });
+  /// Copies the selected elements in front of everything,
+  /// [SlideDocumentController.pasteOffset] past the originals and past each
+  /// earlier duplicate, and selects the copies.
+  void duplicateSelection() => _onSelection(
+    (doc, slideId) => selectElements(
+      doc.duplicateElements(slideId, _selectedElementIds).toSet(),
+    ),
+  );
 
-  String _addCopy(SlideDocumentController doc, String slideId, SlideElement e) {
-    final id = doc.newId();
-    doc.addElement(
-      slideId,
-      e
-          .withId(id)
-          .withFrame(e.frame.translate(duplicateOffset, duplicateOffset)),
+  // ── Arrange ───────────────────────────────────────────────────────────────
+
+  bool _selectionAllows(
+    bool Function(SlideDocumentController doc, String slideId) test,
+  ) {
+    final doc = _doc;
+    final slideId = _selectedSlideId;
+    return doc != null && slideId != null && test(doc.controller, slideId);
+  }
+
+  /// Whether [groupSelection] would group anything: two or more elements.
+  bool get canGroup => _selectionAllows(
+    (doc, slideId) => doc.canGroup(slideId, _selectedElementIds),
+  );
+
+  /// Whether [ungroupSelection] would ungroup anything: a group is selected.
+  bool get canUngroup => _selectionAllows(
+    (doc, slideId) => doc.canUngroup(slideId, _selectedElementIds),
+  );
+
+  /// Whether [alignSelection] applies: anything is selected; one element
+  /// lines up with the slide.
+  bool get canAlign => _selectedElementIds.isNotEmpty;
+
+  /// Whether [distributeSelection] applies: three or more elements.
+  bool get canDistribute => _selectedElementIds.length >= 3;
+
+  /// Whether [matchSelectionSize] applies: two or more elements.
+  bool get canMatchSize => _selectedElementIds.length >= 2;
+
+  /// Groups the selection and selects the group.
+  void groupSelection() {
+    if (!canGroup) return;
+    _onSelection(
+      (doc, slideId) =>
+          selectElements({doc.groupElements(slideId, _selectedElementIds)}),
     );
-    return id;
+  }
+
+  /// Replaces the selected groups with their children and selects them,
+  /// with the rest of the selection.
+  void ungroupSelection() {
+    if (!canUngroup) return;
+    _onSelection((doc, slideId) {
+      final groups = {
+        for (final e in selectedElements)
+          if (e is GroupElement) e.id,
+      };
+      final freed = doc.ungroupElements(slideId, groups);
+      selectElements({..._selectedElementIds.difference(groups), ...freed});
+    });
+  }
+
+  /// Lines the selection up by [alignment]; one element lines up with the
+  /// slide.
+  void alignSelection(ElementAlignment alignment) => _onSelection(
+    (doc, slideId) =>
+        doc.alignElements(slideId, _selectedElementIds, alignment),
+  );
+
+  /// Spaces the selection out along [axis] with equal gaps.
+  void distributeSelection(DistributeAxis axis) {
+    if (!canDistribute) return;
+    _onSelection(
+      (doc, slideId) =>
+          doc.distributeElements(slideId, _selectedElementIds, axis),
+    );
+  }
+
+  /// Gives the selection the [match]ed sides of its largest element.
+  void matchSelectionSize(SizeMatch match) {
+    if (!canMatchSize) return;
+    _onSelection(
+      (doc, slideId) => doc.matchSize(slideId, _selectedElementIds, match),
+    );
+  }
+
+  // ── Clipboard ─────────────────────────────────────────────────────────────
+
+  /// Writes the selection to [clipboard].
+  Future<void> copySelection() async {
+    final doc = _doc;
+    final slideId = _selectedSlideId;
+    if (doc == null || slideId == null || _selectedElementIds.isEmpty) return;
+    await clipboard.copy(doc.controller, slideId, _selectedElementIds);
+  }
+
+  /// Writes the selection to [clipboard], then deletes it as one step.
+  Future<void> cutSelection() async {
+    final doc = _doc;
+    final slideId = _selectedSlideId;
+    if (doc == null || slideId == null || _selectedElementIds.isEmpty) return;
+    await clipboard.cut(doc.controller, slideId, _selectedElementIds);
+  }
+
+  /// Pastes [clipboard] onto the selected slide as one step and selects
+  /// what was pasted: copied elements, or plain text as a new text box.
+  Future<void> paste() async {
+    final doc = _doc;
+    final slideId = _selectedSlideId;
+    if (doc == null || slideId == null) return;
+    final ids = await clipboard.paste(doc.controller, slideId);
+    if (_disposed || ids.isEmpty || slideId != _selectedSlideId) return;
+    selectElements(ids.toSet());
+  }
+
+  // ── Slide background ──────────────────────────────────────────────────────
+
+  /// The selected slide's own background color; null when it uses the
+  /// theme's.
+  SlideColor? get slideBackgroundColor => selectedSlide?.background?.color;
+
+  /// Colors the selected slide's background, or with null falls back to
+  /// the theme's color; a background picture stays. One undo step.
+  void setSlideBackgroundColor(SlideColor? color) {
+    final doc = _doc;
+    final slide = selectedSlide;
+    if (doc == null || slide == null) return;
+    final next = (slide.background ?? const SlideBackground()).copyWith(
+      color: color,
+    );
+    doc.controller.setSlideBackground(
+      slide.id,
+      next.color == null && next.image == null ? null : next,
+    );
   }
 
   /// Gives the one selected element ([singleSelected]) the position, size

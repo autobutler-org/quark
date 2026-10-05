@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/widgets/slides/properties/slide_alt_text_field.dart';
 import 'package:quark/widgets/slides/properties/slide_number_field.dart';
+import 'package:quark/widgets/slides/toolbar/slide_color_palette.dart';
+import 'package:quark/widgets/slides/toolbar/slide_toolbar_choice.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The slide editor's properties (#1167): the one selected element's
-/// position, size and rotation as numbers, and a selected picture's alt
-/// text.
+/// position, size and rotation as numbers, a selected picture's alt text,
+/// and the slide's background color (#1174) from the toolbar's swatches or
+/// a hex code — "Theme background" clears it so the slide follows the
+/// theme.
 ///
 /// A wide screen shows it down the right of the canvas, collapsible from
 /// the toolbar; a phone opens it as a bottom sheet from the toolbar's
@@ -21,7 +26,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// `slide_prop_y`, `slide_prop_width`, `slide_prop_height`,
 /// `slide_prop_rotation` and `slide_prop_alt_text` on the fields;
 /// `slide_prop_hint` on the note shown without exactly one element
-/// selected.
+/// selected; `slide_background` on the background palette, with its
+/// swatches `slide_background_<index>`, `slide_background_none` and
+/// `slide_background_hex`.
 class SlidePropertiesPanel extends StatelessWidget {
   /// The properties of [controller]'s selection.
   const SlidePropertiesPanel({required this.controller, super.key});
@@ -122,6 +129,22 @@ class SlidePropertiesPanel extends StatelessWidget {
               child: SlideAltTextField(
                 value: element.altText,
                 onSubmitted: controller.setAltText,
+              ),
+            ),
+          if (controller.selectedSlide != null)
+            QuarkSection(
+              title: 'Slide background',
+              child: SlideColorPalette(
+                key: const ValueKey('slide_background'),
+                width: double.infinity,
+                choice: SlideColorChoice(
+                  key: 'slide_background',
+                  label: 'Background color',
+                  icon: QuarkIcons.slide_background,
+                  current: controller.slideBackgroundColor,
+                  noneLabel: 'Theme background',
+                  onChanged: controller.setSlideBackgroundColor,
+                ),
               ),
             ),
         ],

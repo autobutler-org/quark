@@ -376,13 +376,14 @@ same drive as the presentation (`photos/cover.jpg`).
    **Italic**, **Underline**, **Strikethrough**, **Text color**, the alignments and the list toggles.
 2. Select the shape, then use **Fill color**, **Outline color**, **Outline width**, **Outline style**, **Corner radius**
    (a rounded rectangle) and **Opacity**.
-3. With anything selected, use **Arrange** (bring to front, forward, backward, to back), **Duplicate** and **Delete**.
+3. With anything selected, use **Arrange** (bring to front, forward, backward, to back) and **Delete**; aligning,
+   grouping and the clipboard are JN-SL-026 and JN-SL-027.
 4. On a phone, open **Format** in the bar's second row and use the same controls from its submenus.
 
 **Expected result:**
 
-- With nothing selected the row reads "Select something on the slide to format it"; the groups that apply to the
-  selection appear, and the toggles show what the selection has.
+- With nothing selected the row holds only the clipboard and reads "Select something on the slide to format it"; the
+  groups that apply to the selection appear, and the toggles show what the selection has.
 - A color palette offers the theme's colors, black and white, a none option, and a hex field for any other color
   (`#RRGGBB`); anything else in the field says how to type it.
 - Each change is one undo step and marks the presentation unsaved until the autosave runs.
@@ -399,10 +400,13 @@ same drive as the presentation (`photos/cover.jpg`).
    row. On a phone, open **Format** › **Properties**.
 2. Select one element and type a new X, Y, Width, Height or Rotation, then press Enter or leave the field.
 3. Select a picture and type its **Alt text**.
+4. Under **Slide background**, pick a swatch, type a hex color (`#RRGGBB`), or pick **Theme background**.
 
 **Expected result:**
 
 - Without exactly one element selected the panel says to select one.
+- The background color fills the slide behind its elements, as one undo
+  step; **Theme background** clears it so the slide follows the presentation's theme, keeping any background picture.
 - Each value is applied once editing ends, as one undo step; dragging on the canvas updates the fields.
 - The alt text is what a screen reader reads for the picture on the slide.
 
@@ -449,3 +453,71 @@ same drive as the presentation (`photos/cover.jpg`).
 - Pictures are embedded from the files they name. One that is missing, in a folder the user cannot read, or not a
   PNG, JPEG, GIF or BMP is a gray box carrying its alt text, so the slide keeps its layout.
 - Exporting changes nothing in the presentation's folder. A failed export reads "Couldn't export the presentation."
+
+---
+
+### JN-SL-025: Keyboard shortcuts
+
+**Preconditions:** A presentation is open (JN-SL-004).
+
+**Steps:**
+
+1. Press `?` or F1 anywhere in the editor, or tap **Keyboard shortcuts** (the keyboard button at the end of the tool
+   row; **Format** › **Keyboard shortcuts** on a phone).
+2. Type in the search box to narrow the list, then tap **Close** or press Esc.
+
+**Expected result:**
+
+- The dialog lists every shortcut by section (editing, selection, text, arrange, view, present), spelled for the
+  platform: ⌘ on macOS and iOS, Ctrl elsewhere.
+- Searching keeps the shortcuts whose name, section or keys match every word; a search that matches nothing says so.
+- `?` typed into a text box or the notes is typed, not taken as a shortcut; F1 still opens the dialog.
+- The list scrolls on a phone and at a 2.0 text scale.
+
+---
+
+### JN-SL-026: Align, distribute, match size and group
+
+**Preconditions:** A presentation is open with several elements on a slide.
+
+**Steps:**
+
+1. Select one element and open **Align** in the format row's arrange group (**Format** › **Arrange** › **Align** on a
+   phone); pick left, center, right, top, middle or bottom.
+2. Select two or more and align them; with three or more, open **Distribute** and space them horizontally or
+   vertically; with two or more, open **Match size** and pick **Same width**, **Same height** or **Same size**.
+3. With two or more selected, tap **Group**; with a group selected, tap **Ungroup**. Ctrl+G (⌘G) groups and
+   Ctrl+Shift+G (⌘⇧G) ungroups on the canvas.
+
+**Expected result:**
+
+- One element lines up with the slide; several line up with the box around them all.
+- Distribute leaves the outermost elements where they are and evens the gaps between them; match size takes the
+  largest element's size, each element keeping its top-left corner.
+- **Distribute**, **Match size**, **Group** and **Ungroup** appear only when the selection allows them.
+- Grouping moves nothing and selects the group; ungrouping selects its elements where they were.
+- Each command is one undo step and starts the autosave.
+
+---
+
+### JN-SL-027: Copy, cut, paste and duplicate
+
+**Preconditions:** A presentation is open.
+
+**Steps:**
+
+1. Select elements and tap **Copy** or **Cut** in the format row's clipboard group (**Format** › **Clipboard** on a
+   phone), or press Ctrl+C / Ctrl+X (⌘C / ⌘X).
+2. Show any slide, in this presentation or another, and tap **Paste** or press Ctrl+V (⌘V).
+3. Copy text in another app and paste it onto a slide.
+4. Select elements and tap **Duplicate** or press Ctrl+D (⌘D).
+
+**Expected result:**
+
+- Copying uses the system clipboard, so elements pasted into another presentation keep their look and pictures; in a
+  browser served over plain HTTP, which blocks the clipboard, copy and paste still work inside the app.
+- Pasted elements are selected and land where they were copied from, or 16 units right and down when that spot is
+  taken, so repeated pastes and duplicates fan out instead of stacking.
+- Plain text from elsewhere becomes a new text box in the middle of the slide, one paragraph per line.
+- **Paste** is offered with nothing selected; **Copy**, **Cut** and **Duplicate** need a selection.
+- Cut, paste and duplicate are one undo step each; copying changes nothing.

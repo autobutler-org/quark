@@ -26,6 +26,7 @@ class SlideToolbar extends StatelessWidget {
     required this.controller,
     required this.onImageFromDevice,
     required this.onImageFromQuark,
+    required this.onShowShortcuts,
     super.key,
   });
 
@@ -37,6 +38,9 @@ class SlideToolbar extends StatelessWidget {
 
   /// Picks a picture on the Quark to insert.
   final VoidCallback onImageFromQuark;
+
+  /// Opens the keyboard shortcuts dialog.
+  final VoidCallback onShowShortcuts;
 
   /// Whether a window [width] wide folds the toolbar into the phone menus.
   static bool isCompact(double width) =>
@@ -80,6 +84,7 @@ class SlideToolbar extends StatelessWidget {
                     actions: actions,
                     propertiesOpen: controller.propertiesOpen,
                     onToggleProperties: controller.toggleProperties,
+                    onShowShortcuts: onShowShortcuts,
                   ),
                 ),
                 Divider(height: 1, color: tokens.border),
