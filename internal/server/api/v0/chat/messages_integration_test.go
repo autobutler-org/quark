@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/chatutil"
@@ -210,11 +211,11 @@ func TestChatWrites_RateLimited(t *testing.T) {
 	h.expect(t, http.StatusOK, http.MethodPut, "/chat/keys/me", "carol", keysBody('c', false), nil)
 	h.expect(t, http.StatusOK, http.MethodPut, path+"/members", "bob", userBody(h.users["carol"], "read_messages", "send_messages"), nil)
 
-	for range 2 {
-		h.expect(t, http.StatusCreated, http.MethodPost, path+"/messages", "bob", messageBody('m', 64, 1), nil)
+	for i := range 2 {
+		h.expect(t, http.StatusCreated, http.MethodPost, path+"/messages", "bob", messageBody(byte('m'+i), 64, 1), nil)
 	}
-	h.expect(t, http.StatusTooManyRequests, http.MethodPost, path+"/messages", "bob", messageBody('m', 64, 1), nil)
-	h.expect(t, http.StatusCreated, http.MethodPost, path+"/messages", "carol", messageBody('m', 64, 1), nil)
+	h.expect(t, http.StatusTooManyRequests, http.MethodPost, path+"/messages", "bob", messageBody('o', 64, 1), nil)
+	h.expect(t, http.StatusCreated, http.MethodPost, path+"/messages", "carol", messageBody('o', 64, 1), nil)
 
 	grants := `{"grants":[` + grantBody('b', roomID, 1, h.users["carol"], 'x') + `]}`
 	h.expect(t, http.StatusOK, http.MethodPost, path+"/keys/grants", "bob", grants, nil)
@@ -225,4 +226,50 @@ func TestChatWrites_RateLimited(t *testing.T) {
 	h.expect(t, http.StatusConflict, http.MethodPost, path+"/keys", "bob", create, nil)
 	h.expect(t, http.StatusConflict, http.MethodPost, path+"/keys", "bob", create, nil)
 	h.expect(t, http.StatusTooManyRequests, http.MethodPost, path+"/keys", "bob", create, nil)
+}
+
+// TestChatMessages_ReplayConflicts posts a ciphertext and replays it (#2487):
+// the author repeating the exact post gets the stored message back with 200,
+// and another member replaying it, including many at once, gets 409.
+func TestChatMessages_ReplayConflicts(t *testing.T) {
+	h := newHarness(t)
+	_, room := roomWithKey(t, h)
+	messages := room + "/messages"
+	h.expect(t, http.StatusOK, http.MethodPut, room+"/members", "bob", userBody(h.users["carol"], member...), nil)
+
+	var first, again chatutil.Message
+	h.expect(t, http.StatusCreated, http.MethodPost, messages, "bob", messageBody('r', 64, 1), &first)
+	h.expect(t, http.StatusOK, http.MethodPost, messages, "bob", messageBody('r', 64, 1), &again)
+	if again.ID != first.ID {
+		t.Errorf("repeated post = message %d, want %d", again.ID, first.ID)
+	}
+	h.expect(t, http.StatusConflict, http.MethodPost, messages, "carol", messageBody('r', 64, 1), nil)
+	// The nonce is the first 24 bytes, so a longer body of the same fill
+	// reuses it.
+	h.expect(t, http.StatusConflict, http.MethodPost, messages, "bob", messageBody('r', 80, 1), nil)
+
+	var wg sync.WaitGroup
+	codes := make([]int, 8)
+	for i := range codes {
+		wg.Go(func() { codes[i], _ = h.do(t, http.MethodPost, messages, "carol", messageBody('s', 64, 1)) })
+	}
+	wg.Wait()
+	created := 0
+	for _, code := range codes {
+		switch code {
+		case http.StatusCreated:
+			created++
+		case http.StatusOK, http.StatusConflict:
+		default:
+			t.Errorf("concurrent replay = %d", code)
+		}
+	}
+	if created != 1 {
+		t.Errorf("concurrent replays created %d messages, want 1 (%v)", created, codes)
+	}
+	var page chatutil.ListMessagesResult
+	h.expect(t, http.StatusOK, http.MethodGet, messages, "bob", "", &page)
+	if len(page.Messages) != 2 {
+		t.Errorf("channel holds %d messages, want 2", len(page.Messages))
+	}
 }
