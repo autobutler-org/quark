@@ -21,6 +21,7 @@ import (
 
 type dependencies struct {
 	authRateLimiter  *ratelimitutil.Limiter
+	background       sync.WaitGroup
 	backupJobStore   backup.BackupJobStore
 	chatRateLimiter  *ratelimitutil.Limiter
 	vaultRateLimiter *ratelimitutil.Limiter
@@ -104,6 +105,10 @@ func (d *dependencies) WithWorker(worker workerutil.Worker) Dependencies {
 
 func (d *dependencies) AuthRateLimiter() *ratelimitutil.Limiter {
 	return d.authRateLimiter
+}
+
+func (d *dependencies) Background() *sync.WaitGroup {
+	return &d.background
 }
 
 func (d *dependencies) BackupJobStore() backup.BackupJobStore {

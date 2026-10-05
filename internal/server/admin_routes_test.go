@@ -56,6 +56,9 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 	}))
 	middleware.Use(engine, deps)
 	setupRouters(engine, nil, deps)
+	// Requests leave connected-device records running; they land before the
+	// database closes (#2772).
+	t.Cleanup(deps.Background().Wait)
 
 	do := func(method, path, token string) int {
 		req := httptest.NewRequest(method, path, nil)

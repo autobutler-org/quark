@@ -35,6 +35,9 @@ func newMiddlewareEngine(t *testing.T, deps deputil.Dependencies) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	middleware.Use(engine, deps)
+	// The device record outlives the request; it has to land before the
+	// test's database closes and its TempDir is removed (#2772).
+	t.Cleanup(deps.Background().Wait)
 	engine.GET("/api/v0/protected", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -59,6 +62,28 @@ func doMiddlewareReq(engine *gin.Engine, req *http.Request) *httptest.ResponseRe
 	w := httptest.NewRecorder()
 	engine.ServeHTTP(w, req)
 	return w
+}
+
+// TestTrackDevice_BackgroundAwaitsTheRecord shows the connected-device record
+// a request leaves behind is owned by deps.Background(): once Wait returns the
+// row is written and nothing is left to touch the database (#2772).
+func TestTrackDevice_BackgroundAwaitsTheRecord(t *testing.T) {
+	sqlDB, queries := newMiddlewareTestDB(t)
+	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{Db: sqlDB, Queries: queries})
+	engine := newMiddlewareEngine(t, deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v0/auth/status", nil)
+	req.Header.Set("User-Agent", "track-device-test")
+	doMiddlewareReq(engine, req)
+	deps.Background().Wait()
+
+	var devices int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM connected_devices WHERE user_agent = 'track-device-test'`).Scan(&devices); err != nil {
+		t.Fatal(err)
+	}
+	if devices != 1 {
+		t.Errorf("connected devices after Wait = %d, want 1", devices)
+	}
 }
 
 // TestRequireAuth_NoDatabaseReturns503 verifies that when no database is

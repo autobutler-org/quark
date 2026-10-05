@@ -72,6 +72,9 @@ func TestExtensionContract(t *testing.T) {
 	engine := gin.New()
 	middleware.Use(engine, deps)
 	setupRouters(engine, nil, deps)
+	// Requests leave connected-device records running; they land before the
+	// database closes (#2772).
+	t.Cleanup(deps.Background().Wait)
 
 	do := func(method, path, token string, body any) (int, map[string]any) {
 		t.Helper()
