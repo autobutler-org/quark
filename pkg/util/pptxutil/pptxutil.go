@@ -18,13 +18,22 @@
 // backgrounds; and speaker notes. An element type this writer does not know is
 // left out, as is a picture it cannot embed — see [ExportQslideParams].
 //
+// Export reads .qslide schema versions 1 and 2. A version 2 deck stores its
+// theme: a role color (theme:accent1) is resolved against it, text a run does
+// not style takes the size, font and color of its box's text role, a slide
+// without a background shows the theme's, and the theme's ten color roles and
+// heading and body fonts become the package theme's color and font schemes, so
+// PowerPoint offers the deck's own palette. A version 1 theme naming a
+// built-in theme by id is that theme, as the editor migrates it.
+//
 // Import reads the same features back, from any PowerPoint file rather than
 // only this package's own: placeholders take their position and text style
 // from their layout and master, theme colors resolve to the theme's RGB, and
 // the master's and layout's own shapes are drawn behind each slide's. What the
 // editor has no model for — charts, tables, SmartArt, embedded objects, video
 // and audio, ink, animations and transitions — is skipped and named in the
-// slide's warnings; see [ImportPptx].
+// slide's warnings; see [ImportPptx]. An import writes schema version 1, every
+// color literal and no theme, which the editor migrates as it opens the file.
 //
 // # Units
 //

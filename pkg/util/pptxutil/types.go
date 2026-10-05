@@ -47,6 +47,9 @@ type qslideElement struct {
 	Paragraphs []qslideParagraph `json:"paragraphs"`
 	Anchor     string            `json:"anchor"`
 	AutoFit    string            `json:"autoFit"`
+	// TextRole is the theme text style unset runs take: title, subtitle, or
+	// body when left out.
+	TextRole string `json:"textRole"`
 
 	// A shape, and the stroke and opacity a line shares.
 	Kind         string        `json:"kind"`
@@ -117,6 +120,8 @@ type exporter struct {
 	openImage OpenImageFunc
 	// scale is EMU per slide unit; see the package doc.
 	scale float64
+	// theme is the presentation's theme, nil for none.
+	theme *deckTheme
 	// cx and cy are the slide size in EMU.
 	cx, cy int64
 	// media maps a picture source to its part, nil when it could not be

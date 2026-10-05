@@ -43,6 +43,7 @@ func writePptx(w io.Writer, src io.Reader, openImage OpenImageFunc) (ExportQslid
 	header, err := walkQslide(dec, func(header qslideHeader, slide qslideSlide) error {
 		if e.scale == 0 {
 			e.setSize(header.size)
+			e.theme = header.theme()
 		}
 		if len(e.notes) == MaxSlides {
 			return fmt.Errorf("%w: the presentation holds more than %d slides", ErrTooLarge, MaxSlides)
@@ -54,6 +55,7 @@ func writePptx(w io.Writer, src io.Reader, openImage OpenImageFunc) (ExportQslid
 	}
 	if e.scale == 0 {
 		e.setSize(header.size)
+		e.theme = header.theme()
 	}
 	if err := e.writePackageParts(header.title); err != nil {
 		return e.result, err

@@ -66,11 +66,11 @@ func (e *exporter) writePackageParts(title string) error {
 		{"ppt/slideLayouts/slideLayout1.xml", slideLayoutPart},
 		{"ppt/slideLayouts/_rels/slideLayout1.xml.rels", xmlHeader + `<Relationships xmlns="` + nsPackageRels + `">` +
 			relationship(1, "slideMaster", "../slideMasters/slideMaster1.xml") + `</Relationships>`},
-		{"ppt/theme/theme1.xml", themePart("Quark")},
+		{"ppt/theme/theme1.xml", themePart("Quark", e.theme)},
 		{"ppt/notesMasters/notesMaster1.xml", e.notesMasterPart()},
 		{"ppt/notesMasters/_rels/notesMaster1.xml.rels", xmlHeader + `<Relationships xmlns="` + nsPackageRels + `">` +
 			relationship(1, "theme", "../theme/theme2.xml") + `</Relationships>`},
-		{"ppt/theme/theme2.xml", themePart("Quark Notes")},
+		{"ppt/theme/theme2.xml", themePart("Quark Notes", nil)},
 		{"ppt/presProps.xml", xmlHeader + `<p:presentationPr` + pmlNamespaces + `/>`},
 		{"ppt/viewProps.xml", xmlHeader + `<p:viewPr` + pmlNamespaces + `/>`},
 		{"ppt/tableStyles.xml", xmlHeader + `<a:tblStyleLst xmlns:a="` + nsDrawing +
@@ -199,22 +199,52 @@ func notesSlidePart(notes string) string {
 	return b.String()
 }
 
-// themePart is a plain theme: black on white, the theme font for headings and
-// body, and flat fill, line and effect styles.
-func themePart(name string) string {
+// plainScheme is the color scheme of a presentation without a theme: black on
+// white, in themeRoles' order.
+var plainScheme = []string{"000000", "FFFFFF", "1F2937", "F3F4F6", "3366FF", "E8590C", "2F9E44", "F59F00", "7048E8", "C2255C"}
+
+// themePart is the package theme: the presentation's theme when it has one —
+// its ten roles as the scheme colors and its heading and body fonts as the
+// major and minor fonts, so PowerPoint offers the deck's own palette — and a
+// plain one, black on white, when it has none; then flat fill, line and effect
+// styles.
+func themePart(name string, theme *deckTheme) string {
 	solid := `<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>`
 	line := `<a:ln w="%d" cap="flat" cmpd="sng" algn="ctr">` + solid + `<a:prstDash val="solid"/><a:miter lim="800000"/></a:ln>`
-	fonts := `<a:latin typeface="` + themeFont + `"/><a:ea typeface=""/><a:cs typeface=""/>`
-	return xmlHeader + `<a:theme xmlns:a="` + nsDrawing + `" name="` + name + `"><a:themeElements>` +
-		`<a:clrScheme name="Quark">` +
-		`<a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>` +
-		`<a:dk2><a:srgbClr val="1F2937"/></a:dk2><a:lt2><a:srgbClr val="F3F4F6"/></a:lt2>` +
-		`<a:accent1><a:srgbClr val="3366FF"/></a:accent1><a:accent2><a:srgbClr val="E8590C"/></a:accent2>` +
-		`<a:accent3><a:srgbClr val="2F9E44"/></a:accent3><a:accent4><a:srgbClr val="F59F00"/></a:accent4>` +
-		`<a:accent5><a:srgbClr val="7048E8"/></a:accent5><a:accent6><a:srgbClr val="C2255C"/></a:accent6>` +
-		`<a:hlink><a:srgbClr val="1C7ED6"/></a:hlink><a:folHlink><a:srgbClr val="862E9C"/></a:folHlink>` +
-		`</a:clrScheme>` +
-		`<a:fontScheme name="Quark"><a:majorFont>` + fonts + `</a:majorFont><a:minorFont>` + fonts + `</a:minorFont></a:fontScheme>` +
+	fonts := func(face string) string {
+		if face == "" {
+			face = themeFont
+		}
+		var b strings.Builder
+		b.WriteString(`<a:latin typeface="`)
+		escape(&b, face)
+		b.WriteString(`"/><a:ea typeface=""/><a:cs typeface=""/>`)
+		return b.String()
+	}
+	major, minor := fonts(""), fonts("")
+	if theme != nil {
+		if theme.name != "" {
+			name = theme.name
+		}
+		major, minor = fonts(theme.headingFont), fonts(theme.bodyFont)
+	}
+	var b strings.Builder
+	b.WriteString(xmlHeader + `<a:theme xmlns:a="` + nsDrawing + `" name="`)
+	escape(&b, name)
+	b.WriteString(`"><a:themeElements><a:clrScheme name="`)
+	escape(&b, name)
+	b.WriteString(`">`)
+	for i, role := range themeRoles {
+		rgb := plainScheme[i]
+		if theme != nil {
+			rgb = theme.colors[role.name].rgb
+		}
+		fmt.Fprintf(&b, `<a:%s><a:srgbClr val="%s"/></a:%s>`, role.scheme, rgb, role.scheme)
+	}
+	b.WriteString(`<a:hlink><a:srgbClr val="1C7ED6"/></a:hlink><a:folHlink><a:srgbClr val="862E9C"/></a:folHlink>` +
+		`</a:clrScheme>`)
+	return b.String() +
+		`<a:fontScheme name="Quark"><a:majorFont>` + major + `</a:majorFont><a:minorFont>` + minor + `</a:minorFont></a:fontScheme>` +
 		`<a:fmtScheme name="Quark">` +
 		`<a:fillStyleLst>` + strings.Repeat(solid, 3) + `</a:fillStyleLst>` +
 		`<a:lnStyleLst>` + fmt.Sprintf(line, 6350) + fmt.Sprintf(line, 12700) + fmt.Sprintf(line, 19050) + `</a:lnStyleLst>` +

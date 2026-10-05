@@ -156,7 +156,7 @@ func (q *qslideWriter) header(title string, size outSize) error {
 		return err
 	}
 	_, err = fmt.Fprintf(q.w, "{\n  \"schemaVersion\": %d,\n  \"title\": %s,\n  \"size\": %s,\n  \"slides\": [",
-		schemaVersion, t, s)
+		importSchemaVersion, t, s)
 	return err
 }
 

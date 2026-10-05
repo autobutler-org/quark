@@ -29,7 +29,8 @@ func seedFile(t *testing.T, filesDir, rel string, body []byte) {
 }
 
 // writeQslide seeds a two-slide .qslide at rel whose pictures are
-// shared/dog.png and other/cat.png, and both pictures.
+// shared/dog.png and other/cat.png, and both pictures. It is schema version 2
+// with a theme, as the editor saves a deck.
 func writeQslide(t *testing.T, filesDir, rel string) {
 	t.Helper()
 	var pic bytes.Buffer
@@ -38,7 +39,8 @@ func writeQslide(t *testing.T, filesDir, rel string) {
 	}
 	seedFile(t, filesDir, "shared/dog.png", pic.Bytes())
 	seedFile(t, filesDir, "other/cat.png", pic.Bytes())
-	seedFile(t, filesDir, rel, []byte(`{"schemaVersion":1,"title":"Talk","slides":[
+	seedFile(t, filesDir, rel, []byte(`{"schemaVersion":2,"title":"Talk",
+		"theme":{"id":"cool","name":"Cool","colors":{"accent1":"#0E7490"}},"slides":[
 		{"id":"s1","elements":[
 			{"id":"a","type":"image","frame":{"x":0,"y":0,"width":10,"height":10},"source":"shared/dog.png"},
 			{"id":"b","type":"image","frame":{"x":0,"y":0,"width":10,"height":10},"source":"other/cat.png"}]},

@@ -10,9 +10,21 @@ import (
 	"strings"
 )
 
-// schemaVersion is the newest .qslide schema this writer reads, the one
-// quark_slides' QslideCodec writes.
-const schemaVersion = 1
+// The .qslide schema versions this package reads and writes.
+const (
+	// exportSchemaVersion is the newest schema an export reads, the one
+	// quark_slides' QslideCodec writes: version 2 added the stored theme,
+	// role colors, slide layouts and placeholder text boxes. Version 1 files
+	// read too, as the codec migrates them.
+	exportSchemaVersion = 2
+	// importSchemaVersion is the schema an import writes. A PowerPoint theme
+	// does not map onto a .qslide theme without loss — its fonts per script,
+	// its color transforms, its master's own text styles — so an import keeps
+	// to version 1: every color literal, every run styled as it is drawn, and
+	// no theme. The editor opens it as a deck with none and saves it as
+	// version 2.
+	importSchemaVersion = 1
+)
 
 // The element types and shape kinds this writer draws.
 const (
@@ -31,9 +43,16 @@ var hexColor = regexp.MustCompile(`^#([0-9a-fA-F]{6})([0-9a-fA-F]{2})?$`)
 type qslideHeader struct {
 	title     string
 	size      qslideSize
-	version   bool
+	version   int
 	sizeKnown bool
+	// themeField is the presentation's theme as read, and themeFixed is set
+	// once the slides begin, after which a theme is not applied.
+	themeField qslideThemeField
+	themeFixed bool
 }
+
+// theme is the theme the presentation's slides are drawn in, or nil.
+func (h qslideHeader) theme() *deckTheme { return h.themeField.theme(h.version) }
 
 // walkQslide steps through the presentation object, hands each slide to emit
 // one at a time, and returns the header.
@@ -42,6 +61,11 @@ type qslideHeader struct {
 // them after has the slides read before them held until they arrive — or until
 // the end, when a missing size is the 16:9 default — since a slide cannot be
 // placed without its size.
+//
+// The editor writes the theme ahead of slides too, but a theme cannot be told
+// apart from none until the end, so slides are not held for one: a theme that
+// comes after the slides begin is not applied, rather than restyling only the
+// slides after it.
 func walkQslide(dec *json.Decoder, emit func(qslideHeader, qslideSlide) error) (qslideHeader, error) {
 	header := qslideHeader{size: qslideSize{Width: 1920, Height: 1080}}
 	var pending []qslideSlide
@@ -63,11 +87,11 @@ func walkQslide(dec *json.Decoder, emit func(qslideHeader, qslideSlide) error) (
 			if err != nil || n < 1 {
 				return header, fmt.Errorf("%w: schemaVersion is not a positive integer", ErrNotQslide)
 			}
-			if n > schemaVersion {
+			if n > exportSchemaVersion {
 				return header, fmt.Errorf("%w: written by schema version %d; this export reads up to %d",
-					ErrNotQslide, n, schemaVersion)
+					ErrNotQslide, n, exportSchemaVersion)
 			}
-			header.version = true
+			header.version = n
 		case "title":
 			if err := dec.Decode(&header.title); err != nil {
 				return header, qslideError(err)
@@ -80,7 +104,19 @@ func walkQslide(dec *json.Decoder, emit func(qslideHeader, qslideSlide) error) (
 				return header, fmt.Errorf("%w: a slide size must be positive", ErrNotQslide)
 			}
 			header.sizeKnown = true
+		case "theme":
+			if header.themeFixed {
+				var skip json.RawMessage
+				if err := dec.Decode(&skip); err != nil {
+					return header, qslideError(err)
+				}
+				continue
+			}
+			if err := dec.Decode(&header.themeField); err != nil {
+				return header, qslideError(err)
+			}
 		case "slides":
+			header.themeFixed = true
 			if err := expectDelim(dec, '['); err != nil {
 				return header, err
 			}
@@ -89,7 +125,7 @@ func walkQslide(dec *json.Decoder, emit func(qslideHeader, qslideSlide) error) (
 				if err := dec.Decode(&slide); err != nil {
 					return header, qslideError(err)
 				}
-				if !header.version || !header.sizeKnown {
+				if header.version == 0 || !header.sizeKnown {
 					pending = append(pending, slide)
 					continue
 				}
@@ -113,7 +149,7 @@ func walkQslide(dec *json.Decoder, emit func(qslideHeader, qslideSlide) error) (
 	if err := expectDelim(dec, '}'); err != nil {
 		return header, err
 	}
-	if !header.version {
+	if header.version == 0 {
 		return header, fmt.Errorf("%w: no schemaVersion", ErrNotQslide)
 	}
 	return header, emitAll(header, &pending, emit)

@@ -85,11 +85,12 @@ func decodeElements(t *testing.T, raws []json.RawMessage) []outElement {
 	return out
 }
 
-// TestImportTypesMirrorTheCodec reads quark_slides' golden fixture into the
-// import's types and streams it back out: the bytes must be the fixture's, so
-// a .qslide an import writes is what QslideCodec.encode would have written.
+// TestImportTypesMirrorTheCodec reads quark_slides' golden version 1 fixture
+// into the import's types and streams it back out: the bytes must be the
+// fixture's, so a .qslide an import writes is what QslideCodec.encode wrote at
+// importSchemaVersion, and what the editor migrates on open.
 func TestImportTypesMirrorTheCodec(t *testing.T) {
-	golden, err := os.ReadFile("../../../packages/quark_slides/test/fixtures/sample.qslide")
+	golden, err := os.ReadFile("../../../packages/quark_slides/test/fixtures/v1_sample.qslide")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,5 +184,66 @@ func TestImportResolvesRelationshipTargetsInsideThePackage(t *testing.T) {
 		if got != c.want || ok != c.ok {
 			t.Errorf("resolveTarget(%q, %q) = %q, %v; want %q, %v", c.source, c.target, got, ok, c.want, c.ok)
 		}
+	}
+}
+
+// TestThemeTypesMirrorTheCodec reads the golden fixture's theme strictly: every
+// field SlideTheme writes is one the export reads, but for the two it has no
+// use for, and the theme it resolves to is the fixture's.
+func TestThemeTypesMirrorTheCodec(t *testing.T) {
+	golden, err := os.ReadFile("../../../packages/quark_slides/test/fixtures/sample.qslide")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var root struct {
+		Theme json.RawMessage `json:"theme"`
+	}
+	if err := json.Unmarshal(golden, &root); err != nil {
+		t.Fatal(err)
+	}
+	var strict struct {
+		qslideTheme
+		// The id names the theme to the editor's picker, and the shape style
+		// seeds new shapes; neither changes how a slide is drawn.
+		ID     string          `json:"id"`
+		Shapes json.RawMessage `json:"shapes"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(root.Theme))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&strict); err != nil {
+		t.Fatalf("the theme has a field the export does not know: %v", err)
+	}
+	for _, style := range []*qslideTextStyle{strict.Title, strict.Subtitle, strict.Body} {
+		if style == nil {
+			t.Fatal("the fixture leaves out a text style")
+		}
+	}
+
+	var field qslideThemeField
+	if err := json.Unmarshal(root.Theme, &field); err != nil {
+		t.Fatal(err)
+	}
+	theme := field.theme(2)
+	want := map[string]string{
+		"background": "FFF8F0", "text": "3B2A20", "background2": "F6E7D8", "text2": "7A5C48",
+		"accent1": "C2410C", "accent2": "B45309", "accent3": "A16207", "accent4": "BE123C",
+		"accent5": "9D174D", "accent6": "4D7C0F",
+	}
+	for role, rgb := range want {
+		if c := theme.colors[role]; c.rgb != rgb || c.alpha != 1 {
+			t.Errorf("%s = %+v, want %s", role, c, rgb)
+		}
+	}
+	if theme.name != "Sample" || theme.headingFont != "Georgia" || theme.bodyFont != "Inter" {
+		t.Errorf("theme = %q in %q and %q", theme.name, theme.headingFont, theme.bodyFont)
+	}
+	title, subtitle, body := roleStyle(theme, "title"), roleStyle(theme, "subtitle"), roleStyle(theme, "")
+	if title.size != 60 || title.font != "Georgia" || title.color.rgb != "3B2A20" ||
+		subtitle.size != 40 || subtitle.font != "Inter" || subtitle.color.rgb != "7A5C48" ||
+		body.size != 36 || body.font != "Inter" || body.color.rgb != "3B2A20" {
+		t.Errorf("styles = %+v, %+v, %+v", title, subtitle, body)
+	}
+	if field.theme(1) != nil {
+		t.Error("a version 1 file's theme object is no theme, as the codec migrates it")
 	}
 }

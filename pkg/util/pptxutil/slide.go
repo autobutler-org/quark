@@ -55,7 +55,7 @@ func (s *slideWriter) writeSlidePart(slide qslideSlide) error {
 	s.out.put(xmlHeader + `<p:sld` + pmlNamespaces + `><p:cSld>`)
 	var bgImage string
 	if bg := slide.Background; bg != nil {
-		if c, ok := parseColor(bg.Color); ok {
+		if c, ok := resolveColor(bg.Color, s.theme); ok {
 			s.out.put(`<p:bg><p:bgPr>`)
 			s.out.put(solidFill(c, 1))
 			s.out.put(`<a:effectLst/></p:bgPr></p:bg>`)
@@ -148,7 +148,7 @@ func (s *slideWriter) writeShape(el qslideElement, prst string) {
 	s.out.put(`<p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>`)
 	s.xfrm(el.Frame, "", "")
 	s.out.put(`<a:prstGeom prst="` + prst + `"><a:avLst>` + s.adjustments(el) + `</a:avLst></a:prstGeom>`)
-	if c, ok := parseColor(el.Fill); ok {
+	if c, ok := resolveColor(el.Fill, s.theme); ok {
 		s.out.put(solidFill(c, opacity))
 	} else {
 		s.out.put(`<a:noFill/>`)
@@ -200,7 +200,7 @@ func (s *slideWriter) writeLineProps(stroke qslideStroke, opacity float64, head,
 	}
 	c := color{rgb: "000000", alpha: 1}
 	if stroke.Color != nil {
-		if parsed, ok := parseColor(*stroke.Color); ok {
+		if parsed, ok := resolveColor(*stroke.Color, s.theme); ok {
 			c = parsed
 		}
 	}
@@ -327,8 +327,10 @@ func (s *slideWriter) writeGroup(el qslideElement) {
 }
 
 // writeTextBox writes a text box: no fill or outline, no insets — the editor
-// draws text flush with its frame — and its paragraphs.
+// draws text flush with its frame — and its paragraphs, styled where they set
+// nothing themselves by the theme's style for the box's text role.
 func (s *slideWriter) writeTextBox(el qslideElement) {
+	style := roleStyle(s.theme, el.TextRole)
 	s.out.put(`<p:sp><p:nvSpPr>`)
 	s.nonVisual(s.id(), "TextBox", "")
 	s.out.put(`<p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>`)
@@ -349,10 +351,12 @@ func (s *slideWriter) writeTextBox(el qslideElement) {
 	s.out.put(`<p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="` + anchor +
 		`" rtlCol="0">` + fit + `</a:bodyPr><a:lstStyle/>`)
 	if len(el.Paragraphs) == 0 {
-		s.out.printf(`<a:p><a:endParaRPr lang="en-US" sz="%d" dirty="0"/></a:p>`, s.fontSize(defaultFontSize))
+		s.out.put(`<a:p>`)
+		s.writeRunProps("a:endParaRPr", qslideRun{}, style)
+		s.out.put(`</a:p>`)
 	}
 	for _, p := range el.Paragraphs {
-		s.writeParagraph(p)
+		s.writeParagraph(p, style)
 	}
 	s.out.put(`</p:txBody></p:sp>`)
 }
@@ -360,9 +364,9 @@ func (s *slideWriter) writeTextBox(el qslideElement) {
 // writeParagraph writes one paragraph: its alignment, line spacing and list
 // marker, then its runs. The paragraph's end takes the last run's style, so an
 // empty line is as tall as the text around it.
-func (s *slideWriter) writeParagraph(p qslideParagraph) {
+func (s *slideWriter) writeParagraph(p qslideParagraph, style runStyle) {
 	s.out.put(`<a:p><a:pPr`)
-	size := defaultFontSize
+	size := style.size
 	if len(p.Runs) > 0 && p.Runs[0].FontSize != nil {
 		size = *p.Runs[0].FontSize
 	}
@@ -397,19 +401,20 @@ func (s *slideWriter) writeParagraph(p qslideParagraph) {
 			continue
 		}
 		s.out.put(`<a:r>`)
-		s.writeRunProps("a:rPr", run)
+		s.writeRunProps("a:rPr", run, style)
 		s.out.put(`<a:t>`)
 		s.out.text(run.Text)
 		s.out.put(`</a:t></a:r>`)
 	}
-	s.writeRunProps("a:endParaRPr", last)
+	s.writeRunProps("a:endParaRPr", last, style)
 	s.out.put(`</a:p>`)
 }
 
-// writeRunProps writes a run's style as the element tag: size always, the
-// rest only where the run sets it, so unset styles inherit the theme's.
-func (s *slideWriter) writeRunProps(tag string, run qslideRun) {
-	size := defaultFontSize
+// writeRunProps writes a run's style as the element tag: size always, and the
+// color and font the run sets, or else style's, so what neither sets inherits
+// the package theme's.
+func (s *slideWriter) writeRunProps(tag string, run qslideRun, style runStyle) {
+	size := style.size
 	if run.FontSize != nil && *run.FontSize > 0 {
 		size = *run.FontSize
 	}
@@ -428,13 +433,21 @@ func (s *slideWriter) writeRunProps(tag string, run qslideRun) {
 		}
 	}
 	s.out.put(` dirty="0">`)
+	c, ok := color{}, false
 	if run.Color != nil {
-		if c, ok := parseColor(*run.Color); ok {
-			s.out.put(solidFill(c, 1))
-		}
+		c, ok = resolveColor(*run.Color, s.theme)
 	}
+	if !ok && style.color != nil {
+		c, ok = *style.color, true
+	}
+	if ok {
+		s.out.put(solidFill(c, 1))
+	}
+	family := style.font
 	if run.FontFamily != nil && strings.TrimSpace(*run.FontFamily) != "" {
-		family := strings.TrimSpace(*run.FontFamily)
+		family = strings.TrimSpace(*run.FontFamily)
+	}
+	if family != "" {
 		if generic, ok := genericFonts[family]; ok {
 			family = generic
 		}
