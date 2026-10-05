@@ -70,9 +70,15 @@ func resolvesWithin(base, joined string) bool {
 		if err == nil {
 			return within(realBase, filepath.Join(landed, suffix))
 		}
-		// current exists (it is a dangling link, or unreadable) yet does not
-		// resolve; base resolved, so the walk never climbs above it.
-		if _, statErr := os.Lstat(current); statErr == nil || current == base {
+		// current is on disk yet did not resolve: a dangling link, something
+		// unreadable, or a directory another request created since the line
+		// above. Resolving once more tells the last from the first two.
+		if _, statErr := os.Lstat(current); statErr == nil {
+			landed, err := filepath.EvalSymlinks(current)
+			return err == nil && within(realBase, filepath.Join(landed, suffix))
+		}
+		// base resolved, so the walk never climbs above it.
+		if current == base {
 			return false
 		}
 		suffix = filepath.Join(filepath.Base(current), suffix)
