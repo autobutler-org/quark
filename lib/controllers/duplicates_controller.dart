@@ -3,6 +3,7 @@ import 'package:quark/models/duplicate_group.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/duplicates_config.dart';
+import 'package:quark/utils/photo_location.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Everything the duplicates page shows and does (#1666): the groups, which
@@ -22,6 +23,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// group that has the preferred one. The preference lasts for this controller
 /// only, carries over a reload, and applies to new groups as they appear; a
 /// toggle afterwards wins until the preference changes again.
+///
+/// Each copy's location is [photoLocation]'s plain wording, never the
+/// storage path (#2575).
 ///
 /// Service calls arrive as function parameters defaulting to the real static
 /// methods, so a test passes fakes without a mocking library.
@@ -237,13 +241,13 @@ class DuplicatesController extends ChangeNotifier {
   ) {
     final id = '$serial:$relPath';
     _paths[id] = (serial: serial, relPath: relPath);
-    final slash = relPath.lastIndexOf('/');
-    final folder = slash < 0 ? 'Files' : relPath.substring(0, slash);
-    final device = serial.isEmpty ? null : devices[serial] ?? serial;
     return DuplicatePhotoItem(
       id: id,
-      name: relPath.substring(slash + 1),
-      location: device == null ? folder : '$device · $folder',
+      name: relPath.substring(relPath.lastIndexOf('/') + 1),
+      location: photoLocation(
+        relPath,
+        deviceName: serial.isEmpty ? null : devices[serial] ?? serial,
+      ),
     );
   }
 

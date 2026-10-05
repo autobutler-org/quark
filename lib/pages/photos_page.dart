@@ -30,6 +30,7 @@ import 'package:quark/widgets/photos/album_picker_sheet.dart';
 import 'package:quark/widgets/photos/delete_album_dialog.dart';
 import 'package:quark/widgets/photos/photo_sort_button.dart';
 import 'package:quark/widgets/photos/photo_thumbnail.dart';
+import 'package:quark/widgets/photos/photos_bar_bottom.dart';
 import 'package:quark/widgets/photos/photos_empty_state.dart';
 import 'package:quark/widgets/photos/remove_from_album_dialog.dart';
 import 'package:quark/widgets/upload_drop_zone.dart';
@@ -660,52 +661,47 @@ class PhotosPageState extends State<PhotosPage>
             final album = c.selectedAlbum;
             final albumError = c.albumError;
 
+            final actions = [
+              QuarkBarChip(
+                key: const ValueKey('photos_upload'),
+                icon: QuarkIcons.upload_rounded,
+                label: c.isUploading ? 'Uploading...' : 'Upload',
+                onPressed: c.isUploading ? null : _uploadPhotos,
+              ),
+              if (album == null)
+                QuarkBarIconButton(
+                  key: const ValueKey('photos_select'),
+                  icon: QuarkIcons.check_circle_outline,
+                  tooltip: 'Select',
+                  onPressed: c.enterSelectionMode,
+                ),
+              // The Quark fills system albums itself and refuses edits (#992).
+              // An empty album carries this button in its empty state
+              // instead, so the page never shows two.
+              if (album != null && !album.isSystemAlbum && photos.isNotEmpty)
+                QuarkBarChip(
+                  key: const ValueKey('photos_add_to_album'),
+                  icon: QuarkIcons.add_rounded,
+                  label: 'Add photos',
+                  onPressed: () => _addPhotosTo(album.toAlbumItem()),
+                ),
+              PhotoSortButton(
+                sortField: c.sortField,
+                sortOrder: c.sortOrder,
+                onChanged: c.setSort,
+              ),
+              const AppThemeToggle(),
+            ];
             return QuarkPageScaffold(
               title: 'Photos',
               icon: QuarkIcons.photo_library_outlined,
-              actions: [
-                QuarkBarChip(
-                  key: const ValueKey('photos_upload'),
-                  icon: QuarkIcons.upload_rounded,
-                  label: c.isUploading ? 'Uploading...' : 'Upload',
-                  onPressed: c.isUploading ? null : _uploadPhotos,
-                ),
-                if (album == null)
-                  QuarkBarIconButton(
-                    key: const ValueKey('photos_select'),
-                    icon: QuarkIcons.check_circle_outline,
-                    tooltip: 'Select',
-                    onPressed: c.enterSelectionMode,
-                  ),
-                // Duplicates are found on the Quark, which Demo mode never
-                // asks (#1666).
-                if (album == null && !_demo)
-                  QuarkBarIconButton(
-                    key: const ValueKey('photos_duplicates'),
-                    icon: QuarkIcons.content_copy,
-                    tooltip: 'Duplicates',
-                    onPressed: () => context.go(AppRoutes.photoDuplicates),
-                  ),
-                // The Quark fills system albums itself and refuses edits (#992).
-                // An empty album carries this button in its empty state
-                // instead, so the page never shows two.
-                if (album != null && !album.isSystemAlbum && photos.isNotEmpty)
-                  QuarkBarChip(
-                    key: const ValueKey('photos_add_to_album'),
-                    icon: QuarkIcons.add_rounded,
-                    label: 'Add photos',
-                    onPressed: () => _addPhotosTo(album.toAlbumItem()),
-                  ),
-                PhotoSortButton(
-                  sortField: c.sortField,
-                  sortOrder: c.sortOrder,
-                  onChanged: c.setSort,
-                ),
-                const AppThemeToggle(),
-              ],
+              actions: actions,
               onRefresh: manualRefresh,
               isRefreshing: isRefreshing,
               // The same selection bar Files and the trash swap in (#2311).
+              // The library carries a second row with Duplicates in it, by
+              // name (#2576); duplicates are found on the Quark, which Demo
+              // mode never asks (#1666).
               appBar: c.selectionMode
                   ? FileSelectionBar(
                       selectedCount: selectedIds.length,
@@ -729,6 +725,19 @@ class PhotosPageState extends State<PhotosPage>
                                 : null,
                           ),
                       ],
+                    )
+                  : album == null && !_demo
+                  ? QuarkAppBar(
+                      label: 'Photos',
+                      icon: QuarkIcons.photo_library_outlined,
+                      actions: actions,
+                      onRefresh: manualRefresh,
+                      isRefreshing: isRefreshing,
+                      bottom: PhotosBarBottom(
+                        title: 'Library',
+                        onDuplicates: () =>
+                            context.go(AppRoutes.photoDuplicates),
+                      ),
                     )
                   : null,
               drawer: const AppDrawer(activeSection: QuarkDrawerSection.photos),
