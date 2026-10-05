@@ -131,6 +131,48 @@ void main() {
       }
     });
 
+    // #2786: the surface containers were left to Material's seed-derived
+    // tonal palette, so the docs toolbar, which is filled with
+    // surfaceContainer, drifted from the chrome around it.
+    test('the surface containers come from the tokens', () {
+      for (final themeColor in [
+        QuarkThemeColor.classic,
+        QuarkThemeColor.pink,
+        QuarkThemeColor.lime,
+        QuarkThemeColor.fromSeed(const Color(0xFF00AA55)),
+      ]) {
+        for (final brightness in Brightness.values) {
+          final tokens = themeColor.tokensFor(brightness);
+          final scheme = QuarkTheme.from(tokens, brightness).colorScheme;
+          final id = '${themeColor.storageValue} in ${brightness.name}';
+          expect(scheme.surfaceContainerLowest, tokens.background, reason: id);
+          expect(scheme.surfaceContainerLow, tokens.sidebar, reason: id);
+          expect(scheme.surfaceContainer, tokens.chrome, reason: id);
+          expect(scheme.surfaceContainerHigh, tokens.card, reason: id);
+          expect(
+            scheme.surfaceContainerHighest,
+            Color.alphaBlend(
+              tokens.foreground.withValues(alpha: 0.08),
+              tokens.card,
+            ),
+            reason: id,
+          );
+          // The well a filled field or a header cell is drawn in stays
+          // readable and set off from the card it sits on.
+          expect(
+            contrastRatio(tokens.foreground, scheme.surfaceContainerHighest),
+            greaterThanOrEqualTo(4.5),
+            reason: id,
+          );
+          expect(
+            scheme.surfaceContainerHighest,
+            isNot(tokens.card),
+            reason: id,
+          );
+        }
+      }
+    });
+
     test('classic is the default, and the shipped tokens', () {
       expect(
         QuarkTheme.light(themeColor: QuarkThemeColor.classic).colorScheme,
