@@ -217,4 +217,85 @@ void main() {
       );
     });
   });
+
+  group('importing PowerPoint (#1171)', () {
+    test('knows the PowerPoint files the Quark imports', () {
+      expect(SlidesService.isPowerPoint('Talk.pptx'), isTrue);
+      expect(SlidesService.isPowerPoint('Talk.PPTM'), isTrue);
+      expect(SlidesService.isPowerPoint('Show.ppsx'), isTrue);
+      expect(SlidesService.isPowerPoint('Old.ppt'), isFalse);
+      expect(SlidesService.isPowerPoint('Talk.qslide'), isFalse);
+    });
+
+    test('imports beside the file and reads the warnings', () async {
+      download = jsonEncode({
+        'path': 'talks/Talk.qslide',
+        'mediaDir': 'talks/Talk_media',
+        'slides': 4,
+        'pictures': 2,
+        'warnings': [
+          {'slide': 2, 'message': 'Charts are not imported.'},
+          {
+            'slide': 0,
+            'message': 'Animations and transitions are not imported.',
+          },
+        ],
+      });
+      final result = await SlidesService.importPowerPoint(
+        'talks/Talk.pptx',
+        serial: 'usb1',
+      );
+
+      final request = requests.single;
+      expect(request.method, 'POST');
+      expect(request.url.path, '/api/v0/files/import/pptx');
+      expect(request.url.queryParameters['filePath'], 'talks/Talk.pptx');
+      expect(request.url.queryParameters['serial'], 'usb1');
+      expect(request.url.queryParameters.containsKey('rootDir'), isFalse);
+      expect(result.path, 'talks/Talk.qslide');
+      expect(result.slides, 4);
+      expect(result.warnings, [
+        (slide: 2, message: 'Charts are not imported.'),
+        (slide: 0, message: 'Animations and transitions are not imported.'),
+      ]);
+    });
+
+    test('a refused import throws its status for the page to word', () async {
+      sharedHttpClientFactory = () => MockClient(
+        (request) async =>
+            http.Response('{"error":"pptxutil: not a pptx"}', 400),
+      );
+      resetSharedHttpClient();
+      await expectLater(
+        SlidesService.importPowerPoint('talks/Broken.pptx'),
+        throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 400)),
+      );
+    });
+
+    test('an answer with no path throws', () async {
+      download = jsonEncode({'slides': 1, 'warnings': []});
+      await expectLater(
+        SlidesService.importPowerPoint('talks/Talk.pptx'),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('uploads a PowerPoint file from this device into the member '
+        'home, streamed, keeping both on a clash', () async {
+      await AppSettings.instance.setUsername('ann');
+      final path = await withQuark(
+        () => SlidesService.uploadPowerPoint((
+          name: 'Talk.pptx',
+          length: 3,
+          bytes: () => Stream.value([1, 2, 3]),
+        )),
+      );
+      final request = requests.single;
+      expect(request.url.path, '/api/v0/files/upload/users/ann');
+      expect(request.url.queryParameters['keepBoth'], 'true');
+      expect(uploads.single, contains('filename="Talk.pptx"'));
+      // The fake Quark answers every upload with the same landed name.
+      expect(path, 'users/ann/Pitch.qslide');
+    });
+  });
 }

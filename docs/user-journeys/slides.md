@@ -521,3 +521,52 @@ same drive as the presentation (`photos/cover.jpg`).
 - Plain text from elsewhere becomes a new text box in the middle of the slide, one paragraph per line.
 - **Paste** is offered with nothing selected; **Copy**, **Cut** and **Duplicate** need a selection.
 - Cut, paste and duplicate are one undo step each; copying changes nothing.
+
+---
+
+### JN-SL-028: Import a PowerPoint file
+
+**Preconditions:** Signed in, on `/slides`, with a `.pptx`, `.pptm` or `.ppsx` file on the Quark or on this device.
+
+**Steps:**
+
+1. Tap **Import PowerPoint** in the bar's second row (**Import** on a phone).
+2. Tap **From your Quark**, browse to the file and tap it; or tap **From this device** and choose it in the platform's
+   picker.
+3. If the summary of what was left out appears, read it and tap **Open presentation**.
+
+**Expected result:**
+
+- The picker on the Quark starts in the folder new files land in and lists only folders and PowerPoint files.
+- A file from this device is uploaded, streamed, into that folder first, under a numbered name if its own is taken;
+  a file that is not a PowerPoint file is refused before it is uploaded.
+- "Importing Talk.pptx…" shows with a spinner until the Quark answers. The presentation is written beside the
+  PowerPoint file as `Talk.qslide` (or `Talk_(1).qslide` when that is taken) with its pictures in `Talk_media`; the
+  PowerPoint file itself is unchanged.
+- When anything could not come across — charts, tables, SmartArt, video, animations, unusual shapes — a summary lists
+  each kind once with the slides it was on ("Slides 2 and 5", or "Whole presentation"), before the presentation opens.
+  Closing it any way opens the presentation.
+- The new presentation opens in the editor at its URL (JN-SL-004).
+- A damaged or oversized file reads "Quark couldn't read that PowerPoint file. It may be damaged or too large to
+  import."; a folder the user cannot write reads "You can't save files in that folder."; anything else reads
+  "Couldn't import the presentation." Nothing opens and the page stays as it was.
+- Canceling either picker imports nothing.
+
+---
+
+### JN-SL-029: Open a PowerPoint file from Files as a presentation
+
+**Preconditions:** Signed in, on `/files`, with a `.pptx`, `.pptm` or `.ppsx` file in the listing.
+
+**Steps:**
+
+1. Open the file's menu (the three-dot button, or a long press on the row).
+2. Tap **Open as presentation**.
+
+**Expected result:**
+
+- The import runs as in JN-SL-028 — progress, then the summary if anything was left out — and the presentation opens
+  in the editor on the same drive.
+- The entry is offered only on PowerPoint files the Quark can import: not on a legacy `.ppt`, a folder, or a file
+  inside an archive.
+- Tapping the PowerPoint file itself still opens it in the generic viewer, as before.

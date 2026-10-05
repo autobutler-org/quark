@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/widgets/slides/insert/slide_image_upload_status.dart';
 import 'package:quark/widgets/slides/insert/slide_quark_image_dialog.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 import '../../../support/tap_target_guidelines.dart' as tap;
@@ -136,6 +137,50 @@ void main() {
       ),
     );
     expect(up.onPressed, isNull);
+  });
+
+  testWidgets('picks another kind of file under its own title and keys '
+      '(#1171)', (tester) async {
+    String? picked = 'unset';
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
+        home: Builder(
+          builder: (context) => Center(
+            child: TextButton(
+              onPressed: () async => picked = await SlideQuarkImageDialog.show(
+                context,
+                startPath: '',
+                listFolder: (path) async => [
+                  node(path, 'dog.jpg'),
+                  node(path, 'Talk.pptx'),
+                ],
+                title: 'Choose a PowerPoint file',
+                accepts: (name) => name.endsWith('.pptx'),
+                fileIcon: QuarkIcons.slideshow_outlined,
+                emptyText: 'No PowerPoint files or folders here',
+                keyPrefix: 'slides_import_pick',
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose a PowerPoint file'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('slides_import_pick_dialog')),
+      findsOneWidget,
+    );
+    expect(find.text('dog.jpg'), findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey('slides_import_pick_file_Talk.pptx')),
+    );
+    await tester.pumpAndSettle();
+    expect(picked, 'Talk.pptx');
   });
 
   testWidgets('the upload strip names the file and its progress', (

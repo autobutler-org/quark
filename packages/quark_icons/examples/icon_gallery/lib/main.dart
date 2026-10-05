@@ -88,6 +88,7 @@ const _sections = <({String title, List<_IconEntry> icons})>[
     icons: [
       _IconEntry(QuarkIcons.export_csv, 'export_csv'),
       _IconEntry(QuarkIcons.import_csv, 'import_csv'),
+      _IconEntry(QuarkIcons.import_file, 'import_file'),
     ],
   ),
 ];

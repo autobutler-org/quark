@@ -81,9 +81,15 @@ lib/widgets/
                                 channel's members; confirms owner changes
                                 and, for a channel, key-rotating ones
   slides/
-    insert/                     picking a picture for a slide: the Quark
-                                folder browser (lists through an injected
-                                function) and the upload progress strip
+    import/                     importing a PowerPoint file: the Slides
+                                bar's Import row, the progress and summary
+                                dialogs, and importPowerPointAndOpen, which
+                                writes errors with Errors and opens the new
+                                presentation through the router
+    insert/                     picking a picture for a slide, or a
+                                PowerPoint file to import: the Quark folder
+                                browser (lists through an injected function)
+                                and the upload progress strip
     properties/                 the properties panel and its fields: reads
                                 SlideEditorController and calls its commands
     toolbar/                    the slide toolbar: SlideToolbarActions maps

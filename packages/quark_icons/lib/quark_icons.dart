@@ -307,6 +307,9 @@ class QuarkIcons {
   /// Import data from a CSV file.
   static const IconData import_csv = Icons.file_upload;
 
+  /// Import a file from another app's format, such as a PowerPoint file.
+  static const IconData import_file = Icons.file_open_outlined;
+
   // ── Navigation & chrome ──────────────────────────────────────────────────────────
   static const IconData arrow_back = Icons.arrow_back;
   static const IconData arrow_back_rounded = Icons.arrow_back_rounded;

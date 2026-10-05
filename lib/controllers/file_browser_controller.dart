@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/file_browser_actions.dart';
+import 'package:quark/services/slides_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
@@ -13,6 +14,7 @@ import 'package:quark/utils/quark_widget.dart';
 import 'package:quark/utils/upload_tree_utils.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
+import 'package:quark/widgets/slides/import/import_power_point.dart';
 import 'package:quark/widgets/video_viewer/convert_video.dart';
 
 class FileMenuActionOutcome {
@@ -40,6 +42,7 @@ class FileBrowserController {
     this.deleteFiles = FilesService.deleteFiles,
     this.listTranscodeFormats = FilesService.listTranscodeFormats,
     this.transcodeVideo = FilesService.transcodeVideo,
+    this.importPowerPoint = SlidesService.importPowerPoint,
   });
 
   /// The batch delete call, injectable so a test can see the batches.
@@ -52,6 +55,11 @@ class FileBrowserController {
   /// The call Convert video queues its job with, injectable so a test can
   /// see it.
   final TranscodeVideoFn transcodeVideo;
+
+  /// The call Open as presentation imports a PowerPoint file with,
+  /// injectable so a test can fake it.
+  final Future<PowerPointImport> Function(String path, {String? serial})
+  importPowerPoint;
 
   Future<List<FileNode>> fetchFiles(
     String currentPath, {
@@ -310,6 +318,16 @@ class FileBrowserController {
           transcode: transcodeVideo,
         );
         return null;
+      case FileMenuAction.openAsPresentation:
+        // The flow reports its own outcome, as it does on the Slides page.
+        final serial = serialOrNull(node.deviceSerial);
+        await importPowerPointAndOpen(
+          context,
+          name: node.name,
+          run: () => importPowerPoint(node.apiPath, serial: serial),
+          serial: serial,
+        );
+        return null;
       case FileMenuAction.restore:
       case FileMenuAction.deletePermanently:
         // Trash-only actions; the Files page never offers them.
@@ -330,6 +348,7 @@ class FileBrowserController {
         FileMenuAction.share => 'share the item',
         FileMenuAction.restore => 'restore the item',
         FileMenuAction.convertVideo => 'convert the video',
+        FileMenuAction.openAsPresentation => 'import the presentation',
       });
 
   String? resolveMoveRenameTargetPath({

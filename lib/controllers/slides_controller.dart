@@ -5,6 +5,7 @@ import 'package:quark/controllers/file_type_listing_cache.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/services/content_search_service.dart';
 import 'package:quark/services/slides_service.dart';
+import 'package:quark/utils/error_text.dart';
 
 /// Fetches every presentation on the Quark.
 typedef ListSlidesFn = Future<List<FileNode>> Function();
@@ -16,8 +17,22 @@ typedef SearchContentFn =
 /// Creates a presentation by name and returns its path.
 typedef CreatePresentationFn = Future<String> Function(String name);
 
+/// Imports the PowerPoint file at a path on the Quark as a presentation.
+typedef ImportPowerPointFn =
+    Future<PowerPointImport> Function(String path, {String? serial});
+
+/// Uploads a PowerPoint file from this device and returns where it landed.
+typedef UploadPowerPointFn = Future<String> Function(SlideFilePick pick);
+
+/// Asks the user for a PowerPoint file on this device; null when they cancel.
+typedef PickPowerPointFn = Future<SlideFilePick?> Function();
+
+/// Lists a folder on the Quark, for picking a PowerPoint file from it.
+typedef ListImportFolderFn = Future<List<FileNode>> Function(String path);
+
 /// State behind the Slides page: the user's `.qslide` presentations, the
-/// search over their names and contents, and starting a new one.
+/// search over their names and contents, starting a new one, and importing
+/// one from a PowerPoint file (#1171).
 ///
 /// The listing comes from `FileTypeListingCache`, so the page shows the last
 /// one on its first frame while a refresh runs, as Docs and Sheets do. A
@@ -33,6 +48,11 @@ class SlidesController extends ChangeNotifier {
     List<FileNode>? Function()? peekSlides,
     this.searchContent = ContentSearchService.search,
     this.createPresentation = SlidesService.create,
+    this.importPowerPoint = SlidesService.importPowerPoint,
+    this.uploadPowerPoint = SlidesService.uploadPowerPoint,
+    this.pickPowerPoint = SlidesService.pickPowerPointFile,
+    this.listFolder = SlidesService.listFolder,
+    this.landingFolder = SlidesService.landingFolder,
     this.searchDebounce = const Duration(milliseconds: 400),
   }) : listSlides =
            listSlides ??
@@ -47,6 +67,13 @@ class SlidesController extends ChangeNotifier {
   final ListSlidesFn listSlides;
   final SearchContentFn searchContent;
   final CreatePresentationFn createPresentation;
+  final ImportPowerPointFn importPowerPoint;
+  final UploadPowerPointFn uploadPowerPoint;
+  final PickPowerPointFn pickPowerPoint;
+  final ListImportFolderFn listFolder;
+
+  /// The folder new files land in, where the PowerPoint picker opens.
+  final String Function() landingFolder;
   final Duration searchDebounce;
 
   List<FileNode> _files;
@@ -129,6 +156,22 @@ class SlidesController extends ChangeNotifier {
   /// Creates a presentation called [name] and returns its path. Throws what
   /// the service threw; the page reports it.
   Future<String> create(String name) => createPresentation(name);
+
+  /// Imports the PowerPoint file at [path] on the Quark, beside itself.
+  /// Throws what the service threw; the page reports it.
+  Future<PowerPointImport> importFromQuark(String path) =>
+      importPowerPoint(path);
+
+  /// Uploads [pick] from this device into the folder new files land in, then
+  /// imports it there. A failed upload is not imported, and a file that is
+  /// not a PowerPoint file — a browser's picker lets any through — is not
+  /// uploaded.
+  Future<PowerPointImport> importFromDevice(SlideFilePick pick) async {
+    if (!SlidesService.isPowerPoint(pick.name)) {
+      throw const MessageException(Errors.notPowerPoint);
+    }
+    return importPowerPoint(await uploadPowerPoint(pick));
+  }
 
   void _notify() {
     if (!_disposed) notifyListeners();

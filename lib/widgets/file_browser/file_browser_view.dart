@@ -31,6 +31,9 @@ enum FileMenuAction {
 
   /// Converts a video to another format or a smaller size (#2277).
   convertVideo,
+
+  /// Imports a PowerPoint file as a presentation and opens it (#1171).
+  openAsPresentation,
 }
 
 enum SortColumn { name, type, size, device }
@@ -81,6 +84,7 @@ class FileBrowserView extends StatefulWidget {
     FileMenuAction.delete,
     FileMenuAction.extractHere,
     FileMenuAction.convertVideo,
+    FileMenuAction.openAsPresentation,
     FileMenuAction.navigateToFolder,
   };
 

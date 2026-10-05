@@ -4,10 +4,12 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:quark/models/file_node.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
+import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/utils/image_header_size.dart';
 import 'package:quark_slides/quark_slides.dart';
@@ -16,12 +18,28 @@ import 'package:quark_slides/quark_slides.dart';
 /// takes it.
 typedef SlideImageSize = ({double width, double height});
 
-/// A picture picked on this device: its file [name], its [length] in bytes,
-/// and [bytes], which opens it as a stream — read once, as it uploads.
-typedef SlideImagePick = ({
+/// A file picked on this device: its file [name], its [length] in bytes, and
+/// [bytes], which opens it as a stream — read once, as it uploads.
+typedef SlideFilePick = ({
   String name,
   int length,
   Stream<List<int>> Function() bytes,
+});
+
+/// A picture picked on this device, as [SlideFilePick].
+typedef SlideImagePick = SlideFilePick;
+
+/// One thing a PowerPoint import left out or approximated: the [slide] it was
+/// on, from 1, or 0 for the whole deck, and a [message] a user can read.
+typedef PowerPointImportWarning = ({int slide, String message});
+
+/// A PowerPoint file imported as a presentation: the [path] of the new
+/// `.qslide`, how many [slides] it has, and the [warnings] about what did not
+/// come across.
+typedef PowerPointImport = ({
+  String path,
+  int slides,
+  List<PowerPointImportWarning> warnings,
 });
 
 /// A picture uploaded for a presentation: the files-relative [path] it
@@ -44,6 +62,21 @@ class SlidesService {
 
   /// The extension every presentation file carries, dot included.
   static const extension = '.qslide';
+
+  /// The PowerPoint extensions the Quark imports (#1171). The legacy binary
+  /// `.ppt` is not Open XML and has no reader.
+  static const powerPointExtensions = {'.pptx', '.pptm', '.ppsx'};
+
+  /// Whether [name] is a PowerPoint file the Quark can import.
+  static bool isPowerPoint(String name) =>
+      powerPointExtensions.contains(fileExtension(name));
+
+  /// The folder new files land in — the root for an admin, a member's home
+  /// otherwise, since a member cannot write the device root (#2139).
+  static String landingFolder() => landingPath(
+    isAdmin: AppSettings.instance.isAdmin.value,
+    username: AppSettings.instance.username,
+  );
 
   /// A new presentation called [title]: one title slide at the default 16:9
   /// size, the title centered on it.
@@ -80,16 +113,12 @@ class SlidesService {
   static String fileNameFor(String name) =>
       name.toLowerCase().endsWith(extension) ? name : '$name$extension';
 
-  /// Writes a new presentation called [name] into the folder new files land
-  /// in — the root for an admin, a member's home otherwise, since a member
-  /// cannot write the device root (#2139) — and returns its path.
+  /// Writes a new presentation called [name] into the [landingFolder] and
+  /// returns its path.
   static Future<String> create(String name) async {
     final fileName = fileNameFor(name);
     final title = fileName.substring(0, fileName.length - extension.length);
-    final dir = landingPath(
-      isAdmin: AppSettings.instance.isAdmin.value,
-      username: AppSettings.instance.username,
-    );
+    final dir = landingFolder();
     final landed = await FilesService.uploadFilesFromFormData(dir, [
       _multipart(fileName, newPresentation(title)),
     ]);
@@ -206,11 +235,85 @@ class SlidesService {
         : (width: size.width.toDouble(), height: size.height.toDouble());
   }
 
+  /// Lists the folder at [path] on the Quark, for picking a file from it.
+  static Future<List<FileNode>> listFolder(String path) =>
+      FilesService.getFiles(path);
+
+  /// Asks the Quark to import the PowerPoint file at [path] as a presentation
+  /// beside it (#1171). The Quark reads the file in place; nothing is
+  /// downloaded here. A refused import throws an [ApiException].
+  static Future<PowerPointImport> importPowerPoint(
+    String path, {
+    String? serial,
+  }) async {
+    final serialValue = serial?.trim() ?? '';
+    final uri = apiBaseUri
+        .resolve('/api/v0/files/import/pptx')
+        .replace(
+          queryParameters: {
+            'filePath': path,
+            if (serialValue.isNotEmpty) 'serial': serialValue,
+          },
+        );
+    final response = await FilesService.instance.authenticatedPost(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Failed to import PowerPoint');
+    }
+    final decoded = jsonDecode(response.body);
+    final landed = decoded is Map<String, dynamic> ? decoded['path'] : null;
+    if (landed is! String || landed.isEmpty) {
+      throw Exception('PowerPoint import response carried no path');
+    }
+    return (
+      path: landed,
+      slides: (decoded['slides'] as num?)?.toInt() ?? 0,
+      warnings: [
+        for (final w in decoded['warnings'] as List<dynamic>? ?? const [])
+          if (w is Map<String, dynamic>)
+            (
+              slide: (w['slide'] as num?)?.toInt() ?? 0,
+              message: w['message'] as String? ?? '',
+            ),
+      ],
+    );
+  }
+
+  /// Uploads the PowerPoint file [pick], streamed, into the [landingFolder]
+  /// under a free name if its own is taken there, and returns where it
+  /// landed.
+  static Future<String> uploadPowerPoint(SlideFilePick pick) async {
+    final dir = landingFolder();
+    final landed = await FilesService.uploadFilesFromFormData(dir, [
+      http.MultipartFile(
+        'files',
+        pick.bytes(),
+        pick.length,
+        filename: pick.name,
+      ),
+    ], keepBoth: true);
+    return landed.firstOrNull ?? joinPath(dir, pick.name);
+  }
+
+  /// Asks the user for a PowerPoint file on this device with the platform's
+  /// picker, or null when they cancel. Nothing is read here.
+  static Future<SlideFilePick?> pickPowerPointFile() => _pick(
+    FileType.custom,
+    allowedExtensions: [for (final e in powerPointExtensions) e.substring(1)],
+  );
+
   /// Asks the user for a picture on this device with the platform's picker,
   /// or null when they cancel. Nothing is read here: the pick opens as a
   /// stream when it uploads.
-  static Future<SlideImagePick?> pickImageFile() async {
-    final file = (await FilePicker.pickFiles(type: FileType.image)).firstOrNull;
+  static Future<SlideImagePick?> pickImageFile() => _pick(FileType.image);
+
+  static Future<SlideFilePick?> _pick(
+    FileType type, {
+    List<String>? allowedExtensions,
+  }) async {
+    final file = (await FilePicker.pickFiles(
+      type: type,
+      allowedExtensions: allowedExtensions,
+    )).firstOrNull;
     if (file == null) return null;
     final length = await file.length();
     if (length == null) {

@@ -3,19 +3,24 @@ import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/slides_controller.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/router.dart';
+import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/rename_doc_sheet.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/slides/import/import_power_point.dart';
+import 'package:quark/widgets/slides/import/slides_import_bar_bottom.dart';
+import 'package:quark/widgets/slides/insert/slide_quark_image_dialog.dart';
 import 'package:quark/widgets/slides/slides_body.dart';
 import 'package:quark/widgets/slides/slides_search_bar.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The Slides page: the user's `.qslide` presentations, a search over their
-/// names and contents, and a way to start a new one (#1161).
+/// names and contents, a way to start a new one (#1161), and a way to import
+/// one from a PowerPoint file on the Quark or on this device (#1171).
 class SlidesPage extends StatefulWidget {
   /// Creates the page; [controller] is for tests, which pass one with fake
   /// services.
@@ -80,6 +85,44 @@ class _SlidesPageState extends State<SlidesPage>
     }
   }
 
+  Future<void> _importFromQuark() async {
+    final path = await SlideQuarkImageDialog.show(
+      context,
+      startPath: _controller.landingFolder(),
+      listFolder: _controller.listFolder,
+      title: 'Choose a PowerPoint file',
+      accepts: SlidesService.isPowerPoint,
+      fileIcon: QuarkIcons.slideshow_outlined,
+      emptyText: 'No PowerPoint files or folders here',
+      keyPrefix: 'slides_import_pick',
+    );
+    if (path == null || !mounted) return;
+    await importPowerPointAndOpen(
+      context,
+      name: path.split('/').last,
+      run: () => _controller.importFromQuark(path),
+    );
+  }
+
+  Future<void> _importFromDevice() async {
+    final SlideFilePick? pick;
+    try {
+      pick = await _controller.pickPowerPoint();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(Errors.importPowerPoint(e))));
+      return;
+    }
+    if (pick == null || !mounted) return;
+    await importPowerPointAndOpen(
+      context,
+      name: pick.name,
+      run: () => _controller.importFromDevice(pick!),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -98,6 +141,10 @@ class _SlidesPageState extends State<SlidesPage>
           ),
           const AppThemeToggle(),
         ],
+        bottom: SlidesImportBarBottom(
+          onImportFromQuark: _importFromQuark,
+          onImportFromDevice: _importFromDevice,
+        ),
       ),
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.slides),
       body: Column(

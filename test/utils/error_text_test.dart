@@ -148,6 +148,31 @@ void main() {
     });
   });
 
+  group('Errors.importPowerPoint', () {
+    test('a 400 says the file could not be read as a PowerPoint file', () {
+      expect(
+        Errors.importPowerPoint(const ApiException(400)),
+        Errors.unreadablePowerPoint,
+      );
+    });
+
+    test('a 403 says the folder is not writable', () {
+      expect(
+        Errors.importPowerPoint(const ApiException(403)),
+        Errors.cantSaveInFolder,
+      );
+    });
+
+    test('anything else reads like Errors.message', () {
+      for (final error in [const ApiException(404), Exception('boom')]) {
+        expect(
+          Errors.importPowerPoint(error),
+          Errors.message(error, 'import the presentation'),
+        );
+      }
+    });
+  });
+
   group('jobs refused with a 403', () {
     test('a conversion says the folder is not writable', () {
       expect(
