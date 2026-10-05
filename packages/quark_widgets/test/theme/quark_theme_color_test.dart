@@ -10,6 +10,10 @@ const double _aa = 4.5;
 /// The ratio WCAG asks of a boundary that identifies a control.
 const double _boundary = 3;
 
+/// How far above a WCAG ratio a derived pair has to land, so none sits on
+/// the floor where a rounding step fails it (#2785).
+const double _margin = 0.1;
+
 /// How strongly a selected chip, segment or badge is tinted with the accent
 /// its label is drawn in.
 const double _selectionTint = 0.12;
@@ -82,13 +86,14 @@ void main() {
         String label,
         Color color,
         Map<String, Color> surfaces,
-        double ratio,
-      ) {
+        double ratio, {
+        double margin = 0,
+      }) {
         expect(color.a, 1.0, reason: '$label is opaque');
         for (final MapEntry(key: name, value: surface) in surfaces.entries) {
           expect(
             contrastRatio(color, surface),
-            greaterThanOrEqualTo(ratio),
+            greaterThanOrEqualTo(ratio + margin),
             reason: '$label on $name',
           );
         }
@@ -98,11 +103,17 @@ void main() {
       /// itself, which is how a selected chip is drawn.
       void expectAccent(String label, Color accent, Map<String, Color> on) {
         final tint = accent.withValues(alpha: _selectionTint);
-        expectRatio(label, accent, {
-          ...on,
-          for (final MapEntry(key: name, value: surface) in on.entries)
-            'selected $name': Color.alphaBlend(tint, surface),
-        }, _aa);
+        expectRatio(
+          label,
+          accent,
+          {
+            ...on,
+            for (final MapEntry(key: name, value: surface) in on.entries)
+              'selected $name': Color.alphaBlend(tint, surface),
+          },
+          _aa,
+          margin: _margin,
+        );
       }
 
       /// The worst a status color scores on the classic content surfaces.
@@ -123,7 +134,7 @@ void main() {
           ('secondaryForeground', tokens.secondaryForeground),
           ('mutedForeground', tokens.mutedForeground),
         ]) {
-          expectRatio('$id: $name', color, content, _aa);
+          expectRatio('$id: $name', color, content, _aa, margin: _margin);
         }
         // Text on chrome.
         for (final (name, color) in [
@@ -131,15 +142,19 @@ void main() {
           ('chromeSecondaryForeground', tokens.chromeSecondaryForeground),
           ('chromeMutedForeground', tokens.chromeMutedForeground),
         ]) {
-          expectRatio('$id: $name', color, chrome, _aa);
+          expectRatio('$id: $name', color, chrome, _aa, margin: _margin);
         }
 
         // The accent: text on content, a shape on chrome, and its own
         // counterpart for text on chrome.
         expectAccent('$id: primary', tokens.primary, content);
-        expectRatio('$id: primary', tokens.primary, {
-          'chrome': tokens.chrome,
-        }, _boundary);
+        expectRatio(
+          '$id: primary',
+          tokens.primary,
+          {'chrome': tokens.chrome},
+          _boundary,
+          margin: _margin,
+        );
         expectAccent('$id: chromePrimary', tokens.chromePrimary, {
           ...content,
           ...chrome,
@@ -150,10 +165,20 @@ void main() {
         }, _aa);
 
         // Outlines.
-        expectRatio('$id: border', tokens.border, content, _boundary);
-        expectRatio('$id: chromeBorder', tokens.chromeBorder, {
-          'chrome': tokens.chrome,
-        }, _boundary);
+        expectRatio(
+          '$id: border',
+          tokens.border,
+          content,
+          _boundary,
+          margin: _margin,
+        );
+        expectRatio(
+          '$id: chromeBorder',
+          tokens.chromeBorder,
+          {'chrome': tokens.chrome},
+          _boundary,
+          margin: _margin,
+        );
 
         // Status colors are fixed. Dark surfaces give them 3:1; white does
         // not (warning is 2.15:1 and success 2.54:1 on a classic light card,
@@ -197,15 +222,36 @@ void main() {
         }
       });
 
-      // Classic is today's palette, and #2600 tracks what it fails: muted
-      // text and the border in dark mode, the border in light mode. Only the
-      // pairs that held before this change are held here: the accent pair on
-      // every surface it is drawn on.
-      test('$mode: classic keeps the pairs it already passed', () {
-        expectRatio('classic: primary', classic.primary, {
-          ..._content(classic),
-          'chrome': classic.chrome,
+      // Classic is written out by hand rather than derived, and #2600 still
+      // tracks its border. Text, muted text included (#2785), and the accent
+      // are held to AA on every surface they are drawn on.
+      test('$mode: classic text and accent clear AA', () {
+        final content = _content(classic);
+        final chrome = _chromeSurfaces(classic);
+        expectRatio('classic: mutedForeground', classic.mutedForeground, {
+          ...content,
+          ...chrome,
         }, _aa);
+        expectRatio(
+          'classic: chromeMutedForeground',
+          classic.chromeMutedForeground,
+          chrome,
+          _aa,
+        );
+        for (final (name, accent, on) in [
+          ('primary', classic.primary, content),
+          ('chromePrimary', classic.chromePrimary, {...content, ...chrome}),
+        ]) {
+          final tint = accent.withValues(alpha: _selectionTint);
+          expectRatio('classic: $name', accent, {
+            ...on,
+            for (final MapEntry(key: surface, value: color) in on.entries)
+              'selected $surface': Color.alphaBlend(tint, color),
+          }, _aa);
+        }
+        expectRatio('classic: primary', classic.primary, {
+          'chrome': classic.chrome,
+        }, _boundary);
         expectRatio('classic: primaryForeground', classic.primaryForeground, {
           'primary': classic.primary,
         }, _aa);
@@ -404,6 +450,94 @@ void main() {
         _hueDistance(_hue(tokens.chrome), _hue(const Color(0xFF0369A1))),
         lessThan(3),
       );
+    });
+  });
+
+  // The pairs #2785 measured, as it listed them: classic muted text failing
+  // AA outright, and derived pairs sitting on the floor of their ratio.
+  group('#2785', () {
+    QuarkTokens tokens(QuarkThemeColor themeColor, Brightness brightness) =>
+        themeColor.tokensFor(brightness);
+
+    test('classic muted text clears AA on the surfaces that failed it', () {
+      for (final (brightness, surfaces) in [
+        (
+          Brightness.dark,
+          const [
+            Color(0xFF070D19),
+            Color(0xFF0F172A),
+            Color(0xFF0C1220),
+            Color(0xFF131C2E),
+          ],
+        ),
+        (
+          Brightness.light,
+          const [Color(0xFFF1F5F9), Color(0xFFF8FAFC), Color(0xFFFFFFFF)],
+        ),
+      ]) {
+        final classic = tokens(QuarkThemeColor.classic, brightness);
+        // The surfaces are the shipped ones the issue measured against.
+        expect({
+          ..._content(classic).values,
+          ..._chromeSurfaces(classic).values,
+        }, containsAll(surfaces));
+        for (final surface in surfaces) {
+          for (final (name, muted) in [
+            ('mutedForeground', classic.mutedForeground),
+            ('chromeMutedForeground', classic.chromeMutedForeground),
+          ]) {
+            expect(
+              contrastRatio(muted, surface),
+              greaterThanOrEqualTo(_aa),
+              reason: 'classic ${brightness.name}: $name on $surface',
+            );
+          }
+        }
+      }
+    });
+
+    test('the accent edge on light chrome is off the 3:1 floor', () {
+      for (final preset in [
+        QuarkThemeColor.blue,
+        QuarkThemeColor.graphite,
+        QuarkThemeColor.lime,
+        QuarkThemeColor.magenta,
+        QuarkThemeColor.pink,
+      ]) {
+        final light = tokens(preset, Brightness.light);
+        expect(
+          contrastRatio(light.primary, light.chrome),
+          greaterThanOrEqualTo(_boundary + _margin),
+          reason: preset.name,
+        );
+      }
+    });
+
+    test('derived light muted text is off the 4.5:1 floor', () {
+      for (final preset in [
+        QuarkThemeColor.indigo,
+        QuarkThemeColor.violet,
+        QuarkThemeColor.magenta,
+        QuarkThemeColor.pink,
+      ]) {
+        final light = tokens(preset, Brightness.light);
+        for (final (name, muted, surfaces) in [
+          ('mutedForeground', light.mutedForeground, _content(light)),
+          (
+            'chromeMutedForeground',
+            light.chromeMutedForeground,
+            _chromeSurfaces(light),
+          ),
+        ]) {
+          for (final MapEntry(key: surface, value: color) in surfaces.entries) {
+            expect(
+              contrastRatio(muted, color),
+              greaterThanOrEqualTo(_aa + _margin),
+              reason: '${preset.name}: $name on $surface',
+            );
+          }
+        }
+      }
     });
   });
 

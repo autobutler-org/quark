@@ -308,9 +308,15 @@ class QuarkThemeColor {
 /// to match this value and does not follow a change to it.
 const double _maxStrength = 0.45;
 
-/// WCAG AA for text. Muted text, and the accent, which text buttons, links
-/// and icons are drawn in, are held to it on every surface they sit on.
-const double _text = 4.5;
+/// How far above a WCAG ratio a derived color is moved. Bisection stops the
+/// moment a ratio holds, so without it pairs land exactly on 4.5 or 3.0,
+/// where nothing is left for a rendering difference to take (#2785).
+const double _margin = 0.1;
+
+/// WCAG AA for text, plus [_margin]. Muted text, and the accent, which text
+/// buttons, links and icons are drawn in, are held to it on every surface
+/// they sit on.
+const double _text = 4.5 + _margin;
 
 /// What secondary text is held to, so it stays a step above muted text.
 const double _secondaryText = 6;
@@ -319,8 +325,9 @@ const double _secondaryText = 6;
 /// badge, which the accent is then drawn on as text.
 const double _selectionTint = 0.12;
 
-/// WCAG's ratio for a boundary that identifies a control: an outline.
-const double _boundary = 3;
+/// WCAG's ratio for a boundary that identifies a control, an outline, plus
+/// [_margin].
+const double _boundary = 3 + _margin;
 
 /// The darkest the chrome gets in light mode. At this luminance dark text
 /// clears it, and so does an accent dark enough to be text on the content.
