@@ -14,11 +14,74 @@ func TestNew(t *testing.T) {
 	if s == nil {
 		t.Fatal("New() returned nil")
 	}
-	if got := s.Cap(); got != iosemutil.DefaultConcurrency {
-		t.Errorf("Cap() = %d, want %d", got, iosemutil.DefaultConcurrency)
+	total := 0
+	for _, c := range iosemutil.Classes() {
+		total += s.For(c).Cap()
 	}
-	if got := s.Available(); got != iosemutil.DefaultConcurrency {
-		t.Errorf("Available() = %d before any acquires, want %d", got, iosemutil.DefaultConcurrency)
+	if got := s.Cap(); got != total {
+		t.Errorf("Cap() = %d, want the classes' total %d", got, total)
+	}
+	if got := s.Available(); got != total {
+		t.Errorf("Available() = %d before any acquires, want %d", got, total)
+	}
+}
+
+// One class running flat out must not cost another its slots (#2762): a
+// backup holding every copy slot used to leave thumbnails waiting 30 s for a
+// 503.
+func TestNew_ClassesAreIsolated(t *testing.T) {
+	s := iosemutil.New()
+	ctx := context.Background()
+	for _, busy := range iosemutil.Classes() {
+		held := s.For(busy)
+		for range held.Cap() {
+			if !held.Acquire(ctx, time.Second) {
+				t.Fatalf("%v: could not fill its own slots", busy)
+			}
+		}
+		if held.Acquire(ctx, 10*time.Millisecond) {
+			t.Fatalf("%v: acquired past its cap of %d", busy, held.Cap())
+		}
+		for _, other := range iosemutil.Classes() {
+			if other == busy {
+				continue
+			}
+			if !s.For(other).Acquire(ctx, 10*time.Millisecond) {
+				t.Errorf("%v is starved while %v is full", other, busy)
+				continue
+			}
+			s.For(other).Release()
+		}
+		for range held.Cap() {
+			held.Release()
+		}
+	}
+}
+
+func TestNew_EveryClassHasASlot(t *testing.T) {
+	s := iosemutil.New()
+	for _, c := range iosemutil.Classes() {
+		if s.For(c).Cap() < 1 {
+			t.Errorf("%v has no slots", c)
+		}
+	}
+}
+
+// A semaphore built with NewWithConcurrency has no classes, so every class
+// shares it: that is what a test injecting one semaphore expects.
+func TestNewWithConcurrency_ForIsItself(t *testing.T) {
+	s := iosemutil.NewWithConcurrency(2)
+	for _, c := range iosemutil.Classes() {
+		if s.For(c) != s {
+			t.Errorf("For(%v) on a classless semaphore should be the semaphore itself", c)
+		}
+	}
+}
+
+func TestFor_NilIsNil(t *testing.T) {
+	var s *iosemutil.Semaphore
+	if s.For(iosemutil.Decode) != nil {
+		t.Error("For on a nil semaphore should be nil, so callers' nil checks keep working")
 	}
 }
 

@@ -16,6 +16,8 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/util/iosemutil"
+	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
@@ -124,6 +126,15 @@ func fileError(err error) *serverutil.Response {
 	return serverutil.InternalServerError(err)
 }
 
+// decodeError answers a ?format=jpeg conversion whose image would not decode:
+// 422 for one refused for its pixel count (#2762), 500 for anything else.
+func decodeError(err error) *serverutil.Response {
+	if errors.Is(err, photoutil.ErrImageTooLarge) {
+		return serverutil.NewResponse().WithStatusCode(http.StatusUnprocessableEntity).WithError(err)
+	}
+	return serverutil.InternalServerError(err)
+}
+
 // zipError answers a folder download whose archive failed. Once any of the
 // archive has been sent the status is committed, so the failure (usually the
 // client going away) is only logged: answering 500 then made gin warn that
@@ -166,7 +177,7 @@ func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, ac
 
 	case fileutil.DownloadJPEG:
 		// Acquire IO semaphore for JPEG conversion.
-		if sem := deps.IOSemaphore(); sem != nil {
+		if sem := deps.IOSemaphore().For(iosemutil.Decode); sem != nil {
 			if !sem.AcquireDefault(ctx) {
 				slog.Warn("download: IO semaphore timed out for VFS JPEG conversion",
 					"path", filePath,
@@ -188,7 +199,7 @@ func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, ac
 
 		img, err := fileutil.DecodeImage(r)
 		if err != nil {
-			return serverutil.InternalServerError(err)
+			return decodeError(err)
 		}
 
 		c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))

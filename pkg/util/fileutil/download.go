@@ -313,10 +313,12 @@ func WriteRawJPEG(w io.Writer, fullPath string) error {
 	return nil
 }
 
-// DecodeImage decodes an image stream. Importing this package registers the
-// HEIC, BMP, TIFF and WebP decoders alongside the standard library's.
+// DecodeImage decodes an image stream, refusing one over
+// photoutil.MaxDecodePixels with photoutil.ErrImageTooLarge before decoding
+// it. Importing this package registers the HEIC, BMP, TIFF and WebP decoders
+// alongside the standard library's.
 func DecodeImage(r io.Reader) (image.Image, error) {
-	img, _, err := image.Decode(r)
+	img, _, err := photoutil.DecodeImage(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode image: %w", err)
 	}

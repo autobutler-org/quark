@@ -25,7 +25,7 @@ the client's refresh-on-every-event turns each shared upload into a request stor
 | Event bus (`pkg/util/eventbus`) | `Publish` loops every subscriber under an `RLock`; each subscriber has a 16-slot channel and a full one **drops** the event silently | 16 per subscriber (#2753) |
 | Events WebSocket (`/api/v0/events`) | two goroutines per socket; filters, re-encodes and writes each event on its own goroutine; `account_changed` and `access_changed` make **every** socket query the database | none (#2764) |
 | Internal subscribers | file index, content indexer and backup sync, each one goroutine doing its work inline | share the drop policy (#2753) |
-| IO semaphore (`pkg/util/iosemutil`) | 8 slots, 30 s wait then 503; held by thumbnail generation, JPEG conversion, archive downloads and backup copies, through the response write | 8 |
+| IO semaphores (`pkg/util/iosemutil`) | one per class of work, 30 s wait then 503: **decode** (thumbnails, JPEG conversion, hash backfill), **video** (ffmpeg frame grabs), **raw** (RAW conversion), **copy** (backup sync and snapshot); held through the response write. One class running flat out never takes another's slots (#2762) | from `runtime.NumCPU()` (n): decode max(2, n/2), video max(1, n/2), raw max(1, n/4), copy 2 — 2/2/1/2 on a 4-core board |
 | Job queue (`pkg/util/jobutil`) | SQLite-backed, 1 encode lane and 2 copy lanes, FIFO across users; `q.mu` held across the claim queries | lanes; queue depth unbounded |
 | Rate limiters (`pkg/util/ratelimitutil`) | map of IP → limiter behind one mutex, auth and vault paths only, swept every 5 min | ~200 B per IP |
 | Upload sessions (`pkg/util/uploadutil`) | map behind one mutex, O(1) lookups; per-session mutex held for one chunk's `io.CopyN` | one fd each, 24 h TTL, no count cap (#2756) |
@@ -131,8 +131,9 @@ on SD, so 25–100 commits/s. Applied to the measurements above:
 | 2,000–3,000 | not viable | not viable on an A55 board without #2763 and #2764; plausible on an 8-core A76 board with them, memory permitting (#2760, #2761) |
 
 Memory is not the first limit. The idle server is 50–100 MB, an app costs a few hundred KiB while connected, and
-the filename index costs ~0.3–0.5 KB per file on the appliance (#2760). Decodes are bounded by the 8-slot semaphore
-at roughly 0.5–2.5 GB transient. `quark serve` sets a Go soft memory limit of 60% of RAM unless `GOMEMLIMIT` is
+the filename index costs ~0.3–0.5 KB per file on the appliance (#2760). Decodes are refused above 64 MP
+(`photoutil.MaxDecodePixels`) from the header alone, so one costs at most 256 MiB at four bytes a pixel (512 MiB for a 16-bit
+PNG), and the decode class admits two at once on a 4-core board. `quark serve` sets a Go soft memory limit of 60% of RAM unless `GOMEMLIMIT` is
 set, so the heap collects near its live set, and `quark install` writes a systemd drop-in
 (`/etc/systemd/system/quark.service.d/50-memory.conf`) with `MemoryHigh` at 80% and `MemoryMax` at 90% of RAM, which
 cover ffmpeg children too: the kernel throttles and then kills inside the service before the board swaps (#2761).
@@ -152,8 +153,7 @@ cover ffmpeg children too: the kernel throttles and then kills inside the servic
 - **The filename index lives in the heap** and is scanned linearly (#2760). A folder delete or move now reaches
   its contents in one step (#2754), and a search checks access before it reads anything about a match from disk
   and stops at 500 (#2758).
-- **Image decoding**: no pixel cap before decode, EXIF rotation at full resolution, and backup copies sharing
-  the 8-slot semaphore (#2762). Uncached HEIC view conversion goes away with #2378.
+- **Uncached HEIC view conversion** goes away with #2378.
 - **Unbounded tables, upload sessions and
   access log** (#2756); **deflate on already-compressed zips, uncapped** (#2757); **bcrypt on every Basic-auth
   request** (#2765).
@@ -168,6 +168,7 @@ cover ffmpeg children too: the kernel throttles and then kills inside the servic
 | #2752 | RAW converters ran without a timeout while holding an IO-semaphore slot | `TestRawViaDcraw_HungToolReturns` |
 | #2755 | the server and the tailnet proxy had no header or idle timeout and spoke only HTTP/1.1; the proxy kept 2 idle loopback connections | `TestNewHTTPServer_ClosesStalledHeaders`, `TestNewHTTPServer_ClosesStalledTLSHandshake`, `TestNewHTTPServer_ClosesIdleKeepAlive`, `TestNewHTTPServer_SlowBodyOutlivesHeaderTimeout`, `TestNewHTTPServer_OffersHTTP2OverTLS`, `TestNewProxy_KeepsEnoughIdleConnections` |
 | #2761 | nothing set a Go memory limit or a cgroup ceiling; the OOM killer was the only backstop | `TestApplyGoLimit_DerivesFromRAM`, `TestApplyGoLimit_EnvWins`, `TestInstallDropIn_WritesCeilingAndReloads`, `TestInstallDropIn_Idempotent`, `TestInstallDropIn_FollowsTheRAM`, `TestInstallDropIn_SkipsWithoutSystemd` |
+| #2762 | images were decoded with no pixel cap, a thumbnail's EXIF rotation copied the full-size image, and backup copies held the same 8 slots as decodes | `TestDecodeImage_RefusesPixelsOverTheCap`, `TestThumbnailPaths_RefusePixelsOverTheCap`, `TestGetThumbnail_ImageOverPixelCapIsNotFound`, `TestUprightThumbnailMatchesRotatingFirst`, `TestUprightThumbnailDoesNotCopyTheSource`, `TestUprightDHashMatchesRotatedImage`, `TestOrientationTransformsHandleSubImages`, `TestNew_ClassesAreIsolated`, `TestClassSlots_FollowCPUs` |
 
 `go test -race` over `./pkg/...`, `./internal/db/...`, `./internal/server/...` and the API packages reported no
 other race; the existing tests rarely run these paths concurrently, which is why the #2749–#2752 fixes above needed their own.
@@ -183,7 +184,7 @@ other race; the existing tests rarely run these paths concurrently, which is why
 3. **Never drop events for internal subscribers** (#2753). A correctness bug at any N.
 4. **Replace whole-tree walks with an indexed, paged query and move the filename index out of the heap** (#2759,
    #2760). These set the limit past ~1,000 accounts, by file count rather than by request rate.
-5. **Bound image work** (#2762, plus #2378) and **folder zips** (#2757).
+5. **Bound folder zips** (#2757) and drop server-side HEIC conversion (#2378).
 6. **Prune and cap what grows** (#2756) and **stop running bcrypt per Basic-auth request** (#2765).
 7. **Measure on a board.** The last open item of #2507: run the harness against an A55 board before and after (1)
    (`go test -tags stress ./internal/server/stress/` with `QUARK_BASE_URL`, `QUARK_USER` and `QUARK_PASSWORD`

@@ -11,7 +11,7 @@
 // can render one and upload it.
 //
 // HTTP concerns — ETag negotiation, status codes, the IO semaphore — stay with
-// the caller; [ETagFromModTime] and [ContentTypeForExt] are here only because
+// the caller, which asks [SemaphoreClass] which semaphore to hold; [ETagFromModTime] and [ContentTypeForExt] are here only because
 // they are derived from the cache entry the service produced.
 package thumbnailutil
 
@@ -24,8 +24,24 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/iosemutil"
+	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
+
+// SemaphoreClass is the kind of work generating the thumbnail for the file at
+// path is, so the caller holds that class's semaphore: an ffmpeg frame grab
+// for a video, a RAW conversion for a camera RAW, and an image decode for
+// everything else.
+func SemaphoreClass(path string, isVideo bool) iosemutil.Class {
+	switch {
+	case isVideo:
+		return iosemutil.Video
+	case photoutil.IsRawFile(path):
+		return iosemutil.Raw
+	}
+	return iosemutil.Decode
+}
 
 // Size represents the supported thumbnail size tiers.
 type Size string

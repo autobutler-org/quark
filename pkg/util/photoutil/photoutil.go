@@ -144,11 +144,11 @@ func FindAllPhotosRecursively(rootDir string) ([]PhotoInfo, error) {
 // ImageToThumbnail decodes an image file, turns it upright, and scales and
 // center-crops it to width × height. It returns the decoded format too.
 func ImageToThumbnail(filePath string, width, height uint) (image.Image, string, error) {
-	img, format, err := decodeImageFile(filePath)
+	img, orientation, format, err := decodeImageFile(filePath)
 	if err != nil {
 		return nil, "", err
 	}
-	cropped, _, err := cropToFit(img, width, height)
+	cropped, err := uprightThumbnail(img, orientation, width, height)
 	if err != nil {
 		return nil, "", fmt.Errorf("error cropping image file %s: %w", filePath, err)
 	}
@@ -158,16 +158,9 @@ func ImageToThumbnail(filePath string, width, height uint) (image.Image, string,
 // ApplyRotation rotates img by quarters × 90° clockwise.
 // Negative values are normalized: -1 → 3, -2 → 2, etc.
 func ApplyRotation(img image.Image, quarters int64) image.Image {
-	switch ((quarters % 4) + 4) % 4 {
-	case 1:
-		return rotate90(img)
-	case 2:
-		return rotate180(img)
-	case 3:
-		return rotate270(img)
-	default:
-		return img
-	}
+	// The EXIF orientations that turn an image 0°, 90°, 180° and 270°
+	// clockwise.
+	return applyExifOrientation(img, [4]int{1, 6, 3, 8}[((quarters%4)+4)%4])
 }
 
 // GenerateThumbnailFromReader creates a thumbnail from an io.Reader.
@@ -188,18 +181,17 @@ func GenerateThumbnailFromReader(r io.Reader, ext string, width, height uint) (*
 		return nil, fmt.Errorf("GenerateThumbnailFromReader: read: %w", err)
 	}
 
-	img, format, err := image.Decode(rs)
+	img, format, err := DecodeImage(rs)
 	if err != nil {
-		return nil, fmt.Errorf("GenerateThumbnailFromReader: decode: %w", err)
+		return nil, fmt.Errorf("GenerateThumbnailFromReader: %w", err)
 	}
+	orientation := sourceOrientation(rs, ImageFormatFromPath("file"+ext))
 
-	img = orientDecodedImage(img, rs, ImageFormatFromPath("file"+ext))
-
-	cropped, _, err := cropToFit(img, width, height)
+	cropped, err := uprightThumbnail(img, orientation, width, height)
 	if err != nil {
 		return nil, fmt.Errorf("GenerateThumbnailFromReader: crop: %w", err)
 	}
-	return &GenerateThumbnailResult{Thumbnail: cropped, Format: format, DHash: DHashHex(img)}, nil
+	return &GenerateThumbnailResult{Thumbnail: cropped, Format: format, DHash: uprightDHash(img, orientation)}, nil
 }
 
 // GenerateThumbnail creates a thumbnail image from an image file. A video's
@@ -224,11 +216,11 @@ func GenerateThumbnail(params GenerateThumbnailParams) (*GenerateThumbnailResult
 		return &GenerateThumbnailResult{Thumbnail: cropped, Format: "jpeg", DHash: DHashHex(img)}, nil
 	}
 
-	img, format, err := decodeImageFile(params.FilePath)
+	img, orientation, format, err := decodeImageFile(params.FilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate thumbnail: %w", err)
 	}
-	thumbnail, _, err := cropToFit(img, params.Width, params.Height)
+	thumbnail, err := uprightThumbnail(img, orientation, params.Width, params.Height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate thumbnail: %w", err)
 	}
@@ -236,7 +228,7 @@ func GenerateThumbnail(params GenerateThumbnailParams) (*GenerateThumbnailResult
 	return &GenerateThumbnailResult{
 		Thumbnail: thumbnail,
 		Format:    format,
-		DHash:     DHashHex(img),
+		DHash:     uprightDHash(img, orientation),
 	}, nil
 }
 

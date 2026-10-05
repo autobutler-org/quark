@@ -149,7 +149,7 @@ func TestRotate90(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 2, 3))
 	img.Set(0, 0, color.RGBA{255, 0, 0, 255})
 
-	rotated := rotate90(img)
+	rotated := applyExifOrientation(img, 6)
 	bounds := rotated.Bounds()
 
 	if bounds.Dx() != 3 || bounds.Dy() != 2 {
@@ -161,7 +161,7 @@ func TestRotate180(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
 	img.Set(0, 0, color.RGBA{255, 0, 0, 255})
 
-	rotated := rotate180(img)
+	rotated := applyExifOrientation(img, 3)
 	bounds := rotated.Bounds()
 
 	if bounds.Dx() != 2 || bounds.Dy() != 2 {
@@ -172,7 +172,7 @@ func TestRotate180(t *testing.T) {
 func TestRotate270(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 2, 3))
 
-	rotated := rotate270(img)
+	rotated := applyExifOrientation(img, 8)
 	bounds := rotated.Bounds()
 
 	if bounds.Dx() != 3 || bounds.Dy() != 2 {
@@ -185,7 +185,7 @@ func TestFlipHorizontal(t *testing.T) {
 	img.Set(0, 0, color.RGBA{255, 0, 0, 255})
 	img.Set(1, 0, color.RGBA{0, 255, 0, 255})
 
-	flipped := flipHorizontal(img)
+	flipped := applyExifOrientation(img, 2)
 
 	r1, g1, _, _ := flipped.At(0, 0).RGBA()
 	r2, g2, _, _ := flipped.At(1, 0).RGBA()
@@ -204,7 +204,7 @@ func TestFlipVertical(t *testing.T) {
 	img.Set(0, 0, color.RGBA{255, 0, 0, 255})
 	img.Set(0, 1, color.RGBA{0, 255, 0, 255})
 
-	flipped := flipVertical(img)
+	flipped := applyExifOrientation(img, 4)
 
 	r1, g1, _, _ := flipped.At(0, 0).RGBA()
 	r2, g2, _, _ := flipped.At(0, 1).RGBA()

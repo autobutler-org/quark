@@ -254,7 +254,7 @@ func BenchmarkScenarioD_SemaphoreContention(b *testing.B) {
 
 // BenchmarkScenarioD_SemaphoreNoContention is the baseline: slots always free.
 func BenchmarkScenarioD_SemaphoreNoContention(b *testing.B) {
-	sem := iosemutil.New() // DefaultConcurrency = 8; test uses GOMAXPROCS
+	sem := iosemutil.New() // every class's slots together; test uses GOMAXPROCS
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
