@@ -30,7 +30,7 @@ the client's refresh-on-every-event turns each shared upload into a request stor
 | Rate limiters (`pkg/util/ratelimitutil`) | map of IP → limiter behind one mutex, auth and vault paths only, swept every 5 min | ~200 B per IP |
 | Upload sessions (`pkg/util/uploadutil`) | map behind one mutex, O(1) lookups; per-session mutex held for one chunk's `io.CopyN` | one fd each, 24 h TTL, 32 per account and 256 overall, then 429 (#2756) |
 | Health collector (`pkg/util/healthutil`) | one `Collector` for every `/health` call | one host read per 5 s, shared (#2750) |
-| Filename index (`storageutil.FileIndex`) | one folder tree per device; linear scan per search under `RLock`, stopping at 500 readable matches | ~300–480 B per file (#2760) |
+| Filename index (`storageutil.FileIndex`) | one folder tree per device, each folder's file names sorted end to end in one string; linear scan per search under `RLock`, stopping at 500 readable matches | ~30 B per file, about the name's length plus 4 (#2760) |
 
 Streaming is in good shape: uploads, downloads and archive entries go through `io.Copy`/`http.ServeContent`, and
 no handler on a file path buffers a whole body (the one unbounded read is inside `gen2brain/heic`, which #2378
@@ -131,7 +131,7 @@ on SD, so 25–100 commits/s. Applied to the measurements above:
 | 2,000–3,000 | not viable | not viable on an A55 board without #2763 and #2764; plausible on an 8-core A76 board with them, memory permitting (#2760, #2761) |
 
 Memory is not the first limit. The idle server is 50–100 MB, an app costs a few hundred KiB while connected, and
-the filename index costs ~0.3–0.5 KB per file on the appliance (#2760). Decodes are refused above 64 MP
+the filename index costs ~30 B per file on the appliance, 30 MB per million (#2760). Decodes are refused above 64 MP
 (`photoutil.MaxDecodePixels`) from the header alone, so one costs at most 256 MiB at four bytes a pixel (512 MiB for a 16-bit
 PNG), and the decode class admits two at once on a 4-core board. `quark serve` sets a Go soft memory limit of 60% of RAM unless `GOMEMLIMIT` is
 set, so the heap collects near its live set, and `quark install` writes a systemd drop-in
@@ -153,7 +153,12 @@ cover ffmpeg children too: the kernel throttles and then kills inside the servic
   grows as N² (#2759). By-type is cached between events since #1780, for listings up to 2,048 files.
 - **The filename index lives in the heap** and is scanned linearly (#2760). A folder delete or move now reaches
   its contents in one step (#2754), and a search checks access before it reads anything about a match from disk
-  and stops at 500 (#2758).
+  and stops at 500 (#2758). Each folder keeps its file names sorted, end to end in one string with a 4-byte
+  offset each, and a search lowercases only non-ASCII names and builds a path only for a match. At 1M generated
+  files (`BenchmarkFileIndexHeap`, `BenchmarkFileIndexBuild` in `pkg/util/storageutil`): 98 B a file and ~200 ms
+  a search with a map per folder, 30 B and ~60 ms after; a build from disk of 100,000 files allocates 18 MB
+  instead of 24. A library of millions of files still costs tens of MB and a scan per search; an on-disk index
+  is the step past that.
 - **Uncached HEIC view conversion** goes away with #2378.
 - **Deflate on already-compressed zips, uncapped** (#2757); **bcrypt on every Basic-auth request** (#2765).
 
@@ -182,8 +187,8 @@ other race; the existing tests rarely run these paths concurrently, which is why
    state only for the accounts a change concerns and encode each event once** (#2764). Together these remove the
    N² request storm that sets the limit once (1) is done.
 3. **Never drop events for internal subscribers** (#2753). A correctness bug at any N.
-4. **Replace whole-tree walks with an indexed, paged query and move the filename index out of the heap** (#2759,
-   #2760). These set the limit past ~1,000 accounts, by file count rather than by request rate.
+4. **Replace whole-tree walks with an indexed, paged query, and give filename search one** (#2759; #2760 cut the
+   index to ~30 B a file). These set the limit past ~1,000 accounts, by file count rather than by request rate.
 5. **Bound folder zips** (#2757) and drop server-side HEIC conversion (#2378).
 6. **Stop running bcrypt per Basic-auth request** (#2765).
 7. **Measure on a board.** The last open item of #2507: run the harness against an A55 board before and after (1)
