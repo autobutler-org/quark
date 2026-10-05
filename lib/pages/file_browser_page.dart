@@ -13,11 +13,8 @@ import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/file_browser_controller.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/path_grant.dart';
-import 'package:quark/pages/audio_player_page.dart';
-import 'package:quark/pages/generic_file_viewer_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/pages/svg_viewer_page.dart';
-import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/dropped_file_reader.dart';
@@ -1525,22 +1522,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         break;
     }
 
-    // Types with no in-app viewer yet — show a detail view with download and
-    // "Open with" actions instead of silently failing. Named document types
-    // land here too: without them a .pdf ends up worse off than an unclassified
-    // file, which reaches this branch as 'generic' (#1184).
-    if (usesGenericFileViewer(kind)) {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => GenericFileViewerPage(node: node),
-        ),
-      );
-      return;
-    }
-
-    // Everything else: the listing already says what the file is, so push
+    // Everything else: the listing already says what the file is, so open
     // its viewer now rather than routing to the file's URL and waiting on a
-    // stat first (#1564). The URL follows once the viewer is up.
+    // stat first (#1564).
     _openResolvedFile(node.apiPath, kind, node.name);
   }
 
@@ -1803,9 +1787,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     await _refreshFileState();
   }
 
-  /// Docs, sheets and text files open at their own `/docs`, `/sheets` or
-  /// `/edit` URL rather than over this page, so a reload reopens the editor instead of the folder
-  /// (#2078). Arriving from the file's own `/files` URL replaces that history
+  /// Every file opens at its own `/docs`, `/sheets`, `/edit` or `/view` URL
+  /// rather than over this page, so a reload reopens the file instead of the
+  /// folder (#2078, #2328). Arriving from the file's own `/files` URL replaces that history
   /// entry: left in place, browser back would land on it and bounce straight
   /// into the editor again.
   void _goToEditor(String filePath, String route, {Object? extra}) {
@@ -1818,114 +1802,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     } else {
       go();
     }
-  }
-
-  /// Pushes the viewer [builder] makes for [filePath] and keeps the URL on the
-  /// file while it is open, so browser back closes it and a reload reopens it.
-  /// Once it closes, the URL returns to the file's folder.
-  Future<void> _openEditorWithUrl({
-    required String filePath,
-    required Widget Function(String targetRoute, String closeRoute) builder,
-  }) async {
-    FileBrowserCache.instance.markFileOpen(filePath);
-
-    final navigator = Navigator.of(context);
-    final routeInformation = GoRouter.of(context).routeInformationProvider;
-    // The live location is always percent-encoded, so both sides go through
-    // canonicalRoute before comparing. Comparing the raw strings made every
-    // name containing a space look like a different route, which fired a
-    // spurious mid-push context.go and popped the viewer straight back (#1604).
-    String currentRoute() =>
-        AppRoutes.canonicalRoute(routeInformation.value.uri.toString());
-    final targetRoute = AppRoutes.filesPath(filePath);
-    final canonicalTarget = AppRoutes.canonicalRoute(targetRoute);
-    final routeBeforeOpen = currentRoute();
-    final isAlreadyOnTarget = routeBeforeOpen == canonicalTarget;
-    // From the home folder the file's URL is a different, nested go_router
-    // page: going to it after the push stacks a second browser over the
-    // viewer and hides it. So that page is opened first and the viewer pushed
-    // over it (#2002). A folder route, which go_router updates in place, can
-    // follow the push instead.
-    final opensNestedPage =
-        !isAlreadyOnTarget && routeBeforeOpen == AppRoutes.files;
-    final shouldSyncRoute = !isAlreadyOnTarget && !opensNestedPage;
-    final closeRoute = routeBeforeOpen.isEmpty || isAlreadyOnTarget
-        ? AppRoutes.filesPath(parentPath(filePath))
-        : routeBeforeOpen;
-    final route = MaterialPageRoute<void>(
-      builder: (_) => builder(targetRoute, closeRoute),
-    );
-    var routeSynced = false;
-    var urlLeftFile = false;
-
-    // Browser back moves the URL off the file, and a folder route is updated
-    // in place with the viewer still over it, so close the viewer here.
-    void closeWhenUrlLeavesFile() {
-      if (currentRoute() == canonicalTarget || !route.isActive) {
-        return;
-      }
-      urlLeftFile = true;
-      navigator.removeRoute(route);
-    }
-
-    void followUrl() => routeInformation.addListener(closeWhenUrlLeavesFile);
-
-    void syncRouteOnce() {
-      if (!mounted || routeSynced || !shouldSyncRoute) {
-        return;
-      }
-      routeSynced = true;
-      try {
-        context.go(targetRoute);
-        followUrl();
-      } catch (_) {
-        if (navigator.canPop()) {
-          navigator.pop();
-        }
-        _showMessage(Errors.couldNot('update the file route'));
-      }
-    }
-
-    try {
-      if (opensNestedPage) {
-        context.go(targetRoute);
-        // The nested page is built on the next frame; the viewer goes on top.
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) {
-          return;
-        }
-      }
-
-      late final AnimationStatusListener statusListener;
-      statusListener = (status) {
-        if (status == AnimationStatus.completed) {
-          route.animation?.removeStatusListener(statusListener);
-          syncRouteOnce();
-        }
-      };
-
-      final pushFuture = navigator.push(route);
-      if (!shouldSyncRoute) {
-        followUrl();
-      }
-      final animation = route.animation;
-      if (animation != null) {
-        animation.addStatusListener(statusListener);
-      } else {
-        WidgetsBinding.instance.addPostFrameCallback((_) => syncRouteOnce());
-      }
-
-      await pushFuture;
-    } finally {
-      routeInformation.removeListener(closeWhenUrlLeavesFile);
-      FileBrowserCache.instance.markFileClosed(filePath);
-    }
-
-    // Leaving by URL already landed where the user asked to go.
-    if (!mounted || urlLeftFile) {
-      return;
-    }
-    context.go(AppRoutes.filesPath(parentPath(filePath)));
   }
 
   /// Shows [path] as a folder once resolution is over, whether the stat said
@@ -2038,7 +1914,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
 
   /// Opens the viewer for a file of [kind], classified from its name — after a
   /// stat on a deep link, or straight from the listing on a click. Every
-  /// viewer is pushed before anything about the file is downloaded, so it can
+  /// viewer opens before anything about the file is downloaded, so it can
   /// show its own loading state (#1564).
   Future<void> _openResolvedFile(
     String filePath,
@@ -2047,38 +1923,6 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     bool justCreated = false,
   }) async {
     if (!mounted) return;
-
-    // Types with no in-app viewer — download + "Open with…" beats the
-    // "No supported editor" dead end these used to hit (#1184). Shared with the
-    // click path in _handleOpenNode so both agree.
-    if (usesGenericFileViewer(kind)) {
-      final node = FileNode(
-        name: filePath.split('/').last,
-        size: 0,
-        isDir: false,
-        deviceName: '',
-        devicePath: '',
-        deviceSerial: '',
-        dirPath: filePath,
-      );
-      FileBrowserCache.instance.markFileOpen(filePath);
-      try {
-        await Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            builder: (_) => GenericFileViewerPage(node: node),
-          ),
-        );
-      } finally {
-        // Without this the marker leaked and both navigation guards then
-        // refused to open any file page until restart (#1604).
-        FileBrowserCache.instance.markFileClosed(filePath);
-      }
-      if (!mounted) return;
-      // Return the URL to the parent folder, as every other branch does — the
-      // route otherwise stays pointed at the file, so reopening it is a no-op.
-      context.go(AppRoutes.filesPath(parentPath(filePath)));
-      return;
-    }
 
     switch (kind) {
       case FileKind.qdoc:
@@ -2097,58 +1941,18 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         _goToEditor(filePath, AppRoutes.plaintextEditorPath(filePath));
         return;
 
-      case FileKind.image:
-        final serials = _serialsForActiveDevices();
-        final serial = serials.isNotEmpty ? serials.first : null;
-        await _openEditorWithUrl(
-          filePath: filePath,
-          builder: (_, _) => ImageViewerPage(
-            name: fileName,
-            relPath: filePath,
-            serial: serial,
+      // Every kind with an in-app viewer opens at its own /view URL, so a
+      // reload or a shared link reopens it (#2328). Types with no viewer of
+      // their own get download + "Open with…" there, which beats the "No
+      // supported editor" dead end they used to hit (#1184).
+      case FileKind.image || FileKind.svg || FileKind.video || FileKind.audio:
+      case _ when usesGenericFileViewer(kind):
+        _goToEditor(
+          filePath,
+          AppRoutes.viewFilePath(
+            filePath,
+            serial: _serialsForActiveDevices().firstOrNull,
           ),
-        );
-        return;
-
-      case FileKind.svg:
-        // SVG is XML, not a raster codec, so it needs SvgPicture rather than
-        // the photo viewer's Image.memory (#1806).
-        final svgSerials = _serialsForActiveDevices();
-        final svgSerial = svgSerials.isNotEmpty ? svgSerials.first : null;
-        final svgBytes = await FilesService.downloadFileBytes(
-          filePath,
-          serial: svgSerial,
-        );
-        if (!mounted) return;
-        if (svgBytes == null) {
-          setState(() {
-            _routeFailure = _FilesRouteFailure(
-              requestedPath: filePath,
-              isFileRoute: true,
-            );
-          });
-          return;
-        }
-        await _openEditorWithUrl(
-          filePath: filePath,
-          builder: (_, _) => SvgViewerPage(bytes: svgBytes, name: fileName),
-        );
-        return;
-
-      case FileKind.video || FileKind.audio:
-        final mediaSerials = _serialsForActiveDevices();
-        final mediaSerial = mediaSerials.isNotEmpty ? mediaSerials.first : null;
-        final url = FilesService.constructMediaUrl(
-          filePath,
-          serial: mediaSerial,
-        );
-        // Audio has no video track, so the video viewer paints only its black
-        // backdrop (#1573).
-        await _openEditorWithUrl(
-          filePath: filePath,
-          builder: (_, _) => kind == FileKind.audio
-              ? AudioPlayerPage(url: url, name: fileName)
-              : VideoViewerPage(url: url, name: fileName),
         );
         return;
 

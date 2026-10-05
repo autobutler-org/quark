@@ -21,11 +21,16 @@ class AudioPlayerPage extends StatefulWidget {
   /// Whether playback may start without the user pressing play.
   final bool Function() canAutoplay;
 
+  /// Closes the player from its back button. Null leaves the app bar's own,
+  /// which pops the route this player was pushed on.
+  final VoidCallback? onClose;
+
   const AudioPlayerPage({
     super.key,
     required this.url,
     required this.name,
     this.canAutoplay = canAutoplayMedia,
+    this.onClose,
   });
 
   @override
@@ -138,6 +143,9 @@ class _AudioPlayerPageState extends State<AudioPlayerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: ChromeAppBar(
+        leading: widget.onClose == null
+            ? null
+            : BackButton(onPressed: widget.onClose),
         title: Text(widget.name),
         actions: [
           Row(
