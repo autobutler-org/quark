@@ -3,7 +3,6 @@ import 'package:quark_icons/quark_icons.dart';
 
 import '../theme/quark_tokens.dart';
 import 'quark_bar_icon_button.dart';
-import 'quark_toolbar.dart';
 
 /// A greeting at the top of a page: a headline, an optional line under it,
 /// and the few actions worth starting with.
@@ -17,8 +16,9 @@ import 'quark_toolbar.dart';
 /// offer, and what a dismissal means; a null [onDismiss] renders no dismiss
 /// button at all.
 ///
-/// The actions go through a [QuarkToolbar], so three chips wrap onto a second
-/// line at 360 pixels instead of overflowing. Pass `QuarkBarChip`s with
+/// The actions are a card's calls to action, not a toolbar, so they wrap:
+/// three chips run onto a second line at 360 pixels rather than scrolling one
+/// out of sight. Pass `QuarkBarChip`s with
 /// `keepLabel: true`: a start-here action that drops its word on a phone is
 /// no longer saying where to start.
 ///
@@ -107,7 +107,13 @@ class WelcomeCard extends StatelessWidget {
                         color: tokens.secondaryForeground,
                       ),
                     ),
-                  if (actions.isNotEmpty) QuarkToolbar(actions: actions),
+                  if (actions.isNotEmpty)
+                    Wrap(
+                      spacing: tokens.spacingSm,
+                      runSpacing: tokens.spacingXs,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: actions,
+                    ),
                 ],
               ),
             ),

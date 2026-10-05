@@ -58,7 +58,6 @@ class FileShortcutBar extends StatelessWidget {
         vertical: tokens.spacingSm,
       ),
       child: QuarkToolbar(
-        overflow: QuarkToolbarOverflow.scroll,
         actions: [
           for (final shortcut in shortcuts)
             ActionChip(

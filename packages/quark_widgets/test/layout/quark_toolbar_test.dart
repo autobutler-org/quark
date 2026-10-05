@@ -1,4 +1,4 @@
-// The action row that refuses to overflow.
+// The action row that refuses to overflow, or to grow a second row.
 //
 // The whole point is the narrow viewport, so every case runs at 360 pixels
 // with more buttons than fit, and asserts that nothing threw and that the
@@ -27,55 +27,44 @@ List<Widget> actionsThatDoNotFit(void Function(String) onTap) => [
 ];
 
 void main() {
-  for (final overflow in QuarkToolbarOverflow.values) {
-    testBothViewports('${overflow.name}: renders every action', (
+  testBothViewports('renders every action', (tester, size) async {
+    await pumpAt(
       tester,
-      size,
-    ) async {
-      await pumpAt(
-        tester,
-        QuarkToolbar(actions: actionsThatDoNotFit((_) {}), overflow: overflow),
-        size: size,
-      );
+      QuarkToolbar(actions: actionsThatDoNotFit((_) {})),
+      size: size,
+    );
 
-      expect(tester.takeException(), isNull);
-      for (final label in const [
-        'Select all',
-        'Deselect all',
-        'Download',
-        'Move to folder',
-        'Add to album',
-        'Delete forever',
-      ]) {
-        expect(find.byKey(ValueKey('toolbar_$label')), findsOneWidget);
-      }
-    });
+    expect(tester.takeException(), isNull);
+    for (final label in const [
+      'Select all',
+      'Deselect all',
+      'Download',
+      'Move to folder',
+      'Add to album',
+      'Delete forever',
+    ]) {
+      expect(find.byKey(ValueKey('toolbar_$label')), findsOneWidget);
+    }
+  });
 
-    testBothViewports('${overflow.name}: reports the action that was tapped', (
+  testBothViewports('reports the action that was tapped', (tester, size) async {
+    final tapped = <String>[];
+    await pumpAt(
       tester,
-      size,
-    ) async {
-      final tapped = <String>[];
-      await pumpAt(
-        tester,
-        QuarkToolbar(
-          actions: actionsThatDoNotFit(tapped.add),
-          overflow: overflow,
-        ),
-        size: size,
-      );
+      QuarkToolbar(actions: actionsThatDoNotFit(tapped.add)),
+      size: size,
+    );
 
-      await tester.tap(
-        find.byKey(const ValueKey('toolbar_Select all')),
-        warnIfMissed: false,
-      );
-      await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('toolbar_Select all')),
+      warnIfMissed: false,
+    );
+    await tester.pump();
 
-      expect(tapped, ['Select all']);
-    });
-  }
+    expect(tapped, ['Select all']);
+  });
 
-  testWidgets('wrap: too many actions run onto another line', (tester) async {
+  testWidgets('too many actions stay on one line and scroll', (tester) async {
     await pumpAt(
       tester,
       QuarkToolbar(actions: actionsThatDoNotFit((_) {})),
@@ -88,32 +77,8 @@ void main() {
     final last = tester.getRect(
       find.byKey(const ValueKey('toolbar_Delete forever')),
     );
-    expect(
-      last.top,
-      greaterThan(first.top),
-      reason: 'the row has to grow taller rather than overflow',
-    );
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('scroll: too many actions stay on one line', (tester) async {
-    await pumpAt(
-      tester,
-      QuarkToolbar(
-        actions: actionsThatDoNotFit((_) {}),
-        overflow: QuarkToolbarOverflow.scroll,
-      ),
-      size: narrowViewport,
-    );
-
-    final first = tester.getRect(
-      find.byKey(const ValueKey('toolbar_Select all')),
-    );
-    final last = tester.getRect(
-      find.byKey(const ValueKey('toolbar_Delete forever')),
-    );
-    expect(last.top, first.top, reason: 'a fixed-height bar cannot wrap');
-    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    expect(last.top, first.top, reason: 'a toolbar is one row high (#2770)');
+    expect(find.byType(QuarkToolbarScroller), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -132,24 +97,6 @@ void main() {
       await pumpAt(
         tester,
         QuarkToolbar(actions: actionsThatDoNotFit((_) {})),
-        brightness: brightness,
-      );
-
-      expect(tester.takeException(), isNull);
-      final wrap = tester.widget<Wrap>(find.byType(Wrap));
-      expect(wrap.spacing, tokens.spacingSm);
-      expect(wrap.runSpacing, tokens.spacingXs);
-    });
-
-    testWidgets('$label: the scrolling gaps come from the tokens too', (
-      tester,
-    ) async {
-      await pumpAt(
-        tester,
-        QuarkToolbar(
-          actions: actionsThatDoNotFit((_) {}),
-          overflow: QuarkToolbarOverflow.scroll,
-        ),
         brightness: brightness,
       );
 

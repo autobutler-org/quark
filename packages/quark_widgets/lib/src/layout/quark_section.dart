@@ -11,8 +11,9 @@ import 'quark_toolbar.dart';
 /// style, the gap under it, and what happens to the actions on a narrow phone
 /// are decided here instead.
 ///
-/// The actions go through a [QuarkToolbar], so a heading with three buttons
-/// wraps them onto a second line rather than overflowing at 360 pixels.
+/// The actions go through a [QuarkToolbar], which drops under a heading that
+/// leaves it no room and stays one row high there, scrolling sideways rather
+/// than overflowing at 360 pixels.
 ///
 /// Key prefixes: `section_<title>`, with the title lowercased and every run of
 /// non-alphanumeric characters turned into a single underscore, so

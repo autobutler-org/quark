@@ -23,9 +23,14 @@ void main() {
       MaterialApp(
         localizationsDelegates: const [FlutterQuillLocalizations.delegate],
         home: Scaffold(
-          body: DocumentEditorToolbar(
-            controller: controller,
-            onPickBackgroundColor: (_, _) async {},
+          // In a Column, as the editor body places it.
+          body: Column(
+            children: [
+              DocumentEditorToolbar(
+                controller: controller,
+                onPickBackgroundColor: (_, _) async {},
+              ),
+            ],
           ),
         ),
       ),
@@ -64,6 +69,20 @@ void main() {
       }
     });
   }
+
+  // A phone used to wrap the toolbar onto three rows, taking the space the
+  // document needs. It scrolls sideways instead (#2770).
+  testWidgets('is one row high on a narrow viewport', (
+    WidgetTester tester,
+  ) async {
+    await pumpToolbar(tester, const Size(1280, 800));
+    final oneRow = tester.getSize(find.byType(DocumentEditorToolbar)).height;
+
+    await pumpToolbar(tester, const Size(360, 640));
+
+    expect(tester.takeException(), isNull);
+    expect(tester.getSize(find.byType(DocumentEditorToolbar)).height, oneRow);
+  });
 
   testWidgets('each button shows its own glyph and tooltip', (
     WidgetTester tester,
