@@ -13,5 +13,8 @@ export 'src/data_sheet/data_sheet_selection.dart';
 export 'src/data_sheet/format/data_sheet_format_bar.dart';
 export 'src/data_sheet/format/data_sheet_palette.dart';
 export 'src/data_sheet/format/format_cell_value.dart';
+export 'src/data_sheet/formula/formula_editing.dart';
+export 'src/data_sheet/formula/formula_references.dart';
+export 'src/data_sheet/formula/formula_text_editing_controller.dart';
 export 'src/data_sheet/formula_bar.dart';
 export 'src/data_sheet/freeze_menu_button.dart';
