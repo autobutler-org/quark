@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 )
@@ -61,15 +62,7 @@ func setupAda(t *testing.T) *db.DatabaseSqlc {
 // password "old-password" and the phrase "old-phrase", and no keys.
 func addLegacy(t *testing.T, queries *db.Queries) {
 	t.Helper()
-	passwordHash, err := authutil.HashPassword("old-password")
-	if err != nil {
-		t.Fatal(err)
-	}
-	phraseHash, err := authutil.HashPassword("old-phrase")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := queries.CreateUser(context.Background(), db.CreateUserParams{Username: "old", PasswordHash: passwordHash, RecoveryPhraseHash: phraseHash}); err != nil {
+	if _, err := queries.CreateUser(context.Background(), db.CreateUserParams{Username: "old", PasswordHash: dbtest.BcryptHash(t, "old-password"), RecoveryPhraseHash: dbtest.BcryptHash(t, "old-phrase")}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -371,5 +364,120 @@ func TestRecover_NewAuthKey(t *testing.T) {
 	}
 	if _, _, err := authutil.ValidateBasicAuth(ctx, queries, "ada", authKeyOf(1)); err == nil {
 		t.Error("the old auth key still passes Basic auth")
+	}
+}
+
+// addBcryptKeyed adds username, an account whose auth key and recovery key
+// were stored before keys took SHA-256 (#2765): the bcrypt hashes of
+// authKeyOf(3) and authKeyOf(4). It returns the auth key hash it stored.
+func addBcryptKeyed(t *testing.T, queries *db.Queries, username string) string {
+	t.Helper()
+	hash := dbtest.BcryptHash(t, authKeyOf(3))
+	if _, err := queries.CreateUser(context.Background(), db.CreateUserParams{Username: username, AuthKeyHash: hash, AuthSalt: "AAAAAAAAAAAAAAAAAAAAAA==", RecoveryKeyHash: dbtest.BcryptHash(t, authKeyOf(4))}); err != nil {
+		t.Fatal(err)
+	}
+	return hash
+}
+
+// TestAuthKey_BcryptHashIsRewritten: an auth key hash stored with bcrypt still
+// verifies, and the first correct key rewrites it to HashKey's form, wherever
+// the key is checked (#2765). A wrong key rewrites nothing, and the same key
+// keeps working afterwards.
+func TestAuthKey_BcryptHashIsRewritten(t *testing.T) {
+	ctx := context.Background()
+	queries := setupAda(t).Queries
+	want, err := authutil.HashKey(authKeyOf(3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for username, check := range map[string]func(username, key string) error{
+		"login": func(username, key string) error { return login(queries, username, key) },
+		"verify": func(username, key string) error {
+			_, err := authutil.VerifyPassword(ctx, authutil.VerifyPasswordParams{Queries: queries, Username: username, Password: key})
+			return err
+		},
+		"validate": func(username, key string) error {
+			_, _, err := authutil.ValidateBasicAuth(ctx, queries, username, key)
+			return err
+		},
+		"basic": func(username, key string) error {
+			_, err := authutil.AuthenticateBasic(ctx, authutil.AuthenticateBasicParams{Queries: queries, Username: username, Password: key})
+			return err
+		},
+	} {
+		t.Run(username, func(t *testing.T) {
+			seeded := addBcryptKeyed(t, queries, username)
+			if err := check(username, authKeyOf(9)); err == nil {
+				t.Fatal("a wrong key passed against a bcrypt hash")
+			}
+			if got := userRow(t, queries, username).AuthKeyHash; got != seeded {
+				t.Fatalf("a wrong key rewrote the hash to %q", got)
+			}
+			if err := check(username, authKeyOf(3)); err != nil {
+				t.Fatalf("the key against its bcrypt hash: %v", err)
+			}
+			if got := userRow(t, queries, username).AuthKeyHash; got != want {
+				t.Fatalf("auth key hash = %q, want it rewritten to %q", got, want)
+			}
+			if err := check(username, authKeyOf(3)); err != nil {
+				t.Errorf("the key after the rewrite: %v", err)
+			}
+			if err := check(username, authKeyOf(9)); err == nil {
+				t.Error("a wrong key passed after the rewrite")
+			}
+		})
+	}
+}
+
+// TestAuthKey_RehashFailureStillSignsIn: the rewrite is housekeeping, so a
+// write that fails leaves the bcrypt hash in place and the key still accepted.
+func TestAuthKey_RehashFailureStillSignsIn(t *testing.T) {
+	database := setupAda(t)
+	queries := database.Queries
+	seeded := addBcryptKeyed(t, queries, "bea")
+	if _, err := database.Db.Exec(`CREATE TRIGGER refuse_rehash BEFORE UPDATE OF auth_key_hash ON users
+		BEGIN SELECT RAISE(ABORT, 'disk full'); END`); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := login(queries, "bea", authKeyOf(3)); err != nil {
+			t.Fatalf("login with a failing rehash: %v", err)
+		}
+	}
+	if got := userRow(t, queries, "bea").AuthKeyHash; got != seeded {
+		t.Errorf("auth key hash = %q, want the bcrypt hash untouched", got)
+	}
+}
+
+// TestRehashAuthKey_LeavesAChangedKeyAlone: the rewrite matches only the hash
+// that was verified, so a key changed between the check and the write stays.
+func TestRehashAuthKey_LeavesAChangedKeyAlone(t *testing.T) {
+	ctx := context.Background()
+	queries := setupAda(t).Queries
+	ada := userRow(t, queries, "ada")
+	if err := queries.RehashAuthKey(ctx, db.RehashAuthKeyParams{NewHash: "sha256:stale", ID: ada.ID, OldHash: dbtest.BcryptHash(t, authKeyOf(1))}); err != nil {
+		t.Fatal(err)
+	}
+	if got := userRow(t, queries, "ada").AuthKeyHash; got != ada.AuthKeyHash {
+		t.Errorf("auth key hash = %q, want %q left alone", got, ada.AuthKeyHash)
+	}
+}
+
+// TestRecoveryKey_BcryptHashStillRecovers: a recovery key hash stored with
+// bcrypt verifies and is left as it is; a recovery writes fresh credentials
+// anyway (#2765).
+func TestRecoveryKey_BcryptHashStillRecovers(t *testing.T) {
+	ctx := context.Background()
+	queries := setupAda(t).Queries
+	addBcryptKeyed(t, queries, "bea")
+	before := userRow(t, queries, "bea").RecoveryKeyHash
+	if _, err := authutil.CheckRecovery(ctx, queries, authutil.CheckRecoveryParams{Username: "bea", RecoveryKey: authKeyOf(4)}); err != nil {
+		t.Fatalf("recovery key against its bcrypt hash: %v", err)
+	}
+	if _, err := authutil.CheckRecovery(ctx, queries, authutil.CheckRecoveryParams{Username: "bea", RecoveryKey: authKeyOf(9)}); !errors.Is(err, authutil.ErrInvalidRecoveryPhrase) {
+		t.Errorf("wrong recovery key: %v, want ErrInvalidRecoveryPhrase", err)
+	}
+	if got := userRow(t, queries, "bea").RecoveryKeyHash; got != before {
+		t.Errorf("recovery key hash = %q, want it left as %q", got, before)
 	}
 }

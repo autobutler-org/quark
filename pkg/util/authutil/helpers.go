@@ -215,9 +215,8 @@ func validateAuthKey(authKey string) error {
 }
 
 // validateKey returns invalid unless key is the standard base64 of exactly 32
-// bytes, the shape of an auth key and of a recovery key. That is 44
-// characters, under bcrypt's 72-byte limit, so the encoded key is what gets
-// hashed.
+// bytes, the shape of an auth key and of a recovery key. The encoded key, 44
+// characters, is what gets hashed.
 func validateKey(key string, invalid error) error {
 	if decoded, err := base64.StdEncoding.DecodeString(key); err != nil || len(decoded) != authKeySize {
 		return invalid
@@ -241,7 +240,7 @@ func recoveryKeyHashFor(recoveryKey string) (string, error) {
 	if err := validateKey(recoveryKey, ErrInvalidRecoveryKey); err != nil {
 		return "", err
 	}
-	return HashPassword(recoveryKey)
+	return HashKey(recoveryKey)
 }
 
 // errUpgradeFailed refuses a sign-in whose password was right but whose move
@@ -261,7 +260,7 @@ func upgradeToAuthKey(ctx context.Context, queries *db.Queries, user db.User, au
 		if err != nil {
 			return err
 		}
-		hash, err := HashPassword(authKey)
+		hash, err := HashKey(authKey)
 		if err != nil {
 			return err
 		}
@@ -296,7 +295,7 @@ func newCredentials(username, authKey string, saltSecret func() ([]byte, error))
 	if authSalt, err = deterministicSalt(saltSecret, username); err != nil {
 		return "", "", err
 	}
-	authKeyHash, err = HashPassword(authKey)
+	authKeyHash, err = HashKey(authKey)
 	return authKeyHash, authSalt, err
 }
 
@@ -308,4 +307,63 @@ func loginFailed(guard *ratelimitutil.LoginGuard, attempt ratelimitutil.LoginAtt
 	guard.RecordFailure(attempt)
 	slog.Warn("sign-in failed", "ip", attempt.IP)
 	return fmt.Errorf("invalid credentials")
+}
+
+// keyHashPrefix marks a hash HashKey made. bcrypt's start with "$2", so the
+// two are never mistaken for each other.
+const keyHashPrefix = "sha256:"
+
+// errNotAKey is HashKey's refusal. Every caller validates its key first and
+// answers with its own error, so this one reaches nobody unless that is missed.
+var errNotAKey = errors.New("only the base64 of 32 bytes is hashed as a key")
+
+// checkAuthKey reports whether authKey is user's auth key. Every check of an
+// auth key goes through here, because a key that matches a bcrypt hash, one
+// stored before keys took SHA-256, has its row rewritten with HashKey so the
+// next check is fast (#2765). The write matches only the hash that was just
+// verified, so a credential changed in the meantime is left alone, and a
+// failed one is logged, not returned: the key was right.
+func checkAuthKey(ctx context.Context, queries *db.Queries, user db.User, authKey string) bool {
+	if !CheckPassword(authKey, user.AuthKeyHash) {
+		return false
+	}
+	if strings.HasPrefix(user.AuthKeyHash, keyHashPrefix) {
+		return true
+	}
+	hash, err := HashKey(authKey)
+	if err == nil {
+		err = queries.RehashAuthKey(ctx, db.RehashAuthKeyParams{NewHash: hash, ID: user.ID, OldHash: user.AuthKeyHash})
+	}
+	if err != nil {
+		slog.Warn("auth key rehash failed", "username", user.Username, "error", err)
+	}
+	return true
+}
+
+// guardedAccount is the credential check Login and AuthenticateBasic share,
+// and returns the account it passed for. A locked-out attempt gets
+// *TooManyAttemptsError before anything is looked up. An account with an auth
+// key is checked by authKey; one with none is checked by password, which only
+// Login sends. A wrong username or credential is counted toward a lockout,
+// and the account's status is checked last. Recording the success is left to
+// the caller, which may still have work that can fail.
+func guardedAccount(ctx context.Context, queries *db.Queries, guard *ratelimitutil.LoginGuard, attempt ratelimitutil.LoginAttempt, authKey, password string) (db.User, error) {
+	if wait := guard.Check(attempt).RetryAfter; wait > 0 {
+		return db.User{}, &TooManyAttemptsError{RetryAfter: wait}
+	}
+	user, err := queries.GetUserByUsername(ctx, attempt.Account)
+	if err != nil {
+		// Don't leak whether the username exists
+		return db.User{}, loginFailed(guard, attempt)
+	}
+	var matched bool
+	if user.AuthKeyHash == "" && password != "" {
+		matched = CheckPassword(password, user.PasswordHash)
+	} else {
+		matched = checkAuthKey(ctx, queries, user, authKey)
+	}
+	if !matched {
+		return db.User{}, loginFailed(guard, attempt)
+	}
+	return user, statusError(user.Status)
 }

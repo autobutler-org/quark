@@ -32,15 +32,7 @@ func newAuthKeyEngine(t *testing.T) (*gin.Engine, *db.DatabaseSqlc) {
 	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatal(err)
 	}
-	passwordHash, err := authutil.HashPassword("old-password")
-	if err != nil {
-		t.Fatal(err)
-	}
-	phraseHash, err := authutil.HashPassword("old-phrase")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := database.Queries.CreateUser(context.Background(), db.CreateUserParams{Username: "old", PasswordHash: passwordHash, RecoveryPhraseHash: phraseHash}); err != nil {
+	if _, err := database.Queries.CreateUser(context.Background(), db.CreateUserParams{Username: "old", PasswordHash: dbtest.BcryptHash(t, "old-password"), RecoveryPhraseHash: dbtest.BcryptHash(t, "old-phrase")}); err != nil {
 		t.Fatal(err)
 	}
 	return newPublicAuthEngine(t, database), database

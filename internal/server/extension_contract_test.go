@@ -37,7 +37,7 @@ func TestExtensionContract(t *testing.T) {
 	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret}); err != nil {
 		t.Fatalf("authutil.Setup: %v", err)
 	}
-	hash, err := authutil.HashPassword(dbtest.AuthKey("pending-password"))
+	hash, err := authutil.HashKey(dbtest.AuthKey("pending-password"))
 	if err != nil {
 		t.Fatal(err)
 	}

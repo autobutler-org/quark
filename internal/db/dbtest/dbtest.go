@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
 	// Registers the "sqlite" driver these connections use.
 	_ "modernc.org/sqlite"
 
@@ -66,6 +67,20 @@ func NewDB(t *testing.T) *db.DatabaseSqlc {
 func AuthKey(secret string) string {
 	sum := sha256.Sum256([]byte(secret))
 	return base64.StdEncoding.EncodeToString(sum[:])
+}
+
+// BcryptHash is the bcrypt hash of secret, for seeding a row no code writes
+// any more: the password or recovery phrase hash of an account from before
+// auth keys (#2430), or a key hash from before keys took SHA-256 (#2765). It
+// hashes at bcrypt.MinCost, since cost 12 (~250ms a hash) made the auth
+// suites take most of a minute each (#2456).
+func BcryptHash(t *testing.T, secret string) string {
+	t.Helper()
+	hash, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("dbtest: bcrypt: %v", err)
+	}
+	return string(hash)
 }
 
 // SaltSecret stands in for the install's salt secret, which settingsutil keeps

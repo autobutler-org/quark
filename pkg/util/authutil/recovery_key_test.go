@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
@@ -65,11 +66,8 @@ func TestCheckRecovery_Phrase(t *testing.T) {
 	ctx := context.Background()
 	queries := setupWithKeys(t).Queries
 	addLegacy(t, queries)
-	phraseHash, err := authutil.HashPassword("both-phrase")
-	if err != nil {
-		t.Fatal(err)
-	}
-	keyHash, err := authutil.HashPassword(authKeyOf(9))
+	phraseHash := dbtest.BcryptHash(t, "both-phrase")
+	keyHash, err := authutil.HashKey(authKeyOf(9))
 	if err != nil {
 		t.Fatal(err)
 	}

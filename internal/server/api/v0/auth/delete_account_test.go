@@ -485,7 +485,7 @@ func TestDeleteAccount_AccountLeavesOtherUsersAlone(t *testing.T) {
 	database.Queries = db.New(conn)
 
 	const otherUser = "other-user"
-	hash, err := authutil.HashPassword(dbtest.AuthKey("OtherPassword123!"))
+	hash, err := authutil.HashKey(dbtest.AuthKey("OtherPassword123!"))
 	if err != nil {
 		t.Fatalf("hash password: %v", err)
 	}

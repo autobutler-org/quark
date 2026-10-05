@@ -56,11 +56,11 @@ func TestRecoverAccount_NamedAccount(t *testing.T) {
 // of "original-password" and recovers with the recovery key of phrase.
 func createRecoverableUser(t *testing.T, queries *db.Queries, username, phrase string) {
 	t.Helper()
-	keyHash, err := authutil.HashPassword(dbtest.AuthKey("original-password"))
+	keyHash, err := authutil.HashKey(dbtest.AuthKey("original-password"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	recoveryHash, err := authutil.HashPassword(dbtest.AuthKey(phrase))
+	recoveryHash, err := authutil.HashKey(dbtest.AuthKey(phrase))
 	if err != nil {
 		t.Fatal(err)
 	}

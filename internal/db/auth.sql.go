@@ -349,6 +349,27 @@ func (q *Queries) ListActiveUsers(ctx context.Context) ([]ListActiveUsersRow, er
 	return items, nil
 }
 
+const rehashAuthKey = `-- name: RehashAuthKey :exec
+UPDATE users
+SET auth_key_hash = ?1
+WHERE id = ?2 AND auth_key_hash = ?3
+`
+
+type RehashAuthKeyParams struct {
+	NewHash string
+	ID      int64
+	OldHash string
+}
+
+// RehashAuthKey replaces an auth key hash stored with bcrypt by the SHA-256
+// one of the same key, once that key has verified against it (#2765). Only the
+// hash that was verified matches, so a key changed in the meantime is never
+// overwritten.
+func (q *Queries) RehashAuthKey(ctx context.Context, arg RehashAuthKeyParams) error {
+	_, err := q.db.ExecContext(ctx, rehashAuthKey, arg.NewHash, arg.ID, arg.OldHash)
+	return err
+}
+
 const renewSession = `-- name: RenewSession :exec
 UPDATE sessions
 SET expires_at = ?, last_used_at = ?
