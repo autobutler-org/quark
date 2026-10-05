@@ -21,6 +21,7 @@ class CalendarEventItem {
     this.colorIndex = 0,
     this.location = '',
     this.repeat = CalendarRepeat.none,
+    this.repeatUntil,
     this.reminderMinutes,
   });
 
@@ -47,6 +48,10 @@ class CalendarEventItem {
 
   /// How the event repeats.
   final CalendarRepeat repeat;
+
+  /// The last date the event repeats on, inclusive, or null when it repeats
+  /// forever or not at all.
+  final DateTime? repeatUntil;
 
   /// How many minutes before [start] its reminder is due, or null for none.
   /// Negative for an all-day event whose reminder falls on its own day.
@@ -89,6 +94,7 @@ class CalendarEventItem {
       other.colorIndex == colorIndex &&
       other.location == location &&
       other.repeat == repeat &&
+      other.repeatUntil == repeatUntil &&
       other.reminderMinutes == reminderMinutes;
 
   @override
@@ -101,6 +107,7 @@ class CalendarEventItem {
     colorIndex,
     location,
     repeat,
+    repeatUntil,
     reminderMinutes,
   );
 }

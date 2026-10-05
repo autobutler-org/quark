@@ -22,6 +22,7 @@ INSERT INTO
         repeat,
         reminder_minutes,
         color_index,
+        repeat_until,
         created_by
     )
 VALUES
@@ -37,6 +38,7 @@ VALUES
         sqlc.arg(repeat),
         sqlc.arg(reminder_minutes),
         sqlc.arg(color_index),
+        sqlc.arg(repeat_until),
         sqlc.arg(created_by)
     )
 RETURNING *;
@@ -55,8 +57,9 @@ LIMIT
     1;
 
 -- A one-off event is listed when it overlaps [range_start, range_end). A
--- repeating event is listed when its series starts before range_end, since any
--- of its occurrences may fall in the range; the app expands them.
+-- repeating event is listed when its series starts before range_end and has
+-- not ended before ended_before (#2535), since any of its occurrences may fall
+-- in the range; the app expands them. A series with no end never ends.
 -- name: ListCalendarEventsInRange :many
 SELECT
     sqlc.embed(calendar_events),
@@ -70,6 +73,10 @@ WHERE
     AND (
         calendar_events.repeat != 'none'
         OR calendar_events.ends_at > sqlc.arg(range_start)
+    )
+    AND (
+        calendar_events.repeat_until IS NULL
+        OR calendar_events.repeat_until >= CAST(sqlc.arg(ended_before) AS TEXT)
     )
 ORDER BY
     calendar_events.starts_at,
@@ -88,6 +95,7 @@ SET
     repeat = sqlc.arg(repeat),
     reminder_minutes = sqlc.arg(reminder_minutes),
     color_index = sqlc.arg(color_index),
+    repeat_until = sqlc.arg(repeat_until),
     updated_at = datetime('now')
 WHERE
     id = sqlc.arg(id)

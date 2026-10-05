@@ -8,8 +8,8 @@ import '../calendar_event_chip.dart';
 import '../calendar_labels.dart';
 import '../calendar_reminders.dart';
 
-/// One event in `CalendarUpcomingList`: when, what, where and how it repeats,
-/// and its reminder.
+/// One event in `CalendarUpcomingList`: when, what, where, how it repeats and
+/// until when, and its reminder.
 ///
 /// A reminder that is due (see `CalendarReminders.isDue`) shows as a
 /// warning-tinted "Starts in 20 min", or "Today" for an all-day event, instead
@@ -62,7 +62,11 @@ class UpcomingEventRow extends StatelessWidget {
       if (span.isNotEmpty) span,
       if (item.location.isNotEmpty) item.location,
       if (item.repeat != CalendarRepeat.none)
-        CalendarLabels.repeatShort(item.repeat),
+        [
+          CalendarLabels.repeatShort(item.repeat),
+          if (item.repeatUntil != null)
+            CalendarLabels.repeatUntil(item.repeatUntil!),
+        ].join(' '),
     ];
     final metaStyle = TextStyle(
       fontSize: 12.5,

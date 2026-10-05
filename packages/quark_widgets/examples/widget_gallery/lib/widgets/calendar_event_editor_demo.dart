@@ -39,11 +39,20 @@ class _CalendarEventEditorDemoState extends State<CalendarEventEditorDemo> {
       timeError: _draft.endsAfterStart
           ? null
           : 'The event has to end after it starts.',
+      repeatError: _draft.repeatEndsInTime
+          ? null
+          : "The repeat can't end before the event starts.",
       onChanged: (draft) {
-        widget.log('onChanged ${draft.title} ${draft.start}–${draft.end}');
+        widget.log(
+          'onChanged ${draft.title} ${draft.start}–${draft.end}'
+          ' until ${draft.savedRepeatUntil}',
+        );
         setState(() => _draft = draft);
       },
-      onSave: _draft.title.trim().isEmpty || !_draft.endsAfterStart
+      onSave:
+          _draft.title.trim().isEmpty ||
+              !_draft.endsAfterStart ||
+              !_draft.repeatEndsInTime
           ? null
           : () => widget.log('onSave'),
       onCancel: () => widget.log('onCancel'),

@@ -20,6 +20,7 @@ class CalendarEventDraft {
     this.title = '',
     this.allDay = false,
     this.repeat = CalendarRepeat.none,
+    this.repeatUntil,
     this.reminderMinutes,
     this.colorIndex = 0,
     this.location = '',
@@ -57,6 +58,11 @@ class CalendarEventDraft {
   /// How it repeats.
   final CalendarRepeat repeat;
 
+  /// The last date it repeats on, inclusive, or null to repeat forever. Read
+  /// only while [repeat] is not none, so switching repeat off and on again
+  /// keeps it.
+  final DateTime? repeatUntil;
+
   /// Minutes before [start] its reminder is due, or null for none.
   final int? reminderMinutes;
 
@@ -76,14 +82,31 @@ class CalendarEventDraft {
   /// saving.
   bool get endsAfterStart => end.isAfter(start);
 
+  /// Whether a repeating draft stops repeating on or after its first date,
+  /// the other rule a form checks. True for a draft that does not repeat or
+  /// repeats forever.
+  bool get repeatEndsInTime =>
+      repeat == CalendarRepeat.none ||
+      repeatUntil == null ||
+      !CalendarDates.dateOnly(
+        repeatUntil!,
+      ).isBefore(CalendarDates.dateOnly(start));
+
+  /// [repeatUntil] while the draft repeats, else null: what is saved.
+  DateTime? get savedRepeatUntil =>
+      repeat == CalendarRepeat.none ? null : repeatUntil;
+
   /// A copy with the given fields replaced. Pass [clearReminder] to turn the
-  /// reminder off, since a null [reminderMinutes] means "keep".
+  /// reminder off and [clearRepeatUntil] to repeat forever, since a null
+  /// [reminderMinutes] or [repeatUntil] means "keep".
   CalendarEventDraft copyWith({
     DateTime? start,
     DateTime? end,
     String? title,
     bool? allDay,
     CalendarRepeat? repeat,
+    DateTime? repeatUntil,
+    bool clearRepeatUntil = false,
     int? reminderMinutes,
     bool clearReminder = false,
     int? colorIndex,
@@ -95,6 +118,7 @@ class CalendarEventDraft {
     title: title ?? this.title,
     allDay: allDay ?? this.allDay,
     repeat: repeat ?? this.repeat,
+    repeatUntil: clearRepeatUntil ? null : repeatUntil ?? this.repeatUntil,
     reminderMinutes: clearReminder
         ? null
         : reminderMinutes ?? this.reminderMinutes,
@@ -191,6 +215,7 @@ class CalendarEventDraft {
       other.title == title &&
       other.allDay == allDay &&
       other.repeat == repeat &&
+      other.repeatUntil == repeatUntil &&
       other.reminderMinutes == reminderMinutes &&
       other.colorIndex == colorIndex &&
       other.location == location &&
@@ -203,6 +228,7 @@ class CalendarEventDraft {
     title,
     allDay,
     repeat,
+    repeatUntil,
     reminderMinutes,
     colorIndex,
     location,

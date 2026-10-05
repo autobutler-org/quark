@@ -46,6 +46,24 @@ void main() {
     expect(e.timeError, Errors.calendarEndBeforeStart);
   });
 
+  test('a repeat that ends before the event starts holds Save', () {
+    final e = editor();
+    final weekly = draft.copyWith(
+      title: 'Piano',
+      repeat: CalendarRepeat.weekly,
+      repeatUntil: DateTime(2026, 12, 17),
+    );
+    e.update(weekly);
+    expect(e.canSave, isTrue);
+    expect(e.repeatError, isNull);
+    e.update(weekly.copyWith(repeatUntil: DateTime(2026, 9, 16)));
+    expect(e.canSave, isFalse);
+    expect(e.repeatError, Errors.calendarRepeatEndsBeforeStart);
+    // Ending on its first day is one occurrence, not an error.
+    e.update(weekly.copyWith(repeatUntil: DateTime(2026, 9, 17)));
+    expect(e.canSave, isTrue);
+  });
+
   test('saves a new event, then an edit over its id', () async {
     final saved = <(CalendarEventDraft, int?)>[];
     final created = editor(saved: saved)

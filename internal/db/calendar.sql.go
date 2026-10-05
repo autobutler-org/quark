@@ -24,6 +24,7 @@ INSERT INTO
         repeat,
         reminder_minutes,
         color_index,
+        repeat_until,
         created_by
     )
 VALUES
@@ -39,9 +40,10 @@ VALUES
         ?9,
         ?10,
         ?11,
-        ?12
+        ?12,
+        ?13
     )
-RETURNING id, calendar_id, title, notes, location, starts_at, ends_at, all_day, time_zone, repeat, reminder_minutes, color_index, created_at, updated_at, created_by
+RETURNING id, calendar_id, title, notes, location, starts_at, ends_at, all_day, time_zone, repeat, reminder_minutes, color_index, created_at, updated_at, created_by, repeat_until
 `
 
 type CreateCalendarEventParams struct {
@@ -56,6 +58,7 @@ type CreateCalendarEventParams struct {
 	Repeat          string
 	ReminderMinutes sql.NullInt64
 	ColorIndex      int64
+	RepeatUntil     sql.NullString
 	CreatedBy       sql.NullInt64
 }
 
@@ -72,6 +75,7 @@ func (q *Queries) CreateCalendarEvent(ctx context.Context, arg CreateCalendarEve
 		arg.Repeat,
 		arg.ReminderMinutes,
 		arg.ColorIndex,
+		arg.RepeatUntil,
 		arg.CreatedBy,
 	)
 	var i CalendarEvent
@@ -91,6 +95,7 @@ func (q *Queries) CreateCalendarEvent(ctx context.Context, arg CreateCalendarEve
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.RepeatUntil,
 	)
 	return i, err
 }
@@ -111,7 +116,7 @@ func (q *Queries) DeleteCalendarEvent(ctx context.Context, id int64) (int64, err
 
 const getCalendarEvent = `-- name: GetCalendarEvent :one
 SELECT
-    calendar_events.id, calendar_events.calendar_id, calendar_events.title, calendar_events.notes, calendar_events.location, calendar_events.starts_at, calendar_events.ends_at, calendar_events.all_day, calendar_events.time_zone, calendar_events.repeat, calendar_events.reminder_minutes, calendar_events.color_index, calendar_events.created_at, calendar_events.updated_at, calendar_events.created_by,
+    calendar_events.id, calendar_events.calendar_id, calendar_events.title, calendar_events.notes, calendar_events.location, calendar_events.starts_at, calendar_events.ends_at, calendar_events.all_day, calendar_events.time_zone, calendar_events.repeat, calendar_events.reminder_minutes, calendar_events.color_index, calendar_events.created_at, calendar_events.updated_at, calendar_events.created_by, calendar_events.repeat_until,
     CAST(COALESCE(users.username, '') AS TEXT) AS owner_name
 FROM
     calendar_events
@@ -147,6 +152,7 @@ func (q *Queries) GetCalendarEvent(ctx context.Context, id int64) (GetCalendarEv
 		&i.CalendarEvent.CreatedAt,
 		&i.CalendarEvent.UpdatedAt,
 		&i.CalendarEvent.CreatedBy,
+		&i.CalendarEvent.RepeatUntil,
 		&i.OwnerName,
 	)
 	return i, err
@@ -177,7 +183,7 @@ func (q *Queries) GetDefaultCalendar(ctx context.Context) (Calendar, error) {
 
 const listCalendarEventsInRange = `-- name: ListCalendarEventsInRange :many
 SELECT
-    calendar_events.id, calendar_events.calendar_id, calendar_events.title, calendar_events.notes, calendar_events.location, calendar_events.starts_at, calendar_events.ends_at, calendar_events.all_day, calendar_events.time_zone, calendar_events.repeat, calendar_events.reminder_minutes, calendar_events.color_index, calendar_events.created_at, calendar_events.updated_at, calendar_events.created_by,
+    calendar_events.id, calendar_events.calendar_id, calendar_events.title, calendar_events.notes, calendar_events.location, calendar_events.starts_at, calendar_events.ends_at, calendar_events.all_day, calendar_events.time_zone, calendar_events.repeat, calendar_events.reminder_minutes, calendar_events.color_index, calendar_events.created_at, calendar_events.updated_at, calendar_events.created_by, calendar_events.repeat_until,
     CAST(COALESCE(users.username, '') AS TEXT) AS owner_name
 FROM
     calendar_events
@@ -189,15 +195,20 @@ WHERE
         calendar_events.repeat != 'none'
         OR calendar_events.ends_at > ?3
     )
+    AND (
+        calendar_events.repeat_until IS NULL
+        OR calendar_events.repeat_until >= CAST(?4 AS TEXT)
+    )
 ORDER BY
     calendar_events.starts_at,
     calendar_events.id
 `
 
 type ListCalendarEventsInRangeParams struct {
-	CalendarID int64
-	RangeEnd   string
-	RangeStart string
+	CalendarID  int64
+	RangeEnd    string
+	RangeStart  string
+	EndedBefore string
 }
 
 type ListCalendarEventsInRangeRow struct {
@@ -206,10 +217,16 @@ type ListCalendarEventsInRangeRow struct {
 }
 
 // A one-off event is listed when it overlaps [range_start, range_end). A
-// repeating event is listed when its series starts before range_end, since any
-// of its occurrences may fall in the range; the app expands them.
+// repeating event is listed when its series starts before range_end and has
+// not ended before ended_before (#2535), since any of its occurrences may fall
+// in the range; the app expands them. A series with no end never ends.
 func (q *Queries) ListCalendarEventsInRange(ctx context.Context, arg ListCalendarEventsInRangeParams) ([]ListCalendarEventsInRangeRow, error) {
-	rows, err := q.db.QueryContext(ctx, listCalendarEventsInRange, arg.CalendarID, arg.RangeEnd, arg.RangeStart)
+	rows, err := q.db.QueryContext(ctx, listCalendarEventsInRange,
+		arg.CalendarID,
+		arg.RangeEnd,
+		arg.RangeStart,
+		arg.EndedBefore,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +250,7 @@ func (q *Queries) ListCalendarEventsInRange(ctx context.Context, arg ListCalenda
 			&i.CalendarEvent.CreatedAt,
 			&i.CalendarEvent.UpdatedAt,
 			&i.CalendarEvent.CreatedBy,
+			&i.CalendarEvent.RepeatUntil,
 			&i.OwnerName,
 		); err != nil {
 			return nil, err
@@ -261,10 +279,11 @@ SET
     repeat = ?8,
     reminder_minutes = ?9,
     color_index = ?10,
+    repeat_until = ?11,
     updated_at = datetime('now')
 WHERE
-    id = ?11
-RETURNING id, calendar_id, title, notes, location, starts_at, ends_at, all_day, time_zone, repeat, reminder_minutes, color_index, created_at, updated_at, created_by
+    id = ?12
+RETURNING id, calendar_id, title, notes, location, starts_at, ends_at, all_day, time_zone, repeat, reminder_minutes, color_index, created_at, updated_at, created_by, repeat_until
 `
 
 type UpdateCalendarEventParams struct {
@@ -278,6 +297,7 @@ type UpdateCalendarEventParams struct {
 	Repeat          string
 	ReminderMinutes sql.NullInt64
 	ColorIndex      int64
+	RepeatUntil     sql.NullString
 	ID              int64
 }
 
@@ -293,6 +313,7 @@ func (q *Queries) UpdateCalendarEvent(ctx context.Context, arg UpdateCalendarEve
 		arg.Repeat,
 		arg.ReminderMinutes,
 		arg.ColorIndex,
+		arg.RepeatUntil,
 		arg.ID,
 	)
 	var i CalendarEvent
@@ -312,6 +333,7 @@ func (q *Queries) UpdateCalendarEvent(ctx context.Context, arg UpdateCalendarEve
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CreatedBy,
+		&i.RepeatUntil,
 	)
 	return i, err
 }

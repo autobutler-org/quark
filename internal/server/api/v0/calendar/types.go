@@ -20,6 +20,9 @@ type EventJSON struct {
 	TimeZone string `json:"timeZone"`
 	// Repeat is none, daily, weekly or monthly.
 	Repeat string `json:"repeat"`
+	// RepeatUntil is a repeating event's last date, inclusive, as midnight
+	// UTC standing for that calendar date; null repeats forever (#2524).
+	RepeatUntil *string `json:"repeatUntil"`
 	// ReminderMinutes counts back from Start; null is no reminder.
 	ReminderMinutes *int `json:"reminderMinutes"`
 	ColorIndex      int  `json:"colorIndex"`
@@ -48,9 +51,13 @@ type eventRequest struct {
 	AllDay   bool   `json:"allDay"`
 	TimeZone string `json:"timeZone"`
 	// Repeat is none, daily, weekly or monthly; empty is none.
-	Repeat          string `json:"repeat"`
-	ReminderMinutes *int   `json:"reminderMinutes"`
-	ColorIndex      int    `json:"colorIndex"`
+	Repeat string `json:"repeat"`
+	// RepeatUntil is the last date a repeating event occurs on, inclusive,
+	// as midnight UTC. Null or absent repeats forever; a one-off event
+	// ignores it.
+	RepeatUntil     *string `json:"repeatUntil"`
+	ReminderMinutes *int    `json:"reminderMinutes"`
+	ColorIndex      int     `json:"colorIndex"`
 }
 
 type router struct{}

@@ -139,6 +139,10 @@ abstract final class CalendarLabels {
               '${start.day > 28 ? ', skipping months without one' : ''}',
       };
 
+  /// The last date a series repeats on: "until Oct 31, 2026".
+  static String repeatUntil(DateTime last) =>
+      'until ${monthShort(last.month)} ${last.day}, ${last.year}';
+
   /// A repeat preset's one-word name: "Weekly".
   static String repeatShort(CalendarRepeat repeat) => switch (repeat) {
     CalendarRepeat.none => 'Never',

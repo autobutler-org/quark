@@ -6,7 +6,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The Quark stores times in UTC. A timed event's [start] and [end] are
 /// instants; an all-day event's are midnight UTC standing for calendar dates,
 /// with [end] exclusive. [localStart] and [localEnd] turn both into the local
-/// wall-clock times the calendar widgets draw.
+/// wall-clock times the calendar widgets draw. A series' [repeatUntil] is a
+/// date in the same way, and [localRepeatUntil] is it on the local calendar.
 class CalendarEvent {
   const CalendarEvent({
     required this.id,
@@ -18,6 +19,7 @@ class CalendarEvent {
     this.allDay = false,
     this.timeZone = '',
     this.repeat = CalendarRepeat.none,
+    this.repeatUntil,
     this.reminderMinutes,
     this.colorIndex = 0,
     this.owner = '',
@@ -34,6 +36,12 @@ class CalendarEvent {
     allDay: json['allDay'] as bool? ?? false,
     timeZone: json['timeZone'] as String? ?? '',
     repeat: repeatFromWire(json['repeat'] as String?),
+    // A Quark from before #2524 sends none, and a series without one
+    // repeats forever.
+    repeatUntil: switch (json['repeatUntil']) {
+      final String until => DateTime.parse(until).toUtc(),
+      _ => null,
+    },
     reminderMinutes: json['reminderMinutes'] as int?,
     colorIndex: json['colorIndex'] as int? ?? 0,
     owner: json['owner'] as String? ?? '',
@@ -58,6 +66,10 @@ class CalendarEvent {
 
   final CalendarRepeat repeat;
 
+  /// The last date the series repeats on, inclusive, as midnight UTC standing
+  /// for that date; null repeats forever (#2524).
+  final DateTime? repeatUntil;
+
   /// Minutes before the start its reminder is due, or null for none.
   final int? reminderMinutes;
 
@@ -80,6 +92,12 @@ class CalendarEvent {
   DateTime get localEnd =>
       allDay ? DateTime(end.year, end.month, end.day) : end.toLocal();
 
+  /// [repeatUntil] as a local date, the same date wherever it is read.
+  DateTime? get localRepeatUntil => switch (repeatUntil) {
+    final until? => DateTime(until.year, until.month, until.day),
+    null => null,
+  };
+
   /// The event as the editor opens it.
   CalendarEventDraft toDraft() => CalendarEventDraft(
     title: title,
@@ -87,6 +105,7 @@ class CalendarEvent {
     end: localEnd,
     allDay: allDay,
     repeat: repeat,
+    repeatUntil: localRepeatUntil,
     reminderMinutes: reminderMinutes,
     colorIndex: colorIndex,
     location: location,
@@ -98,14 +117,16 @@ class CalendarEvent {
       .firstWhere((r) => r.name == name, orElse: () => CalendarRepeat.none);
 
   /// The body of a create or update for [draft]: local times sent as UTC, and
-  /// an all-day draft's dates as midnight UTC.
+  /// an all-day draft's dates, like a series' last date, as midnight UTC.
   static Map<String, dynamic> requestBody(
     CalendarEventDraft draft, {
     String timeZone = '',
   }) {
-    String wire(DateTime local) => draft.allDay
-        ? DateTime.utc(local.year, local.month, local.day).toIso8601String()
-        : local.toUtc().toIso8601String();
+    String date(DateTime local) =>
+        DateTime.utc(local.year, local.month, local.day).toIso8601String();
+    String wire(DateTime local) =>
+        draft.allDay ? date(local) : local.toUtc().toIso8601String();
+    final until = draft.savedRepeatUntil;
     return {
       'title': draft.title.trim(),
       'notes': draft.notes,
@@ -115,6 +136,7 @@ class CalendarEvent {
       'allDay': draft.allDay,
       'timeZone': timeZone,
       'repeat': draft.repeat.name,
+      'repeatUntil': until == null ? null : date(until),
       'reminderMinutes': draft.reminderMinutes,
       'colorIndex': draft.colorIndex,
     };

@@ -14,6 +14,16 @@ import (
 // second, so text comparison in SQL orders it the same as time does.
 const storedTimeLayout = "2006-01-02T15:04:05Z"
 
+// untilSlack is how long after midnight UTC on its RepeatUntil date a timed
+// series' last occurrence can start: that date ends a day later, half a day
+// later still in the westernmost zone, and an occurrence stepped in UTC can
+// sit an hour from the app's local one across a daylight saving change.
+const untilSlack = 2 * 24 * time.Hour
+
+// longestOccurrence is the most an occurrence can last: a monthly event's
+// shortest gap, 28 days.
+const longestOccurrence = 28 * 24 * time.Hour
+
 // invalid wraps ErrInvalidEvent with the rule that failed.
 func invalid(rule string) error {
 	return fmt.Errorf("%w: %s", ErrInvalidEvent, rule)
@@ -27,6 +37,9 @@ func validate(input EventInput) (EventInput, error) {
 	input.End = input.End.UTC()
 	if input.Repeat == "" {
 		input.Repeat = RepeatNone
+	}
+	if input.Repeat == RepeatNone {
+		input.RepeatUntil = nil
 	}
 
 	switch {
@@ -58,6 +71,23 @@ func validate(input EventInput) (EventInput, error) {
 	}
 	if interval > 0 && input.End.Sub(input.Start) > interval {
 		return input, invalid("a repeating event must end before it repeats")
+	}
+
+	if until := input.RepeatUntil; until != nil {
+		utc := until.UTC()
+		input.RepeatUntil = &utc
+		// A timed start's date is its viewer's, which can be the UTC date
+		// before; the westernmost zone is 12 hours behind.
+		first := input.Start
+		if !input.AllDay {
+			first = first.Add(-12 * time.Hour)
+		}
+		switch {
+		case !isMidnight(utc):
+			return input, invalid("the repeat's end must be a date, at midnight UTC")
+		case utc.Before(first.Truncate(24 * time.Hour)):
+			return input, invalid("the repeat must end on or after the event's first day")
+		}
 	}
 
 	if m := input.ReminderMinutes; m != nil {
@@ -101,6 +131,9 @@ func repeatInterval(repeat Repeat) (time.Duration, bool) {
 // day of padding absorbs. A one-off event is its own only occurrence.
 func occursIn(e Event, from, to time.Time) bool {
 	length := e.End.Sub(e.Start)
+	if last, ok := lastStart(e); ok && last.Before(to) {
+		to = last
+	}
 	overlaps := func(start time.Time) bool {
 		return start.Before(to) && start.Add(length).After(from)
 	}
@@ -130,6 +163,20 @@ func occursIn(e Event, from, to time.Time) bool {
 	default:
 		return overlaps(e.Start)
 	}
+}
+
+// lastStart is the instant no occurrence of a series with an end date starts
+// at or after, and false for a series that repeats forever. An all-day
+// series' dates are the same everywhere, so it ends with its date; a timed
+// one is given untilSlack, and the app narrows it to the viewer's day.
+func lastStart(e Event) (time.Time, bool) {
+	if e.RepeatUntil == nil {
+		return time.Time{}, false
+	}
+	if e.AllDay {
+		return e.RepeatUntil.Add(24 * time.Hour), true
+	}
+	return e.RepeatUntil.Add(untilSlack), true
 }
 
 // monthsBetween counts the calendar months from a's to b's, in UTC.
@@ -162,6 +209,14 @@ func boolInt(b bool) int64 {
 	return 0
 }
 
+// nullTime is the column value for an optional date.
+func nullTime(t *time.Time) sql.NullString {
+	if t == nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: formatTime(*t), Valid: true}
+}
+
 // nullMinutes is the column value for an optional reminder.
 func nullMinutes(m *int) sql.NullInt64 {
 	if m == nil {
@@ -182,6 +237,7 @@ func createParams(calendarID int64, input EventInput) db.CreateCalendarEventPara
 		AllDay:          boolInt(input.AllDay),
 		TimeZone:        input.TimeZone,
 		Repeat:          string(input.Repeat),
+		RepeatUntil:     nullTime(input.RepeatUntil),
 		ReminderMinutes: nullMinutes(input.ReminderMinutes),
 		ColorIndex:      int64(input.ColorIndex),
 	}
@@ -199,6 +255,7 @@ func updateParams(id int64, input EventInput) db.UpdateCalendarEventParams {
 		AllDay:          boolInt(input.AllDay),
 		TimeZone:        input.TimeZone,
 		Repeat:          string(input.Repeat),
+		RepeatUntil:     nullTime(input.RepeatUntil),
 		ReminderMinutes: nullMinutes(input.ReminderMinutes),
 		ColorIndex:      int64(input.ColorIndex),
 	}
@@ -213,6 +270,14 @@ func fromRow(row db.CalendarEvent, ownerName string) (Event, error) {
 	end, err := time.Parse(storedTimeLayout, row.EndsAt)
 	if err != nil {
 		return Event{}, fmt.Errorf("event %d end: %w", row.ID, err)
+	}
+	var until *time.Time
+	if row.RepeatUntil.Valid {
+		t, err := time.Parse(storedTimeLayout, row.RepeatUntil.String)
+		if err != nil {
+			return Event{}, fmt.Errorf("event %d repeat until: %w", row.ID, err)
+		}
+		until = &t
 	}
 	var reminder *int
 	if row.ReminderMinutes.Valid {
@@ -230,6 +295,7 @@ func fromRow(row db.CalendarEvent, ownerName string) (Event, error) {
 		AllDay:          row.AllDay == 1,
 		TimeZone:        row.TimeZone,
 		Repeat:          Repeat(row.Repeat),
+		RepeatUntil:     until,
 		ReminderMinutes: reminder,
 		ColorIndex:      int(row.ColorIndex),
 		OwnerID:         row.CreatedBy.Int64,

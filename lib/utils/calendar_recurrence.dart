@@ -8,7 +8,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// into dates. Every occurrence keeps the first one's wall-clock time, so a
 /// weekly 9 AM event is at 9 AM on both sides of a daylight saving change
 /// rather than drifting an hour. Weekly keeps the weekday, and monthly keeps
-/// the day of the month, skipping months without it (no February 30th).
+/// the day of the month, skipping months without it (no February 30th). A
+/// series with a last date stops after it, on the viewer's calendar (#2524).
 List<CalendarEventItem> expandOccurrences(
   Iterable<CalendarEvent> events,
   DateTime from,
@@ -16,7 +17,13 @@ List<CalendarEventItem> expandOccurrences(
 ) {
   final items = <CalendarEventItem>[];
   for (final event in events) {
-    for (final start in _occurrenceStarts(event, from, to)) {
+    final last = event.localRepeatUntil;
+    final stop = last == null ? to : CalendarDates.addDays(last, 1);
+    for (final start in _occurrenceStarts(
+      event,
+      from,
+      stop.isBefore(to) ? stop : to,
+    )) {
       final end = _endFor(event, start);
       if (!end.isAfter(from) || !start.isBefore(to)) continue;
       items.add(
@@ -29,6 +36,7 @@ List<CalendarEventItem> expandOccurrences(
           colorIndex: event.colorIndex,
           location: event.location,
           repeat: event.repeat,
+          repeatUntil: last,
           reminderMinutes: event.reminderMinutes,
         ),
       );

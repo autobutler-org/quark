@@ -5,7 +5,7 @@ import '../../theme/quark_tokens.dart';
 import '../calendar_labels.dart';
 
 /// The four repeat presets as one segmented control, with the choice spelled
-/// out beneath it ("Every week on Thursday").
+/// out beneath it ("Every week on Thursday until Oct 31, 2026").
 ///
 /// Key prefixes: `event_repeat_<preset>` on each segment, for example
 /// `event_repeat_weekly`.
@@ -15,6 +15,7 @@ class RepeatPresetPicker extends StatelessWidget {
     required this.value,
     required this.start,
     required this.onChanged,
+    this.until,
     this.editsSeries = false,
     super.key,
   });
@@ -24,6 +25,9 @@ class RepeatPresetPicker extends StatelessWidget {
 
   /// The first occurrence, which names the weekday or date a preset keeps.
   final DateTime start;
+
+  /// The last date it repeats on, or null for forever.
+  final DateTime? until;
 
   /// Called with the preset picked.
   final ValueChanged<CalendarRepeat> onChanged;
@@ -37,7 +41,8 @@ class RepeatPresetPicker extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
     final help = [
       if (value != CalendarRepeat.none)
-        '${CalendarLabels.repeat(value, start)}.',
+        '${CalendarLabels.repeat(value, start)}'
+            '${until == null ? '' : ' ${CalendarLabels.repeatUntil(until!)}'}.',
       if (editsSeries && value != CalendarRepeat.none)
         'Changes apply to every repeat.',
     ].join(' ');

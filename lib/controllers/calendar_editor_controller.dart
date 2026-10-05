@@ -5,9 +5,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The event form's state while it is open (#1144): the draft, which event it
 /// edits, whether a save is in flight, and the errors to show.
 ///
-/// It holds Save off until the draft keeps the two rules a person can break,
-/// a title and an end after the start, and words an end before the start and
-/// any failed save with `Errors`. Saving and deleting go through the functions it is
+/// It holds Save off until the draft keeps the rules a person can break: a
+/// title, an end after the start, and a repeat that does not stop before the
+/// first date. It words the last two and any failed save with `Errors`. Saving and deleting go through the functions it is
 /// given, which are `CalendarController.save` and `delete` in the app.
 class CalendarEditorController extends ChangeNotifier {
   CalendarEditorController({
@@ -44,14 +44,23 @@ class CalendarEditorController extends ChangeNotifier {
       _savedRepeat != null && _savedRepeat != CalendarRepeat.none;
 
   /// Whether Save can be pressed: the draft has a title, ends after it
-  /// starts, and no save is in flight.
+  /// starts, stops repeating no earlier than its first date, and no save is
+  /// in flight.
   bool get canSave =>
-      _draft.title.trim().isNotEmpty && _draft.endsAfterStart && !_isSaving;
+      _draft.title.trim().isNotEmpty &&
+      _draft.endsAfterStart &&
+      _draft.repeatEndsInTime &&
+      !_isSaving;
 
   /// The times' error. An end before the start shows at once: the pickers
   /// make it easy to do by accident.
   String? get timeError =>
       _draft.endsAfterStart ? null : Errors.calendarEndBeforeStart;
+
+  /// The repeat's end error, shown at once like [timeError]: moving the start
+  /// can leave the end behind it.
+  String? get repeatError =>
+      _draft.repeatEndsInTime ? null : Errors.calendarRepeatEndsBeforeStart;
 
   /// A failed save's or delete's sentence, or null.
   String? get saveError => _saveError;

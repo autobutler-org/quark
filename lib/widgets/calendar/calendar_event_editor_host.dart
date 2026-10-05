@@ -43,6 +43,7 @@ class CalendarEventEditorHost extends StatelessWidget {
         editsSeries: editor.editsSeries,
         isSaving: editor.isSaving,
         timeError: editor.timeError,
+        repeatError: editor.repeatError,
         saveError: editor.saveError,
         onChanged: editor.update,
         onSave: editor.canSave
