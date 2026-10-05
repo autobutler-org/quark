@@ -21,6 +21,7 @@ Future<void> pumpAt(
   Widget child, {
   Size size = wideViewport,
   Brightness brightness = Brightness.dark,
+  QuarkThemeColor themeColor = QuarkThemeColor.classic,
   bool scaffold = true,
 }) async {
   tester.view.physicalSize = size;
@@ -29,10 +30,7 @@ Future<void> pumpAt(
 
   await tester.pumpWidget(
     MaterialApp(
-      theme: QuarkTheme.from(
-        brightness == Brightness.dark ? QuarkTokens.dark : QuarkTokens.light,
-        brightness,
-      ),
+      theme: QuarkTheme.from(themeColor.tokensFor(brightness), brightness),
       home: scaffold ? Scaffold(body: child) : child,
     ),
   );

@@ -277,4 +277,84 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  // #2740: the bar is colored chrome under a derived theme color, so it and
+  // everything placed in it draw from the chrome tokens.
+  for (final brightness in Brightness.values) {
+    testBothViewports(
+      '${brightness.name}: the bar and its contents are chrome',
+      (tester, size) async {
+        late QuarkTokens seenByAction;
+        await pumpAt(
+          tester,
+          Scaffold(
+            appBar: QuarkAppBar(
+              label: 'Photos',
+              icon: QuarkIcons.photo_library_outlined,
+              onRefresh: () {},
+              actions: [
+                Builder(
+                  builder: (context) {
+                    seenByAction = QuarkTokens.of(context);
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ],
+            ),
+            body: const SizedBox.shrink(),
+          ),
+          size: size,
+          brightness: brightness,
+          themeColor: QuarkThemeColor.indigo,
+          scaffold: false,
+        );
+
+        final tokens = QuarkThemeColor.indigo.tokensFor(brightness);
+        final bar = tester.widget<AppBar>(find.byType(AppBar));
+        final material = tester.widget<Material>(
+          find
+              .descendant(
+                of: find.byType(AppBar),
+                matching: find.byType(Material),
+              )
+              .first,
+        );
+        expect(material.color, tokens.chrome);
+        expect((bar.shape! as Border).bottom.color, tokens.chromeBorder);
+        expect(seenByAction, tokens.onChrome);
+
+        // The page name, the brand badge, and the refresh button.
+        expect(
+          tester.widget<Text>(find.text('Photos')).style!.color,
+          tokens.chromeForeground,
+        );
+        final badge = tester.widget<Container>(
+          find
+              .descendant(
+                of: find.byType(QuarkBrandButton),
+                matching: find.byType(Container),
+              )
+              .first,
+        );
+        expect(
+          (badge.decoration! as BoxDecoration).color,
+          tokens.chromePrimary,
+        );
+        final refresh = tester
+            .widget<IconButton>(
+              find.descendant(
+                of: find.byType(RefreshIconButton),
+                matching: find.byType(IconButton),
+              ),
+            )
+            .style!;
+        expect(
+          refresh.foregroundColor!.resolve({}),
+          tokens.chromeSecondaryForeground,
+        );
+        expect(refresh.side!.resolve({})!.color, tokens.chromeBorder);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

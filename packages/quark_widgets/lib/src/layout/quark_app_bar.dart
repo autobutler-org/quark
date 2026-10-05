@@ -5,6 +5,7 @@ import 'quark_app_bar_bottom.dart';
 import 'quark_app_bar_trailing.dart';
 import 'quark_bar_icon_button.dart';
 import 'quark_brand_button.dart';
+import 'quark_chrome.dart';
 import 'refresh_icon_button.dart';
 
 /// The app bar every main page wears: a [QuarkBrandButton] on the left that
@@ -93,7 +94,8 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = QuarkTokens.of(context);
+    // The bar is chrome: its own hairline, and everything placed in it.
+    final tokens = QuarkTokens.of(context).onChrome;
     final refresh = onRefresh;
     final trailing = [...actions, ...QuarkAppBarTrailing.of(context)];
     final middle = this.middle;
@@ -118,43 +120,45 @@ class QuarkAppBar extends StatelessWidget implements PreferredSizeWidget {
           RefreshIconButton(isRefreshing: isRefreshing, onPressed: refresh),
       ],
     );
-    return AppBar(
-      shape: Border(bottom: BorderSide(color: tokens.border)),
-      automaticallyImplyLeading: false,
-      // Without a middle, the brand and refresh hold a fixed leading slot, so
-      // the brand stays whole however many actions a page has.
-      leadingWidth: middle == null ? tokens.spacingSm + slotWidth : null,
-      leading: middle == null
-          ? Builder(
-              builder: (ctx) => Padding(
-                padding: EdgeInsets.only(left: tokens.spacingSm),
-                child: brandAndRefresh(ctx),
+    return QuarkChrome(
+      child: AppBar(
+        shape: Border(bottom: BorderSide(color: tokens.border)),
+        automaticallyImplyLeading: false,
+        // Without a middle, the brand and refresh hold a fixed leading slot, so
+        // the brand stays whole however many actions a page has.
+        leadingWidth: middle == null ? tokens.spacingSm + slotWidth : null,
+        leading: middle == null
+            ? Builder(
+                builder: (ctx) => Padding(
+                  padding: EdgeInsets.only(left: tokens.spacingSm),
+                  child: brandAndRefresh(ctx),
+                ),
+              )
+            : null,
+        // With one, they share a row with it and take only the width the label
+        // needs, which is what leaves Files room for its navigation and search
+        // on a phone.
+        title: middle == null
+            ? null
+            : Builder(
+                builder: (ctx) => Row(
+                  spacing: tokens.spacingSm,
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: slotWidth),
+                      child: brandAndRefresh(ctx),
+                    ),
+                    Expanded(child: middle),
+                  ],
+                ),
               ),
-            )
-          : null,
-      // With one, they share a row with it and take only the width the label
-      // needs, which is what leaves Files room for its navigation and search
-      // on a phone.
-      title: middle == null
-          ? null
-          : Builder(
-              builder: (ctx) => Row(
-                spacing: tokens.spacingSm,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: slotWidth),
-                    child: brandAndRefresh(ctx),
-                  ),
-                  Expanded(child: middle),
-                ],
-              ),
-            ),
-      titleSpacing: tokens.spacingSm,
-      centerTitle: false,
-      actions: trailing.isEmpty
-          ? null
-          : [Row(mainAxisSize: MainAxisSize.min, children: trailing)],
-      bottom: bottom,
+        titleSpacing: tokens.spacingSm,
+        centerTitle: false,
+        actions: trailing.isEmpty
+            ? null
+            : [Row(mainAxisSize: MainAxisSize.min, children: trailing)],
+        bottom: bottom,
+      ),
     );
   }
 }

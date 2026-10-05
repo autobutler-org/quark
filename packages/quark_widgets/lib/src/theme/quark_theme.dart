@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'quark_theme_color.dart';
 import 'quark_tokens.dart';
 
 /// Builds Quark's [ThemeData] from a [QuarkTokens] set.
@@ -14,12 +15,28 @@ import 'quark_tokens.dart';
 ///   darkTheme: QuarkTheme.dark(),
 /// );
 /// ```
+///
+/// Pass a theme color to derive the whole theme from one picked color:
+///
+/// ```dart
+/// final themeColor = QuarkThemeColor.parse(settings.themeColor);
+/// MaterialApp(
+///   theme: QuarkTheme.light(themeColor: themeColor),
+///   darkTheme: QuarkTheme.dark(themeColor: themeColor),
+/// );
+/// ```
 abstract final class QuarkTheme {
-  /// Quark's dark theme, built from [QuarkTokens.dark].
-  static ThemeData dark() => from(QuarkTokens.dark, Brightness.dark);
+  /// Quark's dark theme, built from the dark tokens of [themeColor]. That is
+  /// [QuarkTokens.dark] for [QuarkThemeColor.classic], the default.
+  static ThemeData dark({
+    QuarkThemeColor themeColor = QuarkThemeColor.classic,
+  }) => from(themeColor.tokensFor(Brightness.dark), Brightness.dark);
 
-  /// Quark's light theme, built from [QuarkTokens.light].
-  static ThemeData light() => from(QuarkTokens.light, Brightness.light);
+  /// Quark's light theme, built from the light tokens of [themeColor]. That
+  /// is [QuarkTokens.light] for [QuarkThemeColor.classic], the default.
+  static ThemeData light({
+    QuarkThemeColor themeColor = QuarkThemeColor.classic,
+  }) => from(themeColor.tokensFor(Brightness.light), Brightness.light);
 
   /// Builds a [ThemeData] for [brightness] out of [tokens].
   ///
@@ -55,8 +72,8 @@ abstract final class QuarkTheme {
       useMaterial3: true,
       extensions: <ThemeExtension<dynamic>>[tokens],
       appBarTheme: AppBarTheme(
-        backgroundColor: tokens.sidebar,
-        foregroundColor: tokens.foreground,
+        backgroundColor: tokens.chrome,
+        foregroundColor: tokens.chromeForeground,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         // Bar buttons are bordered, so they need a gap from the screen edge
@@ -121,7 +138,7 @@ abstract final class QuarkTheme {
         ).copyWith(side: _focusRing(tokens)),
       ),
       dividerTheme: DividerThemeData(color: tokens.border, thickness: 1),
-      drawerTheme: DrawerThemeData(backgroundColor: tokens.sidebar),
+      drawerTheme: DrawerThemeData(backgroundColor: tokens.chrome),
       listTileTheme: ListTileThemeData(
         textColor: tokens.foreground,
         iconColor: tokens.secondaryForeground,

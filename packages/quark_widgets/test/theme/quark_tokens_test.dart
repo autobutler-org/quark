@@ -26,8 +26,8 @@ void main() {
     test('dark and light are different token sets', () {
       expect(QuarkTokens.dark, isNot(QuarkTokens.light));
       expect(QuarkTokens.dark.background, isNot(QuarkTokens.light.background));
-      // The accent is deliberately shared between the two.
-      expect(QuarkTokens.dark.primary, QuarkTokens.light.primary);
+      // Each mode has its own shade of the classic blue (#2523).
+      expect(QuarkTokens.dark.primary, isNot(QuarkTokens.light.primary));
     });
 
     test('lerp moves every value and ends on the target', () {
@@ -36,6 +36,59 @@ void main() {
 
       expect(QuarkTokens.dark.lerp(QuarkTokens.light, 1), QuarkTokens.light);
       expect(QuarkTokens.dark.lerp(null, 0.5), QuarkTokens.dark);
+    });
+
+    test('the chrome tokens take part in copyWith, equality and lerp', () {
+      const base = QuarkTokens.light;
+      for (final (edited, read) in <(QuarkTokens, Color Function(QuarkTokens))>[
+        (base.copyWith(chrome: _marker), (t) => t.chrome),
+        (base.copyWith(chromeBorder: _marker), (t) => t.chromeBorder),
+        (base.copyWith(chromeForeground: _marker), (t) => t.chromeForeground),
+        (
+          base.copyWith(chromeSecondaryForeground: _marker),
+          (t) => t.chromeSecondaryForeground,
+        ),
+        (
+          base.copyWith(chromeMutedForeground: _marker),
+          (t) => t.chromeMutedForeground,
+        ),
+        (base.copyWith(chromePrimary: _marker), (t) => t.chromePrimary),
+      ]) {
+        expect(read(edited), _marker);
+        expect(edited, isNot(base));
+        expect(edited.hashCode, isNot(base.hashCode));
+        expect(read(base.lerp(edited, 1)), _marker);
+        expect(read(base.lerp(edited, 0.5)), isNot(read(base)));
+      }
+    });
+
+    test('onChrome swaps in the chrome text, hairline and accent', () {
+      final tokens = QuarkThemeColor.violet.tokensFor(Brightness.light);
+      final onChrome = tokens.onChrome;
+
+      expect(onChrome.foreground, tokens.chromeForeground);
+      expect(onChrome.cardForeground, tokens.chromeForeground);
+      expect(onChrome.secondaryForeground, tokens.chromeSecondaryForeground);
+      expect(onChrome.mutedForeground, tokens.chromeMutedForeground);
+      expect(onChrome.border, tokens.chromeBorder);
+      expect(onChrome.primary, tokens.chromePrimary);
+      expect(onChrome, isNot(tokens));
+      // Surfaces, the accent's foreground and the scale are left alone.
+      expect(
+        onChrome,
+        tokens.copyWith(
+          foreground: tokens.chromeForeground,
+          cardForeground: tokens.chromeForeground,
+          secondaryForeground: tokens.chromeSecondaryForeground,
+          mutedForeground: tokens.chromeMutedForeground,
+          border: tokens.chromeBorder,
+          primary: tokens.chromePrimary,
+        ),
+      );
+      expect(onChrome.onChrome, onChrome);
+      // The shipped sets draw chrome the way they draw content.
+      expect(QuarkTokens.light.onChrome, QuarkTokens.light);
+      expect(QuarkTokens.dark.onChrome, QuarkTokens.dark);
     });
 
     testWidgets('of() reads the tokens off the theme', (tester) async {
@@ -80,10 +133,12 @@ void main() {
       expect(seen, QuarkTokens.dark);
     });
 
-    test('both sets offer the same event colors, primary first', () {
+    test('both sets offer the same event colors, the same blue first', () {
       for (final tokens in [QuarkTokens.dark, QuarkTokens.light]) {
         expect(tokens.eventColors, hasLength(6));
-        expect(tokens.eventColors.first, tokens.primary);
+        // An event stores its index, and its color does not follow the
+        // theme color (#2740).
+        expect(tokens.eventColors.first, const Color(0xFF0EA5E9));
       }
     });
 
@@ -106,3 +161,6 @@ void main() {
     });
   });
 }
+
+/// A color no token has, to tell an edited field from the rest.
+const Color _marker = Color(0xFF123456);

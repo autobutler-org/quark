@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/quark_tokens.dart';
+import '../theme/quark_contrast.dart';
 
 /// A person's picture in a circle, or their initials on a color of their own
 /// when there is no picture.
@@ -8,11 +8,11 @@ import '../theme/quark_tokens.dart';
 /// The package never fetches, so the picture comes in through [imageBuilder].
 /// The app hands it a network image sized to the circle; the gallery hands it
 /// a placeholder. Without a builder the avatar draws the initials of [name]
-/// on a color derived from [QuarkTokens.primary], its hue turned by a hash
-/// of [id], so the same person gets the same color everywhere and the color
-/// still follows the theme. A builder whose image fails to load should return
-/// a `QuarkAvatar` without one from its error builder, which lands back on the
-/// initials.
+/// on [baseColor] with its hue turned by a hash of [id], so the same person
+/// gets the same color everywhere, in either mode and under any theme color. The
+/// initials are white or black, whichever reads better on that color. A
+/// builder whose image fails to load should return a `QuarkAvatar` without
+/// one from its error builder, which lands back on the initials.
 ///
 /// Key prefixes: `avatar_<id>` on the circle.
 ///
@@ -37,6 +37,11 @@ class QuarkAvatar extends StatelessWidget {
 
   /// The diameter an avatar takes when no [size] is given.
   static const double defaultSize = 32;
+
+  /// The color every fallback color is a hue rotation of. It is fixed rather
+  /// than read from the theme, so picking a theme color does not recolor people
+  /// (#2740).
+  static const Color baseColor = Color(0xFF0EA5E9);
 
   /// The person's id, which picks the fallback color and names the key.
   final String id;
@@ -63,20 +68,29 @@ class QuarkAvatar extends StatelessWidget {
     return (first + words.last.characters.first).toUpperCase();
   }
 
-  /// The fallback color for [id]: [QuarkTokens.primary] with its hue turned
-  /// by a stable hash of the id.
-  static Color colorFor(String id, QuarkTokens tokens) {
+  /// The fallback color for [id]: [baseColor] with its hue turned by a stable
+  /// hash of the id.
+  static Color colorFor(String id) {
     // String.hashCode is not stable across runs on every platform, so hash
     // the code units by hand.
     final hash = id.codeUnits.fold<int>(0, (h, c) => (h * 31 + c) & 0x7fffffff);
-    final base = HSLColor.fromColor(tokens.primary);
+    final base = HSLColor.fromColor(baseColor);
     return base.withHue((base.hue + hash % 360) % 360).toColor();
   }
 
+  /// The color of the initials on [background]: white or black, whichever
+  /// contrasts more. One of the two always clears 4.5:1, which no pair of
+  /// theme colors does for every hue.
+  static Color initialsColorOn(Color background) => moreLegibleOn(
+    background,
+    const Color(0xFFFFFFFF),
+    const Color(0xFF000000),
+  );
+
   @override
   Widget build(BuildContext context) {
-    final tokens = QuarkTokens.of(context);
     final imageBuilder = this.imageBuilder;
+    final color = colorFor(id);
 
     return Semantics(
       label: name,
@@ -87,16 +101,13 @@ class QuarkAvatar extends StatelessWidget {
         child: imageBuilder != null
             ? ClipOval(child: imageBuilder(context, size))
             : DecoratedBox(
-                decoration: BoxDecoration(
-                  color: colorFor(id, tokens),
-                  shape: BoxShape.circle,
-                ),
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
                 child: Center(
                   child: ExcludeSemantics(
                     child: Text(
                       initialsOf(name),
                       style: TextStyle(
-                        color: tokens.primaryForeground,
+                        color: initialsColorOn(color),
                         fontSize: size * 0.4,
                         fontWeight: FontWeight.w600,
                         height: 1,

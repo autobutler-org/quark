@@ -255,7 +255,7 @@ final List<GalleryEntry> registry = [
       runSpacing: 16,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        // Initials on a color derived from the primary token.
+        // Initials on a color of the person's own, whatever the theme color.
         for (final (id, name) in const [
           ('ada', 'Ada Lovelace'),
           ('bob', 'Bob Byron'),
@@ -523,6 +523,51 @@ final List<GalleryEntry> registry = [
         onTap: () => log('QuarkBrandButton.onTap'),
       ),
     ),
+  ),
+  GalleryEntry(
+    name: 'QuarkChrome',
+    group: 'Layout',
+    build: (context, log) {
+      final tokens = QuarkTokens.of(context);
+      // The same controls twice: on a card, and on the chrome color under a
+      // QuarkChrome. Pick a theme color in the theme panel to tell them apart.
+      final controls = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          QuarkBrandButton(
+            label: 'Files',
+            onTap: () => log('QuarkBrandButton.onTap'),
+          ),
+          QuarkBarIconButton(
+            icon: QuarkIcons.search,
+            tooltip: 'Search',
+            onPressed: () => log('search'),
+          ),
+          const QuarkBarIconButton(
+            icon: QuarkIcons.delete_outline,
+            tooltip: 'Delete',
+            onPressed: null,
+          ),
+          QuarkBarChip(
+            icon: QuarkIcons.check_circle_outline,
+            label: 'Select',
+            active: true,
+            keepLabel: true,
+            onPressed: () => log('select'),
+          ),
+        ],
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: tokens.spacingMd,
+        children: [
+          ColoredBox(color: tokens.card, child: controls),
+          QuarkChrome(
+            child: ColoredBox(color: tokens.chrome, child: controls),
+          ),
+        ],
+      );
+    },
   ),
   GalleryEntry(
     name: 'QuarkCheckerboard',
@@ -1662,6 +1707,34 @@ final List<GalleryEntry> registry = [
           enabled: false,
           isBusy: true,
           onChanged: (on) => log('FeatureFlagTile.onChanged(notes, $on)'),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'QuarkThemeColorPicker',
+    group: 'Settings',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 16,
+      children: [
+        // A person's own picker: following the Quark until they choose.
+        QuarkThemeColorPicker(
+          value: QuarkThemeColor.violet,
+          usingDefault: true,
+          onChanged: (themeColor) => log(
+            'QuarkThemeColorPicker.onChanged(${themeColor.storageValue})',
+          ),
+          onUseDefault: () => log('QuarkThemeColorPicker.onUseDefault'),
+        ),
+        const Divider(),
+        // The admin's picker for the Quark's default, on a custom color. It
+        // has no default to fall back to.
+        QuarkThemeColorPicker(
+          value: QuarkThemeColor.parse('#22aa44'),
+          onChanged: (themeColor) => log(
+            'QuarkThemeColorPicker.onChanged(${themeColor.storageValue})',
+          ),
         ),
       ],
     ),
