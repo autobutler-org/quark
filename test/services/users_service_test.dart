@@ -8,6 +8,8 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/users_service.dart';
 import 'package:quark/utils/error_text.dart';
 
+import '../support/auth_salt.dart';
+
 /// The admin account routes the Users page calls (#1662, #1908), and which
 /// refusals get the app's copy rather than the Quark's.
 void main() {
@@ -18,10 +20,12 @@ void main() {
   /// Answers every request with [status] and [body], recording it.
   void answer(int status, Object body) {
     resetSharedHttpClient();
-    sharedHttpClientFactory = () => MockClient((request) async {
-      requests.add(request);
-      return http.Response(jsonEncode(body), status);
-    });
+    sharedHttpClientFactory = () => AuthSaltClient(
+      MockClient((request) async {
+        requests.add(request);
+        return http.Response(jsonEncode(body), status);
+      }),
+    );
   }
 
   setUp(requests.clear);
@@ -146,9 +150,10 @@ void main() {
     final request = requests.single;
     expect(request.method, 'POST');
     expect(request.url.path, '/api/v0/admin/users');
+    // #2430: the auth key derived from the password, never the password.
     expect(jsonDecode(request.body), {
       'username': 'bob',
-      'password': 'hunter2hunter2',
+      'authKey': await testAuthKey('hunter2hunter2'),
     });
   });
 

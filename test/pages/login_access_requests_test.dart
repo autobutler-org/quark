@@ -12,6 +12,8 @@ import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/utils/error_text.dart';
 
+import '../support/auth_salt.dart';
+
 /// #1908: the sign-in form offers to request an account when the Quark takes
 /// requests, and a sign-in refused for the account's status says so rather
 /// than "invalid username or password".
@@ -105,11 +107,14 @@ void main() {
   ]) {
     testWidgets('a $status account signing in is told why', (tester) async {
       authStatusProbe = () async => const AuthStatus(setupComplete: true);
-      authHttpClientFactory = () => MockClient(
-        (_) async => http.Response(
-          jsonEncode({'error': 'refused', 'status': status}),
-          403,
+      authHttpClientFactory = () => AuthSaltClient(
+        MockClient(
+          (_) async => http.Response(
+            jsonEncode({'error': 'refused', 'status': status}),
+            403,
+          ),
         ),
+        status: 404,
       );
 
       await pumpLogin(tester);
