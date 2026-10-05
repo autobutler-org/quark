@@ -35,12 +35,15 @@ class FileEvent {
   /// uploaded, deleted, moved or created, or access to it changed.
   /// `access_changed` means something was shared or unshared with this
   /// account, or its groups changed, so what it can see may have too.
+  /// `resync` means the Quark dropped events this socket was too slow for,
+  /// so anything might have changed.
   bool get changesListing => const {
     'upload',
     'delete',
     'move',
     'new_folder',
     'access_changed',
+    'resync',
   }.contains(kind);
 }
 

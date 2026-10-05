@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -69,6 +70,8 @@ func (w *SyncWorker) handleEvent(ctx context.Context, evt eventbus.Event) {
 		w.deletePath(ctx, evt.Path, evt.DeviceSerial)
 	case eventbus.EventMove:
 		w.movePath(ctx, evt.Path, evt.NewPath)
+	case eventbus.EventResync:
+		w.reconcile(ctx)
 	}
 }
 
@@ -186,6 +189,65 @@ func (w *SyncWorker) movePath(ctx context.Context, oldPath, newPath string) {
 	if err := os.Rename(oldDst, newDst); err != nil {
 		log.Printf("sync: move %s → %s: %v", oldPath, newPath, err)
 	}
+}
+
+// reconcile mirrors the internal Files tree onto the target after the bus
+// dropped events (#2753): every folder is created and every file the target
+// lacks, or holds a different-sized or older copy of, is copied. It deletes
+// nothing: a file only the target holds may be a missed delete or may have
+// been written to the device directly, and the two look the same from here.
+func (w *SyncWorker) reconcile(ctx context.Context) {
+	targetDir, err := w.resolveTarget(ctx)
+	if err != nil || targetDir == "" {
+		return
+	}
+	srcDir, err := w.resolveInternalDir()
+	if err != nil {
+		return
+	}
+	walkErr := filepath.WalkDir(srcDir, func(srcPath string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		relPath, err := filepath.Rel(srcDir, srcPath)
+		if err != nil || relPath == "." {
+			return nil
+		}
+		dstPath := filepath.Join(targetDir, relPath)
+		if d.IsDir() {
+			if err := os.MkdirAll(dstPath, 0755); err != nil {
+				log.Printf("sync: reconcile mkdir %s: %v", relPath, err)
+			}
+			return nil
+		}
+		if !d.Type().IsRegular() || upToDate(srcPath, dstPath) {
+			return nil
+		}
+		if err := copyFile(ctx, srcPath, dstPath, w.ioSem); err != nil {
+			log.Printf("sync: reconcile copy %s: %v", relPath, err)
+			w.queueRetry(eventbus.Event{Kind: eventbus.EventUpload, Path: filepath.ToSlash(relPath)})
+		}
+		return nil
+	})
+	if walkErr != nil {
+		log.Printf("sync: reconcile: %v", walkErr)
+	}
+}
+
+// upToDate reports whether dst is the same size as src and no older.
+func upToDate(src, dst string) bool {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return true
+	}
+	dstInfo, err := os.Stat(dst)
+	if err != nil {
+		return false
+	}
+	return srcInfo.Size() == dstInfo.Size() && !srcInfo.ModTime().After(dstInfo.ModTime())
 }
 
 func (w *SyncWorker) queueRetry(evt eventbus.Event) {

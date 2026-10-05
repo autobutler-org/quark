@@ -41,16 +41,12 @@ func ids(page chatutil.ListMessagesResult) []int64 {
 // it held, in order.
 func (h harness) drainMessages() []eventbus.ChatMessageChanged {
 	var heard []eventbus.ChatMessageChanged
-	for {
-		select {
-		case evt := <-h.events:
-			if data, ok := evt.Data.(eventbus.ChatMessageChanged); ok && evt.Kind == eventbus.EventChatMessageCreated {
-				heard = append(heard, data)
-			}
-		default:
-			return heard
+	for _, evt := range h.drain() {
+		if data, ok := evt.Data.(eventbus.ChatMessageChanged); ok && evt.Kind == eventbus.EventChatMessageCreated {
+			heard = append(heard, data)
 		}
 	}
+	return heard
 }
 
 // TestChatMessages_PostPageDelete posts, pages both ways, enforces the cap and
@@ -156,14 +152,16 @@ func TestChatMessages_PostPageDelete(t *testing.T) {
 	h.expect(t, http.StatusNotFound, http.MethodDelete, "/chat/messages/"+strconv.FormatInt(posted[1].ID, 10), "bob", "", nil)
 }
 
-// TestChatMessages_BurstCatchUp posts more messages than a subscriber's
-// 16-slot buffer holds without reading any, so the bus drops some, and then
-// catches up the way the app does: ?after= the last id it heard.
+// TestChatMessages_BurstCatchUp posts more messages than an app socket's
+// 16-slot buffer holds without reading any, so the bus swaps the backlog for
+// a resync (#2753), and then catches up the way the app does after one: the
+// whole page again.
 func TestChatMessages_BurstCatchUp(t *testing.T) {
 	h := newHarness(t)
 	_, room := roomWithKey(t, h)
 	messages := room + "/messages"
-	h.drainMessages()
+	socket, unsub := h.deps.EventBus().SubscribeLossy("burst-catch-up")
+	defer unsub()
 
 	const burst = 20
 	want := make([]int64, 0, burst)
@@ -172,18 +170,26 @@ func TestChatMessages_BurstCatchUp(t *testing.T) {
 		h.expect(t, http.StatusCreated, http.MethodPost, messages, "bob", messageBody(byte('a'+i), 64, 1), &m)
 		want = append(want, m.ID)
 	}
-	heard := h.drainMessages()
-	if len(heard) >= burst {
-		t.Fatalf("heard all %d; the bus should have dropped some", len(heard))
+	resynced, heard := false, 0
+	for drained := false; !drained; {
+		select {
+		case evt := <-socket:
+			switch evt.Kind {
+			case eventbus.EventResync:
+				resynced = true
+			case eventbus.EventChatMessageCreated:
+				heard++
+			}
+		default:
+			drained = true
+		}
 	}
-	got := map[int64]bool{}
-	last := int64(0)
-	for _, data := range heard {
-		got[data.MessageID] = true
-		last = max(last, data.MessageID)
+	if !resynced || heard >= burst {
+		t.Fatalf("resync = %v after hearing %d of %d; the socket should have fallen behind", resynced, heard, burst)
 	}
 	var page chatutil.ListMessagesResult
-	h.expect(t, http.StatusOK, http.MethodGet, messages+"?after="+strconv.FormatInt(last, 10), "bob", "", &page)
+	h.expect(t, http.StatusOK, http.MethodGet, messages+"?after=0", "bob", "", &page)
+	got := map[int64]bool{}
 	for _, id := range ids(page) {
 		got[id] = true
 	}

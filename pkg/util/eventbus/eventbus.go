@@ -78,6 +78,10 @@ const (
 	// from a chat message (#2426). Data is a ChatReactionChanged.
 	EventChatReactionChanged EventKind = "chat_reaction_changed"
 
+	// EventResync tells a subscriber it missed events and should refetch or
+	// reconcile everything it holds (#2753). Data is a Resync; Path is empty.
+	EventResync EventKind = "resync"
+
 	// EventCalendarChanged fires when a calendar event is created, updated
 	// or deleted. Data is the event's id; Path is empty. The calendar is
 	// shared by every account (#1144), so every client hears it.
@@ -133,35 +137,49 @@ type Event struct {
 	DeviceSerial string      `json:"deviceSerial,omitempty"` // serial of the device this event originated from; empty = internal
 }
 
+// Resync is the data of a resync event: how many events the subscriber missed.
+type Resync struct {
+	Dropped int `json:"dropped"`
+}
+
+// Bus fans every published Event out to its subscribers. Publish never
+// blocks; what happens to a subscriber that falls behind depends on how it
+// subscribed.
 type Bus struct {
 	mu          sync.RWMutex
-	subscribers map[string]chan Event
+	subscribers map[string]subscriber
+	// maxPending bounds each Subscribe queue; tests lower it.
+	maxPending int
 }
 
-func New() *Bus { return &Bus{subscribers: map[string]chan Event{}} }
+func New() *Bus { return &Bus{subscribers: map[string]subscriber{}, maxPending: defaultMaxPending} }
 
-// Subscribe registers a subscriber and returns its channel and an unsubscribe func.
+// Subscribe registers a subscriber that must not lose a change: backup sync,
+// the indexers, caches. Its events queue in order however far it falls
+// behind, and repeats of one event for one path collapse into the latest, so
+// the queue holds at most one entry per changed path. If it still outgrows
+// its bound, the backlog is replaced by one EventResync, and the subscriber
+// must reconcile from what is on disk.
+//
+// It returns the subscriber's channel and an unsubscribe func that closes it.
 func (b *Bus) Subscribe(id string) (<-chan Event, func()) {
-	ch := make(chan Event, 16)
-	b.mu.Lock()
-	b.subscribers[id] = ch
-	b.mu.Unlock()
-	return ch, func() {
-		b.mu.Lock()
-		delete(b.subscribers, id)
-		close(ch)
-		b.mu.Unlock()
-	}
+	return b.add(id, newQueuedSubscriber(b.maxPending))
 }
 
-// Publish sends an event to all subscribers (non-blocking; drops if buffer full).
+// SubscribeLossy registers a subscriber that would rather skip ahead than
+// hold events: an app's socket, which can refetch. It gets a small buffer;
+// when that is full, the backlog is discarded and replaced by one
+// EventResync carrying how many events were dropped, so the app refreshes
+// once instead of going quietly stale.
+func (b *Bus) SubscribeLossy(id string) (<-chan Event, func()) {
+	return b.add(id, newLossySubscriber())
+}
+
+// Publish hands an event to every subscriber. It never blocks.
 func (b *Bus) Publish(e Event) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	for _, ch := range b.subscribers {
-		select {
-		case ch <- e:
-		default:
-		}
+	for _, s := range b.subscribers {
+		s.deliver(e)
 	}
 }

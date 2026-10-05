@@ -56,7 +56,7 @@ func streamEvents(c *gin.Context) {
 
 	// The subscriber ID only has to be unique within the bus, so mint it per
 	// connection rather than from a package-global counter (#1674).
-	ch, unsub := deps.EventBus().Subscribe(uuid.NewString())
+	ch, unsub := deps.EventBus().SubscribeLossy(uuid.NewString())
 	defer unsub()
 
 	ctx := conn.CloseRead(c.Request.Context())

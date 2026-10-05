@@ -116,20 +116,33 @@ func (h harness) channelNames(t *testing.T, as string) []string {
 	return names
 }
 
+// drain returns every event published since the last drain, in order. The
+// subscription queues what its channel cannot hold rather than dropping it
+// (#2753), so it reads up to a marker it publishes itself instead of stopping
+// at the first empty read.
+func (h harness) drain() []eventbus.Event {
+	const marker = "chat-integration-test-drained"
+	h.deps.EventBus().Publish(eventbus.Event{Kind: eventbus.EventResync, Path: marker})
+	var events []eventbus.Event
+	for evt := range h.events {
+		if evt.Kind == eventbus.EventResync && evt.Path == marker {
+			break
+		}
+		events = append(events, evt)
+	}
+	return events
+}
+
 // heard drains the bus and reports how many chat_channel_changed events were
 // published for a channel.
 func (h harness) heard(channelID int64) int {
 	n := 0
-	for {
-		select {
-		case evt := <-h.events:
-			if changed, ok := evt.Data.(eventbus.ChatChannelChanged); ok && evt.Kind == eventbus.EventChatChannelChanged && changed.ChannelID == channelID {
-				n++
-			}
-		default:
-			return n
+	for _, evt := range h.drain() {
+		if changed, ok := evt.Data.(eventbus.ChatChannelChanged); ok && evt.Kind == eventbus.EventChatChannelChanged && changed.ChannelID == channelID {
+			n++
 		}
 	}
+	return n
 }
 
 // userBody names an account and, for a PUT, the set it gets.
