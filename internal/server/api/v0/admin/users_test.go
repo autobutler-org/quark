@@ -261,3 +261,33 @@ func TestDeleteUser_RemovesProfilePicture(t *testing.T) {
 		t.Errorf("bob's settings are still there (stat err %v)", err)
 	}
 }
+
+// TestDeleteUser_RemovesSettingsWhenPictureRemovalFails verifies a picture
+// that cannot be removed does not stop the settings cleanup: the account is
+// already gone, so a retry would never reach it (#2773).
+func TestDeleteUser_RemovesSettingsWhenPictureRemovalFails(t *testing.T) {
+	h := newAdminHarness(t)
+	h.addUser(t, "bob", authutil.StatusActive, false)
+	bob, err := h.database.Queries.GetUserByUsername(context.Background(), "bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A non-empty directory where the picture belongs is what os.Remove
+	// refuses, whoever runs the test.
+	picture := filepath.Join(avatarutil.Dir(storageutil.GetDataDir()), strconv.FormatInt(bob.ID, 10)+".png")
+	if err := os.MkdirAll(filepath.Join(picture, "blocker"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	settings := usersettingsutil.SaveParams{DataDir: storageutil.GetDataDir(), UserID: bob.ID, Settings: usersettingsutil.Settings{ThemeColor: "teal"}}
+	if _, err := usersettingsutil.Save(settings); err != nil {
+		t.Fatal(err)
+	}
+
+	if w := h.do(http.MethodDelete, "/api/v0/admin/users/bob"); w.Code != http.StatusInternalServerError {
+		t.Fatalf("DELETE = %d, want 500: %s", w.Code, w.Body.String())
+	}
+	if _, err := os.Stat(usersettingsutil.Path(settings.DataDir, bob.ID)); !os.IsNotExist(err) {
+		t.Errorf("bob's settings are still there (stat err %v)", err)
+	}
+}
