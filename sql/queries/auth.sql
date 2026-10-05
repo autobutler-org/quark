@@ -1,13 +1,13 @@
 -- name: CreateUser :one
-INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, recovery_key_hash)
+VALUES (?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- CreatePendingUser records an account request from the sign-in page (#1908).
 -- It cannot sign in until an admin approves it.
 -- name: CreatePendingUser :one
-INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, status)
-VALUES (?, ?, ?, ?, ?, 'pending')
+INSERT INTO users (username, password_hash, recovery_phrase_hash, auth_key_hash, auth_salt, recovery_key_hash, status)
+VALUES (?, ?, ?, ?, ?, ?, 'pending')
 RETURNING *;
 
 -- DeletePendingUser denies an account request. Only a pending row matches, so
@@ -32,12 +32,21 @@ SET status = sqlc.arg(to_status)
 WHERE username = sqlc.arg(username) AND status = sqlc.arg(from_status);
 
 -- SetRecoveryPhraseIfUnset gives an admin-created account its recovery phrase
--- on its first sign-in (#1873). Only an empty hash matches, so two sign-ins at
--- once cannot both hand out a phrase.
+-- on its first sign-in (#1873). Only an account with neither a phrase nor a
+-- recovery key matches, so two sign-ins at once cannot both hand out a phrase,
+-- and one racing a recovery-key rotation cannot undo it (#2430).
 -- name: SetRecoveryPhraseIfUnset :execrows
 UPDATE users
 SET recovery_phrase_hash = ?
-WHERE id = ? AND recovery_phrase_hash = '';
+WHERE id = ? AND recovery_phrase_hash = '' AND recovery_key_hash = '';
+
+-- SetRecoveryKey gives an account the recovery key its client derived from a
+-- phrase it generated (#2430), and clears the phrase hash so the old phrase,
+-- which the Quark saw, stops recovering the account.
+-- name: SetRecoveryKey :exec
+UPDATE users
+SET recovery_key_hash = ?, recovery_phrase_hash = ''
+WHERE id = ?;
 
 -- SetUserCredentials replaces everything an account signs in with (#2430). A
 -- recovery writes all three so that whichever of the password and the auth
