@@ -1,0 +1,16 @@
+# Test runner configuration for the app suite (`make test/unit/frontend/app`).
+
+# A test file whose load (its compile, then its connection) never finishes
+# fails after this long instead of stalling the run with no output (#2768).
+#
+# `flutter test` compiles files one at a time, and when copying a compiled
+# file into its temp directory throws (a full `/tmp`: "Disk quota exceeded"),
+# that compile never leaves the queue and no later file loads again. Nothing is
+# running then, so no test timeout can fire; the runner's own default for this
+# is no timeout at all. A legitimate load is seconds, queue wait and a cold
+# first compile included, so five minutes only ever catches a stuck one.
+#
+# Test timeouts stay at their defaults, which already end a hung test: 30
+# seconds for `test` and 10 minutes for `testWidgets`. A `timeout:` here would
+# only loosen the first, since `testWidgets` passes its own.
+suite_load_timeout: 5m
