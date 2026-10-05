@@ -164,4 +164,4 @@ Returns `{"setup": true}` or `{"setup": false}`. Useful for the frontend to know
 
 - The app asks for a password of at least 8 characters; the Quark only ever sees the key derived from it
 - The API is wide open until setup is complete (so finish setup before exposing the port)
-- There's no multi-user support yet — one owner account per device
+- A Quark can have many accounts; the first is an admin. See [Accounts and sharing](./guides/accounts-and-sharing.md)
