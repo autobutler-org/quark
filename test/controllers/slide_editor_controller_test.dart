@@ -1175,4 +1175,64 @@ void main() {
       expect(c.canUndo, isFalse);
     });
   });
+  group('transitions (#1164)', () {
+    const fade = SlideTransitionSpec.fade(durationMs: 800);
+
+    test('a slide follows the deck until it is given its own', () async {
+      final c = controllerFor(
+        Presentation(
+          title: 'Deck',
+          defaultTransition: fade,
+          slides: [
+            Slide(id: 's1'),
+            Slide(id: 's2'),
+          ],
+        ),
+      );
+      await c.load();
+      expect(c.slideTransition, isNull);
+      expect(c.effectiveTransition, fade);
+
+      const push = SlideTransitionSpec(kind: SlideTransitionKind.push);
+      c.setSlideTransition(push);
+      expect(c.slideTransition, push);
+      expect(c.effectiveTransition, push);
+      expect(c.saveState, SlideSaveState.dirty);
+
+      c.undo();
+      expect(c.slideTransition, isNull);
+      expect(c.effectiveTransition, fade);
+      expect(c.canUndo, isFalse);
+    });
+
+    test('apply to all sets the deck default as one undo step', () async {
+      final c = controllerFor(deck(2));
+      await c.load();
+      c.setSlideTransition(const SlideTransitionSpec.fade());
+      c.applyTransitionToAll(fade);
+      expect(c.presentation!.defaultTransition, fade);
+      expect(c.slides.every((s) => s.transition == null), isTrue);
+      c.undo();
+      expect(c.presentation!.defaultTransition, SlideTransitionSpec.none);
+      expect(c.slideTransition, const SlideTransitionSpec.fade());
+    });
+
+    test('a view-only deck ignores transition changes', () async {
+      final c = controllerFor(deck(1), readOnly: true);
+      await c.load();
+      c.setSlideTransition(fade);
+      c.applyTransitionToAll(fade);
+      expect(c.slideTransition, isNull);
+      expect(c.presentation!.defaultTransition, SlideTransitionSpec.none);
+      expect(c.canUndo, isFalse);
+    });
+
+    test('nothing is selected before the load', () {
+      final c = controllerFor(deck(1));
+      expect(c.slideTransition, isNull);
+      expect(c.effectiveTransition, SlideTransitionSpec.none);
+      c.setSlideTransition(fade);
+      c.applyTransitionToAll(fade);
+    });
+  });
 }

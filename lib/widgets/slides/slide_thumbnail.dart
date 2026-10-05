@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/slides/slide_editor_canvas.dart';
+import 'package:quark/widgets/slides/transition/slide_transition_labels.dart';
+import 'package:quark/widgets/slides/transition/slide_transition_marker.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -18,6 +20,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// A thumbnail that becomes the selected one scrolls itself into view, so a
 /// slide just added or duplicated is never left off the end of the panel.
+///
+/// A slide that plays a transition (#1164) wears a small marker at the
+/// bottom corner, and its label to a screen reader says which.
 ///
 /// Key prefixes, each followed by the slide id: `slide_thumb_` on the
 /// thumbnail, `slide_menu_` on its menu button, and `slide_present_`,
@@ -38,11 +43,16 @@ class SlideThumbnail extends StatefulWidget {
     this.onMoveLater,
     this.onPresent,
     this.theme,
+    this.transition = SlideTransitionSpec.none,
     super.key,
   });
 
   /// The presentation's theme, which the slide is drawn in; null for none.
   final SlideTheme? theme;
+
+  /// The transition the slide plays, which a marker shows unless it is
+  /// none (#1164).
+  final SlideTransitionSpec transition;
 
   /// The slide to draw.
   final Slide slide;
@@ -130,6 +140,7 @@ class _SlideThumbnailState extends State<SlideThumbnail> {
       :onMoveEarlier,
       :onMoveLater,
       :onPresent,
+      :transition,
     ) = widget;
     final id = slide.id;
     final entries = [
@@ -178,7 +189,9 @@ class _SlideThumbnailState extends State<SlideThumbnail> {
             container: true,
             button: true,
             selected: selected,
-            label: 'Slide $number',
+            label: transition.kind == SlideTransitionKind.none
+                ? 'Slide $number'
+                : 'Slide $number, ${SlideTransitionLabels.describe(transition)}',
             onTap: onSelect,
             excludeSemantics: true,
             child: InkWell(
@@ -204,6 +217,11 @@ class _SlideThumbnailState extends State<SlideThumbnail> {
                         imageBuilder: imageBuilder,
                         style: SlideEditorCanvas.styleOf(context),
                       ),
+                    ),
+                    PositionedDirectional(
+                      end: tokens.spacingXs,
+                      bottom: tokens.spacingXs,
+                      child: SlideTransitionMarker(transition: transition),
                     ),
                     PositionedDirectional(
                       start: tokens.spacingXs,

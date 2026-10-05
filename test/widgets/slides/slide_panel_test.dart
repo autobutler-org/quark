@@ -232,4 +232,60 @@ void main() {
     await tester.pumpAndSettle();
     expect(events, ['add blank']);
   });
+
+  testWidgets('a slide that plays a transition wears a labeled marker', (
+    tester,
+  ) async {
+    tap.setViewport(tester, tap.wideViewport);
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
+        home: Scaffold(
+          body: SizedBox(
+            width: SlidePanel.sideWidth,
+            height: 600,
+            child: SlidePanel(
+              slides: [
+                Slide(id: 'a'),
+                Slide(
+                  id: 'b',
+                  transition: const SlideTransitionSpec(
+                    kind: SlideTransitionKind.push,
+                    direction: SlideTransitionDirection.up,
+                  ),
+                ),
+                Slide(id: 'c', transition: SlideTransitionSpec.none),
+              ],
+              size: SlideSize.widescreen,
+              selectedSlideId: 'a',
+              axis: Axis.vertical,
+              canDelete: true,
+              defaultTransition: const SlideTransitionSpec.fade(),
+              onSelect: (_) {},
+              onAdd: () {},
+              onDuplicate: (_) {},
+              onDelete: (_) {},
+              onMove: (_, _) {},
+              onSelectPrevious: () {},
+              onSelectNext: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // a follows the deck's fade, b has its own push, c opts out.
+    expect(
+      find.byKey(const ValueKey('slide_transition_marker')),
+      findsNWidgets(2),
+    );
+    expect(find.bySemanticsLabel('Slide 1, Fade transition'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Slide 2, Push transition, up'),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('Slide 3'), findsOneWidget);
+    handle.dispose();
+  });
 }

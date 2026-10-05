@@ -303,6 +303,9 @@ class QuarkIcons {
   /// A slide's layout: where its placeholders sit.
   static const IconData slide_layout = Icons.view_quilt_outlined;
 
+  /// A slide's transition: how the show moves on to it.
+  static const IconData slide_transition = Icons.auto_awesome_motion_outlined;
+
   /// Put a slide's placeholders back where its layout has them.
   static const IconData reset_layout = Icons.restart_alt;
 
