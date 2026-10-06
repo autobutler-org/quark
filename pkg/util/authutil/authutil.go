@@ -114,6 +114,14 @@ var (
 var ErrAppTooOld error = serverutil.NewHttpError(http.StatusUpgradeRequired,
 	"This version of the app is too old for this Quark. Update the app to continue.")
 
+// ErrUnavailable reports a credential the database could not be asked about,
+// which says nothing about whether it is right (#2858). A credential with no
+// row behind it is not this: that one is wrong. It is a 503 HttpError, so a
+// handler that passes it on answers 503 whatever status it chose, and an app
+// keeps the session a 401 would have made it drop. The database's own error
+// is logged where it happened and is not part of this one.
+var ErrUnavailable error = serverutil.NewHttpError(http.StatusServiceUnavailable, "service unavailable")
+
 // RefuseRawSecrets returns ErrAppTooOld when any of secrets is set. Handlers
 // pass it the legacy fields a body can carry only from an old app (password at
 // setup and account creation, newPassword at recovery) before anything is
@@ -492,7 +500,8 @@ func IsSetupComplete(ctx context.Context, queries *db.Queries) (bool, error) {
 
 // GetAuthStatus reports whether setup is complete and, when the session token
 // is valid, the caller's username and admin flag. An invalid or missing token
-// is not an error: the caller is simply anonymous.
+// is not an error: the caller is simply anonymous. A token the database could
+// not be asked about is ErrUnavailable, not an anonymous caller.
 func GetAuthStatus(ctx context.Context, queries *db.Queries, params GetAuthStatusParams) (GetAuthStatusResult, error) {
 	setup, err := IsSetupComplete(ctx, queries)
 	if err != nil {
@@ -503,6 +512,9 @@ func GetAuthStatus(ctx context.Context, queries *db.Queries, params GetAuthStatu
 		return result, nil
 	}
 	username, userID, err := ValidateSession(ctx, queries, params.SessionToken)
+	if errors.Is(err, ErrUnavailable) {
+		return GetAuthStatusResult{}, err
+	}
 	if err != nil {
 		return result, nil
 	}
@@ -739,7 +751,8 @@ func GetSalt(ctx context.Context, queries *db.Queries, params GetSaltParams) (Ge
 //
 // With a Guard, a locked-out attempt gets *TooManyAttemptsError without its
 // credential being checked, and every wrong username or credential is counted
-// toward a lockout and logged with its address.
+// toward a lockout and logged with its address. An account lookup the
+// database could not answer is ErrUnavailable and is not counted.
 func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*LoginResult, error) {
 	if params.AuthKey == "" {
 		if err := RefuseRawSecrets(params.Password); err != nil {
@@ -895,11 +908,18 @@ func RepairHomes(ctx context.Context, params RepairHomesParams) (RepairHomesResu
 // callers that need it pay no extra query.
 //
 // Using a session also renews it; see renewSession.
+//
+// A token with no live session behind it is an error. A lookup the database
+// could not answer is ErrUnavailable, which a caller must not treat as a bad
+// token.
 func ValidateSession(ctx context.Context, queries *db.Queries, token string) (string, int64, error) {
 	digest := hashToken(token)
 	session, err := queries.GetSession(ctx, digest)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
 		return "", 0, fmt.Errorf("invalid or expired session")
+	}
+	if err != nil {
+		return "", 0, unavailable("session", err)
 	}
 	renewSession(ctx, queries, digest, session)
 	return session.Username, session.UserID, nil
@@ -913,12 +933,15 @@ func ValidateSession(ctx context.Context, queries *db.Queries, token string) (st
 // this does not create a session, and no login guard stands in front of it:
 // it confirms a signed-in caller's key before one sensitive action. The
 // per-request Basic fallback in requireAuth uses AuthenticateBasic, which is
-// guarded.
+// guarded. An account lookup the database could not answer is ErrUnavailable.
 func ValidateBasicAuth(ctx context.Context, queries *db.Queries, username, password string) (string, int64, error) {
 	if isRawSecret(password) {
 		return "", 0, ErrAppTooOld
 	}
 	user, err := queries.GetUserByUsername(ctx, username)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", 0, unavailable("account", err)
+	}
 	if err != nil || !checkAuthKey(ctx, queries, user, password) {
 		return "", 0, fmt.Errorf("invalid credentials")
 	}
@@ -956,7 +979,8 @@ type AuthenticateBasicResult struct {
 // someone who knows it. Unlike Login it creates no session.
 //
 // A raw password is ErrAppTooOld before anything else is checked, and is not
-// counted toward a lockout (#2430).
+// counted toward a lockout (#2430). Nor is an account lookup the database
+// could not answer, which is ErrUnavailable.
 func AuthenticateBasic(ctx context.Context, params AuthenticateBasicParams) (AuthenticateBasicResult, error) {
 	if isRawSecret(params.Password) {
 		return AuthenticateBasicResult{}, ErrAppTooOld

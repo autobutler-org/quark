@@ -83,6 +83,23 @@ func BcryptHash(t *testing.T, secret string) string {
 	return string(hash)
 }
 
+// HideTable renames table out from under its queries and returns the function
+// that puts it back with every row it held. It is how a test gets a real
+// query error from one table while the rest of the schema keeps answering,
+// and then shows that nothing was lost once the database answers again.
+func HideTable(t *testing.T, sqlDB *sql.DB, table string) (restore func()) {
+	t.Helper()
+	if _, err := sqlDB.Exec("ALTER TABLE " + table + " RENAME TO " + table + "_hidden"); err != nil {
+		t.Fatalf("dbtest: hide %s: %v", table, err)
+	}
+	return func() {
+		t.Helper()
+		if _, err := sqlDB.Exec("ALTER TABLE " + table + "_hidden RENAME TO " + table); err != nil {
+			t.Fatalf("dbtest: restore %s: %v", table, err)
+		}
+	}
+}
+
 // SaltSecret stands in for the install's salt secret, which settingsutil keeps
 // in settings.json, so an account a test makes with an auth key gets the same
 // salt on every run.

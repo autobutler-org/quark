@@ -714,6 +714,149 @@ func TestRequireAuth_DownloadTokenRestartsAnInterruptedZip(t *testing.T) {
 	}
 }
 
+// expectUnavailable fails unless w is the 503 the middleware answers when the
+// database could not be asked, with nothing of the database's error in it.
+func expectUnavailable(t *testing.T, name string, w *httptest.ResponseRecorder) {
+	t.Helper()
+	if w.Code != http.StatusServiceUnavailable || strings.TrimSpace(w.Body.String()) != `{"error":"service unavailable"}` {
+		t.Errorf("%s = %d %s, want 503 service unavailable", name, w.Code, w.Body)
+	}
+}
+
+// TestRequireAuth_LookupErrorReturns503 is #2858: a session or account lookup
+// the database could not answer is a 503, not the 401 an app reads as "signed
+// out". A credential the database says is wrong stays a 401, and the session
+// works again once the database answers.
+func TestRequireAuth_LookupErrorReturns503(t *testing.T) {
+	sqlDB, queries := newMiddlewareTestDB(t)
+	result, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: &db.DatabaseSqlc{Db: sqlDB, Queries: queries}, FilesDir: t.TempDir(),
+		Username: "admin",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
+	})
+	if err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	deps := deputil.NewDependencies().WithDatabase(&db.DatabaseSqlc{Db: sqlDB, Queries: queries})
+	engine := newMiddlewareEngine(t, deps)
+
+	get := func(prepare func(*http.Request)) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/api/v0/protected", nil)
+		prepare(req)
+		w := doMiddlewareReq(engine, req)
+		// The connected-device record lands before a table is hidden.
+		deps.Background().Wait()
+		return w
+	}
+	bearer := func(token string) func(*http.Request) {
+		return func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+token) }
+	}
+	basic := func(password string) func(*http.Request) {
+		return func(r *http.Request) { r.SetBasicAuth("admin", password) }
+	}
+	// A bearer token that names no session beside a cookie that does.
+	mixed := func(r *http.Request) {
+		bearer("no-such-token")(r)
+		r.AddCookie(&http.Cookie{Name: "session", Value: result.SessionToken})
+	}
+
+	if w := get(bearer(result.SessionToken)); w.Code != http.StatusOK {
+		t.Fatalf("valid session = %d, want 200", w.Code)
+	}
+	if w := get(bearer("no-such-token")); w.Code != http.StatusUnauthorized {
+		t.Errorf("unknown token = %d, want 401", w.Code)
+	}
+	if w := get(mixed); w.Code != http.StatusOK {
+		t.Errorf("unknown bearer beside a valid cookie = %d, want 200", w.Code)
+	}
+
+	restore := dbtest.HideTable(t, sqlDB, "sessions")
+	expectUnavailable(t, "valid session, failed lookup", get(bearer(result.SessionToken)))
+	expectUnavailable(t, "unknown token, failed lookup", get(bearer("no-such-token")))
+	expectUnavailable(t, "two credentials, failed lookups", get(mixed))
+	// The mixed case: the account lookup still answers, so a session that
+	// could not be checked beside a right key signs in, and beside a wrong
+	// key it is a 503, not a 401.
+	cookieAnd := func(password string) func(*http.Request) {
+		return func(r *http.Request) {
+			r.AddCookie(&http.Cookie{Name: "session", Value: result.SessionToken})
+			basic(password)(r)
+		}
+	}
+	if w := get(cookieAnd(dbtest.AuthKey("SecurePass1!"))); w.Code != http.StatusOK {
+		t.Errorf("failed session lookup beside a right key = %d, want 200", w.Code)
+	}
+	expectUnavailable(t, "failed session lookup beside a wrong key", get(cookieAnd(dbtest.AuthKey("not-it"))))
+	restore()
+	if w := get(bearer(result.SessionToken)); w.Code != http.StatusOK {
+		t.Errorf("the same session once the database answers = %d, want 200", w.Code)
+	}
+
+	restore = dbtest.HideTable(t, sqlDB, "users")
+	expectUnavailable(t, "Basic auth, failed lookup", get(basic(dbtest.AuthKey("SecurePass1!"))))
+	expectUnavailable(t, "Basic auth with a wrong key, failed lookup", get(basic(dbtest.AuthKey("not-it"))))
+	// A raw password is refused before any lookup, so it is still a 426.
+	if w := get(basic("SecurePass1!")); w.Code != http.StatusUpgradeRequired {
+		t.Errorf("raw password while accounts fail = %d, want 426", w.Code)
+	}
+	restore()
+	if w := get(basic(dbtest.AuthKey("SecurePass1!"))); w.Code != http.StatusOK {
+		t.Errorf("Basic auth once the database answers = %d, want 200", w.Code)
+	}
+	if w := get(basic(dbtest.AuthKey("not-it"))); w.Code != http.StatusUnauthorized {
+		t.Errorf("Basic auth with a wrong key = %d, want 401", w.Code)
+	}
+}
+
+// TestRequireAdmin_LookupErrorReturns503 is the same rule for the admin gate
+// (#2858): a member is a 403, and a role the database could not report is a
+// 503, not a 403 that tells an admin they are not one.
+func TestRequireAdmin_LookupErrorReturns503(t *testing.T) {
+	sqlDB, queries := newMiddlewareTestDB(t)
+	ctx := context.Background()
+	database := &db.DatabaseSqlc{Db: sqlDB, Queries: queries}
+	if _, err := authutil.Setup(ctx, authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+		Username: "admin",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
+	}); err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	if _, err := queries.CreateUser(ctx, db.CreateUserParams{Username: "member"}); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	// Stands in for requireAuth, which is what names the caller.
+	engine.Use(func(c *gin.Context) {
+		c = ctxutil.With(c, "username", c.Query("as"))
+		c.Next()
+	})
+	engine.GET("/admin", middleware.RequireAdmin(deputil.NewDependencies().WithDatabase(database)), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	get := func(username string) *httptest.ResponseRecorder {
+		return doMiddlewareReq(engine, httptest.NewRequest(http.MethodGet, "/admin?as="+username, nil))
+	}
+
+	if w := get("admin"); w.Code != http.StatusOK {
+		t.Fatalf("admin = %d, want 200", w.Code)
+	}
+	if w := get("member"); w.Code != http.StatusForbidden {
+		t.Errorf("member = %d, want 403", w.Code)
+	}
+	if w := get("ghost"); w.Code != http.StatusForbidden {
+		t.Errorf("an account that is gone = %d, want 403", w.Code)
+	}
+
+	restore := dbtest.HideTable(t, sqlDB, "users")
+	expectUnavailable(t, "admin, failed lookup", get("admin"))
+	expectUnavailable(t, "member, failed lookup", get("member"))
+	restore()
+	if w := get("admin"); w.Code != http.StatusOK {
+		t.Errorf("admin once the database answers = %d, want 200", w.Code)
+	}
+}
+
 // TestRequireAuth_BasicAuthLockout verifies the Basic fallback counts wrong
 // keys toward the login guard and answers a locked-out address with 429 and
 // Retry-After, even for the right key, while a client sending the right key

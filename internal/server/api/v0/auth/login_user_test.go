@@ -134,3 +134,47 @@ func TestRecoverAccount_StatusRefusal(t *testing.T) {
 		t.Errorf("recover pending body = %v, want status pending", body)
 	}
 }
+
+// TestAuthRoutes_LookupErrorIs503 is #2858 on the two routes requireAuth lets
+// through unchecked: a sign-in whose account could not be looked up is a 503,
+// not the 401 of a wrong password, and a status call whose session could not
+// be looked up is a 503, not an anonymous 200. Both answer as before once the
+// database does.
+func TestAuthRoutes_LookupErrorIs503(t *testing.T) {
+	database := dbtest.NewDB(t)
+	setup, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(), Username: "admin", AuthKey: dbtest.AuthKey("admin-password"), SaltSecret: dbtest.SaltSecret})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := newPublicAuthEngine(t, database)
+	login := func() *httptest.ResponseRecorder {
+		return postJSON(engine, "/api/v0/auth/login", map[string]string{"username": "admin", "authKey": dbtest.AuthKey("admin-password")})
+	}
+	status := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/api/v0/auth/status", nil)
+		req.Header.Set("Authorization", "Bearer "+setup.SessionToken)
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		return w
+	}
+	expectUnavailable := func(name string, w *httptest.ResponseRecorder) {
+		t.Helper()
+		if w.Code != http.StatusServiceUnavailable || decodeBody(t, w)["error"] != authutil.ErrUnavailable.Error() {
+			t.Errorf("%s = %d %s, want 503 service unavailable", name, w.Code, w.Body)
+		}
+	}
+
+	restore := dbtest.HideTable(t, database.Db, "users")
+	expectUnavailable("login, failed lookup", login())
+	restore()
+	if w := login(); w.Code != http.StatusOK {
+		t.Errorf("login once the database answers = %d, want 200: %s", w.Code, w.Body)
+	}
+
+	restore = dbtest.HideTable(t, database.Db, "sessions")
+	expectUnavailable("status, failed lookup", status())
+	restore()
+	if w := status(); w.Code != http.StatusOK || decodeBody(t, w)["username"] != "admin" {
+		t.Errorf("status once the database answers = %d %s, want 200 for admin", w.Code, w.Body)
+	}
+}
