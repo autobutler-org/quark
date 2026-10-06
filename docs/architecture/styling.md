@@ -92,7 +92,9 @@ legible on it too.
 In HSL, at the seed's hue. Each role starts from a saturation and lightness of its own, written `S / L` below
 (every saturation is then multiplied by the theme's strength, 0.45 at most). Where a row says "until", the
 lightness is moved in one direction, by bisection, only as far as it takes for the condition to hold on the
-8-bit color that is painted. "Darker" and "lighter" are the direction of that move.
+8-bit color that is painted. "Darker" and "lighter" are the direction of that move. Every "until" ratio is aimed
+0.1 above the figure written, 4.6:1 for 4.5:1 and 3.1:1 for 3:1, because bisection stops the moment a ratio
+holds and would otherwise leave pairs sitting exactly on the WCAG floor (#2785).
 
 | Token | Light | Dark |
 | --- | --- | --- |
@@ -121,7 +123,9 @@ with light text.
 ### What the contrast test guarantees
 
 [`quark_theme_color_test.dart`](../../packages/quark_widgets/test/theme/quark_theme_color_test.dart) holds every
-derived preset and 483 custom seeds from around the wheel, in both modes, to all of this:
+derived preset and 483 custom seeds from around the wheel, in both modes, to all of this. Every pair the
+derivation moves (text, muted text, the accent, borders) has to clear its ratio by the 0.1 margin; the fixed
+status colors, `primaryForeground` and the seeded Material slots are held to the ratio itself:
 
 | Pair | Ratio |
 | --- | --- |
@@ -136,8 +140,9 @@ derived preset and 483 custom seeds from around the wheel, in both modes, to all
 | The Material slots `QuarkTheme.from` leaves seeded: `onSurfaceVariant` on each content surface and on `surfaceContainerHighest`, `onPrimaryContainer`, `onErrorContainer` on their containers | 4.5:1 |
 
 The status row is relative because the shipped `warning` and `success` do not reach 3:1 on white: 2.15 and
-2.54 on a classic light card, 1.96 and 2.32 on the classic light sidebar. `classic` itself is held only to the
-accent pair it already passed; its muted text and borders are #2600.
+2.54 on a classic light card, 1.96 and 2.32 on the classic light sidebar. `classic` is written out rather than
+derived and is held to the ratios without the margin: its text, muted text included (#2785), and its accent on
+every surface and selection tint. Its borders are still #2600.
 
 The same file holds the derivation to the design, so it cannot pass by going gray: the chrome and the accent
 stay within three degrees of the seed's hue, the chrome's channels spread at least 0.12 in light mode and 0.07
