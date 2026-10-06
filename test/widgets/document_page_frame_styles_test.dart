@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/document_editor/document_page_frame.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// A block style the page leaves null does not fall back to its `paragraph`
 /// style — flutter_quill substitutes its own 16px/1.15 default in the ambient
@@ -15,6 +16,7 @@ void main() {
     WidgetTester tester,
     Document document, {
     bool darkPage = false,
+    QuarkThemeColor themeColor = QuarkThemeColor.classic,
   }) async {
     final controller = QuillController(
       document: document,
@@ -41,6 +43,7 @@ void main() {
             editorFocus: focus,
             scrollController: scroll,
             darkPage: darkPage,
+            themeColor: themeColor,
             isReadOnly: false,
             onTap: () {},
             onKeyPressed: (_, _) => null,
@@ -137,6 +140,52 @@ void main() {
         moreOrLessEquals(baselineOf(tester, 'item'), epsilon: 0.5),
       );
     });
+  }
+
+  // The page built its palette from `QuarkTheme.dark()` and `.light()` with
+  // no theme color, so under any color but classic it kept classic's fill and
+  // border while the chrome around it changed (#2786).
+  for (final themeColor in [QuarkThemeColor.pink, QuarkThemeColor.lime]) {
+    for (final darkPage in [false, true]) {
+      testWidgets('the page wears ${themeColor.storageValue} '
+          '(darkPage: $darkPage)', (tester) async {
+        await pumpFrame(
+          tester,
+          Document(),
+          darkPage: darkPage,
+          themeColor: themeColor,
+        );
+
+        final scheme =
+            (darkPage
+                    ? QuarkTheme.dark(themeColor: themeColor)
+                    : QuarkTheme.light(themeColor: themeColor))
+                .colorScheme;
+        final page =
+            tester
+                    .widgetList<Container>(
+                      find.descendant(
+                        of: find.byType(DocumentPageFrame),
+                        matching: find.byType(Container),
+                      ),
+                    )
+                    .first
+                    .decoration!
+                as BoxDecoration;
+        expect(page.color, scheme.surface);
+        expect(page.border!.top.color, scheme.outline);
+        expect(
+          tester
+              .widget<QuillEditor>(find.byType(QuillEditor))
+              .config
+              .customStyles!
+              .code!
+              .decoration!
+              .color,
+          scheme.surfaceContainerHighest,
+        );
+      });
+    }
   }
 
   // WCAG 2 contrast ratio; 4.5 is the AA floor for normal-size text.

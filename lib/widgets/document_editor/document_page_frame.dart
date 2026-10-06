@@ -155,6 +155,10 @@ class DocumentPageFrame extends StatelessWidget {
   /// Page brightness, chosen independently of the global theme toggle (#938).
   final bool darkPage;
 
+  /// The app's theme color, so the page wears the same palette as the chrome
+  /// around it in whichever brightness [darkPage] picks.
+  final QuarkThemeColor themeColor;
+
   /// Read-only / edit mode (#939) — drives whether a caret is drawn at all.
   final bool isReadOnly;
   final VoidCallback onTap;
@@ -165,6 +169,7 @@ class DocumentPageFrame extends StatelessWidget {
     required this.editorFocus,
     required this.scrollController,
     required this.darkPage,
+    required this.themeColor,
     required this.isReadOnly,
     required this.onTap,
     required this.onKeyPressed,
@@ -174,13 +179,14 @@ class DocumentPageFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // When dark page mode is active, use the app's dark theme ColorScheme;
-    // when light, use the app's light theme ColorScheme. This keeps the
+    // when light, use the app's light theme ColorScheme, both in the app's
+    // theme color rather than classic's. This keeps the
     // editor page consistent with the rest of the app's design language
     // while allowing the user to choose page brightness independently of
     // the global theme toggle.
     final pageCs = darkPage
-        ? QuarkTheme.dark().colorScheme
-        : QuarkTheme.light().colorScheme;
+        ? QuarkTheme.dark(themeColor: themeColor).colorScheme
+        : QuarkTheme.light(themeColor: themeColor).colorScheme;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),

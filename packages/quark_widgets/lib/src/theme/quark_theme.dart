@@ -9,14 +9,9 @@ import 'quark_tokens.dart';
 /// reach values the Material [ColorScheme] has no slot for — `sidebar`,
 /// `warning`, `success`, the spacing scale — with [QuarkTokens.of].
 ///
-/// ```dart
-/// MaterialApp(
-///   theme: QuarkTheme.light(),
-///   darkTheme: QuarkTheme.dark(),
-/// );
-/// ```
-///
-/// Pass a theme color to derive the whole theme from one picked color:
+/// Both constructors take the theme color the whole theme is derived from.
+/// It is required, so a caller cannot fall back to classic by leaving it out
+/// while the rest of the app wears the picked color (#2786):
 ///
 /// ```dart
 /// final themeColor = QuarkThemeColor.parse(settings.themeColor);
@@ -27,16 +22,14 @@ import 'quark_tokens.dart';
 /// ```
 abstract final class QuarkTheme {
   /// Quark's dark theme, built from the dark tokens of [themeColor]. That is
-  /// [QuarkTokens.dark] for [QuarkThemeColor.classic], the default.
-  static ThemeData dark({
-    QuarkThemeColor themeColor = QuarkThemeColor.classic,
-  }) => from(themeColor.tokensFor(Brightness.dark), Brightness.dark);
+  /// [QuarkTokens.dark] for [QuarkThemeColor.classic].
+  static ThemeData dark({required QuarkThemeColor themeColor}) =>
+      from(themeColor.tokensFor(Brightness.dark), Brightness.dark);
 
   /// Quark's light theme, built from the light tokens of [themeColor]. That
-  /// is [QuarkTokens.light] for [QuarkThemeColor.classic], the default.
-  static ThemeData light({
-    QuarkThemeColor themeColor = QuarkThemeColor.classic,
-  }) => from(themeColor.tokensFor(Brightness.light), Brightness.light);
+  /// is [QuarkTokens.light] for [QuarkThemeColor.classic].
+  static ThemeData light({required QuarkThemeColor themeColor}) =>
+      from(themeColor.tokensFor(Brightness.light), Brightness.light);
 
   /// Builds a [ThemeData] for [brightness] out of [tokens].
   ///

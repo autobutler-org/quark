@@ -173,37 +173,43 @@ void main() {
       }
     });
 
-    test('classic is the default, and the shipped tokens', () {
-      expect(
-        QuarkTheme.light(themeColor: QuarkThemeColor.classic).colorScheme,
-        QuarkTheme.light().colorScheme,
-      );
-      expect(
-        QuarkTheme.dark(themeColor: QuarkThemeColor.classic).colorScheme,
-        QuarkTheme.dark().colorScheme,
-      );
+    test('classic is the shipped tokens', () {
       // What the app bar and the drawer were before they had a token.
       expect(
-        QuarkTheme.light().appBarTheme.backgroundColor,
+        QuarkTheme.light(
+          themeColor: QuarkThemeColor.classic,
+        ).appBarTheme.backgroundColor,
         QuarkTokens.light.sidebar,
       );
       expect(
-        QuarkTheme.dark().appBarTheme.foregroundColor,
+        QuarkTheme.dark(
+          themeColor: QuarkThemeColor.classic,
+        ).appBarTheme.foregroundColor,
         QuarkTokens.dark.foreground,
       );
     });
 
-    test('dark() and light() are from() with the shipped tokens', () {
+    test('classic dark() and light() are from() with the shipped tokens', () {
       expect(
-        QuarkTheme.dark().colorScheme,
+        QuarkTheme.dark(themeColor: QuarkThemeColor.classic).colorScheme,
         QuarkTheme.from(QuarkTokens.dark, Brightness.dark).colorScheme,
       );
       expect(
-        QuarkTheme.light().colorScheme,
+        QuarkTheme.light(themeColor: QuarkThemeColor.classic).colorScheme,
         QuarkTheme.from(QuarkTokens.light, Brightness.light).colorScheme,
       );
-      expect(QuarkTheme.dark().extension<QuarkTokens>(), QuarkTokens.dark);
-      expect(QuarkTheme.light().extension<QuarkTokens>(), QuarkTokens.light);
+      expect(
+        QuarkTheme.dark(
+          themeColor: QuarkThemeColor.classic,
+        ).extension<QuarkTokens>(),
+        QuarkTokens.dark,
+      );
+      expect(
+        QuarkTheme.light(
+          themeColor: QuarkThemeColor.classic,
+        ).extension<QuarkTokens>(),
+        QuarkTokens.light,
+      );
     });
   });
 

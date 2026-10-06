@@ -111,14 +111,18 @@ class DocumentEditorBody extends StatelessWidget {
               child: Column(
                 children: [
                   Expanded(
-                    child: DocumentPageFrame(
-                      controller: controller,
-                      editorFocus: editorFocus,
-                      scrollController: scrollController,
-                      darkPage: darkPage,
-                      isReadOnly: isReadOnly,
-                      onTap: onEditorTap,
-                      onKeyPressed: onEditorKey,
+                    child: ValueListenableBuilder<QuarkThemeColor>(
+                      valueListenable: AppSettings.instance.themeColor,
+                      builder: (context, themeColor, _) => DocumentPageFrame(
+                        controller: controller,
+                        editorFocus: editorFocus,
+                        scrollController: scrollController,
+                        darkPage: darkPage,
+                        themeColor: themeColor,
+                        isReadOnly: isReadOnly,
+                        onTap: onEditorTap,
+                        onKeyPressed: onEditorKey,
+                      ),
                     ),
                   ),
                   ValueListenableBuilder<int>(
