@@ -1,10 +1,10 @@
 package settingsutil
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"maps"
-	"os"
 	"path/filepath"
 	"strconv"
 
@@ -123,7 +123,7 @@ func migrate(path string, data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal migrated settings: %w", err)
 	}
-	if err := os.WriteFile(path, out, 0600); err != nil {
+	if err := storageutil.WriteFileAtomicPerm(path, bytes.NewReader(out), 0600); err != nil {
 		return nil, fmt.Errorf("failed to write migrated settings: %w", err)
 	}
 	return out, nil

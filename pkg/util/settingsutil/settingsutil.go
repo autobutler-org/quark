@@ -3,6 +3,7 @@
 package settingsutil
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"sync"
+
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
 const settingsFileName = "settings.json"
@@ -150,7 +153,7 @@ func Save(s *Settings) error {
 		return fmt.Errorf("failed to marshal settings: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := storageutil.WriteFileAtomicPerm(path, bytes.NewReader(data), 0600); err != nil {
 		return fmt.Errorf("failed to write settings file: %w", err)
 	}
 

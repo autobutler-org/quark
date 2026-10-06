@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"math/big"
@@ -212,5 +213,51 @@ func writeSoonExpiredCert(t *testing.T, certPath, keyPath string) {
 	defer kf.Close()
 	if err := pem.Encode(kf, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}); err != nil {
 		t.Fatalf("encode key PEM: %v", err)
+	}
+}
+
+// TestEnsureSelfSignedCert_RegeneratesByReplacingWholeFiles checks a
+// regenerated pair is renamed into place rather than truncating the old files
+// (#2611), stays private, and still matches: a key torn by a power cut would
+// never be regenerated, because only the cert decides that.
+func TestEnsureSelfSignedCert_RegeneratesByReplacingWholeFiles(t *testing.T) {
+	dir := t.TempDir()
+	certFile, keyFile, err := tlsutil.EnsureSelfSignedCert(dir)
+	if err != nil {
+		t.Fatalf("first EnsureSelfSignedCert: %v", err)
+	}
+	oldKey, err := os.ReadFile(keyFile)
+	if err != nil {
+		t.Fatalf("read key: %v", err)
+	}
+	if err := os.Link(keyFile, keyFile+".old"); err != nil {
+		t.Fatalf("link key: %v", err)
+	}
+	if err := os.WriteFile(certFile, []byte("not a cert"), 0o600); err != nil {
+		t.Fatalf("corrupt cert: %v", err)
+	}
+
+	if _, _, err := tlsutil.EnsureSelfSignedCert(dir); err != nil {
+		t.Fatalf("second EnsureSelfSignedCert: %v", err)
+	}
+
+	linked, err := os.ReadFile(keyFile + ".old")
+	if err != nil {
+		t.Fatalf("read old key link: %v", err)
+	}
+	if string(linked) != string(oldKey) {
+		t.Fatal("key was rewritten in place; a power cut mid-write could leave it empty")
+	}
+	if _, err := tls.LoadX509KeyPair(certFile, keyFile); err != nil {
+		t.Fatalf("regenerated pair does not load: %v", err)
+	}
+	for _, f := range []string{certFile, keyFile} {
+		info, err := os.Stat(f)
+		if err != nil {
+			t.Fatalf("stat %s: %v", f, err)
+		}
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Errorf("%s mode = %o, want 600", filepath.Base(f), perm)
+		}
 	}
 }

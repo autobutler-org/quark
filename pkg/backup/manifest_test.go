@@ -182,3 +182,42 @@ func TestVerifyBackup_NoManifest(t *testing.T) {
 		t.Error("expected error when manifest is missing")
 	}
 }
+
+// TestWriteManifestReplacesTheFileWhole checks a rewritten manifest is renamed
+// into place rather than truncating the old one, so a power cut mid-write
+// cannot leave an empty manifest (#2611).
+func TestWriteManifestReplacesTheFileWhole(t *testing.T) {
+	dir := makeBackupDir(t, map[string]string{"a.txt": "hello"})
+	m, _ := GenerateManifest(dir)
+	if err := WriteManifest(m, dir); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, manifestFilename)
+	old, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(path, path+".old"); err != nil {
+		t.Fatal(err)
+	}
+
+	m.TotalFiles = 42
+	if err := WriteManifest(m, dir); err != nil {
+		t.Fatal(err)
+	}
+
+	linked, err := os.ReadFile(path + ".old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(linked) != string(old) {
+		t.Fatal("manifest was rewritten in place")
+	}
+	read, err := ReadManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read.TotalFiles != 42 {
+		t.Errorf("TotalFiles = %d, want 42", read.TotalFiles)
+	}
+}

@@ -1,6 +1,7 @@
 package storageutil
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -266,7 +267,7 @@ func TrashFilesImpl(params TrashFilesParams, filesDir string) (*TrashFilesResult
 			TrashedAt:    now,
 			TrashedBy:    params.TrashedBy,
 		})
-		if err := os.WriteFile(trashMetaFile(trashDest), metaBytes, 0o600); err != nil {
+		if err := WriteFileAtomicPerm(trashMetaFile(trashDest), bytes.NewReader(metaBytes), 0o600); err != nil {
 			_ = os.Rename(trashDest, fullPath)
 			return result, fmt.Errorf("failed to record trash metadata for %s: %w", filePath, err)
 		}

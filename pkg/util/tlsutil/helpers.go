@@ -1,6 +1,7 @@
 package tlsutil
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -13,6 +14,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
 // needsRegen returns true when the cert file is absent, unreadable, or expires
@@ -80,28 +83,23 @@ func generate(certFile, keyFile string) error {
 		return fmt.Errorf("create certificate: %w", err)
 	}
 
-	// Write cert file.
-	cf, err := os.OpenFile(certFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return fmt.Errorf("open cert file: %w", err)
-	}
-	defer cf.Close()
-	if err := pem.Encode(cf, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
-		return fmt.Errorf("encode cert PEM: %w", err)
-	}
-
-	// Write key file — ECDSA keys are marshalled as SEC 1 / EC PRIVATE KEY.
+	// Key first, then the cert: needsRegen reads only the cert, so the cert
+	// is the commit point. A crash between the two leaves the old cert (or
+	// none), and the next start generates the pair again rather than serving
+	// a cert with a key that does not match it. Each file is renamed into
+	// place whole, so neither is ever left half-written (#2611).
+	// ECDSA keys are marshalled as SEC 1 / EC PRIVATE KEY.
 	keyDER, err := x509.MarshalECPrivateKey(privKey)
 	if err != nil {
 		return fmt.Errorf("marshal EC key: %w", err)
 	}
-	kf, err := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return fmt.Errorf("open key file: %w", err)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+	if err := storageutil.WriteFileAtomicPerm(keyFile, bytes.NewReader(keyPEM), 0o600); err != nil {
+		return fmt.Errorf("write key file: %w", err)
 	}
-	defer kf.Close()
-	if err := pem.Encode(kf, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}); err != nil {
-		return fmt.Errorf("encode key PEM: %w", err)
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	if err := storageutil.WriteFileAtomicPerm(certFile, bytes.NewReader(certPEM), 0o600); err != nil {
+		return fmt.Errorf("write cert file: %w", err)
 	}
 
 	return nil
