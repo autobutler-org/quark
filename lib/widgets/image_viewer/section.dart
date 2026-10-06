@@ -17,7 +17,7 @@ class Section extends StatelessWidget {
           child: Text(
             title.toUpperCase(),
             style: const TextStyle(
-              color: Colors.white38,
+              color: Colors.white70,
               fontSize: 11,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.8,

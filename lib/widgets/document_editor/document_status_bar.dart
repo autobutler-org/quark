@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/document_editor/document_status_item.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// The strip under the document: page brightness, word count, and save state.
 class DocumentStatusBar extends StatelessWidget {
@@ -22,8 +23,8 @@ class DocumentStatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final muted = cs.onSurface.withValues(alpha: 0.5);
+    final tokens = QuarkTokens.of(context);
+    final muted = tokens.mutedForeground;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -66,16 +67,16 @@ class DocumentStatusBar extends StatelessWidget {
               color: muted,
             )
           else if (dirty)
-            const DocumentStatusItem(
+            DocumentStatusItem(
               icon: QuarkIcons.circle,
               label: 'Unsaved',
-              color: Color(0xFFF59E0B),
+              color: tokens.warning,
             )
           else
-            const DocumentStatusItem(
+            DocumentStatusItem(
               icon: QuarkIcons.check_circle_outline,
               label: 'Saved',
-              color: Color(0xFF10B981),
+              color: tokens.success,
             ),
         ],
       ),

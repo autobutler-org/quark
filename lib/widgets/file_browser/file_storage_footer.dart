@@ -45,6 +45,7 @@ class FileStorageFooter extends StatelessWidget {
         ? 0.0
         : (status.diskPercent / 100).clamp(0.0, 1.0);
     final colorScheme = Theme.of(context).colorScheme;
+    final muted = QuarkTokens.of(context).mutedForeground;
     final barColor = QuarkStorageBar.colorForFraction(
       diskPercent,
       QuarkTokens.of(context),
@@ -68,11 +69,7 @@ class FileStorageFooter extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) => Row(
                 children: [
-                  Icon(
-                    QuarkIcons.storage_rounded,
-                    size: 14,
-                    color: colorScheme.onSurface.withValues(alpha: 0.4),
-                  ),
+                  Icon(QuarkIcons.storage_rounded, size: 14, color: muted),
                   const SizedBox(width: 8),
                   // Sized to its text, capped at half the row so a phone
                   // still cuts it short with an ellipsis (#1599). Not
@@ -92,10 +89,7 @@ class FileStorageFooter extends StatelessWidget {
                                 ' / ${_formatBytes(status.diskTotalBytes)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: colorScheme.onSurface.withValues(alpha: 0.4),
-                      ),
+                      style: TextStyle(fontSize: 12, color: muted),
                     ),
                   ),
                   const SizedBox(width: 12),
