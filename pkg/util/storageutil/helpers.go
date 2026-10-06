@@ -51,11 +51,9 @@ func within(base, p string) bool {
 //
 // The policy: a symlink that resolves inside base is allowed, one that leaves
 // it is not, and a dangling one is refused, since writing through it would
-// create its target wherever it points. The deepest existing ancestor of
-// joined is resolved and the components that do not exist yet are appended, so
-// a file about to be created is checked against the directory it will land in.
-// base itself may be a symlink (datalinks/ is). A base that does not exist has
-// nothing on disk to follow, and the lexical check stands.
+// create its target wherever it points. base itself may be a symlink
+// (datalinks/ is). A base that does not exist has nothing on disk to follow,
+// and the lexical check stands.
 //
 // This narrows the window rather than closing it: a link planted between this
 // check and the caller's open is not seen.
@@ -64,25 +62,67 @@ func resolvesWithin(base, joined string) bool {
 	if err != nil {
 		return true
 	}
-	current, suffix := joined, ""
+	landed, ok := resolvePending(base, joined, filepath.EvalSymlinks)
+	return ok && within(realBase, landed)
+}
+
+// resolvePending is [ResolvePending] with the symlink resolver injected, so a
+// test can make a directory appear between two looks at it.
+func resolvePending(base, p string, evalSymlinks func(string) (string, error)) (string, bool) {
+	current, suffix := p, ""
 	for {
-		landed, err := filepath.EvalSymlinks(current)
+		landed, err := evalSymlinks(current)
 		if err == nil {
-			return within(realBase, filepath.Join(landed, suffix))
+			return filepath.Join(landed, suffix), true
 		}
-		// current is on disk yet did not resolve: a dangling link, something
-		// unreadable, or a directory another request created since the line
-		// above. Resolving once more tells the last from the first two.
+		// current exists yet did not resolve: it is a dangling link, it is
+		// unreadable, or it was created after evalSymlinks looked — concurrent
+		// uploads into one new folder race to create it (#2767). A second look
+		// tells them apart: a directory that appeared now resolves, a dangling
+		// link still does not. base resolved, so the walk never climbs above it.
 		if _, statErr := os.Lstat(current); statErr == nil {
-			landed, err := filepath.EvalSymlinks(current)
-			return err == nil && within(realBase, filepath.Join(landed, suffix))
+			if landed, err := evalSymlinks(current); err == nil {
+				return filepath.Join(landed, suffix), true
+			}
+			return "", false
 		}
-		// base resolved, so the walk never climbs above it.
 		if current == base {
-			return false
+			return "", false
 		}
 		suffix = filepath.Join(filepath.Base(current), suffix)
 		current = filepath.Dir(current)
+	}
+}
+
+// createFree creates target, or the first numbered name beside it that is
+// free, and returns the file open for writing; its Name is the path it took.
+// The create is exclusive, so two requests racing for one name each get a
+// file of their own, where a stat for a free name followed by os.Create would
+// hand both the same name and let the second truncate the first.
+func createFree(target string) (*os.File, error) {
+	var f *os.File
+	_, err := takeFreeName(target, func(p string) (err error) {
+		f, err = os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
+		return err
+	})
+	return f, err
+}
+
+// mkdirFree is createFree for a directory: it makes target, or the first
+// numbered name beside it that is free, and returns the path it made.
+func mkdirFree(target string) (string, error) {
+	return takeFreeName(target, func(p string) error { return os.Mkdir(p, 0o755) })
+}
+
+// takeFreeName calls create with target and then each numbered name beside it
+// until one does not already exist, and returns the path create last tried.
+func takeFreeName(target string, create func(p string) error) (string, error) {
+	dir, name := filepath.Split(target)
+	for n := 0; ; n++ {
+		p := filepath.Join(dir, NumberedName(name, n))
+		if err := create(p); !errors.Is(err, fs.ErrExist) {
+			return p, err
+		}
 	}
 }
 

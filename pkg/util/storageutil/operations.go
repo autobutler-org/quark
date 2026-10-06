@@ -732,9 +732,13 @@ func CopyFileImpl(params CopyFileParams, device *ManagedDevice, defaultFilesDir 
 
 	ext := filepath.Ext(srcFull)
 	stem := srcFull[:len(srcFull)-len(ext)]
-	destFull := GetNonConflictingPath(stem + "_copy" + ext)
-
-	if err := copyFileContents(srcFull, destFull); err != nil {
+	out, err := createFree(stem + "_copy" + ext)
+	if err != nil {
+		return nil, fmt.Errorf("copy failed: %w", err)
+	}
+	destFull := out.Name()
+	if err := copyFileContents(srcFull, out); err != nil {
+		os.Remove(destFull)
 		return nil, fmt.Errorf("copy failed: %w", err)
 	}
 
@@ -746,23 +750,18 @@ func CopyFileImpl(params CopyFileParams, device *ManagedDevice, defaultFilesDir 
 	return &CopyFileResult{NewRelPath: newRelPath}, nil
 }
 
-// copyFileContents writes the contents of src to dst.
-func copyFileContents(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
+// copyFileContents writes the contents of src to out, and closes out.
+func copyFileContents(src string, out *os.File) (err error) {
 	defer func() {
 		if cerr := out.Close(); cerr != nil && err == nil {
 			err = cerr
 		}
 	}()
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
 
 	_, err = io.Copy(out, in)
 	return err

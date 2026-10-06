@@ -147,8 +147,8 @@ func extractArchive(fullPath string) (*ExtractFileResult, error) {
 		return nil, fmt.Errorf("archive format %T does not support extraction", format)
 	}
 
-	destDir := archiveDestDir(fullPath)
-	if err := os.MkdirAll(destDir, 0755); err != nil {
+	destDir, err := makeArchiveDestDir(fullPath)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create destination directory: %w", err) // coverage: ignore
 	}
 
@@ -180,21 +180,24 @@ func extractDecompressed(decomp archiver.Decompressor, r io.Reader, fullPath str
 	stem := strings.TrimSuffix(filepath.Base(fullPath), archiveExt(fullPath))
 	// Also strip a trailing .tar if present (e.g. foo.tar.gz → foo).
 	stem = strings.TrimSuffix(stem, ".tar")
-	outPath := GetNonConflictingPath(filepath.Join(filepath.Dir(fullPath), stem))
-
-	out, err := os.Create(outPath)
+	out, err := createFree(filepath.Join(filepath.Dir(fullPath), stem))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create output file: %w", err) // coverage: ignore
 	}
-	defer out.Close()
+	outPath := out.Name()
 
 	limited := io.LimitReader(rc, MaxArchiveEntryBytes+1)
 	n, err := io.Copy(out, limited)
-	if err != nil {
-		return nil, fmt.Errorf("failed to write decompressed output: %w", err)
+	out.Close()
+	switch {
+	case err != nil:
+		err = fmt.Errorf("failed to write decompressed output: %w", err)
+	case n > MaxArchiveEntryBytes:
+		err = fmt.Errorf("decompressed output exceeds maximum allowed size of %d bytes", MaxArchiveEntryBytes)
 	}
-	if n > MaxArchiveEntryBytes {
-		return nil, fmt.Errorf("decompressed output exceeds maximum allowed size of %d bytes", MaxArchiveEntryBytes)
+	if err != nil {
+		os.Remove(outPath)
+		return nil, err
 	}
 
 	return &ExtractFileResult{DestDir: filepath.Dir(outPath), CreatedPath: outPath}, nil
@@ -285,14 +288,15 @@ func archiveExt(path string) string {
 	return strings.ToLower(filepath.Ext(path))
 }
 
-// archiveDestDir returns a conflict-safe destination directory for an archive,
-// stripping double-extensions (e.g. "foo.tar.gz" → "foo", "foo.zip" → "foo").
-func archiveDestDir(fullPath string) string {
+// makeArchiveDestDir creates a destination directory for an archive beside
+// it, stripping double-extensions (e.g. "foo.tar.gz" → "foo", "foo.zip" →
+// "foo"), and numbers it when that name is taken, so two extractions never
+// share a folder.
+func makeArchiveDestDir(fullPath string) (string, error) {
 	base := filepath.Base(fullPath)
 	ext := archiveExt(fullPath)
 	stem := strings.TrimSuffix(base, ext)
 	// Strip a trailing .tar that may remain after stripping .gz/.bz2/.xz.
 	stem = strings.TrimSuffix(stem, ".tar")
-	dest := filepath.Join(filepath.Dir(fullPath), stem)
-	return GetNonConflictingPath(dest)
+	return mkdirFree(filepath.Join(filepath.Dir(fullPath), stem))
 }

@@ -338,7 +338,7 @@ func TestArchiveExt(t *testing.T) {
 	}
 }
 
-func TestArchiveDestDir_DoubleExtension(t *testing.T) {
+func TestMakeArchiveDestDir_DoubleExtension(t *testing.T) {
 	dir := t.TempDir()
 	cases := []struct {
 		filename string
@@ -354,10 +354,13 @@ func TestArchiveDestDir_DoubleExtension(t *testing.T) {
 	}
 	for _, c := range cases {
 		fullPath := filepath.Join(dir, c.filename)
-		got := archiveDestDir(fullPath)
+		got, err := makeArchiveDestDir(fullPath)
+		if err != nil {
+			t.Fatalf("makeArchiveDestDir(%q): %v", c.filename, err)
+		}
 		gotBase := filepath.Base(got)
-		if gotBase != c.wantStem && !strings.HasPrefix(gotBase, c.wantStem+" ") {
-			t.Errorf("archiveDestDir(%q) base = %q; want stem %q", c.filename, gotBase, c.wantStem)
+		if gotBase != c.wantStem && !strings.HasPrefix(gotBase, c.wantStem+"_(") {
+			t.Errorf("makeArchiveDestDir(%q) base = %q; want stem %q", c.filename, gotBase, c.wantStem)
 		}
 	}
 }
