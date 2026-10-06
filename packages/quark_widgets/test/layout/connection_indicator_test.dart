@@ -6,8 +6,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 /// The app bar's local, remote or offline tile (#1880): one glyph and one
-/// token color per state, the caller's label as its tooltip, and no tap
-/// target.
+/// token color per state, the caller's label as its tooltip, and a tap target
+/// only when the caller asks for one (#2857).
 void main() {
   const cases = [
     (ConnectionMode.local, QuarkIcons.home_rounded, 'Home label'),
@@ -45,7 +45,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('is a status, not a button', (tester) async {
+  testBothViewports('is a button when given onTap', (tester, size) async {
+    var taps = 0;
+    await pumpAt(
+      tester,
+      ConnectionIndicator(
+        mode: ConnectionMode.local,
+        label: 'Home',
+        onTap: () => taps++,
+      ),
+      size: size,
+    );
+    await tester.tap(find.byKey(const ValueKey('connection_indicator')));
+    expect(taps, 1);
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Home')),
+      matchesSemantics(label: 'Home', isButton: true, hasTapAction: true),
+    );
+  });
+
+  testWidgets('is a status, not a button, without onTap', (tester) async {
     await pumpAt(
       tester,
       const ConnectionIndicator(mode: ConnectionMode.remote, label: 'Remote'),

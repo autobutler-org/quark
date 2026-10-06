@@ -302,13 +302,44 @@ final List<GalleryEntry> registry = [
   GalleryEntry(
     name: 'ConnectionIndicator',
     group: 'Layout',
-    build: (context, log) => const Row(
+    build: (context, log) => Row(
       spacing: 8,
       children: [
-        ConnectionIndicator(mode: ConnectionMode.local, label: 'Local'),
-        ConnectionIndicator(mode: ConnectionMode.remote, label: 'Remote'),
-        ConnectionIndicator(mode: ConnectionMode.offline, label: 'Offline'),
-        Text('local, remote, offline'),
+        ConnectionIndicator(
+          mode: ConnectionMode.local,
+          label: 'Local',
+          onTap: () => log('ConnectionIndicator.onTap'),
+        ),
+        const ConnectionIndicator(mode: ConnectionMode.remote, label: 'Remote'),
+        const ConnectionIndicator(
+          mode: ConnectionMode.offline,
+          label: 'Offline',
+        ),
+        const Text('local (tappable), remote, offline'),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'ConnectionStatusView',
+    group: 'Layout',
+    build: (context, log) => Column(
+      spacing: 24,
+      children: [
+        ConnectionStatusView(
+          mode: ConnectionMode.remote,
+          label: 'Connected through remote access',
+          detail:
+              "You're away from home, so the app reaches your Quark through "
+              'remote access.',
+          remoteAccess: RemoteAccessState.on,
+          onOpenSettings: () => log('ConnectionStatusView.onOpenSettings'),
+        ),
+        const Divider(),
+        const ConnectionStatusView(
+          mode: ConnectionMode.offline,
+          label: 'Your Quark is not reachable',
+          detail: "The app can't reach your Quark right now.",
+        ),
       ],
     ),
   ),
@@ -1802,6 +1833,66 @@ final List<GalleryEntry> registry = [
           ),
         ),
       ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'RemoteAccessPanel',
+    group: 'Settings',
+    build: (context, log) => Column(
+      spacing: 16,
+      children: [
+        RemoteAccessPanel(
+          state: RemoteAccessState.off,
+          isAdmin: true,
+          onSetUp: () => log('RemoteAccessPanel.onSetUp'),
+        ),
+        const RemoteAccessPanel(state: RemoteAccessState.off, isAdmin: false),
+        RemoteAccessPanel(
+          state: RemoteAccessState.on,
+          isAdmin: true,
+          onTurnOff: () => log('RemoteAccessPanel.onTurnOff'),
+        ),
+        RemoteAccessPanel(
+          state: RemoteAccessState.failing,
+          isAdmin: true,
+          failure:
+              "Remote access is on, but your Quark couldn't connect. You "
+              "can't reach it away from home yet.",
+          failureSteps: const [
+            'Make sure your home internet is working.',
+            'Try again. If the problem was temporary, this fixes it.',
+          ],
+          onTurnOff: () => log('RemoteAccessPanel.onTurnOff'),
+          onTryAgain: () => log('RemoteAccessPanel.onTryAgain'),
+          onGetHelp: () => log('RemoteAccessPanel.onGetHelp'),
+        ),
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'RemoteAccessSetupView',
+    group: 'Settings',
+    build: (context, log) => Column(
+      spacing: 24,
+      children: [
+        for (final stage in RemoteAccessSetupStage.values) ...[
+          Text(stage.name),
+          RemoteAccessSetupView(
+            stage: stage,
+            onTurnOn: () => log('RemoteAccessSetupView.onTurnOn'),
+            onNotNow: () => log('RemoteAccessSetupView.onNotNow'),
+            onDone: () => log('RemoteAccessSetupView.onDone'),
+          ),
+        ],
+      ],
+    ),
+  ),
+  GalleryEntry(
+    name: 'RemoteAccessTurnOffDialog',
+    group: 'Settings',
+    build: (context, log) => RemoteAccessTurnOffDialog(
+      onCancel: () => log('RemoteAccessTurnOffDialog.onCancel'),
+      onConfirm: () => log('RemoteAccessTurnOffDialog.onConfirm'),
     ),
   ),
   GalleryEntry(
