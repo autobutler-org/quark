@@ -43,8 +43,14 @@ a `QuarkTokens` set: `QuarkTheme.light()` and `QuarkTheme.dark()`. It attaches t
 `success`, the spacing scale) through the same `QuarkTokens.of(context)` call. Every Material component theme
 Quark configures — `AppBarTheme`, `CardTheme`, `InputDecorationTheme`, button themes, `SwitchTheme`,
 `CheckboxTheme`, dialogs, snack bars — is built entirely from `tokens`, never a literal, including the two-pixel
-focus ring on inputs and buttons (`quark_theme.dart:106-113`, `:203-213`) that keyboard-only users depend on to
+focus ring on inputs and buttons (`quark_theme.dart:120-127`, `:217-227`) that keyboard-only users depend on to
 see where focus is.
+
+The `ColorScheme` surface containers come from the tokens too, so a Material widget that paints with one stays
+on theme (#2786): `surfaceContainerLowest` is `background`, `surfaceContainerLow` is `sidebar`,
+`surfaceContainer` is `chrome` (Material's fill for a navigation bar, and the docs toolbar's),
+`surfaceContainerHigh` is `card`, and `surfaceContainerHighest` is `card` under 8% of `foreground`, the well a
+filled field or a header cell is drawn in.
 
 ## The theme color
 
@@ -137,7 +143,7 @@ status colors, `primaryForeground` and the seeded Material slots are held to the
 | `primary` on `chrome` | 3:1 |
 | `border` on each content surface, `chromeBorder` on `chrome` | 3:1 |
 | `error`, `warning`, `success` on each content surface | 3:1, or what the color scores on the worst classic surface if that is lower |
-| The Material slots `QuarkTheme.from` leaves seeded: `onSurfaceVariant` on each content surface and on `surfaceContainerHighest`, `onPrimaryContainer`, `onErrorContainer` on their containers | 4.5:1 |
+| The Material slots `QuarkTheme.from` leaves seeded: `onSurfaceVariant` on each content surface and on the mapped `surfaceContainerHighest`, `onPrimaryContainer`, `onErrorContainer` on their containers | 4.5:1 |
 
 The status row is relative because the shipped `warning` and `success` do not reach 3:1 on white: 2.15 and
 2.54 on a classic light card, 1.96 and 2.32 on the classic light sidebar. `classic` is written out rather than

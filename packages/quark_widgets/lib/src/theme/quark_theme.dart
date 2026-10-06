@@ -57,6 +57,20 @@ abstract final class QuarkTheme {
       onError: tokens.errorForeground,
       outline: tokens.border,
       outlineVariant: tokens.border,
+      // Left to `fromSeed`, the containers are Material tones of the accent
+      // that match no Quark surface, and a bar filled with one drifts from
+      // the chrome beside it (#2786). They run from the page to a well:
+      // `surfaceContainer` is what Material fills a navigation bar with, so
+      // it is the chrome, and the highest is the card under a faint wash of
+      // the text color, for filled fields and header cells.
+      surfaceContainerLowest: tokens.background,
+      surfaceContainerLow: tokens.sidebar,
+      surfaceContainer: tokens.chrome,
+      surfaceContainerHigh: tokens.card,
+      surfaceContainerHighest: Color.alphaBlend(
+        tokens.foreground.withValues(alpha: 0.08),
+        tokens.card,
+      ),
     );
 
     // The recessive track behind an off switch: the input fill reads as a well
