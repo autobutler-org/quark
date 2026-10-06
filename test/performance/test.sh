@@ -17,6 +17,9 @@ CONCURRENCY="${TEST_CONCURRENCY:-20}"
 DURATION="${TEST_DURATION:-20s}"
 UPLOAD_CONCURRENCY="${TEST_UPLOAD_CONCURRENCY:-10}"
 UPLOAD_COUNT="${TEST_UPLOAD_COUNT:-20}"
+# Space-separated scenario names to rerun on their own, against an instance an
+# earlier full run already seeded. Empty runs everything.
+SCENARIOS="${PERF_SCENARIOS:-}"
 
 WORK_DIR="${WORK_DIR:-$PWD/test-results/performance}"
 PERF_FIXTURE_TARGET_DIR="${PERF_FIXTURE_TARGET_DIR:-$HOME/quark/data/files}"
@@ -187,6 +190,9 @@ run_wrk() {
   local script="$2"
   local token="${3:-$ACCESS_TOKEN}"
 
+  if [[ -n "$SCENARIOS" && " $SCENARIOS " != *" $name "* ]]; then
+    return 0
+  fi
   echo "Running $name"
   wrk \
     -t"$THREADS" \
@@ -221,7 +227,9 @@ main() {
   auth_login_and_get_token
   prepare_fixtures
   setup_reader
-  seed_albums
+  if [[ -z "$SCENARIOS" ]]; then
+    seed_albums
+  fi
 
   run_wrk "files_list" "$SCENARIO_DIR/files_list.lua"
   run_wrk "files_list_nonadmin" "$SCENARIO_DIR/files_list.lua" "$READER_TOKEN"
@@ -231,7 +239,9 @@ main() {
   run_wrk "thumbnails" "$SCENARIO_DIR/thumbnails.lua"
   run_wrk "albums_list" "$SCENARIO_DIR/albums_list.lua"
   run_wrk "photos_metadata" "$SCENARIO_DIR/photos_metadata.lua"
-  run_upload_stress
+  if [[ -z "$SCENARIOS" ]]; then
+    run_upload_stress
+  fi
 }
 
 main "$@"

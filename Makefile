@@ -955,7 +955,10 @@ PERF_SUMMARY_WRK_DIRS ?= test-results/performance/load test-results/performance/
 # Fails the stress profile when a files list or stat scenario's p99 is over
 # this. It catches a request path that has stopped answering, not a few tens of
 # milliseconds of drift: a shared CI runner puts the nonadmin listing around
-# 350ms on a bad day with no code change at all.
+# 350ms on a bad day with no code change at all. Across 40 passing CI runs its
+# p99 had a median of 362ms and a max of 388ms, so rather than widen this,
+# run_gated.sh reruns a scenario over budget once and fails only if it is over
+# again (#2743).
 # On macOS the every-10s device rescan shells out to diskutil and stalls
 # requests for seconds, so a local run reports timeouts that Linux does not.
 PERF_P99_BUDGET_MS ?= 400
@@ -998,8 +1001,7 @@ test/perf/load: build/backend ## Run local wrk load profile against a temporary 
 	export TEST_DURATION=10s
 	export TEST_UPLOAD_CONCURRENCY=4
 	export TEST_UPLOAD_COUNT=8
-	./test/performance/test.sh
-	python3 ./test/performance/render_summary.py --wrk-dir "$$WORK_DIR" --p99-budget-ms $(PERF_LOAD_P99_BUDGET_MS)
+	./test/performance/run_gated.sh $(PERF_LOAD_P99_BUDGET_MS)
 
 .PHONY: test/perf/stress
 test/perf/stress: build/backend ## Run local wrk stress profile against a temporary local backend
@@ -1023,8 +1025,11 @@ test/perf/stress: build/backend ## Run local wrk stress profile against a tempor
 	export TEST_DURATION=30s
 	export TEST_UPLOAD_CONCURRENCY=10
 	export TEST_UPLOAD_COUNT=20
-	./test/performance/test.sh
-	python3 ./test/performance/render_summary.py --wrk-dir "$$WORK_DIR" --p99-budget-ms $(PERF_P99_BUDGET_MS)
+	./test/performance/run_gated.sh $(PERF_P99_BUDGET_MS)
+
+.PHONY: test/perf/gate
+test/perf/gate: ## Run the unit tests for the performance gate
+	python3 ./test/performance/render_summary_test.py
 
 .PHONY: test/perf/summary
 test/perf/summary: ## Render the Markdown performance summary

@@ -1,14 +1,15 @@
-# What each job in build.yml and test.yml reads, for dorny/paths-filter. On a pull
-# request a job runs only when its set matched; the merge queue and pushes to main run
-# everything. A path missing here means a pull request that breaks that job stays green
-# until it fails in the merge queue, so when a job starts reading something new, add it.
+# What each job in build.yml, test.yml and performance.yml reads, for
+# dorny/paths-filter. On a pull request a job runs only when its set matched; the merge
+# queue and pushes to main run everything. A path missing here means a pull request
+# that breaks that job stays green until it fails in the merge queue, so when a job
+# starts reading something new, add it.
 ci: &ci
   - Makefile
   - .github/path-filters.yml
   - .github/actions/**
   - .github/workflows/build.yml
   - .github/workflows/test.yml
-backend:
+backend: &backend
   - *ci
   - "**/*.go"
   - go.mod
@@ -21,6 +22,11 @@ backend:
   - scripts/coverage-excluded-packages.txt
   # test/chaos/powercut builds its image from these.
   - test/chaos/powercut/**
+# performance.yml: the server under load, and the harness that loads it.
+performance:
+  - *backend
+  - .github/workflows/performance.yml
+  - test/performance/**
 flutter: &flutter
   - *ci
   - lib/**

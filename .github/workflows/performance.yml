@@ -20,9 +20,34 @@ env:
   PASSWORD: perf-password
 
 jobs:
-  performance-loadtest:
+  # A pull request that touches no backend or harness path cannot move these
+  # numbers, and on a shared runner the gate still fails now and then on noise
+  # alone (#2743). Such pull requests skip the jobs; the nightly run and
+  # workflow_dispatch run everything. See the same job in build.yml for why
+  # jobs skip with `if:` rather than `on: paths:`.
+  changes:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      performance: ${{ steps.filter.outputs.performance }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Filter paths
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4
+        with:
+          filters: .github/path-filters.yml
+
+  performance-loadtest:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.performance == 'true'
+    runs-on: ubuntu-latest
+    # Room for run_gated.sh to rerun a scenario once.
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -54,8 +79,11 @@ jobs:
           if-no-files-found: warn
 
   performance-stress:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.performance == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Room for run_gated.sh to rerun a scenario once.
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -74,6 +102,10 @@ jobs:
       - name: Setup wrk
         uses: ./.github/actions/setup-wrk
 
+      - name: Test the performance gate
+        run: |
+          make test/perf/gate
+
       - name: Run stress profile
         run: |
           make test/perf/stress
@@ -89,9 +121,10 @@ jobs:
   performance-summary:
     runs-on: ubuntu-latest
     needs:
+      - changes
       - performance-loadtest
       - performance-stress
-    if: always()
+    if: always() && (github.event_name != 'pull_request' || needs.changes.outputs.performance == 'true')
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
