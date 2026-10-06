@@ -15,6 +15,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/versionutil"
@@ -457,4 +458,25 @@ func currentAccountDescription() string {
 		return fmt.Sprintf("user %s (uid %d)", u.Username, uid)
 	}
 	return fmt.Sprintf("uid %d", uid)
+}
+
+// archiveNameFor is the release archive name for a platform. It mirrors the
+// name_template in .goreleaser.yaml: the OS is title-cased and amd64 is
+// published as x86_64. Only the pairs that file builds (linux on amd64 and
+// arm64) have an archive, so anything else is an error rather than a request
+// for an asset that 404s.
+func archiveNameFor(goos, goarch string) (string, error) {
+	arch := goarch
+	if goarch == "amd64" {
+		arch = "x86_64"
+	}
+	if goos != "linux" || (arch != "x86_64" && arch != "arm64") {
+		return "", fmt.Errorf("no release is published for %s/%s", goos, goarch)
+	}
+	return fmt.Sprintf("quark_%s_%s.tar.gz", strings.ToUpper(goos[:1])+goos[1:], arch), nil
+}
+
+// currentArchiveName is archiveNameFor for the running platform.
+func currentArchiveName() (string, error) {
+	return archiveNameFor(runtime.GOOS, runtime.GOARCH)
 }

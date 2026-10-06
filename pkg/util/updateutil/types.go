@@ -77,8 +77,7 @@ func (s *UpdateSource) BlobPrefix() *string {
 	return nil
 }
 
-func getAssetURLFromRelease(release *githubutil.Release) string {
-	archiveName := ConstructArchiveName()
+func getAssetURLFromRelease(release *githubutil.Release, archiveName string) string {
 	for _, asset := range release.Assets {
 		if strings.HasSuffix(asset.BrowserDownloadURL, archiveName) {
 			return asset.BrowserDownloadURL
