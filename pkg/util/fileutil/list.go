@@ -324,6 +324,8 @@ type ListByTypeParams struct {
 	Access accessutil.Access
 	// FileType is the type every returned file matches.
 	FileType storageutil.FileType
+	// Cache keeps the walk between requests. Nil walks every time.
+	Cache *ByTypeCache
 }
 
 // ListByTypeResult is every file of the requested type, newest first.
@@ -331,7 +333,8 @@ type ListByTypeResult struct {
 	Files []FileNodeWithTime
 }
 
-// ListByType returns every file whose type matches, sorted newest-first.
+// ListByType returns every file whose type matches, sorted newest-first. With a
+// Cache, the walk is shared between requests until the file tree changes.
 func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
 	devices, err := params.Storage.GetManagedRoots()
 	if err != nil {
@@ -339,6 +342,24 @@ func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
 	}
 	selectedDevices := SelectDevices(devices, params.Serials)
 
+	key := byTypeKey(params.FileType, params.Serials, selectedDevices)
+	files, gen, ok := params.Cache.get(key)
+	if !ok {
+		files, err = walkByType(params, selectedDevices)
+		if err != nil {
+			return ListByTypeResult{}, err
+		}
+		params.Cache.put(key, gen, files)
+	}
+	// readableNewestFirst filters and sorts in place, so it gets a copy of
+	// what the cache holds.
+	files = append(make([]FileNodeWithTime, 0, len(files)), files...)
+	return ListByTypeResult{Files: readableNewestFirst(params.Access, files, 0)}, nil
+}
+
+// walkByType lists every file of the requested type on selectedDevices,
+// unsorted and unfiltered by access.
+func walkByType(params ListByTypeParams, selectedDevices []storageutil.ManagedDevice) ([]FileNodeWithTime, error) {
 	// Use make() instead of var to ensure JSON serialization produces []
 	// instead of null when there are no files (nil slice encodes as null).
 	allFiles := make([]FileNodeWithTime, 0)
@@ -347,7 +368,7 @@ func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
 	if fsys := FilesVFS(params.Registry); fsys != nil {
 		infos, listErr := fsys.List(params.Ctx, "", &vfs.ListFilter{Recursive: true, SerialFilter: params.Serials})
 		if listErr != nil {
-			return ListByTypeResult{}, listErr
+			return nil, listErr
 		}
 		for _, fi := range infos {
 			if fi.IsDir {
@@ -371,7 +392,7 @@ func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
 				ModifiedAt: fi.ModTime,
 			})
 		}
-		return ListByTypeResult{Files: readableNewestFirst(params.Access, allFiles, 0)}, nil
+		return allFiles, nil
 	}
 
 	for _, device := range selectedDevices {
@@ -412,7 +433,7 @@ func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
 		}
 	}
 
-	return ListByTypeResult{Files: readableNewestFirst(params.Access, allFiles, 0)}, nil
+	return allFiles, nil
 }
 
 // SearchFilesParams describes a filename search across the library.

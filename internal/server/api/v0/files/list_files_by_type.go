@@ -45,6 +45,7 @@ func listFilesByType(c *gin.Context) *serverutil.Response {
 		Serials:  c.QueryArray("serial"),
 		Access:   access,
 		FileType: storageutil.FileType(fileTypeParam),
+		Cache:    deps.ByTypeCache(),
 	})
 	if err != nil {
 		return fileError(err)
