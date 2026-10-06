@@ -139,7 +139,6 @@ type SyncWorker struct {
 	// Overridable for testing.
 	resolveTarget      func(ctx context.Context) (string, error)
 	resolveInternalDir func() (string, error)
-	getManagedDevices  func() ([]storageutil.ManagedDevice, error)
 }
 
 type SyncWorkerParams struct {
@@ -159,6 +158,5 @@ func NewSyncWorker(params SyncWorkerParams) *SyncWorker {
 	}
 	w.resolveTarget = w.defaultResolveTarget
 	w.resolveInternalDir = w.defaultResolveInternalDir
-	w.getManagedDevices = w.defaultGetManagedDevices
 	return w
 }
