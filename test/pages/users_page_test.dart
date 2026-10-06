@@ -77,6 +77,64 @@ void main() {
     // Disposing the page stops its refresh timer.
     await tester.pumpWidget(const SizedBox());
   });
+  // #2482: an approved or denied request leaves the list, so the page says
+  // what happened to it.
+  for (final (action, said) in [
+    ('approve', 'Approved grace. They can sign in now.'),
+    ('deny', "Denied grace's request."),
+  ]) {
+    testWidgets('says what $action did to the request', (tester) async {
+      var decided = false;
+      sharedHttpClientFactory = () => MockClient((request) async {
+        final path = request.url.path;
+        if (path == '/api/v0/admin/$action/grace') {
+          decided = true;
+          return http.Response('{}', 200);
+        }
+        final Object? body = switch (path) {
+          '/api/v0/admin/users' => [
+            {'id': 1, 'username': 'ada', 'isAdmin': true, 'status': 'active'},
+            if (!decided)
+              {
+                'id': 2,
+                'username': 'grace',
+                'isAdmin': false,
+                'status': 'pending',
+              },
+          ],
+          '/api/v0/auth/status' => {
+            'setup': true,
+            'accessRequestsEnabled': true,
+          },
+          '/api/v0/admin/groups' => <Object>[],
+          _ => null,
+        };
+        return body == null
+            ? http.Response('', 404)
+            : http.Response(jsonEncode(body), 200);
+      });
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: QuarkTheme.from(QuarkTokens.dark, Brightness.dark),
+          home: const UsersPage(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('request_${action}_grace')));
+      await tester.pumpAndSettle();
+
+      expect(decided, isTrue);
+      expect(find.byKey(const ValueKey('request_row_grace')), findsNothing);
+      expect(find.text(said), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   // #2606, #2603, #2605: both tabs survive 200% text on a phone and a
   // desktop, and every control on them is labeled and big enough to hit.
   for (final tab in ['accounts', 'groups']) {

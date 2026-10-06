@@ -47,6 +47,76 @@ void main() {
     expect(changes, isEmpty);
   });
 
+  // #2482: the state is written out, not left to the switch's color.
+  testBothViewports('says On while requests are on', (tester, size) async {
+    await pumpAt(
+      tester,
+      AccessRequestsTile(enabled: true, onChanged: (_) {}),
+      size: size,
+    );
+
+    expect(find.textContaining('On · ', findRichText: true), findsOneWidget);
+    expect(
+      find.textContaining('People can ask', findRichText: true),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Off · ', findRichText: true), findsNothing);
+  });
+
+  testBothViewports('says Off while requests are off', (tester, size) async {
+    await pumpAt(
+      tester,
+      AccessRequestsTile(enabled: false, onChanged: (_) {}),
+      size: size,
+    );
+
+    expect(find.textContaining('Off · ', findRichText: true), findsOneWidget);
+    expect(
+      find.textContaining("doesn't offer", findRichText: true),
+      findsOneWidget,
+    );
+    expect(find.textContaining('On · ', findRichText: true), findsNothing);
+  });
+
+  testWidgets('a screen reader hears the state with the label', (tester) async {
+    final handle = tester.ensureSemantics();
+    await pumpAt(tester, AccessRequestsTile(enabled: false, onChanged: (_) {}));
+
+    final label = tester
+        .getSemantics(find.byKey(const ValueKey('access_requests_toggle')))
+        .label;
+    expect(label, contains('Allow account requests'));
+    expect(label, contains('Off · '));
+    handle.dispose();
+  });
+
+  testWidgets('says Saving while a change is saving', (tester) async {
+    await pumpAt(
+      tester,
+      AccessRequestsTile(enabled: true, isBusy: true, onChanged: (_) {}),
+    );
+
+    expect(find.textContaining('Saving', findRichText: true), findsOneWidget);
+  });
+
+  for (final size in [narrowViewport, wideViewport]) {
+    testWidgets('lays out at 200% text ($size)', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await pumpAt(
+        tester,
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: AccessRequestsTile(enabled: false, onChanged: (_) {}),
+        ),
+        size: size,
+      );
+
+      expect(tester.takeException(), isNull);
+      await expectTapTargetGuidelines(tester);
+    });
+  }
+
   testWidgets('no callback disables the switch', (tester) async {
     await pumpAt(tester, const AccessRequestsTile(enabled: true));
 
