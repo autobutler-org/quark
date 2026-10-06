@@ -5,6 +5,7 @@ package healthutil
 
 import (
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v4/cpu"
@@ -39,7 +40,9 @@ type HealthStatus struct {
 }
 
 // Collector samples host hardware metrics for the health endpoint.
+// One Collector serves every /health request, so its state is behind mu.
 type Collector struct {
+	mu           sync.Mutex
 	cpuHighSince *time.Time
 }
 
@@ -65,7 +68,9 @@ func (c *Collector) CurrentHealth() HealthStatus {
 	}
 	if agg, err := cpu.Percent(0, false); err == nil && len(agg) > 0 {
 		status.CPUPercent = agg[0]
+		c.mu.Lock()
 		c.cpuHighSince = applyCPUThreshold(&status, agg[0], c.cpuHighSince, time.Now())
+		c.mu.Unlock()
 	} else {
 		slog.Warn("system metrics: cpu.Percent (aggregate) failed", "err", err)
 	}

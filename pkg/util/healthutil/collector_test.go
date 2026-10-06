@@ -1,6 +1,7 @@
 package healthutil_test
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/healthutil"
@@ -85,4 +86,24 @@ func TestCurrentHealth_HealthyByDefault(t *testing.T) {
 	// We can't guarantee the exact value on a busy CI runner, but we can
 	// verify the field exists and is readable without panicking.
 	_ = h.Healthy
+}
+
+// TestCurrentHealth_ConcurrentCallers pins that one Collector serves
+// concurrent requests: GET /health is called by every open Files page, so two
+// land at once all the time. Run under -race; the CPU "high since" marker was
+// read and written with no lock.
+func TestCurrentHealth_ConcurrentCallers(t *testing.T) {
+	c, err := healthutil.Register()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.CurrentHealth()
+		}()
+	}
+	wg.Wait()
 }
