@@ -5,18 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:quark/controllers/feature_flags_controller.dart';
+import 'package:quark/controllers/remote_access_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/connected_devices_service.dart';
 import 'package:quark/services/files_service.dart';
-import 'package:quark/services/remote_access_service.dart';
 import 'package:quark/services/sbom_service.dart';
 import 'package:quark/services/settings_service.dart';
 import 'package:quark/services/users_service.dart';
 import 'package:quark/utils/connection_error.dart';
 import 'package:quark/utils/error_text.dart';
-import 'package:quark/utils/remote_access_config.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -24,6 +23,7 @@ import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/settings/connected_devices_card.dart';
 import 'package:quark/widgets/settings/remote_access_card.dart';
+import 'package:quark/widgets/settings/remote_access_setup_sheet.dart';
 import 'package:quark/widgets/settings/settings_about_tab.dart';
 import 'package:quark/widgets/settings/sessions_section.dart';
 import 'package:quark/widgets/settings/settings_account_tab.dart';
@@ -192,14 +192,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   int _refreshIntervalSeconds = 15;
 
-  RemoteAccessStatus? _remoteAccessStatus;
-  bool _isLoadingRemoteAccess = false;
-  bool _isTogglingRemoteAccess = false;
-  String? _remoteAccessError;
-
-  /// Re-reads the status while remote access is on but not yet connected, so
-  /// "Connecting…" resolves without a reload (#1876).
-  Timer? _remoteAccessPoll;
+  /// Remote access on the Network tab (#2857).
+  final RemoteAccessController _remoteAccess = RemoteAccessController();
 
   // Connected devices state
   List<ConnectedDevice> _connectedDevices = [];
@@ -290,72 +284,39 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadRemoteAccess() async {
     if (AppSettings.instance.activeHost == null) {
-      setState(() {
-        _remoteAccessStatus = null;
-        _remoteAccessError = null;
-        _isLoadingRemoteAccess = false;
-      });
-      _syncRemoteAccessPoll();
+      _remoteAccess.clear();
       return;
     }
-    setState(() {
-      _isLoadingRemoteAccess = true;
-      _remoteAccessError = null;
-    });
-    try {
-      final status = await RemoteAccessService.getStatus();
-      if (status.error != null) {
-        debugPrint(
-          '[settings_page.dart] Remote access failing: ${status.error}',
-        );
-      }
-      if (!mounted) return;
-      setState(() {
-        _remoteAccessStatus = status;
-        _isLoadingRemoteAccess = false;
-      });
-      _syncRemoteAccessPoll();
-      _noteReachability(null);
-    } catch (e) {
-      debugPrint('[settings_page.dart] Remote access error: $e');
-      if (!mounted) return;
-      setState(() {
-        _remoteAccessError = Errors.message(e, 'load remote access status');
-        _isLoadingRemoteAccess = false;
-      });
-      _noteReachability(e);
-    }
+    await _remoteAccess.load();
+    _noteReachability(_remoteAccess.loadFailure);
   }
 
-  /// Starts the status poll while remote access is on and not connected, and
-  /// stops it otherwise.
-  void _syncRemoteAccessPoll() {
-    final status = _remoteAccessStatus;
-    if (status == null || !status.enabled || status.connected) {
-      _remoteAccessPoll?.cancel();
-      _remoteAccessPoll = null;
-      return;
-    }
-    _remoteAccessPoll ??= Timer.periodic(
-      RemoteAccessConfig.statusPollInterval,
-      (_) => _pollRemoteAccess(),
+  /// Opens the remote access setup sheet.
+  void _setUpRemoteAccess() =>
+      showRemoteAccessSetupSheet(context, _remoteAccess);
+
+  /// Turns remote access on again after it failed to connect.
+  Future<void> _retryRemoteAccess() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final error = await _remoteAccess.enable();
+    if (error != null) messenger.showSnackBar(SnackBar(content: Text(error)));
+  }
+
+  /// Confirms, then turns remote access off for the whole household.
+  Future<void> _turnOffRemoteAccess() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => RemoteAccessTurnOffDialog(
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+        onConfirm: () => Navigator.of(dialogContext).pop(true),
+      ),
     );
-  }
-
-  /// One quiet status read: no spinner, and a failure keeps the last status
-  /// on screen for the next tick to replace.
-  Future<void> _pollRemoteAccess() async {
-    try {
-      final status = await RemoteAccessService.getStatus();
-      if (!mounted) return;
-      setState(() {
-        _remoteAccessStatus = status;
-        _remoteAccessError = null;
-      });
-      _syncRemoteAccessPoll();
-    } catch (e) {
-      debugPrint('[settings_page.dart] Remote access poll failed: $e');
-    }
+    if (confirmed != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final error = await _remoteAccess.disable();
+    messenger.showSnackBar(
+      SnackBar(content: Text(error ?? 'Remote access is off')),
+    );
   }
 
   /// Turns a beta feature on or off for everyone on this Quark (#2542).
@@ -364,71 +325,6 @@ class _SettingsPageState extends State<SettingsPage> {
     final error = await _features.setFlag(key, enabled);
     if (error != null && mounted) {
       messenger.showSnackBar(SnackBar(content: Text(error)));
-    }
-  }
-
-  Future<void> _enableRemoteAccess() async {
-    setState(() => _isTogglingRemoteAccess = true);
-    try {
-      final status = await RemoteAccessService.enable();
-      if (!mounted) return;
-      setState(() {
-        _remoteAccessStatus = status;
-        _isTogglingRemoteAccess = false;
-      });
-      _syncRemoteAccessPoll();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Remote access enabled')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isTogglingRemoteAccess = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'enable remote access'))),
-      );
-    }
-  }
-
-  Future<void> _disableRemoteAccess() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Disable remote access'),
-        content: const Text(
-          'This will disconnect the Tailscale tunnel. '
-          'You will no longer be able to reach this quark remotely. Continue?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Disable'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    setState(() => _isTogglingRemoteAccess = true);
-    try {
-      final status = await RemoteAccessService.disable();
-      if (!mounted) return;
-      setState(() {
-        _remoteAccessStatus = status;
-        _isTogglingRemoteAccess = false;
-      });
-      _syncRemoteAccessPoll();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Remote access disabled')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isTogglingRemoteAccess = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(Errors.message(e, 'disable remote access'))),
-      );
     }
   }
 
@@ -729,16 +625,22 @@ class _SettingsPageState extends State<SettingsPage> {
               header: banner,
               hasHost: hasHost,
               isAdmin: isAdmin,
-              remoteAccess: RemoteAccessCard(
-                status: _remoteAccessStatus,
-                isLoading: _isLoadingRemoteAccess,
-                isToggling: _isTogglingRemoteAccess,
-                error: _remoteAccessError,
-                disconnected: _disconnected,
-                isAdmin: isAdmin,
-                onRetry: _loadRemoteAccess,
-                onEnable: _enableRemoteAccess,
-                onDisable: _disableRemoteAccess,
+              remoteAccess: ListenableBuilder(
+                listenable: _remoteAccess,
+                builder: (context, _) => RemoteAccessCard(
+                  status: _remoteAccess.status,
+                  isLoading: _remoteAccess.isLoading,
+                  isWorking: _remoteAccess.isWorking,
+                  error: _remoteAccess.error,
+                  disconnected: _disconnected,
+                  isAdmin: isAdmin,
+                  onRetry: _loadRemoteAccess,
+                  onSetUp: _setUpRemoteAccess,
+                  onTurnOff: _turnOffRemoteAccess,
+                  onTryAgain: _retryRemoteAccess,
+                  onGetHelp: () =>
+                      context.go(AppRoutes.settingsTab(SettingsTab.about)),
+                ),
               ),
               connectedDevices: ConnectedDevicesCard(
                 devices: _connectedDevices,
@@ -948,7 +850,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _features.removeListener(_onAdminChanged);
     _themeColors.removeListener(_onAdminChanged);
     if (widget.featureFlags == null) _features.dispose();
-    _remoteAccessPoll?.cancel();
+    _remoteAccess.dispose();
     super.dispose();
   }
 }
