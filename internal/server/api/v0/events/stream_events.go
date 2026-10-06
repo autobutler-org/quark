@@ -30,6 +30,13 @@ func streamEvents(c *gin.Context) {
 		return
 	}
 
+	// Subscribe before loading, so a change committed after the load is
+	// still heard and reloads it. The subscriber ID only has to be unique
+	// within the bus, so mint it per connection rather than from a
+	// package-global counter (#1674).
+	ch, unsub := deps.EventBus().SubscribeLossy(uuid.NewString())
+	defer unsub()
+
 	// The filter runs here rather than in the bus: the file index, content
 	// indexer and backup sync subscribe to the same bus and must keep hearing
 	// everything (#1906). The snapshot is loaded once per connection, and an
@@ -54,11 +61,6 @@ func streamEvents(c *gin.Context) {
 	// Best-effort: the handler is unwinding, so a failed close has nowhere to go.
 	defer func() { _ = conn.CloseNow() }()
 
-	// The subscriber ID only has to be unique within the bus, so mint it per
-	// connection rather than from a package-global counter (#1674).
-	ch, unsub := deps.EventBus().SubscribeLossy(uuid.NewString())
-	defer unsub()
-
 	ctx := conn.CloseRead(c.Request.Context())
 	for {
 		select {
@@ -68,21 +70,16 @@ func streamEvents(c *gin.Context) {
 			if !ok {
 				return
 			}
-			// requireAuth checked the account only when the socket opened, so
-			// an account turned off, deleted, promoted or demoted since stops
-			// hearing events here. The app reconnects and is refused, or is
+			// requireAuth checked the account only when the socket opened, and
+			// rows may have changed since, so a change, or a resync standing in
+			// for changes this socket missed, reloads before this event is
+			// filtered. An account turned off, deleted, promoted or demoted
+			// stops hearing events: the app reconnects and is refused, or is
 			// filtered for its new role.
-			if (evt.Kind == eventbus.EventAccountChanged || evt.Kind == eventbus.EventAccessChanged) &&
-				!stillActive(ctx, deps, access) {
-				return
-			}
-			// Rows changed somewhere, so what this subscriber can read may have
-			// too: reload before filtering this event and the ones after it.
-			// A failed reload closes the stream rather than filter against a
-			// snapshot that may be stale; the app reconnects.
 			previous := access
-			if evt.Kind == eventbus.EventAccessChanged {
-				if access, err = accessutil.LoadRequest(c, deps.Database(), deps.StorageService()); err != nil {
+			switch evt.Kind {
+			case eventbus.EventAccountChanged, eventbus.EventAccessChanged, eventbus.EventResync:
+				if access, ok = reload(ctx, deps, access, evt.Seq); !ok {
 					return
 				}
 			}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/backup"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
@@ -37,6 +38,9 @@ const (
 )
 
 type Dependencies interface {
+	// AccessCache shares each account's access between its event streams
+	// (#2764).
+	AccessCache() *accessutil.Cache
 	AuthRateLimiter() *ratelimitutil.Limiter
 	// Background owns work a request starts and leaves running after its
 	// response, such as the connected-device record. Wait on it before
@@ -71,6 +75,7 @@ type Dependencies interface {
 	// ZipSlots caps how many folder zips are built at once (#2757). Nil
 	// caps nothing.
 	ZipSlots() *downloadutil.ZipSlots
+	WithAccessCache(cache *accessutil.Cache) Dependencies
 	WithByTypeCache(cache *fileutil.ByTypeCache) Dependencies
 	WithChatRateLimiter(limiter *ratelimitutil.Limiter) Dependencies
 	WithDatabase(database *db.DatabaseSqlc) Dependencies
@@ -128,6 +133,9 @@ func NewDependencies() Dependencies {
 		// loginGuard locks out repeated failed sign-ins; see
 		// ratelimitutil.DefaultPairThreshold for the policy.
 		loginGuard: ratelimitutil.NewLoginGuard(ratelimitutil.LoginGuardParams{}),
+		// accessCache holds at most accessutil.CacheCapacity accounts' access,
+		// each loaded once per change for all of its event streams (#2764).
+		accessCache: accessutil.NewCache(accessutil.CacheParams{}),
 		// chatRateLimiter caps chat writes per account, well above the app's
 		// own traffic; see ChatWriteRate.
 		chatRateLimiter: ratelimitutil.NewWithRate(ChatWriteRate, ChatWriteBurst),

@@ -53,10 +53,14 @@ func (s sharing) revoke(access accessutil.Access, rel string, userID, groupID in
 }
 
 // drain returns the events published so far.
+// drain takes every event published so far, without the sequence numbers the
+// bus stamped on them.
 func (s sharing) drain() []eventbus.Event {
 	var got []eventbus.Event
 	for len(s.events) > 0 {
-		got = append(got, <-s.events)
+		evt := <-s.events
+		evt.Seq = 0
+		got = append(got, evt)
 	}
 	return got
 }

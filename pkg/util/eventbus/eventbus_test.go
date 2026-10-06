@@ -256,3 +256,44 @@ func receive(t *testing.T, ch <-chan eventbus.Event) eventbus.Event {
 	}
 	return eventbus.Event{}
 }
+
+// Every published event carries the bus's next sequence number, so a
+// subscriber can tell whether something it loaded since has seen it (#2764).
+func TestPublishStampsIncreasingSeq(t *testing.T) {
+	bus := eventbus.New()
+	if bus.Seq() != 0 {
+		t.Fatalf("new bus Seq() = %d, want 0", bus.Seq())
+	}
+	ch, unsub := bus.Subscribe("seq")
+	defer unsub()
+
+	var last uint64
+	for i := 0; i < 3; i++ {
+		bus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: fmt.Sprintf("/f%d", i)})
+		got := receive(t, ch)
+		if got.Seq <= last {
+			t.Fatalf("event %d has Seq %d, not after %d", i, got.Seq, last)
+		}
+		last = got.Seq
+	}
+	if bus.Seq() != last {
+		t.Fatalf("Seq() = %d, want the last stamped %d", bus.Seq(), last)
+	}
+}
+
+// A lossy resync stands in for every event it dropped, so it carries the
+// newest of their sequence numbers: a subscriber that reloads for it sees
+// whatever any of them announced (#2764).
+func TestSubscribeLossyResyncCarriesNewestSeq(t *testing.T) {
+	bus := eventbus.New()
+	ch, unsub := bus.SubscribeLossy("client")
+	defer unsub()
+
+	for i := 0; i < 17; i++ {
+		bus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: fmt.Sprintf("/f%d", i)})
+	}
+	got := receive(t, ch)
+	if got.Kind != eventbus.EventResync || got.Seq != bus.Seq() {
+		t.Fatalf("got %q with Seq %d, want a resync with Seq %d", got.Kind, got.Seq, bus.Seq())
+	}
+}

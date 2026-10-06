@@ -4,26 +4,39 @@ import (
 	"context"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
-	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 )
 
-// stillActive reports whether the account a stream belongs to may still sign
-// in (#1909), with the admin role it connected with (#1910): a demoted admin's
-// stream would otherwise stay unfiltered, and a promoted account's would stay
-// filtered. A stream with no account behind it, as background principals and
-// tests have, always may. A question the database cannot answer counts as no:
-// the stream closes, and requireAuth decides when the app reconnects.
-func stillActive(ctx context.Context, deps deputil.Dependencies, access accessutil.Access) bool {
+// reload returns a stream's access as of the event with sequence number seq,
+// and false when the stream must close: its account was turned off or
+// deleted (#1909), its admin role changed since it connected (#1910), or the
+// answer could not be had. A demoted admin's stream would otherwise stay
+// unfiltered, and a promoted account's would stay filtered; a failed load
+// closes rather than filter against a stale snapshot, and requireAuth decides
+// when the app reconnects.
+//
+// Every stream of the account shares one load per change through the access
+// cache (#2764). A stream with no account behind it, as background principals
+// and tests have, keeps what it has.
+func reload(ctx context.Context, deps deputil.Dependencies, access accessutil.Access, seq uint64) (accessutil.Access, bool) {
 	principal := access.Principal()
-	userID := principal.UserID
-	if userID == 0 {
-		return true
+	if principal.UserID == 0 {
+		return access, true
 	}
-	database := deps.Database()
-	if database == nil {
-		return false
+	cache := deps.AccessCache()
+	if cache == nil {
+		return access, false
 	}
-	active, err := authutil.IsActiveAs(ctx, database.Queries, userID, principal.IsAdmin)
-	return err == nil && active
+	result, err := cache.Get(accessutil.CacheGetParams{
+		Ctx:      ctx,
+		Database: deps.Database(),
+		Storage:  deps.StorageService(),
+		Bus:      deps.EventBus(),
+		UserID:   principal.UserID,
+		Seq:      seq,
+	})
+	if err != nil || !result.Active || result.Access.Principal().IsAdmin != principal.IsAdmin {
+		return access, false
+	}
+	return result.Access, true
 }

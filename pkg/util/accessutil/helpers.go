@@ -278,3 +278,62 @@ func ownerName(rows []db.ListPathAccessOnAncestorsRow) string {
 	}
 	return name
 }
+
+// refill loads one account for a flight, keeps the answer unless something
+// newer landed first, and wakes everyone waiting on the flight.
+func (c *Cache) refill(params CacheGetParams, flight *cacheFlight) {
+	c.refills.Add(1)
+	flight.result, flight.err = loadAccount(context.WithoutCancel(params.Ctx), params)
+
+	c.mu.Lock()
+	if c.flights[params.UserID] == flight {
+		delete(c.flights, params.UserID)
+	}
+	if flight.err == nil {
+		c.store(params.UserID, flight.seq, flight.result)
+	}
+	c.mu.Unlock()
+	close(flight.done)
+}
+
+// store keeps a snapshot unless a newer one is already there, evicting the
+// least recently used account past the limit. The caller holds c.mu.
+func (c *Cache) store(userID int64, seq uint64, result CacheGetResult) {
+	if el, ok := c.entries[userID]; ok {
+		if entry := el.Value.(*cacheEntry); entry.seq < seq {
+			entry.seq, entry.result = seq, result
+		}
+		c.order.MoveToFront(el)
+		return
+	}
+	c.entries[userID] = c.order.PushFront(&cacheEntry{userID: userID, seq: seq, result: result})
+	for c.order.Len() > c.limit {
+		oldest := c.order.Back()
+		c.order.Remove(oldest)
+		delete(c.entries, oldest.Value.(*cacheEntry).userID)
+	}
+}
+
+// loadAccount reads whether an account may still sign in, its role, and the
+// rows that role needs. An account that no longer exists is inactive.
+func loadAccount(ctx context.Context, params CacheGetParams) (CacheGetResult, error) {
+	if params.Database == nil {
+		return CacheGetResult{}, ErrNoDatabase
+	}
+	user, err := params.Database.Queries.GetUserByID(ctx, params.UserID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return CacheGetResult{}, nil
+	}
+	if err != nil {
+		return CacheGetResult{}, err
+	}
+	principal := Principal{UserID: user.ID, IsAdmin: user.IsAdmin != 0}
+	if user.Status != authutil.StatusActive {
+		return CacheGetResult{Access: Access{principal: principal}}, nil
+	}
+	loaded, err := Load(LoadParams{Ctx: ctx, Database: params.Database, Storage: params.Storage, Principal: principal})
+	if err != nil {
+		return CacheGetResult{}, err
+	}
+	return CacheGetResult{Active: true, Access: loaded.Access}, nil
+}

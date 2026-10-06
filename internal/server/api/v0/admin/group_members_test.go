@@ -50,7 +50,9 @@ func TestGroupMembers_Endpoints(t *testing.T) {
 		}
 		var got []eventbus.Event
 		for len(h.events) > 0 {
-			got = append(got, <-h.events)
+			evt := <-h.events
+			evt.Seq = 0 // the bus's stamp, not part of what was published
+			got = append(got, evt)
 		}
 		if len(got) != len(events) || (len(events) == 1 && got[0] != events[0]) {
 			t.Errorf("%s published %v, want %v", step, got, events)
