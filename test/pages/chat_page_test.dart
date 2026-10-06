@@ -65,6 +65,25 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // #2788: the body pins the composer to the bottom edge, so the page has
+    // to keep it off the home indicator and the rounded display corners.
+    testWidgets('the composer clears the bottom screen edge ($label)', (
+      tester,
+    ) async {
+      const home = FakeViewPadding(bottom: 34);
+      tester.view.viewPadding = home;
+      tester.view.padding = home;
+      await pumpChat(tester, size);
+
+      final composer = find.byType(QuarkMessageComposer);
+      final gutter = QuarkTokens.of(tester.element(composer)).spacingSm;
+      final rect = tester.getRect(composer);
+      expect(rect.bottom, size.height - 34);
+      expect(rect.left, greaterThanOrEqualTo(gutter));
+      expect(rect.right, lessThanOrEqualTo(size.width - gutter));
+      expect(tester.takeException(), isNull);
+    });
+
     // #2499: the pane says the channel can't be opened, at both sizes.
     testWidgets('a link to a missing channel says so ($label)', (tester) async {
       final (r, _) = await pumpChat(tester, size, location: '/chat/999');

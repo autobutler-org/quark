@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'edge_inset/quark_edge_inset.dart';
 import 'quark_app_bar.dart';
 
 /// The shape every top-level Quark page wears: the shared app bar, the
@@ -17,7 +18,8 @@ import 'quark_app_bar.dart';
 /// [bottomBar] is laid out inside a [SafeArea], so a bar handed to it clears
 /// the home indicator without the caller thinking about insets. The body is
 /// left alone: its content scrolls under the system bars, which is what a
-/// photo grid wants.
+/// photo grid wants. Chrome the body pins to the bottom edge itself, such as
+/// a chat composer, is the body's to inset, with a [QuarkEdgeInset].
 ///
 /// Key prefixes: `brand_button` and `refresh_button`, from the [QuarkAppBar]
 /// it builds. The scaffold has nothing tappable of its own.

@@ -622,6 +622,38 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkEdgeInset',
+    group: 'Layout',
+    // A phone's home indicator inset, so both the inset and the corner gutter
+    // beside it show.
+    build: (context, log) => FramedViewport(
+      width: 360,
+      height: 280,
+      child: Builder(
+        builder: (context) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            padding: const EdgeInsets.only(bottom: 34),
+            viewPadding: const EdgeInsets.only(bottom: 34),
+          ),
+          child: Column(
+            children: [
+              const Expanded(
+                child: Center(child: Text('Messages scroll here')),
+              ),
+              QuarkEdgeInset(
+                child: QuarkMessageComposer(
+                  hintText: 'Message #general',
+                  permissions: ChatPermissionPreset.member.permissions,
+                  onSend: (text) => log('QuarkMessageComposer.onSend($text)'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkPageScaffold',
     group: 'Layout',
     build: (context, log) => FramedViewport(

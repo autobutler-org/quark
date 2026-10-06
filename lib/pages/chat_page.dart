@@ -508,19 +508,24 @@ class _ChatPageState extends State<ChatPage>
                           onRetry: () => c.retry(failed.id),
                           onDiscard: () => c.discard(failed.id),
                         ),
-                      QuarkMessageComposer(
-                        // A draft belongs to its channel.
-                        key: ValueKey('chat_composer_${channel?.id}'),
-                        hintText: channel == null
-                            ? 'Message'
-                            : 'Message #${channel.name}',
-                        permissions: channel == null
-                            ? null
-                            : c.selectedPermissions,
-                        isWaitingForKey: c.isWaitingForKey,
-                        disabledReason: c.composerDisabledReason,
-                        maxLength: ChatConfig.maxMessageLength,
-                        onSend: c.send,
+                      // Chrome pinned to the bottom edge keeps clear of the
+                      // rounded display corners and the home indicator
+                      // (#2788).
+                      QuarkEdgeInset(
+                        child: QuarkMessageComposer(
+                          // A draft belongs to its channel.
+                          key: ValueKey('chat_composer_${channel?.id}'),
+                          hintText: channel == null
+                              ? 'Message'
+                              : 'Message #${channel.name}',
+                          permissions: channel == null
+                              ? null
+                              : c.selectedPermissions,
+                          isWaitingForKey: c.isWaitingForKey,
+                          disabledReason: c.composerDisabledReason,
+                          maxLength: ChatConfig.maxMessageLength,
+                          onSend: c.send,
+                        ),
                       ),
                     ],
                   ),

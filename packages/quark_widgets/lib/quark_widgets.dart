@@ -60,6 +60,7 @@ export 'src/file_browser/upload_conflict_dialog.dart';
 export 'src/jobs/job_list.dart';
 export 'src/jobs/jobs_badge.dart';
 export 'src/layout/connection_indicator.dart';
+export 'src/layout/edge_inset/quark_edge_inset.dart';
 export 'src/layout/quark_app_bar.dart';
 export 'src/layout/quark_app_bar_bottom.dart';
 export 'src/layout/quark_app_bar_trailing.dart';
