@@ -59,7 +59,7 @@ func TestIsAdmin(t *testing.T) {
 //
 // The doc comment claims "Returns false (not an error) for unknown users", but
 // IsUserAdmin is a sqlc :one query, so a missing row yields sql.ErrNoRows and
-// IsAdmin wraps it. The (false, err) result is safe — RequireAdmin treats any
+// IsAdmin wraps it. The (false, err) result is safe — RequireAdmin reads that
 // error as "not admin" — but the documented contract is wrong. This test
 // records reality so a future change to either side is deliberate.
 func TestIsAdmin_UnknownUser(t *testing.T) {

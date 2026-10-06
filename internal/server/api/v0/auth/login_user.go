@@ -26,6 +26,7 @@ import (
 // @Failure 426 {object} serverutil.Response "the body carried a password with no authKey: the app is too old"
 // @Failure 500 {object} serverutil.Response "the upgrade's write failed"
 // @Failure 429 {object} serverutil.Response "locked out after repeated failures; see Retry-After"
+// @Failure 503 {object} serverutil.Response "the account lookup failed; nothing was checked or counted toward a lockout"
 // @Header 429 {integer} Retry-After "seconds until the lockout lifts"
 // @Router /auth/login [post]
 func loginUser(c *gin.Context) *serverutil.Response {

@@ -2064,6 +2064,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/serverutil.Response"
                         }
+                    },
+                    "503": {
+                        "description": "the account lookup failed; nothing was checked or counted toward a lockout",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
                     }
                 }
             }

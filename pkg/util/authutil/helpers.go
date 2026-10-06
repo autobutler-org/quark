@@ -309,6 +309,16 @@ func loginFailed(guard *ratelimitutil.LoginGuard, attempt ratelimitutil.LoginAtt
 	return fmt.Errorf("invalid credentials")
 }
 
+// unavailable logs a session or account lookup the database could not answer
+// and returns ErrUnavailable in its place, so the cause reaches the log and
+// stays out of the response (#2858). The caller has already set aside
+// sql.ErrNoRows, which is an answer: the credential is wrong. Neither the
+// token nor the username is logged.
+func unavailable(lookup string, err error) error {
+	slog.Warn("auth lookup failed", "lookup", lookup, "error", err)
+	return ErrUnavailable
+}
+
 // keyHashPrefix marks a hash HashKey made. bcrypt's start with "$2", so the
 // two are never mistaken for each other.
 const keyHashPrefix = "sha256:"
@@ -347,11 +357,17 @@ func checkAuthKey(ctx context.Context, queries *db.Queries, user db.User, authKe
 // Login sends. A wrong username or credential is counted toward a lockout,
 // and the account's status is checked last. Recording the success is left to
 // the caller, which may still have work that can fail.
+//
+// A lookup the database could not answer is ErrUnavailable. It is not a wrong
+// guess, so it is not counted: a database error must not lock an account out.
 func guardedAccount(ctx context.Context, queries *db.Queries, guard *ratelimitutil.LoginGuard, attempt ratelimitutil.LoginAttempt, authKey, password string) (db.User, error) {
 	if wait := guard.Check(attempt).RetryAfter; wait > 0 {
 		return db.User{}, &TooManyAttemptsError{RetryAfter: wait}
 	}
 	user, err := queries.GetUserByUsername(ctx, attempt.Account)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return db.User{}, unavailable("account", err)
+	}
 	if err != nil {
 		// Don't leak whether the username exists
 		return db.User{}, loginFailed(guard, attempt)

@@ -5,6 +5,7 @@ package middleware
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -163,7 +164,8 @@ func trackDevice(deps deputil.Dependencies) gin.HandlerFunc {
 
 // requireAuth validates the request using a fallthrough chain of auth methods.
 // Each method is tried in order; if one fails, the next is attempted. Only if
-// ALL methods fail does the request get a 401.
+// ALL methods fail does the request get a 401, or a 503 when one of them
+// failed because the database could not be asked (#2858).
 //
 // Precedence (highest to lowest):
 //  1. Bearer token (Authorization: Bearer <token>)
@@ -248,6 +250,15 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 			tokens = append(tokens, q)
 		}
 
+		// A lookup the database could not answer says nothing about the
+		// credential, so it must not end in the 401 that makes an app drop its
+		// session (#2858). A request can carry several credentials: a bearer
+		// token and a cookie, a session and Basic. One failed lookup does not
+		// end the chain, because a later credential the database can still
+		// check is worth what it always was. But when none checks out, the
+		// answer is 503, not 401: the one that could not be checked may be
+		// valid, and only the database can say it is not.
+		unavailable := false
 		for _, t := range tokens {
 			username, userID, err := authutil.ValidateSession(ctx, db.Queries, t)
 			if err == nil {
@@ -257,6 +268,7 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 				authenticated(c, db.Queries, username, userID)
 				return
 			}
+			unavailable = unavailable || errors.Is(err, authutil.ErrUnavailable)
 		}
 
 		// A download token is good for one download of the filePath and serial
@@ -315,8 +327,14 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 				c.AbortWithStatusJSON(http.StatusUpgradeRequired, gin.H{"error": err.Error()})
 				return
 			}
+			unavailable = unavailable || errors.Is(err, authutil.ErrUnavailable)
 		}
 
+		// authutil logged the database's error; it stays out of the response.
+		if unavailable {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "service unavailable"})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 		c.Abort()
 	}
@@ -371,6 +389,7 @@ func Use(router *gin.Engine, deps deputil.Dependencies) {
 
 // RequireAdmin is a middleware that rejects requests from non-admin users with
 // 403 Forbidden. It must be applied after requireAuth (which sets "username").
+// A role the database could not report is a 503, not a refusal (#2858).
 func RequireAdmin(deps deputil.Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, ok := ctxutil.Get[string](c, "username")
@@ -384,7 +403,14 @@ func RequireAdmin(deps deputil.Dependencies) gin.HandlerFunc {
 			return
 		}
 		isAdmin, err := authutil.IsAdmin(c.Request.Context(), db.Queries, username)
-		if err != nil || !isAdmin {
+		// IsAdmin answers an account that has no row with sql.ErrNoRows, and
+		// that account is no admin. Any other error is a failed lookup.
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			slog.Warn("admin lookup failed", "error", err)
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "service unavailable"})
+			return
+		}
+		if !isAdmin {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin access required"})
 			return
 		}
