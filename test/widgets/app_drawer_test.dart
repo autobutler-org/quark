@@ -106,7 +106,11 @@ void main() {
     expect(files.selected, isTrue);
   });
 
-  for (final key in [FeatureFlag.chat, FeatureFlag.calendar]) {
+  for (final key in [
+    FeatureFlag.chat,
+    FeatureFlag.calendar,
+    FeatureFlag.slides,
+  ]) {
     testWidgets('offers $key, marked beta, only while its beta is on', (
       tester,
     ) async {

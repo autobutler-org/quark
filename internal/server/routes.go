@@ -72,10 +72,11 @@ func setupRouters(engine *gin.Engine, systemCollector *healthutil.Collector, dep
 		serverutil.RegisterRouterWithGroup(group, r)
 	}
 
-	// Betas an admin can turn off (#2421, #2609), each behind its flag.
+	// Betas an admin can turn off (#2421, #2609, #2868), each behind its flag.
 	betaRouters := map[string]serverutil.Router{
 		featureflagutil.Chat:     v0_chat.NewRouter(),
 		featureflagutil.Calendar: v0_calendar.NewRouter(),
+		featureflagutil.Slides:   v0_files.NewSlidesRouter(),
 	}
 	for key, r := range betaRouters {
 		serverutil.RegisterRouterWithGroup(group.Group("", middleware.RequireFeatureEnabled(key)), r)

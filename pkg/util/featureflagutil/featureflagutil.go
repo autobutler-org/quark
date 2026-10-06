@@ -18,6 +18,9 @@ const Chat = "chat"
 // Calendar is the key of the calendar beta's flag (#2609).
 const Calendar = "calendar"
 
+// Slides is the key of the slides beta's flag (#2868).
+const Slides = "slides"
+
 // ErrUnknownFlag is returned for a key the registry does not declare, which
 // includes every retired flag.
 var ErrUnknownFlag = errors.New("unknown feature flag")

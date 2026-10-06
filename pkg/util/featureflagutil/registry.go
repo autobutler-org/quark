@@ -22,4 +22,13 @@ var registry = []Flag{
 		IntroducedIn: "#1144",
 		SunsetIssue:  2610,
 	},
+	{
+		Key:   Slides,
+		Label: "Slides",
+		Description: "The presentation editor, with PowerPoint import and export. Turning it off hides " +
+			"Slides from everyone; stored presentations are kept, not deleted. It is not a security measure.",
+		Default:      true,
+		IntroducedIn: "#1152",
+		SunsetIssue:  2869,
+	},
 }

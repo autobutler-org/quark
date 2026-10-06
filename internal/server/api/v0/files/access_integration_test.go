@@ -78,6 +78,7 @@ func newAccessHarness(t *testing.T, admin bool, extra ...storageutil.Device) acc
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_files.NewRouter())
+	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_files.NewSlidesRouter())
 	return accessHarness{engine: engine, filesDir: filesDir, database: database, userID: user.ID, principal: principal}
 }
 
