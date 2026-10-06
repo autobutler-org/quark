@@ -120,8 +120,8 @@ const (
 	// running, a count is forgotten.
 	DefaultFailureReset = time.Hour
 	// maxGuardRecords bounds the failure table. An attacker picks the
-	// usernames and, on IPv6, a lot of addresses; past the bound a new key is
-	// not tracked, and the per-IP token bucket is still in front of it.
+	// usernames and, on IPv6, a lot of addresses, so a spray can reach the
+	// bound; a full table makes room rather than stop counting (#2833).
 	maxGuardRecords = 50_000
 )
 
@@ -219,12 +219,13 @@ func (g *LoginGuard) RecordFailure(a LoginAttempt) {
 	g.sweep(now)
 	account, ip := accountKey(a.Account), addressKey(a.IP)
 	thresholds := []int{g.policy.PairThreshold, g.policy.IPThreshold, g.policy.AccountThreshold}
-	for i, key := range g.keysFor(account, ip, false) {
+	keys := g.keysFor(account, ip, false)
+	if len(g.records)+len(keys) > maxGuardRecords {
+		g.evict(now)
+	}
+	for i, key := range keys {
 		r, ok := g.records[key]
 		if !ok {
-			if len(g.records) >= maxGuardRecords {
-				continue
-			}
 			r = &guardRecord{}
 			g.records[key] = r
 		}

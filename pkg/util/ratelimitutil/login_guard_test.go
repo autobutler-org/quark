@@ -204,3 +204,46 @@ func TestLoginGuard_NilIsOpen(t *testing.T) {
 		t.Fatalf("nil guard locked: %v", got)
 	}
 }
+
+// fillGuard sprays one failure each from fresh accounts and addresses until
+// the failure table is full, the way a high-cardinality spray fills it. Each
+// attempt adds three keys, and from numbers the first so sprays do not overlap.
+func fillGuard(g *ratelimitutil.LoginGuard, from int) {
+	for i := from; i <= from+ratelimitutil.MaxGuardRecords/3; i++ {
+		g.RecordFailure(ratelimitutil.LoginAttempt{
+			Account: fmt.Sprintf("spray%d", i),
+			IP:      fmt.Sprintf("10.%d.%d.%d", i>>16&0xff, i>>8&0xff, i&0xff),
+		})
+	}
+}
+
+// TestLoginGuard_FullTableStillLocksNewKeys (#2833): once a spray has filled
+// the table, a new pair still meets its lockout.
+func TestLoginGuard_FullTableStillLocksNewKeys(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+	fillGuard(g, 0)
+	clock.Advance(time.Second)
+
+	a := ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}
+	fail(g, a, 3)
+	if got := g.Check(a).RetryAfter; got != time.Minute {
+		t.Fatalf("retry after = %v on a full table, want 1m", got)
+	}
+}
+
+// TestLoginGuard_FullTableKeepsRunningLockouts (#2833): making room in a full
+// table drops idle counts, not a lockout that is still running, so a spray
+// cannot flush its own lockout away.
+func TestLoginGuard_FullTableKeepsRunningLockouts(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+	a := ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}
+	fail(g, a, 3)
+
+	fillGuard(g, 0)
+	fillGuard(g, ratelimitutil.MaxGuardRecords)
+	if got := g.Check(a).RetryAfter; got != time.Minute {
+		t.Fatalf("retry after = %v after the spray, want 1m", got)
+	}
+}
