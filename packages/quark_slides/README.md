@@ -26,7 +26,7 @@ Everything is immutable and compares by value. An edit makes a new
 | `ImageElement`   | `source` (an `ImageSource` reference), `altText`, `fit`                |
 | `GroupElement`   | `children`, back to front, in group-local frames; groups nest          |
 | `Stroke`         | `color`, `width`, `dash` (solid, dash, dot, dash-dot)                  |
-| `SlideColor`     | a literal ARGB value, or a theme role: `SlideColor.theme(ThemeColor.accent1)` |
+| `SlideColor`     | a literal 32-bit color value, or a theme role: `SlideColor.theme(ThemeColor.accent1)` |
 
 Slide units are an abstract space set by `SlideSize` (1920×1080 for the
 default 16:9). Stacking order is an element's index in `Slide.elements`. Ids are
@@ -107,10 +107,10 @@ final ours = SlideThemes.cool.copyWith(
   headingFont: 'Lora',
 );
 const accent = SlideColor.theme(ThemeColor.accent1);
-accent.resolve(deck.theme); // the ARGB to paint; a literal ignores the theme
+accent.resolve(deck.theme); // the color value to paint; a literal ignores the theme
 ```
 
-A swatch for a role is `Color(theme.colors[role])`. A role color's `argb`
+A swatch for a role is `Color(theme.colors[role])`. A role color's literal value
 is its light-theme fallback; paint with `resolve`.
 
 A `SlideLayout` is a set of `LayoutPlaceholder` slots, each a text role, a
