@@ -56,6 +56,15 @@ UPDATE users
 SET auth_key_hash = ?, auth_salt = ?, password_hash = ''
 WHERE id = ? AND auth_key_hash = '';
 
+-- RehashAuthKey replaces an auth key hash stored with bcrypt by the SHA-256
+-- one of the same key, once that key has verified against it (#2765). Only the
+-- hash that was verified matches, so a key changed in the meantime is never
+-- overwritten.
+-- name: RehashAuthKey :exec
+UPDATE users
+SET auth_key_hash = sqlc.arg(new_hash)
+WHERE id = sqlc.arg(id) AND auth_key_hash = sqlc.arg(old_hash);
+
 -- name: CreateSession :one
 INSERT INTO sessions (token, user_id, expires_at, last_used_at)
 VALUES (?, ?, ?, ?)

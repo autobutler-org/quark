@@ -98,7 +98,7 @@ func (h adminHarness) do(method, path string) *httptest.ResponseRecorder {
 func (h adminHarness) addUser(t *testing.T, username, status string, admin bool) {
 	t.Helper()
 	ctx := context.Background()
-	hash, err := authutil.HashPassword(dbtest.AuthKey("user-password"))
+	hash, err := authutil.HashKey(dbtest.AuthKey("user-password"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -40,9 +40,9 @@ recoveryKey  = HKDF-SHA256(phraseMaster, info = "recovery-auth")  sent in the ph
 phraseKey    = HKDF-SHA256(phraseMaster, info = "recovery-wrap")  the phrase wrap's key
 ```
 
-`normalize` trims and lowercases, as the Quark always has. The Quark stores only hashes of `authKey` and
-`recoveryKey`. `ChatCrypto.deriveAuthKeys` and `deriveRecoveryKeys` in `lib/services/chat_crypto.dart` are the
-construction, pinned by fixed test vectors.
+`normalize` trims and lowercases, as the Quark always has. The Quark stores only SHA-256 digests of `authKey` and
+`recoveryKey` (#2765). `ChatCrypto.deriveAuthKeys` and `deriveRecoveryKeys` in `lib/services/chat_crypto.dart` are
+the construction, pinned by fixed test vectors.
 
 The recovery phrase is generated in the app now, not on the Quark: six words from the Quark's own 256-word list
 (`lib/utils/recovery_phrase.dart`, checked word for word against `pkg/util/authutil/wordlist.go`), one random

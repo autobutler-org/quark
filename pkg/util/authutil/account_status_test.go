@@ -20,11 +20,11 @@ var statusKey, statusRecoveryKey = authKeyOf(5), authKeyOf(6)
 func mkStatusUser(t *testing.T, q *db.Queries, name, status string) {
 	t.Helper()
 	ctx := context.Background()
-	keyHash, err := authutil.HashPassword(statusKey)
+	keyHash, err := authutil.HashKey(statusKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	recoveryHash, err := authutil.HashPassword(statusRecoveryKey)
+	recoveryHash, err := authutil.HashKey(statusRecoveryKey)
 	if err != nil {
 		t.Fatal(err)
 	}

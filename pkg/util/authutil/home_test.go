@@ -37,10 +37,7 @@ func ownsHome(t *testing.T, f createUserFixture, userID int64, username string) 
 // way an approval did before it made homes: a row, and nothing else.
 func addAccountWithoutHome(t *testing.T, f createUserFixture, username string) int64 {
 	t.Helper()
-	hash, err := authutil.HashPassword("user-password")
-	if err != nil {
-		t.Fatal(err)
-	}
+	hash := dbtest.BcryptHash(t, "user-password")
 	user, err := f.database.Queries.CreateUser(context.Background(), db.CreateUserParams{
 		Username:           username,
 		PasswordHash:       hash,

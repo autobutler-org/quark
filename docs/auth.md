@@ -39,6 +39,13 @@ recoveryKey = HKDF-SHA256(ikm = master, salt = none, info = "recovery-auth"), 32
 Each key is sent as the standard base64 of its 32 bytes; anything else is a 400. `ChatCrypto` in the app is the
 reference implementation.
 
+The Quark stores each key as `sha256:` and the hex SHA-256 of that base64 string, and compares in constant time
+(#2765). Argon2id is the slow, memory-hard step in front of every password guess, so a second slow hash on the Quark
+bought nothing and cost a core-second per HTTP Basic request. Only a value shaped like a key takes the fast hash. The
+password and phrase hashes of a legacy account stay bcrypt until the account moves to keys. An auth key stored with
+bcrypt before this change is verified with bcrypt once more, and that first correct key rewrites its row to SHA-256;
+a build from before the change cannot verify a rewritten row.
+
 `legacy` is `true` for an account that has no auth key yet: it never signed in with an app that sends one, and the
 app upgrades it at the next sign-in (see [Logging in](#logging-in)). `legacyRecovery` is `true` for an account with no
 recovery key, which the app gives one at sign-in or at a recovery (see [Recovery keys](#recovery-keys)). An unknown
@@ -84,7 +91,8 @@ an auth key is checked by the key, and a password beside it is ignored. The pass
 
 `/auth/request-account` takes the same `authKey` and `recoveryKey` as setup, and `POST /admin/users` takes `authKey`
 for the account it adds. Wherever an action asks for the password again, or a request uses HTTP Basic, the client
-sends the auth key as the password; a raw password there is a 426 too.
+sends the auth key as the password; a raw password there is a 426 too. HTTP Basic sits behind the same lockout as
+`/auth/login`: wrong keys count toward it, and a locked-out request gets 429 with `Retry-After`, whatever key it sends.
 
 ## Using the token
 

@@ -3,11 +3,19 @@
 // account status, and admin role management. A legacy account's password and
 // recovery phrase are taken once each, to move it to keys; anywhere else a raw
 // one is refused with ErrAppTooOld (#2430).
+//
+// A key is 32 bytes a client derived with Argon2id, so it is stored as a
+// SHA-256 digest, as a session token is, and checked in constant time
+// (#2765). bcrypt is only ever verified, never written: for the password and
+// recovery phrase hashes of an account that has not moved to keys, and for a
+// key hash written before keys took SHA-256, which the first correct auth key
+// rewrites.
 package authutil
 
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -16,7 +24,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"testing"
+	"strings"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -28,10 +36,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const (
-	bcryptCost       = 12
-	sessionTokenSize = 32 // bytes → 64 hex chars
-)
+const sessionTokenSize = 32 // bytes → 64 hex chars
 
 // Account statuses, as the users table spells them (#1908).
 const (
@@ -406,26 +411,31 @@ func SessionID(token string) string {
 	return hashToken(token)
 }
 
-// HashPassword hashes a secret, an auth key or a recovery key, using bcrypt.
-// The name is older than the keys (#2430). Test binaries hash
-// at bcrypt.MinCost, since cost 12 (~250ms a hash) made the auth suites take
-// most of a minute each (#2456).
-func HashPassword(password string) (string, error) {
-	cost := bcryptCost
-	if testing.Testing() {
-		cost = bcrypt.MinCost
+// HashKey returns the hash an auth key or a recovery key is stored as:
+// "sha256:" and the hex SHA-256 of the key as the client sent it (#2765). The
+// key is 32 random-looking bytes that Argon2id already stands in front of, so
+// a slow hash adds nothing, and Basic auth pays for the hash on every request.
+//
+// It refuses anything not shaped like a key, the standard base64 of exactly
+// 32 bytes, so a secret a person chose can never be stored under the fast
+// hash.
+func HashKey(key string) (string, error) {
+	if err := validateKey(key, errNotAKey); err != nil {
+		return "", err
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), cost)
-	if err != nil {
-		return "", fmt.Errorf("failed to hash password: %w", err)
-	}
-	return string(hash), nil
+	return keyHashPrefix + hashToken(key), nil
 }
 
-// CheckPassword verifies a secret against a bcrypt hash. An empty hash, which
-// is how an unset key is stored, matches nothing.
-func CheckPassword(password, hash string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+// CheckPassword verifies a secret against the hash stored for it. A hash from
+// HashKey is compared in constant time. Anything else is taken as bcrypt: the
+// password or recovery phrase hash of an account that has not moved to keys,
+// or a key hash from before HashKey (#2765). An empty hash, which is how an
+// unset credential is stored, matches nothing.
+func CheckPassword(secret, hash string) bool {
+	if strings.HasPrefix(hash, keyHashPrefix) {
+		return subtle.ConstantTimeCompare([]byte(keyHashPrefix+hashToken(secret)), []byte(hash)) == 1
+	}
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(secret)) == nil
 }
 
 // VerifyPasswordParams names the signed-in account and the auth key it gave
@@ -456,7 +466,7 @@ func VerifyPassword(ctx context.Context, params VerifyPasswordParams) (VerifyPas
 	if err != nil {
 		return VerifyPasswordResult{}, fmt.Errorf("look up the account: %w", err)
 	}
-	if !CheckPassword(params.Password, user.AuthKeyHash) {
+	if !checkAuthKey(ctx, params.Queries, user, params.Password) {
 		return VerifyPasswordResult{}, ErrIncorrectPassword
 	}
 	return VerifyPasswordResult{}, nil
@@ -740,26 +750,13 @@ func Login(ctx context.Context, queries *db.Queries, params LoginParams) (*Login
 		return nil, err
 	}
 	attempt := ratelimitutil.LoginAttempt{Account: params.Username, IP: params.ClientIP}
-	if wait := params.Guard.Check(attempt).RetryAfter; wait > 0 {
-		return nil, &TooManyAttemptsError{RetryAfter: wait}
-	}
-	user, err := queries.GetUserByUsername(ctx, params.Username)
+	user, err := guardedAccount(ctx, queries, params.Guard, attempt, params.AuthKey, params.Password)
 	if err != nil {
-		// Don't leak whether the username exists
-		return nil, loginFailed(params.Guard, attempt)
-	}
-	upgrade := user.AuthKeyHash == "" && params.Password != ""
-	secret, hash := params.AuthKey, user.AuthKeyHash
-	if upgrade {
-		secret, hash = params.Password, user.PasswordHash
-	}
-	if !CheckPassword(secret, hash) {
-		return nil, loginFailed(params.Guard, attempt)
-	}
-	if err := statusError(user.Status); err != nil {
 		return nil, err
 	}
-	if upgrade {
+	// An account with no auth key got here on its password: this is the
+	// sign-in that upgrades it.
+	if user.AuthKeyHash == "" {
 		if err := upgradeToAuthKey(ctx, queries, user, params.AuthKey, params.SaltSecret); err != nil {
 			return nil, err
 		}
@@ -800,8 +797,8 @@ func CreateUser(ctx context.Context, params CreateUserParams) (CreateUserResult,
 	var result CreateUserResult
 	madeDir := ""
 	err = inTx(ctx, params.Database, func(q *db.Queries) error {
-		// An empty recovery key hash is "none yet": bcrypt never matches it,
-		// so recovery fails like a wrong phrase until the client sets one.
+		// An empty recovery key hash is "none yet": nothing matches it, so
+		// recovery fails like a wrong phrase until the client sets one.
 		user, err := q.CreateUser(ctx, db.CreateUserParams{
 			Username:    params.Username,
 			AuthKeyHash: authKeyHash,
@@ -913,22 +910,64 @@ func ValidateSession(ctx context.Context, queries *db.Queries, token string) (st
 // shaped like an auth key is a raw one and returns ErrAppTooOld before any
 // lookup.
 // Returns the username and user id if valid, or an error if not. Unlike Login,
-// this does not create a session — each request authenticates independently.
+// this does not create a session, and no login guard stands in front of it:
+// it confirms a signed-in caller's key before one sensitive action. The
+// per-request Basic fallback in requireAuth uses AuthenticateBasic, which is
+// guarded.
 func ValidateBasicAuth(ctx context.Context, queries *db.Queries, username, password string) (string, int64, error) {
 	if isRawSecret(password) {
 		return "", 0, ErrAppTooOld
 	}
 	user, err := queries.GetUserByUsername(ctx, username)
-	if err != nil {
-		return "", 0, fmt.Errorf("invalid credentials")
-	}
-	if !CheckPassword(password, user.AuthKeyHash) {
+	if err != nil || !checkAuthKey(ctx, queries, user, password) {
 		return "", 0, fmt.Errorf("invalid credentials")
 	}
 	if err := statusError(user.Status); err != nil {
 		return "", 0, err
 	}
 	return user.Username, user.ID, nil
+}
+
+// AuthenticateBasicParams is one HTTP Basic credential and where it came from.
+type AuthenticateBasicParams struct {
+	Queries  *db.Queries
+	Username string
+	// Password is the account's auth key, which Basic carries in its password
+	// field (#2430).
+	Password string
+	// ClientIP is the address the request came from, without a port.
+	ClientIP string
+	// Guard locks out an address or account after repeated failures; nil
+	// checks nothing.
+	Guard *ratelimitutil.LoginGuard
+}
+
+// AuthenticateBasicResult is the account a Basic credential belongs to.
+type AuthenticateBasicResult struct {
+	Username string
+	UserID   int64
+}
+
+// AuthenticateBasic checks an HTTP Basic credential for requireAuth, behind
+// Guard exactly as Login is (#2765): a locked-out attempt gets
+// *TooManyAttemptsError without its key being checked, every wrong username
+// or key counts toward a lockout, and the account's status is checked only
+// after the key, so ErrAccountPending and ErrAccountDisabled reach only
+// someone who knows it. Unlike Login it creates no session.
+//
+// A raw password is ErrAppTooOld before anything else is checked, and is not
+// counted toward a lockout (#2430).
+func AuthenticateBasic(ctx context.Context, params AuthenticateBasicParams) (AuthenticateBasicResult, error) {
+	if isRawSecret(params.Password) {
+		return AuthenticateBasicResult{}, ErrAppTooOld
+	}
+	attempt := ratelimitutil.LoginAttempt{Account: params.Username, IP: params.ClientIP}
+	user, err := guardedAccount(ctx, params.Queries, params.Guard, attempt, params.Password, "")
+	if err != nil {
+		return AuthenticateBasicResult{}, err
+	}
+	params.Guard.RecordSuccess(attempt)
+	return AuthenticateBasicResult{Username: user.Username, UserID: user.ID}, nil
 }
 
 // Logout deletes a session token.
@@ -987,7 +1026,7 @@ func SetRecoveryKey(ctx context.Context, database *db.DatabaseSqlc, params SetRe
 	if err := validateKey(params.RecoveryKey, ErrInvalidRecoveryKey); err != nil {
 		return SetRecoveryKeyResult{}, err
 	}
-	hash, err := HashPassword(params.RecoveryKey)
+	hash, err := HashKey(params.RecoveryKey)
 	if err != nil {
 		return SetRecoveryKeyResult{}, err
 	}

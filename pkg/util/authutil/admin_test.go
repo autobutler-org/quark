@@ -7,16 +7,14 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
 // mkUser inserts a user and optionally promotes them to admin.
 func mkUser(t *testing.T, q *db.Queries, name string, admin bool) {
 	t.Helper()
-	hash, err := authutil.HashPassword("pw")
-	if err != nil {
-		t.Fatalf("hash: %v", err)
-	}
+	hash := dbtest.BcryptHash(t, "pw")
 	if _, err := q.CreateUser(context.Background(), db.CreateUserParams{
 		Username:           name,
 		PasswordHash:       hash,

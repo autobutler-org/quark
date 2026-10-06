@@ -1,7 +1,11 @@
 package authutil_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -11,19 +15,53 @@ import (
 
 // --- Unit tests ---
 
-func TestHashPassword_AndCheck(t *testing.T) {
-	hash, err := authutil.HashPassword("correct-horse-battery")
+// TestHashKey_AndCheck: a key is stored as "sha256:" and its hex digest, which
+// only that key matches (#2765).
+func TestHashKey_AndCheck(t *testing.T) {
+	key := dbtest.AuthKey("correct-horse-battery")
+	hash, err := authutil.HashKey(key)
 	if err != nil {
-		t.Fatalf("HashPassword failed: %v", err)
+		t.Fatalf("HashKey failed: %v", err)
 	}
-	if hash == "" {
-		t.Error("Expected non-empty hash")
+	sum := sha256.Sum256([]byte(key))
+	if want := "sha256:" + hex.EncodeToString(sum[:]); hash != want {
+		t.Errorf("HashKey = %q, want %q", hash, want)
 	}
+	if !authutil.CheckPassword(key, hash) {
+		t.Error("CheckPassword should return true for the key")
+	}
+	for _, wrong := range []string{dbtest.AuthKey("wrong-password"), "", hash} {
+		if authutil.CheckPassword(wrong, hash) {
+			t.Errorf("CheckPassword(%q) = true, want false", wrong)
+		}
+	}
+}
+
+// TestHashKey_RefusesWhatIsNotAKey: only the base64 of 32 bytes takes the fast
+// hash, so a secret a person chose can never be stored under it (#2765).
+func TestHashKey_RefusesWhatIsNotAKey(t *testing.T) {
+	for _, secret := range []string{
+		"",
+		"correct-horse-battery",
+		base64.StdEncoding.EncodeToString(make([]byte, 31)),
+		base64.StdEncoding.EncodeToString(make([]byte, 33)),
+		base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0xff}, 32)),
+	} {
+		if hash, err := authutil.HashKey(secret); err == nil || hash != "" {
+			t.Errorf("HashKey(%q) = %q, %v, want it refused", secret, hash, err)
+		}
+	}
+}
+
+// TestCheckPassword_Bcrypt: a hash that is not HashKey's is checked as bcrypt,
+// which is what a legacy account's password and phrase are stored under.
+func TestCheckPassword_Bcrypt(t *testing.T) {
+	hash := dbtest.BcryptHash(t, "correct-horse-battery")
 	if !authutil.CheckPassword("correct-horse-battery", hash) {
-		t.Error("CheckPassword should return true for correct password")
+		t.Error("CheckPassword should return true for the right password")
 	}
 	if authutil.CheckPassword("wrong-password", hash) {
-		t.Error("CheckPassword should return false for wrong password")
+		t.Error("CheckPassword should return false for a wrong password")
 	}
 }
 
@@ -289,11 +327,11 @@ func TestRecover_WrongPhrase(t *testing.T) {
 // createUserWithKeys adds a second account the way Setup stores the first.
 func createUserWithKeys(t *testing.T, queries *db.Queries, username, password, phrase string) {
 	t.Helper()
-	keyHash, err := authutil.HashPassword(dbtest.AuthKey(password))
+	keyHash, err := authutil.HashKey(dbtest.AuthKey(password))
 	if err != nil {
 		t.Fatal(err)
 	}
-	recoveryHash, err := authutil.HashPassword(dbtest.AuthKey(phrase))
+	recoveryHash, err := authutil.HashKey(dbtest.AuthKey(phrase))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -30,7 +30,7 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authutil.Setup: %v", err)
 	}
-	hash, err := authutil.HashPassword(dbtest.AuthKey("member-password"))
+	hash, err := authutil.HashKey(dbtest.AuthKey("member-password"))
 	if err != nil {
 		t.Fatal(err)
 	}

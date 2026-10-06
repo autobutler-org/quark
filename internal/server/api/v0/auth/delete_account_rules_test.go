@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 )
 
@@ -17,10 +18,7 @@ func TestDeleteAccount_LastAdminRules(t *testing.T) {
 	addOther := func(t *testing.T, queries *db.Queries, status string) {
 		t.Helper()
 		ctx := context.Background()
-		hash, err := authutil.HashPassword("OtherPassword123!")
-		if err != nil {
-			t.Fatal(err)
-		}
+		hash := dbtest.BcryptHash(t, "OtherPassword123!")
 		if _, err := queries.CreateUser(ctx, db.CreateUserParams{Username: "other-user", PasswordHash: hash, RecoveryPhraseHash: hash}); err != nil {
 			t.Fatal(err)
 		}

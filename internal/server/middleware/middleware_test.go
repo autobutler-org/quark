@@ -18,6 +18,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/downloadutil"
+	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
 	"github.com/gin-gonic/gin"
 	_ "modernc.org/sqlite"
 )
@@ -710,5 +711,46 @@ func TestRequireAuth_DownloadTokenRestartsAnInterruptedZip(t *testing.T) {
 	}
 	if code := get(); code != http.StatusUnauthorized {
 		t.Errorf("retry after a complete zip: got %d, want 401", code)
+	}
+}
+
+// TestRequireAuth_BasicAuthLockout verifies the Basic fallback counts wrong
+// keys toward the login guard and answers a locked-out address with 429 and
+// Retry-After, even for the right key, while a client sending the right key
+// on every request is never throttled by the auth rate limiter (#2765).
+func TestRequireAuth_BasicAuthLockout(t *testing.T) {
+	sqlDB, queries := newMiddlewareTestDB(t)
+	database := &db.DatabaseSqlc{Db: sqlDB, Queries: queries}
+	if _, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: t.TempDir(),
+		Username: "admin",
+		AuthKey:  dbtest.AuthKey("SecurePass1!"), SaltSecret: dbtest.SaltSecret,
+	}); err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+	deps := deputil.NewDependencies().WithDatabase(database).
+		WithLoginGuard(ratelimitutil.NewLoginGuard(ratelimitutil.LoginGuardParams{PairThreshold: 2, BaseLockout: time.Minute}))
+	engine := newMiddlewareEngine(t, deps)
+	basic := func(password string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/api/v0/protected", nil)
+		req.SetBasicAuth("admin", dbtest.AuthKey(password))
+		return doMiddlewareReq(engine, req)
+	}
+
+	for i := range 2 * ratelimitutil.DefaultBurst {
+		if w := basic("SecurePass1!"); w.Code != http.StatusOK {
+			t.Fatalf("right password, request %d = %d, want 200", i, w.Code)
+		}
+	}
+	for range 2 {
+		if w := basic("wrong"); w.Code != http.StatusUnauthorized {
+			t.Fatalf("wrong password = %d, want 401", w.Code)
+		}
+	}
+	w := basic("SecurePass1!")
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("right password while locked out = %d, want 429", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got != "60" {
+		t.Errorf("Retry-After = %q, want 60", got)
 	}
 }

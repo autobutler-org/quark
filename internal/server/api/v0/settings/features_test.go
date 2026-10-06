@@ -58,10 +58,7 @@ func newFeaturesHarness(t *testing.T) featuresHarness {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	hash, err := authutil.HashPassword("member-password")
-	if err != nil {
-		t.Fatal(err)
-	}
+	hash := dbtest.BcryptHash(t, "member-password")
 	if _, err := database.Queries.CreateUser(ctx, db.CreateUserParams{Username: "member", PasswordHash: hash, RecoveryPhraseHash: hash}); err != nil {
 		t.Fatal(err)
 	}

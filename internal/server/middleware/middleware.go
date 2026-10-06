@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -170,7 +171,9 @@ func trackDevice(deps deputil.Dependencies) gin.HandlerFunc {
 //  3. Query parameter (?token=)
 //  4. Download token (?downloadToken=, downloadTokenPaths only)
 //  5. HTTP Basic Auth (Authorization: Basic <base64>), whose password is the
-//     account's auth key. A raw password answers 426 instead of 401 (#2430).
+//     account's auth key, behind the login guard: a locked-out address or
+//     account answers 429 with Retry-After (#2765). A raw password answers
+//     426 instead of 401 (#2430).
 //
 // Exempt paths (setup, login, recover, status) are always allowed through.
 // If no users have been set up yet, all requests are allowed through (first-boot).
@@ -285,11 +288,27 @@ func requireAuth(deps deputil.Dependencies) gin.HandlerFunc {
 			}
 		}
 
-		// Fall back to HTTP Basic Auth.
+		// Fall back to HTTP Basic Auth. A client sends its auth key on every
+		// request, which costs one SHA-256 to check (#2765), so nothing is
+		// cached and no rate-limit token is spent: the login guard stands in
+		// front of it as it does in front of sign-in, and bounds wrong guesses.
 		if username, password, ok := c.Request.BasicAuth(); ok {
-			validUser, userID, err := authutil.ValidateBasicAuth(ctx, db.Queries, username, password)
+			result, err := authutil.AuthenticateBasic(ctx, authutil.AuthenticateBasicParams{
+				Queries:  db.Queries,
+				Username: username,
+				Password: password,
+				ClientIP: ratelimitutil.ExtractIP(c.ClientIP()),
+				Guard:    deps.LoginGuard(),
+			})
+			var locked *authutil.TooManyAttemptsError
+			if errors.As(err, &locked) {
+				// Whole seconds, rounded up, as the login route sends them.
+				c.Header("Retry-After", strconv.Itoa(int((locked.RetryAfter+time.Second-1)/time.Second)))
+				c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
+				return
+			}
 			if err == nil {
-				authenticated(c, db.Queries, validUser, userID)
+				authenticated(c, db.Queries, result.Username, result.UserID)
 				return
 			}
 			if errors.Is(err, authutil.ErrAppTooOld) {
