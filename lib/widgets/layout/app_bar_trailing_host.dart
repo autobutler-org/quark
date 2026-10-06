@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/router.dart';
+import 'package:quark/widgets/layout/connection_sheet_button.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// Gives every main page's top bar the app-wide controls, through one
-/// [QuarkAppBarTrailing] scope at the app root: a [ConnectionIndicator] fed
-/// by [connection] (#1880) and a [JobsBadge] counting [jobs]' running jobs.
+/// [QuarkAppBarTrailing] scope at the app root: a [ConnectionSheetButton] fed
+/// by [connection] (#1880), which opens the connection sheet (#2857), and a
+/// [JobsBadge] counting [jobs]' running jobs.
 ///
 /// The indicator is left out until [connection] has a mode, which is never on
 /// web and never with no Quark configured.
@@ -42,14 +44,7 @@ class AppBarTrailingHost extends StatelessWidget {
         return QuarkAppBarTrailing(
           actions: [
             if (mode != null)
-              ConnectionIndicator(
-                mode: mode,
-                label: switch (mode) {
-                  ConnectionMode.local => 'Connected on your home network',
-                  ConnectionMode.remote => 'Connected through remote access',
-                  ConnectionMode.offline => 'Your Quark is not reachable',
-                },
-              ),
+              ConnectionSheetButton(mode: mode, onNavigate: onNavigate),
             ListenableBuilder(
               listenable: jobs,
               builder: (context, _) => JobsBadge(

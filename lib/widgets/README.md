@@ -51,12 +51,18 @@ lib/widgets/
                                 announces finished, and navigates its action
   layout/
     app_bar_trailing_host.dart  provides the QuarkAppBarTrailing scope with a
-                                ConnectionIndicator fed by ConnectionController
-                                and a JobsBadge fed by JobsController
+                                ConnectionSheetButton fed by
+                                ConnectionController and a JobsBadge fed by
+                                JobsController
     app_drawer.dart             AppDrawer, QuarkDrawer wired to the router
     chrome_app_bar.dart         ChromeAppBar, a drill-down page's AppBar under
                                 QuarkChrome; not coupled, a candidate for the
                                 package
+    connection_sheet.dart       ConnectionStatusView with the remote access
+                                status read from RemoteAccessService
+    connection_sheet_button.dart
+                                ConnectionIndicator that opens ConnectionSheet
+                                and navigates to Settings › Network
     theme_toggle_button.dart    AppThemeToggle, ThemeToggleButton wired to AppSettings
   login/
     active_host_card.dart       the active Quark from AppSettings, with the

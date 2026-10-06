@@ -50,6 +50,12 @@ abstract final class Errors {
   static const String couldNotConnect =
       'Could not connect. Check the address and try again.';
 
+  /// The app reaches its Quark neither at home nor through remote access,
+  /// as the connection sheet behind the app bar's indicator says it (#2857).
+  static const String quarkOutOfReach =
+      "The app can't reach your Quark right now. Check your internet "
+      "connection, or try again when you're home.";
+
   /// Headline above a [message], where a page has room for both.
   static const String somethingWentWrong = 'Something went wrong';
 
