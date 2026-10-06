@@ -49,7 +49,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
-        theme: QuarkTheme.light(),
+        theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
         home: Scaffold(
           body: SettingsGeneralTab(
             theme: ThemeMode.system,

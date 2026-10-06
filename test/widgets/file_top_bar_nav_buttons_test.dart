@@ -12,7 +12,7 @@ void main() {
     bool navEnabled = true,
   }) => tester.pumpWidget(
     MaterialApp(
-      theme: QuarkTheme.dark(),
+      theme: QuarkTheme.dark(themeColor: QuarkThemeColor.classic),
       home: Scaffold(
         body: FileTopBarNavButtons(
           navEnabled: navEnabled,

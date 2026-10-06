@@ -58,8 +58,9 @@ One color is picked, per Quark by an admin and optionally per person, and the wh
 (#2740). A [`QuarkThemeColor`](../../packages/quark_widgets/lib/src/theme/quark_theme_color.dart) is a preset
 name or a custom seed, and `tokensFor(brightness)` yields a full `QuarkTokens` set for light mode and another
 for dark, so the light/dark/system toggle keeps working under any color. `QuarkTheme.light(themeColor:)` and
-`QuarkTheme.dark(themeColor:)` build from those sets. It is saved as `storageValue` (a preset name or
-`#rrggbb`) and read back with `QuarkThemeColor.parse`.
+`QuarkTheme.dark(themeColor:)` build from those sets, and the argument is required: left optional it
+defaulted to `classic`, which is how the docs page kept classic's palette under a picked color (#2786). It is
+saved as `storageValue` (a preset name or `#rrggbb`) and read back with `QuarkThemeColor.parse`.
 
 - **`classic` is Quark as it ships**: `QuarkTokens.light` and `QuarkTokens.dark`, untouched. Its accent is the
   blue preset's hue at the same strength, written out as constants. It is the default,

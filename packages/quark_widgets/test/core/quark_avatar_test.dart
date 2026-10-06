@@ -78,8 +78,8 @@ void main() {
   // #2740: a person's color is theirs. It used to be a rotation of the
   // primary token, so it would have moved with the theme color and the mode.
   for (final (label, theme) in [
-    ('dark', QuarkTheme.dark()),
-    ('light', QuarkTheme.light()),
+    ('dark', QuarkTheme.dark(themeColor: QuarkThemeColor.classic)),
+    ('light', QuarkTheme.light(themeColor: QuarkThemeColor.classic)),
     ('another theme color', QuarkTheme.dark(themeColor: QuarkThemeColor.pink)),
   ]) {
     testWidgets('$label: the fallback color is the same', (tester) async {

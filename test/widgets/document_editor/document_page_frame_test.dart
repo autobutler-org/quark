@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/document_editor/document_page_frame.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 // The editor page, and the two things about it that have to match what a
 // writer expects from any other document editor: a caret only where typing
@@ -40,6 +41,7 @@ void main() {
             editorFocus: editorFocus,
             scrollController: scrollController,
             darkPage: false,
+            themeColor: QuarkThemeColor.classic,
             isReadOnly: isReadOnly,
             onTap: onTap ?? () {},
             onKeyPressed: (_, _) => null,

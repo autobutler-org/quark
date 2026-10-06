@@ -90,7 +90,10 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp.router(theme: QuarkTheme.light(), routerConfig: router),
+      MaterialApp.router(
+        theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
+        routerConfig: router,
+      ),
     );
 
     expect(find.text('I Agree'), findsOneWidget);

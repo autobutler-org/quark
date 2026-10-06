@@ -18,7 +18,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: QuarkTheme.dark(),
+        theme: QuarkTheme.dark(themeColor: QuarkThemeColor.classic),
         home: Scaffold(
           appBar: FileTopBar(
             currentPath: '/docs',
