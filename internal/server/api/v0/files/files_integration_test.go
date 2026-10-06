@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
@@ -197,6 +198,34 @@ func TestUploadToSubdirectory(t *testing.T) {
 	subFiles := listFiles(t, engine, "docs")
 	if !contains(fileNames(subFiles), "readme.txt") {
 		t.Errorf("expected 'readme.txt' in docs/, got: %v", fileNames(subFiles))
+	}
+}
+
+// The Files page reads modifiedAt off every listing, not only the recent one
+// (#1565).
+func TestListings_ReportModifiedAt(t *testing.T) {
+	engine, filesDir := newTestEngine(t)
+	notes := filepath.Join(filesDir, "notes.txt")
+	if err := os.WriteFile(notes, []byte("notes"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	mtime := time.Date(2021, time.March, 4, 5, 6, 7, 0, time.UTC)
+	if err := os.Chtimes(notes, mtime, mtime); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{"/api/v0/files", "/api/v0/files/recent", "/api/v0/files/search?query=notes"} {
+		w := doRequest(engine, http.MethodGet, path, nil, "")
+		var files []struct {
+			ModifiedAt time.Time `json:"modifiedAt"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &files); err != nil || len(files) != 1 {
+			t.Errorf("%s: expected 1 file, got %d: %s", path, w.Code, w.Body.String())
+			continue
+		}
+		if !files[0].ModifiedAt.Equal(mtime) {
+			t.Errorf("%s: modifiedAt = %v, want %v", path, files[0].ModifiedAt, mtime)
+		}
 	}
 }
 

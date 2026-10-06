@@ -4690,7 +4690,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/v0_files.FileNodeWithTimeJSON"
+                                "$ref": "#/definitions/v0_files.FileNodeJSON"
                             }
                         }
                     },
@@ -5258,7 +5258,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/v0_files.FileNodeWithTimeJSON"
+                                "$ref": "#/definitions/v0_files.FileNodeJSON"
                             }
                         }
                     },
@@ -11748,44 +11748,8 @@
                 "isDir": {
                     "type": "boolean"
                 },
-                "name": {
-                    "type": "string"
-                },
-                "size": {
-                    "type": "integer"
-                }
-            }
-        },
-        "v0_files.FileNodeWithTimeJSON": {
-            "type": "object",
-            "properties": {
-                "compressedSize": {
-                    "type": "integer"
-                },
-                "deviceName": {
-                    "type": "string"
-                },
-                "devicePath": {
-                    "type": "string"
-                },
-                "deviceSerial": {
-                    "type": "string"
-                },
-                "dirPath": {
-                    "description": "Directory path containing the file, for easier client-side handling",
-                    "type": "string"
-                },
-                "fileType": {
-                    "description": "Kept for older clients; route viewers by file name instead",
-                    "type": "string"
-                },
-                "fullPath": {
-                    "type": "string"
-                },
-                "isDir": {
-                    "type": "boolean"
-                },
                 "modifiedAt": {
+                    "description": "ModifiedAt is when the entry last changed. It is left out when the source\ndoes not say, as some entries inside an archive do not.",
                     "type": "string"
                 },
                 "name": {

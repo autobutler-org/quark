@@ -40,7 +40,7 @@ type ByTypeCache struct {
 
 // byTypeEntry is one cached listing, sorted newest-first.
 type byTypeEntry struct {
-	files    []FileNodeWithTime
+	files    []FileNode
 	storedAt time.Time
 }
 
@@ -83,7 +83,7 @@ func (c *ByTypeCache) Invalidate() {
 
 // get returns the cached listing for key, or the generation a walk started
 // now has to hand back to put.
-func (c *ByTypeCache) get(key string) ([]FileNodeWithTime, uint64, bool) {
+func (c *ByTypeCache) get(key string) ([]FileNode, uint64, bool) {
 	if c == nil {
 		return nil, 0, false
 	}
@@ -99,7 +99,7 @@ func (c *ByTypeCache) get(key string) ([]FileNodeWithTime, uint64, bool) {
 
 // put stores files under key unless the cache was invalidated since get
 // handed out gen, or the listing is too big to keep.
-func (c *ByTypeCache) put(key string, gen uint64, files []FileNodeWithTime) {
+func (c *ByTypeCache) put(key string, gen uint64, files []FileNode) {
 	if c == nil || len(files) > byTypeCacheMaxFiles {
 		return
 	}

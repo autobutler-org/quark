@@ -41,13 +41,9 @@ type FileNode struct {
 	FullPath       string `json:"fullPath"`
 	DeviceSerial   string `json:"deviceSerial"`
 	FileType       string `json:"fileType"` // Kept for older clients; route viewers by file name instead
-}
-
-// FileNodeWithTime is a FileNode carrying its modification time, for the
-// listings that sort newest-first.
-type FileNodeWithTime struct {
-	FileNode
-	ModifiedAt time.Time `json:"modifiedAt"`
+	// ModifiedAt is when the entry last changed. It is left out when the source
+	// does not say, as some entries inside an archive do not.
+	ModifiedAt time.Time `json:"modifiedAt,omitzero"`
 }
 
 // ErrNoFilesNamespace reports a VFS registry without the local files namespace.

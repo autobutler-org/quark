@@ -12,9 +12,6 @@ import (
 // name it by.
 type FileNodeJSON = fileutil.FileNode
 
-// FileNodeWithTimeJSON extends FileNodeJSON with modification time for sorting/display
-type FileNodeWithTimeJSON = fileutil.FileNodeWithTime
-
 // ConvertXlsxJSON reports the .qsheet a workbook was converted into, and what
 // it holds. The client opens Path; the counts are what it tells the user it
 // brought across.

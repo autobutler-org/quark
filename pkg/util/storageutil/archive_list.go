@@ -144,11 +144,13 @@ func listArchiveEntries(fullPath, subPath string) ([]ArchiveEntry, error) {
 
 		if _, exists := seen[childName]; !exists {
 			entry := &ArchiveEntry{
-				Name:    childName,
-				IsDir:   isDir,
-				ModTime: af.ModTime(),
+				Name:  childName,
+				IsDir: isDir,
 			}
 			if slash < 0 {
+				// A folder the archive only implies has no time of its own;
+				// this entry's belongs to something deeper.
+				entry.ModTime = af.ModTime()
 				entry.Size = af.Size()
 				if zh, ok := af.Header.(kzip.FileHeader); ok {
 					entry.CompressedSize = int64(zh.CompressedSize64)
