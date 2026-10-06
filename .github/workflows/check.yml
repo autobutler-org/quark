@@ -81,6 +81,11 @@ jobs:
           fi
   check-misc:
     runs-on: ubuntu-latest
+    # Job-level permissions replace the workflow's, so contents: read is repeated.
+    # pull-requests: read is what lets check/attribution read the pull request.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -89,6 +94,13 @@ jobs:
       - name: Spellcheck
         run: |
           make check/spelling
+      # Merge queue and manual runs have no pull request to read, so they skip this.
+      - name: Check for AI attribution
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          make check/attribution PR=${{ github.event.pull_request.number }}
 
   check-migrations:
     runs-on: ubuntu-latest
