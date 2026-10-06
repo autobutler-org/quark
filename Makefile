@@ -1308,6 +1308,38 @@ MIGRATION_BASE_REF ?= origin/main
 check/migrations: ## Check DB migrations are numbered above the base branch (MIGRATION_BASE_REF=origin/main)
 	./scripts/check-migration-numbers.bash "$(MIGRATION_BASE_REF)"
 
+# The footer Claude Code appends to a pull request it opens, without its leading
+# emoji so a line matches with or without it.
+ATTRIBUTION_FOOTER := Generated with [Claude Code](https://claude.com/claude-code)
+
+# Not part of `make check`: it needs a pull request number and the network. CI
+# runs it in check-misc. The pull request is read fresh through gh rather than
+# from the workflow's event payload, which a re-run would reuse unchanged.
+.PHONY: check/attribution
+check/attribution: ## Check a pull request carries no Claude Code attribution footer (PR=number)
+	if [[ -z "$(PR)" ]]; then
+		echo "Usage: make check/attribution PR=<pull request number>"
+		exit 1
+	fi
+	if ! command -v gh >/dev/null 2>&1; then
+		echo "gh is not installed. Install the GitHub CLI (https://cli.github.com), then run 'gh auth login'."
+		exit 1
+	fi
+	# One line per line of the title, the description and each commit message,
+	# labeled with where it came from, so a match says what to edit.
+	if ! lines="$$(gh pr view "$(PR)" --json title,body,commits --jq '"title: " + .title, (.body | split("\n")[] | "description: " + .), (.commits[] | "commit \(.oid[0:8]): " + (.messageHeadline, (.messageBody | split("\n")[])))')"; then
+		echo "Could not read pull request #$(PR). Check the number, and run 'gh auth login' (in CI, set GH_TOKEN)."
+		exit 1
+	fi
+	if hits="$$(printf '%s\n' "$$lines" | tr -d '\r' | grep -F -- '$(ATTRIBUTION_FOOTER)')"; then
+		echo "Pull request #$(PR) carries the Claude Code attribution footer:"
+		echo ""
+		printf '%s\n' "$$hits" | sed 's/^/  /'
+		echo ""
+		echo "Remove it: edit the pull request title or description, or amend the commit and push. Then re-run this check."
+		exit 1
+	fi
+
 .PHONY: check/vuln
 check/vuln: check/vuln/backend ## Check for known CVEs
 
