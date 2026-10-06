@@ -26,6 +26,28 @@ void main() {
     );
   });
 
+  /// #2599: the web build was invisible to screen readers until someone found
+  /// Flutter's hidden "Enable accessibility" button, and a bare `<html>` left
+  /// them guessing the language to read it in (WCAG 3.1.1).
+  group('screen readers', () {
+    test('are told the page language', () {
+      expect(flattened(), contains('<html lang="en">'));
+    });
+
+    // main() loads settings and starts controllers before runApp, so it
+    // cannot run under a test; this guards the call instead.
+    test('get the semantics tree without opting in', () {
+      final main = File(
+        'lib/main.dart',
+      ).readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
+
+      expect(
+        main,
+        contains('if (kIsWeb) SemanticsBinding.instance.ensureSemantics();'),
+      );
+    });
+  });
+
   /// #2019: a cold load spent seconds on a blank white viewport before the
   /// bundle started. The splash is plain markup in the document because it
   /// has to paint before any Dart has run — nothing in `lib/` can put it

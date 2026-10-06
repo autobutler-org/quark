@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -24,6 +25,10 @@ import 'package:quark/probe_bootstrap.dart';
 Future<void> main() async {
   usePathUrlStrategy();
   final binding = WidgetsFlutterBinding.ensureInitialized();
+  // Flutter web builds the semantics tree only after someone finds its hidden
+  // "Enable accessibility" button, so screen readers see nothing until then
+  // (#2599). The handle is never disposed: the tree lives as long as the app.
+  if (kIsWeb) SemanticsBinding.instance.ensureSemantics();
   await maybeStartProbeAgent();
   await AppSettings.instance.load();
   // Quarks on the local network serve self-signed certificates. Install the
