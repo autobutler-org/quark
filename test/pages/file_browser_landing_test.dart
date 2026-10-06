@@ -33,16 +33,29 @@ class _RecordingHttpOverrides extends HttpOverrides {
   /// What `/api/v0/access/mine` answers. Nothing is shared by default.
   String sharedWithMe = '{"items":[]}';
 
+  /// What a folder listing answers. Empty by default.
+  String listing = '[]';
+
   @override
-  HttpClient createHttpClient(SecurityContext? context) =>
-      _RecordingClient(requested, () => statStatus, () => sharedWithMe);
+  HttpClient createHttpClient(SecurityContext? context) => _RecordingClient(
+    requested,
+    () => statStatus,
+    () => sharedWithMe,
+    () => listing,
+  );
 }
 
 class _RecordingClient implements HttpClient {
-  _RecordingClient(this.requested, this.statStatus, this.sharedWithMe);
+  _RecordingClient(
+    this.requested,
+    this.statStatus,
+    this.sharedWithMe,
+    this.listing,
+  );
   final List<Uri> requested;
   final int Function() statStatus;
   final String Function() sharedWithMe;
+  final String Function() listing;
 
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async {
@@ -57,6 +70,9 @@ class _RecordingClient implements HttpClient {
     }
     if (url.path.endsWith('/api/v0/access/mine')) {
       return sharedWithMe();
+    }
+    if (url.path.endsWith('/api/v0/files')) {
+      return listing();
     }
     return '[]';
   }
@@ -578,6 +594,58 @@ void main() {
       expect(find.text('Shared by bob'), findsOne);
     }, createHttpClient: overrides.createHttpClient);
   });
+
+  // #1565, #1566: the list's columns are the ones this device has chosen, and
+  // the picker changes them in place and for good.
+  testWidgets(
+    'the list shows the chosen columns, and the picker changes them',
+    (tester) async {
+      overrides.listing = jsonEncode([
+        {
+          'name': 'budget.csv',
+          'size': 2048,
+          'isDir': false,
+          'deviceName': 'Attic',
+          'dirPath': 'users/alice/budget.csv',
+          'modifiedAt': DateTime(2026, 10, 6, 14, 30).toUtc().toIso8601String(),
+        },
+      ]);
+      Finder header(String column) =>
+          find.byKey(ValueKey('file_sort_header_$column'));
+
+      await HttpOverrides.runZoned(() async {
+        await pumpBrowser(tester);
+
+        expect(find.text('budget.csv'), findsOneWidget);
+        expect(header('modified'), findsOneWidget);
+        expect(header('size'), findsOneWidget);
+        expect(header('type'), findsNothing);
+        expect(header('device'), findsNothing);
+        expect(find.text('Oct 6, 2026'), findsOneWidget);
+
+        // The default test window is narrower than the bar's breakpoint, so
+        // the picker is the Views menu's Columns section.
+        await tester.tap(find.byKey(const ValueKey('app_bar_bottom_menu')));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('file_top_bar_views_column_kind')),
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('file_top_bar_views_column_size')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(header('type'), findsOneWidget);
+        expect(find.text('Spreadsheet'), findsOneWidget);
+        expect(header('size'), findsNothing);
+        final prefs = await SharedPreferences.getInstance();
+        expect(
+          prefs.getStringList('fileListColumns'),
+          unorderedEquals(['kind', 'modified']),
+        );
+      }, createHttpClient: overrides.createHttpClient);
+    },
+  );
 
   testWidgets('Shared with me asks which one when there are several', (
     tester,

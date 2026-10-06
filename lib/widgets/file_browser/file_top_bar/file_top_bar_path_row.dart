@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/models/file_list_column.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_actions.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_breadcrumb.dart';
@@ -13,6 +14,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// On a wide bar the device filter, the create chips and the view toggles sit
 /// beside the breadcrumb. Below the bar's breakpoint they give way to the
 /// labeled Views menu, and creating moves to the floating button.
+///
+/// The column picker is live only while a list is on screen: the grid has no
+/// columns, except per device, where the listing is a list whatever the
+/// layout switch says.
 class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
   const FileTopBarPathRow({
     required this.currentPath,
@@ -38,6 +43,8 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
     this.devices,
     this.activeDevicePaths,
     this.onDeviceToggled,
+    this.columns = const {},
+    this.onColumnToggled,
     super.key,
   });
 
@@ -67,6 +74,12 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
   final Set<String>? activeDevicePaths;
   final ValueChanged<String>? onDeviceToggled;
 
+  /// The list columns currently shown.
+  final Set<FileListColumn> columns;
+
+  /// Shows or hides a list column.
+  final FileListColumnToggle? onColumnToggled;
+
   @override
   Size get preferredSize => const Size.fromHeight(QuarkAppBarBottom.height);
 
@@ -81,6 +94,9 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
       onPathSelected: onPathSelected,
     );
     final devices = this.devices;
+    final onColumnToggled = isGridView && isUnifiedView
+        ? null
+        : this.onColumnToggled;
     return QuarkAppBarBottom(
       // At the root the breadcrumb is only the home icon: let the pill shrink
       // to it rather than stretch across the row.
@@ -111,6 +127,8 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
           isUnifiedView: isUnifiedView,
           onToggleView: onToggleView,
           onToggleUnifiedView: onToggleUnifiedView,
+          columns: columns,
+          onColumnToggled: onColumnToggled,
         ),
       ],
       menuChildren: [
@@ -122,6 +140,8 @@ class FileTopBarPathRow extends StatelessWidget implements PreferredSizeWidget {
           devices: devices,
           activeDevicePaths: activeDevicePaths,
           onDeviceToggled: onDeviceToggled,
+          columns: columns,
+          onColumnToggled: onColumnToggled,
         ),
       ],
     );

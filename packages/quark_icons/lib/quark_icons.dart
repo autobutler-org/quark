@@ -554,6 +554,7 @@ class QuarkIcons {
   static const IconData grid_view_outlined = Icons.grid_view_outlined;
   static const IconData grid_view_rounded = Icons.grid_view_rounded;
   static const IconData view_list_rounded = Icons.view_list_rounded;
+  static const IconData view_column_outlined = Icons.view_column_outlined;
   static const IconData lens_outlined = Icons.lens_outlined;
 
   // ── Calendar ─────────────────────────────────────────────────────────────────────

@@ -44,6 +44,7 @@ Future<void> _pumpTile(
         isSelected: false,
         extractingPaths: const {},
         showFileSizeAndMenu: true,
+        columns: const [],
         inArchive: inArchive,
         isSearchMode: false,
         selectionMode: selectionMode,

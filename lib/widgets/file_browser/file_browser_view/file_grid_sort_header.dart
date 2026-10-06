@@ -33,8 +33,15 @@ class FileGridSortHeader extends StatelessWidget {
             onToggleSort: onToggleSort,
           ),
           FileSortHeaderCell(
-            label: 'Type',
+            label: 'Kind',
             column: SortColumn.type,
+            sortColumn: sortColumn,
+            sortDirection: sortDirection,
+            onToggleSort: onToggleSort,
+          ),
+          FileSortHeaderCell(
+            label: 'Modified',
+            column: SortColumn.modified,
             sortColumn: sortColumn,
             sortDirection: sortDirection,
             onToggleSort: onToggleSort,

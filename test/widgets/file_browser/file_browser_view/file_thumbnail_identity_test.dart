@@ -99,6 +99,7 @@ void main() {
                     isSelected: false,
                     extractingPaths: const {},
                     showFileSizeAndMenu: false,
+                    columns: const [],
                     inArchive: false,
                     isSearchMode: false,
                     selectionMode: false,

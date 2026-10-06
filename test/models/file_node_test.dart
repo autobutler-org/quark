@@ -103,6 +103,36 @@ void main() {
     });
   });
 
+  // #1565: every listing reports when the node last changed, and leaves the
+  // field out when it does not know (some archive entries).
+  group('FileNode.modifiedAt', () {
+    test('parses an RFC 3339 timestamp', () {
+      final node = FileNode.fromJson(<String, dynamic>{
+        'name': 'notes.txt',
+        'modifiedAt': '2026-10-06T14:30:00Z',
+      });
+
+      expect(node.modifiedAt, DateTime.utc(2026, 10, 6, 14, 30));
+    });
+
+    test('is null when the field is absent', () {
+      final node = FileNode.fromJson(<String, dynamic>{'name': 'notes.txt'});
+
+      expect(node.modifiedAt, isNull);
+    });
+
+    test('is null for anything that is not a timestamp', () {
+      for (final garbage in <Object?>['yesterday', '', 20261006, null]) {
+        final node = FileNode.fromJson(<String, dynamic>{
+          'name': 'notes.txt',
+          'modifiedAt': garbage,
+        });
+
+        expect(node.modifiedAt, isNull, reason: '$garbage');
+      }
+    });
+  });
+
   group('FileNode.apiPath', () {
     test('returns dirPath with leading/trailing slashes stripped', () {
       const node = FileNode(

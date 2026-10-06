@@ -1,3 +1,4 @@
+import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_browser_list_tile.dart';
@@ -12,6 +13,10 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+
+// SortColumn lives beside FileListColumn, which names the column each one
+// sorts; it is still part of this file's surface.
+export 'package:quark/models/file_list_column.dart' show SortColumn;
 
 enum FileMenuAction {
   download,
@@ -35,8 +40,6 @@ enum FileMenuAction {
   /// Imports a PowerPoint file as a presentation and opens it (#1171).
   openAsPresentation,
 }
-
-enum SortColumn { name, type, size, device }
 
 enum SortDirection { asc, desc }
 
@@ -70,8 +73,20 @@ class FileBrowserView extends StatefulWidget {
     this.selectionMode = false,
     this.selectedPaths = const {},
     this.onSelectionChanged,
+    this.columns = defaultColumns,
     super.key,
   });
+
+  /// The list columns of a listing that offers no choice of them: the trash
+  /// and the folder picker.
+  static const Set<FileListColumn> defaultColumns = {
+    FileListColumn.device,
+    FileListColumn.size,
+  };
+
+  /// The columns the list view shows after Name. Size is left out, chosen or
+  /// not, when [showFileSizeAndMenu] is false. The grid ignores this.
+  final Set<FileListColumn> columns;
 
   final Future<List<FileNode>> filesFuture;
   final List<FileNode>? initialData;
@@ -177,6 +192,9 @@ class _FileBrowserViewState extends State<FileBrowserView> {
     });
   }
 
+  /// A node with no modification time sorts as the oldest there is.
+  static final _noTime = DateTime.fromMillisecondsSinceEpoch(0);
+
   List<FileNode> _sorted(List<FileNode> files) {
     final sorted = List<FileNode>.from(files);
     sorted.sort((a, b) {
@@ -184,19 +202,21 @@ class _FileBrowserViewState extends State<FileBrowserView> {
       final dirCmp = (b.isDir ? 1 : 0) - (a.isDir ? 1 : 0);
       if (dirCmp != 0) return dirCmp;
 
-      int cmp;
-      switch (_sortColumn) {
-        case SortColumn.name:
-          cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
-        case SortColumn.type:
-          cmp = _fileType(a).compareTo(_fileType(b));
-        case SortColumn.size:
-          cmp = a.size.compareTo(b.size);
-        case SortColumn.device:
-          cmp = a.deviceName.toLowerCase().compareTo(
-            b.deviceName.toLowerCase(),
-          );
-      }
+      final byName = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      final byColumn = switch (_sortColumn) {
+        SortColumn.name => byName,
+        SortColumn.type => fileKindText(a).compareTo(fileKindText(b)),
+        SortColumn.modified => (a.modifiedAt ?? _noTime).compareTo(
+          b.modifiedAt ?? _noTime,
+        ),
+        SortColumn.size => a.size.compareTo(b.size),
+        SortColumn.device => a.deviceName.toLowerCase().compareTo(
+          b.deviceName.toLowerCase(),
+        ),
+      };
+      // Many files share a kind or a device: name settles the tie, so equal
+      // rows do not land in whatever order the sort left them.
+      final cmp = byColumn != 0 ? byColumn : byName;
       return _sortDirection == SortDirection.asc ? cmp : -cmp;
     });
     return sorted;
@@ -282,6 +302,12 @@ class _FileBrowserViewState extends State<FileBrowserView> {
         }
 
         final files = _sorted(raw);
+        final columns = [
+          for (final column in FileListColumn.values)
+            if (widget.columns.contains(column) &&
+                (column != FileListColumn.size || widget.showFileSizeAndMenu))
+              column,
+        ];
 
         // ── Segmented view ────────────────────────────────────────────────
         if (!widget.isUnifiedView && !widget.isSearchMode) {
@@ -299,6 +325,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                 sortDirection: _sortDirection,
                 onToggleSort: _toggleSort,
                 showFileSizeAndMenu: widget.showFileSizeAndMenu,
+                columns: columns,
               ),
               Expanded(
                 child: ListView(
@@ -328,6 +355,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                                 ),
                                 extractingPaths: _extractingPaths,
                                 showFileSizeAndMenu: widget.showFileSizeAndMenu,
+                                columns: columns,
                                 inArchive: widget.inArchive,
                                 isSearchMode: widget.isSearchMode,
                                 isAdmin: widget.isAdmin,
@@ -556,6 +584,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
               sortDirection: _sortDirection,
               onToggleSort: _toggleSort,
               showFileSizeAndMenu: widget.showFileSizeAndMenu,
+              columns: columns,
             ),
             Expanded(
               child: ListView.separated(
@@ -578,6 +607,7 @@ class _FileBrowserViewState extends State<FileBrowserView> {
                       isSelected: widget.selectedPaths.contains(item.apiPath),
                       extractingPaths: _extractingPaths,
                       showFileSizeAndMenu: widget.showFileSizeAndMenu,
+                      columns: columns,
                       inArchive: widget.inArchive,
                       isSearchMode: widget.isSearchMode,
                       isAdmin: widget.isAdmin,
@@ -597,12 +627,5 @@ class _FileBrowserViewState extends State<FileBrowserView> {
         );
       },
     );
-  }
-
-  static String _fileType(FileNode node) {
-    if (node.isDir) return '';
-    final dot = node.name.lastIndexOf('.');
-    if (dot < 0) return 'file';
-    return node.name.substring(dot + 1).toLowerCase();
   }
 }
