@@ -225,6 +225,57 @@ func TestGroupJoinIsAnnouncedWithoutOpeningSettings(t *testing.T) {
 	}
 }
 
+// keyNeeded waits briefly for chat_key_needed on channelID and returns its
+// audience, or nil when none came.
+func keyNeeded(events <-chan eventbus.Event, channelID int64) []int64 {
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case <-deadline:
+			return nil
+		case evt := <-events:
+			changed, ok := evt.Data.(eventbus.ChatChannelChanged)
+			if evt.Kind == eventbus.EventChatKeyNeeded && ok && changed.ChannelID == channelID {
+				return changed.Audience
+			}
+		}
+	}
+}
+
+// TestMemberChangeAsksHoldersAtOnce changes a keyed channel's members with no
+// watcher running (#2624): SetMember and RemoveMember themselves must tell the
+// key holders to fill or rotate, not leave it to WatchKeyNeeds catching up.
+func TestMemberChangeAsksHoldersAtOnce(t *testing.T) {
+	f := newFixture(t)
+	f.publishKeys(t, "bob", "carol")
+	channel := f.create(t, "bob", "design")
+	if _, err := f.createVersion("bob", channel.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	events, unsub := f.bus.Subscribe("member-change-test")
+	defer unsub()
+
+	if err := f.set(t, "bob", channel.ID, f.users["carol"], 0, chatutil.PresetMember); err != nil {
+		t.Fatal(err)
+	}
+	if got := keyNeeded(events, channel.ID); !slices.Equal(got, []int64{f.users["bob"]}) {
+		t.Errorf("chat_key_needed after adding carol = %v, want bob", got)
+	}
+	if got := f.pendingFor(t, "bob", channel.ID); !slices.Equal(got[1], []string{"carol"}) {
+		t.Errorf("bob's pending grants = %v, want carol's", got)
+	}
+
+	if _, err := f.grant("bob", channel.ID, 1, "carol", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.remove("bob", channel.ID, f.users["carol"], 0); err != nil {
+		t.Fatal(err)
+	}
+	if got := keyNeeded(events, channel.ID); !slices.Equal(got, []int64{f.users["bob"]}) {
+		t.Errorf("chat_key_needed after removing carol = %v, want bob to rotate", got)
+	}
+}
+
 func TestFirstGrantWins(t *testing.T) {
 	f := newFixture(t)
 	f.publishKeys(t, "bob", "carol", "dave")

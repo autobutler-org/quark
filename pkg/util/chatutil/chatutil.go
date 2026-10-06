@@ -608,7 +608,8 @@ func ListMembers(params ListMembersParams) (ListMembersResult, error) {
 type SetMemberParams struct {
 	Ctx      context.Context
 	Database *db.DatabaseSqlc
-	// EventBus hears chat_channel_changed. Nil skips it.
+	// EventBus hears chat_channel_changed, and chat_key_needed when a member
+	// now lacks a key the holders can fill. Nil skips both.
 	EventBus    *eventbus.Bus
 	Principal   accessutil.Principal
 	ChannelID   int64
@@ -707,7 +708,8 @@ func SetMember(params SetMemberParams) (ListMembersResult, error) {
 type RemoveMemberParams struct {
 	Ctx      context.Context
 	Database *db.DatabaseSqlc
-	// EventBus hears chat_channel_changed. Nil skips it.
+	// EventBus hears chat_channel_changed, and chat_key_needed when the key
+	// now needs rotating. Nil skips both.
 	EventBus  *eventbus.Bus
 	Principal accessutil.Principal
 	ChannelID int64
