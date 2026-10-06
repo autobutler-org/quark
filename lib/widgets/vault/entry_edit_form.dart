@@ -58,6 +58,7 @@ class EntryEditForm extends StatelessWidget {
             labelText: 'Username',
             border: OutlineInputBorder(),
           ),
+          autocorrect: false,
         ),
         const SizedBox(height: 12),
         TextField(
