@@ -19,6 +19,7 @@ Looking for setup instructions? Start with the [README](../README.md).
 
 ## Features
 
+- [Accounts and sharing](./guides/accounts-and-sharing.md) — members vs admins, homes and groups, sharing, sessions, account requests
 - [Authentication](./auth.md) — local auth setup, login, recovery
 - [Chat Security](./chat-security.md) — end-to-end encrypted chat: identity keys and the threat model
 - [Mobile Setup](./mobile-setup.md) — running the app on a physical Android or iOS device
