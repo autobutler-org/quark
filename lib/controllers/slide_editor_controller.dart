@@ -133,6 +133,16 @@ enum SlideSaveState {
 /// [effectiveTransition] the one it plays; [setSlideTransition] and
 /// [applyTransitionToAll] change them, one undo step each.
 ///
+/// **Tables** (#1160). [insertTable] puts a table in the middle of the
+/// slide, selected; the table tool on [tools] draws one instead. [tables]
+/// holds the cells selected on the canvas, which it shares. The table
+/// commands — [insertTableRowAbove] and its siblings, [deleteTableRows],
+/// [mergeTableCells], [formatTableCells], [setTableStyle] and
+/// [distributeTableRows] — act on those cells, or on the whole table when
+/// it is selected with none, one undo step each. With cells selected and
+/// no cell being typed in, the text controls ([formatText], [toggleText],
+/// [setFontSize]) format the cells' text through [formatTableCells].
+///
 /// **Pictures** (#1158). [insertImageFromDevice] picks a file, streams it up
 /// beside the presentation and puts it on the slide at the size its header
 /// gives; [insertImageFromQuark] does the same for a file already on the
@@ -166,7 +176,9 @@ class SlideEditorController extends ChangeNotifier {
     SlideClipboard? clipboard,
     bool readOnly = false,
   }) : _readOnly = readOnly,
-       clipboard = clipboard ?? systemClipboard;
+       clipboard = clipboard ?? systemClipboard {
+    tables.addListener(_notify);
+  }
 
   /// The presentation's path, relative to the device's files root.
   final String filePath;
@@ -240,6 +252,10 @@ class SlideEditorController extends ChangeNotifier {
   /// commands.
   late final SlideTextEditingController textEditing =
       SlideTextEditingController(fontFamilies: fontFamilies);
+
+  /// The table cells selected on the canvas, which the table commands act
+  /// on; shared with the canvas.
+  final SlideTableEditingController tables = SlideTableEditingController();
 
   /// The families the toolbar offers by default: the generic ones every
   /// platform can draw.
@@ -366,7 +382,7 @@ class SlideEditorController extends ChangeNotifier {
   /// The selected text's size: a shared size, [inheritedFontSize] when it
   /// sets none, or null when the selection mixes sizes.
   double? get fontSize {
-    final size = textEditing.selectionFormat.fontSize;
+    final size = textFormat.fontSize;
     if (size is double) return size;
     return size == null ? inheritedFontSize : null;
   }
@@ -498,6 +514,7 @@ class SlideEditorController extends ChangeNotifier {
     final slideId = _selectedSlideId;
     if (doc != null && slideId != null) {
       textEditing.attach(doc.controller, slideId, _selectedElementIds);
+      tables.attach(doc.controller, slideId);
     }
   }
 
@@ -585,6 +602,7 @@ class SlideEditorController extends ChangeNotifier {
   void selectElements(Set<String> ids) {
     if (setEquals(ids, _selectedElementIds)) return;
     _selectedElementIds = Set.unmodifiable(ids);
+    if (!setEquals(ids, {tables.tableId})) tables.clear();
     _attachText();
     _notify();
   }
@@ -642,12 +660,40 @@ class SlideEditorController extends ChangeNotifier {
 
   /// Sets the selected text's size, kept within [minFontSize] and
   /// [maxFontSize].
-  void setFontSize(double size) {
-    if (_readOnly) return;
-    textEditing.format(
-      TextFormat(fontSize: size.clamp(minFontSize, maxFontSize).toDouble()),
-    );
+  void setFontSize(double size) => formatText(
+    TextFormat(fontSize: size.clamp(minFontSize, maxFontSize).toDouble()),
+  );
+
+  /// Whether the text controls have anything to format: a text box, the
+  /// text being typed, or a table's cells.
+  bool get canFormatText => textEditing.canFormat || _formatsCells;
+
+  /// Whether the text controls format cells: a table is selected and no
+  /// text is being typed.
+  bool get _formatsCells => !textEditing.isEditing && selectedTable != null;
+
+  /// The formatting the text controls show: the text being typed or the
+  /// selected text boxes', or the selected cells' — the cell the keyboard
+  /// is on, or the table's first cell.
+  TextFormat get textFormat {
+    if (!_formatsCells) return textEditing.selectionFormat;
+    final table = selectedTable!;
+    final cell = tables.active ?? (row: 0, column: 0);
+    return textFormatOf(table.cell(cell.row, cell.column).paragraphs);
   }
+
+  /// Applies [format] to the text being typed, the selected text boxes, or
+  /// the selected cells, as one undo step.
+  void formatText(TextFormat format) {
+    if (_readOnly) return;
+    _formatsCells
+        ? formatTableCells(CellFormat(text: format))
+        : textEditing.format(format);
+  }
+
+  /// Turns [toggle] on or off for what [formatText] formats.
+  void toggleText(TextToggle toggle) =>
+      formatText(toggle.changeFrom(textFormat));
 
   /// Moves the selected text's size to the next of [fontSizes] up
   /// ([direction] 1) or down (-1).
@@ -924,6 +970,196 @@ class SlideEditorController extends ChangeNotifier {
     _notify();
   }
 
+  // ── Tables ────────────────────────────────────────────────────────────────
+
+  /// The table the table commands act on: the one element selected, when
+  /// it is a table (a table whose cells are selected is selected itself);
+  /// null otherwise.
+  TableElement? get selectedTable {
+    final element = singleSelected;
+    return element is TableElement ? element : null;
+  }
+
+  /// Whether the table commands apply: a table is selected in an editable
+  /// presentation.
+  bool get canEditTable => !_readOnly && selectedTable != null;
+
+  /// The cells the commands act on: those selected, or the whole table.
+  CellRange? get _tableRange {
+    final table = selectedTable;
+    if (table == null) return null;
+    return tables.range ??
+        CellRange(
+          top: 0,
+          left: 0,
+          bottom: table.rowCount - 1,
+          right: table.columnCount - 1,
+        );
+  }
+
+  /// Puts a [rows] by [columns] table in the middle of the selected slide
+  /// and selects it, as one undo step; the sizes are kept within one and
+  /// the table limits. The tool goes back to select.
+  void insertTable(int rows, int columns) {
+    final doc = _doc;
+    final slideId = _selectedSlideId;
+    if (_readOnly || doc == null || slideId == null) return;
+    textEditing.commit();
+    final r = rows.clamp(1, TableElement.maxRows);
+    final c = columns.clamp(1, TableElement.maxColumns);
+    final id = doc.controller.insertTable(
+      slideId,
+      r,
+      c.clamp(1, TableElement.maxCells ~/ r),
+    );
+    tools.use(SlideCanvasTool.select);
+    selectElements({id});
+  }
+
+  /// Runs [edit] on the selected table, its cells selected or not, after
+  /// writing any cell being typed in.
+  void _onTable(
+    void Function(
+      SlideDocumentController doc,
+      String slideId,
+      TableElement table,
+      CellRange range,
+    )
+    edit,
+  ) {
+    final doc = _doc;
+    final slideId = _selectedSlideId;
+    final table = selectedTable;
+    final range = _tableRange;
+    if (!canEditTable || doc == null || slideId == null || range == null) {
+      return;
+    }
+    textEditing.commit();
+    edit(doc.controller, slideId, table!, range);
+  }
+
+  /// Inserts a row above the selected cells, or at the table's top.
+  void insertTableRowAbove() => tables.hasSelection
+      ? _onTable((_, _, _, _) => tables.insertRowAbove())
+      : _onTable((doc, s, t, _) => doc.insertTableRow(s, t.id, 0));
+
+  /// Inserts a row below the selected cells, or at the table's bottom.
+  void insertTableRowBelow() => tables.hasSelection
+      ? _onTable((_, _, _, _) => tables.insertRowBelow())
+      : _onTable(
+          (doc, s, t, _) =>
+              doc.insertTableRow(s, t.id, t.rowCount - 1, after: true),
+        );
+
+  /// Inserts a column left of the selected cells, or at the table's left.
+  void insertTableColumnLeft() => tables.hasSelection
+      ? _onTable((_, _, _, _) => tables.insertColumnLeft())
+      : _onTable((doc, s, t, _) => doc.insertTableColumn(s, t.id, 0));
+
+  /// Inserts a column right of the selected cells, or at the table's right.
+  void insertTableColumnRight() => tables.hasSelection
+      ? _onTable((_, _, _, _) => tables.insertColumnRight())
+      : _onTable(
+          (doc, s, t, _) =>
+              doc.insertTableColumn(s, t.id, t.columnCount - 1, after: true),
+        );
+
+  /// Whether [deleteTableRows] and [deleteTableColumns] apply: cells are
+  /// selected. The whole table goes with Delete.
+  bool get canDeleteTableRows => canEditTable && tables.hasSelection;
+
+  /// Deletes the rows of the selected cells.
+  void deleteTableRows() {
+    if (canDeleteTableRows) _onTable((_, _, _, _) => tables.deleteRows());
+  }
+
+  /// Deletes the columns of the selected cells.
+  void deleteTableColumns() {
+    if (canDeleteTableRows) _onTable((_, _, _, _) => tables.deleteColumns());
+  }
+
+  /// Whether [mergeTableCells] would merge anything.
+  bool get canMergeTableCells => canEditTable && tables.canMerge;
+
+  /// Whether [unmergeTableCells] would split anything.
+  bool get canUnmergeTableCells => canEditTable && tables.canUnmerge;
+
+  /// Merges the selected cells into one.
+  void mergeTableCells() {
+    if (canMergeTableCells) _onTable((_, _, _, _) => tables.merge());
+  }
+
+  /// Splits the merged cells in the selection.
+  void unmergeTableCells() {
+    if (canUnmergeTableCells) _onTable((_, _, _, _) => tables.unmerge());
+  }
+
+  /// Applies [format] to the selected cells, or every cell.
+  void formatTableCells(CellFormat format) =>
+      _onTable((doc, s, t, range) => doc.formatCells(s, t.id, range, format));
+
+  /// The fill the cells [formatTableCells] formats share; null when they
+  /// set none or differ.
+  SlideColor? get tableCellFill {
+    final table = selectedTable;
+    final range = _tableRange;
+    if (table == null || range == null) return null;
+    final fills = {
+      for (var r = range.top; r <= range.bottom; r++)
+        for (var c = range.left; c <= range.right; c++) table.cell(r, c).fill,
+    };
+    return fills.length == 1 ? fills.single : null;
+  }
+
+  /// Turns the selected table's header row and banded rows on or off;
+  /// what is left out is kept.
+  void setTableStyle({bool? headerRow, bool? bandedRows}) => _onTable(
+    (doc, s, t, _) => doc.setTableStyle(
+      s,
+      t.id,
+      headerRow: headerRow,
+      bandedRows: bandedRows,
+    ),
+  );
+
+  /// The rows or columns distributing evens: those of the selected cells
+  /// when they span more than one, else the whole table's.
+  (int, int) _spread(CellRange range, int count, {required bool rows}) {
+    final (first, last) = rows
+        ? (range.top, range.bottom)
+        : (range.left, range.right);
+    return last > first ? (first, last) : (0, count - 1);
+  }
+
+  /// Gives the rows of the selected cells, or of the whole table, the same
+  /// height, keeping their total; one undo step. A row is never made
+  /// shorter than its text.
+  void distributeTableRows() => _onTable((doc, s, t, range) {
+    final (first, last) = _spread(range, t.rowCount, rows: true);
+    final heights = t.rowHeights.sublist(first, last + 1);
+    final even = heights.reduce((a, b) => a + b) / heights.length;
+    doc.batch(() {
+      for (var r = first; r <= last; r++) {
+        doc.setTableRowHeight(s, t.id, r, even);
+      }
+    });
+  });
+
+  /// Gives the columns of the selected cells, or of the whole table, the
+  /// same width, keeping the table's width; one undo step.
+  void distributeTableColumns() => _onTable((doc, s, t, range) {
+    final (first, last) = _spread(range, t.columnCount, rows: false);
+    final widths = t.columnWidths.sublist(first, last + 1);
+    final even = widths.reduce((a, b) => a + b) / widths.length;
+    // Each width hands the difference to the column on its right, so the
+    // last one comes out even too.
+    doc.batch(() {
+      for (var c = first; c < last; c++) {
+        doc.setTableColumnWidth(s, t.id, c, even);
+      }
+    });
+  });
+
   // ── Pictures ──────────────────────────────────────────────────────────────
 
   /// Asks for a picture on this device, uploads it beside the presentation
@@ -1138,6 +1374,7 @@ class SlideEditorController extends ChangeNotifier {
     _doc?.dispose();
     tools.dispose();
     textEditing.dispose();
+    tables.dispose();
     super.dispose();
   }
 }

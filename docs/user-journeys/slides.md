@@ -720,3 +720,48 @@ same drive as the presentation (`photos/cover.jpg`).
   the show use a short fade instead.
 - In view-only mode (JN-SL-034) the panel shows the transition with its choices off, and the toolbar chip and the
   phone's menu entry are gone.
+
+### JN-SL-036: Insert a table
+
+**Preconditions:** A presentation is open in the editor (JN-SL-004), and the person can edit it.
+
+**Steps:**
+
+1. Tap the table button in the toolbar's tool row (on a phone: **Insert** › **Table**, which opens a sheet).
+2. Hover or drag across the 8 by 8 grid to pick a size, or set **Rows** and **Columns** with their − and + buttons
+   (up to 20 each). It starts at 3 by 3, and reads the size, such as "4 × 3 table".
+3. Tap a square of the grid, or **Draw**, then click the slide to place the table at its default size, or drag to
+   size it.
+4. Or tap **Insert** to put it in the middle of the slide — the way in from the keyboard.
+
+**Expected result:**
+
+- The picker closes; while the table tool is armed its button is lit.
+- The table has a header row and banded rows in the theme's colors, and is selected once placed.
+- Inserting is one undo step and starts the autosave (JN-SL-009).
+- In view-only mode (JN-SL-034) the table button and a phone's **Insert** menu are gone.
+
+### JN-SL-037: Edit a table
+
+**Preconditions:** A slide with a table is open in the editor (JN-SL-036), and the person can edit it.
+
+**Steps:**
+
+1. Select the table, or tap a cell of the selected table and drag (or Shift and the arrow keys) to select cells.
+   Double-click a cell, or press Enter or F2, to type in it.
+2. In the toolbar's **Table** group (on a phone: **Format** › **Table**), insert a row above or below or a column left
+   or right, delete the selected cells' rows or columns, merge or unmerge cells, and turn the header row and banded
+   rows on or off.
+3. Pick a **Cell color** — the theme's colors first, then swatches and a hex code; **Table color** goes back to the
+   table's own — and a **Borders** preset: all, outside, bottom or none.
+4. **Distribute rows and columns** evens out the rows' heights or the columns' widths.
+5. With cells selected, the text controls — bold, italic, font, size, color and alignment — format the cells' text.
+6. The properties panel (on a phone: **Format** › **Properties**) shows the table's position and size, its rows by
+   columns, and switches for the header row and banded rows.
+
+**Expected result:**
+
+- With cells selected the commands act on those cells; with the whole table selected, on the whole table (rows and
+  columns are added at its edges, and its rows or columns are deleted with the cells selected only).
+- Each command is one undo step and starts the autosave.
+- In view-only mode the **Table** group is gone and the properties panel's switches are off to input.

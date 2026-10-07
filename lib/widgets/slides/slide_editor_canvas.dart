@@ -16,8 +16,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// arrow, Delete, Tab and stacking keys work at once; Ctrl or Cmd Z is not
 /// one of them, so it reaches the editor's undo shortcut above.
 ///
-/// The toolbar's drawing tool and text formatting reach it through the
-/// controller's `tools` and `textEditing`, which it shares; its copy, cut
+/// The toolbar's drawing tool, text formatting and table commands reach it
+/// through the controller's `tools`, `textEditing` and `tables` (#1160),
+/// which it shares; its copy, cut
 /// and paste keys use the controller's `clipboard`, as the toolbar does.
 ///
 /// Find and replace's matches (#1176) come from the `SlideFindProvider`
@@ -32,7 +33,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// element to a screen reader. Colors come from [styleOf].
 ///
 /// Key prefixes: `slide_editor_canvas` on the canvas, and the package's
-/// `slide_element_<id>` and `slide_handle_<name>` inside it.
+/// `slide_element_<id>` and `slide_handle_<name>` inside it, and a table's
+/// `slide_table_cell_<id>_<row>_<column>`, `slide_table_column_<i>` and
+/// `slide_table_row_<i>`.
 class SlideEditorCanvas extends StatelessWidget {
   /// Edits [controller]'s selected slide, drawing pictures with
   /// [imageBuilder].
@@ -80,6 +83,7 @@ class SlideEditorCanvas extends StatelessWidget {
       style: styleOf(context),
       tools: controller.tools,
       textEditing: controller.textEditing,
+      tableEditing: controller.tables,
       clipboard: controller.clipboard,
       autofocus: !controller.isReadOnly,
       highlights: find?.highlights ?? const [],

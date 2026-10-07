@@ -312,6 +312,33 @@ class QuarkIcons {
   /// The list of keyboard shortcuts.
   static const IconData keyboard_shortcuts = Icons.keyboard_outlined;
 
+  /// Insert a table on a slide, and a slide table's controls.
+  static const IconData insert_table = Icons.table_chart_outlined;
+
+  /// Merge the selected table cells into one.
+  static const IconData merge_cells = Icons.call_merge;
+
+  /// Split a merged table cell back into its cells.
+  static const IconData unmerge_cells = Icons.call_split;
+
+  /// A table's header row: its first row filled with the accent.
+  static const IconData table_header_row = Icons.web_asset;
+
+  /// A table's banded rows: every other row shaded.
+  static const IconData table_banded_rows = Icons.table_rows_outlined;
+
+  /// Lines along every edge of the selected cells.
+  static const IconData border_all = Icons.border_all;
+
+  /// Lines around the outside of the selected cells.
+  static const IconData border_outside = Icons.border_outer;
+
+  /// A line along the bottom of the selected cells.
+  static const IconData border_bottom = Icons.border_bottom;
+
+  /// No lines on the selected cells.
+  static const IconData border_none = Icons.border_clear;
+
   // ── Import / Export ────────────────────────────────────────────────────────────────
   /// Export data as a CSV file.
   static const IconData export_csv = Icons.file_download;

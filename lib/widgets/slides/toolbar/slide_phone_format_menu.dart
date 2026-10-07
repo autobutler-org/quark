@@ -20,8 +20,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// no room for otherwise, and "Keyboard shortcuts".
 ///
 /// Key prefixes: `slide_format_menu` on the chip, [SlideToolbarGroup.key]
-/// on each group's submenu, `<key>_menu` on the font, color, width, style,
-/// corner and opacity submenus; items keep the keys the wide row gives
+/// on each group's submenu (the table's, "Table", is
+/// `slide_format_group_table`), `<key>_menu` on the font, color, width,
+/// style, corner, opacity, borders and distribute submenus; items keep the keys the wide row gives
 /// them; `slide_format_theme` on "Theme", `slide_format_layout` on "Slide
 /// layout", `slide_format_transition` on "Transition", `slide_format_find` on "Find and replace", `slide_format_properties` on "Properties", `slide_zoom_menu` on
 /// "Zoom" and `slide_menu_zoom_out`, `slide_menu_zoom_fit` and
@@ -110,6 +111,27 @@ class SlidePhoneFormatMenu extends StatelessWidget {
       SlideToolbarGroup.paragraph => [
         for (final c in [...a.alignments, ...a.lists])
           SlideChoiceMenuItem(choice: c),
+      ],
+      SlideToolbarGroup.table => [
+        for (final c in [
+          ...a.tableRowsAndColumns,
+          ...a.tableMerges,
+          ...a.tableStyles,
+        ])
+          SlideChoiceMenuItem(choice: c),
+        color(a.cellFill),
+        choices(
+          'slide_table_borders',
+          'Borders',
+          QuarkIcons.border_all,
+          a.cellBorders,
+        ),
+        choices(
+          'slide_table_distribute',
+          'Distribute',
+          QuarkIcons.distribute_vertical,
+          a.tableDistributions,
+        ),
       ],
       SlideToolbarGroup.shape => [
         color(a.fill),
