@@ -247,3 +247,53 @@ func TestLoginGuard_FullTableKeepsRunningLockouts(t *testing.T) {
 		t.Fatalf("retry after = %v after the spray, want 1m", got)
 	}
 }
+
+// TestLoginGuard_SweepDropsForgottenRecords: once a record's lockout has run
+// out and its failures are older than FailureReset, the next failure anywhere
+// drops it, so the table does not grow with every address ever seen.
+func TestLoginGuard_SweepDropsForgottenRecords(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+
+	fail(g, ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}, 3)
+	fail(g, ratelimitutil.LoginAttempt{Account: "guest", IP: "5.6.7.8"}, 1)
+	if got := g.Records(); got != 6 {
+		t.Fatalf("records = %d, want 6 (a pair, an address and an account per attempt)", got)
+	}
+
+	clock.Advance(time.Hour + time.Minute)
+	fail(g, ratelimitutil.LoginAttempt{Account: "other", IP: "9.9.9.9"}, 1)
+	if got := g.Records(); got != 3 {
+		t.Fatalf("records = %d after the reset window, want only the new attempt's 3", got)
+	}
+}
+
+// TestLoginGuard_BackoffHoldsAtCapForLongRuns: a long run of failures stays at
+// MaxLockout instead of doubling past it until time.Duration overflows.
+func TestLoginGuard_BackoffHoldsAtCapForLongRuns(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+	a := ratelimitutil.LoginAttempt{Account: "admin", IP: "1.2.3.4"}
+
+	fail(g, a, 100)
+	if got := g.Check(a).RetryAfter; got != 8*time.Minute {
+		t.Fatalf("retry after = %v after 100 failures, want the 8m cap", got)
+	}
+}
+
+// TestLoginGuard_TableNeverExceedsBound: a spray far past the bound never
+// grows the failure table beyond MaxGuardRecords, not even for one attempt.
+func TestLoginGuard_TableNeverExceedsBound(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	g := newGuard(clock)
+	fillGuard(g, 0)
+	for i := ratelimitutil.MaxGuardRecords/3 + 1; i < 2*ratelimitutil.MaxGuardRecords/3; i++ {
+		g.RecordFailure(ratelimitutil.LoginAttempt{
+			Account: fmt.Sprintf("spray%d", i),
+			IP:      fmt.Sprintf("10.%d.%d.%d", i>>16&0xff, i>>8&0xff, i&0xff),
+		})
+		if got := g.Records(); got > ratelimitutil.MaxGuardRecords {
+			t.Fatalf("records = %d, over the bound of %d", got, ratelimitutil.MaxGuardRecords)
+		}
+	}
+}
