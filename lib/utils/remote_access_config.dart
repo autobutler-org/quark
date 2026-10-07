@@ -1,13 +1,16 @@
+import 'package:flutter/foundation.dart';
+
 /// Tuning for the remote access section of Settings (#1876).
 abstract final class RemoteAccessConfig {
-  /// Whether an admin can turn remote access on from Settings.
+  /// Whether an admin can set remote access up from Settings.
   ///
-  /// True: the Quark fetches its own key from the provisioning service and
-  /// enrolls as its own Headscale household (#2358), so the empty-body enable
-  /// the app posts succeeds. Setting it to false shows **Coming soon** in place
-  /// of the button (#2036); a Quark that is already connected still shows its
-  /// address and its Disable button either way.
-  static const bool enableAvailable = true;
+  /// The Quark enrolls itself (#2358), so turning it on works, but until the
+  /// app runs its own tunnel (#2876, on #1881) no phone can use it without
+  /// installing Tailscale, which our users should never be asked to do. So
+  /// release builds say **Coming soon** in place of the set-up button
+  /// (#2857), and debug and profile builds offer it for testing. A Quark that
+  /// is already on still shows its state and its switch either way.
+  static const bool enableAvailable = !kReleaseMode;
 
   /// How often Settings re-reads the status while remote access is on but the
   /// Quark has not joined the tailnet yet.

@@ -220,12 +220,21 @@ abstract final class Errors {
       ? couldNot('finish a job')
       : "$name didn't finish.";
 
-  /// Remote access is switched on but the Quark could not start it. The
+  /// Remote access is switched on but the Quark could not connect. The
   /// Quark's own reason is a diagnostic from the network layer, so it goes to
-  /// the log and the user reads this instead.
+  /// the log and the user reads this instead, with
+  /// [remoteAccessFailingSteps] (#2857).
   static const String remoteAccessFailing =
-      "Remote access is on, but your Quark couldn't start it. Its log has "
-      'the details.';
+      "Remote access is still switched on, but your Quark couldn't connect. "
+      "It keeps trying, but you can't reach it away from home yet.";
+
+  /// What to try while [remoteAccessFailing], in order, in words for someone
+  /// who has never configured a network.
+  static const List<String> remoteAccessFailingSteps = [
+    'Make sure your home internet is working. Try opening any website on '
+        'your home Wi‑Fi.',
+    'Try again. If the problem was temporary, this fixes it.',
+  ];
 
   /// Demo mode's sample albums are bundled with the app, so there is no Quark
   /// to change them on.

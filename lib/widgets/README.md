@@ -193,8 +193,10 @@ Settings is split into tabs (#2350), one widget each under `settings/`:
 `settings_network_tab.dart`, `settings_updates_tab.dart`,
 `settings_about_tab.dart` and the admin-only `settings_features_tab.dart`
 (#2542), which lists the package `FeatureFlagTile` over the app's
-`FeatureFlag` model, with the Network tab's `remote_access_card.dart` and
-`connected_devices_card.dart`. The page still loads everything and hands each
+`FeatureFlag` model, with the Network tab's `remote_access_card.dart` (which
+maps the Quark's status onto the package `RemoteAccessPanel`),
+`remote_access_setup_sheet.dart` (the package `RemoteAccessSetupView` moved
+along by `RemoteAccessController`) and `connected_devices_card.dart`. The page still loads everything and hands each
 tab its values and callbacks; the tabs stay app-side because they take the
 app's service models and host `HostManager`, `SessionsSection`,
 `SshAccessSection` and

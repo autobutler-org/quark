@@ -186,24 +186,32 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 
 ### JN-ST-011: Enable remote access
 
-**Preconditions:** User is signed in as an admin and on the Network tab of Settings (`/settings/network`). Remote access is currently disabled.
+**Preconditions:** User is signed in as an admin and on the Network tab of Settings (`/settings/network`). Remote access is currently off. The app is a debug or profile build: release builds say **Coming soon** until the app can run its own tunnel (#2857, #2876).
 
 **Steps:**
 
 1. Find the Remote access section.
-2. Tap **Enable remote access**.
+2. Tap **Set up remote access**.
+3. Tap **Turn on remote access** in the sheet.
+4. Wait, or close the sheet partway.
 
 **Expected result:**
 
-- The Quark fetches its own Tailscale key from the provisioning service; the user never sees or enters a key
+- Step 2 opens a sheet saying what remote access does, with **Turn on remote access** and **Not now**, and that it
+  comes with the Quark: no extra account, no subscription, nothing else to install. Nothing in the flow names
+  Tailscale, a tailnet, a key, or an address (#2857).
+- The Quark fetches its own key from the provisioning service; the user never sees or enters a key
   (#1876). The first enable creates the Quark's own household on the tailnet and joins it under a hostname
   unique to the device; enabling again after a disable rejoins the same household (#2358).
-- Remote access is enabled and the section reads **Connecting…** until the node joins the tailnet, then
-  **Connected via Tailscale** with the remote URL. The section refreshes itself every few seconds while it
-  connects, so no reload is needed.
-- A non-admin is told they do not have permission.
-- If the Quark cannot start remote access, at boot or on enable, or the tailnet rejects its key, the section
-  stays on and says it could not start; the reason is in the Quark's log.
+- After step 3 the sheet shows a checklist: *Preparing a private connection*, then *Connecting your Quark*, then
+  every step ticked and **Remote access is on** with **Done**. It moves by itself as the Quark reports its state,
+  every few seconds, with no reload.
+- Closing the sheet partway leaves setup running. The section reads **Connecting…**, then **On**, with *Reachable
+  away from home*. The remote address is never shown (the app keeps it for its own routing, #1880).
+- A non-admin sees what remote access is and that an admin turns it on for the household, with no button.
+- If the Quark cannot start remote access, at boot or on enable, or the tailnet rejects its key, the sheet closes
+  and the section says **Couldn't connect**: it is still switched on, the Quark keeps trying, and it lists what to
+  try, with **Try again**, **Turn off** and **Get help**. The reason is in the Quark's log, never on screen.
 - After a restart the Quark reconnects with its saved enrollment and does not fetch a new key.
 
 ---
@@ -215,28 +223,25 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 **Steps:**
 
 1. Navigate to `/settings/network`, the Remote access section.
-2. Tap **Disable**.
+2. Turn the **Your Quark** switch off.
+3. Tap **Cancel**, then turn the switch off again and tap **Turn off**.
 
 **Expected result:**
 
-- Remote access is disabled.
-- Remote URL is no longer shown.
-- The Quark logs its node out of the tailnet and forgets the enrollment, so enabling again fetches a fresh key.
+- Step 2 asks **Turn off remote access for everyone?** and says what that does: devices away from home lose the
+  Quark, home keeps working, and added devices stay added.
+- **Cancel** leaves remote access on.
+- **Turn off** turns remote access off, says so in a snack bar, and the section offers **Set up remote access**
+  again.
+- The Quark logs its node out of the tailnet and keeps its machine key, so enabling again rejoins as the same node.
+- A non-admin sees the switch on but cannot move it.
 
 ---
 
-### JN-ST-013: Copy remote access URL
+### JN-ST-013: Copy remote access URL (retired)
 
-**Preconditions:** Remote access is enabled (JN-ST-011).
-
-**Steps:**
-
-1. Tap the copy button next to the remote URL.
-
-**Expected result:**
-
-- URL is copied to the clipboard.
-- A confirmation (snackbar or toast) is shown.
+Retired by #2857: Settings no longer shows the remote address. The app keeps it for its own routing (#1880), and
+nobody needs to type or paste it.
 
 ---
 
