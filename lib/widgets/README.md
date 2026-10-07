@@ -40,7 +40,9 @@ lib/widgets/
     file_top_bar.dart           Files' QuarkAppBar: holds the inline search
                                 state and takes the app's StorageDevice
     file_top_bar/               its parts, on the package bar buttons
-    file_storage_footer.dart    capacity row, takes the app's HealthStatus
+    file_storage_footer.dart    capacity row for the drives in view, scoped
+                                by file_storage_footer_scope.dart from the
+                                app's StorageDevice and HealthStatus
     files_welcome_card.dart     WelcomeCard wired to AppSettings: the greeting
                                 on the Files landing after setup or sign-in
     folder_explainer.dart       WelcomeCard saying what users, groups and

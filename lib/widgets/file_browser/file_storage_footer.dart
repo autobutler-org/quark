@@ -1,49 +1,32 @@
-import 'package:quark/services/health_service.dart';
+import 'package:quark/services/storage_service.dart';
+import 'package:quark/widgets/file_browser/file_storage_footer_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// What the whole-disk figure in the footer means.
-///
-/// The number is the Quark's disk, system and all, so a brand-new Quark with
-/// no files in it still shows tens of gigabytes used. Beside "No files yet"
-/// that reads as "Quark has already eaten my disk" rather than "this is the
-/// whole device" (#2024), so the footer says which it is.
-const String kStorageFooterScope = 'Device storage';
-
-/// The longer form, for the tooltip.
-const String kStorageFooterExplanation =
-    'The whole disk inside your Quark, including its system software — not '
-    'just the files you have put here.';
-
 /// The capacity row at the bottom of the Files page. It renders whatever
-/// [status] the page last fetched and never fetches on its own, so the page's
-/// refresh (button, timer, server events) is what keeps it current (#2151).
+/// [scope] the page last worked out and never fetches on its own, so the
+/// page's refresh (button, timer, server events) is what keeps it current
+/// (#2151). The scope is the drives the view is showing (#2895).
 class FileStorageFooter extends StatelessWidget {
-  const FileStorageFooter({super.key, this.status});
+  const FileStorageFooter({
+    super.key,
+    this.scope = const FileStorageFooterScope(
+      label: kStorageFooterScope,
+      explanation: kStorageFooterExplanation,
+    ),
+  });
 
-  /// The latest health reading, or null before one has arrived (or when the
-  /// Quark's health endpoint is unreachable), which shows the placeholder.
-  final HealthStatus? status;
-
-  String _formatBytes(int bytes) {
-    if (bytes <= 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var value = bytes.toDouble();
-    var i = 0;
-    while (value >= 1024 && i < units.length - 1) {
-      value /= 1024;
-      i++;
-    }
-    return '${value.toStringAsFixed(i == 0 ? 0 : 1)} ${units[i]}';
-  }
+  /// What to measure and what to call it. Without figures — before a reading
+  /// has arrived, or when none could be fetched — the footer shows only the
+  /// label.
+  final FileStorageFooterScope scope;
 
   @override
   Widget build(BuildContext context) {
-    final status = this.status;
-    final diskPercent = status == null
-        ? 0.0
-        : (status.diskPercent / 100).clamp(0.0, 1.0);
+    final usedBytes = scope.usedBytes;
+    final totalBytes = scope.totalBytes;
+    final diskPercent = scope.usedFraction;
     final colorScheme = Theme.of(context).colorScheme;
     final muted = QuarkTokens.of(context).mutedForeground;
     final barColor = QuarkStorageBar.colorForFraction(
@@ -63,7 +46,7 @@ class FileStorageFooter extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Tooltip(
-          message: kStorageFooterExplanation,
+          message: scope.explanation,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: LayoutBuilder(
@@ -82,11 +65,10 @@ class FileStorageFooter extends StatelessWidget {
                       maxWidth: constraints.maxWidth / 2,
                     ),
                     child: Text(
-                      status == null
-                          ? kStorageFooterScope
-                          : '$kStorageFooterScope  ·  '
-                                '${_formatBytes(status.diskUsedBytes)}'
-                                ' / ${_formatBytes(status.diskTotalBytes)}',
+                      usedBytes == null || totalBytes == null
+                          ? scope.label
+                          : '${scope.label}  ·  ${StorageDevice.formatBytes(usedBytes)}'
+                                ' / ${StorageDevice.formatBytes(totalBytes)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 12, color: muted),

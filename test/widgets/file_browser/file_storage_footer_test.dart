@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quark/services/health_service.dart';
 import 'package:quark/widgets/file_browser/file_storage_footer.dart';
+import 'package:quark/widgets/file_browser/file_storage_footer_scope.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 // The footer is the last child of the file browser's Column, so it sits flush
@@ -121,33 +121,31 @@ void main() {
   testWidgets('shows the reading it is rebuilt with', (
     WidgetTester tester,
   ) async {
-    HealthStatus reading(int usedGiB) => HealthStatus(
-      healthy: true,
-      alerts: const [],
-      cpuPercent: 0,
-      cpuCorePercents: const [],
-      memPercent: 0,
-      memUsedBytes: 0,
-      memTotalBytes: 0,
-      diskPercent: usedGiB.toDouble(),
-      diskUsedBytes: usedGiB << 30,
-      diskTotalBytes: 100 << 30,
-      temperatureCelsius: 0,
+    FileStorageFooterScope reading(int usedGiB) => FileStorageFooterScope(
+      label: kStorageFooterScope,
+      explanation: kStorageFooterExplanation,
+      usedBytes: usedGiB << 30,
+      totalBytes: 100 << 30,
     );
-    Future<void> pumpWith(HealthStatus? status) => tester.pumpWidget(
+    Future<void> pumpWith(FileStorageFooterScope scope) => tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: Column(
             children: [
               const Spacer(),
-              FileStorageFooter(status: status),
+              FileStorageFooter(scope: scope),
             ],
           ),
         ),
       ),
     );
 
-    await pumpWith(null);
+    await pumpWith(
+      const FileStorageFooterScope(
+        label: kStorageFooterScope,
+        explanation: kStorageFooterExplanation,
+      ),
+    );
     expect(find.text(kStorageFooterScope), findsOneWidget);
 
     await pumpWith(reading(10));
@@ -168,6 +166,38 @@ void main() {
 
     expect(find.textContaining(kStorageFooterScope), findsOneWidget);
     expect(find.byTooltip(kStorageFooterExplanation), findsOneWidget);
+  });
+
+  /// #2895: in a view showing more than one drive, the label and tooltip
+  /// say so rather than calling the sum the device's own storage.
+  testWidgets('names a scope of several drives', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              Spacer(),
+              FileStorageFooter(
+                scope: FileStorageFooterScope(
+                  label: kStorageFooterAllDrives,
+                  explanation: kStorageFooterAllDrivesExplanation,
+                  usedBytes: 12 << 30,
+                  totalBytes: 1828 << 30,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.text('$kStorageFooterAllDrives  ·  12.0 GB / 1.8 TB'),
+      findsOneWidget,
+    );
+    expect(find.byTooltip(kStorageFooterAllDrivesExplanation), findsOneWidget);
+    expect(find.textContaining(kStorageFooterScope), findsNothing);
+    expect(find.text('1%'), findsOneWidget);
   });
 
   testWidgets('survives a phone-width bar with the scope in the label', (
@@ -197,19 +227,12 @@ void main() {
             body: Column(
               children: [
                 const Spacer(),
-                FileStorageFooter(
-                  status: HealthStatus(
-                    healthy: true,
-                    alerts: const [],
-                    cpuPercent: 0,
-                    cpuCorePercents: const [],
-                    memPercent: 0,
-                    memUsedBytes: 0,
-                    memTotalBytes: 0,
-                    diskPercent: 50,
-                    diskUsedBytes: 62 << 30,
-                    diskTotalBytes: 125 << 30,
-                    temperatureCelsius: 0,
+                const FileStorageFooter(
+                  scope: FileStorageFooterScope(
+                    label: kStorageFooterScope,
+                    explanation: kStorageFooterExplanation,
+                    usedBytes: 62 << 30,
+                    totalBytes: 124 << 30,
                   ),
                 ),
               ],

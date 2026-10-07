@@ -48,6 +48,7 @@ import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/upload_conflict_prompt.dart';
 import 'package:quark/widgets/file_browser/file_route_error_state.dart';
 import 'package:quark/widgets/file_browser/file_storage_footer.dart';
+import 'package:quark/widgets/file_browser/file_storage_footer_scope.dart';
 import 'package:quark/widgets/file_browser/file_top_bar.dart';
 import 'package:quark/widgets/file_browser/files_welcome_card.dart';
 import 'package:quark/widgets/file_browser/folder_explainer.dart';
@@ -511,7 +512,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     if (!identical(_filesFuture, _notLoaded)) await _filesFuture;
   }
 
-  /// Feeds the storage footer. A failure keeps the last reading (or the
+  /// Feeds the storage footer until the device list has loaded, and whenever
+  /// it cannot (#2895). A failure keeps the last reading (or the
   /// placeholder, before the first one) rather than surfacing an error.
   Future<void> _loadHealth() async {
     try {
@@ -2430,7 +2432,14 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                     ),
                   ),
           ),
-          if (!_noHostSelected) FileStorageFooter(status: _health),
+          if (!_noHostSelected)
+            FileStorageFooter(
+              scope: FileStorageFooterScope.of(
+                devices: _allDevices,
+                activeDevicePaths: _activeDevicePaths,
+                health: _health,
+              ),
+            ),
         ],
       ),
     );
