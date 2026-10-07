@@ -4,6 +4,7 @@ import 'package:quark/widgets/slides/insert/slide_image_upload_status.dart';
 import 'package:quark/widgets/slides/notes/slide_notes_panel.dart';
 import 'package:quark/widgets/slides/properties/slide_properties_panel.dart';
 import 'package:quark/widgets/slides/slide_editor_canvas.dart';
+import 'package:quark/widgets/slides/find/slide_find_provider.dart';
 import 'package:quark/widgets/slides/slide_editor_shortcuts.dart';
 import 'package:quark/widgets/slides/slide_image.dart';
 import 'package:quark/widgets/slides/slide_panel.dart';
@@ -84,6 +85,7 @@ class SlideEditorBody extends StatelessWidget {
     }
 
     final tokens = QuarkTokens.of(context);
+    final find = SlideFindProvider.maybeOf(context);
     final collapsed = QuarkSplitView.isCollapsed(context);
     Widget imageBuilder(BuildContext context, SlideImageSource image) =>
         SlideImage(
@@ -173,6 +175,8 @@ class SlideEditorBody extends StatelessWidget {
             onImageFromDevice: onImageFromDevice,
             onImageFromQuark: onImageFromQuark,
             onShowShortcuts: onShowShortcuts,
+            findOpen: find?.isOpen ?? false,
+            onToggleFind: find?.toggle ?? () {},
           ),
           Expanded(
             // The canvas stays the first child whether or not the panel

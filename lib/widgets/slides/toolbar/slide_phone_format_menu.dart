@@ -11,6 +11,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// into a labeled chip, one submenu per [SlideToolbarGroup] that applies to
 /// the selection, holding every control the row has, then "Theme" and
 /// "Slide layout" (#1163), which open their pickers in a bottom sheet,
+/// "Find and replace" (#1176), which opens the find bar,
 /// "Properties",
 /// which opens the properties sheet, "Zoom", which the phone's bar has
 /// no room for otherwise, and "Keyboard shortcuts".
@@ -19,7 +20,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// on each group's submenu, `<key>_menu` on the font, color, width, style,
 /// corner and opacity submenus; items keep the keys the wide row gives
 /// them; `slide_format_theme` on "Theme", `slide_format_layout` on "Slide
-/// layout", `slide_format_properties` on "Properties", `slide_zoom_menu` on
+/// layout", `slide_format_find` on "Find and replace", `slide_format_properties` on "Properties", `slide_zoom_menu` on
 /// "Zoom" and `slide_menu_zoom_out`, `slide_menu_zoom_fit` and
 /// `slide_menu_zoom_in` on its items, `slide_format_shortcuts` on
 /// "Keyboard shortcuts".
@@ -31,6 +32,7 @@ class SlidePhoneFormatMenu extends StatelessWidget {
     required this.onShowShortcuts,
     required this.onOpenTheme,
     required this.onOpenLayout,
+    required this.onFind,
     super.key,
   });
 
@@ -39,6 +41,9 @@ class SlidePhoneFormatMenu extends StatelessWidget {
 
   /// Opens the selected slide's layout picker in a sheet.
   final VoidCallback onOpenLayout;
+
+  /// Opens the find bar.
+  final VoidCallback onFind;
 
   /// What the controls do.
   final SlideToolbarActions actions;
@@ -158,6 +163,12 @@ class SlidePhoneFormatMenu extends StatelessWidget {
             menuChildren: controls(group),
             child: Text(group.label),
           ),
+        MenuItemButton(
+          key: const ValueKey('slide_format_find'),
+          leadingIcon: const Icon(QuarkIcons.search_rounded),
+          onPressed: onFind,
+          child: const Text('Find and replace'),
+        ),
         MenuItemButton(
           key: const ValueKey('slide_format_theme'),
           leadingIcon: const Icon(QuarkIcons.slide_theme),

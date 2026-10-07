@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
+import 'package:quark/widgets/slides/find/slide_find_provider.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -18,6 +19,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The toolbar's drawing tool and text formatting reach it through the
 /// controller's `tools` and `textEditing`, which it shares; its copy, cut
 /// and paste keys use the controller's `clipboard`, as the toolbar does.
+///
+/// Find and replace's matches (#1176) come from the `SlideFindProvider`
+/// above it: every match is highlighted and the current one is selected
+/// and centered.
 ///
 /// The bar's second row says which slide it is; the canvas names each
 /// element to a screen reader. Colors come from [styleOf].
@@ -58,6 +63,7 @@ class SlideEditorCanvas extends StatelessWidget {
     final document = controller.document;
     final slideId = controller.selectedSlideId;
     if (document == null || slideId == null) return const SizedBox.expand();
+    final find = SlideFindProvider.maybeOf(context);
     return SlideCanvas(
       key: const ValueKey('slide_editor_canvas'),
       document: document,
@@ -72,6 +78,8 @@ class SlideEditorCanvas extends StatelessWidget {
       textEditing: controller.textEditing,
       clipboard: controller.clipboard,
       autofocus: true,
+      highlights: find?.highlights ?? const [],
+      currentHighlight: find?.current,
     );
   }
 }

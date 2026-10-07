@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/slides/find/slide_find_button.dart';
 import 'package:quark/widgets/slides/theme/slide_picker_menu_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_choice_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_choice_menu_button.dart';
@@ -13,7 +14,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// Key prefixes: `slide_tool_shape` on the shape menu, `slide_tool_image`
 /// on the picture menu, `slide_theme_button` and `slide_layout_button` on
-/// the pickers' chips, `slide_shortcuts_button` on the shortcuts button,
+/// the pickers' chips, `slide_find_open` on the find button,
+/// `slide_shortcuts_button` on the shortcuts button,
 /// `slide_properties_toggle` on the toggle; the tools' own keys (see
 /// [SlideToolbarActions]).
 class SlideToolRow extends StatelessWidget {
@@ -24,6 +26,8 @@ class SlideToolRow extends StatelessWidget {
     required this.propertiesOpen,
     required this.onToggleProperties,
     required this.onShowShortcuts,
+    required this.findOpen,
+    required this.onToggleFind,
     super.key,
   });
 
@@ -38,6 +42,12 @@ class SlideToolRow extends StatelessWidget {
 
   /// Opens the keyboard shortcuts dialog.
   final VoidCallback onShowShortcuts;
+
+  /// Whether the find bar is showing.
+  final bool findOpen;
+
+  /// Opens the find bar, or closes it when it is open.
+  final VoidCallback onToggleFind;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -76,6 +86,7 @@ class SlideToolRow extends StatelessWidget {
           ),
         ),
       ),
+      SlideFindButton(isOpen: findOpen, onPressed: onToggleFind),
       QuarkBarIconButton(
         key: const ValueKey('slide_shortcuts_button'),
         icon: QuarkIcons.keyboard_shortcuts,

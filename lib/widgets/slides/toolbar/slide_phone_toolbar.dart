@@ -24,6 +24,7 @@ class SlidePhoneToolbar extends StatelessWidget {
     required this.onShowShortcuts,
     required this.onOpenTheme,
     required this.onOpenLayout,
+    required this.onFind,
     super.key,
   });
 
@@ -32,6 +33,9 @@ class SlidePhoneToolbar extends StatelessWidget {
 
   /// Opens the slide layout picker sheet.
   final VoidCallback onOpenLayout;
+
+  /// Opens the find bar.
+  final VoidCallback onFind;
 
   /// The open presentation.
   final SlideEditorController controller;
@@ -71,6 +75,7 @@ class SlidePhoneToolbar extends StatelessWidget {
             onShowShortcuts: onShowShortcuts,
             onOpenTheme: onOpenTheme,
             onOpenLayout: onOpenLayout,
+            onFind: onFind,
           ),
         ],
       );
