@@ -153,9 +153,11 @@ jobs:
           make ${{ matrix.suite }}
   # The ruleset requires a check named test-frontend, and a matrix leg is named
   # after its suite, so this job carries the name and fails when any leg did.
+  # It stays out of a canceled run: a stack push starts two runs of one commit, the
+  # second cancels the first, and a canceled suite is not a failed one (#2870).
   test-frontend:
     needs: test-frontend-suite
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Check every suite passed
