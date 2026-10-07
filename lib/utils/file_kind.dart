@@ -29,6 +29,7 @@ enum FileKind {
 String fileKindLabel(FileKind kind) => switch (kind) {
   FileKind.qdoc || FileKind.docx => 'Document',
   FileKind.qsheet || FileKind.xlsx || FileKind.csv => 'Spreadsheet',
+  FileKind.qslide => 'Slideshow',
   FileKind.text => 'Text',
   FileKind.code => 'Code',
   FileKind.image || FileKind.svg => 'Image',
