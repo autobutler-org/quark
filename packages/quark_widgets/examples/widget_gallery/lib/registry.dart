@@ -612,6 +612,7 @@ final List<GalleryEntry> registry = [
         onTapTrash: () => log('QuarkDrawer.onTapTrash'),
         onTapDocs: () => log('QuarkDrawer.onTapDocs'),
         onTapSheets: () => log('QuarkDrawer.onTapSheets'),
+        onTapSlides: () => log('QuarkDrawer.onTapSlides'),
         onTapChat: () => log('QuarkDrawer.onTapChat'),
         onTapSystem: () => log('QuarkDrawer.onTapSystem'),
         onTapVault: () => log('QuarkDrawer.onTapVault'),

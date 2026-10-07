@@ -2,9 +2,10 @@
 // indexed file contents using SQLite FTS5.
 //
 // Supported for text extraction (in order of fidelity):
-//   - Quark documents (.qdoc) and spreadsheets (.qsheet): the prose is
-//     pulled out of the JSON envelope so the index holds readable text rather
-//     than markup (see extractDelta and extractSheet)
+//   - Quark documents (.qdoc), spreadsheets (.qsheet) and presentations
+//     (.qslide): the prose is pulled out of the JSON envelope so the index
+//     holds readable text rather than markup (see extractDelta, extractSheet
+//     and extractSlides)
 //   - Plaintext files (.txt, .md, .csv, .log, .yaml, .yml, .toml, .json, .xml,
 //     .html, .htm, .ini, .cfg, .conf, .sh, .py, .go, .js, .ts, .css, .sql)
 //   - All other files: content is not indexed (empty string returned)

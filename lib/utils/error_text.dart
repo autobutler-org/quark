@@ -147,6 +147,26 @@ abstract final class Errors {
     _ => message(error, 'convert the video'),
   };
 
+  /// A PowerPoint file the Quark could not read: damaged, not really a
+  /// PowerPoint file, or past the import's size limits (#1171).
+  static const String unreadablePowerPoint =
+      "Quark couldn't read that PowerPoint file. It may be damaged or too "
+      'large to import.';
+
+  /// A file picked to import that is not a PowerPoint file, refused before
+  /// it is uploaded.
+  static const String notPowerPoint =
+      'Choose a PowerPoint file: .pptx, .pptm or .ppsx.';
+
+  /// A PowerPoint import the Quark refused. A 400 is the file's fault, so it
+  /// gets [unreadablePowerPoint]; a 403 means the folder beside it is not
+  /// writable, so it gets [cantSaveInFolder].
+  static String importPowerPoint(Object? error) => switch (error) {
+    ApiException(statusCode: 400) => unreadablePowerPoint,
+    ApiException(statusCode: 403) => cantSaveInFolder,
+    _ => message(error, 'import the presentation'),
+  };
+
   /// A retry the Quark refused. Only a failed job can be retried, so a 409
   /// means this one didn't fail; a 422 means the file it used is gone; a 404
   /// means the Quark no longer knows the job, or no longer shows it to this

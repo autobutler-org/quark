@@ -2,6 +2,8 @@ package xlsxutil
 
 import (
 	"archive/zip"
+	"bufio"
+	"io"
 	"time"
 )
 
@@ -92,3 +94,76 @@ const (
 	// dateAndTime shows both.
 	dateAndTime
 )
+
+// qsheetTab is one tab of a .qsheet as the editor saves it: the cells, and
+// the layout and formats that sit beside them. Keys the export does not use
+// (filters, row heights) are not decoded.
+type qsheetTab struct {
+	Name string `json:"name"`
+	Data struct {
+		Rows [][]any `json:"rows"`
+	} `json:"data"`
+	ColumnWidths  []float64      `json:"columnWidths"`
+	FrozenRows    int            `json:"frozenRows"`
+	FrozenColumns int            `json:"frozenColumns"`
+	Formats       []qsheetFormat `json:"formats"`
+}
+
+// qsheetFormat is one formatted cell, as the editor's CellFormat.toJson
+// writes it beside the cell's row and column. Every field but the position is
+// optional, and a missing one is the plain default.
+type qsheetFormat struct {
+	Row          int    `json:"row"`
+	Col          int    `json:"col"`
+	Bold         bool   `json:"bold"`
+	Italic       bool   `json:"italic"`
+	TextColor    *int64 `json:"textColor"`
+	FillColor    *int64 `json:"fillColor"`
+	Align        string `json:"align"`
+	NumberFormat string `json:"numberFormat"`
+	Decimals     *int   `json:"decimals"`
+}
+
+// cellStyle is the part of a qsheetFormat a workbook stores, and the key the
+// export dedupes cell formats by: equal styles share one cellXfs entry.
+type cellStyle struct {
+	bold, italic bool
+	textColor    string
+	fillColor    string
+	align        string
+	numFmt       string
+}
+
+// font is the part of a cellStyle stored in the workbook's font table.
+type font struct {
+	bold, italic bool
+	color        string
+}
+
+// styleTable collects the distinct cell styles a workbook uses, in the order
+// they are first met, so styles.xml can be written once every tab is done.
+// Index 0 of each table is the default the format requires.
+type styleTable struct {
+	xfs     []cellStyle
+	xfIndex map[cellStyle]int
+	fonts   []font
+	fontIdx map[font]int
+	fills   []string
+	fillIdx map[string]int
+	numFmts []string
+	fmtIdx  map[string]int
+}
+
+// cappedReader reads until remaining runs out, then fails with
+// [ErrTooLarge] instead of reporting a clean end the decoder would trust.
+type cappedReader struct {
+	r         io.Reader
+	remaining int64
+}
+
+// partWriter writes one worksheet part. A bufio.Writer keeps its first write
+// error and reports it from Flush, so the part's many small writes need no
+// checks of their own.
+type partWriter struct {
+	*bufio.Writer
+}

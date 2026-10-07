@@ -80,6 +80,46 @@ lib/widgets/
                                 a ShareTarget, a file or folder or a chat
                                 channel's members; confirms owner changes
                                 and, for a channel, key-rotating ones
+  slides/
+    import/                     importing a PowerPoint file: the Slides
+                                bar's Import row, the progress and summary
+                                dialogs, and importPowerPointAndOpen, which
+                                writes errors with Errors and opens the new
+                                presentation through the router
+    insert/                     picking a picture for a slide, or a
+                                PowerPoint file to import: the Quark folder
+                                browser (lists through an injected function)
+                                and the upload progress strip
+    properties/                 the properties panel and its fields: reads
+                                SlideEditorController and calls its commands
+    toolbar/                    the slide toolbar: SlideToolbarActions maps
+                                the controller into choices, the rows and
+                                phone menus draw them; SlideToolbarGroup is
+                                the registry of formatting groups
+    shortcuts/                  the keyboard shortcuts dialog (searchable, key
+                                caps per platform) from lib/utils/
+                                slide_shortcuts.dart, and SlideShortcutsHelp,
+                                which opens it on ? and F1
+    slide_editor_body.dart      the slide editor under its bar: reads
+                                SlideEditorController and calls its commands
+    slide_editor_bar_bottom.dart
+                                the editor's zoom row, from the controller
+    slide_editor_canvas.dart    the package's SlideCanvas bound to the
+                                controller's document, selection and zoom
+    slide_editor_shortcuts.dart the editor's undo and redo keys
+    slide_image.dart            a slide picture from the authenticated
+                                download URL, with loading and error states
+    slide_save_status.dart      the editor's save chip, from SlideSaveState
+    slides_body.dart            the Slides list: its rows open editors through
+                                ContentResultTile's router call
+    slides_error_view.dart      opens Settings from the disconnected view and
+                                writes its sentence with Errors
+    slide_panel.dart            the slide panel, slide_thumbnail.dart its rows
+    slide_thumbnail.dart        drawn by a read-only SlideCanvas: data in,
+                                callbacks out, app-side while it sizes itself
+                                to the editor's split and takes the app's
+                                image builder
+    slides_search_bar.dart      the list's filter field
   system/
     health_tab.dart             the System page's tabs: each loads and
     storage_tab.dart            refreshes itself through its service or
@@ -96,9 +136,9 @@ lib/widgets/
                                 shows its snack bar; the viewer and Files share it
     transcode_dialog_host.dart  hosts TranscodeDialog around an injected
                                 formats loader
-  content_result_tile.dart      one docs/sheets content search hit; pushes the
+  content_result_tile.dart      one docs/sheets/slides content search hit; pushes the
                                 editor its extension names
-  doc_sheet_tile.dart           one doc or sheet row, shared by filename and
+  doc_sheet_tile.dart           one doc, sheet or slides row, shared by filename and
                                 content matches so they look alike (#2272)
   host_dialog.dart              edits AppSettings hosts
   host_manager.dart             edits AppSettings hosts

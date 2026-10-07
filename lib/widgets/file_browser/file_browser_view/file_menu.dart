@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark/models/file_node.dart';
+import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
@@ -18,7 +19,8 @@ typedef FileMenuActionDispatch =
 ///
 /// [entries] leaves out whatever does not apply to [item]: nothing that
 /// changes or shares a file inside an archive, Extract only on an archive,
-/// Convert video only on a video file, Navigate to folder only in search
+/// Convert video only on a video file, Open as presentation only on a
+/// PowerPoint file the Quark can import, Navigate to folder only in search
 /// results, and no Move/Rename or Delete on the `users` or `groups` folder, a
 /// home folder, or a group's folder itself unless the viewer is an admin. Share is hidden on the `users` and `groups`
 /// folders for everyone, admins included: access is additive down the tree, so
@@ -112,6 +114,11 @@ class FileMenu {
           !item.isDir &&
           fileKindForName(item.name) == FileKind.video)
         entry(FileMenuAction.convertVideo, 'Convert video'),
+      if (menuActions.contains(FileMenuAction.openAsPresentation) &&
+          !inArchive &&
+          !item.isDir &&
+          SlidesService.isPowerPoint(item.name))
+        entry(FileMenuAction.openAsPresentation, 'Open as presentation'),
       if (menuActions.contains(FileMenuAction.navigateToFolder) &&
           isSearchMode &&
           onNavigateToFolder != null)

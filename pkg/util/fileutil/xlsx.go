@@ -195,7 +195,8 @@ type convertOutcome struct {
 // derives status codes from. A workbook that is malformed or past the
 // conversion limits is the caller's file, not a server fault.
 func convertError(err error) error {
-	if errors.Is(err, xlsxutil.ErrNotSpreadsheet) || errors.Is(err, xlsxutil.ErrTooLarge) {
+	if errors.Is(err, xlsxutil.ErrNotSpreadsheet) || errors.Is(err, xlsxutil.ErrNotQsheet) ||
+		errors.Is(err, xlsxutil.ErrTooLarge) {
 		return &UnsupportedError{Err: err}
 	}
 	return err

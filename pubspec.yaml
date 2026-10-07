@@ -79,6 +79,8 @@ dependencies:
     path: packages/data_table
   quark_icons:
     path: packages/quark_icons
+  quark_slides:
+    path: packages/quark_slides
   quark_widgets:
     path: packages/quark_widgets
 

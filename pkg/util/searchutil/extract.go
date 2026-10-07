@@ -14,10 +14,11 @@ import (
 // to read as UTF-8 text for indexing. Binary formats (images, video, audio,
 // executables) are excluded.
 var extractableExtensions = map[string]bool{
-	// Quark's own document formats. Both are JSON envelopes, so they are
+	// Quark's own document formats. All are JSON envelopes, so they are
 	// routed through a structured extractor rather than indexed verbatim.
 	".qdoc":   true,
 	".qsheet": true,
+	".qslide": true,
 
 	".txt":  true,
 	".md":   true,
@@ -75,6 +76,10 @@ func ExtractText(path string) string {
 		}
 	case ".qsheet":
 		if text := extractSheet(raw); text != "" {
+			return text
+		}
+	case ".qslide":
+		if text := extractSlides(raw); text != "" {
 			return text
 		}
 	}
@@ -140,6 +145,51 @@ func extractSheet(raw string) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// extractSlides pulls the title, the text of every text box and the speaker
+// notes out of a presentation, the format used by .qslide files:
+// {"title":"…","slides":[{"elements":[{"paragraphs":[{"runs":[{"text":"…"}]}]}],"notes":"…"}]}.
+// A paragraph's runs are joined as written, so styling never splits a word;
+// shapes, images and lines carry no text. Returns "" when raw is not a
+// presentation.
+func extractSlides(raw string) string {
+	var doc struct {
+		Title  string `json:"title"`
+		Slides []struct {
+			Elements []struct {
+				Paragraphs []struct {
+					Runs []struct {
+						Text string `json:"text"`
+					} `json:"runs"`
+				} `json:"paragraphs"`
+			} `json:"elements"`
+			Notes string `json:"notes"`
+		} `json:"slides"`
+	}
+	if err := json.Unmarshal([]byte(raw), &doc); err != nil {
+		return ""
+	}
+	parts := []string{doc.Title}
+	for _, slide := range doc.Slides {
+		for _, element := range slide.Elements {
+			for _, paragraph := range element.Paragraphs {
+				var b strings.Builder
+				for _, run := range paragraph.Runs {
+					b.WriteString(run.Text)
+				}
+				parts = append(parts, b.String())
+			}
+		}
+		parts = append(parts, slide.Notes)
+	}
+	nonEmpty := parts[:0]
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			nonEmpty = append(nonEmpty, part)
+		}
+	}
+	return strings.Join(nonEmpty, " ")
 }
 
 // extractReader reads up to MaxExtractBytes from r, truncating at a valid

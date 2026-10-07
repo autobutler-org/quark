@@ -1415,6 +1415,31 @@ definitions:
       size:
         type: integer
     type: object
+  v0_files.ImportPptxJSON:
+    properties:
+      mediaDir:
+        description: |-
+          MediaDir is the folder the pictures were stored in, empty when the
+          presentation has none.
+        type: string
+      path:
+        type: string
+      pictures:
+        type: integer
+      slides:
+        type: integer
+      warnings:
+        items:
+          $ref: '#/definitions/v0_files.ImportWarningJSON'
+        type: array
+    type: object
+  v0_files.ImportWarningJSON:
+    properties:
+      message:
+        type: string
+      slide:
+        type: integer
+    type: object
   v0_files.StatFileJSON:
     properties:
       fileType:
@@ -5779,6 +5804,91 @@ paths:
       summary: Issue a download token
       tags:
       - files
+  /files/export/pptx:
+    get:
+      description: 'Streams a .qslide back as a .pptx attachment, one slide per slide
+        in show order. Shapes, lines and arrows, rich text, pictures, groups, rotation,
+        stacking order, backgrounds and speaker notes carry across. Pictures are read
+        from the files they name on the same device and embedded; one the caller cannot
+        read, or that is missing, too large, or not a PNG, JPEG, GIF or BMP, is drawn
+        as a gray placeholder with its alt text. Only reads: nothing is written beside
+        the presentation. Needs read access on the .qslide.'
+      parameters:
+      - description: Path to the .qslide file to export
+        in: query
+        name: filePath
+        required: true
+        type: string
+      - description: Device serial number
+        in: query
+        name: serial
+        type: string
+      produces:
+      - application/vnd.openxmlformats-officedocument.presentationml.presentation
+      responses:
+        "200":
+          description: The presentation
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Download a Quark presentation as a PowerPoint file
+      tags:
+      - files
+  /files/export/xlsx:
+    get:
+      description: 'Streams a .qsheet back as an .xlsx attachment, one worksheet per
+        tab in tab order. Values, bold, italic, colors, alignment, number formats,
+        column widths and frozen panes carry across; formulas are written as their
+        text, since the editor''s formula dialect is not Excel''s and the server has
+        no evaluator to supply the cached results Excel expects. Only reads: nothing
+        is written beside the sheet. Needs read access on the .qsheet.'
+      parameters:
+      - description: Path to the .qsheet file to export
+        in: query
+        name: filePath
+        required: true
+        type: string
+      - description: Device serial number
+        in: query
+        name: serial
+        type: string
+      produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: The workbook
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Download a Quark spreadsheet as an Excel workbook
+      tags:
+      - files
   /files/extract:
     post:
       description: Extracts a zip file into a subdirectory named after the archive
@@ -5869,6 +5979,60 @@ paths:
       security:
       - BearerAuth: []
       summary: Create a new folder
+      tags:
+      - files
+  /files/import/pptx:
+    post:
+      description: 'Reads a .pptx (or .pptm or .ppsx) and writes it as a .qslide,
+        the format the Slides editor opens, in rootDir — the PowerPoint file''s own
+        folder when rootDir is left out. Its pictures are copied into a <name>_media
+        folder beside the presentation. Nothing is overwritten: a name already taken
+        is kept, and the import lands under the next free numbered name, as Talk_(1).qslide.
+        What the editor cannot show — charts, tables, SmartArt, video, animations
+        — is skipped and listed in the warnings, slide by slide. The PowerPoint file
+        itself is left untouched. Needs read access on it and write access on rootDir;
+        the caller owns what the import created.'
+      parameters:
+      - description: Path to the .pptx file to import
+        in: query
+        name: filePath
+        required: true
+        type: string
+      - description: Folder to write the presentation into; defaults to the .pptx's
+          folder
+        in: query
+        name: rootDir
+        type: string
+      - description: Device serial number
+        in: query
+        name: serial
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_files.ImportPptxJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Import a PowerPoint file as a Quark presentation
       tags:
       - files
   /files/list-archive:

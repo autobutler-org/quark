@@ -13,6 +13,7 @@ void main() {
     VoidCallback? onPressed,
     bool isBusy = false,
     bool destructive = false,
+    bool? selected,
   }) => Center(
     child: QuarkBarIconButton(
       key: key,
@@ -21,6 +22,7 @@ void main() {
       onPressed: onPressed,
       isBusy: isBusy,
       destructive: destructive,
+      selected: selected,
     ),
   );
 
@@ -122,5 +124,46 @@ void main() {
     await tester.pump();
     expect(presses, 1);
     await expectTapTargetGuidelines(tester);
+  });
+
+  testBothViewports('a toggle that is on wears the primary tint', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(tester, button(onPressed: () {}, selected: true), size: size);
+
+    final tokens = QuarkTokens.dark;
+    expect(glyph(tester).text.style!.color, tokens.primary);
+    final material = tester.widget<Material>(
+      find.descendant(of: find.byKey(key), matching: find.byType(Material)),
+    );
+    expect(material.color, tokens.primary.withValues(alpha: 0.12));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tells a screen reader whether a toggle is on', (tester) async {
+    final handle = tester.ensureSemantics();
+    await pumpAt(tester, button(onPressed: () {}, selected: false));
+    expect(
+      tester.getSemantics(find.byKey(key)),
+      isSemantics(isButton: true, hasSelectedState: true, isSelected: false),
+    );
+
+    await pumpAt(tester, button(onPressed: () {}, selected: true));
+    expect(
+      tester.getSemantics(find.byKey(key)),
+      isSemantics(hasSelectedState: true, isSelected: true),
+    );
+    handle.dispose();
+  });
+
+  testWidgets('a plain action is not a toggle', (tester) async {
+    final handle = tester.ensureSemantics();
+    await pumpAt(tester, button(onPressed: () {}));
+    expect(
+      tester.getSemantics(find.byKey(key)),
+      isSemantics(hasSelectedState: false),
+    );
+    handle.dispose();
   });
 }

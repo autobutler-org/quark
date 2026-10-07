@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/widgets/doc_sheet_tile.dart';
+import 'package:quark_icons/quark_icons.dart';
 
 /// #2276: a right-click on a Docs or Sheets row opens the menu its three-dot
 /// button does.
@@ -55,5 +56,27 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(PopupMenuItem<int>), findsNothing);
+  });
+
+  testWidgets('a presentation gets its own icon and loses its extension', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DocSheetTile(
+            relPath: 'talks/Pitch.qslide',
+            deviceName: '',
+            showDevice: false,
+            onTap: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Pitch'), findsOneWidget);
+    expect(find.byIcon(QuarkIcons.slideshow_outlined), findsOneWidget);
+    expect(DocSheetTile.isSlides('a/B.QSLIDE'), isTrue);
+    expect(DocSheetTile.isSheet('a/B.qslide'), isFalse);
   });
 }

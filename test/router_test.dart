@@ -79,6 +79,17 @@ void main() {
         '/edit/my%20notes.txt',
       );
     });
+
+    test('slideFile encodes the path and carries the serial', () {
+      expect(
+        AppRoutes.slideFile('/my deck.qslide'),
+        '/slides/my%20deck.qslide',
+      );
+      expect(
+        AppRoutes.slideFile('talks/q1.qslide', serial: 's 1'),
+        '/slides/talks/q1.qslide?serial=s+1',
+      );
+    });
   });
 
   group('AppRoutes.canonicalRoute', () {
@@ -1182,6 +1193,10 @@ void main() {
       );
       expect(viewFileRedirect('budget.qsheet', null), '/sheets/budget.qsheet');
       expect(
+        viewFileRedirect('talks/q1.qslide', 's1'),
+        '/slides/talks/q1.qslide?serial=s1',
+      );
+      expect(
         viewFileRedirect('notes/readme.md', null),
         '/edit/notes/readme.md',
       );
@@ -1260,6 +1275,130 @@ void main() {
       await tester.pumpAndSettle();
       expect(at(), link);
       expect(find.text('view photos/beach 1.jpg'), findsOneWidget);
+    });
+  });
+
+  group('slides routes', () {
+    test(
+      'the app routes /slides to the list and /slides/<path> to the editor',
+      () {
+        final paths = router.configuration.routes
+            .whereType<GoRoute>()
+            .map((route) => route.path)
+            .toSet();
+        expect(paths, contains(AppRoutes.slides));
+        expect(paths, contains('${AppRoutes.slides}/:path(.*)'));
+        expect(paths, contains('${AppRoutes.slides}/:path(.*)/present'));
+        // go_router takes the first route that matches, and the editor's
+        // pattern matches a presenting URL too.
+        final list = paths.toList();
+        expect(
+          list.indexOf('${AppRoutes.slides}/:path(.*)/present'),
+          lessThan(list.indexOf('${AppRoutes.slides}/:path(.*)')),
+        );
+      },
+    );
+
+    test('slidePresent encodes the path and carries the serial and slide', () {
+      expect(
+        AppRoutes.slidePresent('/my deck.qslide'),
+        '/slides/my%20deck.qslide/present',
+      );
+      expect(
+        AppRoutes.slidePresent('talks/q1.qslide', serial: 's 1', slide: 3),
+        '/slides/talks/q1.qslide/present?serial=s+1&slide=3',
+      );
+    });
+
+    testWidgets('a presenting link opens the presentation at its slide', (
+      tester,
+    ) async {
+      final link = AppRoutes.slidePresent(
+        'talks/present.qslide',
+        serial: 's1',
+        slide: 2,
+      );
+      final r = GoRouter(
+        initialLocation: link,
+        routes: [
+          slidePresentRoute(
+            builder: (filePath, serial, startIndex, _) =>
+                Text('present $filePath $serial $startIndex'),
+          ),
+          GoRoute(
+            path: '${AppRoutes.slides}/:path(.*)',
+            builder: (_, state) =>
+                Text('editor ${state.pathParameters['path']}'),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+      expect(find.text('present talks/present.qslide s1 1'), findsOneWidget);
+
+      r.go(AppRoutes.slideFile('talks/present.qslide'));
+      await tester.pumpAndSettle();
+      expect(find.text('editor talks/present.qslide'), findsOneWidget);
+    });
+
+    testWidgets('a signed-out presentation link comes back after signing in', (
+      tester,
+    ) async {
+      final settings = AppSettings.instance;
+      const secureStorage = MethodChannel(
+        'plugins.it_nomads.com/flutter_secure_storage',
+      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(secureStorage, (_) async => null);
+      addTearDown(() async {
+        while (settings.hosts.isNotEmpty) {
+          await settings.removeHost(settings.hosts.length - 1);
+        }
+        await settings.setSessionToken(null);
+        authStatusProbe = AuthService.checkStatus;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(secureStorage, null);
+      });
+      await settings.addHost(
+        HostEntry(name: 'Home', hostAddress: 'http://slides.local'),
+      );
+      await settings.acceptTerms();
+      authStatusProbe = () async => const AuthStatus(setupComplete: true);
+
+      final link = AppRoutes.slideFile('talks/q 1.qslide', serial: 's1');
+      final r = GoRouter(
+        initialLocation: link,
+        redirect: authRedirect,
+        refreshListenable: routerRefreshListenable,
+        routes: [
+          GoRoute(
+            path: '${AppRoutes.slides}/:path(.*)',
+            builder: (_, state) => Text(
+              'slides ${state.pathParameters['path']} '
+              '${state.uri.queryParameters['serial']}',
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.files,
+            builder: (_, _) => const Text('files'),
+          ),
+          GoRoute(
+            path: AppRoutes.login,
+            builder: (_, _) => const Text('login'),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+      String at() => r.routerDelegate.currentConfiguration.uri.toString();
+      expect(at(), '/login?from=${Uri.encodeComponent(link)}');
+
+      await settings.setSessionToken('token');
+      await tester.pumpAndSettle();
+      expect(at(), link);
+      expect(find.text('slides talks/q 1.qslide s1'), findsOneWidget);
     });
   });
 }

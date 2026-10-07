@@ -8,10 +8,10 @@ import (
 	"testing"
 )
 
-// --- .qdoc / .qsheet extraction ---
+// --- .qdoc / .qsheet / .qslide extraction ---
 
 func TestIsIndexable_QuarkFormats(t *testing.T) {
-	for _, path := range []string{"notes.qdoc", "budget.qsheet", "NOTES.QDOC"} {
+	for _, path := range []string{"notes.qdoc", "budget.qsheet", "deck.qslide", "NOTES.QDOC"} {
 		if !IsIndexable(path) {
 			t.Errorf("IsIndexable(%q) = false, want true", path)
 		}
@@ -64,6 +64,25 @@ func TestExtractText_Qsheet(t *testing.T) {
 	}
 	// Empty cells must not become stray tokens.
 	if containsAny(got, `"rows"`, `"tabs"`) {
+		t.Errorf("ExtractText leaked JSON syntax: %q", got)
+	}
+}
+
+func TestExtractText_Qslide(t *testing.T) {
+	const deck = `{"schemaVersion":1,"title":"Quarterly review","slides":[` +
+		`{"id":"s1","elements":[{"id":"e1","type":"text","frame":{"x":0,"y":0,"width":1,"height":1},` +
+		`"paragraphs":[{"runs":[{"text":"Revenue "},{"text":"grew"}]},{"runs":[{"text":"second"}]}]},` +
+		`{"id":"e2","type":"shape","kind":"rect","frame":{"x":0,"y":0,"width":1,"height":1}}],` +
+		`"notes":"say thanks"}]}`
+	path := writeTemp(t, "review.qslide", deck)
+
+	got := ExtractText(path)
+	for _, want := range []string{"Quarterly review", "Revenue grew", "second", "say thanks"} {
+		if !containsAny(got, want) {
+			t.Errorf("ExtractText = %q, missing %q", got, want)
+		}
+	}
+	if containsAny(got, `"slides"`, `"runs"`, "rect") {
 		t.Errorf("ExtractText leaked JSON syntax: %q", got)
 	}
 }

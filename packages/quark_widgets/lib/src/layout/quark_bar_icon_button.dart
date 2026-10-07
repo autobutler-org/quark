@@ -21,6 +21,11 @@ import '../theme/quark_tokens.dart';
 /// keeps its shape as an action comes and goes. [isBusy] swaps the glyph for
 /// a spinner and refuses taps, for an action that is already running.
 ///
+/// [selected] makes it a toggle a user can read the state of — bold in a
+/// formatting row, the active drawing tool — tinted with the primary color
+/// as an active [QuarkBarChip] is, and announced as on or off to a screen
+/// reader. Left null, it is a plain action.
+///
 /// Key prefixes: none of its own. Every bar action passes its own `key`, and
 /// that is the one a test or a `.probe` script reaches for.
 ///
@@ -40,6 +45,7 @@ class QuarkBarIconButton extends StatelessWidget {
     required this.onPressed,
     this.isBusy = false,
     this.destructive = false,
+    this.selected,
     super.key,
   });
 
@@ -77,20 +83,33 @@ class QuarkBarIconButton extends StatelessWidget {
   /// error color.
   final bool destructive;
 
+  /// Whether the button is a toggle that is on; null for a plain action.
+  final bool? selected;
+
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
-    final color = destructive ? tokens.error : tokens.secondaryForeground;
+    final on = selected ?? false;
+    final color = destructive
+        ? tokens.error
+        : on
+        ? tokens.primary
+        : tokens.secondaryForeground;
     return IconButton(
       tooltip: tooltip,
+      isSelected: selected,
       onPressed: isBusy ? null : onPressed,
       iconSize: glyphSize,
       style: IconButton.styleFrom(
         foregroundColor: color,
         disabledForegroundColor: tokens.mutedForeground,
-        backgroundColor: tokens.input,
+        backgroundColor: on
+            ? tokens.primary.withValues(alpha: 0.12)
+            : tokens.input,
         disabledBackgroundColor: tokens.input,
-        side: BorderSide(color: tokens.border),
+        side: BorderSide(
+          color: on ? tokens.primary.withValues(alpha: 0.3) : tokens.border,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(tokens.radiusMd),
         ),

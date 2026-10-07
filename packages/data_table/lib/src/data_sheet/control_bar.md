@@ -114,7 +114,8 @@ to memory where the browser blocks the clipboard.
 
 - ✅ Export CSV — `exportCsv()` returns RFC-4180 string; shown in copy-able dialog
 - ✅ Import CSV — `loadFromCsv(csv)` replaces table; dialog accepts pasted text
-- 🔜 Export to Excel / spreadsheet format
+- ✅ Export to Excel — `DataSheetControlBar(onExportXlsx:)` adds the button; the host builds the workbook. Quark streams
+  every tab from its server as an `.xlsx`, formulas as text
 - 🔜 Save / Load named templates
 
 ## View & Layout

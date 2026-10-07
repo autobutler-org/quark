@@ -60,6 +60,7 @@ void main() {
     expect(iconFor('a.zst'), QuarkIcons.archive_outlined);
     expect(iconFor('a.qdoc'), QuarkIcons.edit_document);
     expect(iconFor('a.qsheet'), QuarkIcons.table_chart);
+    expect(iconFor('a.qslide'), QuarkIcons.slideshow);
     expect(iconFor('a.docx'), QuarkIcons.description_outlined);
     expect(iconFor('a.csv'), QuarkIcons.table_chart_outlined);
     expect(iconFor('a.pptx'), QuarkIcons.slideshow_outlined);

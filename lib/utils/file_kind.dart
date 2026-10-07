@@ -7,6 +7,7 @@
 enum FileKind {
   qdoc,
   qsheet,
+  qslide,
   text,
   code,
   image,
@@ -80,6 +81,7 @@ const serverConvertedImageExtensions = {
 const _kindByExtension = {
   '.qdoc': FileKind.qdoc,
   '.qsheet': FileKind.qsheet,
+  '.qslide': FileKind.qslide,
   '.pdf': FileKind.pdf,
   '.docx': FileKind.docx,
   '.pptx': FileKind.slideshow,

@@ -5,9 +5,9 @@ import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_dialog_utils.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 
-final _extension = RegExp(r'\.(qdoc|qsheet)$', caseSensitive: false);
+final _extension = RegExp(r'\.(qdoc|qsheet|qslide)$', caseSensitive: false);
 
-/// Asks for a new name for a doc or sheet and renames it in place, keeping its
+/// Asks for a new name for a doc, sheet or presentation and renames it in place, keeping its
 /// extension.
 ///
 /// Returns the new API path — no leading slash, the path `moveRenameNode`
@@ -27,11 +27,15 @@ Future<String?> renameDocOrSheet(
     0,
     node.name.length - extension.length,
   );
-  final isSheet = extension.toLowerCase() == '.qsheet';
+  final (noun, longNoun, shortNoun) = switch (extension.toLowerCase()) {
+    '.qsheet' => ('Spreadsheet', 'spreadsheet', 'sheet'),
+    '.qslide' => ('Presentation', 'presentation', 'presentation'),
+    _ => ('Document', 'document', 'doc'),
+  };
   final name = await promptForNewFileName(
     context,
-    title: isSheet ? 'Rename spreadsheet' : 'Rename document',
-    hintText: isSheet ? 'Spreadsheet name' : 'Document name',
+    title: 'Rename $longNoun',
+    hintText: '$noun name',
     confirmLabel: 'Rename',
     initialName: currentName,
   );
@@ -58,11 +62,7 @@ Future<String?> renameDocOrSheet(
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            Errors.message(e, isSheet ? 'rename the sheet' : 'rename the doc'),
-          ),
-        ),
+        SnackBar(content: Text(Errors.message(e, 'rename the $shortNoun'))),
       );
     }
     return null;

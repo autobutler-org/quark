@@ -58,6 +58,8 @@ void main() {
 
       expect(hasSupportedFilesEditorForType(FileKind.qdoc), isTrue);
       expect(hasSupportedFilesEditorForType(FileKind.qsheet), isTrue);
+      expect(hasSupportedFilesEditorForType(FileKind.qslide), isTrue);
+      expect(hasSupportedFilesEditorForPath('/Talks/Pitch.QSLIDE'), isTrue);
       expect(hasSupportedFilesEditorForType(FileKind.image), isFalse);
     });
   });
