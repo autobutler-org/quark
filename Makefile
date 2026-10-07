@@ -249,6 +249,10 @@ setup/probe: ## Install the Flutter Probe e2e CLI and its MCP server (probe, pro
 setup/swag: ## Install swag tool
 	$(GO) install github.com/swaggo/swag/cmd/swag@latest
 
+.PHONY: setup/gremlins
+setup/gremlins: ## Install the gremlins mutation-testing tool (used by test/mutation/backend)
+	$(GO) install github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0
+
 .PHONY: setup/hooks
 setup/hooks: ## Install git hooks
 	ln -sf "$(PWD)/git/hooks/pre-commit" .git/hooks/pre-commit
@@ -1178,6 +1182,24 @@ test/integration: test/integration/backend ## Run integration tests
 .PHONY: test/integration/backend
 test/integration/backend: internal/server/public/stub.txt ## Run backend integration tests (requires real filesystem, spins up gin engine)
 	$(GO) test -v ./internal/server/api/v0/...
+
+# Packages test/mutation/backend mutates: pure business logic with fast tests (#2855).
+# Run one with MUTATION_PACKAGES=./pkg/util/authutil (a trailing /... is accepted).
+MUTATION_PACKAGES ?= ./pkg/util/authutil ./pkg/util/accessutil ./pkg/util/grouputil \
+	./pkg/util/ratelimitutil ./pkg/util/vaultcrypto
+
+# gremlins copies the whole module into a work directory per worker, so a run can
+# take tens of GB under $$TMPDIR; point TMPDIR at a disk-backed directory if /tmp is
+# a small tmpfs. Local and on demand only: not in CI, no threshold.
+.PHONY: test/mutation/backend
+test/mutation/backend: internal/server/public/stub.txt ## Mutation-test MUTATION_PACKAGES with gremlins (local only; tested on Linux)
+	# gremlins times each mutant against its first coverage run. A cached `go test`
+	# makes that run near-instant, and every mutant then reports TIMED OUT.
+	export GOFLAGS="$${GOFLAGS:+$$GOFLAGS }-count=1"
+	for pkg in $(MUTATION_PACKAGES); do
+		echo "gremlins: $${pkg%/...}"
+		gremlins unleash "$${pkg%/...}"
+	done
 
 .PHONY: coverage
 coverage: test/unit/backend ## Run backend tests and print coverage percentage
