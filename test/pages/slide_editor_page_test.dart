@@ -196,6 +196,21 @@ void main() {
     await letAutosaveRun(tester);
   });
 
+  testWidgets('deleting a slide offers Undo in a snack bar (#2897)', (
+    tester,
+  ) async {
+    tap.setViewport(tester, tap.wideViewport);
+    final c = await pumpEditor(tester, slides: 3);
+    await openMenuAndTap(tester, 's2', 'slide_delete');
+    expect([for (final s in c.slides) s.id], ['s1', 's3']);
+    expect(find.text('Slide deleted'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('slide_delete_undo')));
+    await tester.pumpAndSettle();
+    expect([for (final s in c.slides) s.id], ['s1', 's2', 's3']);
+    expect(c.selectedSlideId, 's2');
+    await letAutosaveRun(tester);
+  });
+
   testWidgets('tapping a thumbnail selects it', (tester) async {
     tap.setViewport(tester, tap.wideViewport);
     final c = await pumpEditor(tester);

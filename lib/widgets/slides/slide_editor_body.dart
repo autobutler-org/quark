@@ -29,7 +29,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The open notes field gives up height before the canvas shrinks below one
 /// touch target, so a phone with its keyboard up keeps a sliver of slide.
 ///
-/// A slide's menu offers presenting from it through [onPresent].
+/// A slide's menu offers presenting from it through [onPresent], and its
+/// Delete goes through [onDeleteSlide].
 ///
 /// Pictures on the canvas and the thumbnails are [SlideImage]s fetched
 /// through the Quark's authenticated download URL for their path
@@ -50,6 +51,7 @@ class SlideEditorBody extends StatelessWidget {
     required this.onImageFromDevice,
     required this.onImageFromQuark,
     required this.onShowShortcuts,
+    required this.onDeleteSlide,
     this.onPresent,
     super.key,
   });
@@ -69,6 +71,10 @@ class SlideEditorBody extends StatelessWidget {
 
   /// Opens the keyboard shortcuts dialog.
   final VoidCallback onShowShortcuts;
+
+  /// Deletes the slide with the given id from its menu; the page deletes it
+  /// and offers Undo (#2897).
+  final ValueChanged<String> onDeleteSlide;
 
   @override
   Widget build(BuildContext context) {
@@ -105,7 +111,7 @@ class SlideEditorBody extends StatelessWidget {
       theme: presentation.theme,
       defaultTransition: presentation.defaultTransition,
       onDuplicate: c.duplicateSlide,
-      onDelete: c.deleteSlide,
+      onDelete: onDeleteSlide,
       onMove: c.moveSlide,
       onSelectPrevious: c.selectPreviousSlide,
       onSelectNext: c.selectNextSlide,

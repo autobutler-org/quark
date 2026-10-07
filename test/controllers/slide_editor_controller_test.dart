@@ -150,6 +150,26 @@ void main() {
     expect(c.selectedSlideId, 'n0');
   });
 
+  test('a delete is undone from its toast only while nothing changed since '
+      '(#2897)', () async {
+    final c = controllerFor(deck(3));
+    await c.load();
+    expect(c.canUndoDeleteSlide, isFalse);
+    c.deleteSlide('s2');
+    expect(c.canUndoDeleteSlide, isTrue);
+    c.undoDeleteSlide();
+    expect(ids(c), ['s1', 's2', 's3']);
+    expect(c.selectedSlideId, 's2', reason: 'the restored slide is shown');
+    expect(c.canUndoDeleteSlide, isFalse);
+
+    c.deleteSlide('s2');
+    c.addSlide();
+    expect(c.canUndoDeleteSlide, isFalse);
+    final before = ids(c);
+    c.undoDeleteSlide();
+    expect(ids(c), before, reason: 'the later edit is not undone');
+  });
+
   test('delete moves the selection and never removes the last slide', () async {
     final c = controllerFor(deck(3));
     await c.load();

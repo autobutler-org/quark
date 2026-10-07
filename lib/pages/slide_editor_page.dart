@@ -32,10 +32,10 @@ import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The editor for one presentation, at `/slides/<path>?serial=` (#1161): the
-/// slide panel to add, duplicate, delete and reorder slides, the canvas
-/// editing the selected slide in the middle (#1153) with its zoom in the
-/// bar's second row, undo and redo from the bar or the keyboard, and an
-/// autosave whose state the bar shows. A failed save says so and keeps the
+/// slide panel to add, duplicate, delete (with an Undo snack bar, #2897) and
+/// reorder slides, the canvas editing the selected slide in the middle
+/// (#1153) with its zoom in the bar's second row, undo and redo from the
+/// bar or the keyboard, and an autosave whose state the bar shows. A failed save says so and keeps the
 /// edits for a retry. Each slide's speaker notes are typed under the canvas
 /// (#1166).
 ///
@@ -184,6 +184,25 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
       ),
       extra: presentation,
     );
+  }
+
+  /// Deletes the slide [slideId] and says so in a snack bar whose Undo puts
+  /// it back while nothing else has changed (#2897).
+  void _deleteSlide(String slideId) {
+    _controller.deleteSlide(slideId);
+    if (!_controller.canUndoDeleteSlide) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('Slide deleted'),
+          action: SnackBarAction(
+            key: const ValueKey('slide_delete_undo'),
+            label: 'Undo',
+            onPressed: _controller.undoDeleteSlide,
+          ),
+        ),
+      );
   }
 
   Future<void> _insertImageFromQuark() async {
@@ -377,6 +396,7 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                   onImageFromDevice: _controller.insertImageFromDevice,
                   onImageFromQuark: _insertImageFromQuark,
                   onShowShortcuts: _showShortcuts,
+                  onDeleteSlide: _deleteSlide,
                 ),
               ),
             ),

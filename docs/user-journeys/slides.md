@@ -107,7 +107,8 @@ inserting pictures, tables and charts, its speaker notes, and presenting (#1152,
   after a title or blank slide it is a title and content slide, its "Click to add title" and "Click to add text"
   placeholders showing where to type (#2899).
 - The duplicate appears right after its original and is selected.
-- The deleted slide is gone and the slide that took its place is selected.
+- The deleted slide is gone and the slide that took its place is selected. A "Slide deleted" snack bar offers **Undo**,
+  which puts the slide back and selects it until anything else changes the presentation (#2897).
 - **Delete** is disabled while only one slide is left.
 
 ---

@@ -329,6 +329,11 @@ class SlideEditorController extends ChangeNotifier {
   bool _disposed = false;
   bool _notesOpen = false;
   ({String slideId, String text})? _pendingNotes;
+
+  /// The last slide [deleteSlide] removed, and the presentation as that
+  /// left it.
+  ({String slideId, Presentation after})? _deleted;
+
   Timer? _notesTimer;
   bool _propertiesOpen = true;
   ({String name, double progress})? _imageUpload;
@@ -592,10 +597,28 @@ class SlideEditorController extends ChangeNotifier {
     if (index < 0) return;
     _commitNotes();
     doc.controller.deleteSlide(slideId);
+    _deleted = (slideId: slideId, after: doc.controller.presentation);
     if (slideId == _selectedSlideId) {
       _showSlide(slides[index.clamp(0, slides.length - 1)].id);
     }
     _notify();
+  }
+
+  /// Whether [undoDeleteSlide] would put back the last deleted slide: true
+  /// until anything else changes the presentation (#2897).
+  bool get canUndoDeleteSlide =>
+      _deleted != null && identical(_deleted!.after, presentation);
+
+  /// Puts back the slide the last [deleteSlide] removed and shows it, as
+  /// the delete's Undo toast does (#2897). Nothing once anything else has
+  /// changed the presentation, so the toast never takes back a later edit.
+  void undoDeleteSlide() {
+    final deleted = _deleted;
+    if (deleted == null || !canUndoDeleteSlide) return;
+    _deleted = null;
+    // Nothing changed since the delete, so the last step is the delete.
+    undo();
+    selectSlide(deleted.slideId);
   }
 
   /// Moves the slide [slideId] to [toIndex] in show order.
