@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../controller/slide_document_controller.dart';
@@ -17,10 +18,14 @@ import '../model/slide.dart';
 import '../model/slide_element.dart';
 import '../model/slide_size.dart';
 import 'slide_canvas_style.dart';
+import 'slide_canvas_tool.dart';
 import 'slide_element_label.dart';
 import 'slide_image_source.dart';
 import 'slide_selection_overlay.dart';
 import 'slide_stage.dart';
+import 'slide_text_editing_controller.dart';
+import 'slide_text_editor.dart';
+import 'slide_text_layout.dart';
 
 /// Shows one slide scaled to fit its box, with letterbox bars, at the presentation's
 /// aspect ratio, and — unless built [SlideCanvas.readOnly] — edits it.
@@ -45,6 +50,18 @@ import 'slide_stage.dart';
 /// - scroll to pan a zoomed slide, Ctrl or Cmd scroll (or pinch) to zoom
 ///   about the pointer, middle-drag or two fingers to pan.
 ///
+/// **Text.** Double-click or double-tap a text box, or press Enter or F2
+/// with one selected, to edit its text in place — at the canvas's scale and
+/// rotation, with the platform's caret, selection, input methods and touch
+/// handles (see [SlideTextEditor]). Escape or a click outside the box ends
+/// editing and writes everything typed as one undo step. A screen reader's
+/// tap on a selected text box edits it too, and the canvas announces
+/// [editingAnnouncement] and [editingDoneAnnouncement] as editing starts
+/// and stops. With [tool] set to [SlideCanvasTool.text], a click places a
+/// new text box and a drag draws one, which opens for typing; one left
+/// empty disappears again. [textEditing] is the session a toolbar formats
+/// through; see [SlideTextEditingController].
+///
 /// The caller owns [selection] and [zoom] and hears about changes through
 /// [onSelectionChanged] and [onZoomChanged]; zoom is relative to fitting
 /// the box, from [minZoom] to [maxZoom]. Handles are drawn
@@ -58,8 +75,9 @@ import 'slide_stage.dart';
 /// Images are drawn by [imageBuilder]; the package never loads one. The
 /// canvas needs a bounded box when editing and handles pointers itself, so
 /// do not put it in a scroll view. Keys: each element is
-/// `slide_element_<id>` and each handle `slide_handle_<id>` (see
-/// [SlideHandle.keyName]).
+/// `slide_element_<id>`, each handle `slide_handle_<id>` (see
+/// [SlideHandle.keyName]), and while a box is edited each of its paragraphs
+/// `slide_text_paragraph_<index>` (see [SlideTextEditor.keyName]).
 ///
 /// ```dart
 /// ListenableBuilder(
@@ -90,6 +108,11 @@ class SlideCanvas extends StatefulWidget {
     this.padding = const EdgeInsets.all(24),
     this.focusNode,
     this.autofocus = false,
+    this.textEditing,
+    this.tool = SlideCanvasTool.select,
+    this.onToolChanged,
+    this.editingAnnouncement = 'Editing text',
+    this.editingDoneAnnouncement = 'Done editing text',
   })  : slide = null,
         size = null;
 
@@ -111,7 +134,12 @@ class SlideCanvas extends StatefulWidget {
         zoom = 1,
         onZoomChanged = null,
         focusNode = null,
-        autofocus = false;
+        autofocus = false,
+        textEditing = null,
+        tool = SlideCanvasTool.select,
+        onToolChanged = null,
+        editingAnnouncement = '',
+        editingDoneAnnouncement = '';
 
   /// The smallest zoom, half the fitted size.
   static const minZoom = 0.5;
@@ -163,6 +191,22 @@ class SlideCanvas extends StatefulWidget {
   /// Whether to take focus when first built.
   final bool autofocus;
 
+  /// The text editing session and formatting commands; the canvas makes
+  /// its own when none is given.
+  final SlideTextEditingController? textEditing;
+
+  /// What the pointer does.
+  final SlideCanvasTool tool;
+
+  /// Called when the canvas hands the tool back, after drawing a text box.
+  final ValueChanged<SlideCanvasTool>? onToolChanged;
+
+  /// What a screen reader hears when a text box opens for editing.
+  final String editingAnnouncement;
+
+  /// What a screen reader hears when editing ends.
+  final String editingDoneAnnouncement;
+
   /// Whether the canvas only draws.
   bool get readOnly => document == null;
 
@@ -175,6 +219,7 @@ enum _GestureKind {
   resize(edits: true),
   rotate(edits: true),
   marquee(edits: false),
+  draw(edits: false),
   pan(edits: false);
 
   const _GestureKind({required this.edits});
@@ -195,6 +240,7 @@ class _Gesture {
     this.isLine = false,
     this.startBounds,
     this.collapseTo,
+    this.hit,
     this.startPan = Offset.zero,
   });
 
@@ -213,6 +259,9 @@ class _Gesture {
 
   /// The element to select alone if this ends as a tap on a multi-selection.
   final String? collapseTo;
+
+  /// The element under the pointer when it went down.
+  final String? hit;
   final Offset startPan;
 
   bool started = false;
@@ -249,6 +298,15 @@ class _SlideCanvasState extends State<SlideCanvas> {
   List<SnapGuide> _guides = const [];
   Rect? _marquee;
   MouseCursor _cursor = MouseCursor.defer;
+  SlideTextEditingController? _ownTextEditing;
+  bool _wasEditing = false;
+
+  /// The last tap that did not drag: when, where in slide units, and on
+  /// which element, to tell a double tap.
+  (Duration, Offset, String)? _lastTap;
+
+  SlideTextEditingController get _editing =>
+      widget.textEditing ?? (_ownTextEditing ??= SlideTextEditingController());
 
   SlideDocumentController get _doc => widget.document!.controller;
 
@@ -260,23 +318,148 @@ class _SlideCanvasState extends State<SlideCanvas> {
       widget.style ?? SlideCanvasStyle.fromTheme(Theme.of(context));
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.readOnly) return;
+    _editing.addListener(_onEditingChanged);
+    widget.document!.addListener(_onDocumentChanged);
+  }
+
+  @override
   void didUpdateWidget(SlideCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!setEquals(widget.selection, oldWidget.selection)) {
       _selection = widget.selection;
     }
+    final oldEditing = oldWidget.textEditing ?? _ownTextEditing;
     if (widget.slideId != oldWidget.slideId ||
-        widget.document != oldWidget.document) {
+        widget.document != oldWidget.document ||
+        oldEditing != _editing) {
+      // Written to the slide it was typed on, before the canvas moves on.
+      oldEditing?.commit();
       _cancelGesture();
       _selection = widget.selection;
+    }
+    if (oldEditing != _editing) {
+      oldEditing?.removeListener(_onEditingChanged);
+      if (!widget.readOnly) _editing.addListener(_onEditingChanged);
+    }
+    if (widget.document != oldWidget.document) {
+      oldWidget.document?.removeListener(_onDocumentChanged);
+      widget.document?.addListener(_onDocumentChanged);
     }
   }
 
   @override
   void dispose() {
     _cancelGesture();
+    widget.document?.removeListener(_onDocumentChanged);
+    final editing = widget.textEditing ?? _ownTextEditing;
+    editing?.removeListener(_onEditingChanged);
+    final own = _ownTextEditing;
+    if (editing != null && editing.isEditing) {
+      // Keep what was typed; the document cannot change mid-unmount.
+      Future.microtask(() {
+        editing.commit();
+        own?.dispose();
+      });
+    } else {
+      own?.dispose();
+    }
     _ownFocusNode?.dispose();
     super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Text editing
+  // ---------------------------------------------------------------------------
+
+  void _onEditingChanged() {
+    final editing = _editing.isEditing;
+    if (editing != _wasEditing) {
+      _wasEditing = editing;
+      _announce(
+        editing ? widget.editingAnnouncement : widget.editingDoneAnnouncement,
+      );
+      if (!editing) _focusNode.requestFocus();
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _announce(String message) {
+    if (message.isEmpty) return;
+    SemanticsService.sendAnnouncement(
+      View.of(context),
+      message,
+      Directionality.of(context),
+    );
+  }
+
+  /// Drops the session when its box leaves the slide — undone, say.
+  void _onDocumentChanged() {
+    final id = _editing.elementId;
+    if (id != null && _slide?.elementById(id) is! TextBox) _editing.cancel();
+  }
+
+  /// Opens [id] for editing, with the caret under the global point
+  /// [caretAt] when given and at the end otherwise.
+  void _beginEditing(String id, {Offset? caretAt, bool fresh = false}) {
+    _editing.attach(_doc, widget.slideId!, {id});
+    _editing.begin(id, removeIfEmpty: fresh);
+    if (caretAt != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _placeCaret(caretAt));
+    }
+  }
+
+  /// Puts the caret at the character nearest the global point [point].
+  void _placeCaret(Offset point) {
+    final root = context.findRenderObject();
+    if (!mounted || !_editing.isEditing || root == null) return;
+    final fields = <RenderEditable>[];
+    void visit(RenderObject object) {
+      if (object is RenderEditable) return fields.add(object);
+      object.visitChildren(visit);
+    }
+
+    root.visitChildren(visit);
+    if (fields.length != _editing.paragraphControllers.length) return;
+    var best = 0;
+    var bestDistance = double.infinity;
+    for (var i = 0; i < fields.length; i++) {
+      final local = fields[i].globalToLocal(point);
+      final distance = local.dy < 0
+          ? -local.dy
+          : math.max(0.0, local.dy - fields[i].size.height);
+      if (distance < bestDistance) {
+        best = i;
+        bestDistance = distance;
+      }
+    }
+    final position = fields[best].getPositionForPoint(point);
+    _editing.paragraphControllers[best].selection =
+        TextSelection.collapsed(offset: position.offset);
+  }
+
+  /// The frame of the box being edited, grown to its draft text when it
+  /// grows to fit.
+  ElementFrame? get _editingFrame {
+    final draft = _editing.draft;
+    if (draft == null) return null;
+    if (draft.autoFit != TextAutoFit.grow) return draft.frame;
+    final height = SlideTextLayout.fromStyle(_style).contentHeight(draft);
+    return height <= draft.frame.height
+        ? draft.frame
+        : draft.frame.copyWith(height: height);
+  }
+
+  bool _insideEditor(Offset viewPoint) {
+    final frame = _editingFrame;
+    final viewport = _viewport;
+    if (frame == null || viewport == null) return false;
+    return frame.contains(
+      viewport.toSlide(viewPoint),
+      tolerance: _style.handleSize / viewport.scale,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -305,6 +488,11 @@ class _SlideCanvasState extends State<SlideCanvas> {
   }
 
   void _onPointerDown(PointerDownEvent event) {
+    if (_editing.isEditing) {
+      // The editor's own gestures handle pointers inside the box.
+      if (_insideEditor(event.localPosition)) return;
+      _editing.commit();
+    }
     _focusNode.requestFocus();
     final mouse = event.kind == PointerDeviceKind.mouse;
     if (mouse && event.buttons == kMiddleMouseButton) {
@@ -335,6 +523,9 @@ class _SlideCanvasState extends State<SlideCanvas> {
     final point = event.localPosition;
     final slidePoint = viewport.toSlide(point);
     final selected = _validSelection(slide);
+    final hit = slide
+        .elementAt(slidePoint, tolerance: _style.handleSize / viewport.scale)
+        ?.id;
     _Gesture gesture(
       _GestureKind kind,
       Set<String> ids, {
@@ -353,8 +544,12 @@ class _SlideCanvasState extends State<SlideCanvas> {
           isLine: element is LineElement,
           startBounds: kind == _GestureKind.move ? slide.boundsOf(ids) : null,
           collapseTo: collapseTo,
+          hit: hit,
         );
 
+    if (widget.tool == SlideCanvasTool.text) {
+      return gesture(_GestureKind.draw, const {});
+    }
     if (selected.length == 1) {
       final element = slide.elementById(selected.single)!;
       final handle = _handleAt(element.frame, point, viewport);
@@ -367,9 +562,6 @@ class _SlideCanvasState extends State<SlideCanvas> {
         );
       }
     }
-    final hit = slide
-        .elementAt(slidePoint, tolerance: _style.handleSize / viewport.scale)
-        ?.id;
     if (hit == null) {
       if (!_additive) _select(const {});
       return gesture(_GestureKind.marquee, _additive ? selected : const {});
@@ -491,6 +683,10 @@ class _SlideCanvasState extends State<SlideCanvas> {
         final area = Rect.fromPoints(gesture.startSlide, slidePoint);
         _select({...gesture.ids, ...slide.elementsInside(area)});
         setState(() => _marquee = area);
+      case _GestureKind.draw:
+        setState(
+          () => _marquee = Rect.fromPoints(gesture.startSlide, slidePoint),
+        );
       case _GestureKind.pan:
         _viewTo(gesture.startPan + (point - gesture.startView), widget.zoom);
     }
@@ -504,10 +700,53 @@ class _SlideCanvasState extends State<SlideCanvas> {
     }
     final gesture = _gesture;
     if (gesture == null || gesture.pointer != event.pointer) return;
+    final drawn = _marquee;
     if (!gesture.started && gesture.collapseTo != null) {
       _select({gesture.collapseTo!});
     }
     setState(_cancelGesture);
+    if (gesture.kind == _GestureKind.draw) {
+      return _drawTextBox(gesture.started ? drawn : null, gesture.startSlide);
+    }
+    // A handle that was tapped, not dragged, was a tap on its element: on a
+    // phone a short box is all handle.
+    if (!gesture.started && gesture.kind.edits) _onTap(event, gesture.hit);
+  }
+
+  /// Opens a text box tapped twice in a row for editing.
+  void _onTap(PointerEvent event, String? hit) {
+    final last = _lastTap;
+    final point = event.localPosition;
+    _lastTap = hit == null ? null : (event.timeStamp, point, hit);
+    if (last == null || hit == null) return;
+    final (time, where, id) = last;
+    final isDouble = id == hit &&
+        event.timeStamp - time <= kDoubleTapTimeout &&
+        (point - where).distance <= kDoubleTapSlop;
+    if (!isDouble || _slide?.elementById(hit) is! TextBox) return;
+    _lastTap = null;
+    _select({hit});
+    _beginEditing(hit, caretAt: event.position);
+  }
+
+  /// Inserts a text box filling [area], or at [point] at the default size
+  /// when the pointer did not drag, and opens it for typing.
+  void _drawTextBox(Rect? area, Offset point) {
+    final viewport = _viewport;
+    if (viewport == null || _slide == null) return;
+    final minimum = _style.handleHitSize / viewport.scale;
+    final slideId = widget.slideId!;
+    final id = area == null || area.width < minimum
+        ? _doc.insertTextBox(slideId, at: (x: point.dx, y: point.dy))
+        : _doc.insertTextBox(
+            slideId,
+            at: (x: area.left, y: area.top),
+            width: area.width,
+            height: area.height,
+          );
+    _select({id});
+    widget.onToolChanged?.call(SlideCanvasTool.select);
+    _beginEditing(id, fresh: true);
   }
 
   /// Ends the current gesture, closing its undo step and clearing its
@@ -642,7 +881,10 @@ class _SlideCanvasState extends State<SlideCanvas> {
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     final slide = _slide;
-    if (slide == null || event is KeyUpEvent || _gesture != null) {
+    if (slide == null ||
+        event is KeyUpEvent ||
+        _gesture != null ||
+        _editing.isEditing) {
       return KeyEventResult.ignored;
     }
     final keys = HardwareKeyboard.instance;
@@ -653,6 +895,14 @@ class _SlideCanvasState extends State<SlideCanvas> {
       return _cycle(slide, selected, backward: keys.isShiftPressed);
     }
     if (selected.isEmpty) return KeyEventResult.ignored;
+    if ((key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.numpadEnter ||
+            key == LogicalKeyboardKey.f2) &&
+        selected.length == 1 &&
+        slide.elementById(selected.single) is TextBox) {
+      _beginEditing(selected.single);
+      return KeyEventResult.handled;
+    }
     final nudge = _nudges[key];
     final command = keys.isControlPressed || keys.isMetaPressed;
     final toFront = _forwardKeys.contains(key);
@@ -755,8 +1005,13 @@ class _SlideCanvasState extends State<SlideCanvas> {
                 padding: widget.padding,
               );
               final selected = _validSelection(slide);
+              _editing.attach(_doc, widget.slideId!, selected);
+              final editingId = _editing.elementId;
+              final editingFrame = _editingFrame;
               return MouseRegion(
-                cursor: _cursor,
+                cursor: widget.tool == SlideCanvasTool.text
+                    ? SystemMouseCursors.precise
+                    : _cursor,
                 child: Listener(
                   behavior: HitTestBehavior.opaque,
                   onPointerDown: _onPointerDown,
@@ -784,22 +1039,43 @@ class _SlideCanvasState extends State<SlideCanvas> {
                                 imageBuilder: widget.imageBuilder,
                                 selection: selected,
                                 onSelect: (id) {
+                                  final edit = setEquals(selected, {id}) &&
+                                      slide.elementById(id) is TextBox;
+                                  if (edit) return _beginEditing(id);
                                   _focusNode.requestFocus();
                                   _select({id});
                                 },
+                                editingId: editingId,
+                                editor: editingId == null
+                                    ? null
+                                    : SlideTextEditor(
+                                        session: _editing,
+                                        style: style,
+                                        scale: viewport.scale,
+                                        onDone: _editing.commit,
+                                      ),
                               ),
                             ),
                           ),
                           Positioned.fill(
-                            child: SlideSelectionOverlay(
-                              viewport: viewport,
-                              frames: [
-                                for (final e in slide.elements)
-                                  if (selected.contains(e.id)) e.frame,
-                              ],
-                              style: style,
-                              guides: _guides,
-                              marquee: _marquee,
+                            // The chrome takes every hit it is over; while a
+                            // box is edited its text needs them instead.
+                            child: IgnorePointer(
+                              ignoring: editingId != null,
+                              child: SlideSelectionOverlay(
+                                viewport: viewport,
+                                frames: [
+                                  for (final e in slide.elements)
+                                    if (e.id == editingId &&
+                                        editingFrame != null)
+                                      editingFrame
+                                    else if (selected.contains(e.id))
+                                      e.frame,
+                                ],
+                                style: style,
+                                guides: _guides,
+                                marquee: _marquee,
+                              ),
                             ),
                           ),
                         ],

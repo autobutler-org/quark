@@ -18,6 +18,10 @@ import 'slide_text_box_view.dart';
 /// reader as [label], marked [selected]; [onSelect], when given, is the
 /// screen reader's tap action. Pointer input is not handled here: the canvas
 /// hit tests the slide's geometry itself.
+///
+/// While a text box is being edited the canvas passes its [editor], which
+/// takes the place of the box's view and speaks for itself to a screen
+/// reader. [showPlaceholder] shows an empty text box's placeholder.
 class SlideElementView extends StatelessWidget {
   /// Creates the view of [element].
   const SlideElementView({
@@ -28,6 +32,8 @@ class SlideElementView extends StatelessWidget {
     this.imageBuilder,
     this.selected = false,
     this.onSelect,
+    this.editor,
+    this.showPlaceholder = false,
   });
 
   /// The element to draw.
@@ -49,6 +55,12 @@ class SlideElementView extends StatelessWidget {
   /// selected — on a read-only slide.
   final VoidCallback? onSelect;
 
+  /// The in-place editor drawn instead of the element, or `null`.
+  final Widget? editor;
+
+  /// Whether an empty text box shows its placeholder.
+  final bool showPlaceholder;
+
   /// The [ValueKey] value of the element with [id]: `slide_element_<id>`.
   static String keyName(String id) => 'slide_element_$id';
 
@@ -61,8 +73,14 @@ class SlideElementView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final frame = element.frame;
+    final editor = this.editor;
     final Widget content = switch (element) {
-      final TextBox box => SlideTextBoxView(box: box, style: style),
+      TextBox() when editor != null => editor,
+      final TextBox box => SlideTextBoxView(
+          box: box,
+          style: style,
+          showPlaceholder: showPlaceholder,
+        ),
       final ShapeElement shape =>
         CustomPaint(painter: SlideShapePainter(shape), size: Size.infinite),
       final LineElement line =>
@@ -84,14 +102,16 @@ class SlideElementView extends StatelessWidget {
       child: Transform.rotate(
         key: ValueKey(keyName(element.id)),
         angle: frame.rotation * math.pi / 180,
-        child: Semantics(
-          container: true,
-          label: label,
-          selected: onSelect == null ? null : selected,
-          onTap: onSelect,
-          excludeSemantics: true,
-          child: content,
-        ),
+        child: editor != null
+            ? content
+            : Semantics(
+                container: true,
+                label: label,
+                selected: onSelect == null ? null : selected,
+                onTap: onSelect,
+                excludeSemantics: true,
+                child: content,
+              ),
       ),
     );
   }

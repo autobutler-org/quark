@@ -13,11 +13,17 @@ void main() {
         frame: frame,
         paragraphs: [TextParagraph.plain(' Hello '), TextParagraph.plain('x')],
       )),
-      'Text box: Hello',
+      'Hello\nx',
     );
     expect(
       defaultSlideElementLabel(TextBox(id: 't', frame: frame)),
       'Empty text box',
+    );
+    expect(
+      defaultSlideElementLabel(
+        TextBox(id: 't', frame: frame, placeholder: 'Click to add title'),
+      ),
+      'Click to add title',
     );
     expect(
       defaultSlideElementLabel(

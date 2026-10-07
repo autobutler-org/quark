@@ -18,7 +18,9 @@ Everything is immutable and compares by value. An edit makes a new
 | `Slide`          | stable `id`, `background`, `elements` back to front, speaker `notes`   |
 | `SlideElement`   | sealed: `TextBox`, `ShapeElement`, `ImageElement`, `LineElement`, `UnknownElement` |
 | `ElementFrame`   | `x`, `y`, `width`, `height` in slide units, `rotation` in degrees       |
-| `TextParagraph`  | styled `TextRun`s and an alignment                                     |
+| `TextBox`        | paragraphs, vertical `anchor`, `autoFit` (grow, fixed, shrink), `placeholder` |
+| `TextParagraph`  | styled `TextRun`s, alignment, `lineSpacing`, `list` (none, bullet, numbered) |
+| `TextRun`        | text with bold, italic, underline, strikethrough, size, family, color  |
 
 Slide units are an abstract space set by `SlideSize` (1920×1080 for the
 default 16:9). Stacking order is an element's index in `Slide.elements`. Ids are
@@ -75,7 +77,9 @@ history of earlier presentations:
 
 - slides: `addSlide`, `duplicateSlide`, `deleteSlide`, `moveSlide`, `setSlideNotes`
 - elements: `addElement`, `moveElements`, `resizeElement`, `rotateElement`,
-  `deleteElements`, `reorderElement`, `arrangeElements`, `editText`
+  `deleteElements`, `reorderElement`, `arrangeElements`
+- text: `editText`, `formatText` (a `TextFormat` over whole boxes),
+  `insertTextBox(slideId, at: (x: 160, y: 120))`
 - history: `undo`, `redo`, `load`, and `batch` / `beginBatch` / `endBatch`
 
 A command that changes nothing records no step. Commands inside a batch apply
@@ -88,6 +92,12 @@ doc.beginBatch(); // pointer down
 doc.moveElements(slideId, selection, dx, dy); // each pointer move
 doc.endBatch(); // pointer up: one undo step
 ```
+
+A text box whose `autoFit` is `grow` grows taller to fit its text in the
+same step as any command that changes its text, formatting or size; it never
+shrinks on its own. Measuring text needs Flutter, so the controller takes a
+`measureText` function; `SlideDocumentNotifier` passes
+`SlideTextLayout().measure` by default.
 
 The controller is plain Dart; its `onChanged` callback is the only hook.
 `SlideDocumentNotifier` wraps it in a `ChangeNotifier` for Flutter:
@@ -137,6 +147,91 @@ reader through `elementLabel` (`defaultSlideElementLabel` in English); each
 handle is keyed `slide_handle_<id>`, `slide_handle_bottom_right` and so on.
 The math behind the gestures — `FrameGeometry`, `snapMove`,
 `SlideViewport` — is exported and tested on its own.
+
+## Text editing
+
+Text is edited in place on the canvas: double-click or double-tap a text
+box, or select one and press Enter or F2. The editor sits on the slide at
+the canvas's scale and rotation, wraps lines exactly where the drawn text
+does, and gives the platform's caret, selection, input methods, context
+menu and touch handles. Escape or a click outside the box ends editing.
+Everything typed and formatted in one session is **one undo step** on the
+document; Ctrl/Cmd+Z inside the editor steps back through the session
+itself. Ctrl/Cmd+B, I and U toggle bold, italic and underline, and
+Ctrl/Cmd+A selects every paragraph.
+
+The text tool draws new boxes: set `tool: SlideCanvasTool.text`, and a click
+places a box at the default width (a drag sizes it), which opens for typing.
+The canvas hands the tool back through `onToolChanged`, and a new box left
+empty disappears again.
+
+### For a toolbar: `SlideTextEditingController`
+
+Create one, pass it to the canvas, and drive every text command through it.
+It formats the editor's selection while a box is being edited and every
+selected text box whole otherwise, as one undo step either way:
+
+```dart
+final editing = SlideTextEditingController(fontFamilies: ['Inter', 'Lora']);
+
+SlideCanvas(document: doc, slideId: slideId, textEditing: editing, ...);
+
+ListenableBuilder(
+  listenable: editing,
+  builder: (context, _) {
+    final format = editing.selectionFormat; // what the selection shares
+    return Row(children: [
+      IconButton(
+        isSelected: TextToggle.bold.isOn(format),
+        onPressed: editing.canFormat
+            ? () => editing.toggle(TextToggle.bold)
+            : null,
+        icon: const Icon(Icons.format_bold),
+      ),
+      // fontSize is a double when the selection shares one, null when it
+      // inherits, and `unset` when it is mixed.
+      Text(format.fontSize is double ? '${format.fontSize}' : ''),
+    ]);
+  },
+);
+
+editing.format(const TextFormat(fontSize: 48.0));
+editing.format(const TextFormat(alignment: TextAlignment.center));
+editing.format(const TextFormat(color: SlideColor(0xFF3366FF)));
+editing.format(const TextFormat(fontFamily: 'Lora'));
+editing.format(const TextFormat(lineSpacing: 1.5));
+editing.format(const TextFormat(anchor: TextAnchor.middle));
+editing.format(const TextFormat(autoFit: TextAutoFit.shrink));
+editing.toggle(TextToggle.bulletList); // italic, underline, strikethrough,
+                                       // numberedList likewise
+```
+
+| Member | What it does |
+| --- | --- |
+| `toggle(TextToggle)` | bold, italic, underline, strikethrough, bullet or numbered list: on unless all of the selection has it |
+| `format(TextFormat)` | any mix of run, paragraph and box changes; a field left out is left alone, `null` makes a size, family, color or spacing inherit |
+| `selectionFormat` | the `TextFormat` the selection shares; mixed fields are left out |
+| `canFormat` | a box is being edited, or a text box is selected |
+| `isEditing`, `elementId`, `draft`, `textSelection` | the open session |
+| `commit()`, `cancel()` | end the session, writing it as one step or dropping it |
+| `fontFamilies` | the families the app offers |
+
+At a collapsed caret a run format styles what is typed next. Call
+`editing.commit()` before the document's own undo or redo, so the step the
+session makes exists before history moves. The formatting itself is pure
+functions over runs — `replaceText`, `formatParagraphs`, `formatTextBox`,
+`textFormatOf`, `typingStyleAt`, `listMarkers` — which split and merge runs
+and carry unknown fields along; `SlideDocumentController.formatText` applies
+a `TextFormat` to whole boxes without a canvas.
+
+**Keys.** While a box is edited, each of its paragraphs is keyed
+`slide_text_paragraph_<index>`.
+
+**Accessibility.** A text box reads to a screen reader as its text, or its
+placeholder when empty. Editing announces `editingAnnouncement` ("Editing
+text") and `editingDoneAnnouncement`; the editor's fields are ordinary text
+fields to a screen reader, and a screen reader's tap on a selected text box
+opens it. Slide text ignores the device text scale while editing too.
 
 ## Development
 

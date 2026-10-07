@@ -1,10 +1,18 @@
 import 'dart:math';
 
+import '../model/element_frame.dart';
 import '../model/presentation.dart';
+import '../model/rich_text.dart';
 import '../model/slide.dart';
 import '../model/slide_background.dart';
 import '../model/slide_element.dart';
+import '../model/text_format.dart';
 import '../model/text_paragraph.dart';
+
+/// Measures how tall, in slide units, a [TextBox]'s text lays out at its
+/// frame's width. `SlideDocumentNotifier` supplies one built on Flutter's
+/// text layout; this file stays plain Dart.
+typedef TextBoxMeasurer = double Function(TextBox box);
 
 /// Edits a [Presentation] through commands, with undo and redo.
 ///
@@ -32,6 +40,11 @@ import '../model/text_paragraph.dart';
 /// doc.undo(); // back to before both moves
 /// ```
 ///
+/// A text box whose [TextBox.autoFit] is [TextAutoFit.grow] grows taller
+/// to fit its text whenever a command changes its text, its formatting or
+/// its size — in the same step — as long as the controller was given a
+/// [measureText]. It never shrinks on its own.
+///
 /// Commands that name a slide or element that does not exist throw an
 /// [ArgumentError]; an index out of range throws a [RangeError]. This class
 /// has no Flutter dependency; [onChanged] is its only listener hook, and
@@ -48,6 +61,7 @@ class SlideDocumentController {
     String Function()? newId,
     this.onChanged,
     this.maxUndoDepth = 100,
+    this.measureText,
   })  : _presentation = presentation,
         _generateId = newId ?? _randomId;
 
@@ -56,6 +70,10 @@ class SlideDocumentController {
 
   /// The most undo steps kept.
   final int maxUndoDepth;
+
+  /// Measures text for auto-grow; without one, text boxes keep the size
+  /// they are given.
+  final TextBoxMeasurer? measureText;
 
   final String Function() _generateId;
   final List<Presentation> _undoStack = [];
@@ -299,8 +317,10 @@ class SlideDocumentController {
     _updateElement(
       slideId,
       elementId,
-      (e) => e.withFrame(
-        e.frame.copyWith(x: x, y: y, width: width, height: height),
+      (e) => _fitted(
+        e.withFrame(
+          e.frame.copyWith(x: x, y: y, width: width, height: height),
+        ),
       ),
     );
   }
@@ -392,13 +412,102 @@ class SlideDocumentController {
     String elementId,
     List<TextParagraph> paragraphs,
   ) =>
-      _updateElement(slideId, elementId, (e) {
-        if (e is! TextBox) {
-          throw ArgumentError.value(
-              elementId, 'elementId', 'is not a text box');
-        }
-        return e.copyWith(paragraphs: List.unmodifiable(paragraphs));
-      });
+      _updateElement(
+        slideId,
+        elementId,
+        (e) => _fitted(
+          _textBox(e).copyWith(paragraphs: List.unmodifiable(paragraphs)),
+        ),
+      );
+
+  /// Applies [format] to all the text of every text box in [elementIds]
+  /// on the slide [slideId], as one step; other elements in [elementIds]
+  /// are skipped, so a toolbar can pass a mixed selection. See [TextFormat].
+  void formatText(
+    String slideId,
+    Iterable<String> elementIds,
+    TextFormat format,
+  ) {
+    final ids = elementIds.toSet();
+    _updateSlide(slideId, (slide) {
+      for (final id in ids) {
+        _elementIndex(slide, id);
+      }
+      return slide.copyWith(
+        elements: [
+          for (final e in slide.elements)
+            e is TextBox && ids.contains(e.id)
+                ? _fitted(formatTextBox(e, format))
+                : e,
+        ],
+      );
+    });
+  }
+
+  /// Inserts a text box on the slide [slideId] with its top-left corner at
+  /// the slide point [at] and returns its id.
+  ///
+  /// ```dart
+  /// final id = doc.insertTextBox(slideId, at: (x: 160, y: 120));
+  /// ```
+  ///
+  /// It is [width] wide ([defaultTextBoxWidth] by default) and [height]
+  /// tall; left out, the height fits one line of text when the controller
+  /// can [measureText], and is [defaultTextBoxHeight] when it cannot. It
+  /// holds [paragraphs] (one empty one by default) and goes in front of
+  /// everything, or at stacking position [index].
+  String insertTextBox(
+    String slideId, {
+    required ({double x, double y}) at,
+    double? width,
+    double? height,
+    List<TextParagraph> paragraphs = const [TextParagraph([])],
+    String placeholder = '',
+    int? index,
+  }) {
+    var box = TextBox(
+      id: newId(),
+      frame: ElementFrame(
+        x: at.x,
+        y: at.y,
+        width: width ?? defaultTextBoxWidth,
+        height: height ?? 0,
+      ),
+      paragraphs: List.unmodifiable(paragraphs),
+      placeholder: placeholder,
+    );
+    box = _fitted(box);
+    if (box.frame.height == 0 && height == null) {
+      box = box.withFrame(box.frame.copyWith(height: defaultTextBoxHeight));
+    }
+    addElement(slideId, box, index: index);
+    return box.id;
+  }
+
+  /// The width of a text box [insertTextBox] makes when given none.
+  static const defaultTextBoxWidth = 600.0;
+
+  /// The height of a text box [insertTextBox] makes when given none and
+  /// unable to measure text.
+  static const defaultTextBoxHeight = 80.0;
+
+  static TextBox _textBox(SlideElement e) => e is TextBox
+      ? e
+      : throw ArgumentError.value(e.id, 'elementId', 'is not a text box');
+
+  /// [element] grown to fit its text, when it is a text box that grows and
+  /// there is a [measureText].
+  T _fitted<T extends SlideElement>(T element) {
+    final measure = measureText;
+    if (element is! TextBox ||
+        element.autoFit != TextAutoFit.grow ||
+        measure == null) {
+      return element;
+    }
+    final height = measure(element);
+    if (height <= element.frame.height + 1e-6) return element;
+    return element.withFrame(element.frame.copyWith(height: height)) as T;
+  }
 
   // ---------------------------------------------------------------------------
   // Lookup

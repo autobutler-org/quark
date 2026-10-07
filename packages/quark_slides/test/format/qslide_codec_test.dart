@@ -77,7 +77,8 @@ void main() {
       );
     });
 
-    test('an unknown alignment or fit falls back to the default', () {
+    test('an unknown alignment, fit, anchor or list falls back to the default',
+        () {
       final deck = QslideCodec.fromJson({
         'schemaVersion': 1,
         'slides': [
@@ -88,8 +89,10 @@ void main() {
                 'id': 't',
                 'type': 'text',
                 'frame': {'x': 0, 'y': 0, 'width': 1, 'height': 1},
+                'anchor': 'baseline',
+                'autoFit': 'wrap',
                 'paragraphs': [
-                  {'runs': [], 'align': 'distributed'},
+                  {'runs': [], 'align': 'distributed', 'list': 'roman'},
                 ],
               },
               {
@@ -109,6 +112,10 @@ void main() {
         TextAlignment.start,
       );
       expect((slide.elements[1] as ImageElement).fit, ImageFit.contain);
+      final box = slide.elements[0] as TextBox;
+      expect(box.anchor, TextAnchor.top);
+      expect(box.autoFit, TextAutoFit.grow);
+      expect(box.paragraphs.single.list, TextListStyle.none);
     });
   });
 

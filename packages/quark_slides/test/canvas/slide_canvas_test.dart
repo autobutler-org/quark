@@ -157,7 +157,7 @@ void main() {
         (tester, size) async {
       final semantics = tester.ensureSemantics();
       await pumpCanvas(tester, doc, size: size);
-      expect(find.bySemanticsLabel('Text box: Quarterly review'), findsOne);
+      expect(find.bySemanticsLabel('Quarterly review'), findsOne);
       expect(find.bySemanticsLabel('Image: A dog'), findsOne);
       await tester.tap(elementKey('box'));
       await tester.pump();

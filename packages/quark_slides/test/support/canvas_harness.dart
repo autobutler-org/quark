@@ -70,11 +70,13 @@ class CanvasHarness extends StatefulWidget {
     required this.document,
     this.zoom = 1,
     this.imageBuilder,
+    this.textEditing,
   });
 
   final SlideDocumentNotifier document;
   final double zoom;
   final SlideImageBuilder? imageBuilder;
+  final SlideTextEditingController? textEditing;
 
   @override
   State<CanvasHarness> createState() => CanvasHarnessState();
@@ -83,6 +85,10 @@ class CanvasHarness extends StatefulWidget {
 class CanvasHarnessState extends State<CanvasHarness> {
   Set<String> selection = {};
   late double zoom = widget.zoom;
+  SlideCanvasTool tool = SlideCanvasTool.select;
+
+  /// Picks a tool, as a toolbar would.
+  void useTool(SlideCanvasTool next) => setState(() => tool = next);
 
   /// Sets the selection from outside the canvas, as a toolbar would.
   void select(Set<String> ids) => setState(() => selection = ids);
@@ -96,6 +102,9 @@ class CanvasHarnessState extends State<CanvasHarness> {
         zoom: zoom,
         onZoomChanged: (z) => setState(() => zoom = z),
         imageBuilder: widget.imageBuilder,
+        textEditing: widget.textEditing,
+        tool: tool,
+        onToolChanged: useTool,
       );
 }
 
@@ -106,6 +115,7 @@ Future<void> pumpCanvas(
   Size size = wideViewport,
   double zoom = 1,
   SlideImageBuilder? imageBuilder,
+  SlideTextEditingController? textEditing,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -117,6 +127,7 @@ Future<void> pumpCanvas(
           document: document,
           zoom: zoom,
           imageBuilder: imageBuilder,
+          textEditing: textEditing,
         ),
       ),
     ),

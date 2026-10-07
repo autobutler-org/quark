@@ -13,6 +13,7 @@ class TextRun {
     this.bold = false,
     this.italic = false,
     this.underline = false,
+    this.strikethrough = false,
     this.fontSize,
     this.fontFamily,
     this.color,
@@ -32,6 +33,9 @@ class TextRun {
   /// Whether the run is underlined.
   final bool underline;
 
+  /// Whether the run is struck through.
+  final bool strikethrough;
+
   /// Font size in slide units, or `null` to inherit.
   final double? fontSize;
 
@@ -49,6 +53,7 @@ class TextRun {
     'bold',
     'italic',
     'underline',
+    'strikethrough',
     'fontSize',
     'fontFamily',
     'color',
@@ -63,6 +68,7 @@ class TextRun {
       bold: optionalBool(json, 'bold', path, false),
       italic: optionalBool(json, 'italic', path, false),
       underline: optionalBool(json, 'underline', path, false),
+      strikethrough: optionalBool(json, 'strikethrough', path, false),
       fontSize: optionalNumber(json, 'fontSize', path),
       fontFamily: optionalString(json, 'fontFamily', path),
       color:
@@ -78,6 +84,7 @@ class TextRun {
         if (bold) 'bold': true,
         if (italic) 'italic': true,
         if (underline) 'underline': true,
+        if (strikethrough) 'strikethrough': true,
         if (fontSize != null) 'fontSize': jsonNumber(fontSize!),
         if (fontFamily != null) 'fontFamily': fontFamily,
         if (color != null) 'color': color!.toHex(),
@@ -90,6 +97,7 @@ class TextRun {
     bool? bold,
     bool? italic,
     bool? underline,
+    bool? strikethrough,
     Object? fontSize = unset,
     Object? fontFamily = unset,
     Object? color = unset,
@@ -99,6 +107,7 @@ class TextRun {
         bold: bold ?? this.bold,
         italic: italic ?? this.italic,
         underline: underline ?? this.underline,
+        strikethrough: strikethrough ?? this.strikethrough,
         fontSize:
             identical(fontSize, unset) ? this.fontSize : fontSize as double?,
         fontFamily: identical(fontFamily, unset)
@@ -108,6 +117,10 @@ class TextRun {
         extra: extra,
       );
 
+  /// Whether [other] is styled exactly like this run — every field but
+  /// [text] matches, unknown fields included — so the two could be one run.
+  bool hasStyleOf(TextRun other) => other.copyWith(text: text) == this;
+
   @override
   bool operator ==(Object other) =>
       other is TextRun &&
@@ -115,6 +128,7 @@ class TextRun {
       other.bold == bold &&
       other.italic == italic &&
       other.underline == underline &&
+      other.strikethrough == strikethrough &&
       other.fontSize == fontSize &&
       other.fontFamily == fontFamily &&
       other.color == color &&
@@ -126,6 +140,7 @@ class TextRun {
         bold,
         italic,
         underline,
+        strikethrough,
         fontSize,
         fontFamily,
         color,

@@ -15,6 +15,9 @@ import 'slide_image_source.dart';
 /// It is drawn at full size and scaled by its parent, so text wraps the
 /// same way at every zoom. The device's text scale does not apply: a
 /// slide's type sizes are part of its design, like an image's pixels.
+///
+/// An editable stage — one given [onSelect] — shows empty text boxes'
+/// placeholders, and draws the text box [editingId] as [editor].
 class SlideStage extends StatelessWidget {
   /// Creates a stage for [slide].
   const SlideStage({
@@ -26,6 +29,8 @@ class SlideStage extends StatelessWidget {
     this.imageBuilder,
     this.selection = const {},
     this.onSelect,
+    this.editingId,
+    this.editor,
   });
 
   /// The slide to draw.
@@ -49,6 +54,13 @@ class SlideStage extends StatelessWidget {
   /// Selects an element by id from a screen reader, or `null` when the
   /// slide is read-only.
   final ValueChanged<String>? onSelect;
+
+  /// The id of the text box being edited, drawn as [editor] and not as
+  /// itself; `null` when nothing is.
+  final String? editingId;
+
+  /// The in-place editor of [editingId].
+  final Widget? editor;
 
   @override
   Widget build(BuildContext context) => MediaQuery.withNoTextScaling(
@@ -75,6 +87,8 @@ class SlideStage extends StatelessWidget {
                     selected: selection.contains(element.id),
                     onSelect:
                         onSelect == null ? null : () => onSelect!(element.id),
+                    editor: element.id == editingId ? editor : null,
+                    showPlaceholder: onSelect != null,
                   ),
               ],
             ),

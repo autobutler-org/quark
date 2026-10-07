@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../canvas/slide_text_layout.dart';
 import '../model/presentation.dart';
 import 'slide_document_controller.dart';
 
@@ -17,18 +18,25 @@ import 'slide_document_controller.dart';
 /// doc.controller.addSlide();
 /// ```
 class SlideDocumentNotifier extends ChangeNotifier {
-  /// Creates a notifier editing [presentation]; [newId] and [maxUndoDepth]
-  /// are passed to the [SlideDocumentController].
+  /// Creates a notifier editing [presentation]; [newId], [maxUndoDepth]
+  /// and [measureText] are passed to the [SlideDocumentController].
+  ///
+  /// [measureText] defaults to [SlideTextLayout]'s, at the canvas's default
+  /// text size, so text boxes grow to fit their text; an app that draws
+  /// with a different `SlideCanvasStyle.fontSize` passes
+  /// `SlideTextLayout.fromStyle(style).measure`.
   SlideDocumentNotifier(
     Presentation presentation, {
     String Function()? newId,
     int maxUndoDepth = 100,
+    TextBoxMeasurer? measureText,
   }) {
     controller = SlideDocumentController(
       presentation,
       newId: newId,
       onChanged: notifyListeners,
       maxUndoDepth: maxUndoDepth,
+      measureText: measureText ?? const SlideTextLayout().measure,
     );
   }
 
