@@ -245,50 +245,72 @@ class ChatMessageRow extends StatelessWidget {
                         ),
                       ],
                     ),
-                  body,
-                  if (reacts && message.reactions.isNotEmpty)
-                    ChatReactionBar(
-                      messageId: message.id,
-                      reactions: message.reactions,
-                      onToggle: onReact,
-                    ),
-                  if (message.isUnverified)
-                    Row(
-                      children: [
-                        Icon(
-                          QuarkIcons.warning_amber,
-                          size: 14,
-                          color: tokens.warning,
+                  // The buttons stand beside the body, not the header: their
+                  // 48dp sets the height of a short message, and beside the
+                  // header they would set it short of the rest (#2890).
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            body,
+                            if (reacts && message.reactions.isNotEmpty)
+                              ChatReactionBar(
+                                messageId: message.id,
+                                reactions: message.reactions,
+                                onToggle: onReact,
+                              ),
+                            if (message.isUnverified)
+                              Row(
+                                children: [
+                                  Icon(
+                                    QuarkIcons.warning_amber,
+                                    size: 14,
+                                    color: tokens.warning,
+                                  ),
+                                  SizedBox(width: tokens.spacingXs),
+                                  Flexible(
+                                    child: Text(
+                                      'Unverified',
+                                      style: TextStyle(
+                                        color: tokens.warning,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
                         ),
-                        SizedBox(width: tokens.spacingXs),
-                        Flexible(
-                          child: Text(
-                            'Unverified',
-                            style: TextStyle(
-                              color: tokens.warning,
-                              fontSize: 12,
+                      ),
+                      if (reacts && onReact != null)
+                        ChatReactionPicker(
+                          messageId: message.id,
+                          onPick: onReact,
+                        ),
+                      if (hasMenu)
+                        // The same 48dp touch target as the picker beside it,
+                        // so the two glyphs share a center (#2605). The
+                        // Builder makes the button the anchor of "Add
+                        // reaction".
+                        Builder(
+                          builder: (context) => QuarkMenuButton(
+                            key: ValueKey('message_menu_${message.id}'),
+                            tooltip: 'Message actions',
+                            iconSize: 18,
+                            entries: menuEntries(
+                              context,
+                              () => quarkMenuAnchor(context),
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                    ],
+                  ),
                 ],
               ),
             ),
-            if (reacts && onReact != null)
-              ChatReactionPicker(messageId: message.id, onPick: onReact),
-            if (hasMenu)
-              // The same 48dp touch target as the picker beside it, so the two
-              // glyphs share a center (#2605). The Builder makes the button
-              // the anchor of "Add reaction".
-              Builder(
-                builder: (context) => QuarkMenuButton(
-                  key: ValueKey('message_menu_${message.id}'),
-                  tooltip: 'Message actions',
-                  iconSize: 18,
-                  entries: menuEntries(context, () => quarkMenuAnchor(context)),
-                ),
-              ),
           ],
         ),
       ),
