@@ -49,7 +49,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The bar's Present chip, and a slide's "Present from this slide", open
 /// the presentation full-window at `/slides/<path>/present` (#1165). The
 /// presentation as it is on screen goes along, so nothing waits for the
-/// save the chip starts on the way.
+/// save the chip starts on the way. Ending it comes back at
+/// `/slides/<path>?slide=N`, open on the slide the show ended on (#2900).
 ///
 /// The bar's export button saves the presentation as a PowerPoint file
 /// (#1172), saving unsaved edits first; a failure is a snack bar.
@@ -103,6 +104,7 @@ class SlideEditorPage extends StatefulWidget {
   const SlideEditorPage({
     required this.filePath,
     this.deviceSerial = '',
+    this.startIndex = 0,
     this.controller,
     super.key,
   });
@@ -113,8 +115,12 @@ class SlideEditorPage extends StatefulWidget {
   /// The device the file is on; empty for the Quark's own storage.
   final String deviceSerial;
 
+  /// The slide to open at, counting from 0: where a presentation ended
+  /// (#2900), or the start.
+  final int startIndex;
+
   /// The page's state, for tests that pass fake services; built from
-  /// [filePath] and [deviceSerial] when null.
+  /// [filePath], [deviceSerial] and [startIndex] when null.
   final SlideEditorController? controller;
 
   @override
@@ -127,6 +133,7 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
       SlideEditorController(
         filePath: widget.filePath,
         deviceSerial: widget.deviceSerial,
+        startIndex: widget.startIndex,
       );
 
   late final SlideFindController _find = SlideFindController.forEditor(

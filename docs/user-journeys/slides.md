@@ -298,7 +298,8 @@ same drive as the presentation (`photos/cover.jpg`).
   over 0.2 to 2 seconds (#1164). Stepping back plays it the other way; a presentation without transitions cuts. Under
   reduced motion every transition is a short fade with no movement. The presenter view's next-slide preview never
   animates.
-- Escape or **End the presentation** returns to the editor.
+- Escape or **End the presentation** returns to the editor at `/slides/<path>?slide=N`, on the slide the show ended on
+  (#2900).
 
 ---
 

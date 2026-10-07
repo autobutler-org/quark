@@ -19,7 +19,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// It is always dark, whatever the app's theme, as a projector wants. Escape,
 /// the bar's close button and a system back all end the show in the editor
-/// at `/slides/<path>`, out of fullscreen.
+/// at `/slides/<path>?slide=N`, on the slide the show ended on (#2900), out
+/// of fullscreen.
 class SlidePresentPage extends StatefulWidget {
   /// Presents the file at [filePath] on the device [deviceSerial], from the
   /// slide at [startIndex].
@@ -80,7 +81,11 @@ class _SlidePresentPageState extends State<SlidePresentPage> {
     await _controller.leaveFullscreen();
     if (!mounted) return;
     context.go(
-      AppRoutes.slideFile(widget.filePath, serial: widget.deviceSerial),
+      AppRoutes.slideFile(
+        widget.filePath,
+        serial: widget.deviceSerial,
+        slide: _controller.index + 1,
+      ),
     );
   }
 

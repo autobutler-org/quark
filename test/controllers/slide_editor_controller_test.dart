@@ -67,6 +67,19 @@ void main() {
     expect(c.canUndo, isFalse);
   });
 
+  test('loads at the start slide, clamped to the deck (#2900)', () async {
+    for (final (start, selected) in [(2, 's3'), (9, 's3'), (-1, 's1')]) {
+      final c = SlideEditorController(
+        filePath: 'talks/deck.qslide',
+        startIndex: start,
+        loadPresentation: (path, {serial}) async => deck(3),
+      );
+      addTearDown(c.dispose);
+      await c.load();
+      expect(c.selectedSlideId, selected, reason: 'start $start');
+    }
+  });
+
   test('a failed load is kept as the thrown object', () async {
     final failure = Exception('boom');
     final c = SlideEditorController(

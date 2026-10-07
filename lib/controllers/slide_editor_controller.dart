@@ -171,6 +171,7 @@ class SlideEditorController extends ChangeNotifier {
   SlideEditorController({
     required this.filePath,
     this.deviceSerial = '',
+    this.startIndex = 0,
     this.loadPresentation = SlidesService.load,
     this.savePresentation = SlidesService.save,
     this.mediaUrl = FilesService.constructMediaUrl,
@@ -195,6 +196,10 @@ class SlideEditorController extends ChangeNotifier {
 
   /// The device the file is on; empty for the Quark's own storage.
   final String deviceSerial;
+
+  /// The slide [load] selects, counting from 0 and clamped to the deck, so
+  /// ending a presentation comes back to the slide it ended on (#2900).
+  final int startIndex;
   final LoadPresentationFn loadPresentation;
   final SavePresentationFn savePresentation;
 
@@ -482,7 +487,12 @@ class SlideEditorController extends ChangeNotifier {
         ..addListener(_onDocumentChanged);
       _saved = loaded;
       _saveError = null;
-      _showSlide(loaded.slides.firstOrNull?.id);
+      final slides = loaded.slides;
+      _showSlide(
+        slides.isEmpty
+            ? null
+            : slides[startIndex.clamp(0, slides.length - 1)].id,
+      );
     } catch (e) {
       _loadError = e;
     }
