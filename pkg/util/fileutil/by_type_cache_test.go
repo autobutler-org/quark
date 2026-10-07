@@ -57,7 +57,7 @@ func (f byTypeFixture) write(t testing.TB, rel string) {
 	}
 }
 
-func (f byTypeFixture) list(t testing.TB) []FileNodeWithTime {
+func (f byTypeFixture) list(t testing.TB) []FileNode {
 	t.Helper()
 	result, err := ListByType(f.params)
 	if err != nil {
@@ -152,7 +152,7 @@ func TestByTypeCacheDropsAWalkThatRacedAnInvalidation(t *testing.T) {
 	c := NewByTypeCache()
 	_, gen, _ := c.get("k")
 	c.Invalidate()
-	c.put("k", gen, []FileNodeWithTime{{}})
+	c.put("k", gen, []FileNode{{}})
 	if _, _, ok := c.get("k"); ok {
 		t.Fatal("a walk started before an invalidation was stored")
 	}
@@ -164,7 +164,7 @@ func TestByTypeCacheIsBounded(t *testing.T) {
 	c.now = func() time.Time { return clock }
 	for i := range byTypeCacheMaxEntries + 1 {
 		clock = clock.Add(time.Second)
-		c.put(fmt.Sprintf("k%d", i), 0, []FileNodeWithTime{{}})
+		c.put(fmt.Sprintf("k%d", i), 0, []FileNode{{}})
 	}
 	if len(c.entries) != byTypeCacheMaxEntries {
 		t.Fatalf("got %d entries, want %d", len(c.entries), byTypeCacheMaxEntries)
@@ -173,7 +173,7 @@ func TestByTypeCacheIsBounded(t *testing.T) {
 		t.Fatal("the oldest entry was not the one evicted")
 	}
 
-	c.put("big", 0, make([]FileNodeWithTime, byTypeCacheMaxFiles+1))
+	c.put("big", 0, make([]FileNode, byTypeCacheMaxFiles+1))
 	if _, _, ok := c.get("big"); ok {
 		t.Fatal("a listing over the size cap was stored")
 	}
@@ -186,7 +186,7 @@ func TestByTypeCacheIsBounded(t *testing.T) {
 
 func TestNilByTypeCacheCachesNothing(t *testing.T) {
 	var c *ByTypeCache
-	c.put("k", 0, []FileNodeWithTime{{}})
+	c.put("k", 0, []FileNode{{}})
 	c.Invalidate()
 	if _, _, ok := c.get("k"); ok {
 		t.Fatal("a nil cache served an entry")

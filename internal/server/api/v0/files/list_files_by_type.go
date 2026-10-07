@@ -18,7 +18,7 @@ import (
 // @Produce json
 // @Param fileType query string true "File type to filter by (e.g. qdoc, qsheet)"
 // @Param serial query []string false "Filter by device serial(s)"
-// @Success 200 {array} FileNodeWithTimeJSON
+// @Success 200 {array} FileNodeJSON
 // @Failure 400 {object} serverutil.Response "Bad Request"
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Security BearerAuth

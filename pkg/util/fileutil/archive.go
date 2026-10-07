@@ -95,10 +95,22 @@ func ListArchive(params ListArchiveParams) (ListArchiveResult, error) {
 			FullPath:       dirPath,
 			DeviceSerial:   params.Serial,
 			FileType:       fileType,
+			ModifiedAt:     archiveEntryTime(e.ModTime),
 		}
 	}
 
 	return ListArchiveResult{Entries: result}, nil
+}
+
+// archiveEntryTime is an entry's modification time, or the zero time when the
+// archive does not really say. A zip entry written without one reads back as
+// 1979-11-30, the DOS date zero, so anything before the DOS epoch counts as
+// unset rather than as a date to show.
+func archiveEntryTime(t time.Time) time.Time {
+	if t.Year() < 1980 {
+		return time.Time{}
+	}
+	return t
 }
 
 // listArchiveVFS lists an archive read out of the VFS namespace.
@@ -140,12 +152,14 @@ func listArchiveVFS(params ListArchiveParams, fsys vfs.VFS) (ListArchiveResult, 
 		isDir := f.FileInfo().IsDir()
 		var size int64
 		var compressedSize int64
+		var modifiedAt time.Time
 		if hasChildren {
 			childName = before
 			isDir = true
 		} else {
 			size = int64(f.UncompressedSize64)
 			compressedSize = int64(f.CompressedSize64)
+			modifiedAt = archiveEntryTime(f.Modified)
 		}
 
 		if _, exists := seen[childName]; exists {
@@ -176,6 +190,7 @@ func listArchiveVFS(params ListArchiveParams, fsys vfs.VFS) (ListArchiveResult, 
 			FullPath:       dirPath,
 			DeviceSerial:   params.Serial,
 			FileType:       fileType,
+			ModifiedAt:     modifiedAt,
 		})
 	}
 

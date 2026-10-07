@@ -17,7 +17,7 @@ import (
 // @Produce json
 // @Param limit query int false "Maximum number of files to return (default 20, max 200)"
 // @Param serial query []string false "Filter by device serial(s)"
-// @Success 200 {array} FileNodeWithTimeJSON
+// @Success 200 {array} FileNodeJSON
 // @Failure 500 {object} serverutil.Response "Internal Server Error"
 // @Security BearerAuth
 // @Router /files/recent [get]

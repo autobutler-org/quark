@@ -1,10 +1,13 @@
 package fileutil
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -89,8 +92,8 @@ func TestVFSListingsCarryTheDevice(t *testing.T) {
 	cases := map[string][]FileNode{
 		"ListFiles":           listed.Files,
 		"SearchFiles":         searched.Files,
-		"ListRecent":          nodesOf(recent.Files),
-		"ListByType":          nodesOf(byType.Files),
+		"ListRecent":          recent.Files,
+		"ListByType":          byType.Files,
 		"indexed SearchFiles": indexed.Files,
 	}
 	for name, files := range cases {
@@ -107,14 +110,6 @@ func TestVFSListingsCarryTheDevice(t *testing.T) {
 			t.Errorf("%s: expected file type %q, got %q", name, storageutil.FileTypeImage, f.FileType)
 		}
 	}
-}
-
-func nodesOf(files []FileNodeWithTime) []FileNode {
-	nodes := make([]FileNode, len(files))
-	for i, f := range files {
-		nodes[i] = f.FileNode
-	}
-	return nodes
 }
 
 // makeManagedDevice creates a ManagedDevice backed by a real temp directory,
@@ -375,6 +370,148 @@ func TestSearchResultsCarrySizeAndPath(t *testing.T) {
 		}
 		if got.FullPath != want.FullPath {
 			t.Errorf("%s: full path = %q, want %q as listed", name, got.FullPath, want.FullPath)
+		}
+	}
+}
+
+// TestListingsCarryModifiedAt is the regression for #1565: only the recent and
+// by-type listings reported when a file was last modified, so the file browser
+// had nothing to put in a Modified column.
+func TestListingsCarryModifiedAt(t *testing.T) {
+	mountPoint := t.TempDir()
+	filesDir := filepath.Join(mountPoint, "quark", "data", "files")
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	notes := filepath.Join(filesDir, "notes.txt")
+	if err := os.WriteFile(notes, []byte("notes"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	mtime := time.Date(2021, time.March, 4, 5, 6, 7, 0, time.UTC)
+	if err := os.Chtimes(notes, mtime, mtime); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: "USB-1565"})
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, vfs.NewStorageServiceVFS(svc, filesNamespace)); err != nil {
+		t.Fatal(err)
+	}
+	devices, err := svc.GetManagedDevices()
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := storageutil.NewFileIndex()
+	index.Build(devices)
+	ctx := context.Background()
+	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		t.Fatal(err)
+	}
+	access := system.Access
+
+	cases := map[string]func() ([]FileNode, error){
+		"ListFiles through the VFS": func() ([]FileNode, error) {
+			r, err := ListFiles(ListFilesParams{Ctx: ctx, Registry: registry, Storage: svc, Access: access})
+			return r.Files, err
+		},
+		"ListFiles on the devices": func() ([]FileNode, error) {
+			r, err := ListFiles(ListFilesParams{Ctx: ctx, Storage: svc, Access: access})
+			return r.Files, err
+		},
+		"SearchFiles from the index": func() ([]FileNode, error) {
+			r, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Storage: svc, Access: access, Query: "notes"})
+			return r.Files, err
+		},
+		"SearchFiles through the VFS": func() ([]FileNode, error) {
+			r, err := SearchFiles(SearchFilesParams{Ctx: ctx, Registry: registry, Storage: svc, Access: access, Query: "notes"})
+			return r.Files, err
+		},
+		"SearchFiles on the devices": func() ([]FileNode, error) {
+			r, err := SearchFiles(SearchFilesParams{Ctx: ctx, Storage: svc, Access: access, Query: "notes"})
+			return r.Files, err
+		},
+	}
+	for name, list := range cases {
+		files, err := list()
+		if err != nil || len(files) != 1 {
+			t.Errorf("%s: expected 1 file, got %+v, %v", name, files, err)
+			continue
+		}
+		if !files[0].ModifiedAt.Equal(mtime) {
+			t.Errorf("%s: modified at %v, want %v", name, files[0].ModifiedAt, mtime)
+		}
+	}
+}
+
+// TestArchiveListingsCarryModifiedAt covers what an archive can and cannot
+// say: an entry's own time is reported, while an entry written without one and
+// a folder the archive only implies are left without (#1565).
+func TestArchiveListingsCarryModifiedAt(t *testing.T) {
+	mtime := time.Date(2021, time.March, 4, 5, 6, 8, 0, time.UTC)
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, header := range []zip.FileHeader{
+		{Name: "dated.txt", Modified: mtime},
+		{Name: "undated.txt"},
+		{Name: "implied/inner.txt", Modified: mtime},
+	} {
+		if _, err := zw.CreateHeader(&header); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	const serial = "USB-1565"
+	mountPoint := t.TempDir()
+	filesDir := filepath.Join(mountPoint, "quark", "data", "files")
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filesDir, "bundle.zip"), buf.Bytes(), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	mem := vfs.NewMemVFS(filesNamespace)
+	if err := mem.Write(ctx, "bundle.zip", bytes.NewReader(buf.Bytes()), vfs.WriteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, mem); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := map[string]ListArchiveParams{
+		"through the VFS": {Ctx: ctx, Registry: registry, FilePath: "bundle.zip"},
+		"on the device": {
+			Storage:  storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: serial}),
+			FilePath: "bundle.zip",
+			Serial:   serial,
+		},
+	}
+	for name, params := range cases {
+		listed, err := ListArchive(params)
+		if err != nil {
+			t.Errorf("%s: ListArchive failed: %v", name, err)
+			continue
+		}
+		got := map[string]time.Time{}
+		for _, e := range listed.Entries {
+			got[e.Name] = e.ModifiedAt
+		}
+		if len(got) != 3 {
+			t.Errorf("%s: expected 3 entries, got %+v", name, listed.Entries)
+			continue
+		}
+		if !got["dated.txt"].Equal(mtime) {
+			t.Errorf("%s: dated.txt modified at %v, want %v", name, got["dated.txt"], mtime)
+		}
+		for _, unknown := range []string{"undated.txt", "implied"} {
+			if !got[unknown].IsZero() {
+				t.Errorf("%s: %s modified at %v, want none", name, unknown, got[unknown])
+			}
 		}
 	}
 }

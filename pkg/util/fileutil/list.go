@@ -109,19 +109,25 @@ func listFilesVFS(ctx context.Context, registry vfs.Registry, rootDir string, se
 	}
 	result := make([]FileNode, len(infos))
 	for i, fi := range infos {
-		result[i] = FileNode{
-			Name:         fi.Name,
-			Size:         fi.Size,
-			IsDir:        fi.IsDir,
-			DeviceName:   fi.DeviceName,
-			DevicePath:   fi.DevicePath,
-			DirPath:      fi.Path,
-			FullPath:     fi.Path,
-			DeviceSerial: fi.DeviceSerial,
-			FileType:     string(storageutil.DetermineFileTypeFromPath(fi.Path)),
-		}
+		result[i] = vfsFileNode(fi)
 	}
 	return result, nil
+}
+
+// vfsFileNode is a VFS entry as every listing reports it.
+func vfsFileNode(fi vfs.FileInfo) FileNode {
+	return FileNode{
+		Name:         fi.Name,
+		Size:         fi.Size,
+		IsDir:        fi.IsDir,
+		DeviceName:   fi.DeviceName,
+		DevicePath:   fi.DevicePath,
+		DirPath:      fi.Path,
+		FullPath:     fi.Path,
+		DeviceSerial: fi.DeviceSerial,
+		FileType:     string(storageutil.DetermineFileTypeFromPath(fi.Path)),
+		ModifiedAt:   fi.ModTime,
+	}
 }
 
 // listFilesOnDevices lists files across the given devices (serial-scoped fallback).
@@ -174,6 +180,7 @@ func listFilesOnDevices(rootDir string, devices []storageutil.ManagedDevice) ([]
 			FullPath:     file.FullPath,
 			DeviceSerial: file.DeviceSerial,
 			FileType:     string(storageutil.DetermineFileTypeFromPath(file.FullPath)),
+			ModifiedAt:   file.ModTime(),
 		}
 	}
 	return result, nil
@@ -214,12 +221,12 @@ type ListRecentParams struct {
 
 // ListRecentResult is the newest-first page of files.
 type ListRecentResult struct {
-	Files []FileNodeWithTime
+	Files []FileNode
 }
 
 // ListRecent returns the most recently modified files, newest first.
 func ListRecent(params ListRecentParams) (ListRecentResult, error) {
-	var allFiles []FileNodeWithTime
+	var allFiles []FileNode
 
 	// VFS path: use recursive list when registry is available.
 	if fsys := FilesVFS(params.Registry); fsys != nil {
@@ -231,20 +238,7 @@ func ListRecent(params ListRecentParams) (ListRecentResult, error) {
 			if fi.IsDir {
 				continue
 			}
-			allFiles = append(allFiles, FileNodeWithTime{
-				FileNode: FileNode{
-					Name:         fi.Name,
-					Size:         fi.Size,
-					IsDir:        false,
-					DeviceName:   fi.DeviceName,
-					DevicePath:   fi.DevicePath,
-					DirPath:      fi.Path,
-					FullPath:     fi.Path,
-					DeviceSerial: fi.DeviceSerial,
-					FileType:     string(storageutil.DetermineFileTypeFromPath(fi.Path)),
-				},
-				ModifiedAt: fi.ModTime,
-			})
+			allFiles = append(allFiles, vfsFileNode(fi))
 		}
 		return ListRecentResult{Files: readableNewestFirst(params.Access, allFiles, params.Limit)}, nil
 	}
@@ -269,18 +263,16 @@ func ListRecent(params ListRecentParams) (ListRecentResult, error) {
 				if info.IsDir() {
 					return nil // only return files, not directories
 				}
-				allFiles = append(allFiles, FileNodeWithTime{
-					FileNode: FileNode{
-						Name:         info.Name(),
-						Size:         info.FileInfo.Size(),
-						IsDir:        false,
-						DeviceName:   info.DeviceName,
-						DevicePath:   info.DevicePath,
-						DirPath:      f.RelPath,
-						FullPath:     info.FullPath,
-						DeviceSerial: deviceSerial,
-					},
-					ModifiedAt: info.ModTime(),
+				allFiles = append(allFiles, FileNode{
+					Name:         info.Name(),
+					Size:         info.FileInfo.Size(),
+					IsDir:        false,
+					DeviceName:   info.DeviceName,
+					DevicePath:   info.DevicePath,
+					DirPath:      f.RelPath,
+					FullPath:     info.FullPath,
+					DeviceSerial: deviceSerial,
+					ModifiedAt:   info.ModTime(),
 				})
 				return nil
 			},
@@ -297,8 +289,8 @@ func ListRecent(params ListRecentParams) (ListRecentResult, error) {
 // by modification time descending, and truncates to limit, in that order so a
 // page of recent files stays full (#1907). A limit of zero or less leaves the
 // listing whole.
-func readableNewestFirst(access accessutil.Access, files []FileNodeWithTime, limit int) []FileNodeWithTime {
-	files = slices.DeleteFunc(files, func(f FileNodeWithTime) bool {
+func readableNewestFirst(access accessutil.Access, files []FileNode, limit int) []FileNode {
+	files = slices.DeleteFunc(files, func(f FileNode) bool {
 		return !access.Check(f.DeviceSerial, f.DirPath, accessutil.Read).Readable
 	})
 	sort.Slice(files, func(i, j int) bool {
@@ -330,7 +322,7 @@ type ListByTypeParams struct {
 
 // ListByTypeResult is every file of the requested type, newest first.
 type ListByTypeResult struct {
-	Files []FileNodeWithTime
+	Files []FileNode
 }
 
 // ListByType returns every file whose type matches, sorted newest-first. With a
@@ -353,16 +345,16 @@ func ListByType(params ListByTypeParams) (ListByTypeResult, error) {
 	}
 	// readableNewestFirst filters and sorts in place, so it gets a copy of
 	// what the cache holds.
-	files = append(make([]FileNodeWithTime, 0, len(files)), files...)
+	files = append(make([]FileNode, 0, len(files)), files...)
 	return ListByTypeResult{Files: readableNewestFirst(params.Access, files, 0)}, nil
 }
 
 // walkByType lists every file of the requested type on selectedDevices,
 // unsorted and unfiltered by access.
-func walkByType(params ListByTypeParams, selectedDevices []storageutil.ManagedDevice) ([]FileNodeWithTime, error) {
+func walkByType(params ListByTypeParams, selectedDevices []storageutil.ManagedDevice) ([]FileNode, error) {
 	// Use make() instead of var to ensure JSON serialization produces []
 	// instead of null when there are no files (nil slice encodes as null).
-	allFiles := make([]FileNodeWithTime, 0)
+	allFiles := make([]FileNode, 0)
 
 	// VFS path: recursive list + type filter.
 	if fsys := FilesVFS(params.Registry); fsys != nil {
@@ -377,20 +369,7 @@ func walkByType(params ListByTypeParams, selectedDevices []storageutil.ManagedDe
 			if storageutil.DetermineFileTypeFromPath(fi.Path) != params.FileType {
 				continue
 			}
-			allFiles = append(allFiles, FileNodeWithTime{
-				FileNode: FileNode{
-					Name:         fi.Name,
-					Size:         fi.Size,
-					IsDir:        false,
-					DeviceName:   fi.DeviceName,
-					DevicePath:   fi.DevicePath,
-					DirPath:      fi.Path,
-					FullPath:     fi.Path,
-					DeviceSerial: fi.DeviceSerial,
-					FileType:     string(params.FileType),
-				},
-				ModifiedAt: fi.ModTime,
-			})
+			allFiles = append(allFiles, vfsFileNode(fi))
 		}
 		return allFiles, nil
 	}
@@ -411,19 +390,17 @@ func walkByType(params ListByTypeParams, selectedDevices []storageutil.ManagedDe
 				if storageutil.DetermineFileTypeFromPath(info.FullPath) != params.FileType {
 					return nil
 				}
-				allFiles = append(allFiles, FileNodeWithTime{
-					FileNode: FileNode{
-						Name:         info.Name(),
-						Size:         info.FileInfo.Size(),
-						IsDir:        false,
-						DeviceName:   info.DeviceName,
-						DevicePath:   info.DevicePath,
-						DirPath:      f.RelPath,
-						FullPath:     info.FullPath,
-						DeviceSerial: deviceSerial,
-						FileType:     string(params.FileType),
-					},
-					ModifiedAt: info.ModTime(),
+				allFiles = append(allFiles, FileNode{
+					Name:         info.Name(),
+					Size:         info.FileInfo.Size(),
+					IsDir:        false,
+					DeviceName:   info.DeviceName,
+					DevicePath:   info.DevicePath,
+					DirPath:      f.RelPath,
+					FullPath:     info.FullPath,
+					DeviceSerial: deviceSerial,
+					FileType:     string(params.FileType),
+					ModifiedAt:   info.ModTime(),
 				})
 				return nil
 			},
@@ -464,7 +441,7 @@ type SearchFilesResult struct {
 // appliance costs a bounded amount of work and response (#2758).
 const MaxSearchResults = 500
 
-// statFile reads a match's size; a variable so a test can prove stat never
+// statFile reads a match's size and modification time; a variable so a test can prove stat never
 // runs on an unreadable match.
 var statFile = os.Stat
 
@@ -522,8 +499,8 @@ func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 		if !readable(params.Access, f.DeviceSerial, f.RelPath) {
 			continue
 		}
-		// The index holds no size, which would go stale on every write, so
-		// stat at search time. A file deleted since it was indexed is skipped.
+		// The index holds no size or modification time, which would go stale on
+		// every write, so stat at search time. A file deleted since it was indexed is skipped.
 		info, err := statFile(filepath.Join(f.FilesDir, f.RelPath))
 		if err != nil {
 			continue
@@ -543,6 +520,7 @@ func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 			DevicePath:   device.DataDir,
 			DeviceSerial: f.DeviceSerial,
 			FileType:     string(storageutil.DetermineFileTypeFromPath(f.RelPath)),
+			ModifiedAt:   info.ModTime(),
 		})
 	}
 	return SearchFilesResult{Files: allFiles}, nil
@@ -567,17 +545,7 @@ func searchFilesVFS(params SearchFilesParams) (SearchFilesResult, error) {
 			!readable(params.Access, fi.DeviceSerial, fi.Path) {
 			continue
 		}
-		result = append(result, FileNode{
-			Name:         fi.Name,
-			Size:         fi.Size,
-			DirPath:      fi.Path,
-			FullPath:     fi.Path,
-			FileType:     string(storageutil.DetermineFileTypeFromPath(fi.Path)),
-			IsDir:        false,
-			DeviceName:   fi.DeviceName,
-			DevicePath:   fi.DevicePath,
-			DeviceSerial: fi.DeviceSerial,
-		})
+		result = append(result, vfsFileNode(fi))
 		if len(result) == MaxSearchResults {
 			break
 		}
