@@ -11,7 +11,8 @@ import '../../support/tap_target_guidelines.dart';
 /// The Calendar body's error states: a failed load after the first one keeps
 /// the view on show under a banner with its own Try again (#2540). Also the
 /// week start it hands the month grid (#2539) and the empty month and day
-/// (#2538), and the swipe that steps Day, Week and Month (#2885).
+/// (#2538), the swipe that steps Day, Week and Month (#2885), and the hours
+/// kept in view across a step (#2887).
 void main() {
   final today = CalendarDates.dateOnly(DateTime.now());
 
@@ -26,7 +27,9 @@ void main() {
     List<CalendarEventItem> occurrences = const [],
     VoidCallback? onAddEvent,
     List<String>? log,
+    DateTime? from,
   }) async {
+    final start = from ?? today;
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -37,10 +40,10 @@ void main() {
         home: Scaffold(
           body: CalendarBody(
             view: view,
-            anchor: today,
+            anchor: start,
             days: view == CalendarView.day
-                ? [today]
-                : [for (var i = 0; i < 7; i++) CalendarDates.addDays(today, i)],
+                ? [start]
+                : [for (var i = 0; i < 7; i++) CalendarDates.addDays(start, i)],
             today: today,
             now: DateTime.now(),
             occurrences: occurrences,
@@ -298,5 +301,44 @@ void main() {
       await tester.pumpAndSettle();
       expect(log, ['next']);
     });
+  }
+
+  // #2887: stepping Day or Week keeps the hours on show. A new span used to be
+  // a new timeline, which scrolled back to the morning.
+  for (final size in const [narrowViewport, wideViewport]) {
+    for (final view in [CalendarView.day, CalendarView.week]) {
+      testWidgets('${view.slug}: a step keeps the hours on show at $size', (
+        tester,
+      ) async {
+        Future<void> pumpFrom(DateTime from) => pumpBody(
+          tester,
+          size,
+          view: view,
+          isInitialLoad: false,
+          from: from,
+        );
+        final hours = find.descendant(
+          of: find.byType(CalendarTimeGrid),
+          matching: find.byType(Scrollable),
+        );
+        double offset() => tester.state<ScrollableState>(hours).position.pixels;
+
+        await pumpFrom(today);
+        // From the top of the hours, clear of the empty day's notice.
+        await tester.dragFrom(
+          tester.getTopLeft(hours) + const Offset(100, 20),
+          const Offset(0, 300),
+        );
+        await tester.pumpAndSettle();
+        final early = offset();
+        expect(early, lessThan(300));
+
+        await pumpFrom(
+          CalendarDates.addDays(today, view == CalendarView.day ? 1 : 7),
+        );
+        await tester.pumpAndSettle();
+        expect(offset(), early);
+      });
+    }
   }
 }

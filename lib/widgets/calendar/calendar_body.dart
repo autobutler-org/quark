@@ -137,11 +137,9 @@ class CalendarBody extends StatelessWidget {
         onEventTap: onEventTap,
         onAddEvent: onAddEvent,
       ),
+      // One timeline across steps, so a new span keeps the hours on show
+      // rather than scrolling back to the morning (#2887).
       CalendarView.week || CalendarView.day => CalendarTimeGrid(
-        // A new span is a new timeline, opening at the morning again.
-        key: ValueKey(
-          'time_grid_${CalendarDates.key(days.first)}_${days.length}',
-        ),
         days: days,
         today: today,
         now: now,
