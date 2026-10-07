@@ -2,6 +2,7 @@ import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark/models/file_list_column.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_views_menu.dart';
 
@@ -40,6 +41,8 @@ void main() {
                   devices: [_device('sda'), _device('sdb')],
                   activeDevicePaths: const {'/dev/sda'},
                   onDeviceToggled: (_) {},
+                  columns: const {FileListColumn.modified},
+                  onColumnToggled: (_, _) {},
                 ),
               ),
             ),
@@ -65,6 +68,57 @@ void main() {
       handle.dispose();
 
       await expectTapTargetGuidelines(tester);
+    });
+
+    // #1566: the compact layout's column picker.
+    testWidgets('a Columns section checks and toggles the columns ($label)', (
+      tester,
+    ) async {
+      setViewport(tester, size);
+      final toggles = <(FileListColumn, bool)>[];
+      Future<void> pump({required bool enabled}) => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: FileTopBarViewsMenu(
+                isGridView: false,
+                isUnifiedView: true,
+                onToggleView: () {},
+                onToggleUnifiedView: () {},
+                columns: const {FileListColumn.modified, FileListColumn.size},
+                onColumnToggled: enabled
+                    ? (column, visible) => toggles.add((column, visible))
+                    : null,
+              ),
+            ),
+          ),
+        ),
+      );
+      Finder box(FileListColumn column) =>
+          find.byKey(ValueKey('file_top_bar_views_column_${column.name}'));
+
+      await pump(enabled: true);
+      expect(tester.takeException(), isNull);
+      expect(find.text('COLUMNS'), findsOneWidget);
+      for (final column in FileListColumn.values) {
+        expect(
+          tester.widget<CheckboxListTile>(box(column)).value,
+          column == FileListColumn.modified || column == FileListColumn.size,
+          reason: column.name,
+        );
+      }
+
+      await tester.tap(box(FileListColumn.device));
+      await tester.tap(box(FileListColumn.modified));
+      expect(toggles, [
+        (FileListColumn.device, true),
+        (FileListColumn.modified, false),
+      ]);
+
+      // Nothing to call: the grid, which has no columns to choose.
+      await pump(enabled: false);
+      await tester.tap(box(FileListColumn.kind));
+      expect(toggles, hasLength(2));
     });
   }
 }

@@ -842,3 +842,41 @@ group the user is in, publishes `access_changed`.
 
 **Notes:** Docs, sheets and text have their own `/docs`, `/sheets` and `/edit` URLs, and `/view/<path>` to one of
 them goes there. Files inside an archive still open over the browser and have no URL of their own (#2328).
+
+---
+
+### JN-FB-044: Choose the columns the file list shows, and sort by them
+
+**Preconditions:** User is at `/files` in list view (JN-FB-004), in a folder holding files and folders.
+
+**Steps:**
+
+1. Open the column picker: the **Columns** button beside the list/grid toggle on a wide screen, or the
+   **Columns** section of the **Views** menu on a phone.
+2. Check and uncheck **Kind**, **Modified**, **Device** and **Size**.
+3. Tap a column's header, then tap it again.
+4. Reload the page, or close and reopen the app.
+
+**Expected result:**
+
+- **Name** always shows. A fresh install also shows **Modified** and **Size**; **Kind** and **Device** start
+  hidden.
+- Each checked column appears at once as a header and a cell in every row, in the order Kind, Modified, Device,
+  Size, and each unchecked one disappears. The picker stays open, so several can change in one visit.
+- **Kind** names what a file is — Image, Video, Spreadsheet, Document, Folder — and **Modified** shows the date
+  it last changed, such as `Oct 6, 2026`, in the viewer's time zone.
+- A file the Quark sent no modification time for (some entries inside an archive) shows `--`, the same
+  placeholder a folder's size shows.
+- Tapping a header sorts by that column, and tapping it again reverses the order. Folders stay above files.
+  Files that tie — the same kind, the same device — are ordered by name. A file with no modification time sorts
+  as the oldest.
+- The chosen columns are still the chosen columns after the reload or restart.
+
+**Notes:**
+
+- The choice is kept on the device, not on the Quark: another browser or phone starts from the default.
+- The grid has no columns, so the picker is disabled there. The grid's sort row still offers Name, Kind,
+  Modified, Size and Device. Per device (JN-FB-005) the listing is always a list, so the picker stays live.
+- The trash and the folder picker do not offer the choice; they show Device and Size.
+- A 360-pixel-wide phone has room for about two columns beside Name. More than that still fit without
+  overflowing, but each one is cut short.

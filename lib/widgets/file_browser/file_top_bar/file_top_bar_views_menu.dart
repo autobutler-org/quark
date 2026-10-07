@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/models/file_list_column.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/view_grouping_copy.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/top_bar_menu_radio_item.dart';
@@ -6,14 +7,18 @@ import 'package:quark/widgets/file_browser/file_top_bar/top_bar_menu_section_hea
 import 'package:quark_icons/quark_icons.dart';
 
 /// What the compact layout's labeled Views menu holds: everything the wide
-/// layout spreads across the path row — device filter, layout and grouping.
+/// layout spreads across the path row — device filter, layout, list columns
+/// and grouping.
 /// The menu itself, and the chip that opens it, belong to the bar's
 /// `QuarkAppBarBottom`.
 ///
 /// Every row is at least 48dp tall: no compact density (#2605).
 ///
 /// Probe keys: `file_top_bar_views_list`, `file_top_bar_views_grid` and
-/// `file_top_bar_views_grouping`.
+/// `file_top_bar_views_grouping`, plus `file_top_bar_views_column_<name>` for
+/// each column's checkbox — `file_top_bar_views_column_kind`,
+/// `file_top_bar_views_column_modified`, `file_top_bar_views_column_device`
+/// and `file_top_bar_views_column_size`.
 class FileTopBarViewsMenu extends StatelessWidget {
   const FileTopBarViewsMenu({
     required this.isGridView,
@@ -23,6 +28,8 @@ class FileTopBarViewsMenu extends StatelessWidget {
     this.devices,
     this.activeDevicePaths,
     this.onDeviceToggled,
+    this.columns = const {},
+    this.onColumnToggled,
     super.key,
   });
 
@@ -34,10 +41,17 @@ class FileTopBarViewsMenu extends StatelessWidget {
   final Set<String>? activeDevicePaths;
   final ValueChanged<String>? onDeviceToggled;
 
+  /// The list columns currently shown.
+  final Set<FileListColumn> columns;
+
+  /// Shows or hides a list column. Null disables the checkboxes.
+  final FileListColumnToggle? onColumnToggled;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasDeviceFilter = devices != null && devices!.length > 1;
+    final onColumnToggled = this.onColumnToggled;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -85,6 +99,21 @@ class FileTopBarViewsMenu extends StatelessWidget {
             if (!isGridView) onToggleView();
           },
         ),
+        const Divider(height: 1, indent: 16, endIndent: 16),
+
+        // ── Columns section ──
+        const TopBarMenuSectionHeader(title: 'Columns'),
+        for (final column in FileListColumn.values)
+          CheckboxListTile(
+            key: ValueKey('file_top_bar_views_column_${column.name}'),
+            value: columns.contains(column),
+            dense: true,
+            title: Text(column.label, style: const TextStyle(fontSize: 14)),
+            controlAffinity: ListTileControlAffinity.leading,
+            onChanged: onColumnToggled == null
+                ? null
+                : (visible) => onColumnToggled(column, visible ?? false),
+          ),
         const Divider(height: 1, indent: 16, endIndent: 16),
 
         // ── Device grouping section ──

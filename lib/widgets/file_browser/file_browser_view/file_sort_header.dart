@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:quark/models/file_list_column.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_sort_header_cell.dart';
 
-/// Column headers above the list view. The flex values match the row layout in
-/// `FileBrowserListTile` so the labels sit over their columns.
+/// Column headers above the list view: Name, then one per entry of [columns].
+/// `FileBrowserListTile` lays its cells out from the same list and the same
+/// [FileListColumn] flexes, so the labels sit over their columns.
+///
+/// Probe keys: those of [FileSortHeaderCell], one per column shown.
 class FileSortHeader extends StatelessWidget {
   const FileSortHeader({
     required this.sortColumn,
     required this.sortDirection,
     required this.onToggleSort,
     required this.showFileSizeAndMenu,
+    required this.columns,
     super.key,
   });
 
@@ -17,6 +22,9 @@ class FileSortHeader extends StatelessWidget {
   final SortDirection sortDirection;
   final ValueChanged<SortColumn> onToggleSort;
   final bool showFileSizeAndMenu;
+
+  /// The columns after Name, in the order they are shown.
+  final List<FileListColumn> columns;
 
   @override
   Widget build(BuildContext context) {
@@ -35,24 +43,16 @@ class FileSortHeader extends StatelessWidget {
             sortColumn: sortColumn,
             sortDirection: sortDirection,
             onToggleSort: onToggleSort,
-            flex: 5,
+            flex: FileListColumn.nameFlex,
           ),
-          FileSortHeaderCell(
-            label: 'Device',
-            column: SortColumn.device,
-            sortColumn: sortColumn,
-            sortDirection: sortDirection,
-            onToggleSort: onToggleSort,
-            flex: 2,
-          ),
-          if (showFileSizeAndMenu)
+          for (final column in columns)
             FileSortHeaderCell(
-              label: 'Size',
-              column: SortColumn.size,
+              label: column.label,
+              column: column.sortColumn,
               sortColumn: sortColumn,
               sortDirection: sortDirection,
               onToggleSort: onToggleSort,
-              flex: 2,
+              flex: FileListColumn.flex,
             ),
           // Trailing menu placeholder
           if (showFileSizeAndMenu) const SizedBox(width: 48),

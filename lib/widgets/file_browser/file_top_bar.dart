@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:quark/models/file_list_column.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_nav_buttons.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_path_row.dart';
@@ -51,6 +52,8 @@ class FileTopBar extends StatefulWidget implements PreferredSizeWidget {
     this.devices,
     this.activeDevicePaths,
     this.onDeviceToggled,
+    this.columns = const {},
+    this.onColumnToggled,
     super.key,
   });
 
@@ -116,6 +119,12 @@ class FileTopBar extends StatefulWidget implements PreferredSizeWidget {
   final List<StorageDevice>? devices;
   final Set<String>? activeDevicePaths;
   final ValueChanged<String>? onDeviceToggled;
+
+  /// The list columns currently shown, for the column picker.
+  final Set<FileListColumn> columns;
+
+  /// Shows or hides a list column. Null leaves the picker disabled.
+  final FileListColumnToggle? onColumnToggled;
 
   /// One bar row, plus the path row outside search.
   @override
@@ -260,6 +269,8 @@ class _FileTopBarState extends State<FileTopBar> {
               devices: widget.devices,
               activeDevicePaths: widget.activeDevicePaths,
               onDeviceToggled: widget.onDeviceToggled,
+              columns: widget.columns,
+              onColumnToggled: widget.onColumnToggled,
             ),
     );
   }

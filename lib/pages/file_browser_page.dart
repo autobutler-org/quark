@@ -264,6 +264,14 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     _cachedFiles = FileBrowserCache.instance.get(normalized);
   }
 
+  /// The column picker changed the list's columns: the bar and the listing
+  /// both read them.
+  void _onFileListColumnsChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   /// The admin flag is not persisted — it arrives from `/auth/status` after
   /// the page is already built — so a reload can land an admin in their own
   /// home before the answer comes. Move them to the root they should have
@@ -311,6 +319,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     _fileBrowserScrollController.addListener(_onScroll);
     AppSettings.instance.isAdmin.addListener(_onAdminFlagChanged);
     AppSettings.instance.activeHostNotifier.addListener(_onActiveHostChanged);
+    AppSettings.instance.fileListColumns.addListener(_onFileListColumnsChanged);
     EventsService.instance.start();
     // If the deep-link URL pointed at a file, open its editor after the first
     // frame so the folder content is loaded beneath it.
@@ -589,6 +598,9 @@ class _FileBrowserPageState extends State<FileBrowserPage>
     AppSettings.instance.isAdmin.removeListener(_onAdminFlagChanged);
     AppSettings.instance.activeHostNotifier.removeListener(
       _onActiveHostChanged,
+    );
+    AppSettings.instance.fileListColumns.removeListener(
+      _onFileListColumnsChanged,
     );
     _fileBrowserScrollController.dispose();
     super.dispose();
@@ -2167,6 +2179,8 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                   _reloadFiles();
                 });
               },
+              columns: AppSettings.instance.fileListColumns.value,
+              onColumnToggled: AppSettings.instance.setFileListColumnVisible,
             ),
       body: Column(
         children: [
@@ -2353,6 +2367,7 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                             onOpenDirectory: _handleOpenNode,
                             isGridView: _isGridView,
                             isUnifiedView: _isUnifiedView,
+                            columns: AppSettings.instance.fileListColumns.value,
                             isSearchMode: _isSearchMode,
                             searchQuery: _searchQuery,
                             onNavigateToFolder: _navigateToFolder,

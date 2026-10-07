@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/widgets/file_browser/file_browser_view.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_list_leading.dart';
@@ -6,7 +7,8 @@ import 'package:quark/widgets/file_browser/file_browser_view/file_menu.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_menu_button.dart';
 import 'package:quark/widgets/file_browser/file_browser_view/file_node_display.dart';
 
-/// One file or folder in the list view.
+/// One file or folder in the list view: its name, then one cell per entry of
+/// [columns], laid out with the flexes `FileSortHeader` uses.
 class FileBrowserListTile extends StatelessWidget {
   const FileBrowserListTile({
     required this.item,
@@ -18,6 +20,7 @@ class FileBrowserListTile extends StatelessWidget {
     required this.selectionMode,
     required this.onDispatchMenuAction,
     required this.onOpenDirectory,
+    required this.columns,
     this.menuActions = FileBrowserView.defaultMenuActions,
     this.isAdmin = false,
     this.subtitle,
@@ -36,6 +39,9 @@ class FileBrowserListTile extends StatelessWidget {
   /// this set and rebuilds, so it is read rather than copied.
   final Set<String> extractingPaths;
   final bool showFileSizeAndMenu;
+
+  /// The columns after the name, in the order they are shown.
+  final List<FileListColumn> columns;
   final bool inArchive;
   final bool isSearchMode;
   final bool selectionMode;
@@ -94,31 +100,18 @@ class FileBrowserListTile extends StatelessWidget {
           title: Row(
             children: [
               Expanded(
-                flex: 5,
+                flex: FileListColumn.nameFlex,
                 child: Text(
                   item.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  item.deviceName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
-              ),
-              if (showFileSizeAndMenu)
+              for (final column in columns)
                 Expanded(
-                  flex: 2,
+                  flex: FileListColumn.flex,
                   child: Text(
-                    formatFileSize(
-                      item.size,
-                      item.isDir,
-                      compressedSize: item.compressedSize,
-                    ),
+                    fileListCellText(column, item),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: colors.onSurfaceVariant),

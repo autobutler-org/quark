@@ -24,6 +24,24 @@ enum FileKind {
   generic,
 }
 
+/// The word a person would use for [kind]: what the file list's Kind column
+/// shows and sorts by (#1565).
+String fileKindLabel(FileKind kind) => switch (kind) {
+  FileKind.qdoc || FileKind.docx => 'Document',
+  FileKind.qsheet || FileKind.xlsx || FileKind.csv => 'Spreadsheet',
+  FileKind.qslide => 'Slideshow',
+  FileKind.text => 'Text',
+  FileKind.code => 'Code',
+  FileKind.image || FileKind.svg => 'Image',
+  FileKind.video => 'Video',
+  FileKind.audio => 'Audio',
+  FileKind.pdf => 'PDF',
+  FileKind.slideshow => 'Presentation',
+  FileKind.epub => 'Book',
+  FileKind.archive => 'Archive',
+  FileKind.generic => 'File',
+};
+
 /// The lowercase extension of [name], dot included, or `''` when it has none.
 String fileExtension(String name) {
   final dot = name.lastIndexOf('.');

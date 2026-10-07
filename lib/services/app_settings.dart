@@ -9,6 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/models/feature_flag.dart';
+import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/photo_sort.dart';
 import 'package:quark_widgets/quark_widgets.dart'
     show AlbumSort, QuarkThemeColor;
@@ -152,6 +153,18 @@ class AppSettings {
   /// How the Photos sidebar orders the user's albums (#2510).
   final ValueNotifier<AlbumSort> albumSort = ValueNotifier(AlbumSort.nameAsc);
 
+  /// The columns the Files list shows until the user picks otherwise.
+  static const Set<FileListColumn> defaultFileListColumns = {
+    FileListColumn.modified,
+    FileListColumn.size,
+  };
+
+  /// The columns the Files list shows beside Name (#1565, #1566). Kept on
+  /// this device, not on the Quark.
+  final ValueNotifier<Set<FileListColumn>> fileListColumns = ValueNotifier(
+    defaultFileListColumns,
+  );
+
   List<HostEntry> _hosts = [];
   int _activeIndex = -1;
 
@@ -280,6 +293,7 @@ class AppSettings {
   static const _photoSortFieldKey = 'photoSortField';
   static const _photoSortOrderKey = 'photoSortOrder';
   static const _albumSortKey = 'albumSort';
+  static const _fileListColumnsKey = 'fileListColumns';
 
   /// Holds a JSON object of host key -> username. Absent for a session that
   /// predates it.
@@ -319,6 +333,15 @@ class AppSettings {
       (s) => s.id == albumSortRaw,
       orElse: () => AlbumSort.nameAsc,
     );
+
+    // A name this build does not know means the list was written by another
+    // build; the default is safer than half of someone else's choice.
+    final columnsRaw = _prefs!.getStringList(_fileListColumnsKey);
+    final columnsByName = FileListColumn.values.asNameMap();
+    fileListColumns.value =
+        columnsRaw == null || !columnsRaw.every(columnsByName.containsKey)
+        ? defaultFileListColumns
+        : {for (final name in columnsRaw) columnsByName[name]!};
 
     final hostsJson = _prefs!.getString('hosts') ?? '[]';
     try {
@@ -765,6 +788,22 @@ class AppSettings {
     photoSortOrder.value = order;
     await _prefs?.setString(_photoSortFieldKey, field.apiValue);
     await _prefs?.setString(_photoSortOrderKey, order.apiValue);
+  }
+
+  /// Shows or hides one of the Files list's columns and persists the choice
+  /// (#1566).
+  Future<void> setFileListColumnVisible(
+    FileListColumn column,
+    bool visible,
+  ) async {
+    final columns = visible
+        ? {...fileListColumns.value, column}
+        : fileListColumns.value.difference({column});
+    fileListColumns.value = columns;
+    await _prefs?.setStringList(
+      _fileListColumnsKey,
+      columns.map((shown) => shown.name).toList(),
+    );
   }
 
   /// Sets the order of the Photos sidebar's albums and persists it (#2510).

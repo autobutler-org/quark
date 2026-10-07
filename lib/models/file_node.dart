@@ -11,6 +11,7 @@ class FileNode {
     required this.dirPath,
     this.fileType = '',
     this.compressedSize = 0,
+    this.modifiedAt,
   });
 
   final String name;
@@ -22,6 +23,10 @@ class FileNode {
   final String deviceSerial;
   final String dirPath;
   final String fileType;
+
+  /// When the node last changed, or null when the Quark did not say — some
+  /// archive entries carry no time.
+  final DateTime? modifiedAt;
 
   /// API path relative to the files root, safe to use in API calls.
   String get apiPath {
@@ -75,6 +80,10 @@ class FileNode {
       deviceSerial: parseString(json['deviceSerial'] ?? json['device_serial']),
       dirPath: parseString(json['dirPath'] ?? json['dir_path']),
       fileType: parseString(json['fileType'] ?? json['file_type']),
+      modifiedAt: switch (json['modifiedAt']) {
+        final String value => DateTime.tryParse(value),
+        _ => null,
+      },
     );
   }
 }

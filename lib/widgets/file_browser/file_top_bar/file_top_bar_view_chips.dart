@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:quark/models/file_list_column.dart';
+import 'package:quark/widgets/file_browser/file_top_bar/file_top_bar_columns_button.dart';
 import 'package:quark/widgets/file_browser/file_top_bar/view_grouping_copy.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// The wide layout's list/grid switch and device-grouping toggle.
+/// The wide layout's list/grid switch, device-grouping toggle and column
+/// picker.
 ///
 /// Probe keys: `bar_segment_list`, `bar_segment_grid` and
-/// `file_top_bar_grouping`.
+/// `file_top_bar_grouping`, plus those of [FileTopBarColumnsButton].
 class FileTopBarViewChips extends StatelessWidget {
   const FileTopBarViewChips({
     required this.isGridView,
     required this.isUnifiedView,
     required this.onToggleView,
     required this.onToggleUnifiedView,
+    this.columns = const {},
+    this.onColumnToggled,
     super.key,
   });
 
@@ -20,6 +25,12 @@ class FileTopBarViewChips extends StatelessWidget {
   final bool isUnifiedView;
   final VoidCallback onToggleView;
   final VoidCallback onToggleUnifiedView;
+
+  /// The list columns currently shown.
+  final Set<FileListColumn> columns;
+
+  /// Shows or hides a list column. Null disables the picker.
+  final FileListColumnToggle? onColumnToggled;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +65,10 @@ class FileTopBarViewChips extends StatelessWidget {
           tooltip: ViewGroupingCopy.forMode(isUnified: isUnifiedView),
           onPressed: onToggleUnifiedView,
           active: isUnifiedView,
+        ),
+        FileTopBarColumnsButton(
+          columns: columns,
+          onColumnToggled: onColumnToggled,
         ),
       ],
     );
