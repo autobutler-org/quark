@@ -110,6 +110,7 @@ class SlideEditorBody extends StatelessWidget {
       onSelectNext: c.selectNextSlide,
       imageBuilder: imageBuilder,
       onPresent: onPresent,
+      readOnly: c.isReadOnly,
     );
     final slideId = c.selectedSlideId;
     final upload = c.imageUpload;
@@ -138,6 +139,7 @@ class SlideEditorBody extends StatelessWidget {
               open: c.notesOpen,
               onToggle: c.toggleNotes,
               onChanged: c.editNotes,
+              readOnly: c.isReadOnly,
               fieldHeight:
                   (constraints.maxHeight - 2 * SlideNotesPanel.headerHeight)
                       .clamp(0, SlideNotesPanel.maxFieldHeight),

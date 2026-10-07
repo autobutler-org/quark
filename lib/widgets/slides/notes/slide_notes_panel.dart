@@ -36,6 +36,7 @@ class SlideNotesPanel extends StatefulWidget {
     required this.onToggle,
     required this.onChanged,
     this.fieldHeight = maxFieldHeight,
+    this.readOnly = false,
     super.key,
   });
 
@@ -56,6 +57,10 @@ class SlideNotesPanel extends StatefulWidget {
 
   /// How tall the field is.
   final double fieldHeight;
+
+  /// Whether the notes can be read but not typed in, for a view-only
+  /// presentation.
+  final bool readOnly;
 
   /// The header's height: one touch target.
   static const double headerHeight = kMinInteractiveDimension;
@@ -142,13 +147,16 @@ class _SlideNotesPanelState extends State<SlideNotesPanel> {
                 key: const ValueKey('slide_notes_field'),
                 controller: _text,
                 onChanged: onChanged,
+                readOnly: widget.readOnly,
                 expands: true,
                 maxLines: null,
                 keyboardType: TextInputType.multiline,
                 textAlignVertical: TextAlignVertical.top,
-                decoration: const InputDecoration(
-                  hintText: 'Notes for the speaker, shown while presenting',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  hintText: widget.readOnly
+                      ? 'No speaker notes'
+                      : 'Notes for the speaker, shown while presenting',
+                  border: const OutlineInputBorder(),
                 ),
               ),
             ),

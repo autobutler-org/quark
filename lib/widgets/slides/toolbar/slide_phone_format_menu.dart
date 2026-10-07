@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/slides/slide_share_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_choice_menu_item.dart';
 import 'package:quark/widgets/slides/toolbar/slide_color_palette.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_actions.dart';
@@ -13,7 +14,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// "Slide layout" (#1163), which open their pickers in a bottom sheet,
 /// "Find and replace" (#1176), which opens the find bar,
 /// "Properties",
-/// which opens the properties sheet, "Zoom", which the phone's bar has
+/// which opens the properties sheet, "Share" (#1170), which opens the share
+/// sheet (key `slide_format_share`), "Zoom", which the phone's bar has
 /// no room for otherwise, and "Keyboard shortcuts".
 ///
 /// Key prefixes: `slide_format_menu` on the chip, [SlideToolbarGroup.key]
@@ -33,6 +35,8 @@ class SlidePhoneFormatMenu extends StatelessWidget {
     required this.onOpenTheme,
     required this.onOpenLayout,
     required this.onFind,
+    this.onShare,
+    this.readOnly = false,
     super.key,
   });
 
@@ -44,6 +48,13 @@ class SlidePhoneFormatMenu extends StatelessWidget {
 
   /// Opens the find bar.
   final VoidCallback onFind;
+
+  /// Opens the share sheet; null leaves "Share" out.
+  final VoidCallback? onShare;
+
+  /// Whether the presentation is view only: the formatting groups, "Theme"
+  /// and "Slide layout" are left out.
+  final bool readOnly;
 
   /// What the controls do.
   final SlideToolbarActions actions;
@@ -152,7 +163,7 @@ class SlidePhoneFormatMenu extends StatelessWidget {
     };
     final groups = [
       for (final group in SlideToolbarGroup.values)
-        if (group.appliesTo(a)) group,
+        if (!readOnly && group.appliesTo(a)) group,
     ];
     return MenuAnchor(
       menuChildren: [
@@ -169,18 +180,20 @@ class SlidePhoneFormatMenu extends StatelessWidget {
           onPressed: onFind,
           child: const Text('Find and replace'),
         ),
-        MenuItemButton(
-          key: const ValueKey('slide_format_theme'),
-          leadingIcon: const Icon(QuarkIcons.slide_theme),
-          onPressed: onOpenTheme,
-          child: const Text('Theme'),
-        ),
-        MenuItemButton(
-          key: const ValueKey('slide_format_layout'),
-          leadingIcon: const Icon(QuarkIcons.slide_layout),
-          onPressed: onOpenLayout,
-          child: const Text('Slide layout'),
-        ),
+        if (!readOnly) ...[
+          MenuItemButton(
+            key: const ValueKey('slide_format_theme'),
+            leadingIcon: const Icon(QuarkIcons.slide_theme),
+            onPressed: onOpenTheme,
+            child: const Text('Theme'),
+          ),
+          MenuItemButton(
+            key: const ValueKey('slide_format_layout'),
+            leadingIcon: const Icon(QuarkIcons.slide_layout),
+            onPressed: onOpenLayout,
+            child: const Text('Slide layout'),
+          ),
+        ],
         MenuItemButton(
           key: const ValueKey('slide_format_properties'),
           leadingIcon: const Icon(QuarkIcons.properties),
@@ -195,6 +208,13 @@ class SlidePhoneFormatMenu extends StatelessWidget {
           ],
           child: const Text('Zoom'),
         ),
+        if (onShare != null)
+          MenuItemButton(
+            key: const ValueKey('slide_format_share'),
+            leadingIcon: const Icon(QuarkIcons.share_outlined),
+            onPressed: onShare,
+            child: const Text(SlideShareButton.label),
+          ),
         MenuItemButton(
           key: const ValueKey('slide_format_shortcuts'),
           leadingIcon: const Icon(QuarkIcons.keyboard_shortcuts),

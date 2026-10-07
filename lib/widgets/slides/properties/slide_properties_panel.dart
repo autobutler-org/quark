@@ -22,6 +22,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// "Format" menu. Either way it reads [controller] and each field is one
 /// undo step through it, saved when the field is submitted or left.
 ///
+/// A view-only presentation ([SlideEditorController.isReadOnly]) shows the
+/// position, size and alt text in fields that take no input, and leaves out
+/// the background, layout and theme sections.
+///
 /// Position and size are in slide units (a 16:9 slide is 1920 by 1080),
 /// rotation in degrees clockwise.
 ///
@@ -46,8 +50,10 @@ class SlidePropertiesPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     final element = controller.singleSelected;
+    final readOnly = controller.isReadOnly;
     final count = controller.selectedElementIds.length;
     final frame = element?.frame;
+    // A view-only deck shows the values in fields that do not take input.
     final rows = frame == null
         ? const <List<(String, String, double, String, ValueChanged<double>)>>[]
         : [
@@ -118,7 +124,7 @@ class SlidePropertiesPanel extends StatelessWidget {
                                   label: label,
                                   value: value,
                                   unit: unit,
-                                  onSubmitted: set,
+                                  onSubmitted: readOnly ? null : set,
                                 ),
                               ),
                           ],
@@ -132,9 +138,10 @@ class SlidePropertiesPanel extends StatelessWidget {
               child: SlideAltTextField(
                 value: element.altText,
                 onSubmitted: controller.setAltText,
+                readOnly: readOnly,
               ),
             ),
-          if (controller.selectedSlide != null)
+          if (!readOnly && controller.selectedSlide != null)
             QuarkSection(
               title: 'Slide background',
               child: SlideColorPalette(
@@ -151,15 +158,16 @@ class SlidePropertiesPanel extends StatelessWidget {
                 ),
               ),
             ),
-          if (controller.selectedSlide != null)
+          if (!readOnly && controller.selectedSlide != null)
             QuarkSection(
               title: 'Slide layout',
               child: SlideLayoutControl(controller: controller),
             ),
-          QuarkSection(
-            title: 'Theme',
-            child: SlideThemeControl(controller: controller),
-          ),
+          if (!readOnly)
+            QuarkSection(
+              title: 'Theme',
+              child: SlideThemeControl(controller: controller),
+            ),
         ],
       ),
     );

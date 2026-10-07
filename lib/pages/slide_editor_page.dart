@@ -8,6 +8,7 @@ import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/widgets/slides/find/slide_find_controller.dart';
 import 'package:quark/widgets/slides/find/slide_find_layout.dart';
 import 'package:quark/widgets/slides/export/slide_export_button.dart';
@@ -18,6 +19,8 @@ import 'package:quark/widgets/slides/shortcuts/slide_shortcuts_help.dart';
 import 'package:quark/widgets/slides/slide_editor_bar_bottom.dart';
 import 'package:quark/widgets/slides/slide_editor_body.dart';
 import 'package:quark/widgets/slides/slide_save_status.dart';
+import 'package:quark/widgets/slides/slide_share_bar_button.dart';
+import 'package:quark/widgets/slides/slide_view_only_badge.dart';
 import 'package:quark/widgets/slides/theme/slide_layout_control.dart';
 import 'package:quark/widgets/slides/theme/slide_theme_control.dart';
 import 'package:quark/widgets/slides/toolbar/slide_phone_toolbar.dart';
@@ -57,6 +60,14 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// tool row's Find and replace button and a phone's "Find and replace" in
 /// the Format menu open it too. Matches are highlighted on the canvas and
 /// Escape closes the bar.
+///
+/// Sharing and view-only (#1170): the bar's Share button (on a wide window), and "Share" in a
+/// phone's Format menu, open the Quark's share sheet for the presentation.
+/// A reader's save is refused, which turns the editor view only: the
+/// "View only" indicator replaces the save chip, nothing is autosaved, and
+/// the edit tools, the properties fields, the slide panel's add, delete and
+/// reorder, the notes field and the canvas's editing are off. Selecting
+/// slides, zoom, find (without replace), Present and Export keep working.
 ///
 /// `?` or F1 anywhere in the editor, the toolbar's keyboard button, or
 /// "Keyboard shortcuts" in a phone's Format menu opens the shortcuts dialog
@@ -156,6 +167,13 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
     if (path != null) await _controller.insertImageFromQuark(path);
   }
 
+  Future<void> _share() => showShareSheet(
+    context,
+    deviceSerial: widget.deviceSerial,
+    relPath: widget.filePath,
+    name: fileNameWithoutExtension(widget.filePath, SlidesService.extension),
+  );
+
   void _showShortcuts() => SlideShortcutsDialog.show(context);
 
   void _openSheet(String title, Widget Function() builder) =>
@@ -222,15 +240,21 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                     tooltip: 'Redo',
                     onPressed: _controller.canRedo ? _controller.redo : null,
                   ),
-                  SlideSaveStatus(
-                    state: _controller.saveState,
-                    onSave: _controller.save,
-                  ),
+                  if (_controller.isReadOnly)
+                    const SlideViewOnlyBadge()
+                  else
+                    SlideSaveStatus(
+                      state: _controller.saveState,
+                      onSave: _controller.save,
+                    ),
                   SlideExportButton(
                     isExporting: _controller.isExporting,
                     onPressed: _controller.presentation == null
                         ? null
                         : _controller.exportPptx,
+                  ),
+                  SlideShareBarButton(
+                    onPressed: _controller.presentation == null ? null : _share,
                   ),
                   QuarkBarChip(
                     key: const ValueKey('slide_editor_present'),
@@ -250,7 +274,8 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                 : SlideEditorBarBottom(
                     position:
                         'Slide ${_controller.selectedIndex + 1} of '
-                        '${_controller.slides.length}',
+                        '${_controller.slides.length}'
+                        '${_controller.isReadOnly ? SlideViewOnlyBadge.suffix : ''}',
                     zoomPercent: _controller.zoomPercent,
                     onZoomIn: _controller.canZoomIn ? _controller.zoomIn : null,
                     onZoomOut: _controller.canZoomOut
@@ -266,6 +291,7 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                       onOpenTheme: _openThemeSheet,
                       onOpenLayout: _openLayoutSheet,
                       onFind: _find.open,
+                      onShare: _controller.presentation == null ? null : _share,
                     ),
                   ),
           ),

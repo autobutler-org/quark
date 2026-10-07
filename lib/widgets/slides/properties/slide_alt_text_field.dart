@@ -11,6 +11,7 @@ class SlideAltTextField extends StatefulWidget {
   const SlideAltTextField({
     required this.value,
     required this.onSubmitted,
+    this.readOnly = false,
     super.key,
   });
 
@@ -19,6 +20,9 @@ class SlideAltTextField extends StatefulWidget {
 
   /// Saves the alt text.
   final ValueChanged<String> onSubmitted;
+
+  /// Whether the field only shows the text, for a view-only presentation.
+  final bool readOnly;
 
   @override
   State<SlideAltTextField> createState() => _SlideAltTextFieldState();
@@ -67,6 +71,7 @@ class _SlideAltTextFieldState extends State<SlideAltTextField> {
     key: const ValueKey('slide_prop_alt_text'),
     controller: _text,
     focusNode: _focus,
+    readOnly: widget.readOnly,
     minLines: 2,
     maxLines: 5,
     keyboardType: TextInputType.text,
