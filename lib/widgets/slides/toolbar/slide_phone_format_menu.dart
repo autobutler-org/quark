@@ -9,14 +9,17 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The phone slide toolbar's "Format" menu: the wide formatting row folded
 /// into a labeled chip, one submenu per [SlideToolbarGroup] that applies to
-/// the selection, holding every control the row has, then "Properties",
+/// the selection, holding every control the row has, then "Theme" and
+/// "Slide layout" (#1163), which open their pickers in a bottom sheet,
+/// "Properties",
 /// which opens the properties sheet, "Zoom", which the phone's bar has
 /// no room for otherwise, and "Keyboard shortcuts".
 ///
 /// Key prefixes: `slide_format_menu` on the chip, [SlideToolbarGroup.key]
 /// on each group's submenu, `<key>_menu` on the font, color, width, style,
 /// corner and opacity submenus; items keep the keys the wide row gives
-/// them; `slide_format_properties` on "Properties", `slide_zoom_menu` on
+/// them; `slide_format_theme` on "Theme", `slide_format_layout` on "Slide
+/// layout", `slide_format_properties` on "Properties", `slide_zoom_menu` on
 /// "Zoom" and `slide_menu_zoom_out`, `slide_menu_zoom_fit` and
 /// `slide_menu_zoom_in` on its items, `slide_format_shortcuts` on
 /// "Keyboard shortcuts".
@@ -26,8 +29,16 @@ class SlidePhoneFormatMenu extends StatelessWidget {
     required this.actions,
     required this.onOpenProperties,
     required this.onShowShortcuts,
+    required this.onOpenTheme,
+    required this.onOpenLayout,
     super.key,
   });
+
+  /// Opens the theme picker in a sheet.
+  final VoidCallback onOpenTheme;
+
+  /// Opens the selected slide's layout picker in a sheet.
+  final VoidCallback onOpenLayout;
 
   /// What the controls do.
   final SlideToolbarActions actions;
@@ -147,6 +158,18 @@ class SlidePhoneFormatMenu extends StatelessWidget {
             menuChildren: controls(group),
             child: Text(group.label),
           ),
+        MenuItemButton(
+          key: const ValueKey('slide_format_theme'),
+          leadingIcon: const Icon(QuarkIcons.slide_theme),
+          onPressed: onOpenTheme,
+          child: const Text('Theme'),
+        ),
+        MenuItemButton(
+          key: const ValueKey('slide_format_layout'),
+          leadingIcon: const Icon(QuarkIcons.slide_layout),
+          onPressed: onOpenLayout,
+          child: const Text('Slide layout'),
+        ),
         MenuItemButton(
           key: const ValueKey('slide_format_properties'),
           leadingIcon: const Icon(QuarkIcons.properties),

@@ -6,11 +6,12 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The phone slide toolbar's "Insert" menu: the wide tool row folded into a
 /// labeled chip — select, text, a "Shape" submenu of kinds, line, arrow and
-/// an "Image" submenu of sources. Choosing a drawing tool arms the canvas;
+/// an "Image" submenu of sources, and a "New slide" submenu of layouts
+/// (#1163) that adds a slide on the one picked after the selected slide. Choosing a drawing tool arms the canvas;
 /// the next tap on the slide places the element.
 ///
 /// Key prefixes: `slide_insert_menu` on the chip, `slide_insert_shape` and
-/// `slide_insert_image` on the submenus; items keep the keys the wide row
+/// `slide_insert_image` and `slide_insert_slide` on the submenus; items keep the keys the wide row
 /// gives them.
 class SlidePhoneInsertMenu extends StatelessWidget {
   /// The menu for [actions].
@@ -41,6 +42,15 @@ class SlidePhoneInsertMenu extends StatelessWidget {
           for (final c in actions.imageSources) SlideChoiceMenuItem(choice: c),
         ],
         child: const Text('Image'),
+      ),
+      SubmenuButton(
+        key: const ValueKey('slide_insert_slide'),
+        leadingIcon: const Icon(QuarkIcons.slide_layout),
+        menuChildren: [
+          for (final c in actions.newSlideLayouts)
+            SlideChoiceMenuItem(choice: c),
+        ],
+        child: const Text('New slide'),
       ),
     ],
     builder: (context, menu, _) => QuarkBarChip(

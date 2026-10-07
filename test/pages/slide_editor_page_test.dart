@@ -1085,4 +1085,126 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('themes and layouts (#1163)', () {
+    Finder key(String k) => find.byKey(ValueKey(k));
+
+    testWidgets('a deck with no theme says so, and a wide window applies '
+        'one from the panel and another from the toolbar', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpEditor(tester);
+      expect(key('slide_theme_none'), findsOneWidget);
+
+      await tester.ensureVisible(key('slide_theme_apply'));
+      await tester.tap(key('slide_theme_apply'));
+      await tester.pumpAndSettle();
+      expect(c.theme, SlideThemes.all.first);
+      expect(key('slide_theme_none'), findsNothing);
+
+      await tester.tap(key('slide_theme_button'));
+      await tester.pumpAndSettle();
+      // The panel's picker and the menu's.
+      expect(key('slide_theme_dark'), findsNWidgets(2));
+      await tester.tap(key('slide_theme_dark').last);
+      await tester.pumpAndSettle();
+      expect(c.theme, SlideThemes.dark);
+      expect(c.saveState, SlideSaveState.dirty);
+      final drawn = tester.widget<SlideCanvas>(
+        find.descendant(of: thumb('s1'), matching: find.byType(SlideCanvas)),
+      );
+      expect(drawn.theme, SlideThemes.dark);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      await tester.tap(key('slide_editor_undo'));
+      await tester.pumpAndSettle();
+      expect(c.theme, SlideThemes.all.first);
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('a wide window changes and resets the slide\'s layout, and '
+        'adds slides on a layout', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpEditor(tester);
+      // Only the menu's picker, not the properties panel's.
+      await tester.tap(key('slide_properties_toggle'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(key('slide_layout_button'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_layout_titleAndContent'));
+      await tester.pumpAndSettle();
+      expect(c.selectedLayoutId, SlideLayout.titleAndContent.id);
+      // The typed text is kept as an ordinary box beside the placeholders.
+      expect(c.selectedSlide!.findElement('t1'), isNotNull);
+      await tester.tap(key('slide_layout_reset'));
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      // A plain tap copies the layout; the chevron picks one.
+      await tester.tap(key('slide_panel_add'));
+      await tester.pumpAndSettle();
+      expect(c.selectedLayoutId, SlideLayout.titleAndContent.id);
+      await tester.tap(key('slide_panel_add_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_panel_add_sectionHeader'));
+      await tester.pumpAndSettle();
+      expect(c.selectedLayoutId, SlideLayout.sectionHeader.id);
+      expect(c.slides, hasLength(4));
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('a phone picks the theme and layout in sheets from Format, '
+        'and a new slide\'s layout from Insert', (tester) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final c = await pumpEditor(tester);
+
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_format_theme'));
+      await tester.pumpAndSettle();
+      expect(find.text('No theme'), findsOneWidget);
+      await tester.tap(key('slide_theme_warm'));
+      await tester.pumpAndSettle();
+      expect(c.theme, SlideThemes.warm);
+      // The sheet follows the pick.
+      expect(find.text('No theme'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.tapAt(const Offset(180, 20));
+      await tester.pumpAndSettle();
+
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_format_layout'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(key('slide_layout_twoContent'));
+      await tester.tap(key('slide_layout_twoContent'));
+      await tester.pumpAndSettle();
+      expect(c.selectedLayoutId, SlideLayout.twoContent.id);
+      await tester.tapAt(const Offset(180, 20));
+      await tester.pumpAndSettle();
+
+      await tester.tap(key('slide_insert_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_insert_slide'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_new_slide_title'));
+      await tester.pumpAndSettle();
+      expect(c.selectedLayoutId, SlideLayout.title.id);
+      expect(c.selectedIndex, 1);
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+    });
+
+    testLargeText('the pickers fit', (tester, size) async {
+      final c = await pumpEditor(tester);
+      c.applyTheme(SlideThemes.cool);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+    });
+  });
 }

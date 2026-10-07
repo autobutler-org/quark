@@ -16,6 +16,8 @@ import 'package:quark/widgets/slides/shortcuts/slide_shortcuts_help.dart';
 import 'package:quark/widgets/slides/slide_editor_bar_bottom.dart';
 import 'package:quark/widgets/slides/slide_editor_body.dart';
 import 'package:quark/widgets/slides/slide_save_status.dart';
+import 'package:quark/widgets/slides/theme/slide_layout_control.dart';
+import 'package:quark/widgets/slides/theme/slide_theme_control.dart';
 import 'package:quark/widgets/slides/toolbar/slide_phone_toolbar.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -42,6 +44,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// The bar's export button saves the presentation as a PowerPoint file
 /// (#1172), saving unsaved edits first; a failure is a snack bar.
+///
+/// Themes and layouts (#1163): the toolbar's Theme and Layout chips and
+/// the properties panel pick the presentation's theme and the slide's
+/// layout; on a phone, "Theme" and "Slide layout" in the Format menu open
+/// the same pickers in a bottom sheet.
 ///
 /// `?` or F1 anywhere in the editor, the toolbar's keyboard button, or
 /// "Keyboard shortcuts" in a phone's Format menu opens the shortcuts dialog
@@ -138,13 +145,27 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
 
   void _showShortcuts() => SlideShortcutsDialog.show(context);
 
-  void _openPropertiesSheet() => showQuarkSheet<void>(
-    context,
-    title: 'Properties',
-    builder: (_) => ListenableBuilder(
-      listenable: _controller,
-      builder: (_, _) => SlidePropertiesPanel(controller: _controller),
-    ),
+  void _openSheet(String title, Widget Function() builder) =>
+      showQuarkSheet<void>(
+        context,
+        title: title,
+        builder: (_) => ListenableBuilder(
+          listenable: _controller,
+          builder: (_, _) => builder(),
+        ),
+      );
+
+  void _openPropertiesSheet() => _openSheet(
+    'Properties',
+    () => SlidePropertiesPanel(controller: _controller),
+  );
+
+  void _openThemeSheet() =>
+      _openSheet('Theme', () => SlideThemeControl(controller: _controller));
+
+  void _openLayoutSheet() => _openSheet(
+    'Slide layout',
+    () => SlideLayoutControl(controller: _controller),
   );
 
   @override
@@ -229,6 +250,8 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                       onImageFromQuark: _insertImageFromQuark,
                       onOpenProperties: _openPropertiesSheet,
                       onShowShortcuts: _showShortcuts,
+                      onOpenTheme: _openThemeSheet,
+                      onOpenLayout: _openLayoutSheet,
                     ),
                   ),
           ),

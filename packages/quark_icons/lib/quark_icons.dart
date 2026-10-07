@@ -297,6 +297,15 @@ class QuarkIcons {
   /// A slide's background.
   static const IconData slide_background = Icons.wallpaper;
 
+  /// A presentation's theme: its colors and fonts.
+  static const IconData slide_theme = Icons.palette_outlined;
+
+  /// A slide's layout: where its placeholders sit.
+  static const IconData slide_layout = Icons.view_quilt_outlined;
+
+  /// Put a slide's placeholders back where its layout has them.
+  static const IconData reset_layout = Icons.restart_alt;
+
   /// The list of keyboard shortcuts.
   static const IconData keyboard_shortcuts = Icons.keyboard_outlined;
 

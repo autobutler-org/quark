@@ -36,8 +36,12 @@ class SlidePresenterView extends StatelessWidget {
     required this.notes,
     required this.elapsed,
     this.imageBuilder,
+    this.theme,
     super.key,
   });
+
+  /// The presentation's theme, which the slide is drawn in; null for none.
+  final SlideTheme? theme;
 
   /// The slide on screen, as the audience sees it.
   final Widget stage;
@@ -91,6 +95,7 @@ class SlidePresenterView extends StatelessWidget {
                         : SlideCanvas.readOnly(
                             slide: next,
                             size: size,
+                            theme: theme,
                             imageBuilder: imageBuilder,
                             style: SlideEditorCanvas.styleOf(context),
                           ),

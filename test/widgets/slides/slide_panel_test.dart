@@ -186,4 +186,50 @@ void main() {
     );
     handle.dispose();
   });
+
+  testWidgets('draws thumbnails in the theme and splits the add button '
+      '(#1163)', (tester) async {
+    tap.setViewport(tester, tap.wideViewport);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
+        home: Scaffold(
+          body: SizedBox(
+            width: SlidePanel.sideWidth,
+            height: 600,
+            child: SlidePanel(
+              slides: slides,
+              size: SlideSize.widescreen,
+              selectedSlideId: 's1',
+              axis: Axis.vertical,
+              canDelete: true,
+              theme: SlideThemes.warm,
+              layouts: SlideMaster.standard.layouts,
+              onAddWithLayout: (id) => events.add('add $id'),
+              onSelect: (_) {},
+              onAdd: () => events.add('add'),
+              onDuplicate: (_) {},
+              onDelete: (_) {},
+              onMove: (_, _) {},
+              onSelectPrevious: () {},
+              onSelectNext: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    final canvas = tester.widget<SlideCanvas>(
+      find.descendant(
+        of: find.byKey(const ValueKey('slide_thumb_s1')),
+        matching: find.byType(SlideCanvas),
+      ),
+    );
+    expect(canvas.theme, SlideThemes.warm);
+
+    await tester.tap(find.byKey(const ValueKey('slide_panel_add_menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('slide_panel_add_blank')));
+    await tester.pumpAndSettle();
+    expect(events, ['add blank']);
+  });
 }
