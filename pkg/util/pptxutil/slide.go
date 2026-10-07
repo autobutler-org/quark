@@ -50,7 +50,7 @@ var genericFonts = map[string]string{
 }
 
 // writeSlidePart writes the slide: its background, then its elements back to
-// front, which is the shape tree's order.
+// front, which is the shape tree's order, then its transition, or the deck's.
 func (s *slideWriter) writeSlidePart(slide qslideSlide) error {
 	s.out.put(xmlHeader + `<p:sld` + pmlNamespaces + `><p:cSld>`)
 	var bgImage string
@@ -72,7 +72,12 @@ func (s *slideWriter) writeSlidePart(slide qslideSlide) error {
 	for _, el := range slide.Elements {
 		s.writeElement(el)
 	}
-	s.out.put(`</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`)
+	s.out.put(`</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>`)
+	transition := slide.Transition
+	if transition == nil {
+		transition = s.transition
+	}
+	s.out.put(transitionXML(transition) + `</p:sld>`)
 	return s.out.Flush()
 }
 

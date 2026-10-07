@@ -1,11 +1,13 @@
 import '../format/json_fields.dart';
 import 'slide_background.dart';
 import 'slide_element.dart';
+import 'slide_transition_spec.dart';
 import 'unset.dart';
 import '../layout/slide_layout.dart';
 
 /// One slide: a [background], the [elements] drawn on it, the speaker
-/// [notes], and the [layoutId] of the `SlideLayout` it is built on.
+/// [notes], the [layoutId] of the `SlideLayout` it is built on, and the
+/// [transition] it comes onto the screen with when presenting.
 ///
 /// [elements] is in stacking order, first at the back. [id] is unique
 /// within the presentation and stays with the slide as it is reordered.
@@ -17,6 +19,7 @@ class Slide {
     this.elements = const [],
     this.notes = '',
     this.layoutId = SlideLayout.blankId,
+    this.transition,
     this.extra = const {},
   });
 
@@ -37,6 +40,11 @@ class Slide {
   /// kept, and the slide is treated as having no placeholder slots.
   final String layoutId;
 
+  /// The slide's own transition, played as the show arrives at it, or
+  /// `null` to follow `Presentation.defaultTransition`. Read the one that
+  /// plays with `Presentation.transitionFor`.
+  final SlideTransitionSpec? transition;
+
   /// Fields a newer writer added that this version does not read.
   final JsonMap extra;
 
@@ -50,7 +58,14 @@ class Slide {
     return index < 0 ? null : elements[index];
   }
 
-  static const _known = {'id', 'background', 'elements', 'notes', 'layout'};
+  static const _known = {
+    'id',
+    'background',
+    'elements',
+    'notes',
+    'layout',
+    'transition',
+  };
 
   /// Reads a slide from its `.qslide` object at [path].
   factory Slide.fromJson(Object? value, String path) {
@@ -67,6 +82,12 @@ class Slide {
       ]),
       notes: optionalString(json, 'notes', path) ?? '',
       layoutId: optionalString(json, 'layout', path) ?? SlideLayout.blankId,
+      transition: json['transition'] == null
+          ? null
+          : SlideTransitionSpec.fromJson(
+              json['transition'],
+              '$path.transition',
+            ),
       extra: unknownFields(json, _known),
     );
   }
@@ -79,16 +100,19 @@ class Slide {
         'elements': [for (final e in elements) e.toJson()],
         if (notes.isNotEmpty) 'notes': notes,
         if (layoutId != SlideLayout.blankId) 'layout': layoutId,
+        if (transition != null) 'transition': transition!.toJson(),
       };
 
   /// Returns a copy with the given fields replaced; pass `null` as
-  /// [background] to fall back to the theme's.
+  /// [background] to fall back to the theme's, and as [transition] to
+  /// follow the deck's.
   Slide copyWith({
     String? id,
     Object? background = unset,
     List<SlideElement>? elements,
     String? notes,
     String? layoutId,
+    Object? transition = unset,
   }) =>
       Slide(
         id: id ?? this.id,
@@ -99,6 +123,9 @@ class Slide {
             elements == null ? this.elements : List.unmodifiable(elements),
         notes: notes ?? this.notes,
         layoutId: layoutId ?? this.layoutId,
+        transition: identical(transition, unset)
+            ? this.transition
+            : transition as SlideTransitionSpec?,
         extra: extra,
       );
 
@@ -109,6 +136,7 @@ class Slide {
       other.background == background &&
       other.notes == notes &&
       other.layoutId == layoutId &&
+      other.transition == transition &&
       listEquals(other.elements, elements) &&
       jsonEquals(other.extra, extra);
 
@@ -119,6 +147,7 @@ class Slide {
         Object.hashAll(elements),
         notes,
         layoutId,
+        transition,
         jsonHash(extra),
       );
 

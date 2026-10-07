@@ -1,11 +1,13 @@
 import '../format/json_fields.dart';
 import 'slide.dart';
 import 'slide_size.dart';
+import 'slide_transition_spec.dart';
 import 'unset.dart';
 import '../theme/slide_theme.dart';
 
 /// A whole presentation: its [title], the [size] every slide shares, the
-/// [theme] it is styled with, and its [slides] in show order.
+/// [theme] it is styled with, the [defaultTransition] slides without their
+/// own play, and its [slides] in show order.
 ///
 /// Presentations are immutable; every edit produces a new one, which is
 /// what makes undo a matter of keeping the old one. Read and write them as
@@ -23,6 +25,7 @@ class Presentation {
     this.title = '',
     SlideSize? size,
     this.theme,
+    this.defaultTransition = SlideTransitionSpec.none,
     List<Slide> slides = const [],
     this.extra = const {},
   })  : size = size ?? SlideSize.widescreen,
@@ -39,6 +42,10 @@ class Presentation {
   /// `ColorScheme`. Role colors and unset text styles resolve against it.
   final SlideTheme? theme;
 
+  /// The transition a slide whose own `Slide.transition` is `null` comes
+  /// on with; [SlideTransitionSpec.none] by default.
+  final SlideTransitionSpec defaultTransition;
+
   /// The slides, in show order.
   final List<Slide> slides;
 
@@ -54,7 +61,19 @@ class Presentation {
     return index < 0 ? null : slides[index];
   }
 
-  static const _known = {'schemaVersion', 'title', 'size', 'theme', 'slides'};
+  /// The transition [slide] comes onto the screen with: its own, or the
+  /// [defaultTransition].
+  SlideTransitionSpec transitionFor(Slide slide) =>
+      slide.transition ?? defaultTransition;
+
+  static const _known = {
+    'schemaVersion',
+    'title',
+    'size',
+    'theme',
+    'transition',
+    'slides',
+  };
 
   /// Reads the presentation fields of a `.qslide` root object at [path].
   /// `QslideCodec.decode` checks `schemaVersion` before calling this.
@@ -69,6 +88,12 @@ class Presentation {
       theme: json['theme'] == null
           ? null
           : SlideTheme.fromJson(json['theme'], '$path.theme'),
+      defaultTransition: json['transition'] == null
+          ? SlideTransitionSpec.none
+          : SlideTransitionSpec.fromJson(
+              json['transition'],
+              '$path.transition',
+            ),
       slides: [
         for (var i = 0; i < slides.length; i++)
           Slide.fromJson(slides[i], '$path.slides[$i]'),
@@ -84,6 +109,8 @@ class Presentation {
         'title': title,
         'size': size.toJson(),
         if (theme != null) 'theme': theme!.toJson(),
+        if (defaultTransition != SlideTransitionSpec.none)
+          'transition': defaultTransition.toJson(),
         'slides': [for (final s in slides) s.toJson()],
       };
 
@@ -93,12 +120,14 @@ class Presentation {
     String? title,
     SlideSize? size,
     Object? theme = unset,
+    SlideTransitionSpec? defaultTransition,
     List<Slide>? slides,
   }) =>
       Presentation(
         title: title ?? this.title,
         size: size ?? this.size,
         theme: identical(theme, unset) ? this.theme : theme as SlideTheme?,
+        defaultTransition: defaultTransition ?? this.defaultTransition,
         slides: slides ?? this.slides,
         extra: extra,
       );
@@ -109,12 +138,19 @@ class Presentation {
       other.title == title &&
       other.size == size &&
       other.theme == theme &&
+      other.defaultTransition == defaultTransition &&
       listEquals(other.slides, slides) &&
       jsonEquals(other.extra, extra);
 
   @override
-  int get hashCode =>
-      Object.hash(title, size, theme, Object.hashAll(slides), jsonHash(extra));
+  int get hashCode => Object.hash(
+        title,
+        size,
+        theme,
+        defaultTransition,
+        Object.hashAll(slides),
+        jsonHash(extra),
+      );
 
   @override
   String toString() => 'Presentation($title, ${slides.length} slides)';

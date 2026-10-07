@@ -2,16 +2,22 @@ import 'package:quark_slides/quark_slides.dart';
 
 /// A presentation that uses every element type — groups nested in groups
 /// among them — and every optional field, a theme, a layout and role
-/// colors among them, so that a round trip through `.qslide` exercises the
+/// colors and transitions among them, so that a round trip through `.qslide` exercises the
 /// whole model. `test/fixtures/sample.qslide` is its golden encoding.
 Presentation samplePresentation() => Presentation(
       title: 'Sample deck',
       theme: sampleTheme(),
+      defaultTransition: const SlideTransitionSpec.fade(durationMs: 700),
       slides: [
         ...legacySamplePresentation().slides,
         Slide(
           id: 's4',
           layoutId: SlideLayout.titleAndContent.id,
+          transition: const SlideTransitionSpec(
+            kind: SlideTransitionKind.wipe,
+            direction: SlideTransitionDirection.right,
+            durationMs: 1200,
+          ),
           elements: [
             TextBox(
               id: 'e13',

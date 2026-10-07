@@ -16,6 +16,9 @@ import 'package:quark_slides/quark_slides.dart';
 /// the file. It never edits: speaker notes are read here, written in the
 /// editor (#1166).
 ///
+/// Each step plays the [transition] of the slide it arrives at, mirrored
+/// when it goes back ([movedBack]).
+///
 /// The clock counts whole seconds from when the presentation is on screen,
 /// through [elapsed], so only the clock rebuilds each second. The controls
 /// are visible for [controlsIdle] after the last [wakeControls].
@@ -62,6 +65,7 @@ class SlidePresentController extends ChangeNotifier {
   Presentation? _presentation;
   Object? _loadError;
   int _index = 0;
+  bool _movedBack = false;
   bool _presenterView = false;
   bool _controlsVisible = true;
   Timer? _clock;
@@ -91,6 +95,19 @@ class SlidePresentController extends ChangeNotifier {
   /// The slide after [currentSlide], or null at the last.
   Slide? get nextSlide =>
       _index + 1 < slides.length ? slides[_index + 1] : null;
+
+  /// The transition [currentSlide] comes on with: its own, or the deck's
+  /// default; none before the presentation has loaded.
+  SlideTransitionSpec get transition {
+    final slide = currentSlide;
+    return slide == null
+        ? SlideTransitionSpec.none
+        : _presentation!.transitionFor(slide);
+  }
+
+  /// Whether the show last stepped back, to an earlier slide, which plays
+  /// [transition] in reverse.
+  bool get movedBack => _movedBack;
 
   /// Whether [currentSlide] is the first.
   bool get isFirst => _index == 0;
@@ -148,6 +165,7 @@ class SlidePresentController extends ChangeNotifier {
     if (slides.isEmpty) return;
     final to = index.clamp(0, slides.length - 1);
     if (to == _index) return;
+    _movedBack = to < _index;
     _index = to;
     _notify();
   }

@@ -94,8 +94,43 @@ type xSlidePart struct {
 		Body  *xListStyle `xml:"bodyStyle"`
 		Other *xListStyle `xml:"otherStyle"`
 	} `xml:"txStyles"`
-	Timing     *struct{} `xml:"timing"`
-	Transition *struct{} `xml:"transition"`
+	Timing     *struct{}    `xml:"timing"`
+	Transition *xTransition `xml:"transition"`
+	Alternates []xAlternate `xml:"AlternateContent"`
+}
+
+// xTransition is a slide's <p:transition>: its speed or exact duration, and
+// the effect, of which only those a .qslide can play are read by name.
+type xTransition struct {
+	Speed string `xml:"spd,attr"`
+	// Duration is p14:dur, in milliseconds.
+	Duration string           `xml:"dur,attr"`
+	Fade     *struct{}        `xml:"fade"`
+	Push     *xTransitionSide `xml:"push"`
+	Wipe     *xTransitionSide `xml:"wipe"`
+	Zoom     *struct{}        `xml:"zoom"`
+	// Other is every other child: an effect this cannot play, or a sound
+	// (sndAc) or extension list, which are not effects.
+	Other []struct {
+		XMLName xml.Name
+	} `xml:",any"`
+}
+
+// xTransitionSide is a push's or wipe's direction: l, r, u or d.
+type xTransitionSide struct {
+	Dir string `xml:"dir,attr"`
+}
+
+// xAlternate is an mc:AlternateContent at the slide's root, where PowerPoint
+// puts a transition with an exact duration or a 2010 effect, with a plainer
+// one as its fallback.
+type xAlternate struct {
+	Choices []struct {
+		Transition *xTransition `xml:"transition"`
+	} `xml:"Choice"`
+	Fallback *struct {
+		Transition *xTransition `xml:"transition"`
+	} `xml:"Fallback"`
 }
 
 // xBackground is a slide's own background, or a reference into the theme's.

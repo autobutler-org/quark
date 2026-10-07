@@ -44,6 +44,7 @@ func writePptx(w io.Writer, src io.Reader, openImage OpenImageFunc) (ExportQslid
 		if e.scale == 0 {
 			e.setSize(header.size)
 			e.theme = header.theme()
+			e.transition = header.transition
 		}
 		if len(e.notes) == MaxSlides {
 			return fmt.Errorf("%w: the presentation holds more than %d slides", ErrTooLarge, MaxSlides)

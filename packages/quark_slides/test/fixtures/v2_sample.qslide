@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 2,
   "title": "Sample deck",
   "size": {
     "width": 1920,
@@ -46,10 +46,6 @@
         "width": 4
       }
     }
-  },
-  "transition": {
-    "kind": "fade",
-    "duration": 700
   },
   "slides": [
     {
@@ -332,12 +328,7 @@
           }
         }
       ],
-      "layout": "titleAndContent",
-      "transition": {
-        "kind": "wipe",
-        "direction": "right",
-        "duration": 1200
-      }
+      "layout": "titleAndContent"
     }
   ]
 }

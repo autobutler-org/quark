@@ -14,8 +14,9 @@ Everything is immutable and compares by value. An edit makes a new
 
 | Type             | What it holds                                                          |
 | ---------------- | ---------------------------------------------------------------------- |
-| `Presentation`   | `title`, `size` (a `SlideSize`), `theme` (a `SlideTheme` or none), `slides` |
-| `Slide`          | stable `id`, `background`, `elements` back to front, speaker `notes`, `layoutId` |
+| `Presentation`   | `title`, `size` (a `SlideSize`), `theme` (a `SlideTheme` or none), `defaultTransition`, `slides` |
+| `Slide`          | stable `id`, `background`, `elements` back to front, speaker `notes`, `layoutId`, `transition` (or none, to follow the deck) |
+| `SlideTransitionSpec` | `kind` (none, fade, push, wipe, zoom), `direction` (left, right, up, down), `durationMs` (200–2000) |
 | `SlideElement`   | sealed: `TextBox`, `ShapeElement`, `ImageElement`, `LineElement`, `GroupElement`, `UnknownElement` |
 | `ElementFrame`   | `x`, `y`, `width`, `height` in slide units, `rotation` in degrees       |
 | `TextBox`        | paragraphs, vertical `anchor`, `autoFit` (grow, fixed, shrink), `placeholder`, layout `slot`, `textRole` |
@@ -40,7 +41,7 @@ A presentation is saved as a file, as sheets (`.qsheet`) and documents
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "title": "Demo",
   "size": { "width": 1920, "height": 1080 },
   "slides": [
@@ -82,8 +83,11 @@ version at a time as it is read, and saved at the current version. Version 2
 added the inline theme, role colors (`"fill": "theme:accent1"`), slide
 `layout`s and text box `slot`s and `textRole`s. A version 1 file's `theme`
 was a reference string nothing drew; it becomes the built-in theme with that
-id, or none, and every slide reads as blank-layout.
-`test/fixtures/v1_sample.qslide` is the golden version 1 file.
+id, or none, and every slide reads as blank-layout. Version 3 added slide
+transitions — a slide's own `transition` and the deck's default one — and a
+version 2 file reads with every slide cutting, as it showed.
+`test/fixtures/v1_sample.qslide` and `test/fixtures/v2_sample.qslide` are
+the golden version 1 and 2 files.
 
 ## Themes and layouts — for a theme or layout picker
 
@@ -166,6 +170,8 @@ history of earlier presentations:
   `pasteText` (see [Copy and paste](#copy-and-paste))
 - find and replace: `replaceCurrent`, `replaceAll` (see [Find and
   replace](#find-and-replace--for-a-find-bar))
+- transitions: `setSlideTransition`, `applyTransitionToAll` (see
+  [Transitions](#transitions--for-a-transition-picker))
 - history: `undo`, `redo`, `load`, and `batch` / `beginBatch` / `endBatch`
 
 A command that changes nothing records no step. Commands inside a batch apply
@@ -589,6 +595,52 @@ out exactly as the paragraph is, in `SlideCanvasStyle.highlightColor` and
 `currentHighlightColor`; each time `currentHighlight` changes to a text box
 on the slide it enters the box's group, selects it and pans to center it.
 The app moves to the match's slide itself.
+
+## Transitions — for a transition picker
+
+A `SlideTransitionSpec` says how a slide comes onto the screen when
+presenting: a `kind` — `none` (an instant cut, the default), `fade`, `push`,
+`wipe` or `zoom` — the `direction` a push or wipe travels (`left` brings the
+new slide in from the right; PresentationML's `dir` names the same thing),
+and a `durationMs` from 200 to 2000, 500 when unset. A slide's own
+`transition` plays as the show arrives at it; a slide with none follows the
+deck's `defaultTransition`. Stepping back plays it in the opposite direction.
+
+```json
+"transition": {"kind": "push", "direction": "up", "duration": 800}
+```
+
+```dart
+deck.transitionFor(slide); // what plays: the slide's own, or the deck's
+doc.controller.setSlideTransition(slideId, const SlideTransitionSpec.fade());
+doc.controller.setSlideTransition(slideId, null); // follow the deck again
+doc.controller.applyTransitionToAll(spec); // deck default, overrides cleared
+```
+
+Both commands are one undo step. An unknown `kind` plays as a cut and is
+written back as it was read. It is `SlideTransitionSpec`, not
+`SlideTransition`, so it does not collide with Flutter's widget of that name.
+
+`SlideTransitionView` plays one: give it the slide's id and its drawing, and
+when the id changes it keeps the old drawing under the new one and runs the
+effect, clipped to its box. Each layer is keyed `slide_transition_<slideId>`.
+
+```dart
+SlideTransitionView(
+  slideId: slide.id,
+  transition: deck.transitionFor(slide),
+  reverse: steppedBack,
+  child: SlideCanvas.readOnly(slide: slide, size: deck.size, theme: deck.theme),
+);
+```
+
+Under reduced motion — `MediaQuery.disableAnimationsOf` or the platform's
+`reduceMotion`, re-read when the accessibility features change — every
+transition but a cut becomes `reducedMotion`, a 200 ms cross-fade with no
+movement, and one already playing finishes at once. The math is pure and
+exported: `SlideTransitionFrame.ease` (a cubic in and out),
+`SlideTransitionFrame.progress`, and `SlideTransitionFrame.at`, which places
+the outgoing and incoming `SlideTransitionLayer`s for a kind and progress.
 
 ## Development
 

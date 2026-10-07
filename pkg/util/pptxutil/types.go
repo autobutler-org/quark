@@ -17,6 +17,17 @@ type qslideSlide struct {
 	Background *qslideBackground `json:"background"`
 	Elements   []qslideElement   `json:"elements"`
 	Notes      string            `json:"notes"`
+	// Transition is the slide's own, nil to follow the deck's default.
+	Transition *qslideTransition `json:"transition"`
+}
+
+// qslideTransition is how a slide comes on: a kind (none, fade, push, wipe,
+// zoom), the direction a push or wipe travels (left when left out), and a
+// duration in milliseconds (500 when left out).
+type qslideTransition struct {
+	Kind      string   `json:"kind"`
+	Direction string   `json:"direction"`
+	Duration  *float64 `json:"duration"`
 }
 
 // qslideBackground is a slide's own background: a color, an image drawn to
@@ -122,6 +133,8 @@ type exporter struct {
 	scale float64
 	// theme is the presentation's theme, nil for none.
 	theme *deckTheme
+	// transition is the deck's default transition, nil for none.
+	transition *qslideTransition
 	// cx and cy are the slide size in EMU.
 	cx, cy int64
 	// media maps a picture source to its part, nil when it could not be

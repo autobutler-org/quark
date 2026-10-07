@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"reflect"
@@ -36,7 +37,7 @@ func exportFile(t *testing.T, name string) (pptx, pptxutil.ExportQslideResult) {
 	return unzip(t, out.Bytes()), result
 }
 
-func TestExportReadsTheGoldenVersion2Fixture(t *testing.T) {
+func TestExportReadsTheGoldenVersion3Fixture(t *testing.T) {
 	parts, result := exportFile(t, "sample.qslide")
 	if result.Slides != 4 {
 		t.Errorf("slides = %d, want 4", result.Slides)
@@ -74,6 +75,23 @@ func TestExportReadsTheGoldenVersion2Fixture(t *testing.T) {
 	// theme's background role.
 	lacks(t, "slide 4", slide, `<p:bg>`)
 	contains(t, "master", parts.part(t, "ppt/slideMasters/slideMaster1.xml"), `<a:schemeClr val="bg1"/>`)
+
+	// The deck fades from slide to slide, except slide 4, which wipes.
+	contains(t, "slide 1", parts.part(t, "ppt/slides/slide1.xml"),
+		`<p:transition spd="med" p14:dur="700"><p:fade/></p:transition>`)
+	contains(t, "slide 4", slide, `<p:transition spd="slow" p14:dur="1200"><p:wipe dir="r"/></p:transition>`)
+}
+
+func TestExportReadsTheGoldenVersion2Fixture(t *testing.T) {
+	parts, result := exportFile(t, "v2_sample.qslide")
+	if result.Slides != 4 {
+		t.Errorf("slides = %d, want 4", result.Slides)
+	}
+	contains(t, "theme", parts.part(t, "ppt/theme/theme1.xml"), `name="Sample"`)
+	// Version 2 had no transitions: every slide cuts.
+	for i := 1; i <= 4; i++ {
+		lacks(t, fmt.Sprintf("slide %d", i), parts.part(t, fmt.Sprintf("ppt/slides/slide%d.xml", i)), `transition`)
+	}
 }
 
 func TestExportReadsTheGoldenVersion1Fixture(t *testing.T) {
@@ -108,8 +126,8 @@ func TestExportRefusesTheNewerSchemaFixture(t *testing.T) {
 	}
 	defer f.Close()
 	_, err = pptxutil.ExportQslide(pptxutil.ExportQslideParams{Source: f, Out: io.Discard})
-	if !errors.Is(err, pptxutil.ErrNotQslide) || !strings.Contains(err.Error(), "schema version 3") {
-		t.Errorf("err = %v, want ErrNotQslide naming schema version 3", err)
+	if !errors.Is(err, pptxutil.ErrNotQslide) || !strings.Contains(err.Error(), "schema version 4") {
+		t.Errorf("err = %v, want ErrNotQslide naming schema version 4", err)
 	}
 }
 
