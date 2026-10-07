@@ -19,6 +19,9 @@ enum SlideToolMode {
 
   /// Choose where a picture goes; the app picks the picture.
   image,
+
+  /// Draw a table of [SlideCanvasTool.rows] by [SlideCanvasTool.columns].
+  table,
 }
 
 /// What a pointer does on an editing `SlideCanvas`: a [mode], plus the kind
@@ -38,14 +41,28 @@ enum SlideToolMode {
 /// tools.use(SlideCanvasTool.line);
 /// tools.use(SlideCanvasTool.arrowLine);
 /// tools.use(SlideCanvasTool.image);
+/// tools.use(const SlideCanvasTool.table(3, 4));
 /// ```
 @immutable
 final class SlideCanvasTool {
-  const SlideCanvasTool._(this.mode, {this.shapeKind, this.arrow = false});
+  const SlideCanvasTool._(
+    this.mode, {
+    this.shapeKind,
+    this.arrow = false,
+    this.rows = 0,
+    this.columns = 0,
+  });
 
   /// Draws a [kind] of shape.
   const SlideCanvasTool.shape(ShapeKind kind)
       : this._(SlideToolMode.shape, shapeKind: kind);
+
+  /// Draws a table of [rows] by [columns], in equal columns and rows: a
+  /// click places it at its default size
+  /// (`SlideDocumentController.defaultTableColumnWidth` per column by
+  /// `defaultTableRowHeight` per row), a drag sizes it.
+  const SlideCanvasTool.table(int rows, int columns)
+      : this._(SlideToolMode.table, rows: rows, columns: columns);
 
   /// Selects, moves, resizes and rotates elements.
   static const select = SlideCanvasTool._(SlideToolMode.select);
@@ -73,6 +90,14 @@ final class SlideCanvasTool {
   /// Whether a [SlideToolMode.line] tool draws an arrow.
   final bool arrow;
 
+  /// How many rows a [SlideToolMode.table] tool's table has; 0 for the
+  /// others.
+  final int rows;
+
+  /// How many columns a [SlideToolMode.table] tool's table has; 0 for the
+  /// others.
+  final int columns;
+
   /// Whether the tool adds elements rather than selecting them.
   bool get draws => mode != SlideToolMode.select;
 
@@ -81,15 +106,18 @@ final class SlideCanvasTool {
       other is SlideCanvasTool &&
       other.mode == mode &&
       other.shapeKind == shapeKind &&
-      other.arrow == arrow;
+      other.arrow == arrow &&
+      other.rows == rows &&
+      other.columns == columns;
 
   @override
-  int get hashCode => Object.hash(mode, shapeKind, arrow);
+  int get hashCode => Object.hash(mode, shapeKind, arrow, rows, columns);
 
   @override
   String toString() => switch (mode) {
         SlideToolMode.shape => 'SlideCanvasTool.shape(${shapeKind!.name})',
         SlideToolMode.line when arrow => 'SlideCanvasTool.arrowLine',
+        SlideToolMode.table => 'SlideCanvasTool.table($rows, $columns)',
         _ => 'SlideCanvasTool.${mode.name}',
       };
 }

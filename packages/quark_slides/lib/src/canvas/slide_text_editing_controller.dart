@@ -4,10 +4,13 @@ import 'package:flutter/services.dart';
 
 import '../controller/slide_document_controller.dart';
 import '../geometry/slide_tree.dart';
+import '../model/cell_format.dart';
+import '../model/cell_range.dart';
 import '../model/presentation.dart';
 import '../model/rich_text.dart';
 import '../model/slide_element.dart';
 import '../model/text_format.dart';
+import '../model/text_paragraph.dart';
 import '../model/unset.dart';
 import 'slide_paragraph_editing_controller.dart';
 import 'slide_text_layout.dart';
@@ -21,7 +24,10 @@ import 'slide_text_layout.dart';
 /// double-clicks a text box, presses Enter or F2 on one, or draws one with
 /// the text tool, and ends it on Escape or a click elsewhere.
 ///
-/// **A session** edits a draft of one box — [elementId], [draft] — and
+/// **A session** edits a draft of one box — [elementId], [draft] — or of
+/// one table cell, opened with [beginCell]: then [elementId] is the
+/// table's, [cell] the cell's, and [draft] the cell's text as a box the
+/// size of the cell (see `TableElement.cellTextBox`). It
 /// writes it to the document when it ends ([commit]) as a single undo step,
 /// however much was typed and formatted; [cancel] drops it. Undo and redo
 /// inside the editor step through the session's own history, which ends
@@ -66,6 +72,7 @@ class SlideTextEditingController extends ChangeNotifier {
   Set<String> _selection = const {};
 
   String? _elementId;
+  ({int row, int column})? _cell;
   TextBox? _original;
   TextBox? _draft;
   TextSelection _textSelection = const TextSelection.collapsed(offset: 0);
@@ -95,8 +102,13 @@ class SlideTextEditingController extends ChangeNotifier {
   /// Whether a session is open.
   bool get isEditing => _draft != null;
 
-  /// The id of the text box being edited, or `null`.
+  /// The id of the text box being edited — or of the table whose [cell] is
+  /// — or `null`.
   String? get elementId => _elementId;
+
+  /// The table cell being edited, its merge anchor, or `null` when the
+  /// session edits a text box or none is open.
+  ({int row, int column})? get cell => _cell;
 
   /// The box being edited as it stands, typing and formatting included, or
   /// `null`.
@@ -175,16 +187,55 @@ class SlideTextEditingController extends ChangeNotifier {
     bool removeIfEmpty = false,
   }) {
     if (isEditing) commit();
-    final doc = _doc;
     final element =
-        doc?.presentation.slideById(_slideId!)?.findElement(elementId);
+        _doc?.presentation.slideById(_slideId!)?.findElement(elementId);
     if (element is! TextBox) {
       throw ArgumentError.value(elementId, 'elementId', 'is not a text box');
     }
-    _elementId = elementId;
-    _original = element;
-    _draft = element;
-    final length = element.plainText.length;
+    _open(element, null, selection, removeIfEmpty);
+  }
+
+  /// Opens a session on the cell at [row], [column] of the table
+  /// [tableId] on the attached slide — its merge anchor, when it is merged
+  /// — committing any session already open. [commit] writes the text back
+  /// with `SlideDocumentController.setCellText`, as one undo step.
+  void beginCell(
+    String tableId,
+    int row,
+    int column, {
+    TextSelection? selection,
+  }) {
+    if (isEditing) commit();
+    final element =
+        _doc?.presentation.slideById(_slideId!)?.findElement(tableId);
+    if (element is! TableElement) {
+      throw ArgumentError.value(tableId, 'tableId', 'is not a table');
+    }
+    RangeError.checkValidIndex(row, element.cells, 'row');
+    RangeError.checkValidIndex(column, element.columnWidths, 'column');
+    final box = element.cellTextBox(row, column);
+    _open(
+      // A blank cell gets a line to type on.
+      box.paragraphs.isEmpty
+          ? box.copyWith(paragraphs: const [TextParagraph([])])
+          : box,
+      element.anchorOf(row, column),
+      selection,
+      false,
+    );
+  }
+
+  void _open(
+    TextBox box,
+    ({int row, int column})? cell,
+    TextSelection? selection,
+    bool removeIfEmpty,
+  ) {
+    _elementId = box.id;
+    _cell = cell;
+    _original = box;
+    _draft = box;
+    final length = box.plainText.length;
     _textSelection = selection == null
         ? TextSelection.collapsed(offset: length)
         : TextSelection(
@@ -192,7 +243,7 @@ class SlideTextEditingController extends ChangeNotifier {
             extentOffset: selection.extentOffset.clamp(0, length),
           );
     _removeIfEmpty = removeIfEmpty;
-    _insertedInto = doc!.presentation;
+    _insertedInto = _doc!.presentation;
     _pending = null;
     _undo.clear();
     _redo.clear();
@@ -210,11 +261,13 @@ class SlideTextEditingController extends ChangeNotifier {
     if (draft == null || original == null || doc == null) return;
     final inserted = _insertedInto;
     final removeIfEmpty = _removeIfEmpty;
+    final cell = _cell;
     _end();
     final slideId = _slideId!;
     final current = doc.presentation.slideById(slideId)?.findElement(
           draft.id,
         );
+    if (cell != null) return _commitCell(doc, slideId, current, cell, draft);
     if (current is! TextBox) return;
     if (removeIfEmpty &&
         draft.plainText.isEmpty &&
@@ -238,12 +291,45 @@ class SlideTextEditingController extends ChangeNotifier {
     });
   }
 
+  /// Writes a cell session's [draft] to the cell [cell] of the table
+  /// [current], as one step, when the table still has that cell.
+  void _commitCell(
+    SlideDocumentController doc,
+    String slideId,
+    SlideElement? current,
+    ({int row, int column}) cell,
+    TextBox draft,
+  ) {
+    if (current is! TableElement ||
+        cell.row >= current.rowCount ||
+        cell.column >= current.columnCount) {
+      return;
+    }
+    final before = current.cell(cell.row, cell.column);
+    final blank = draft.plainText.isEmpty && before.plainText.isEmpty;
+    doc.batch(() {
+      if (!blank && !listEquals(draft.paragraphs, before.paragraphs)) {
+        doc.setCellText(
+            slideId, draft.id, cell.row, cell.column, draft.paragraphs);
+      }
+      if (draft.anchor != before.anchor) {
+        doc.formatCells(
+          slideId,
+          draft.id,
+          CellRange.single(cell.row, cell.column),
+          CellFormat(text: TextFormat(anchor: draft.anchor)),
+        );
+      }
+    });
+  }
+
   /// Ends the session and drops the draft.
   void cancel() => _end();
 
   bool _end() {
     if (!isEditing) return false;
     _elementId = null;
+    _cell = null;
     _original = null;
     _draft = null;
     _pending = null;

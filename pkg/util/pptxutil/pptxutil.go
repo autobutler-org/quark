@@ -14,11 +14,12 @@
 // dash) and opacity; lines and arrows; text boxes with their runs (bold,
 // italic, underline, strikethrough, size, font, color), alignment, line
 // spacing, bullets and numbering, vertical anchor and auto-fit; pictures with
-// their alt text and fit; groups, nested; rotation; stacking order; slide
-// backgrounds; and speaker notes. An element type this writer does not know is
+// their alt text and fit; groups, nested; tables, with their column widths,
+// row heights, cell text, fills, borders and merged cells; rotation;
+// stacking order; slide backgrounds; and speaker notes. An element type this writer does not know is
 // left out, as is a picture it cannot embed — see [ExportQslideParams].
 //
-// Export reads .qslide schema versions 1 and 2. A version 2 deck stores its
+// Export reads .qslide schema versions 1 to 4. A version 2 deck stores its
 // theme: a role color (theme:accent1) is resolved against it, text a run does
 // not style takes the size, font and color of its box's text role, a slide
 // without a background shows the theme's, and the theme's ten color roles and
@@ -29,8 +30,12 @@
 // Import reads the same features back, from any PowerPoint file rather than
 // only this package's own: placeholders take their position and text style
 // from their layout and master, theme colors resolve to the theme's RGB, and
-// the master's and layout's own shapes are drawn behind each slide's. What the
-// editor has no model for — charts, tables, SmartArt, embedded objects, video
+// the master's and layout's own shapes are drawn behind each slide's. A
+// table's header and banded-row flags come across, but not the table style
+// it names: its cells keep only the fills and lines they set themselves. A
+// table past quark_slides' limits — 500 rows, 100 columns, 5,000 cells — is
+// skipped. What the editor has no model for — charts, SmartArt, embedded
+// objects, video
 // and audio, ink, animations and transitions — is skipped and named in the
 // slide's warnings; see [ImportPptx]. An import writes schema version 1, every
 // color literal and no theme, which the editor migrates as it opens the file.
@@ -211,7 +216,8 @@ type ImportWarning struct {
 // .qslide to params.Out, one slide per slide in show order.
 //
 // What the editor cannot show is skipped and reported in the result's
-// warnings — a chart, a table, an unknown shape drawn as a rectangle — and is
+// warnings — a chart, an oversized table, an unknown shape drawn as a
+// rectangle — and is
 // never a failure. Errors wrap [ErrNotPptx] when the source is not a
 // PowerPoint package and [ErrTooLarge] past the import limits; anything else
 // is a read, write or StoreMedia failure. Out may hold part of a .qslide when

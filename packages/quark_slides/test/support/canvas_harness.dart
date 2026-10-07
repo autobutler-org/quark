@@ -77,6 +77,7 @@ class CanvasHarness extends StatefulWidget {
     this.clipboard,
     this.highlights = const [],
     this.currentHighlight,
+    this.tableEditing,
   });
 
   final SlideDocumentNotifier document;
@@ -88,6 +89,7 @@ class CanvasHarness extends StatefulWidget {
   final SlideClipboard? clipboard;
   final List<SlideMatch> highlights;
   final SlideMatch? currentHighlight;
+  final SlideTableEditingController? tableEditing;
 
   @override
   State<CanvasHarness> createState() => CanvasHarnessState();
@@ -128,6 +130,7 @@ class CanvasHarnessState extends State<CanvasHarness> {
         clipboard: widget.clipboard,
         highlights: widget.highlights,
         currentHighlight: widget.currentHighlight,
+        tableEditing: widget.tableEditing,
       );
 }
 
@@ -144,12 +147,20 @@ Future<void> pumpCanvas(
   SlideClipboard? clipboard,
   List<SlideMatch> highlights = const [],
   SlideMatch? currentHighlight,
+  SlideTableEditingController? tableEditing,
+  double textScale = 1,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(textScale),
+        ),
+        child: child!,
+      ),
       home: Scaffold(
         body: CanvasHarness(
           document: document,
@@ -161,6 +172,7 @@ Future<void> pumpCanvas(
           clipboard: clipboard,
           highlights: highlights,
           currentHighlight: currentHighlight,
+          tableEditing: tableEditing,
         ),
       ),
     ),

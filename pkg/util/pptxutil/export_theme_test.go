@@ -126,8 +126,8 @@ func TestExportRefusesTheNewerSchemaFixture(t *testing.T) {
 	}
 	defer f.Close()
 	_, err = pptxutil.ExportQslide(pptxutil.ExportQslideParams{Source: f, Out: io.Discard})
-	if !errors.Is(err, pptxutil.ErrNotQslide) || !strings.Contains(err.Error(), "schema version 4") {
-		t.Errorf("err = %v, want ErrNotQslide naming schema version 4", err)
+	if !errors.Is(err, pptxutil.ErrNotQslide) || !strings.Contains(err.Error(), "schema version 5") {
+		t.Errorf("err = %v, want ErrNotQslide naming schema version 5", err)
 	}
 }
 

@@ -53,6 +53,13 @@ func (e *exporter) embedElements(elements []qslideElement, depth int) error {
 			if err := e.embedElements(el.Children, depth+1); err != nil {
 				return err
 			}
+		case typeTable:
+			// A cell is drawn as a shape is, so the deck's budget pays for
+			// it.
+			e.elements += min(len(el.Rows)*len(el.Columns), maxTableCells)
+			if e.elements > MaxElements {
+				return fmt.Errorf("%w: the presentation holds more than %d elements", ErrTooLarge, MaxElements)
+			}
 		}
 	}
 	return nil

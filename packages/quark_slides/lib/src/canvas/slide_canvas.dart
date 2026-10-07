@@ -12,15 +12,19 @@ import '../controller/slide_document_notifier.dart';
 import '../geometry/frame_geometry.dart';
 import '../geometry/slide_drawing.dart';
 import '../geometry/slide_handle.dart';
+import '../geometry/group_geometry.dart';
 import '../geometry/slide_snapping.dart';
+import '../geometry/slide_table_grip.dart';
 import '../geometry/slide_tree.dart';
 import '../geometry/slide_viewport.dart';
+import '../model/cell_range.dart';
 import '../model/element_frame.dart';
 import '../model/presentation.dart';
 import '../model/slide.dart';
 import '../model/slide_element.dart';
 import '../model/slide_size.dart';
 import '../search/slide_match.dart';
+import '../table/table_edits.dart';
 import '../theme/slide_theme.dart';
 import 'slide_canvas_style.dart';
 import 'slide_fallback_theme.dart';
@@ -31,6 +35,8 @@ import 'slide_tool_label.dart';
 import 'slide_image_source.dart';
 import 'slide_selection_overlay.dart';
 import 'slide_stage.dart';
+import 'slide_table_editing_controller.dart';
+import 'slide_table_view.dart';
 import 'slide_text_editing_controller.dart';
 import 'slide_text_editor.dart';
 import 'slide_text_highlight_painter.dart';
@@ -78,6 +84,21 @@ import 'slide_text_layout.dart';
 /// [editingAnnouncement] and [editingDoneAnnouncement] as editing starts
 /// and stops. [textEditing] is the session a toolbar formats through; see
 /// [SlideTextEditingController].
+///
+/// **Tables.** A table selects, moves, resizes and rotates as one element;
+/// resizing scales its columns and rows. With a table selected, a press on
+/// a cell selects it and a drag selects the cells between, Shift with the
+/// arrow keys grows the selection, the arrow keys move it, Tab and
+/// Shift+Tab step through the cells, Delete empties them, and Escape lets
+/// go of the cells; a press within [SlideCanvasStyle.handleSize] of the
+/// table's edge (or a quarter of the cell there, if that is less) moves it
+/// instead. Double-click or double-tap a cell, or
+/// press Enter or F2, to edit it in place with the text editor, where Tab
+/// moves on to the next cell. The grips on its top and left edges drag the
+/// lines between columns and rows. Each is one undo step. [tableEditing]
+/// holds the selected cells and the table commands a toolbar sends; see
+/// [SlideTableEditingController]. Each cell reads to a screen reader as
+/// [cellLabel] names it.
 ///
 /// **Drawing.** [tools] holds the active [SlideCanvasTool]: text, any
 /// [ShapeKind], a line or arrow, or an image. With a drawing tool a click
@@ -130,7 +151,11 @@ import 'slide_text_layout.dart';
 /// do not put it in a scroll view. Keys: each element is
 /// `slide_element_<id>`, each handle `slide_handle_<id>` (see
 /// [SlideHandle.keyName]), and while a box is edited each of its paragraphs
-/// `slide_text_paragraph_<index>` (see [SlideTextEditor.keyName]).
+/// `slide_text_paragraph_<index>` (see [SlideTextEditor.keyName]); each
+/// table cell `slide_table_cell_<id>_<row>_<column>` (see
+/// [SlideTableView.cellKeyName]) and each table grip
+/// `slide_table_column_<index>` or `slide_table_row_<index>` (see
+/// [SlideTableGrip.keyName]).
 ///
 /// ```dart
 /// ListenableBuilder(
@@ -170,6 +195,8 @@ class SlideCanvas extends StatefulWidget {
     this.clipboard,
     this.highlights = const [],
     this.currentHighlight,
+    this.tableEditing,
+    this.cellLabel = defaultSlideTableCellLabel,
   })  : slide = null,
         size = null,
         theme = null;
@@ -186,6 +213,7 @@ class SlideCanvas extends StatefulWidget {
     this.elementLabel = defaultSlideElementLabel,
     this.padding = EdgeInsets.zero,
     this.theme,
+    this.cellLabel = defaultSlideTableCellLabel,
   })  : document = null,
         slideId = null,
         selection = const {},
@@ -202,7 +230,8 @@ class SlideCanvas extends StatefulWidget {
         editingDoneAnnouncement = '',
         clipboard = null,
         highlights = const [],
-        currentHighlight = null;
+        currentHighlight = null,
+        tableEditing = null;
 
   /// The smallest zoom, half the fitted size.
   static const minZoom = 0.5;
@@ -295,6 +324,13 @@ class SlideCanvas extends StatefulWidget {
   /// `null` for none.
   final SlideMatch? currentHighlight;
 
+  /// The selected table cells and the table commands; the canvas makes its
+  /// own when none is given.
+  final SlideTableEditingController? tableEditing;
+
+  /// Names a table's cells for a screen reader.
+  final SlideTableCellLabel cellLabel;
+
   /// Whether the canvas only draws.
   bool get readOnly => document == null;
 
@@ -306,6 +342,8 @@ enum _GestureKind {
   move(edits: true),
   resize(edits: true),
   rotate(edits: true),
+  tableResize(edits: true),
+  cells(edits: false),
   marquee(edits: false),
   draw(edits: false),
   pan(edits: false);
@@ -331,6 +369,9 @@ class _Gesture {
     this.collapseTo,
     this.hit,
     this.startPan = Offset.zero,
+    this.grip,
+    this.cell,
+    this.startSize = 0,
   });
 
   final _GestureKind kind;
@@ -353,6 +394,16 @@ class _Gesture {
   /// The element under the pointer when it went down.
   final String? hit;
   final Offset startPan;
+
+  /// The table grip a table resize drags.
+  final SlideTableGrip? grip;
+
+  /// The cell a cell selection started on.
+  final ({int row, int column})? cell;
+
+  /// The width or height of the column or row a table resize drags, when
+  /// it started.
+  final double startSize;
 
   bool started = false;
   Offset applied = Offset.zero;
@@ -393,6 +444,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
   MouseCursor _cursor = MouseCursor.defer;
   SlideTextEditingController? _ownTextEditing;
   SlideToolController? _ownTools;
+  SlideTableEditingController? _ownTableEditing;
   bool _wasEditing = false;
 
   /// The element a draw gesture would insert, drawn over the slide.
@@ -413,6 +465,10 @@ class _SlideCanvasState extends State<SlideCanvas> {
       widget.tools ?? (_ownTools ??= SlideToolController());
 
   SlideCanvasTool get _tool => _tools.tool;
+
+  SlideTableEditingController get _cells =>
+      widget.tableEditing ??
+      (_ownTableEditing ??= SlideTableEditingController());
 
   SlideDocumentController get _doc => widget.document!.controller;
 
@@ -436,6 +492,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
     if (widget.readOnly) return;
     _editing.addListener(_onEditingChanged);
     _tools.addListener(_onToolChanged);
+    _cells.addListener(_onCellsChanged);
     widget.document!.addListener(_onDocumentChanged);
     _revealLater();
   }
@@ -474,6 +531,11 @@ class _SlideCanvasState extends State<SlideCanvas> {
       oldTools?.removeListener(_onToolChanged);
       if (!widget.readOnly) _tools.addListener(_onToolChanged);
     }
+    final oldCells = oldWidget.tableEditing ?? _ownTableEditing;
+    if (oldCells != _cells) {
+      oldCells?.removeListener(_onCellsChanged);
+      if (!widget.readOnly) _cells.addListener(_onCellsChanged);
+    }
   }
 
   @override
@@ -484,6 +546,8 @@ class _SlideCanvasState extends State<SlideCanvas> {
     editing?.removeListener(_onEditingChanged);
     (widget.tools ?? _ownTools)?.removeListener(_onToolChanged);
     _ownTools?.dispose();
+    (widget.tableEditing ?? _ownTableEditing)?.removeListener(_onCellsChanged);
+    _ownTableEditing?.dispose();
     final own = _ownTextEditing;
     if (editing != null && editing.isEditing) {
       // Keep what was typed; the document cannot change mid-unmount.
@@ -496,6 +560,10 @@ class _SlideCanvasState extends State<SlideCanvas> {
     }
     _ownFocusNode?.dispose();
     super.dispose();
+  }
+
+  void _onCellsChanged() {
+    if (mounted) setState(() {});
   }
 
   /// Drops a drawing in progress when the tool changes under it.
@@ -534,7 +602,15 @@ class _SlideCanvasState extends State<SlideCanvas> {
   /// Drops the session when its box leaves the slide — undone, say.
   void _onDocumentChanged() {
     final id = _editing.elementId;
-    if (id != null && _slide?.findElement(id) is! TextBox) _editing.cancel();
+    if (id == null) return;
+    final element = _slide?.findElement(id);
+    final cell = _editing.cell;
+    final kept = cell == null
+        ? element is TextBox
+        : element is TableElement &&
+            cell.row < element.rowCount &&
+            cell.column < element.columnCount;
+    if (!kept) _editing.cancel();
   }
 
   /// Opens [id] for editing, with the caret under the global point
@@ -544,6 +620,59 @@ class _SlideCanvasState extends State<SlideCanvas> {
     _editing.begin(id, removeIfEmpty: fresh);
     if (caretAt != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _placeCaret(caretAt));
+    }
+  }
+
+  /// Opens the cell at [row], [column] of the table [tableId] for editing,
+  /// selecting it, with the caret under the global point [caretAt] when
+  /// given and at the end otherwise.
+  void _beginCellEditing(
+    String tableId,
+    int row,
+    int column, {
+    Offset? caretAt,
+  }) {
+    _cells.select(tableId, CellRange.single(row, column));
+    _editing.attach(_doc, widget.slideId!, {tableId});
+    _editing.beginCell(tableId, row, column);
+    if (caretAt != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _placeCaret(caretAt));
+    }
+  }
+
+  /// Commits the cell being edited and opens the next one in reading order
+  /// — the previous one when [backward] — as Tab does in the editor. Past
+  /// either end the editing ends with that cell selected.
+  void _tabToCell(bool backward) {
+    final id = _editing.elementId;
+    final cell = _editing.cell;
+    if (id == null || cell == null) return;
+    _editing.commit();
+    final table = _slide?.findElement(id);
+    if (table is! TableElement) return;
+    final next = _stepCell(table, cell, backward: backward);
+    if (next == null) {
+      _cells.select(id, CellRange.single(cell.row, cell.column));
+      return;
+    }
+    _beginCellEditing(id, next.row, next.column);
+  }
+
+  /// The cell after [from] in reading order — before it when [backward] —
+  /// skipping covered cells, or `null` past the end.
+  static ({int row, int column})? _stepCell(
+    TableElement table,
+    ({int row, int column}) from, {
+    required bool backward,
+  }) {
+    final count = table.rowCount * table.columnCount;
+    var i = from.row * table.columnCount + from.column;
+    while (true) {
+      i += backward ? -1 : 1;
+      if (i < 0 || i >= count) return null;
+      final row = i ~/ table.columnCount;
+      final column = i % table.columnCount;
+      if (!table.isCovered(row, column)) return (row: row, column: column);
     }
   }
 
@@ -558,7 +687,10 @@ class _SlideCanvasState extends State<SlideCanvas> {
     }
 
     root.visitChildren(visit);
-    if (fields.length != _editing.paragraphControllers.length) return;
+    if (fields.isEmpty ||
+        fields.length != _editing.paragraphControllers.length) {
+      return;
+    }
     var best = 0;
     var bestDistance = double.infinity;
     for (var i = 0; i < fields.length; i++) {
@@ -582,6 +714,17 @@ class _SlideCanvasState extends State<SlideCanvas> {
     final draft = _editing.draft;
     final slide = _slide;
     if (draft == null || slide == null) return null;
+    final cell = _editing.cell;
+    if (cell != null) {
+      final table = slide.findElement(draft.id);
+      final frame = slide.frameOnSlide(draft.id);
+      if (table is! TableElement || frame == null) return null;
+      final box = table.cellBox(cell.row, cell.column);
+      return frameInParent(
+        frame,
+        ElementFrame(x: box.x, y: box.y, width: box.width, height: box.height),
+      );
+    }
     var frame = draft.frame;
     if (draft.autoFit == TextAutoFit.grow) {
       final height = SlideTextLayout.forBox(draft, _theme).contentHeight(draft);
@@ -612,6 +755,9 @@ class _SlideCanvasState extends State<SlideCanvas> {
 
   void _select(Set<String> ids) {
     _leaveUnlessInside(ids);
+    if (_cells.tableId != null && !setEquals(ids, {_cells.tableId})) {
+      _cells.clear();
+    }
     if (setEquals(ids, _selection)) return;
     setState(() => _selection = ids);
     widget.onSelectionChanged?.call(ids);
@@ -803,6 +949,10 @@ class _SlideCanvasState extends State<SlideCanvas> {
           frame: frame,
         );
       }
+      if (element is TableElement) {
+        final table = _startTableGesture(event, element, frame, hit);
+        if (table != null) return table;
+      }
     }
     if (hit == null) {
       if (!_additive) _select(const {});
@@ -822,6 +972,73 @@ class _SlideCanvasState extends State<SlideCanvas> {
       _GestureKind.move,
       selected,
       collapseTo: selected.length > 1 ? hit : null,
+    );
+  }
+
+  /// A gesture on the selected [table], whose frame on the slide is
+  /// [frame]: a column or row resize on one of its grips, or a cell
+  /// selection on a cell. `null` — an ordinary move — within
+  /// [SlideCanvasStyle.handleSize] of its edge, or for Ctrl, Cmd, or Shift
+  /// without cells to extend.
+  _Gesture? _startTableGesture(
+    PointerDownEvent event,
+    TableElement table,
+    ElementFrame frame,
+    String? hit,
+  ) {
+    final viewport = _viewport!;
+    final point = event.localPosition;
+    final slidePoint = viewport.toSlide(point);
+    final reach = _style.handleHitSize / 2;
+    for (final (grip, at) in SlideTableGrip.gripsOf(table, frame)) {
+      final offset = point - viewport.toView(at);
+      if (offset.dx.abs() > reach || offset.dy.abs() > reach) continue;
+      return _Gesture(
+        _GestureKind.tableResize,
+        pointer: event.pointer,
+        startView: point,
+        startSlide: slidePoint,
+        ids: {table.id},
+        frame: frame,
+        grip: grip,
+        startSize: grip.isColumn
+            ? table.columnWidths[grip.index]
+            : table.rowHeights[grip.index],
+        hit: hit,
+      );
+    }
+    final local =
+        frame.toLocal(slidePoint) + Offset(frame.width, frame.height) / 2;
+    // The band along the edge that moves the table: a handle wide, but
+    // never more than a quarter of the cell it cuts into.
+    final band = _style.handleSize / viewport.scale;
+    double edge(double cell) => math.min(band, cell / 4);
+    if (local.dx < edge(table.columnWidths.first) ||
+        local.dy < edge(table.rowHeights.first) ||
+        local.dx > frame.width - edge(table.columnWidths.last) ||
+        local.dy > frame.height - edge(table.rowHeights.last)) {
+      return null;
+    }
+    final cell = hit == table.id ? table.cellAt(local.dx, local.dy) : null;
+    if (cell == null) return null;
+    final keys = HardwareKeyboard.instance;
+    final active = _cells.tableId == table.id ? _cells.active : null;
+    final extend = keys.isShiftPressed && active != null;
+    if (_additive && !extend) return null;
+    final from = extend ? active : cell;
+    _cells.select(
+      table.id,
+      CellRange.spanning(from, cell),
+      active: from,
+    );
+    return _Gesture(
+      _GestureKind.cells,
+      pointer: event.pointer,
+      startView: point,
+      startSlide: slidePoint,
+      ids: {table.id},
+      cell: from,
+      hit: hit,
     );
   }
 
@@ -922,6 +1139,32 @@ class _SlideCanvasState extends State<SlideCanvas> {
           x: frame.x,
           y: frame.y,
         );
+      case _GestureKind.tableResize:
+        final grip = gesture.grip!;
+        final along = rotateOffset(travel, -gesture.frame!.rotation);
+        final size = gesture.startSize + (grip.isColumn ? along.dx : along.dy);
+        final id = gesture.ids.single;
+        if (slide.findElement(id) is! TableElement) return;
+        grip.isColumn
+            ? _doc.setTableColumnWidth(slideId, id, grip.index, size)
+            : _doc.setTableRowHeight(slideId, id, grip.index, size);
+      case _GestureKind.cells:
+        final id = gesture.ids.single;
+        final table = slide.findElement(id);
+        final frame = slide.frameOnSlide(id);
+        if (table is! TableElement || frame == null) return;
+        final local =
+            frame.toLocal(slidePoint) + Offset(frame.width, frame.height) / 2;
+        final cell = table.cellAt(
+          local.dx.clamp(0, frame.width),
+          local.dy.clamp(0, frame.height),
+        );
+        if (cell == null) return;
+        _cells.select(
+          id,
+          CellRange.spanning(gesture.cell!, cell),
+          active: gesture.cell,
+        );
       case _GestureKind.rotate:
         _doc.rotateElement(
           slideId,
@@ -962,7 +1205,10 @@ class _SlideCanvasState extends State<SlideCanvas> {
     }
     // A handle that was tapped, not dragged, was a tap on its element: on a
     // phone a short box is all handle.
-    if (!gesture.started && gesture.kind.edits) _onTap(event, gesture.hit);
+    if (!gesture.started &&
+        (gesture.kind.edits || gesture.kind == _GestureKind.cells)) {
+      _onTap(event, gesture.hit);
+    }
   }
 
   /// Opens a text box tapped twice in a row for editing.
@@ -990,6 +1236,22 @@ class _SlideCanvasState extends State<SlideCanvas> {
       if (child == null) return;
       _lastTap = null;
       return _enter(hit, child);
+    }
+    if (element is TableElement) {
+      // Into the cell under the pointer.
+      final frame = slide.frameOnSlide(hit)!;
+      final local = frame.toLocal(viewport.toSlide(point)) +
+          Offset(frame.width, frame.height) / 2;
+      final cell = element.cellAt(local.dx, local.dy);
+      if (cell == null) return;
+      _lastTap = null;
+      _select({hit});
+      return _beginCellEditing(
+        hit,
+        cell.row,
+        cell.column,
+        caretAt: event.position,
+      );
     }
     if (element is! TextBox) return;
     _lastTap = null;
@@ -1032,6 +1294,14 @@ class _SlideCanvasState extends State<SlideCanvas> {
       fromCenter: keys.isAltPressed,
     );
     if (box.width < minimum && box.height < minimum) return null;
+    if (tool.mode == SlideToolMode.table) {
+      return newTable(
+        id: '',
+        frame: _frameOf(box),
+        rows: tool.rows,
+        columns: tool.columns,
+      );
+    }
     if (tool.mode != SlideToolMode.shape) return box;
     return ShapeElement(
       id: '',
@@ -1088,6 +1358,23 @@ class _SlideCanvasState extends State<SlideCanvas> {
                             2,
                       ),
               );
+      case SlideToolMode.table:
+        final size = _doc.defaultTableSize(tool.rows, tool.columns);
+        id = _doc.insertTable(
+          slideId,
+          tool.rows,
+          tool.columns,
+          frame: switch ((drawn, at)) {
+            (final TableElement table, _) => table.frame,
+            (_, final at?) => ElementFrame(
+                x: at.dx,
+                y: at.dy,
+                width: size.width,
+                height: size.height,
+              ),
+            _ => null,
+          },
+        );
       case SlideToolMode.shape || SlideToolMode.line when drawn is SlideElement:
         final element = drawn.withId(_doc.newId());
         _doc.addElement(slideId, element);
@@ -1263,6 +1550,12 @@ class _SlideCanvasState extends State<SlideCanvas> {
     final selected = _validSelection(slide);
     final slideId = widget.slideId!;
     final command = keys.isControlPressed || keys.isMetaPressed;
+    final only =
+        selected.length == 1 ? slide.findElement(selected.single) : null;
+    if (only is TableElement && !command && !_tool.draws) {
+      final handled = _onTableKey(only, key, keys.isShiftPressed);
+      if (handled != null) return handled;
+    }
     if (key == LogicalKeyboardKey.tab) {
       return _cycle(slide, selected, backward: keys.isShiftPressed);
     }
@@ -1347,6 +1640,82 @@ class _SlideCanvasState extends State<SlideCanvas> {
     return KeyEventResult.handled;
   }
 
+  static final _cellSteps = {
+    LogicalKeyboardKey.arrowLeft: (row: 0, column: -1),
+    LogicalKeyboardKey.arrowRight: (row: 0, column: 1),
+    LogicalKeyboardKey.arrowUp: (row: -1, column: 0),
+    LogicalKeyboardKey.arrowDown: (row: 1, column: 0),
+  };
+
+  /// The keys of a selected [table]: Enter or F2 edit the keyboard's cell
+  /// (the first, with none selected); with cells selected, the arrows move
+  /// to the next cell — growing or shrinking the selection with [shift] —
+  /// Tab steps through the cells, Delete empties them and Escape lets go.
+  /// `null` for a key the table leaves to the canvas.
+  KeyEventResult? _onTableKey(
+    TableElement table,
+    LogicalKeyboardKey key,
+    bool shift,
+  ) {
+    final range = _cells.tableId == table.id ? _cells.range : null;
+    final active = range == null ? null : _cells.active;
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter ||
+        key == LogicalKeyboardKey.f2) {
+      final cell = active ?? (row: 0, column: 0);
+      _beginCellEditing(table.id, cell.row, cell.column);
+      return KeyEventResult.handled;
+    }
+    if (range == null || active == null) return null;
+    final step = _cellSteps[key];
+    if (key == LogicalKeyboardKey.tab) {
+      final next = _stepCell(table, active, backward: shift);
+      if (next == null) {
+        _cells.clear();
+        return KeyEventResult.ignored;
+      }
+      _cells.select(table.id, CellRange.single(next.row, next.column));
+    } else if (step != null && shift) {
+      // The corner across from the keyboard's cell moves.
+      final row = active.row == range.top ? range.bottom : range.top;
+      final column = active.column == range.left ? range.right : range.left;
+      final extent = (
+        row: (row + step.row).clamp(0, table.rowCount - 1),
+        column: (column + step.column).clamp(0, table.columnCount - 1),
+      );
+      _cells.select(
+        table.id,
+        CellRange.spanning(active, extent),
+        active: active,
+      );
+    } else if (step != null) {
+      final area = table.areaOf(active.row, active.column);
+      final row = switch (step.row) {
+        < 0 => area.top - 1,
+        > 0 => area.bottom + 1,
+        _ => active.row,
+      };
+      final column = switch (step.column) {
+        < 0 => area.left - 1,
+        > 0 => area.right + 1,
+        _ => active.column,
+      };
+      final next = table.anchorOf(
+        row.clamp(0, table.rowCount - 1),
+        column.clamp(0, table.columnCount - 1),
+      );
+      _cells.select(table.id, CellRange.single(next.row, next.column));
+    } else if (key == LogicalKeyboardKey.delete ||
+        key == LogicalKeyboardKey.backspace) {
+      _cells.clearText();
+    } else if (key == LogicalKeyboardKey.escape) {
+      _cells.clear();
+    } else {
+      return null;
+    }
+    return KeyEventResult.handled;
+  }
+
   /// Pastes the clipboard onto the slide and selects what it pasted, when
   /// the canvas is still on that slide.
   Future<void> _paste() async {
@@ -1410,6 +1779,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
                 theme: _theme,
                 elementLabel: widget.elementLabel,
                 imageBuilder: widget.imageBuilder,
+                cellLabel: widget.cellLabel,
               ),
             ),
           ),
@@ -1440,9 +1810,22 @@ class _SlideCanvasState extends State<SlideCanvas> {
               );
               final selected = _validSelection(slide);
               _editing.attach(_doc, widget.slideId!, selected);
+              _cells.attach(_doc, widget.slideId!);
               final editingId = _editing.elementId;
               final editingFrame = _editingFrame;
               final theme = _theme;
+              final editingCell = _editing.cell;
+              final editedTable = editingId == null || editingCell == null
+                  ? null
+                  : slide.findElement(editingId);
+              final cellsOf = _cells.tableId;
+              final cellRange = _cells.range;
+              final single = selected.length == 1
+                  ? slide.findElement(selected.single)
+                  : null;
+              final tableFrame = single is TableElement && editingId == null
+                  ? slide.frameOnSlide(single.id)
+                  : null;
               return MouseRegion(
                 cursor: _tool.draws ? SystemMouseCursors.precise : _cursor,
                 child: Listener(
@@ -1482,14 +1865,28 @@ class _SlideCanvasState extends State<SlideCanvas> {
                                 editingId: editingId,
                                 preview: _preview,
                                 highlights: _highlightsOn(slide),
+                                cellLabel: widget.cellLabel,
+                                selectedCells:
+                                    cellsOf == null || cellRange == null
+                                        ? null
+                                        : (tableId: cellsOf, range: cellRange),
                                 editor: editingId == null
                                     ? null
                                     : SlideTextEditor(
                                         session: _editing,
                                         style: style,
-                                        theme: theme,
+                                        theme: editedTable is TableElement
+                                            ? SlideTableView.cellTheme(
+                                                editedTable,
+                                                editingCell!.row,
+                                                theme,
+                                              )
+                                            : theme,
                                         scale: viewport.scale,
                                         onDone: _editing.commit,
+                                        onTab: editingCell == null
+                                            ? null
+                                            : _tabToCell,
                                       ),
                               ),
                             ),
@@ -1519,6 +1916,11 @@ class _SlideCanvasState extends State<SlideCanvas> {
                                 style: style,
                                 guides: _guides,
                                 marquee: _marquee,
+                                tableGrips: single is TableElement &&
+                                        tableFrame != null
+                                    ? SlideTableGrip.gripsOf(single, tableFrame)
+                                    : const [],
+                                tableRotation: tableFrame?.rotation ?? 0,
                               ),
                             ),
                           ),

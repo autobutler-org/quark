@@ -14,17 +14,18 @@ import (
 const (
 	// exportSchemaVersion is the newest schema an export reads, the one
 	// quark_slides' QslideCodec writes: version 2 added the stored theme,
-	// role colors, slide layouts and placeholder text boxes, and version 3
-	// slide transitions, a slide's own and the deck's default. Version 1 and
-	// 2 files read too, as the codec migrates them.
-	exportSchemaVersion = 3
+	// role colors, slide layouts and placeholder text boxes, version 3
+	// slide transitions, a slide's own and the deck's default, and version 4
+	// tables. Older files read too, as the codec migrates them.
+	exportSchemaVersion = 4
 	// importSchemaVersion is the schema an import writes. A PowerPoint theme
 	// does not map onto a .qslide theme without loss — its fonts per script,
 	// its color transforms, its master's own text styles — so an import keeps
 	// to version 1: every color literal, every run styled as it is drawn, and
 	// no theme. The editor opens it as a deck with none and saves it at its
-	// own version. A slide's transition is written as version 3 has it: the
-	// codec's migrations up from 1 carry a slide's fields through unchanged.
+	// own version. A slide's transition is written as version 3 has it, and
+	// a table as version 4 has it: the codec's migrations up from 1 carry a
+	// slide's fields and elements through unchanged.
 	importSchemaVersion = 1
 )
 
@@ -35,6 +36,7 @@ const (
 	typeImage = "image"
 	typeLine  = "line"
 	typeGroup = "group"
+	typeTable = "table"
 )
 
 // hexColor is a .qslide color: #RRGGBB, or #RRGGBBAA with alpha.
@@ -180,7 +182,7 @@ func (e *qslideElement) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	switch head.Type {
-	case typeText, typeShape, typeImage, typeLine, typeGroup:
+	case typeText, typeShape, typeImage, typeLine, typeGroup, typeTable:
 		type plain qslideElement
 		return json.Unmarshal(b, (*plain)(e))
 	}

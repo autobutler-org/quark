@@ -16,11 +16,14 @@
 /// colors (`SlideColor.theme(ThemeColor.accent1)`), and the `SlideLayout`s
 /// of `SlideMaster.standard` whose placeholders slides are built from; and
 /// find and replace: `SlideSearch` over a presentation, its `SlideMatch`es,
-/// and the controller's `replaceCurrent` and `replaceAll`; and
-/// slide transitions: `SlideTransitionSpec` on a slide and as the deck's
-/// default, the controller's `setSlideTransition` and `applyTransitionToAll`,
-/// and `SlideTransitionView`, which plays one between two slides, over the
-/// pure `SlideTransitionFrame` math.
+/// and the controller's `replaceCurrent` and `replaceAll`; and slide
+/// transitions: `SlideTransitionSpec` on a slide and as the deck's default,
+/// the controller's `setSlideTransition` and `applyTransitionToAll`, and
+/// `SlideTransitionView`, which plays one between two slides, over the pure
+/// `SlideTransitionFrame` math; and tables: `TableElement` and its
+/// `SlideTableCell`s, the controller's table commands over the pure
+/// `table_edits` functions, the `SlideCanvasTool.table` tool, and the
+/// `SlideTableEditingController` a toolbar works on selected cells through.
 library;
 
 export 'src/clipboard/slide_clipboard.dart';
@@ -32,6 +35,8 @@ export 'src/canvas/slide_element_label.dart';
 export 'src/canvas/slide_fallback_theme.dart';
 export 'src/canvas/slide_image_source.dart';
 export 'src/canvas/slide_shape_paths.dart';
+export 'src/canvas/slide_table_editing_controller.dart';
+export 'src/canvas/slide_table_view.dart';
 export 'src/canvas/slide_text_editing_controller.dart';
 export 'src/canvas/slide_text_layout.dart';
 export 'src/canvas/slide_tool_controller.dart';
@@ -47,12 +52,17 @@ export 'src/geometry/slide_alignment.dart';
 export 'src/geometry/slide_drawing.dart';
 export 'src/geometry/slide_handle.dart';
 export 'src/geometry/slide_snapping.dart';
+export 'src/geometry/slide_table_grip.dart';
 export 'src/geometry/slide_tree.dart';
 export 'src/geometry/slide_viewport.dart';
 export 'src/layout/layout_flow.dart';
 export 'src/layout/layout_placeholder.dart';
 export 'src/layout/slide_layout.dart';
 export 'src/layout/slide_master.dart';
+export 'src/model/cell_border_preset.dart';
+export 'src/model/cell_borders.dart';
+export 'src/model/cell_format.dart';
+export 'src/model/cell_range.dart';
 export 'src/model/element_frame.dart';
 export 'src/model/element_style.dart';
 export 'src/model/image_source.dart';
@@ -63,6 +73,7 @@ export 'src/model/slide_background.dart';
 export 'src/model/slide_color.dart';
 export 'src/model/slide_element.dart';
 export 'src/model/slide_size.dart';
+export 'src/model/slide_table_cell.dart';
 export 'src/model/slide_transition_direction.dart';
 export 'src/model/slide_transition_kind.dart';
 export 'src/model/slide_transition_spec.dart';
@@ -72,6 +83,7 @@ export 'src/model/text_paragraph.dart';
 export 'src/model/text_run.dart';
 export 'src/model/unset.dart';
 export 'src/search/slide_match.dart';
+export 'src/table/table_edits.dart';
 export 'src/search/slide_replace.dart';
 export 'src/search/slide_search.dart';
 export 'src/search/slide_search_query.dart';

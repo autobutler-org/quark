@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 4,
+  "title": "",
+  "size": {"width": 1920, "height": 1080},
+  "slides": [
+    {
+      "id": "s1",
+      "elements": [
+        {
+          "id": "t1",
+          "type": "table",
+          "frame": {"x": 0, "y": 0, "width": 200, "height": 100},
+          "columns": [100, 100],
+          "rows": [50, 50],
+          "style": "medium-2",
+          "firstColumn": true,
+          "cells": [
+            [
+              {
+                "paragraphs": [{"runs": [{"text": "A", "highlight": "#FFFF00"}]}],
+                "anchor": "middle",
+                "margin": {"left": 4},
+                "borders": {
+                  "top": {"color": "#000000", "width": 1, "compound": "double"},
+                  "diagonal": {"color": "#FF0000", "width": 1}
+                }
+              },
+              {"gradient": {"from": "#000000", "to": "#FFFFFF"}}
+            ],
+            [{}, {"paragraphs": [{"runs": [{"text": "D"}]}], "textDirection": "vertical"}]
+          ]
+        }
+      ]
+    }
+  ]
+}

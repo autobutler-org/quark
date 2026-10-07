@@ -415,9 +415,48 @@ type xBlipFill struct {
 
 // xGraphicFrame holds a table, chart, diagram or embedded object.
 type xGraphicFrame struct {
-	Data struct {
-		URI string `xml:"uri,attr"`
+	Props xNonVisual `xml:"nvGraphicFramePr"`
+	Xfrm  *xXfrm     `xml:"xfrm"`
+	Data  struct {
+		URI   string  `xml:"uri,attr"`
+		Table *xTable `xml:"tbl"`
 	} `xml:"graphic>graphicData"`
+}
+
+// xTable is a table: whether its first row is a header and its rows banded,
+// its column widths, and its rows.
+type xTable struct {
+	Props struct {
+		FirstRow xBool `xml:"firstRow,attr"`
+		BandRow  xBool `xml:"bandRow,attr"`
+	} `xml:"tblPr"`
+	Grid []struct {
+		W xInt `xml:"w,attr"`
+	} `xml:"tblGrid>gridCol"`
+	Rows []xTableRow `xml:"tr"`
+}
+
+// xTableRow is one row of a table: its height and its cells.
+type xTableRow struct {
+	H     xInt         `xml:"h,attr"`
+	Cells []xTableCell `xml:"tc"`
+}
+
+// xTableCell is one cell: its merge, its text, and its properties.
+type xTableCell struct {
+	GridSpan xInt       `xml:"gridSpan,attr"`
+	RowSpan  xInt       `xml:"rowSpan,attr"`
+	HMerge   xBool      `xml:"hMerge,attr"`
+	VMerge   xBool      `xml:"vMerge,attr"`
+	Text     *xTextBody `xml:"txBody"`
+	Props    *struct {
+		Anchor string `xml:"anchor,attr"`
+		Left   *xLine `xml:"lnL"`
+		Right  *xLine `xml:"lnR"`
+		Top    *xLine `xml:"lnT"`
+		Bottom *xLine `xml:"lnB"`
+		xFill
+	} `xml:"tcPr"`
 }
 
 // xTextBody is a shape's text.

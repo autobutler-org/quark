@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../model/cell_range.dart';
 import '../model/slide_element.dart';
 import '../theme/slide_theme.dart';
 import 'slide_canvas_style.dart';
@@ -31,6 +32,8 @@ class SlideGroupView extends StatelessWidget {
     this.showPlaceholder = false,
     this.excluded = false,
     this.highlights = const {},
+    this.cellLabel = defaultSlideTableCellLabel,
+    this.selectedCells,
   });
 
   /// The group to draw.
@@ -64,6 +67,12 @@ class SlideGroupView extends StatelessWidget {
   /// Search highlights by text box id.
   final Map<String, List<SlideTextHighlight>> highlights;
 
+  /// Names a table's cells for a screen reader.
+  final SlideTableCellLabel cellLabel;
+
+  /// The table cells selected on the canvas, or `null`.
+  final ({String tableId, CellRange range})? selectedCells;
+
   @override
   Widget build(BuildContext context) => Stack(
         clipBehavior: Clip.none,
@@ -81,6 +90,8 @@ class SlideGroupView extends StatelessWidget {
               showPlaceholder: showPlaceholder,
               excluded: excluded,
               highlights: highlights,
+              cellLabel: cellLabel,
+              selectedCells: selectedCells,
             ),
         ],
       );

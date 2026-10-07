@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../model/cell_range.dart';
 import '../model/slide_element.dart';
 import '../theme/slide_theme.dart';
 import 'slide_canvas_style.dart';
@@ -11,6 +12,8 @@ import 'slide_image_source.dart';
 import 'slide_line_painter.dart';
 import 'slide_placeholder_view.dart';
 import 'slide_shape_painter.dart';
+import 'slide_table_view.dart';
+import 'slide_text_editor.dart';
 import 'slide_text_highlight_painter.dart';
 import 'slide_text_box_view.dart';
 
@@ -30,7 +33,9 @@ import 'slide_text_box_view.dart';
 /// is drawn at its opacity; an image reads as its alt text through [label].
 /// A group draws its children inside its frame (see [SlideGroupView]), each
 /// named by [elementLabel]. A text box paints its [highlights] behind its
-/// text.
+/// text. A table draws its cells (see [SlideTableView]), each named by
+/// [cellLabel], with [selectedCells] tinted when they are its own; while
+/// one of its cells is edited, [editor] is drawn in that cell.
 class SlideElementView extends StatelessWidget {
   /// Creates the view of [element].
   const SlideElementView({
@@ -48,6 +53,8 @@ class SlideElementView extends StatelessWidget {
     this.showPlaceholder = false,
     this.excluded = false,
     this.highlights = const {},
+    this.cellLabel = defaultSlideTableCellLabel,
+    this.selectedCells,
   });
 
   /// The element to draw.
@@ -95,6 +102,13 @@ class SlideElementView extends StatelessWidget {
   /// its children.
   final Map<String, List<SlideTextHighlight>> highlights;
 
+  /// Names a table's cells for a screen reader.
+  final SlideTableCellLabel cellLabel;
+
+  /// The table cells selected on the canvas — the table's id and the
+  /// range — or `null` for none.
+  final ({String tableId, CellRange range})? selectedCells;
+
   /// The [ValueKey] value of the element with [id]: `slide_element_<id>`.
   static String keyName(String id) => 'slide_element_$id';
 
@@ -129,6 +143,19 @@ class SlideElementView extends StatelessWidget {
           ),
         ),
       ImageElement() || UnknownElement() => SlidePlaceholderView(style: style),
+      final TableElement table => SlideTableView(
+          table: table,
+          style: style,
+          theme: theme,
+          cellLabel: cellLabel,
+          selectedCells:
+              selectedCells?.tableId == table.id ? selectedCells!.range : null,
+          editingCell: switch (editor) {
+            SlideTextEditor(:final session) => session.cell,
+            _ => null,
+          },
+          editor: editor,
+        ),
       final GroupElement group => SlideGroupView(
           group: group,
           style: style,
@@ -140,6 +167,8 @@ class SlideElementView extends StatelessWidget {
           showPlaceholder: showPlaceholder,
           excluded: excluded,
           highlights: highlights,
+          cellLabel: cellLabel,
+          selectedCells: selectedCells,
         ),
     };
     final opacity = switch (element) {
@@ -165,8 +194,10 @@ class SlideElementView extends StatelessWidget {
                     label: label,
                     selected: onSelect == null ? null : selected,
                     onTap: onSelect,
-                    // A group's children read on their own, inside it.
-                    excludeSemantics: element is! GroupElement,
+                    // A group's children and a table's cells read on their
+                    // own, inside it.
+                    excludeSemantics:
+                        element is! GroupElement && element is! TableElement,
                     child: drawn,
                   ),
       ),

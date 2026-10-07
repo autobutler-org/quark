@@ -471,7 +471,7 @@ func TestExportRefusesWhatIsNotAQslide(t *testing.T) {
 		"empty":         ``,
 		"not json":      `hello`,
 		"no version":    `{"slides":[]}`,
-		"newer version": `{"schemaVersion":4,"slides":[]}`,
+		"newer version": `{"schemaVersion":5,"slides":[]}`,
 		"bad size":      `{"schemaVersion":1,"size":{"width":0,"height":10},"slides":[]}`,
 		"bad slide":     `{"schemaVersion":1,"slides":[{"elements":"no"}]}`,
 	} {

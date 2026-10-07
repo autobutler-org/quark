@@ -9,8 +9,8 @@ import 'slide_canvas_tool.dart';
 /// for its buttons' tooltips.
 typedef SlideToolLabel = String Function(SlideCanvasTool tool);
 
-/// English labels: "Insert text box", "Insert star", "Insert arrow", and
-/// "Select" for the select tool.
+/// English labels: "Insert text box", "Insert star", "Insert arrow",
+/// "Insert 3 by 4 table", and "Select" for the select tool.
 ///
 /// ```dart
 /// defaultSlideToolLabel(const SlideCanvasTool.shape(ShapeKind.ellipse));
@@ -22,6 +22,7 @@ String defaultSlideToolLabel(SlideCanvasTool tool) => switch (tool.mode) {
       SlideToolMode.shape => 'Insert ${shapeKindName(tool.shapeKind!)}',
       SlideToolMode.line => tool.arrow ? 'Insert arrow' : 'Insert line',
       SlideToolMode.image => 'Insert image',
+      SlideToolMode.table => 'Insert ${tool.rows} by ${tool.columns} table',
     };
 
 /// The English name of a [kind] of shape, lowercase: "rounded rectangle",

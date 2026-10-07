@@ -17,7 +17,7 @@ Everything is immutable and compares by value. An edit makes a new
 | `Presentation`   | `title`, `size` (a `SlideSize`), `theme` (a `SlideTheme` or none), `defaultTransition`, `slides` |
 | `Slide`          | stable `id`, `background`, `elements` back to front, speaker `notes`, `layoutId`, `transition` (or none, to follow the deck) |
 | `SlideTransitionSpec` | `kind` (none, fade, push, wipe, zoom), `direction` (left, right, up, down), `durationMs` (200–2000) |
-| `SlideElement`   | sealed: `TextBox`, `ShapeElement`, `ImageElement`, `LineElement`, `GroupElement`, `UnknownElement` |
+| `SlideElement`   | sealed: `TextBox`, `ShapeElement`, `ImageElement`, `LineElement`, `TableElement`, `GroupElement`, `UnknownElement` |
 | `ElementFrame`   | `x`, `y`, `width`, `height` in slide units, `rotation` in degrees       |
 | `TextBox`        | paragraphs, vertical `anchor`, `autoFit` (grow, fixed, shrink), `placeholder`, layout `slot`, `textRole` |
 | `TextParagraph`  | styled `TextRun`s, alignment, `lineSpacing`, `list` (none, bullet, numbered) |
@@ -26,6 +26,8 @@ Everything is immutable and compares by value. An edit makes a new
 | `LineElement`    | `stroke`, `flipped`, `startCap` and `endCap` (none or arrow), `opacity` |
 | `ImageElement`   | `source` (an `ImageSource` reference), `altText`, `fit`                |
 | `GroupElement`   | `children`, back to front, in group-local frames; groups nest          |
+| `TableElement`   | `columnWidths`, `rowHeights`, `cells` (a full grid of `SlideTableCell`s), `headerRow`, `bandedRows`, `accent` |
+| `SlideTableCell` | `paragraphs` (as a `TextBox`'s), `fill`, `borders` (`CellBorders`), `anchor`, `rowSpan`, `colSpan` |
 | `Stroke`         | `color`, `width`, `dash` (solid, dash, dot, dash-dot)                  |
 | `SlideColor`     | a literal 32-bit color value, or a theme role: `SlideColor.theme(ThemeColor.accent1)` |
 
@@ -41,7 +43,7 @@ A presentation is saved as a file, as sheets (`.qsheet`) and documents
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "title": "Demo",
   "size": { "width": 1920, "height": 1080 },
   "slides": [
@@ -85,9 +87,11 @@ added the inline theme, role colors (`"fill": "theme:accent1"`), slide
 was a reference string nothing drew; it becomes the built-in theme with that
 id, or none, and every slide reads as blank-layout. Version 3 added slide
 transitions — a slide's own `transition` and the deck's default one — and a
-version 2 file reads with every slide cutting, as it showed.
-`test/fixtures/v1_sample.qslide` and `test/fixtures/v2_sample.qslide` are
-the golden version 1 and 2 files.
+version 2 file reads with every slide cutting, as it showed. Version 4
+added tables, and a version 3 file reads as it is.
+`test/fixtures/v1_sample.qslide`, `v2_sample.qslide` and `v3_sample.qslide`
+are the golden version 1, 2 and 3 files; `table_sample.qslide` is the
+golden table.
 
 ## Themes and layouts — for a theme or layout picker
 
@@ -163,6 +167,10 @@ history of earlier presentations:
   `insertTextBox(slideId, at: (x: 160, y: 120))`
 - drawing: `insertShape`, `insertLine`, `insertImage`, `styleElements` (an
   `ElementStyle` over shapes and lines), `setAltText`
+- tables: `insertTable`, `insertTableRow`, `insertTableColumn`,
+  `deleteTableRow`, `deleteTableColumn`, `setTableColumnWidth`,
+  `setTableRowHeight`, `setCellText`, `formatCells`, `mergeCells`,
+  `unmergeCells`, `setTableStyle` (see [Tables](#tables--for-a-table-toolbar))
 - groups and layout: `groupElements`, `ungroupElements`, `alignElements`,
   `distributeElements`, `matchSize` (see [Groups and
   alignment](#groups-and-alignment--for-a-toolbar))
@@ -504,6 +512,129 @@ The math is pure and exported — `alignFrames`, `distributeFrames`,
 `matchFrameSizes` over `id → ElementFrame` maps, and `groupOf`,
 `ungroupChildren`, `resizeGroup`, `fitGroup`, `frameInParent`,
 `frameInGroup` and `frameBox` — and tested on its own.
+
+## Tables — for a table toolbar
+
+A `TableElement` is a grid of cells in its frame: `columnWidths` add up to
+the frame's width and `rowHeights` to its height, so moving, resizing and
+rotating it are the ordinary element commands, and a resize scales every
+column and row in proportion. Each `SlideTableCell` holds rich text — the
+same paragraphs and runs a text box does, laid out by the same
+`SlideTextLayout` inside the cell's padding (`TableElement.cellPaddingX`,
+`cellPaddingY`) — a `fill`, `CellBorders` (a `Stroke` per side, or none)
+and an `anchor`. A row grows to fit its text, never shrinking on its own,
+in the step of any command that changes the table.
+
+**Merged cells** are rectangles: the top-left cell of the area is its
+anchor and stores `rowSpan` and `colSpan`; the cells it covers stay in the
+grid, so it is always rows × columns, but are not drawn. `anchorOf`,
+`areaOf`, `cellBox`, `cellAt` and `expandToMerges` answer questions about
+them, and a file whose merges overlap or run off the grid reads with them
+clipped and undone (`TableElement.normalizedSpans`).
+
+**Style.** With `headerRow` the first row is filled with `accent` (the
+theme's first accent unless set) and its unset text color is the theme's
+background; with `bandedRows` every other body row is filled with the
+theme's `background2`. A cell's own fill wins (`fillAt`). Colors may be
+role colors, so a theme change recolors the table. Two cells share an
+edge: the commands set both cells' sides, and `edgeAbove` and
+`edgeBefore` say what is drawn.
+
+```json
+{"id": "t1", "type": "table",
+ "frame": {"x": 160, "y": 200, "width": 600, "height": 160},
+ "columns": [300, 300], "rows": [80, 80], "headerRow": true,
+ "cells": [[{"paragraphs": [{"runs": [{"text": "Region"}]}], "colSpan": 2}, {}],
+           [{"fill": "theme:accent2", "anchor": "middle"}, {}]]}
+```
+
+A file with no rows or columns, a ragged grid, or more than
+`TableElement.maxRows` (500), `maxColumns` (100) or `maxCells` (5,000) is
+refused with a `QslideFormatException`.
+
+**Commands**, each one undo step; a toolbar normally sends them through a
+`SlideTableEditingController` (below), which knows the selected cells:
+
+| Command | Does |
+| --- | --- |
+| `insertTable(slideId, rows, columns, frame:)` | a table with a header and bands, centered at 300 × 80 per cell unless framed; returns its id |
+| `insertTableRow(…, row, after:)`, `insertTableColumn(…, column, after:)` | a blank row or column copying its neighbor's size, fills and borders; the table grows, and a merge it lands in widens |
+| `deleteTableRow(…, first, count:)`, `deleteTableColumn(…)` | the table shrinks; a merge loses what was deleted and keeps its text; deleting everything deletes the table |
+| `setTableColumnWidth(…, column, width)` | the column to the right makes up the difference, so the table keeps its width |
+| `setTableRowHeight(…, row, height)` | the table grows or shrinks with the row |
+| `setCellText(…, row, column, paragraphs)` | a merged or covered cell writes to its anchor |
+| `formatCells(…, range, CellFormat)` | a `TextFormat` (bold, italic, color, size, alignment, anchor), a `fill`, and a `CellBorderPreset` (`all`, `outside`, `inside`, `top`, … `none`) drawn with a `borderStroke` |
+| `mergeCells(…, range)`, `unmergeCells(…, range)` | merging joins every cell's text into the anchor |
+| `setTableStyle(…, headerRow:, bandedRows:, accent:)` | what is left out is kept |
+
+The pure functions underneath — `newTable`, `insertTableRows`,
+`deleteTableRows`, `resizeTableColumn`, `formatTableCells`,
+`mergeTableCells`, `fitTableRows`, `transposeTable` and the rest — are
+exported and tested on their own.
+
+**On the canvas.** A table selects, moves, resizes and rotates as one
+element. With it selected, a press on a cell selects that cell and a drag
+selects the cells between; a press within a handle's width of the table's
+edge moves it instead. Shift with the arrow keys grows or shrinks the
+selection, the arrow keys move it, Tab and Shift+Tab step through the
+cells, Delete empties them and Escape lets go of them. Double-click or
+double-tap a cell, or press Enter or F2, to edit it with the in-place text
+editor (`SlideTextEditingController.beginCell`; Tab commits and moves on).
+The grips on the table's top and left edges, drawn 12dp and grabbed within
+48dp, drag the lines between columns and rows. The table tool,
+`SlideCanvasTool.table(rows, columns)`, draws one: a click places it at its
+default size, a drag sizes it.
+
+```dart
+final tables = SlideTableEditingController();
+SlideCanvas(document: doc, slideId: slideId, tableEditing: tables, ...);
+tools.use(const SlideCanvasTool.table(3, 4));
+
+ListenableBuilder(
+  listenable: tables,
+  builder: (context, _) => Row(children: [
+    IconButton(
+      onPressed: tables.hasSelection ? tables.insertRowBelow : null,
+      tooltip: 'Insert row below',
+      icon: const Icon(Icons.table_rows),
+    ),
+    IconButton(
+      onPressed: tables.canMerge ? tables.merge : null,
+      tooltip: 'Merge cells',
+      icon: const Icon(Icons.call_merge),
+    ),
+  ]),
+);
+tables.format(const CellFormat(text: TextFormat(bold: true)));
+tables.format(CellFormat(borders: CellBorderPreset.outside, borderStroke: Stroke(width: 4)));
+tables.setStyle(bandedRows: false);
+```
+
+| `SlideTableEditingController` | What it does |
+| --- | --- |
+| `tableId`, `range`, `active`, `hasSelection` | the selected cells and the cell the keyboard is on |
+| `insertRowAbove`, `insertRowBelow`, `insertColumnLeft`, `insertColumnRight` | around the selection; the selection moves with its cells |
+| `deleteRows`, `deleteColumns`, `clearText` | the selected rows, columns or text |
+| `format(CellFormat)`, `setStyle(...)` | as the document's commands |
+| `canMerge`, `merge`, `canUnmerge`, `unmerge` | over the selection |
+| `select(tableId, range)`, `clear()` | set the selection from outside |
+
+**Keys and accessibility.** Each cell is keyed
+`slide_table_cell_<id>_<row>_<column>` (`SlideTableView.cellKeyName`) and
+each grip `slide_table_column_<index>` or `slide_table_row_<index>`
+(`SlideTableGrip.keyName`). The table reads to a screen reader as its size
+("Table, 3 rows by 4 columns") and each cell as `cellLabel` names it —
+"Row 2, column 3: Revenue" in English (`defaultSlideTableCellLabel`) —
+marked selected when it is. Cell text ignores the device text scale, as
+all slide text does, and nothing about a table animates.
+
+**PowerPoint.** `pkg/util/pptxutil` exports a table as a graphic frame
+holding an `a:tbl` — its grid, rows, and cells with their text, fills,
+every edge, and merges as `gridSpan`, `rowSpan`, `hMerge` and `vMerge` —
+and imports one back, within the same size limits.
+
+Find and replace does not look inside tables yet, and charts (#1160) are
+not built.
 
 ## Copy and paste
 

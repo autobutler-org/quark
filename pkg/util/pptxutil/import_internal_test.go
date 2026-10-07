@@ -247,3 +247,34 @@ func TestThemeTypesMirrorTheCodec(t *testing.T) {
 		t.Error("a version 1 file's theme object is no theme, as the codec migrates it")
 	}
 }
+
+// TestImportTableMirrorsTheCodec reads the table of quark_slides' golden
+// table fixture into the import's types and writes it back: the bytes must
+// be the fixture's, so a table an import writes is what QslideCodec.encode
+// writes.
+func TestImportTableMirrorsTheCodec(t *testing.T) {
+	golden, err := os.ReadFile("../../../packages/quark_slides/test/fixtures/table_sample.qslide")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(golden)
+	start := strings.Index(text, "    {\n      \"id\": \"s1\"")
+	end := strings.Index(text, ",\n    {\n      \"id\": \"s2\"")
+	if start < 0 || end < 0 {
+		t.Fatal("the fixture's first slide was not found")
+	}
+	var slide struct {
+		ID       string     `json:"id"`
+		Elements []outTable `json:"elements"`
+	}
+	if err := json.Unmarshal([]byte(text[start:end]), &slide); err != nil {
+		t.Fatal(err)
+	}
+	got, err := marshalIndented(slide, "    ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := strings.TrimPrefix(text[start:end], "    "); got != want {
+		t.Errorf("table differs from the codec's:\n%s\nwant:\n%s", got, want)
+	}
+}
