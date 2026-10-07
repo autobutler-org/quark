@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/models/calendar_view.dart';
+import 'package:quark/widgets/calendar/calendar_swipe_detector.dart';
 import 'package:quark/widgets/error_banner.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -8,7 +9,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// reminder above it, and the loading and error states around it.
 ///
 /// On Day, Week and Month a horizontal swipe steps one span back or forward,
-/// the phone's stand-in for the arrows. Upcoming shows due reminders in its
+/// the phone's stand-in for the arrows; see [CalendarSwipeDetector]. Upcoming shows due reminders in its
 /// own rows, so it has no reminder bar.
 ///
 /// A load that fails before anything has shown fills the body with a retry;
@@ -100,9 +101,6 @@ class CalendarBody extends StatelessWidget {
 
   /// Hides [dueReminder].
   final ValueChanged<CalendarEventItem>? onDismissReminder;
-
-  /// How fast a fling has to be to step, in logical pixels a second.
-  static const double swipeVelocity = 300;
 
   @override
   Widget build(BuildContext context) {
@@ -199,12 +197,9 @@ class CalendarBody extends StatelessWidget {
         Expanded(
           child: view == CalendarView.upcoming
               ? content
-              : GestureDetector(
-                  onHorizontalDragEnd: (details) {
-                    final velocity = details.primaryVelocity ?? 0;
-                    if (velocity > swipeVelocity) onPrevious();
-                    if (velocity < -swipeVelocity) onNext();
-                  },
+              : CalendarSwipeDetector(
+                  onPrevious: onPrevious,
+                  onNext: onNext,
                   child: content,
                 ),
         ),

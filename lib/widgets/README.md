@@ -21,6 +21,9 @@ lib/widgets/
     calendar_event_editor_host.dart
                                 CalendarEventEditor around a
                                 CalendarEditorController; confirms delete
+    calendar_swipe_detector.dart
+                                the sideways swipe that steps a span, by
+                                distance or fling
     show_calendar_event_editor.dart
                                 opens that form as a sheet or a dialog
   chat/

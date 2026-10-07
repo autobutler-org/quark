@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/models/calendar_view.dart';
@@ -10,7 +11,7 @@ import '../../support/tap_target_guidelines.dart';
 /// The Calendar body's error states: a failed load after the first one keeps
 /// the view on show under a banner with its own Try again (#2540). Also the
 /// week start it hands the month grid (#2539) and the empty month and day
-/// (#2538).
+/// (#2538), and the swipe that steps Day, Week and Month (#2885).
 void main() {
   final today = CalendarDates.dateOnly(DateTime.now());
 
@@ -24,6 +25,7 @@ void main() {
     int firstWeekday = DateTime.sunday,
     List<CalendarEventItem> occurrences = const [],
     VoidCallback? onAddEvent,
+    List<String>? log,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
@@ -47,12 +49,12 @@ void main() {
             isLoading: isLoading,
             firstWeekday: firstWeekday,
             error: error,
-            onPrevious: () {},
-            onNext: () {},
+            onPrevious: () => log?.add('previous'),
+            onNext: () => log?.add('next'),
             onRetry: () => retries++,
             onDayTap: (_) {},
-            onCreateOn: (_) {},
-            onCreateAt: (_) {},
+            onCreateOn: (_) => log?.add('create'),
+            onCreateAt: (_) => log?.add('create'),
             onEventTap: (_) {},
             onAddEvent: onAddEvent ?? () {},
           ),
@@ -223,6 +225,78 @@ void main() {
         expect(find.text('Nothing planned this month'), findsNothing);
         expect(find.text('Free day'), findsNothing);
       }
+    });
+  }
+
+  // #2885: a swipe steps by how far it went, not only by how fast it was let
+  // go, so a mouse drag that comes to rest before the button is released still
+  // steps, either way, and never creates an event.
+  for (final size in const [narrowViewport, wideViewport]) {
+    for (final view in [
+      CalendarView.day,
+      CalendarView.week,
+      CalendarView.month,
+    ]) {
+      for (final kind in [PointerDeviceKind.mouse, PointerDeviceKind.touch]) {
+        testWidgets(
+          '${view.slug}: a ${kind.name} drag that stops before release steps '
+          'at $size',
+          (tester) async {
+            final log = <String>[];
+            await pumpBody(
+              tester,
+              size,
+              view: view,
+              isInitialLoad: false,
+              log: log,
+            );
+            final grid = view == CalendarView.month
+                ? find.byType(CalendarMonthGrid)
+                : find.byType(CalendarTimeGrid);
+
+            Future<void> drag(double dx) async {
+              final gesture = await tester.startGesture(
+                tester.getCenter(grid),
+                kind: kind,
+              );
+              for (var i = 0; i < 10; i++) {
+                await gesture.moveBy(Offset(dx / 10, 1));
+                await tester.pump(const Duration(milliseconds: 16));
+              }
+              // Held still, so nothing is left of the fling.
+              await tester.pump(const Duration(milliseconds: 200));
+              await gesture.up();
+              await tester.pumpAndSettle();
+            }
+
+            await drag(-size.width * 0.3);
+            await drag(size.width * 0.3);
+            // Too short to mean anything.
+            await drag(-20);
+            expect(log, ['next', 'previous']);
+          },
+        );
+      }
+    }
+
+    testWidgets('week: a drag on the day headings steps at $size', (
+      tester,
+    ) async {
+      final log = <String>[];
+      await pumpBody(
+        tester,
+        size,
+        view: CalendarView.week,
+        isInitialLoad: false,
+        log: log,
+      );
+      await tester.timedDrag(
+        find.byKey(ValueKey('calendar_day_header_${CalendarDates.key(today)}')),
+        Offset(-size.width * 0.3, 0),
+        const Duration(seconds: 1),
+      );
+      await tester.pumpAndSettle();
+      expect(log, ['next']);
     });
   }
 }
