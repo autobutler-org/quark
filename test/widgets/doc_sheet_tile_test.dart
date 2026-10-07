@@ -10,20 +10,24 @@ void main() {
   const path = 'reports/budget.qsheet';
   final rename = find.byKey(const ValueKey('doc_sheet_rename_$path'));
 
-  Future<void> pumpTile(WidgetTester tester, {VoidCallback? onRename}) =>
-      tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: DocSheetTile(
-              relPath: path,
-              deviceName: 'Data',
-              showDevice: false,
-              onTap: () {},
-              onRename: onRename,
-            ),
-          ),
+  Future<void> pumpTile(
+    WidgetTester tester, {
+    VoidCallback? onRename,
+    VoidCallback? onShare,
+  }) => tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: DocSheetTile(
+          relPath: path,
+          deviceName: 'Data',
+          showDevice: false,
+          onTap: () {},
+          onRename: onRename,
+          onShare: onShare,
         ),
-      );
+      ),
+    ),
+  );
 
   testWidgets('a right-click opens Rename, like the button', (tester) async {
     var renamed = 0;
@@ -44,6 +48,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(renamed, 1);
+  });
+
+  testWidgets('Share is in the row menu when the row can be shared', (
+    tester,
+  ) async {
+    var shared = 0;
+    await pumpTile(tester, onShare: () => shared++);
+    await tester.tap(find.byKey(const ValueKey('doc_sheet_menu_$path')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('doc_sheet_share_$path')));
+    await tester.pumpAndSettle();
+    expect(shared, 1);
   });
 
   testWidgets('a row with no actions opens nothing', (tester) async {

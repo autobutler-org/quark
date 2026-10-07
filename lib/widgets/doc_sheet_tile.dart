@@ -26,6 +26,10 @@ class DocSheetTile extends StatelessWidget {
   /// `doc_sheet_rename_<relPath>`. With none the row has no menu.
   final VoidCallback? onRename;
 
+  /// Offered from the same menu, keyed `doc_sheet_share_<relPath>`; opens
+  /// the share sheet (#1170).
+  final VoidCallback? onShare;
+
   const DocSheetTile({
     required this.relPath,
     required this.deviceName,
@@ -33,6 +37,7 @@ class DocSheetTile extends StatelessWidget {
     required this.onTap,
     this.snippet,
     this.onRename,
+    this.onShare,
     super.key,
   });
 
@@ -77,12 +82,19 @@ class DocSheetTile extends StatelessWidget {
     );
 
     final onRename = this.onRename;
+    final onShare = this.onShare;
     final entries = [
       if (onRename != null)
         QuarkMenuEntry(
           key: ValueKey('doc_sheet_rename_$relPath'),
           label: 'Rename',
           onSelected: onRename,
+        ),
+      if (onShare != null)
+        QuarkMenuEntry(
+          key: ValueKey('doc_sheet_share_$relPath'),
+          label: 'Share',
+          onSelected: onShare,
         ),
     ];
     // A right-click on the row opens the same menu as its button (#2276).

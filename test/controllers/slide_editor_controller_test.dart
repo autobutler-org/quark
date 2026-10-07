@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
 import 'package:quark/services/slides_service.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark_slides/quark_slides.dart';
 
 /// The slide editor's state: loading the `.qslide`, the slide panel's
@@ -21,6 +22,7 @@ void main() {
     Completer<void>? saveGate,
     bool disposeAtEnd = true,
     SlideClipboard? clipboard,
+    bool readOnly = false,
   }) {
     var next = 0;
     final controller = SlideEditorController(
@@ -39,6 +41,7 @@ void main() {
       },
       newId: () => 'n${next++}',
       clipboard: clipboard,
+      readOnly: readOnly,
     );
     // No autosave timer outlives its test.
     if (disposeAtEnd) addTearDown(controller.dispose);
@@ -74,6 +77,47 @@ void main() {
     expect(c.isLoading, isFalse);
     expect(c.loadError, same(failure));
     expect(c.presentation, isNull);
+  });
+
+  group('read-only (#1170)', () {
+    test(
+      'a refused save (403) makes the deck read-only and stops retrying',
+      () async {
+        saveFailure = const ApiException(403, 'save');
+        final c = controllerFor(deck(1));
+        await c.load();
+        expect(c.isReadOnly, isFalse);
+        c.addSlide();
+        await c.save();
+        expect(c.isReadOnly, isTrue);
+        expect(c.saveState, SlideSaveState.saved);
+
+        saveFailure = null;
+        c.addSlide();
+        await c.save();
+        expect(saved, isEmpty);
+      },
+    );
+
+    test('a read-only controller never autosaves', () async {
+      final c = controllerFor(deck(1), readOnly: true);
+      await c.load();
+      expect(c.isReadOnly, isTrue);
+      c.addSlide();
+      expect(c.saveState, SlideSaveState.saved);
+      expect(await c.save(), isTrue);
+      expect(saved, isEmpty);
+    });
+
+    test('other failures stay failed and editable', () async {
+      saveFailure = const ApiException(500, 'save');
+      final c = controllerFor(deck(1));
+      await c.load();
+      c.addSlide();
+      await c.save();
+      expect(c.isReadOnly, isFalse);
+      expect(c.saveState, SlideSaveState.failed);
+    });
   });
 
   test('add puts a slide after the selected one and selects it', () async {

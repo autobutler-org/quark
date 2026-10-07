@@ -13,8 +13,13 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The picture is excluded from semantics: the canvas already names the
 /// element ("Image") to a screen reader.
 ///
-/// Key prefixes: `slide_image_loading` on the placeholder and
-/// `slide_image_error` on the error state.
+/// A picture the viewer may not read — its folder is not shared with them
+/// (#1170), so the download answers 401 or 403 — shows a lock instead, so a
+/// shared deck reads as "no access" rather than as a broken file.
+///
+/// Key prefixes: `slide_image_loading` on the placeholder,
+/// `slide_image_no_access` on the no-access state and `slide_image_error` on
+/// the error state.
 ///
 /// ```dart
 /// SlideImage(image: NetworkImage(url), fit: BoxFit.cover);
@@ -48,21 +53,32 @@ class SlideImage extends StatelessWidget {
               color: muted,
               child: const SizedBox.expand(),
             ),
-      errorBuilder: (context, error, stack) => ColoredBox(
-        key: const ValueKey('slide_image_error'),
-        color: muted,
-        child: Center(
-          // Slide units: a slide is 1920 across, so this reads at any zoom.
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Icon(
-              QuarkIcons.broken_image_outlined,
-              size: 96,
-              color: tokens.mutedForeground,
+      errorBuilder: (context, error, stack) {
+        final noAccess = _isNoAccess(error);
+        return ColoredBox(
+          key: ValueKey(
+            noAccess ? 'slide_image_no_access' : 'slide_image_error',
+          ),
+          color: muted,
+          child: Center(
+            // Slide units: a slide is 1920 across, so this reads at any zoom.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Icon(
+                noAccess
+                    ? QuarkIcons.lock_outline
+                    : QuarkIcons.broken_image_outlined,
+                size: 96,
+                color: tokens.mutedForeground,
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
+
+  static bool _isNoAccess(Object error) =>
+      error is NetworkImageLoadException &&
+      (error.statusCode == 401 || error.statusCode == 403);
 }

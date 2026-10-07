@@ -6,6 +6,7 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/services/files_service.dart';
 import 'package:quark/services/slides_service.dart';
 import 'package:quark/utils/clipboard_utils.dart';
+import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/file_browser_path_utils.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
 import 'package:quark_slides/quark_slides.dart';
@@ -159,7 +160,9 @@ class SlideEditorController extends ChangeNotifier {
     this.listFolder = _listFolder,
     this.exportPresentation = FilesService.savePresentationAsPptx,
     SlideClipboard? clipboard,
-  }) : clipboard = clipboard ?? systemClipboard;
+    bool readOnly = false,
+  }) : _readOnly = readOnly,
+       clipboard = clipboard ?? systemClipboard;
 
   /// The presentation's path, relative to the device's files root.
   final String filePath;
@@ -206,6 +209,16 @@ class SlideEditorController extends ChangeNotifier {
   static SlideClipboard get systemClipboard => isClipboardAvailable
       ? const SlideClipboard(read: readClipboardText, write: writeClipboardText)
       : SlideClipboard.memory;
+
+  /// Whether the signed-in account may only view this presentation (#1170).
+  ///
+  /// The Quark does not tell a client its own level on a file, so a deck
+  /// starts editable and turns read-only when a save is refused with 403:
+  /// the autosave stops, the unsaved state clears so nothing keeps failing,
+  /// and the page disables its edit tools. Present mode still works. A page
+  /// that knows better can start it read-only.
+  bool get isReadOnly => _readOnly;
+  bool _readOnly;
 
   /// Called with the thrown object when a save fails.
   void Function(Object error)? onSaveFailed;
@@ -390,10 +403,12 @@ class SlideEditorController extends ChangeNotifier {
   /// always keeps a slide to show.
   bool get canDeleteSlide => slides.length > 1;
 
-  /// Whether the presentation differs from the file on the Quark.
+  /// Whether the presentation differs from the file on the Quark. A
+  /// read-only deck never does: its edits are not saved, so nothing is owed.
   bool get isDirty {
     final current = presentation;
-    return current != null &&
+    return !_readOnly &&
+        current != null &&
         (_pendingNotes != null || !identical(current, _saved));
   }
 
@@ -977,7 +992,7 @@ class SlideEditorController extends ChangeNotifier {
       _attachText();
     }
     _autosaveTimer?.cancel();
-    if (isDirty) _autosaveTimer = Timer(autosaveDelay, save);
+    if (isDirty && !_readOnly) _autosaveTimer = Timer(autosaveDelay, save);
     _notify();
   }
 
@@ -1017,7 +1032,7 @@ class SlideEditorController extends ChangeNotifier {
     _commitNotes();
     _autosaveTimer?.cancel();
     final current = presentation;
-    if (current == null || _saving || !isDirty) return !isDirty;
+    if (current == null || _saving || !isDirty || _readOnly) return !isDirty;
     _saving = true;
     _notify();
     try {
@@ -1025,8 +1040,15 @@ class SlideEditorController extends ChangeNotifier {
       _saved = current;
       _saveError = null;
     } catch (e) {
-      _saveError = e;
-      onSaveFailed?.call(e);
+      if (e is ApiException && e.statusCode == 403) {
+        // Only a reader is refused with 403: stop saving, keep what is on
+        // screen to look at.
+        _readOnly = true;
+        _saveError = null;
+      } else {
+        _saveError = e;
+        onSaveFailed?.call(e);
+      }
     }
     _saving = false;
     _notify();
