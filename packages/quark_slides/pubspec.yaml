@@ -1,0 +1,19 @@
+name: quark_slides
+description: Headless presentation engine for Flutter — the slide data model, the .qslide format, and a document controller with undo.
+version: 0.0.1
+homepage: "https://github.com/autobutler-org/quark"
+environment:
+  sdk: ^3.6.0
+
+resolution: workspace
+
+publish_to: none
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
