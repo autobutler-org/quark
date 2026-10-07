@@ -124,6 +124,7 @@ func TestTrashVisibility(t *testing.T) {
 	f.grant(t, f.userID, "", "shared", accessutil.Read)
 	f.grant(t, f.userID, "", "writable", accessutil.Write)
 	f.grant(t, f.userID, "", storageutil.TrashPath("T-rows", ""), accessutil.Owner)
+	f.grant(t, f.userID, "", storageutil.TrashPath("T-read", ""), accessutil.Read)
 	bob := f.load(t, accessutil.Principal{UserID: f.userID})
 	admin := f.load(t, accessutil.System)
 
@@ -137,6 +138,7 @@ func TestTrashVisibility(t *testing.T) {
 		{"eve's item from a write share", "T3", "writable/z.txt", eve, true, true},
 		{"eve's private item", "T4", "private/w.txt", eve, false, false},
 		{"eve's item whose rows name bob", "T-rows", "private/v.txt", eve, true, false},
+		{"eve's item whose rows let bob read", "T-read", "private/u.txt", eve, true, false},
 		{"a legacy item in a read share", "T5", "shared/old.txt", 0, false, false},
 	} {
 		if got := bob.CanSeeTrash("", tc.trashName, tc.original, tc.trashedBy); got != tc.see {
@@ -498,5 +500,82 @@ func TestIsGroupRoot(t *testing.T) {
 		if got := accessutil.IsGroupRoot(tc.serial, tc.path); got != tc.want {
 			t.Errorf("IsGroupRoot(%q, %q) = %v, want %v", tc.serial, tc.path, got, tc.want)
 		}
+	}
+}
+
+// TestRowChangesThatChangeNothingStayQuiet: a move or delete that finds no
+// rows tells no stream that access changed.
+func TestRowChangesThatChangeNothingStayQuiet(t *testing.T) {
+	f := newFixture(t)
+	f.grant(t, f.userID, "", "a", accessutil.Read)
+	bus := eventbus.New()
+	events, unsub := bus.Subscribe("quiet-rows-test")
+	defer unsub()
+	ctx := context.Background()
+
+	if result, err := accessutil.MoveRows(accessutil.MoveRowsParams{
+		Ctx: ctx, Database: f.database, EventBus: bus, OldPath: "nothing-here", NewPath: "moved",
+	}); err != nil || result.Moved != 0 {
+		t.Fatalf("MoveRows = %+v, %v; want nothing moved", result, err)
+	}
+	if n := len(events); n != 0 {
+		t.Errorf("a move of no rows published %d events", n)
+	}
+
+	if result, err := accessutil.DeleteRows(accessutil.DeleteRowsParams{
+		Ctx: ctx, Database: f.database, EventBus: bus, Paths: []string{"a", "nothing-here"},
+	}); err != nil || result.Deleted != 1 {
+		t.Fatalf("DeleteRows = %+v, %v; want 1 row deleted", result, err)
+	}
+	var paths []string
+	for len(events) > 0 {
+		paths = append(paths, (<-events).Path)
+	}
+	if len(paths) != 1 || paths[0] != "a" {
+		t.Errorf("DeleteRows announced %v, want only a", paths)
+	}
+}
+
+// TestVisibleOnAny: a merged listing is shown when the folder is visible on
+// one of the named devices, or on any attached device when none are named.
+func TestVisibleOnAny(t *testing.T) {
+	f := newFixture(t)
+	f.grant(t, f.userID, "", "shared", accessutil.Read)
+	bob := f.load(t, accessutil.Principal{UserID: f.userID})
+
+	if !bob.VisibleOnAny(nil, "shared") {
+		t.Error("shared is readable on the internal device, so a merged listing of every device should show it")
+	}
+	if !bob.VisibleOnAny([]string{""}, "shared") {
+		t.Error("shared is readable on the one device named")
+	}
+	if bob.VisibleOnAny([]string{"USB-1"}, "shared") {
+		t.Error("shared is not visible on USB-1, the only device named")
+	}
+	if bob.VisibleOnAny(nil, "private") {
+		t.Error("private is shared with no one, on no device")
+	}
+	if !f.load(t, accessutil.System).VisibleOnAny([]string{"USB-1"}, "private") {
+		t.Error("an admin sees every listing")
+	}
+}
+
+// TestRootLeadsToADeepShare: the files root itself shows in a listing for
+// someone whose only grant is deep inside it, as every breadcrumb above a
+// share does, without making the root readable.
+func TestRootLeadsToADeepShare(t *testing.T) {
+	f := newFixture(t)
+	f.grant(t, f.userID, "", "a/b", accessutil.Read)
+	bob := f.load(t, accessutil.Principal{UserID: f.userID})
+
+	if !bob.Visible("", "") {
+		t.Error("the root should show, since it leads to a/b")
+	}
+	if bob.Check("", "", accessutil.Read).Readable {
+		t.Error("the root itself should not be readable")
+	}
+	carol := createUser(t, f.database, "carol")
+	if f.load(t, accessutil.Principal{UserID: carol}).Visible("", "") {
+		t.Error("someone with no grants should not see the root")
 	}
 }
