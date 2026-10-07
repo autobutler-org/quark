@@ -239,6 +239,35 @@ func TestLogin_UpgradeWriteFails(t *testing.T) {
 	}
 }
 
+// TestLogin_UpgradeLostRace refuses the sign-in when the upgrade's write
+// changes no row, as when a concurrent sign-in upgraded the account first, and
+// leaves the account as it was with no session.
+func TestLogin_UpgradeLostRace(t *testing.T) {
+	ctx := context.Background()
+	database := setupAda(t)
+	queries := database.Queries
+	addLegacy(t, queries)
+	if _, err := database.Db.Exec(`CREATE TRIGGER lose_upgrade BEFORE UPDATE OF auth_key_hash ON users
+		BEGIN SELECT RAISE(IGNORE); END`); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := authutil.Login(ctx, queries, authutil.LoginParams{Username: "old", Password: "old-password", AuthKey: authKeyOf(5), SaltSecret: saltSecret})
+	if err == nil {
+		t.Fatalf("login = %+v, want an upgrade that changed no row to refuse it", result)
+	}
+	if httpErr, ok := errors.AsType[*serverutil.HttpError](err); !ok || httpErr.StatusCode != http.StatusInternalServerError {
+		t.Errorf("err = %#v, want a 500 HttpError", err)
+	}
+	user := userRow(t, queries, "old")
+	if user.AuthKeyHash != "" || user.PasswordHash == "" {
+		t.Error("an upgrade that changed no row changed the account")
+	}
+	if sessions, err := queries.ListActiveSessionsForUser(ctx, user.ID); err != nil || len(sessions) != 0 {
+		t.Errorf("sessions = %d %v, want none", len(sessions), err)
+	}
+}
+
 // TestNewAccount_AuthKey makes an account each way an account is made: it
 // stores the salt GetSalt offered beforehand and no raw-secret hash.
 func TestNewAccount_AuthKey(t *testing.T) {
