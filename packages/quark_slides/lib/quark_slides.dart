@@ -5,7 +5,10 @@
 /// `SlideCanvas`, which draws a slide and edits it through the controller,
 /// and the rich-text editing behind its text boxes: the pure functions over
 /// runs (`replaceText`, `formatParagraphs`, `textFormatOf`), `TextFormat`,
-/// and the `SlideTextEditingController` a toolbar formats through.
+/// and the `SlideTextEditingController` a toolbar formats through; and the
+/// drawing tools: `SlideCanvasTool` and the `SlideToolController` a toolbar
+/// picks them through, the insertion commands, `ElementStyle`, `ImageSource`,
+/// and the pure path and drag geometry behind shapes and lines.
 library;
 
 export 'src/canvas/slide_canvas.dart';
@@ -13,17 +16,23 @@ export 'src/canvas/slide_canvas_style.dart';
 export 'src/canvas/slide_canvas_tool.dart';
 export 'src/canvas/slide_element_label.dart';
 export 'src/canvas/slide_image_source.dart';
+export 'src/canvas/slide_shape_paths.dart';
 export 'src/canvas/slide_text_editing_controller.dart';
 export 'src/canvas/slide_text_layout.dart';
+export 'src/canvas/slide_tool_controller.dart';
+export 'src/canvas/slide_tool_label.dart';
 export 'src/controller/slide_document_controller.dart';
 export 'src/controller/slide_document_notifier.dart';
 export 'src/format/qslide_codec.dart';
 export 'src/format/qslide_format_exception.dart';
 export 'src/geometry/frame_geometry.dart';
+export 'src/geometry/slide_drawing.dart';
 export 'src/geometry/slide_handle.dart';
 export 'src/geometry/slide_snapping.dart';
 export 'src/geometry/slide_viewport.dart';
 export 'src/model/element_frame.dart';
+export 'src/model/element_style.dart';
+export 'src/model/image_source.dart';
 export 'src/model/presentation.dart';
 export 'src/model/rich_text.dart';
 export 'src/model/slide.dart';

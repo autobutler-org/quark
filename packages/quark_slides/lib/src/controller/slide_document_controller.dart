@@ -1,11 +1,15 @@
 import 'dart:math';
 
 import '../model/element_frame.dart';
+import '../model/element_style.dart';
+import '../model/image_source.dart';
 import '../model/presentation.dart';
 import '../model/rich_text.dart';
 import '../model/slide.dart';
 import '../model/slide_background.dart';
+import '../model/slide_color.dart';
 import '../model/slide_element.dart';
+import '../model/stroke.dart';
 import '../model/text_format.dart';
 import '../model/text_paragraph.dart';
 
@@ -490,6 +494,196 @@ class SlideDocumentController {
   /// The height of a text box [insertTextBox] makes when given none and
   /// unable to measure text.
   static const defaultTextBoxHeight = 80.0;
+
+  // ---------------------------------------------------------------------------
+  // Shapes, lines and images
+  // ---------------------------------------------------------------------------
+
+  /// Inserts a [kind] of shape on the slide [slideId] and returns its id.
+  ///
+  /// It fills [frame], or — left out — a [defaultShapeSize] square centered
+  /// on the slide, which is what a toolbar's keyboard-operable "insert"
+  /// wants. It is filled with [fill] ([defaultShapeFill] unless given;
+  /// `null` for hollow), outlined with [stroke] (none by default), and goes
+  /// in front of everything, or at stacking position [index].
+  ///
+  /// ```dart
+  /// final id = doc.insertShape(slideId, ShapeKind.star);
+  /// ```
+  String insertShape(
+    String slideId,
+    ShapeKind kind, {
+    ElementFrame? frame,
+    SlideColor? fill = defaultShapeFill,
+    Stroke? stroke,
+    int? index,
+  }) {
+    final shape = ShapeElement(
+      id: newId(),
+      frame: frame ?? _centered(defaultShapeSize, defaultShapeSize),
+      kind: kind,
+      fill: fill,
+      stroke: stroke,
+    );
+    addElement(slideId, shape, index: index);
+    return shape.id;
+  }
+
+  /// Inserts a line on the slide [slideId] and returns its id; an arrow
+  /// when [endCap] or [startCap] is [LineCap.arrow].
+  ///
+  /// It runs across [frame] (see [LineElement] for [flipped]), or — left
+  /// out — horizontally for [defaultLineLength] through the slide's center.
+  /// It is drawn with [stroke] (black, [defaultLineWidth] wide unless
+  /// given) and goes in front of everything, or at stacking position
+  /// [index].
+  ///
+  /// ```dart
+  /// final id = doc.insertLine(slideId, endCap: LineCap.arrow);
+  /// ```
+  String insertLine(
+    String slideId, {
+    ElementFrame? frame,
+    bool flipped = false,
+    LineCap startCap = LineCap.none,
+    LineCap endCap = LineCap.none,
+    Stroke? stroke,
+    int? index,
+  }) {
+    final line = LineElement(
+      id: newId(),
+      frame: frame ?? _centered(defaultLineLength, 0),
+      flipped: flipped,
+      startCap: startCap,
+      endCap: endCap,
+      stroke: stroke ?? Stroke(width: defaultLineWidth),
+    );
+    addElement(slideId, line, index: index);
+    return line.id;
+  }
+
+  /// Inserts the picture [source], whose pixels are [naturalSize], on the
+  /// slide [slideId] and returns its id.
+  ///
+  /// The picture keeps its aspect ratio. Given [within] — the box a user
+  /// drew — it is scaled to fit that box and centered in it; otherwise it
+  /// is centered on the slide and scaled down, never up, to fit within
+  /// [imageFitFraction] (60%) of the slide's width and height. [altText] is
+  /// what a screen reader reads for it. It goes in front of everything, or
+  /// at stacking position [index]. A [naturalSize] without area throws an
+  /// [ArgumentError].
+  ///
+  /// The package never loads the picture: the app reads its size when it
+  /// picks or uploads it, then calls this.
+  ///
+  /// ```dart
+  /// final id = doc.insertImage(
+  ///   slideId,
+  ///   const QuarkFileImage('photos/dog.jpg'),
+  ///   (width: 4032, height: 3024),
+  ///   altText: 'A dog on a beach',
+  /// );
+  /// ```
+  String insertImage(
+    String slideId,
+    ImageSource source,
+    ({double width, double height}) naturalSize, {
+    ElementFrame? within,
+    String altText = '',
+    int? index,
+  }) {
+    final (:width, :height) = naturalSize;
+    if (!(width > 0 && height > 0)) {
+      throw ArgumentError.value(naturalSize, 'naturalSize', 'has no area');
+    }
+    final size = _presentation.size;
+    final box = within ??
+        _centered(
+          size.width * imageFitFraction,
+          size.height * imageFitFraction,
+        );
+    var scale = min(box.width / width, box.height / height);
+    if (within == null) scale = min(scale, 1);
+    final image = ImageElement(
+      id: newId(),
+      frame: ElementFrame(
+        x: box.x + (box.width - width * scale) / 2,
+        y: box.y + (box.height - height * scale) / 2,
+        width: width * scale,
+        height: height * scale,
+      ),
+      source: source.ref,
+      altText: altText,
+    );
+    addElement(slideId, image, index: index);
+    return image.id;
+  }
+
+  /// Restyles every shape and line in [elementIds] on the slide [slideId]
+  /// as one step; other elements in [elementIds] are skipped, so a toolbar
+  /// can pass a mixed selection. See [ElementStyle].
+  ///
+  /// ```dart
+  /// doc.styleElements(slideId, selection, const ElementStyle(fill: null));
+  /// ```
+  void styleElements(
+    String slideId,
+    Iterable<String> elementIds,
+    ElementStyle style,
+  ) {
+    final ids = elementIds.toSet();
+    _updateSlide(slideId, (slide) {
+      for (final id in ids) {
+        _elementIndex(slide, id);
+      }
+      return slide.copyWith(
+        elements: [
+          for (final e in slide.elements)
+            ids.contains(e.id) ? style.applyTo(e) : e,
+        ],
+      );
+    });
+  }
+
+  /// Sets the image [elementId]'s alt text, which a screen reader reads
+  /// for it. Throws an [ArgumentError] when the element is not an
+  /// [ImageElement].
+  void setAltText(String slideId, String elementId, String altText) =>
+      _updateElement(
+        slideId,
+        elementId,
+        (e) => e is ImageElement
+            ? e.copyWith(altText: altText)
+            : throw ArgumentError.value(
+                elementId, 'elementId', 'is not an image'),
+      );
+
+  /// The side of the square [insertShape] makes when given no frame.
+  static const defaultShapeSize = 400.0;
+
+  /// The fill [insertShape] gives a shape unless told otherwise.
+  static const defaultShapeFill = SlideColor(0xFF3366FF);
+
+  /// The length of the line [insertLine] makes when given no frame.
+  static const defaultLineLength = 400.0;
+
+  /// The stroke width of the line [insertLine] makes when given none.
+  static const defaultLineWidth = 4.0;
+
+  /// The share of the slide's width and height an inserted image fits
+  /// within when no box is drawn for it.
+  static const imageFitFraction = 0.6;
+
+  /// A [width] by [height] frame centered on the slide.
+  ElementFrame _centered(double width, double height) {
+    final size = _presentation.size;
+    return ElementFrame(
+      x: (size.width - width) / 2,
+      y: (size.height - height) / 2,
+      width: width,
+      height: height,
+    );
+  }
 
   static TextBox _textBox(SlideElement e) => e is TextBox
       ? e

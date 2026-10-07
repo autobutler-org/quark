@@ -71,12 +71,16 @@ class CanvasHarness extends StatefulWidget {
     this.zoom = 1,
     this.imageBuilder,
     this.textEditing,
+    this.tools,
+    this.onPickImage,
   });
 
   final SlideDocumentNotifier document;
   final double zoom;
   final SlideImageBuilder? imageBuilder;
   final SlideTextEditingController? textEditing;
+  final SlideToolController? tools;
+  final ValueChanged<ElementFrame?>? onPickImage;
 
   @override
   State<CanvasHarness> createState() => CanvasHarnessState();
@@ -85,10 +89,19 @@ class CanvasHarness extends StatefulWidget {
 class CanvasHarnessState extends State<CanvasHarness> {
   Set<String> selection = {};
   late double zoom = widget.zoom;
-  SlideCanvasTool tool = SlideCanvasTool.select;
+  late final SlideToolController tools = widget.tools ?? SlideToolController();
+
+  /// The active tool.
+  SlideCanvasTool get tool => tools.tool;
 
   /// Picks a tool, as a toolbar would.
-  void useTool(SlideCanvasTool next) => setState(() => tool = next);
+  void useTool(SlideCanvasTool next) => tools.use(next);
+
+  @override
+  void dispose() {
+    if (widget.tools == null) tools.dispose();
+    super.dispose();
+  }
 
   /// Sets the selection from outside the canvas, as a toolbar would.
   void select(Set<String> ids) => setState(() => selection = ids);
@@ -103,8 +116,8 @@ class CanvasHarnessState extends State<CanvasHarness> {
         onZoomChanged: (z) => setState(() => zoom = z),
         imageBuilder: widget.imageBuilder,
         textEditing: widget.textEditing,
-        tool: tool,
-        onToolChanged: useTool,
+        tools: tools,
+        onPickImage: widget.onPickImage,
       );
 }
 
@@ -116,6 +129,8 @@ Future<void> pumpCanvas(
   double zoom = 1,
   SlideImageBuilder? imageBuilder,
   SlideTextEditingController? textEditing,
+  SlideToolController? tools,
+  ValueChanged<ElementFrame?>? onPickImage,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -128,6 +143,8 @@ Future<void> pumpCanvas(
           zoom: zoom,
           imageBuilder: imageBuilder,
           textEditing: textEditing,
+          tools: tools,
+          onPickImage: onPickImage,
         ),
       ),
     ),

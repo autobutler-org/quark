@@ -1,4 +1,5 @@
 import '../model/slide_element.dart';
+import 'slide_tool_label.dart';
 
 /// Names a slide element for a screen reader.
 ///
@@ -23,7 +24,7 @@ String defaultSlideElementLabel(SlideElement element) => switch (element) {
           for (final line in plainText.split('\n'))
             if (line.trim().isNotEmpty) line.trim(),
         ].join('\n'),
-      ShapeElement(:final kind) => '${_shapeNames[kind]} shape',
+      ShapeElement(:final kind) => '${_capitalized(shapeKindName(kind))} shape',
       ImageElement(:final altText) when altText.isEmpty => 'Image',
       ImageElement(:final altText) => 'Image: $altText',
       LineElement(:final startCap, :final endCap)
@@ -33,12 +34,4 @@ String defaultSlideElementLabel(SlideElement element) => switch (element) {
       UnknownElement(:final type) => 'Unsupported $type element',
     };
 
-const _shapeNames = {
-  ShapeKind.rectangle: 'Rectangle',
-  ShapeKind.roundedRectangle: 'Rounded rectangle',
-  ShapeKind.ellipse: 'Ellipse',
-  ShapeKind.triangle: 'Triangle',
-  ShapeKind.diamond: 'Diamond',
-  ShapeKind.arrow: 'Arrow',
-  ShapeKind.star: 'Star',
-};
+String _capitalized(String s) => s[0].toUpperCase() + s.substring(1);

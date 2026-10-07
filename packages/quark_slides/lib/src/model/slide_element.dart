@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import '../format/json_fields.dart';
 import 'element_frame.dart';
+import 'image_source.dart';
 import 'slide_color.dart';
 import 'stroke.dart';
 import 'text_paragraph.dart';
@@ -100,6 +103,9 @@ sealed class SlideElement {
           stroke: json['stroke'] == null
               ? null
               : Stroke.fromJson(json['stroke'], '$path.stroke'),
+          cornerRadius:
+              _nonNegative(optionalNumber(json, 'cornerRadius', path)),
+          opacity: _opacity(json, path),
           extra: unknownFields(json, ShapeElement._known),
         );
       case ImageElement.typeName:
@@ -121,6 +127,7 @@ sealed class SlideElement {
           flipped: optionalBool(json, 'flipped', path, false),
           startCap: enumByName(json, 'startCap', LineCap.values, LineCap.none),
           endCap: enumByName(json, 'endCap', LineCap.values, LineCap.none),
+          opacity: _opacity(json, path),
           extra: unknownFields(json, LineElement._known),
         );
     }
@@ -131,6 +138,13 @@ sealed class SlideElement {
     );
   }
 }
+
+/// Reads an element's `opacity`, 1 when absent, clamped to 0–1.
+double _opacity(JsonMap json, String path) =>
+    (optionalNumber(json, 'opacity', path) ?? 1).clamp(0.0, 1.0);
+
+double? _nonNegative(double? value) =>
+    value == null ? null : math.max(0, value);
 
 /// Where a [TextBox]'s text sits between the top and bottom of its frame.
 enum TextAnchor {
@@ -266,7 +280,8 @@ enum ShapeKind {
   /// A rectangle filling the frame.
   rectangle,
 
-  /// A rectangle with rounded corners.
+  /// A rectangle with rounded corners, [ShapeElement.cornerRadius] in
+  /// radius.
   roundedRectangle,
 
   /// An ellipse inscribed in the frame.
@@ -278,29 +293,48 @@ enum ShapeKind {
   /// A diamond touching the midpoint of each edge.
   diamond,
 
-  /// A right-pointing block arrow.
+  /// A right-pointing block arrow — the "right arrow" of a shape menu.
+  /// Rotate it to point elsewhere.
   arrow,
 
   /// A five-pointed star.
   star,
 }
 
-/// A filled and outlined geometric figure.
+/// A filled and outlined geometric figure, drawn at [opacity].
+///
+/// Its fill is solid or none ([fill] `null`); its outline is a [Stroke]
+/// with a color, width and dash, or none. A [ShapeKind.roundedRectangle]
+/// rounds its corners by [cornerRadius] slide units, or by 15% of its
+/// shorter side when that is `null`, so it keeps its proportions as it is
+/// resized; other kinds ignore it.
 class ShapeElement extends SlideElement {
-  /// Creates a shape.
+  /// Creates a shape; [opacity] runs from 0 (invisible) to 1 (opaque).
   const ShapeElement({
     required super.id,
     required super.frame,
     this.kind = ShapeKind.rectangle,
     this.fill,
     this.stroke,
+    this.cornerRadius,
+    this.opacity = 1,
     super.extra,
-  });
+  })  : assert(cornerRadius == null || cornerRadius >= 0),
+        assert(opacity >= 0 && opacity <= 1);
 
   /// The `type` discriminator, `shape`.
   static const typeName = 'shape';
 
-  static const _known = {'id', 'type', 'frame', 'kind', 'fill', 'stroke'};
+  static const _known = {
+    'id',
+    'type',
+    'frame',
+    'kind',
+    'fill',
+    'stroke',
+    'cornerRadius',
+    'opacity',
+  };
 
   /// Which figure to draw.
   final ShapeKind kind;
@@ -311,6 +345,13 @@ class ShapeElement extends SlideElement {
   /// The outline, or `null` for none.
   final Stroke? stroke;
 
+  /// A rounded rectangle's corner radius in slide units, or `null` for 15%
+  /// of its shorter side.
+  final double? cornerRadius;
+
+  /// How opaque the whole shape is, fill and outline together: 0 to 1.
+  final double opacity;
+
   @override
   String get type => typeName;
 
@@ -319,16 +360,20 @@ class ShapeElement extends SlideElement {
         'kind': kind.name,
         if (fill != null) 'fill': fill!.toHex(),
         if (stroke != null) 'stroke': stroke!.toJson(),
+        if (cornerRadius != null) 'cornerRadius': jsonNumber(cornerRadius!),
+        if (opacity != 1) 'opacity': jsonNumber(opacity),
       };
 
   /// Returns a copy with the given fields replaced; pass `null` to clear
-  /// [fill] or [stroke].
+  /// [fill], [stroke] or [cornerRadius].
   ShapeElement copyWith({
     String? id,
     ElementFrame? frame,
     ShapeKind? kind,
     Object? fill = unset,
     Object? stroke = unset,
+    Object? cornerRadius = unset,
+    double? opacity,
   }) =>
       ShapeElement(
         id: id ?? this.id,
@@ -336,6 +381,10 @@ class ShapeElement extends SlideElement {
         kind: kind ?? this.kind,
         fill: identical(fill, unset) ? this.fill : fill as SlideColor?,
         stroke: identical(stroke, unset) ? this.stroke : stroke as Stroke?,
+        cornerRadius: identical(cornerRadius, unset)
+            ? this.cornerRadius
+            : cornerRadius as double?,
+        opacity: opacity ?? this.opacity,
         extra: extra,
       );
 
@@ -353,11 +402,21 @@ class ShapeElement extends SlideElement {
       other.kind == kind &&
       other.fill == fill &&
       other.stroke == stroke &&
+      other.cornerRadius == cornerRadius &&
+      other.opacity == opacity &&
       jsonEquals(other.extra, extra);
 
   @override
-  int get hashCode =>
-      Object.hash(id, frame, kind, fill, stroke, jsonHash(extra));
+  int get hashCode => Object.hash(
+        id,
+        frame,
+        kind,
+        fill,
+        stroke,
+        cornerRadius,
+        opacity,
+        jsonHash(extra),
+      );
 }
 
 /// How an [ImageElement]'s picture is fitted to its frame. A value this
@@ -390,11 +449,16 @@ class ImageElement extends SlideElement {
 
   static const _known = {'id', 'type', 'frame', 'source', 'altText', 'fit'};
 
-  /// An opaque reference to the picture — a file path or URL the host app
-  /// resolves. The package never loads it.
+  /// The picture, as an [ImageSource] reference string — a Quark file path
+  /// or `asset:<id>` for an uploaded asset — that the host app resolves.
+  /// The package never loads it; [imageSource] reads it.
   final String source;
 
-  /// A description for screen readers; empty when none was given.
+  /// [source] read as an [ImageSource].
+  ImageSource get imageSource => ImageSource.parse(source);
+
+  /// A description for screen readers — the canvas reads it as the
+  /// element's semantics label — empty when none was given.
   final String altText;
 
   /// How the picture fits the frame.
@@ -458,7 +522,8 @@ enum LineCap {
   arrow,
 }
 
-/// A straight line across its frame's diagonal.
+/// A straight line across its frame's diagonal, drawn at [opacity]; an
+/// arrow when either cap is [LineCap.arrow].
 ///
 /// The line runs from the frame's top-left corner to its bottom-right, or
 /// from bottom-left to top-right when [flipped]. A horizontal or vertical
@@ -472,8 +537,10 @@ class LineElement extends SlideElement {
     this.flipped = false,
     this.startCap = LineCap.none,
     this.endCap = LineCap.none,
+    this.opacity = 1,
     super.extra,
-  }) : stroke = stroke ?? Stroke();
+  })  : assert(opacity >= 0 && opacity <= 1),
+        stroke = stroke ?? Stroke();
 
   /// The `type` discriminator, `line`.
   static const typeName = 'line';
@@ -486,9 +553,10 @@ class LineElement extends SlideElement {
     'flipped',
     'startCap',
     'endCap',
+    'opacity',
   };
 
-  /// The line's color and width.
+  /// The line's color, width and dash.
   final Stroke stroke;
 
   /// Whether the line runs bottom-left to top-right.
@@ -500,6 +568,9 @@ class LineElement extends SlideElement {
   /// What is drawn at the end of the line.
   final LineCap endCap;
 
+  /// How opaque the line is: 0 to 1.
+  final double opacity;
+
   @override
   String get type => typeName;
 
@@ -509,6 +580,7 @@ class LineElement extends SlideElement {
         if (flipped) 'flipped': true,
         if (startCap != LineCap.none) 'startCap': startCap.name,
         if (endCap != LineCap.none) 'endCap': endCap.name,
+        if (opacity != 1) 'opacity': jsonNumber(opacity),
       };
 
   /// Returns a copy with the given fields replaced.
@@ -519,6 +591,7 @@ class LineElement extends SlideElement {
     bool? flipped,
     LineCap? startCap,
     LineCap? endCap,
+    double? opacity,
   }) =>
       LineElement(
         id: id ?? this.id,
@@ -527,6 +600,7 @@ class LineElement extends SlideElement {
         flipped: flipped ?? this.flipped,
         startCap: startCap ?? this.startCap,
         endCap: endCap ?? this.endCap,
+        opacity: opacity ?? this.opacity,
         extra: extra,
       );
 
@@ -545,6 +619,7 @@ class LineElement extends SlideElement {
       other.flipped == flipped &&
       other.startCap == startCap &&
       other.endCap == endCap &&
+      other.opacity == opacity &&
       jsonEquals(other.extra, extra);
 
   @override
@@ -555,6 +630,7 @@ class LineElement extends SlideElement {
         flipped,
         startCap,
         endCap,
+        opacity,
         jsonHash(extra),
       );
 }

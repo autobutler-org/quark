@@ -91,8 +91,9 @@ extension FrameGeometry on ElementFrame {
   /// axes, and the opposite edges (or, for an edge handle, the center line
   /// across it) stay where they are on the slide, so a rotated frame grows
   /// the way it looks. No edge passes its opposite: a resized dimension is
-  /// at least [minExtent]. [keepAspect] keeps the width-to-height ratio on a
-  /// corner handle, the way Shift does.
+  /// at least [minExtent]. [keepAspect] keeps the width-to-height ratio, the
+  /// way Shift does at a corner and an image always does: at an edge handle
+  /// the other side scales to match, about the center line across it.
   ElementFrame resized(
     SlideHandle handle,
     Offset delta, {
@@ -107,16 +108,23 @@ extension FrameGeometry on ElementFrame {
     var newHeight = handle.dy == 0
         ? height
         : math.max(minExtent, height + handle.dy * local.dy);
-    if (keepAspect && handle.isCorner && width > 0 && height > 0) {
-      final scale = math.max(newWidth / width, newHeight / height);
+    if (keepAspect && width > 0 && height > 0) {
+      // A corner follows whichever side grew more; an edge scales the
+      // other side to match, about the center line across it.
+      final scale = handle.isCorner
+          ? math.max(newWidth / width, newHeight / height)
+          : (handle.dx == 0 ? newHeight / height : newWidth / width);
       newWidth = math.max(minExtent, width * scale);
       newHeight = math.max(minExtent, height * scale);
     }
     if (rotation % 360 == 0) {
       // With no rotation, the fixed edges keep their exact coordinates.
+      double fixed(int dir, double start, double old, double next) => dir < 0
+          ? start + old - next
+          : (dir == 0 ? start + (old - next) / 2 : start);
       return copyWith(
-        x: handle.dx < 0 ? x + width - newWidth : x,
-        y: handle.dy < 0 ? y + height - newHeight : y,
+        x: fixed(handle.dx, x, width, newWidth),
+        y: fixed(handle.dy, y, height, newHeight),
         width: newWidth,
         height: newHeight,
       );
