@@ -529,6 +529,67 @@ void main() {
     });
   });
 
+  group('leaving (#2896)', () {
+    /// Pumps the editor at its own URL with nothing underneath it, beside
+    /// the Slides list and Files it could leave for.
+    Future<GoRouter> pumpAtUrl(WidgetTester tester) async {
+      final controller = SlideEditorController(
+        filePath: 'talks/Deck.qslide',
+        loadPresentation: (path, {serial}) async => deck(2),
+        savePresentation: (path, p, {serial}) async => saved.add(p),
+      );
+      addTearDown(controller.dispose);
+      final router = GoRouter(
+        initialLocation: AppRoutes.slideFile('talks/Deck.qslide'),
+        routes: [
+          GoRoute(
+            path: AppRoutes.slides,
+            builder: (_, _) => const Text('slides list'),
+          ),
+          GoRoute(
+            path: '${AppRoutes.files}/:path(.*)',
+            builder: (_, state) =>
+                Text('files ${state.pathParameters['path']}'),
+          ),
+          GoRoute(
+            path: '${AppRoutes.slides}/:path(.*)',
+            builder: (_, state) => SlideEditorPage(
+              filePath: state.pathParameters['path']!,
+              controller: controller,
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        MaterialApp.router(
+          theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
+          routerConfig: router,
+        ),
+      );
+      await tester.pumpAndSettle();
+      return router;
+    }
+
+    testWidgets('the back arrow returns to the Slides list', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final router = await pumpAtUrl(tester);
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.text('slides list'), findsOneWidget);
+      expect(router.routeInformationProvider.value.uri.path, AppRoutes.slides);
+    });
+
+    testWidgets('a system back returns to the Slides list', (tester) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final router = await pumpAtUrl(tester);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('slides list'), findsOneWidget);
+      expect(router.routeInformationProvider.value.uri.path, AppRoutes.slides);
+    });
+  });
+
   group('toolbar, properties and pictures (#1167, #1158)', () {
     Presentation drawn() => Presentation(
       title: 'Deck',

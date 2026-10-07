@@ -71,6 +71,7 @@ inserting pictures, tables and charts, its speaker notes, and presenting (#1152,
   the middle.
 - The bar's second row reads "Slide 1 of N".
 - On a phone the panel is a strip across the top; on a wide window it runs down the left.
+- The bar's back arrow, or a system back, returns to the Slides list at `/slides` (#2896).
 
 ---
 
