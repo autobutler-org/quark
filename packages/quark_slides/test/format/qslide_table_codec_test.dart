@@ -14,7 +14,7 @@ Matcher throwsFormatAt(String path) => throwsA(
 
 /// A one-slide deck holding [table], a table object.
 Map<String, Object?> deckWith(Map<String, Object?> table) => {
-      'schemaVersion': 4,
+      'schemaVersion': 5,
       'slides': [
         {
           'id': 's',

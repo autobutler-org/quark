@@ -42,6 +42,7 @@ class SlideStage extends StatelessWidget {
     this.highlights = const {},
     this.cellLabel = defaultSlideTableCellLabel,
     this.selectedCells,
+    this.chartDataLabel = defaultSlideChartDataLabel,
   });
 
   /// The slide to draw.
@@ -89,6 +90,9 @@ class SlideStage extends StatelessWidget {
   /// The table cells selected on the canvas, or `null`.
   final ({String tableId, CellRange range})? selectedCells;
 
+  /// Reads a chart's numbers to a screen reader.
+  final SlideChartDataLabel chartDataLabel;
+
   @override
   Widget build(BuildContext context) => MediaQuery.withNoTextScaling(
         child: SizedBox(
@@ -122,6 +126,7 @@ class SlideStage extends StatelessWidget {
                     highlights: highlights,
                     cellLabel: cellLabel,
                     selectedCells: selectedCells,
+                    chartDataLabel: chartDataLabel,
                   ),
                 if (preview case final preview?)
                   SlideElementView(

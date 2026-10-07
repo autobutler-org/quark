@@ -1,5 +1,6 @@
 import '../model/slide_element.dart';
 import 'slide_canvas_tool.dart';
+import 'slide_element_label.dart';
 
 /// Names a drawing tool for a screen reader, as the action of inserting
 /// with it.
@@ -10,7 +11,8 @@ import 'slide_canvas_tool.dart';
 typedef SlideToolLabel = String Function(SlideCanvasTool tool);
 
 /// English labels: "Insert text box", "Insert star", "Insert arrow",
-/// "Insert 3 by 4 table", and "Select" for the select tool.
+/// "Insert 3 by 4 table", "Insert pie chart", and "Select" for the select
+/// tool.
 ///
 /// ```dart
 /// defaultSlideToolLabel(const SlideCanvasTool.shape(ShapeKind.ellipse));
@@ -23,6 +25,8 @@ String defaultSlideToolLabel(SlideCanvasTool tool) => switch (tool.mode) {
       SlideToolMode.line => tool.arrow ? 'Insert arrow' : 'Insert line',
       SlideToolMode.image => 'Insert image',
       SlideToolMode.table => 'Insert ${tool.rows} by ${tool.columns} table',
+      SlideToolMode.chart =>
+        'Insert ${chartKindName(tool.chartKind!).toLowerCase()}',
     };
 
 /// The English name of a [kind] of shape, lowercase: "rounded rectangle",

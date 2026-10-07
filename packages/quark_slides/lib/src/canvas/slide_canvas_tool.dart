@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../model/chart_kind.dart';
 import '../model/slide_element.dart';
 
 /// The kinds of thing a pointer can do on an editing `SlideCanvas`; the
@@ -22,6 +23,9 @@ enum SlideToolMode {
 
   /// Draw a table of [SlideCanvasTool.rows] by [SlideCanvasTool.columns].
   table,
+
+  /// Draw a chart of [SlideCanvasTool.chartKind], with sample data.
+  chart,
 }
 
 /// What a pointer does on an editing `SlideCanvas`: a [mode], plus the kind
@@ -42,6 +46,7 @@ enum SlideToolMode {
 /// tools.use(SlideCanvasTool.arrowLine);
 /// tools.use(SlideCanvasTool.image);
 /// tools.use(const SlideCanvasTool.table(3, 4));
+/// tools.use(const SlideCanvasTool.chart(ChartKind.pie));
 /// ```
 @immutable
 final class SlideCanvasTool {
@@ -51,6 +56,7 @@ final class SlideCanvasTool {
     this.arrow = false,
     this.rows = 0,
     this.columns = 0,
+    this.chartKind,
   });
 
   /// Draws a [kind] of shape.
@@ -63,6 +69,12 @@ final class SlideCanvasTool {
   /// `defaultTableRowHeight` per row), a drag sizes it.
   const SlideCanvasTool.table(int rows, int columns)
       : this._(SlideToolMode.table, rows: rows, columns: columns);
+
+  /// Draws a [kind] of chart holding
+  /// `SlideDocumentController.sampleChartData`: a click places it at
+  /// `SlideDocumentController.defaultChartSize`, a drag sizes it.
+  const SlideCanvasTool.chart(ChartKind kind)
+      : this._(SlideToolMode.chart, chartKind: kind);
 
   /// Selects, moves, resizes and rotates elements.
   static const select = SlideCanvasTool._(SlideToolMode.select);
@@ -98,6 +110,9 @@ final class SlideCanvasTool {
   /// others.
   final int columns;
 
+  /// The chart a [SlideToolMode.chart] tool draws; `null` for the others.
+  final ChartKind? chartKind;
+
   /// Whether the tool adds elements rather than selecting them.
   bool get draws => mode != SlideToolMode.select;
 
@@ -108,16 +123,19 @@ final class SlideCanvasTool {
       other.shapeKind == shapeKind &&
       other.arrow == arrow &&
       other.rows == rows &&
-      other.columns == columns;
+      other.columns == columns &&
+      other.chartKind == chartKind;
 
   @override
-  int get hashCode => Object.hash(mode, shapeKind, arrow, rows, columns);
+  int get hashCode =>
+      Object.hash(mode, shapeKind, arrow, rows, columns, chartKind);
 
   @override
   String toString() => switch (mode) {
         SlideToolMode.shape => 'SlideCanvasTool.shape(${shapeKind!.name})',
         SlideToolMode.line when arrow => 'SlideCanvasTool.arrowLine',
         SlideToolMode.table => 'SlideCanvasTool.table($rows, $columns)',
+        SlideToolMode.chart => 'SlideCanvasTool.chart(${chartKind!.name})',
         _ => 'SlideCanvasTool.${mode.name}',
       };
 }

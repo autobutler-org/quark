@@ -111,6 +111,7 @@ class ElementStyle {
       case TextBox() ||
             ImageElement() ||
             TableElement() ||
+            ChartElement() ||
             GroupElement() ||
             UnknownElement():
         return element;

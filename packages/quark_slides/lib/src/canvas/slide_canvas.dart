@@ -26,7 +26,10 @@ import '../model/slide_size.dart';
 import '../search/slide_match.dart';
 import '../table/table_edits.dart';
 import '../theme/slide_theme.dart';
+import 'slide_canvas_interaction.dart';
 import 'slide_canvas_style.dart';
+import 'slide_chart_editing_controller.dart';
+import 'slide_chart_painter.dart';
 import 'slide_fallback_theme.dart';
 import 'slide_canvas_tool.dart';
 import 'slide_element_label.dart';
@@ -100,8 +103,16 @@ import 'slide_text_layout.dart';
 /// [SlideTableEditingController]. Each cell reads to a screen reader as
 /// [cellLabel] names it.
 ///
+/// **Charts.** A chart selects, moves, resizes and rotates as one element
+/// with the ordinary handles; what is inside it is laid out as it is drawn
+/// (see [SlideChartPainter]). It reads to a screen reader as a summary
+/// ("Bar chart, 3 series, 4 categories; highest value 24 in Q4") with its
+/// numbers as [chartDataLabel] reads them. [chartEditing] holds the
+/// selected chart and the chart commands a toolbar sends; see
+/// [SlideChartEditingController].
+///
 /// **Drawing.** [tools] holds the active [SlideCanvasTool]: text, any
-/// [ShapeKind], a line or arrow, or an image. With a drawing tool a click
+/// [ShapeKind], a line or arrow, a table, a chart, or an image. With a drawing tool a click
 /// places the element at its default size and a drag draws it (Shift keeps
 /// a shape square or a line at 45° steps, Alt draws out from the point
 /// pressed), previewing it as it goes. The insertion is one undo step; the
@@ -120,6 +131,14 @@ import 'slide_text_layout.dart';
 /// [SlideCanvasStyle.handleSize] across but grab within
 /// [SlideCanvasStyle.handleHitSize]. The canvas draws without animation, so
 /// there is no motion for reduced-motion settings to remove.
+///
+/// **Locked.** [interaction] limits an editing canvas without hiding it
+/// from pointers: [SlideCanvasInteraction.selectOnly] keeps selection
+/// (taps, marquee, Tab, Escape, groups, table cells), copying, pan, zoom and
+/// every screen reader label while no gesture, key, tool or in-place editor
+/// changes the document; [SlideCanvasInteraction.viewOnly] keeps only pan,
+/// zoom — a drag pans — and the labels. Switching away from editing commits
+/// a text edit in progress.
 ///
 /// **Read-only.** [SlideCanvas.readOnly] draws a [Slide] with no chrome and
 /// no input, for thumbnails and presenting.
@@ -197,6 +216,9 @@ class SlideCanvas extends StatefulWidget {
     this.currentHighlight,
     this.tableEditing,
     this.cellLabel = defaultSlideTableCellLabel,
+    this.interaction = SlideCanvasInteraction.editable,
+    this.chartEditing,
+    this.chartDataLabel = defaultSlideChartDataLabel,
   })  : slide = null,
         size = null,
         theme = null;
@@ -214,6 +236,7 @@ class SlideCanvas extends StatefulWidget {
     this.padding = EdgeInsets.zero,
     this.theme,
     this.cellLabel = defaultSlideTableCellLabel,
+    this.chartDataLabel = defaultSlideChartDataLabel,
   })  : document = null,
         slideId = null,
         selection = const {},
@@ -231,7 +254,9 @@ class SlideCanvas extends StatefulWidget {
         clipboard = null,
         highlights = const [],
         currentHighlight = null,
-        tableEditing = null;
+        tableEditing = null,
+        interaction = SlideCanvasInteraction.viewOnly,
+        chartEditing = null;
 
   /// The smallest zoom, half the fitted size.
   static const minZoom = 0.5;
@@ -331,6 +356,17 @@ class SlideCanvas extends StatefulWidget {
   /// Names a table's cells for a screen reader.
   final SlideTableCellLabel cellLabel;
 
+  /// Reads a chart's numbers to a screen reader.
+  final SlideChartDataLabel chartDataLabel;
+
+  /// What a person may do: edit, only select, or only look. A read-only
+  /// canvas is [SlideCanvasInteraction.viewOnly].
+  final SlideCanvasInteraction interaction;
+
+  /// The selected chart and the chart commands; the canvas makes its own
+  /// when none is given.
+  final SlideChartEditingController? chartEditing;
+
   /// Whether the canvas only draws.
   bool get readOnly => document == null;
 
@@ -340,6 +376,9 @@ class SlideCanvas extends StatefulWidget {
 
 enum _GestureKind {
   move(edits: true),
+
+  /// A press that only selects, on a canvas that does not edit.
+  press(edits: false),
   resize(edits: true),
   rotate(edits: true),
   tableResize(edits: true),
@@ -445,6 +484,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
   SlideTextEditingController? _ownTextEditing;
   SlideToolController? _ownTools;
   SlideTableEditingController? _ownTableEditing;
+  SlideChartEditingController? _ownChartEditing;
   bool _wasEditing = false;
 
   /// The element a draw gesture would insert, drawn over the slide.
@@ -464,11 +504,22 @@ class _SlideCanvasState extends State<SlideCanvas> {
   SlideToolController get _tools =>
       widget.tools ?? (_ownTools ??= SlideToolController());
 
-  SlideCanvasTool get _tool => _tools.tool;
+  /// The active tool; [SlideCanvasTool.select] unless the canvas edits.
+  SlideCanvasTool get _tool => _edits ? _tools.tool : SlideCanvasTool.select;
+
+  /// Whether gestures and keys may change the document.
+  bool get _edits => widget.interaction.edits;
+
+  /// Whether gestures and keys may select.
+  bool get _selects => widget.interaction.selects;
 
   SlideTableEditingController get _cells =>
       widget.tableEditing ??
       (_ownTableEditing ??= SlideTableEditingController());
+
+  SlideChartEditingController get _charts =>
+      widget.chartEditing ??
+      (_ownChartEditing ??= SlideChartEditingController());
 
   SlideDocumentController get _doc => widget.document!.controller;
 
@@ -505,6 +556,12 @@ class _SlideCanvasState extends State<SlideCanvas> {
       _leaveUnlessInside(_selection);
     }
     final oldEditing = oldWidget.textEditing ?? _ownTextEditing;
+    if (widget.interaction != oldWidget.interaction && !_edits) {
+      // What was typed is kept; nothing more can be.
+      oldEditing?.commit();
+      _cancelGesture();
+      if (!_selects) _cells.clear();
+    }
     if (widget.slideId != oldWidget.slideId ||
         widget.document != oldWidget.document ||
         oldEditing != _editing) {
@@ -548,6 +605,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
     _ownTools?.dispose();
     (widget.tableEditing ?? _ownTableEditing)?.removeListener(_onCellsChanged);
     _ownTableEditing?.dispose();
+    _ownChartEditing?.dispose();
     final own = _ownTextEditing;
     if (editing != null && editing.isEditing) {
       // Keep what was typed; the document cannot change mid-unmount.
@@ -747,13 +805,16 @@ class _SlideCanvasState extends State<SlideCanvas> {
   // Selection
   // ---------------------------------------------------------------------------
 
-  /// The selected ids that are on [slide], at any depth, back to front.
+  /// The selected ids that are on [slide], at any depth, back to front;
+  /// none when the canvas does not select.
   Set<String> _validSelection(Slide slide) => {
-        for (final e in slide.allElements)
-          if (_selection.contains(e.id)) e.id,
+        if (_selects)
+          for (final e in slide.allElements)
+            if (_selection.contains(e.id)) e.id,
       };
 
   void _select(Set<String> ids) {
+    if (!_selects) return;
     _leaveUnlessInside(ids);
     if (_cells.tableId != null && !setEquals(ids, {_cells.tableId})) {
       _cells.clear();
@@ -911,6 +972,16 @@ class _SlideCanvasState extends State<SlideCanvas> {
     final point = event.localPosition;
     final slidePoint = viewport.toSlide(point);
     final selected = _validSelection(slide);
+    if (!_selects) {
+      // Nothing to select: a drag pans.
+      return _Gesture(
+        _GestureKind.pan,
+        pointer: event.pointer,
+        startView: point,
+        startSlide: slidePoint,
+        startPan: viewport.pan,
+      );
+    }
     final hit = _hitAt(slide, slidePoint, _style.handleSize / viewport.scale);
     _Gesture gesture(
       _GestureKind kind,
@@ -921,7 +992,8 @@ class _SlideCanvasState extends State<SlideCanvas> {
       String? collapseTo,
     }) =>
         _Gesture(
-          kind,
+          // A canvas that does not edit presses where it would move.
+          kind == _GestureKind.move && !_edits ? _GestureKind.press : kind,
           pointer: event.pointer,
           startView: point,
           startSlide: slidePoint,
@@ -939,7 +1011,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
     if (selected.length == 1) {
       final element = slide.findElement(selected.single)!;
       final frame = slide.frameOnSlide(element.id)!;
-      final handle = _handleAt(frame, point, viewport);
+      final handle = _edits ? _handleAt(frame, point, viewport) : null;
       if (handle != null) {
         return gesture(
           handle.isResize ? _GestureKind.resize : _GestureKind.rotate,
@@ -990,7 +1062,10 @@ class _SlideCanvasState extends State<SlideCanvas> {
     final point = event.localPosition;
     final slidePoint = viewport.toSlide(point);
     final reach = _style.handleHitSize / 2;
-    for (final (grip, at) in SlideTableGrip.gripsOf(table, frame)) {
+    final grips = _edits
+        ? SlideTableGrip.gripsOf(table, frame)
+        : const <(SlideTableGrip, Offset)>[];
+    for (final (grip, at) in grips) {
       final offset = point - viewport.toView(at);
       if (offset.dx.abs() > reach || offset.dy.abs() > reach) continue;
       return _Gesture(
@@ -1165,6 +1240,8 @@ class _SlideCanvasState extends State<SlideCanvas> {
           CellRange.spanning(gesture.cell!, cell),
           active: gesture.cell,
         );
+      case _GestureKind.press:
+        return;
       case _GestureKind.rotate:
         _doc.rotateElement(
           slideId,
@@ -1206,9 +1283,24 @@ class _SlideCanvasState extends State<SlideCanvas> {
     // A handle that was tapped, not dragged, was a tap on its element: on a
     // phone a short box is all handle.
     if (!gesture.started &&
-        (gesture.kind.edits || gesture.kind == _GestureKind.cells)) {
+        (gesture.kind.edits ||
+            gesture.kind == _GestureKind.cells ||
+            gesture.kind == _GestureKind.press)) {
       _onTap(event, gesture.hit);
     }
+  }
+
+  /// Selects [id] for a screen reader's tap, or edits it when it is a text
+  /// box selected alone already.
+  void _onSemanticSelect(String id) {
+    final slide = _slide;
+    final edit = _edits &&
+        slide != null &&
+        setEquals(_validSelection(slide), {id}) &&
+        slide.elementById(id) is TextBox;
+    if (edit) return _beginEditing(id);
+    _focusNode.requestFocus();
+    _select({id});
   }
 
   /// Opens a text box tapped twice in a row for editing.
@@ -1243,7 +1335,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
       final local = frame.toLocal(viewport.toSlide(point)) +
           Offset(frame.width, frame.height) / 2;
       final cell = element.cellAt(local.dx, local.dy);
-      if (cell == null) return;
+      if (cell == null || !_edits) return;
       _lastTap = null;
       _select({hit});
       return _beginCellEditing(
@@ -1253,7 +1345,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
         caretAt: event.position,
       );
     }
-    if (element is! TextBox) return;
+    if (element is! TextBox || !_edits) return;
     _lastTap = null;
     _select({hit});
     _beginEditing(hit, caretAt: event.position);
@@ -1358,6 +1450,22 @@ class _SlideCanvasState extends State<SlideCanvas> {
                             2,
                       ),
               );
+      case SlideToolMode.chart:
+        final size = _doc.defaultChartSize;
+        id = _doc.insertChart(
+          slideId,
+          tool.chartKind!,
+          frame: switch ((drawn, at)) {
+            (final Rect box, _) => _frameOf(box),
+            (_, final at?) => ElementFrame(
+                x: at.dx,
+                y: at.dy,
+                width: size.width,
+                height: size.height,
+              ),
+            _ => null,
+          },
+        );
       case SlideToolMode.table:
         final size = _doc.defaultTableSize(tool.rows, tool.columns);
         id = _doc.insertTable(
@@ -1512,7 +1620,11 @@ class _SlideCanvasState extends State<SlideCanvas> {
       viewport.toSlide(event.localPosition),
       tolerance: _style.handleSize / viewport.scale,
     );
-    final cursor = over == null ? MouseCursor.defer : SystemMouseCursors.move;
+    final cursor = over == null || !_selects
+        ? MouseCursor.defer
+        : _edits
+            ? SystemMouseCursors.move
+            : SystemMouseCursors.click;
     if (cursor != _cursor) setState(() => _cursor = cursor);
   }
 
@@ -1542,7 +1654,8 @@ class _SlideCanvasState extends State<SlideCanvas> {
     if (slide == null ||
         event is KeyUpEvent ||
         _gesture != null ||
-        _editing.isEditing) {
+        _editing.isEditing ||
+        !_selects) {
       return KeyEventResult.ignored;
     }
     final keys = HardwareKeyboard.instance;
@@ -1559,7 +1672,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
     if (key == LogicalKeyboardKey.tab) {
       return _cycle(slide, selected, backward: keys.isShiftPressed);
     }
-    if (command && key == LogicalKeyboardKey.keyV) {
+    if (command && key == LogicalKeyboardKey.keyV && _edits) {
       _paste();
       return KeyEventResult.handled;
     }
@@ -1580,7 +1693,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter ||
         key == LogicalKeyboardKey.f2) {
-      if (single is TextBox) {
+      if (single is TextBox && _edits) {
         _beginEditing(single.id);
         return KeyEventResult.handled;
       }
@@ -1588,6 +1701,10 @@ class _SlideCanvasState extends State<SlideCanvas> {
         _enter(single.id, single.children.first.id);
         return KeyEventResult.handled;
       }
+    }
+    final copy = command && key == LogicalKeyboardKey.keyC;
+    if (!_edits && key != LogicalKeyboardKey.escape && !copy) {
+      return KeyEventResult.ignored;
     }
     final nudge = _nudges[key];
     final toFront = _forwardKeys.contains(key);
@@ -1607,7 +1724,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
         _select({group.id});
         setState(() => _entered = slide.parentOf(group.id)?.id);
       }
-    } else if (command && key == LogicalKeyboardKey.keyC) {
+    } else if (copy) {
       _clipboard.copy(_doc, slideId, selected);
     } else if (command && key == LogicalKeyboardKey.keyX) {
       _clipboard.cut(_doc, slideId, selected);
@@ -1659,9 +1776,13 @@ class _SlideCanvasState extends State<SlideCanvas> {
   ) {
     final range = _cells.tableId == table.id ? _cells.range : null;
     final active = range == null ? null : _cells.active;
-    if (key == LogicalKeyboardKey.enter ||
+    final enter = key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter ||
-        key == LogicalKeyboardKey.f2) {
+        key == LogicalKeyboardKey.f2;
+    final clear =
+        key == LogicalKeyboardKey.delete || key == LogicalKeyboardKey.backspace;
+    if (!_edits && (enter || clear)) return null;
+    if (enter) {
       final cell = active ?? (row: 0, column: 0);
       _beginCellEditing(table.id, cell.row, cell.column);
       return KeyEventResult.handled;
@@ -1705,8 +1826,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
         column.clamp(0, table.columnCount - 1),
       );
       _cells.select(table.id, CellRange.single(next.row, next.column));
-    } else if (key == LogicalKeyboardKey.delete ||
-        key == LogicalKeyboardKey.backspace) {
+    } else if (clear) {
       _cells.clearText();
     } else if (key == LogicalKeyboardKey.escape) {
       _cells.clear();
@@ -1780,6 +1900,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
                 elementLabel: widget.elementLabel,
                 imageBuilder: widget.imageBuilder,
                 cellLabel: widget.cellLabel,
+                chartDataLabel: widget.chartDataLabel,
               ),
             ),
           ),
@@ -1811,6 +1932,12 @@ class _SlideCanvasState extends State<SlideCanvas> {
               final selected = _validSelection(slide);
               _editing.attach(_doc, widget.slideId!, selected);
               _cells.attach(_doc, widget.slideId!);
+              _charts.attach(
+                _doc,
+                widget.slideId!,
+                selected,
+                editable: _edits,
+              );
               final editingId = _editing.elementId;
               final editingFrame = _editingFrame;
               final theme = _theme;
@@ -1855,17 +1982,12 @@ class _SlideCanvasState extends State<SlideCanvas> {
                                 elementLabel: widget.elementLabel,
                                 imageBuilder: widget.imageBuilder,
                                 selection: selected,
-                                onSelect: (id) {
-                                  final edit = setEquals(selected, {id}) &&
-                                      slide.elementById(id) is TextBox;
-                                  if (edit) return _beginEditing(id);
-                                  _focusNode.requestFocus();
-                                  _select({id});
-                                },
+                                onSelect: _selects ? _onSemanticSelect : null,
                                 editingId: editingId,
                                 preview: _preview,
                                 highlights: _highlightsOn(slide),
                                 cellLabel: widget.cellLabel,
+                                chartDataLabel: widget.chartDataLabel,
                                 selectedCells:
                                     cellsOf == null || cellRange == null
                                         ? null
@@ -1916,7 +2038,9 @@ class _SlideCanvasState extends State<SlideCanvas> {
                                 style: style,
                                 guides: _guides,
                                 marquee: _marquee,
-                                tableGrips: single is TableElement &&
+                                showHandles: _edits,
+                                tableGrips: _edits &&
+                                        single is TableElement &&
                                         tableFrame != null
                                     ? SlideTableGrip.gripsOf(single, tableFrame)
                                     : const [],

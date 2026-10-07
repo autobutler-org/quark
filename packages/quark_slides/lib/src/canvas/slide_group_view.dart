@@ -34,6 +34,7 @@ class SlideGroupView extends StatelessWidget {
     this.highlights = const {},
     this.cellLabel = defaultSlideTableCellLabel,
     this.selectedCells,
+    this.chartDataLabel = defaultSlideChartDataLabel,
   });
 
   /// The group to draw.
@@ -73,6 +74,9 @@ class SlideGroupView extends StatelessWidget {
   /// The table cells selected on the canvas, or `null`.
   final ({String tableId, CellRange range})? selectedCells;
 
+  /// Reads a chart's numbers to a screen reader.
+  final SlideChartDataLabel chartDataLabel;
+
   @override
   Widget build(BuildContext context) => Stack(
         clipBehavior: Clip.none,
@@ -92,6 +96,7 @@ class SlideGroupView extends StatelessWidget {
               highlights: highlights,
               cellLabel: cellLabel,
               selectedCells: selectedCells,
+              chartDataLabel: chartDataLabel,
             ),
         ],
       );

@@ -99,6 +99,8 @@ func (s *slideWriter) writeElement(el qslideElement) {
 		s.writeGroup(el)
 	case typeTable:
 		s.writeTable(el)
+	case typeChart:
+		s.writeChart(el)
 	}
 }
 

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 5,
+  "title": "",
+  "size": {"width": 1920, "height": 1080},
+  "slides": [
+    {
+      "id": "s1",
+      "elements": [
+        {
+          "id": "c1",
+          "type": "chart",
+          "frame": {"x": 0, "y": 0, "width": 800, "height": 500},
+          "kind": "line",
+          "categories": ["Jan", "Feb"],
+          "series": [
+            {"name": "Visits", "values": [10, 20], "marker": "diamond", "smooth": true}
+          ],
+          "stacked": "percent",
+          "valueAxis": {"min": 0, "logBase": 10}
+        },
+        {
+          "id": "c2",
+          "type": "chart",
+          "frame": {"x": 0, "y": 600, "width": 400, "height": 300},
+          "kind": "scatter",
+          "points": [[1, 2], [3, 4]]
+        }
+      ]
+    }
+  ]
+}

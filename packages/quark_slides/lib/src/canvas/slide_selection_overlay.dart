@@ -13,8 +13,8 @@ import 'slide_table_grip_view.dart';
 
 /// The editing chrome over a slide, sized to the whole viewport: selection
 /// outlines, the faint outline of an entered group, snap guides and the
-/// marquee, and — when exactly one element is selected — its eight resize
-/// handles and its rotate handle, and a selected table's grips between its
+/// marquee, and — when exactly one element is selected and [showHandles]
+/// — its eight resize handles and its rotate handle, and a selected table's grips between its
 /// columns and rows (see [SlideTableGripView]).
 ///
 /// It sits in screen space rather than in the scaled slide, so handles keep
@@ -32,6 +32,7 @@ class SlideSelectionOverlay extends StatelessWidget {
     this.groupFrame,
     this.tableGrips = const [],
     this.tableRotation = 0,
+    this.showHandles = true,
   });
 
   /// Maps slide units to the viewport.
@@ -59,9 +60,13 @@ class SlideSelectionOverlay extends StatelessWidget {
   /// The selected table's rotation, which turns its grips.
   final double tableRotation;
 
+  /// Whether a single selection shows its resize and rotate handles; a
+  /// canvas that does not edit outlines the selection only.
+  final bool showHandles;
+
   @override
   Widget build(BuildContext context) {
-    final single = frames.length == 1 ? frames.single : null;
+    final single = frames.length == 1 && showHandles ? frames.single : null;
     final hit = style.handleHitSize;
     return Stack(
       children: [

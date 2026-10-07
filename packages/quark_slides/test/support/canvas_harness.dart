@@ -78,6 +78,8 @@ class CanvasHarness extends StatefulWidget {
     this.highlights = const [],
     this.currentHighlight,
     this.tableEditing,
+    this.interaction = SlideCanvasInteraction.editable,
+    this.chartEditing,
   });
 
   final SlideDocumentNotifier document;
@@ -90,6 +92,8 @@ class CanvasHarness extends StatefulWidget {
   final List<SlideMatch> highlights;
   final SlideMatch? currentHighlight;
   final SlideTableEditingController? tableEditing;
+  final SlideCanvasInteraction interaction;
+  final SlideChartEditingController? chartEditing;
 
   @override
   State<CanvasHarness> createState() => CanvasHarnessState();
@@ -131,6 +135,8 @@ class CanvasHarnessState extends State<CanvasHarness> {
         highlights: widget.highlights,
         currentHighlight: widget.currentHighlight,
         tableEditing: widget.tableEditing,
+        interaction: widget.interaction,
+        chartEditing: widget.chartEditing,
       );
 }
 
@@ -149,6 +155,8 @@ Future<void> pumpCanvas(
   SlideMatch? currentHighlight,
   SlideTableEditingController? tableEditing,
   double textScale = 1,
+  SlideCanvasInteraction interaction = SlideCanvasInteraction.editable,
+  SlideChartEditingController? chartEditing,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -173,6 +181,8 @@ Future<void> pumpCanvas(
           highlights: highlights,
           currentHighlight: currentHighlight,
           tableEditing: tableEditing,
+          interaction: interaction,
+          chartEditing: chartEditing,
         ),
       ),
     ),
