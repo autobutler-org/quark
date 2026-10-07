@@ -1,9 +1,11 @@
 import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/keyboard.dart';
 import '../support/pump.dart';
 
 void main() {
@@ -172,4 +174,24 @@ void main() {
       await expectTapTargetGuidelines(tester);
     },
   );
+
+  // #2604: the type cards were bare gesture detectors a keyboard could not
+  // reach.
+  testBothViewports('a type is picked from the keyboard', (tester, size) async {
+    final created = await pumpDialog(tester, size: size);
+    final handle = tester.ensureSemantics();
+
+    final card = find.byKey(const ValueKey('new_file_type_qdoc'));
+    await tabTo(tester, card);
+    expect(findFocusRing(card), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+
+    expect(
+      tester.getSemantics(card).flagsCollection.isSelected,
+      Tristate.isTrue,
+    );
+    expect(created, isEmpty);
+    handle.dispose();
+  });
 }

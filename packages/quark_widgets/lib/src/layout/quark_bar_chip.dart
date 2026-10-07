@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/quark_theme.dart';
 import '../theme/quark_tokens.dart';
 import 'quark_bar_icon_button.dart';
 
@@ -87,32 +88,40 @@ class QuarkBarChip extends StatelessWidget {
       onPressed: onPressed,
       icon: Icon(icon),
       label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: foreground,
-        iconColor: foreground,
-        disabledForegroundColor: tokens.mutedForeground,
-        disabledIconColor: tokens.mutedForeground,
-        backgroundColor: active
-            ? tokens.primary.withValues(alpha: 0.12)
-            : tokens.input,
-        disabledBackgroundColor: tokens.input,
-        side: BorderSide(
-          color: active ? tokens.primary.withValues(alpha: 0.3) : tokens.border,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(tokens.radiusLg),
-        ),
-        iconSize: QuarkBarIconButton.glyphSize,
-        textStyle: Theme.of(context).textTheme.labelLarge,
-        padding: EdgeInsets.symmetric(
-          horizontal: tokens.spacingSm + tokens.spacingXs,
-        ),
-        // No maximum: at large text sizes the label is taller than a bar
-        // button, and the chip grows to hold it rather than clip it (#2606).
-        minimumSize: const Size(0, QuarkBarIconButton.size),
-        tapTargetSize: MaterialTapTargetSize.padded,
-        visualDensity: VisualDensity.standard,
-      ),
+      style:
+          OutlinedButton.styleFrom(
+            foregroundColor: foreground,
+            iconColor: foreground,
+            disabledForegroundColor: tokens.mutedForeground,
+            disabledIconColor: tokens.mutedForeground,
+            backgroundColor: active
+                ? tokens.primary.withValues(alpha: 0.12)
+                : tokens.input,
+            disabledBackgroundColor: tokens.input,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(tokens.radiusLg),
+            ),
+            iconSize: QuarkBarIconButton.glyphSize,
+            textStyle: Theme.of(context).textTheme.labelLarge,
+            padding: EdgeInsets.symmetric(
+              horizontal: tokens.spacingSm + tokens.spacingXs,
+            ),
+            // No maximum: at large text sizes the label is taller than a bar
+            // button, and the chip grows to hold it rather than clip it (#2606).
+            minimumSize: const Size(0, QuarkBarIconButton.size),
+            tapTargetSize: MaterialTapTargetSize.padded,
+            visualDensity: VisualDensity.standard,
+            // Through the theme's focus outline: a side of its own would replace
+            // it, and on the input fill a focused button looked like any other
+            // (#2604).
+          ).copyWith(
+            side: QuarkTheme.focusRing(
+              tokens,
+              resting: active
+                  ? tokens.primary.withValues(alpha: 0.3)
+                  : tokens.border,
+            ),
+          ),
     );
     final message = tooltip;
     return Padding(

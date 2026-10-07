@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_tappable.dart';
 import '../models/photo_item.dart';
 import 'live_badge.dart';
 
@@ -29,7 +30,8 @@ import 'live_badge.dart';
 /// too, unless the caller has turned it off with `BrowserContextMenu`.
 ///
 /// A screen reader hears the tile as a button named for [PhotoItem.name], and
-/// while selecting, whether it is selected (#2603).
+/// while selecting, whether it is selected (#2603). A keyboard reaches it with
+/// Tab and opens it with Enter or Space, as a [QuarkTappable] (#2604).
 ///
 /// Key prefixes: `photo_tile_<id>` on the tile, `photo_tile_check_<id>` on
 /// the selection checkbox, which is only rendered in [selectionMode], and
@@ -114,11 +116,19 @@ class PhotoGridTile extends StatelessWidget {
       button: true,
       label: item.name,
       selected: selectionMode ? isSelected : null,
-      child: MouseRegion(
-        cursor: selectionMode ? MouseCursor.defer : SystemMouseCursors.click,
+      // The pointer gestures below stay out of the semantics tree: their
+      // secondary tap reads as a second tap action, which split the tile into
+      // a labeled node and an unlabeled one. The long press they offered a
+      // screen reader is offered here instead.
+      onLongPress: longPressMenu ? () => onMenu(Offset.zero) : onLongPress,
+      // A Tab stop that opens with Enter or Space and shows a ring while it
+      // has focus (#2604). The menu stays reachable through its button.
+      child: QuarkTappable(
+        key: ValueKey('photo_tile_${item.id}'),
+        onTap: onTap,
+        mouseCursor: selectionMode ? MouseCursor.defer : null,
         child: GestureDetector(
-          key: ValueKey('photo_tile_${item.id}'),
-          onTap: onTap,
+          excludeFromSemantics: true,
           onLongPress: longPressMenu ? null : onLongPress,
           onLongPressStart: longPressMenu
               ? (details) => onMenu(details.globalPosition)

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/quark_loader.dart';
+import '../theme/quark_theme.dart';
 import '../theme/quark_tokens.dart';
 
 /// A square, bordered, filled icon button: the one shape a top bar action
@@ -100,25 +101,33 @@ class QuarkBarIconButton extends StatelessWidget {
       isSelected: selected,
       onPressed: isBusy ? null : onPressed,
       iconSize: glyphSize,
-      style: IconButton.styleFrom(
-        foregroundColor: color,
-        disabledForegroundColor: tokens.mutedForeground,
-        backgroundColor: on
-            ? tokens.primary.withValues(alpha: 0.12)
-            : tokens.input,
-        disabledBackgroundColor: tokens.input,
-        side: BorderSide(
-          color: on ? tokens.primary.withValues(alpha: 0.3) : tokens.border,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(tokens.radiusMd),
-        ),
-        padding: EdgeInsets.zero,
-        minimumSize: const Size.square(size),
-        maximumSize: const Size.square(size),
-        tapTargetSize: MaterialTapTargetSize.padded,
-        visualDensity: VisualDensity.standard,
-      ),
+      style:
+          IconButton.styleFrom(
+            foregroundColor: color,
+            disabledForegroundColor: tokens.mutedForeground,
+            backgroundColor: on
+                ? tokens.primary.withValues(alpha: 0.12)
+                : tokens.input,
+            disabledBackgroundColor: tokens.input,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(tokens.radiusMd),
+            ),
+            padding: EdgeInsets.zero,
+            minimumSize: const Size.square(size),
+            maximumSize: const Size.square(size),
+            tapTargetSize: MaterialTapTargetSize.padded,
+            visualDensity: VisualDensity.standard,
+            // Through the theme's focus outline: a side of its own would replace
+            // it, and on the input fill a focused button looked like any other
+            // (#2604).
+          ).copyWith(
+            side: QuarkTheme.focusRing(
+              tokens,
+              resting: on
+                  ? tokens.primary.withValues(alpha: 0.3)
+                  : tokens.border,
+            ),
+          ),
       icon: isBusy ? QuarkLoader(size: glyphSize) : Icon(icon),
     );
   }
