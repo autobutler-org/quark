@@ -342,3 +342,95 @@ func TestSetup_FoundingAdminGetsAHome(t *testing.T) {
 		t.Error("a demoted founder cannot write to their own home")
 	}
 }
+
+// refuseUserGrants makes every account grant fail, as a full disk would, so a
+// path that lands an account fails after the home is made.
+func refuseUserGrants(t *testing.T, database *db.DatabaseSqlc) {
+	t.Helper()
+	if _, err := database.Db.Exec(`CREATE TRIGGER refuse_user_grant BEFORE INSERT ON path_access
+		WHEN NEW.user_id IS NOT NULL BEGIN SELECT RAISE(ABORT, 'disk full'); END`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertNoHome(t *testing.T, filesDir, username string) {
+	t.Helper()
+	if _, err := os.Stat(homeOf(filesDir, username)); !os.IsNotExist(err) {
+		t.Errorf("a failed %s left the home it made: %v", username, err)
+	}
+}
+
+func TestSetup_FailedGrantRemovesItsHome(t *testing.T) {
+	database := newTestDB(t)
+	filesDir := t.TempDir()
+	refuseUserGrants(t, database)
+
+	_, err := authutil.Setup(context.Background(), authutil.SetupParams{Database: database, FilesDir: filesDir,
+		Username: "admin",
+		AuthKey:  dbtest.AuthKey("supersecret"), SaltSecret: dbtest.SaltSecret,
+	})
+	if err == nil {
+		t.Fatal("Setup succeeded though the founder's grant was refused")
+	}
+	assertNoHome(t, filesDir, "admin")
+	if complete, _ := authutil.IsSetupComplete(context.Background(), database.Queries); complete {
+		t.Error("a failed Setup counts as complete")
+	}
+}
+
+func TestCreateUser_FailedGrantRemovesItsHome(t *testing.T) {
+	f := newCreateUserFixture(t)
+	refuseUserGrants(t, f.database)
+
+	if _, err := f.create("bob"); err == nil {
+		t.Fatal("create succeeded though the grant was refused")
+	}
+	assertNoHome(t, f.filesDir, "bob")
+	if _, err := f.database.Queries.GetUserByUsername(context.Background(), "bob"); err == nil {
+		t.Error("a failed grant left the account behind")
+	}
+}
+
+func TestCreateUser_FailedGrantKeepsAnAdoptedHome(t *testing.T) {
+	f := newCreateUserFixture(t)
+	kept := filepath.Join(homeOf(f.filesDir, "bob"), "notes.txt")
+	if err := os.MkdirAll(filepath.Dir(kept), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(kept, []byte("mine"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refuseUserGrants(t, f.database)
+
+	if _, err := f.create("bob"); err == nil {
+		t.Fatal("create succeeded though the grant was refused")
+	}
+	if _, err := os.Stat(kept); err != nil {
+		t.Errorf("a failed create touched a home it adopted: %v", err)
+	}
+}
+
+func TestApproveRequest_FailedGrantRemovesItsHome(t *testing.T) {
+	f := newCreateUserFixture(t)
+	ctx := context.Background()
+	if _, err := request(f.database.Queries, "bob", "bob-password"); err != nil {
+		t.Fatal(err)
+	}
+	refuseUserGrants(t, f.database)
+
+	if _, err := authutil.ApproveRequest(ctx, authutil.ApproveRequestParams{
+		Database: f.database,
+		Username: "bob",
+		FilesDir: f.filesDir,
+	}); err == nil {
+		t.Fatal("approve succeeded though the grant was refused")
+	}
+	assertNoHome(t, f.filesDir, "bob")
+	bob, err := f.database.Queries.GetUserByUsername(ctx, "bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bob.Status == authutil.StatusActive {
+		t.Error("a failed approval left the account active")
+	}
+}

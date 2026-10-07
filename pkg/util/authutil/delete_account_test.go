@@ -114,6 +114,9 @@ func TestDeleteAccount_LeavesDevicesAloneWithoutOptIn(t *testing.T) {
 	if result.DevicesDeleted {
 		t.Error("DevicesDeleted should be false when devices was not selected")
 	}
+	if !result.FilesDeleted {
+		t.Error("FilesDeleted should be true when files was selected")
+	}
 
 	assertGone(t, fixture.filesDir, "local files should be gone")
 	assertExists(t, filepath.Join(fixture.deviceDataDir, "on-device.txt"),
