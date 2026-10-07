@@ -34,7 +34,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// Pictures on the canvas and the thumbnails are [SlideImage]s fetched
 /// through the Quark's authenticated download URL for their path
-/// ([SlideEditorController.imageUrl]).
+/// ([SlideEditorController.imageUrl]); an animated one plays on the canvas
+/// and holds its first frame in a thumbnail.
 ///
 /// The panel runs down the side of a wide window and across the top of a
 /// phone, switching at [QuarkSplitView.collapseBreakpoint] so the editor
@@ -93,10 +94,12 @@ class SlideEditorBody extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
     final find = SlideFindProvider.maybeOf(context);
     final collapsed = QuarkSplitView.isCollapsed(context);
-    Widget imageBuilder(BuildContext context, SlideImageSource image) =>
-        SlideImage(
+    // The thumbnails hold an animated picture's first frame (#2866).
+    SlideImageBuilder imageBuilder({required bool animate}) =>
+        (context, image) => SlideImage(
           image: NetworkImage(c.imageUrl(image.source).toString()),
           fit: image.fit,
+          animate: animate,
         );
     final panel = SlidePanel(
       slides: presentation.slides,
@@ -115,7 +118,7 @@ class SlideEditorBody extends StatelessWidget {
       onMove: c.moveSlide,
       onSelectPrevious: c.selectPreviousSlide,
       onSelectNext: c.selectNextSlide,
-      imageBuilder: imageBuilder,
+      imageBuilder: imageBuilder(animate: false),
       onPresent: onPresent,
       readOnly: c.isReadOnly,
     );
@@ -135,7 +138,7 @@ class SlideEditorBody extends StatelessWidget {
               key: const ValueKey('slide_editor_stage'),
               child: SlideEditorCanvas(
                 controller: c,
-                imageBuilder: imageBuilder,
+                imageBuilder: imageBuilder(animate: true),
               ),
             ),
           ),
