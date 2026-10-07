@@ -72,8 +72,8 @@ type EventInput struct {
 	End      time.Time
 	AllDay   bool
 	// TimeZone is the IANA zone the event was made in, when the client knows
-	// it. It is recorded for server-side reminders later (#2525) and not used
-	// yet.
+	// it, and empty when it does not; any other name is rejected. It is
+	// recorded for server-side reminders later (#2525) and not used yet.
 	TimeZone string
 	// Repeat is RepeatNone when empty.
 	Repeat Repeat
