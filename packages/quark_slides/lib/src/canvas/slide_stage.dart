@@ -9,6 +9,7 @@ import 'slide_canvas_style.dart';
 import 'slide_element_label.dart';
 import 'slide_element_view.dart';
 import 'slide_image_source.dart';
+import 'slide_text_highlight_painter.dart';
 
 /// A slide laid out at its logical size: one logical pixel per slide unit,
 /// its background and then its elements back to front, clipped to the
@@ -37,6 +38,7 @@ class SlideStage extends StatelessWidget {
     this.editingId,
     this.editor,
     this.preview,
+    this.highlights = const {},
   });
 
   /// The slide to draw.
@@ -75,6 +77,9 @@ class SlideStage extends StatelessWidget {
   /// An element being drawn, not yet in the slide; `null` when none is.
   final SlideElement? preview;
 
+  /// Search highlights by text box id, at any depth.
+  final Map<String, List<SlideTextHighlight>> highlights;
+
   @override
   Widget build(BuildContext context) => MediaQuery.withNoTextScaling(
         child: SizedBox(
@@ -105,6 +110,7 @@ class SlideStage extends StatelessWidget {
                     editingId: editingId,
                     editor: editor,
                     showPlaceholder: onSelect != null,
+                    highlights: highlights,
                   ),
                 if (preview case final preview?)
                   SlideElementView(

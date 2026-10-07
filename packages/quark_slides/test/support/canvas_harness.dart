@@ -75,6 +75,8 @@ class CanvasHarness extends StatefulWidget {
     this.tools,
     this.onPickImage,
     this.clipboard,
+    this.highlights = const [],
+    this.currentHighlight,
   });
 
   final SlideDocumentNotifier document;
@@ -84,6 +86,8 @@ class CanvasHarness extends StatefulWidget {
   final SlideToolController? tools;
   final ValueChanged<ElementFrame?>? onPickImage;
   final SlideClipboard? clipboard;
+  final List<SlideMatch> highlights;
+  final SlideMatch? currentHighlight;
 
   @override
   State<CanvasHarness> createState() => CanvasHarnessState();
@@ -122,6 +126,8 @@ class CanvasHarnessState extends State<CanvasHarness> {
         tools: tools,
         onPickImage: widget.onPickImage,
         clipboard: widget.clipboard,
+        highlights: widget.highlights,
+        currentHighlight: widget.currentHighlight,
       );
 }
 
@@ -136,6 +142,8 @@ Future<void> pumpCanvas(
   SlideToolController? tools,
   ValueChanged<ElementFrame?>? onPickImage,
   SlideClipboard? clipboard,
+  List<SlideMatch> highlights = const [],
+  SlideMatch? currentHighlight,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
@@ -151,6 +159,8 @@ Future<void> pumpCanvas(
           tools: tools,
           onPickImage: onPickImage,
           clipboard: clipboard,
+          highlights: highlights,
+          currentHighlight: currentHighlight,
         ),
       ),
     ),

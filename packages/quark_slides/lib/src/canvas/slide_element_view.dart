@@ -11,6 +11,7 @@ import 'slide_image_source.dart';
 import 'slide_line_painter.dart';
 import 'slide_placeholder_view.dart';
 import 'slide_shape_painter.dart';
+import 'slide_text_highlight_painter.dart';
 import 'slide_text_box_view.dart';
 
 /// One element drawn at its frame on a slide laid out in slide units: placed
@@ -28,7 +29,8 @@ import 'slide_text_box_view.dart';
 /// [showPlaceholder] shows an empty text box's placeholder. A shape or line
 /// is drawn at its opacity; an image reads as its alt text through [label].
 /// A group draws its children inside its frame (see [SlideGroupView]), each
-/// named by [elementLabel].
+/// named by [elementLabel]. A text box paints its [highlights] behind its
+/// text.
 class SlideElementView extends StatelessWidget {
   /// Creates the view of [element].
   const SlideElementView({
@@ -45,6 +47,7 @@ class SlideElementView extends StatelessWidget {
     this.editor,
     this.showPlaceholder = false,
     this.excluded = false,
+    this.highlights = const {},
   });
 
   /// The element to draw.
@@ -88,6 +91,10 @@ class SlideElementView extends StatelessWidget {
   /// preview is.
   final bool excluded;
 
+  /// Search highlights by text box id, for this element or, in a group,
+  /// its children.
+  final Map<String, List<SlideTextHighlight>> highlights;
+
   /// The [ValueKey] value of the element with [id]: `slide_element_<id>`.
   static String keyName(String id) => 'slide_element_$id';
 
@@ -108,6 +115,7 @@ class SlideElementView extends StatelessWidget {
           style: style,
           theme: theme,
           showPlaceholder: showPlaceholder,
+          highlights: highlights[box.id] ?? const [],
         ),
       final ShapeElement shape => CustomPaint(
           painter: SlideShapePainter(shape, theme), size: Size.infinite),
@@ -131,6 +139,7 @@ class SlideElementView extends StatelessWidget {
           editor: this.editor,
           showPlaceholder: showPlaceholder,
           excluded: excluded,
+          highlights: highlights,
         ),
     };
     final opacity = switch (element) {
