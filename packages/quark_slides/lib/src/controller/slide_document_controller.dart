@@ -17,11 +17,20 @@ import '../model/stroke.dart';
 import '../model/text_format.dart';
 import '../model/text_paragraph.dart';
 import '../model/text_run.dart';
+import '../layout/layout_flow.dart';
+import '../layout/slide_layout.dart';
+import '../layout/slide_master.dart';
+import '../theme/slide_theme.dart';
+import '../theme/slide_themes.dart';
+import '../theme/theme_color.dart';
+import '../theme/theme_shape_style.dart';
+import '../model/unset.dart';
 
 /// Measures how tall, in slide units, a [TextBox]'s text lays out at its
-/// frame's width. `SlideDocumentNotifier` supplies one built on Flutter's
-/// text layout; this file stays plain Dart.
-typedef TextBoxMeasurer = double Function(TextBox box);
+/// frame's width, its unset styles taken from [theme] (`null` for none).
+/// `SlideDocumentNotifier` supplies one built on Flutter's text layout;
+/// this file stays plain Dart.
+typedef TextBoxMeasurer = double Function(TextBox box, SlideTheme? theme);
 
 /// Edits a [Presentation] through commands, with undo and redo.
 ///
@@ -298,6 +307,125 @@ class SlideDocumentController {
       );
 
   // ---------------------------------------------------------------------------
+  // Themes and layouts
+  // ---------------------------------------------------------------------------
+
+  /// Gives the presentation [theme], or none with `null`, as one step.
+  ///
+  /// Nothing else is rewritten: every role color and unset text style
+  /// already refers to the theme, so the whole deck restyles at once, while
+  /// literal colors and a run's own size stay as they are. Text boxes that
+  /// grow are refitted to the new theme's sizes in the same step.
+  ///
+  /// ```dart
+  /// doc.setTheme(SlideThemes.dark);
+  /// ```
+  void setTheme(SlideTheme? theme) {
+    if (theme == _presentation.theme) return;
+    _commit(
+      _presentation.copyWith(
+        theme: theme,
+        slides: [
+          for (final slide in _presentation.slides)
+            slide.copyWith(
+              elements: [
+                for (final e in slide.elements) _fitted(e, theme),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// The layouts slides can be built on: [SlideMaster.standard].
+  SlideMaster get master => SlideMaster.standard;
+
+  /// Inserts a slide built on the layout [layoutId] at [index] (at the end
+  /// by default), with an empty placeholder for each of its slots, and
+  /// returns its id. Throws an [ArgumentError] for a layout [master] does
+  /// not have.
+  ///
+  /// ```dart
+  /// final id = doc.insertSlideWithLayout(SlideLayout.titleAndContent.id);
+  /// ```
+  String insertSlideWithLayout(String layoutId, {int? index}) {
+    final layout = _layout(layoutId);
+    final slides = _presentation.slides;
+    index ??= slides.length;
+    RangeError.checkValueInInterval(index, 0, slides.length, 'index');
+    final ids = _freshIds(layout.placeholders.length + 1).iterator..moveNext();
+    final slide = Slide(
+      id: ids.current,
+      layoutId: layout.id,
+      elements: layoutBoxes(layout, _presentation.size, () {
+        ids.moveNext();
+        return ids.current;
+      }),
+    );
+    _commit(_presentation.copyWith(slides: [...slides]..insert(index, slide)));
+    return slide.id;
+  }
+
+  /// Moves the slide [slideId] onto the layout [layoutId], as one step.
+  ///
+  /// Its placeholders fill the new layout's slots — by slot, then by text
+  /// role — keeping what the user typed. One the user has not moved or
+  /// resized re-flows into its new slot; one they have keeps its place. A
+  /// placeholder with no slot left stays as an ordinary text box when it
+  /// has text and goes when it is empty, and every unfilled slot gets an
+  /// empty placeholder. Other elements are untouched. See `applyLayout`.
+  void setSlideLayout(String slideId, String layoutId) {
+    final layout = _layout(layoutId);
+    _updateSlide(
+      slideId,
+      (slide) => _fittedSlide(
+        applyLayout(
+          slide,
+          layout,
+          _presentation.size,
+          _idSource(layout.placeholders.length),
+          master: master,
+        ),
+      ),
+    );
+  }
+
+  /// Puts the slide [slideId]'s placeholders back as its layout defines
+  /// them, as one step: their frames, anchors and alignment, and their runs'
+  /// size, family and color, which return to the theme's. A slot left empty
+  /// gets its placeholder back. Text and other elements are kept. See
+  /// `resetToLayout`.
+  void resetSlideToLayout(String slideId) {
+    final layoutId = _slideOf(slideId).layoutId;
+    final slots = master.layoutById(layoutId)?.placeholders.length ?? 0;
+    _updateSlide(
+      slideId,
+      (slide) => resetToLayout(
+        slide,
+        _presentation.size,
+        _idSource(slots),
+        master: master,
+      ),
+    );
+  }
+
+  SlideLayout _layout(String layoutId) =>
+      master.layoutById(layoutId) ??
+      (throw ArgumentError.value(layoutId, 'layoutId', 'no such layout'));
+
+  /// A function handing out [count] fresh ids, one per call.
+  String Function() _idSource(int count) {
+    final ids = _freshIds(count).iterator;
+    return () {
+      ids.moveNext();
+      return ids.current;
+    };
+  }
+
+  Slide _fittedSlide(Slide slide) =>
+      slide.copyWith(elements: [for (final e in slide.elements) _fitted(e)]);
+
+  // ---------------------------------------------------------------------------
   // Elements
   // ---------------------------------------------------------------------------
 
@@ -548,9 +676,10 @@ class SlideDocumentController {
   ///
   /// It fills [frame], or — left out — a [defaultShapeSize] square centered
   /// on the slide, which is what a toolbar's keyboard-operable "insert"
-  /// wants. It is filled with [fill] ([defaultShapeFill] unless given;
-  /// `null` for hollow), outlined with [stroke] (none by default), and goes
-  /// in front of everything, or at stacking position [index].
+  /// wants. It is filled with [fill] and outlined with [stroke], each the
+  /// theme's `ThemeShapeStyle` unless given — the first accent and no
+  /// outline in the built-in themes; pass `null` for hollow or no outline —
+  /// and goes in front of everything, or at stacking position [index].
   ///
   /// ```dart
   /// final id = doc.insertShape(slideId, ShapeKind.star);
@@ -559,16 +688,17 @@ class SlideDocumentController {
     String slideId,
     ShapeKind kind, {
     ElementFrame? frame,
-    SlideColor? fill = defaultShapeFill,
-    Stroke? stroke,
+    Object? fill = unset,
+    Object? stroke = unset,
     int? index,
   }) {
+    final style = shapeStyle;
     final shape = ShapeElement(
       id: newId(),
       frame: frame ?? _centered(defaultShapeSize, defaultShapeSize),
       kind: kind,
-      fill: fill,
-      stroke: stroke,
+      fill: identical(fill, unset) ? style.fill : fill as SlideColor?,
+      stroke: identical(stroke, unset) ? style.stroke : stroke as Stroke?,
     );
     addElement(slideId, shape, index: index);
     return shape.id;
@@ -579,8 +709,9 @@ class SlideDocumentController {
   ///
   /// It runs across [frame] (see [LineElement] for [flipped]), or — left
   /// out — horizontally for [defaultLineLength] through the slide's center.
-  /// It is drawn with [stroke] (black, [defaultLineWidth] wide unless
-  /// given) and goes in front of everything, or at stacking position
+  /// It is drawn with [stroke] (the theme's `ThemeShapeStyle.line` unless
+  /// given: its text color, [defaultLineWidth] wide, in the built-in
+  /// themes) and goes in front of everything, or at stacking position
   /// [index].
   ///
   /// ```dart
@@ -601,7 +732,7 @@ class SlideDocumentController {
       flipped: flipped,
       startCap: startCap,
       endCap: endCap,
-      stroke: stroke ?? Stroke(width: defaultLineWidth),
+      stroke: stroke ?? shapeStyle.line,
     );
     addElement(slideId, line, index: index);
     return line.id;
@@ -694,8 +825,14 @@ class SlideDocumentController {
   /// The side of the square [insertShape] makes when given no frame.
   static const defaultShapeSize = 400.0;
 
-  /// The fill [insertShape] gives a shape unless told otherwise.
-  static const defaultShapeFill = SlideColor(0xFF3366FF);
+  /// The fill the built-in themes give a new shape: the first accent.
+  static const defaultShapeFill = SlideColor.theme(ThemeColor.accent1);
+
+  /// How new shapes and lines are styled, by [insertShape], [insertLine]
+  /// and the canvas's drawing tools: the theme's, or the light theme's when
+  /// the deck has none.
+  ThemeShapeStyle get shapeStyle =>
+      (_presentation.theme ?? SlideThemes.light).shapes;
 
   /// The length of the line [insertLine] makes when given no frame.
   static const defaultLineLength = 400.0;
@@ -722,16 +859,20 @@ class SlideDocumentController {
       ? e
       : throw ArgumentError.value(e.id, 'elementId', 'is not a text box');
 
-  /// [element] grown to fit its text, when it is a text box that grows and
-  /// there is a [measureText].
-  T _fitted<T extends SlideElement>(T element) {
+  /// [element] grown to fit its text under [theme] (the deck's by
+  /// default), when it is a text box that grows and there is a
+  /// [measureText].
+  T _fitted<T extends SlideElement>(T element, [Object? theme = unset]) {
     final measure = measureText;
     if (element is! TextBox ||
         element.autoFit != TextAutoFit.grow ||
         measure == null) {
       return element;
     }
-    final height = measure(element);
+    final height = measure(
+      element,
+      identical(theme, unset) ? _presentation.theme : theme as SlideTheme?,
+    );
     if (height <= element.frame.height + 1e-6) return element;
     return element.withFrame(element.frame.copyWith(height: height)) as T;
   }

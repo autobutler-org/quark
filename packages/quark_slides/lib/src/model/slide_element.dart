@@ -5,6 +5,7 @@ import 'element_frame.dart';
 import 'image_source.dart';
 import 'slide_color.dart';
 import 'stroke.dart';
+import '../theme/theme_text_role.dart';
 import 'text_paragraph.dart';
 import 'unset.dart';
 
@@ -89,6 +90,13 @@ sealed class SlideElement {
             TextAutoFit.grow,
           ),
           placeholder: optionalString(json, 'placeholder', path) ?? '',
+          slot: optionalString(json, 'slot', path),
+          textRole: enumByName(
+            json,
+            'textRole',
+            ThemeTextRole.values,
+            ThemeTextRole.body,
+          ),
           extra: unknownFields(json, TextBox._known),
         );
       case ShapeElement.typeName:
@@ -187,6 +195,11 @@ enum TextAutoFit {
 ///
 /// [placeholder] is the prompt an editor shows while the box is empty —
 /// "Click to add title" — and is never part of the text itself.
+///
+/// A run that leaves its size, family or color unset takes them from the
+/// theme's text style for [textRole]. A box that fills a slot of its
+/// slide's `SlideLayout` names it as [slot]; the layout places it until the
+/// user moves or resizes it (see `SlideDocumentController.setSlideLayout`).
 class TextBox extends SlideElement {
   /// Creates a text box.
   const TextBox({
@@ -196,6 +209,8 @@ class TextBox extends SlideElement {
     this.anchor = TextAnchor.top,
     this.autoFit = TextAutoFit.grow,
     this.placeholder = '',
+    this.slot,
+    this.textRole = ThemeTextRole.body,
     super.extra,
   });
 
@@ -210,6 +225,8 @@ class TextBox extends SlideElement {
     'anchor',
     'autoFit',
     'placeholder',
+    'slot',
+    'textRole',
   };
 
   /// The text, one entry per paragraph.
@@ -224,6 +241,13 @@ class TextBox extends SlideElement {
   /// The prompt an editor shows while the box is empty; empty for none.
   final String placeholder;
 
+  /// The id of the layout slot this box fills (a `LayoutPlaceholder.id`),
+  /// or `null` for an ordinary text box.
+  final String? slot;
+
+  /// Which theme text style the box's unset run styles come from.
+  final ThemeTextRole textRole;
+
   /// The text with styling dropped, paragraphs joined by `\n`.
   String get plainText => paragraphs.map((p) => p.plainText).join('\n');
 
@@ -236,9 +260,12 @@ class TextBox extends SlideElement {
         if (anchor != TextAnchor.top) 'anchor': anchor.name,
         if (autoFit != TextAutoFit.grow) 'autoFit': autoFit.name,
         if (placeholder.isNotEmpty) 'placeholder': placeholder,
+        if (slot != null) 'slot': slot,
+        if (textRole != ThemeTextRole.body) 'textRole': textRole.name,
       };
 
-  /// Returns a copy with the given fields replaced.
+  /// Returns a copy with the given fields replaced; pass `null` as [slot]
+  /// to make the box an ordinary one.
   TextBox copyWith({
     String? id,
     ElementFrame? frame,
@@ -246,6 +273,8 @@ class TextBox extends SlideElement {
     TextAnchor? anchor,
     TextAutoFit? autoFit,
     String? placeholder,
+    Object? slot = unset,
+    ThemeTextRole? textRole,
   }) =>
       TextBox(
         id: id ?? this.id,
@@ -254,6 +283,8 @@ class TextBox extends SlideElement {
         anchor: anchor ?? this.anchor,
         autoFit: autoFit ?? this.autoFit,
         placeholder: placeholder ?? this.placeholder,
+        slot: identical(slot, unset) ? this.slot : slot as String?,
+        textRole: textRole ?? this.textRole,
         extra: extra,
       );
 
@@ -271,6 +302,8 @@ class TextBox extends SlideElement {
       other.anchor == anchor &&
       other.autoFit == autoFit &&
       other.placeholder == placeholder &&
+      other.slot == slot &&
+      other.textRole == textRole &&
       listEquals(other.paragraphs, paragraphs) &&
       jsonEquals(other.extra, extra);
 
@@ -282,6 +315,8 @@ class TextBox extends SlideElement {
         anchor,
         autoFit,
         placeholder,
+        slot,
+        textRole,
         jsonHash(extra),
       );
 }

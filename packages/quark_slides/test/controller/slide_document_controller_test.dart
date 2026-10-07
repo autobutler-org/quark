@@ -8,7 +8,7 @@ import '../support/sample_presentation.dart';
 class Harness {
   Harness([Presentation? presentation, int maxUndoDepth = 100]) {
     doc = SlideDocumentController(
-      presentation ?? samplePresentation(),
+      presentation ?? legacySamplePresentation(),
       newId: () => 'n${++_next}',
       onChanged: () => changes++,
       maxUndoDepth: maxUndoDepth,
@@ -64,7 +64,7 @@ void main() {
     test('generated ids skip ones already in use', () {
       final ids = ['s1', 'e1', 'fresh'];
       final doc = SlideDocumentController(
-        samplePresentation(),
+        legacySamplePresentation(),
         newId: () => ids.removeAt(0),
       );
       expect(doc.newId(), 'fresh');

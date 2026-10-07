@@ -20,8 +20,9 @@ import '../model/presentation.dart';
 import '../model/slide.dart';
 import '../model/slide_element.dart';
 import '../model/slide_size.dart';
-import '../model/stroke.dart';
+import '../theme/slide_theme.dart';
 import 'slide_canvas_style.dart';
+import 'slide_fallback_theme.dart';
 import 'slide_canvas_tool.dart';
 import 'slide_element_label.dart';
 import 'slide_tool_controller.dart';
@@ -100,6 +101,14 @@ import 'slide_text_layout.dart';
 /// **Read-only.** [SlideCanvas.readOnly] draws a [Slide] with no chrome and
 /// no input, for thumbnails and presenting.
 ///
+/// **Themes.** Role colors (`SlideColor.theme`) and the unset styles of
+/// text resolve against the presentation's `SlideTheme` as the slide is
+/// painted — or, read-only, against [theme] — so a theme change repaints
+/// the deck. Without one, the canvas uses [slideFallbackTheme]: the
+/// style's slide and text colors and the ambient [ColorScheme]'s accents.
+/// A placeholder text box reads to a screen reader with its role first
+/// ("Title: Quarterly review"; see [defaultSlideElementLabel]).
+///
 /// **Clipboard.** Copied elements go to [clipboard] as versioned JSON (see
 /// [SlideClipboardCodec]); a paste lands [SlideDocumentController.pasteOffset]
 /// units past anything it would cover exactly, and selects what it pasted.
@@ -150,7 +159,8 @@ class SlideCanvas extends StatefulWidget {
     this.editingDoneAnnouncement = 'Done editing text',
     this.clipboard,
   })  : slide = null,
-        size = null;
+        size = null,
+        theme = null;
 
   /// Creates a canvas that only draws [slide], at [size], for a thumbnail or
   /// a presentation. It sizes itself to [size]'s aspect ratio within its
@@ -163,6 +173,7 @@ class SlideCanvas extends StatefulWidget {
     this.style,
     this.elementLabel = defaultSlideElementLabel,
     this.padding = EdgeInsets.zero,
+    this.theme,
   })  : document = null,
         slideId = null,
         selection = const {},
@@ -196,6 +207,10 @@ class SlideCanvas extends StatefulWidget {
 
   /// The slide size when read-only.
   final SlideSize? size;
+
+  /// The presentation's theme when read-only, or `null` for none; an
+  /// editing canvas takes the document's.
+  final SlideTheme? theme;
 
   /// The ids of the selected elements. Ids not on the slide are ignored.
   final Set<String> selection;
@@ -388,6 +403,11 @@ class _SlideCanvasState extends State<SlideCanvas> {
   SlideCanvasStyle get _style =>
       widget.style ?? SlideCanvasStyle.fromTheme(Theme.of(context));
 
+  /// The theme the slide is painted in: the deck's, or the fallback.
+  SlideTheme get _theme =>
+      (widget.readOnly ? widget.theme : widget.document!.presentation.theme) ??
+      slideFallbackTheme(_style, Theme.of(context).colorScheme);
+
   @override
   void initState() {
     super.initState();
@@ -537,7 +557,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
     if (draft == null || slide == null) return null;
     var frame = draft.frame;
     if (draft.autoFit == TextAutoFit.grow) {
-      final height = SlideTextLayout.fromStyle(_style).contentHeight(draft);
+      final height = SlideTextLayout.forBox(draft, _theme).contentHeight(draft);
       if (height > frame.height) frame = frame.copyWith(height: height);
     }
     return slide.placeOnSlide(draft.id, frame);
@@ -925,7 +945,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
         flipped: line.flipped,
         startCap: line.reversed ? arrow : LineCap.none,
         endCap: line.reversed ? LineCap.none : arrow,
-        stroke: Stroke(width: SlideDocumentController.defaultLineWidth),
+        stroke: _doc.shapeStyle.line,
       );
     }
     final box = drawnBox(
@@ -940,7 +960,8 @@ class _SlideCanvasState extends State<SlideCanvas> {
       id: '',
       frame: _frameOf(box),
       kind: tool.shapeKind!,
-      fill: SlideDocumentController.defaultShapeFill,
+      fill: _doc.shapeStyle.fill,
+      stroke: _doc.shapeStyle.stroke,
     );
   }
 
@@ -1309,6 +1330,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
                 slide: widget.slide!,
                 size: size,
                 style: style,
+                theme: _theme,
                 elementLabel: widget.elementLabel,
                 imageBuilder: widget.imageBuilder,
               ),
@@ -1343,6 +1365,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
               _editing.attach(_doc, widget.slideId!, selected);
               final editingId = _editing.elementId;
               final editingFrame = _editingFrame;
+              final theme = _theme;
               return MouseRegion(
                 cursor: _tool.draws ? SystemMouseCursors.precise : _cursor,
                 child: Listener(
@@ -1368,6 +1391,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
                                 slide: slide,
                                 size: _size,
                                 style: style,
+                                theme: theme,
                                 elementLabel: widget.elementLabel,
                                 imageBuilder: widget.imageBuilder,
                                 selection: selected,
@@ -1385,6 +1409,7 @@ class _SlideCanvasState extends State<SlideCanvas> {
                                     : SlideTextEditor(
                                         session: _editing,
                                         style: style,
+                                        theme: theme,
                                         scale: viewport.scale,
                                         onDone: _editing.commit,
                                       ),

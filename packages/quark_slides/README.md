@@ -14,11 +14,11 @@ Everything is immutable and compares by value. An edit makes a new
 
 | Type             | What it holds                                                          |
 | ---------------- | ---------------------------------------------------------------------- |
-| `Presentation`   | `title`, `size` (a `SlideSize`), `theme` reference, `slides`           |
-| `Slide`          | stable `id`, `background`, `elements` back to front, speaker `notes`   |
+| `Presentation`   | `title`, `size` (a `SlideSize`), `theme` (a `SlideTheme` or none), `slides` |
+| `Slide`          | stable `id`, `background`, `elements` back to front, speaker `notes`, `layoutId` |
 | `SlideElement`   | sealed: `TextBox`, `ShapeElement`, `ImageElement`, `LineElement`, `GroupElement`, `UnknownElement` |
 | `ElementFrame`   | `x`, `y`, `width`, `height` in slide units, `rotation` in degrees       |
-| `TextBox`        | paragraphs, vertical `anchor`, `autoFit` (grow, fixed, shrink), `placeholder` |
+| `TextBox`        | paragraphs, vertical `anchor`, `autoFit` (grow, fixed, shrink), `placeholder`, layout `slot`, `textRole` |
 | `TextParagraph`  | styled `TextRun`s, alignment, `lineSpacing`, `list` (none, bullet, numbered) |
 | `TextRun`        | text with bold, italic, underline, strikethrough, size, family, color  |
 | `ShapeElement`   | `kind`, solid `fill` or none, `stroke`, `cornerRadius`, `opacity`      |
@@ -26,6 +26,7 @@ Everything is immutable and compares by value. An edit makes a new
 | `ImageElement`   | `source` (an `ImageSource` reference), `altText`, `fit`                |
 | `GroupElement`   | `children`, back to front, in group-local frames; groups nest          |
 | `Stroke`         | `color`, `width`, `dash` (solid, dash, dot, dash-dot)                  |
+| `SlideColor`     | a literal 32-bit color value, or a theme role: `SlideColor.theme(ThemeColor.accent1)` |
 
 Slide units are an abstract space set by `SlideSize` (1920×1080 for the
 default 16:9). Stacking order is an element's index in `Slide.elements`. Ids are
@@ -39,7 +40,7 @@ A presentation is saved as a file, as sheets (`.qsheet`) and documents
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "title": "Demo",
   "size": { "width": 1920, "height": 1080 },
   "slides": [
@@ -73,7 +74,74 @@ verbatim as an `UnknownElement`, so an older reader can open, edit and save a
 newer file without losing anything. A breaking change bumps `schemaVersion`,
 and a reader refuses a file newer than `QslideCodec.schemaVersion` with a
 `QslideFormatException` rather than misreading it. An unknown value of a small
-enum (paragraph alignment, image fit, line cap) reads as its default.
+enum (paragraph alignment, image fit, line cap, text role, theme color
+role) reads as its default.
+
+**Migration.** A file older than `QslideCodec.schemaVersion` is upgraded one
+version at a time as it is read, and saved at the current version. Version 2
+added the inline theme, role colors (`"fill": "theme:accent1"`), slide
+`layout`s and text box `slot`s and `textRole`s. A version 1 file's `theme`
+was a reference string nothing drew; it becomes the built-in theme with that
+id, or none, and every slide reads as blank-layout.
+`test/fixtures/v1_sample.qslide` is the golden version 1 file.
+
+## Themes and layouts — for a theme or layout picker
+
+A `SlideTheme` is a palette of ten `ThemeColor` roles (`background`,
+`text`, `background2`, `text2`, `accent1` to `accent6`), a heading and a
+body font, a `ThemeTextStyle` (size, color, heading or body font) for each
+`ThemeTextRole` — `title`, `subtitle`, `body` — and the `ThemeShapeStyle`
+new shapes and lines get. It is stored in the `.qslide` file, so a custom
+theme needs no server. Elements refer to it rather than copy it: a color
+can be a role, and a text run's unset size, family and color come from the
+theme's style for its box's `textRole`. Changing the theme restyles the
+whole deck in one step; literal colors and a run's own size stay put.
+
+```dart
+SlideThemes.all; // light, dark, warm, cool, highContrast: a picker's cards
+doc.controller.setTheme(SlideThemes.dark); // one undo step; null for none
+final ours = SlideThemes.cool.copyWith(
+  id: 'ours',
+  name: 'Ours',
+  colors: SlideThemes.cool.colors.copyWith({ThemeColor.accent1: 0xFF0A7E8C}),
+  headingFont: 'Lora',
+);
+const accent = SlideColor.theme(ThemeColor.accent1);
+accent.resolve(deck.theme); // the color value to paint; a literal ignores the theme
+```
+
+A swatch for a role is `Color(theme.colors[role])`. A role color's literal value
+is its light-theme fallback; paint with `resolve`.
+
+A `SlideLayout` is a set of `LayoutPlaceholder` slots, each a text role, a
+prompt and a box in fractions of the slide. `SlideMaster.standard` holds the
+built-in five — `title`, `titleAndContent`, `sectionHeader`, `twoContent`
+and `blank` — and a slide names its own by `layoutId`. A placeholder is a
+`TextBox` whose `slot` names its slot; it inherits the slot's frame, anchor
+and alignment until the user changes them, and the theme's text style until
+a run sets its own.
+
+| Command | Does |
+| --- | --- |
+| `insertSlideWithLayout(layoutId, index:)` | a slide with an empty placeholder per slot; returns its id |
+| `setSlideLayout(slideId, layoutId)` | fills the new slots by slot, then role, keeping typed text; untouched placeholders re-flow, moved ones stay; leftover text becomes an ordinary box, leftover empty placeholders go |
+| `resetSlideToLayout(slideId)` | puts placeholders back where the layout has them, drops their runs' own size, family and color, and restores deleted ones |
+| `setTheme(theme)` | swaps the theme; growing text boxes refit to its sizes |
+
+Each is one undo step, and an unknown layout id throws an `ArgumentError`.
+The pure functions underneath — `layoutBoxes`, `applyLayout`,
+`resetToLayout` — are exported and tested on their own. New shapes and lines
+take `controller.shapeStyle`: the theme's, or the light theme's when the
+deck has none.
+
+**Drawing.** The canvas resolves every role and unset text style against
+the deck's theme as it paints; `SlideCanvas.readOnly` takes a `theme` for
+thumbnails and presenting. A deck with no theme is drawn in
+`slideFallbackTheme(style, colorScheme)`: the canvas style's slide and text
+colors with the app's `ColorScheme` accents, so it matches the app around
+it. A placeholder reads to a screen reader with its role first: "Title:
+Quarterly review", or "Subtitle placeholder: Click to add subtitle" while
+empty (`ThemeTextRole.label`).
 
 ## Editing and undo
 
@@ -82,6 +150,9 @@ history of earlier presentations:
 
 - slides: `addSlide`, `duplicateSlide`, `deleteSlide`, `moveSlide`, `setSlideNotes`,
   `setSlideBackground`
+- themes and layouts: `setTheme`, `insertSlideWithLayout`, `setSlideLayout`,
+  `resetSlideToLayout` (see [Themes and
+  layouts](#themes-and-layouts--for-a-theme-or-layout-picker))
 - elements: `addElement`, `moveElements`, `resizeElement`, `rotateElement`,
   `deleteElements`, `reorderElement`, `arrangeElements`
 - text: `editText`, `formatText` (a `TextFormat` over whole boxes),
@@ -124,9 +195,9 @@ notifier.controller.addSlide();
 ## Canvas
 
 `SlideCanvas` draws a slide and, given a `SlideDocumentNotifier`, edits it.
-It depends on nothing but Flutter: colors come from the ambient
-`ColorScheme`, or from a `SlideCanvasStyle` the app fills with its own
-tokens, and pictures come from an `imageBuilder` the app supplies, since the
+It depends on nothing but Flutter: slide content is colored by the deck's
+theme, and the chrome by the ambient `ColorScheme`, or by a
+`SlideCanvasStyle` the app fills with its own tokens, and pictures come from an `imageBuilder` the app supplies, since the
 package never loads a file.
 
 ```dart
@@ -140,7 +211,7 @@ SlideCanvas(
   imageBuilder: (context, image) => Image.network(image.source, fit: image.fit),
 );
 
-SlideCanvas.readOnly(slide: slide, size: deck.size); // thumbnails, presenting
+SlideCanvas.readOnly(slide: slide, size: deck.size, theme: deck.theme);
 ```
 
 The slide is laid out at its logical size and scaled, so text wraps the

@@ -10,13 +10,23 @@ typedef SlideElementLabel = String Function(SlideElement element);
 /// English screen reader labels: a text box reads its text, a line per
 /// non-blank paragraph (its placeholder, or "Empty text box", when it has
 /// none), an image its alt
-/// text, a shape its kind, a group how many elements it holds.
+/// text, a shape its kind, a group how many elements it holds. A layout
+/// placeholder announces its role first: "Title: Quarterly review", or
+/// "Title placeholder: Click to add title" while it is empty.
 ///
 /// ```dart
 /// defaultSlideElementLabel(ImageElement(..., altText: 'A dog'));
 /// // 'Image: A dog'
 /// ```
 String defaultSlideElementLabel(SlideElement element) => switch (element) {
+      TextBox(slot: _?, :final textRole, :final plainText, :final placeholder)
+          when plainText.trim().isEmpty =>
+        [
+          '${textRole.label} placeholder',
+          if (placeholder.isNotEmpty) placeholder,
+        ].join(': '),
+      final TextBox box when box.slot != null => '${box.textRole.label}: '
+          '${defaultSlideElementLabel(box.copyWith(slot: null))}',
       TextBox(:final plainText, :final placeholder)
           when plainText.trim().isEmpty =>
         placeholder.isEmpty ? 'Empty text box' : placeholder,

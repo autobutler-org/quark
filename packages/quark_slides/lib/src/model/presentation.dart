@@ -2,6 +2,7 @@ import '../format/json_fields.dart';
 import 'slide.dart';
 import 'slide_size.dart';
 import 'unset.dart';
+import '../theme/slide_theme.dart';
 
 /// A whole presentation: its [title], the [size] every slide shares, the
 /// [theme] it is styled with, and its [slides] in show order.
@@ -33,9 +34,10 @@ class Presentation {
   /// The size of every slide.
   final SlideSize size;
 
-  /// A reference to the theme — its id or file path — or `null` for the
-  /// default theme. Themes themselves are not part of this model yet.
-  final String? theme;
+  /// The deck's theme, stored in the file, or `null` for none: the host's
+  /// own colors, as `SlideCanvas` takes them from its style and the ambient
+  /// `ColorScheme`. Role colors and unset text styles resolve against it.
+  final SlideTheme? theme;
 
   /// The slides, in show order.
   final List<Slide> slides;
@@ -64,7 +66,9 @@ class Presentation {
       size: json['size'] == null
           ? null
           : SlideSize.fromJson(json['size'], '$path.size'),
-      theme: optionalString(json, 'theme', path),
+      theme: json['theme'] == null
+          ? null
+          : SlideTheme.fromJson(json['theme'], '$path.theme'),
       slides: [
         for (var i = 0; i < slides.length; i++)
           Slide.fromJson(slides[i], '$path.slides[$i]'),
@@ -79,12 +83,12 @@ class Presentation {
         ...extra,
         'title': title,
         'size': size.toJson(),
-        if (theme != null) 'theme': theme,
+        if (theme != null) 'theme': theme!.toJson(),
         'slides': [for (final s in slides) s.toJson()],
       };
 
   /// Returns a copy with the given fields replaced; pass `null` as [theme]
-  /// to use the default theme.
+  /// for none.
   Presentation copyWith({
     String? title,
     SlideSize? size,
@@ -94,7 +98,7 @@ class Presentation {
       Presentation(
         title: title ?? this.title,
         size: size ?? this.size,
-        theme: identical(theme, unset) ? this.theme : theme as String?,
+        theme: identical(theme, unset) ? this.theme : theme as SlideTheme?,
         slides: slides ?? this.slides,
         extra: extra,
       );

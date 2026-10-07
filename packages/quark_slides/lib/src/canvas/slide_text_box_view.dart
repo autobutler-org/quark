@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../model/rich_text.dart';
 import '../model/slide_element.dart';
 import '../model/text_paragraph.dart';
+import '../theme/slide_theme.dart';
 import 'slide_canvas_style.dart';
 import 'slide_text_layout.dart';
 import 'slide_text_paragraph_view.dart';
@@ -11,8 +12,8 @@ import 'slide_text_paragraph_view.dart';
 ///
 /// Each paragraph is one block of styled runs with its own alignment, line
 /// spacing and list marker, laid out by [SlideTextLayout]; a run that
-/// leaves its size or color unset takes [SlideCanvasStyle.fontSize] or
-/// [SlideCanvasStyle.textColor]. The text sits against the box's
+/// leaves its size, family or color unset takes them from [theme]'s style
+/// for the box's [TextBox.textRole]. The text sits against the box's
 /// [TextBox.anchor] edge. Text taller than the frame runs past it, as it
 /// does in other slide editors, instead of being cut off — unless the box
 /// shrinks text to fit ([TextAutoFit.shrink]).
@@ -26,14 +27,19 @@ class SlideTextBoxView extends StatelessWidget {
     super.key,
     required this.box,
     required this.style,
+    required this.theme,
     this.showPlaceholder = false,
   });
 
   /// The text box to draw.
   final TextBox box;
 
-  /// Supplies the defaults for unset run styles.
+  /// Supplies the placeholder color.
   final SlideCanvasStyle style;
+
+  /// The theme the slide's role colors and unset text styles resolve
+  /// against: the deck's, or `slideFallbackTheme`.
+  final SlideTheme theme;
 
   /// Whether an empty box shows its placeholder.
   final bool showPlaceholder;
@@ -47,7 +53,7 @@ class SlideTextBoxView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final layout = SlideTextLayout.fromStyle(style);
+    final layout = SlideTextLayout.forBox(box, theme);
     final scale = layout.shrinkScale(box);
     final placeholder =
         showPlaceholder && box.placeholder.isNotEmpty && box.plainText.isEmpty;

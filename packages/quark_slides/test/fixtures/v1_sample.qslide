@@ -1,52 +1,11 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 1,
   "title": "Sample deck",
   "size": {
     "width": 1920,
     "height": 1080
   },
-  "theme": {
-    "id": "sample",
-    "name": "Sample",
-    "colors": {
-      "background": "#FFF8F0",
-      "text": "#3B2A20",
-      "background2": "#F6E7D8",
-      "text2": "#7A5C48",
-      "accent1": "#C2410C",
-      "accent2": "#B45309",
-      "accent3": "#A16207",
-      "accent4": "#BE123C",
-      "accent5": "#9D174D",
-      "accent6": "#4D7C0F"
-    },
-    "headingFont": "Georgia",
-    "bodyFont": "Inter",
-    "title": {
-      "fontSize": 60,
-      "color": "theme:text",
-      "heading": true
-    },
-    "subtitle": {
-      "fontSize": 40,
-      "color": "theme:text2"
-    },
-    "body": {
-      "fontSize": 36,
-      "color": "theme:text"
-    },
-    "shapes": {
-      "fill": "theme:accent1",
-      "stroke": {
-        "color": "theme:accent2",
-        "width": 2
-      },
-      "line": {
-        "color": "theme:text",
-        "width": 4
-      }
-    }
-  },
+  "theme": "themes/default",
   "slides": [
     {
       "id": "s1",
@@ -264,71 +223,6 @@
     {
       "id": "s3",
       "elements": []
-    },
-    {
-      "id": "s4",
-      "elements": [
-        {
-          "id": "e13",
-          "type": "text",
-          "frame": {
-            "x": 115.2,
-            "y": 54,
-            "width": 1689.6,
-            "height": 162
-          },
-          "paragraphs": [
-            {
-              "runs": [
-                {
-                  "text": "Agenda",
-                  "color": "theme:accent2"
-                }
-              ]
-            }
-          ],
-          "anchor": "middle",
-          "autoFit": "shrink",
-          "placeholder": "Click to add title",
-          "slot": "title",
-          "textRole": "title"
-        },
-        {
-          "id": "e14",
-          "type": "text",
-          "frame": {
-            "x": 115.2,
-            "y": 259.2,
-            "width": 1689.6,
-            "height": 734.4
-          },
-          "paragraphs": [
-            {
-              "runs": []
-            }
-          ],
-          "autoFit": "shrink",
-          "placeholder": "Click to add text",
-          "slot": "body"
-        },
-        {
-          "id": "e15",
-          "type": "shape",
-          "frame": {
-            "x": 1500,
-            "y": 800,
-            "width": 200,
-            "height": 200
-          },
-          "kind": "rectangle",
-          "fill": "theme:accent1",
-          "stroke": {
-            "color": "theme:text",
-            "width": 2
-          }
-        }
-      ],
-      "layout": "titleAndContent"
     }
   ]
 }

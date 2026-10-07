@@ -6,6 +6,8 @@ import '../model/rich_text.dart';
 import '../model/slide_element.dart';
 import '../model/text_paragraph.dart';
 import '../model/text_run.dart';
+import '../theme/slide_theme.dart';
+import '../theme/slide_themes.dart';
 import 'slide_canvas_style.dart';
 
 /// How a [TextBox]'s text is styled and laid out, in slide units, shared by
@@ -23,24 +25,51 @@ import 'slide_canvas_style.dart';
 /// final height = layout.contentHeight(box); // what auto-grow fits to
 /// ```
 ///
+/// A box drawn in a theme uses [SlideTextLayout.forBox]: its unset runs
+/// take the theme's text style for the box's `ThemeTextRole`, and theme
+/// role colors resolve against [theme].
+///
 /// Its [measure] is the [TextBoxMeasurer] `SlideDocumentNotifier` gives its
 /// controller by default.
 class SlideTextLayout {
-  /// Creates a layout whose unstyled runs are [fontSize] and [textColor].
+  /// Creates a layout whose unstyled runs are [fontSize], [textColor] and
+  /// [fontFamily], and whose role colors resolve against [theme].
   const SlideTextLayout({
     this.fontSize = 36,
     this.textColor = const Color(0xFF000000),
+    this.fontFamily,
+    this.theme,
   });
 
   /// A layout with [style]'s text defaults.
   factory SlideTextLayout.fromStyle(SlideCanvasStyle style) =>
       SlideTextLayout(fontSize: style.fontSize, textColor: style.textColor);
 
+  /// The layout of [box] in [theme]: unset runs take the size, family and
+  /// color of the theme's style for the box's `TextBox.textRole`.
+  factory SlideTextLayout.forBox(TextBox box, SlideTheme theme) {
+    final style = theme.textStyle(box.textRole);
+    return SlideTextLayout(
+      fontSize: style.fontSize,
+      textColor: Color(style.color.resolve(theme)),
+      fontFamily: theme.fontOf(style),
+      theme: theme,
+    );
+  }
+
   /// The size of a run that leaves its own unset, in slide units.
   final double fontSize;
 
   /// The color of a run that leaves its own unset.
   final Color textColor;
+
+  /// The family of a run that leaves its own unset, or `null` for the
+  /// platform's default.
+  final String? fontFamily;
+
+  /// The theme a run's role color resolves against, or `null` for each
+  /// role's fallback.
+  final SlideTheme? theme;
 
   /// The smallest [shrinkScale]: text is never drawn below a quarter size.
   static const minShrinkScale = 0.25;
@@ -61,7 +90,7 @@ class SlideTextLayout {
   TextStyle runStyle(TextRun run, {double scale = 1}) => TextStyle(
         fontSize: run.fontSize == null ? null : run.fontSize! * scale,
         fontFamily: run.fontFamily,
-        color: run.color == null ? null : Color(run.color!.argb),
+        color: run.color == null ? null : Color(run.color!.resolve(theme)),
         fontWeight: run.bold ? FontWeight.bold : null,
         fontStyle: run.italic ? FontStyle.italic : null,
         decoration: TextDecoration.combine([
@@ -80,6 +109,7 @@ class SlideTextLayout {
     final base = TextStyle(
       inherit: false,
       fontSize: fontSize * scale,
+      fontFamily: fontFamily,
       color: textColor,
       height: paragraph.lineSpacing ?? TextParagraph.defaultLineSpacing,
     );
@@ -134,9 +164,18 @@ class SlideTextLayout {
     return height;
   }
 
-  /// The height [box]'s text needs at its frame's width; a
+  /// The height [box]'s text needs at its frame's width in [theme]; a
   /// [TextBoxMeasurer] for `SlideDocumentController.measureText`.
-  double measure(TextBox box) => contentHeight(box);
+  ///
+  /// With no theme, the box is measured as a canvas draws a deck with none:
+  /// the light theme's type, with body text at [fontSize].
+  double measure(TextBox box, [SlideTheme? theme]) => SlideTextLayout.forBox(
+        box,
+        theme ??
+            SlideThemes.light.copyWith(
+              body: SlideThemes.light.body.copyWith(fontSize: fontSize),
+            ),
+      ).contentHeight(box);
 
   /// The scale at which [box]'s text fits its frame's height: 1 when it
   /// already fits or the box does not shrink text, and never below
