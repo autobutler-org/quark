@@ -188,6 +188,34 @@ void main() {
       expect(() => h.doc.reorderElement('s2', 'e5', 3), throwsRangeError);
     });
 
+    test('arrangeElements restacks a selection as one step', () {
+      final h = Harness();
+      h.doc.arrangeElements('s2', ['e3'], ZOrderMove.toFront);
+      expect(h.elementIds('s2'), ['e4', 'e5', 'e3']);
+      h.doc.arrangeElements('s2', ['e3', 'e5'], ZOrderMove.toBack);
+      expect(h.elementIds('s2'), ['e5', 'e3', 'e4']);
+      h.doc.arrangeElements('s2', ['e5'], ZOrderMove.forward);
+      expect(h.elementIds('s2'), ['e3', 'e5', 'e4']);
+      h.doc.arrangeElements('s2', ['e4'], ZOrderMove.backward);
+      expect(h.elementIds('s2'), ['e3', 'e4', 'e5']);
+      expect(h.changes, 4);
+      h.doc.undo();
+      expect(h.elementIds('s2'), ['e3', 'e5', 'e4']);
+    });
+
+    test('arrangeElements moves a selection past one neighbor at a time', () {
+      final h = Harness();
+      h.doc.arrangeElements('s2', ['e3', 'e4'], ZOrderMove.forward);
+      expect(h.elementIds('s2'), ['e5', 'e3', 'e4']);
+      h.doc.arrangeElements('s2', ['e3', 'e4'], ZOrderMove.forward);
+      expect(h.elementIds('s2'), ['e5', 'e3', 'e4']);
+      expect(h.changes, 1, reason: 'already in front records nothing');
+      expect(
+        () => h.doc.arrangeElements('s2', ['e1'], ZOrderMove.toBack),
+        throwsArgumentError,
+      );
+    });
+
     test('editText replaces a text box\'s paragraphs', () {
       final h = Harness();
       h.doc.editText('s1', 'e1', [

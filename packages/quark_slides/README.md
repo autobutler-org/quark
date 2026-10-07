@@ -1,8 +1,8 @@
 # quark_slides
 
-A headless presentation engine: the immutable slide model, the `.qslide` file
-format, and a document controller with undo. It draws nothing; a slide editor
-or viewer is built on top of it.
+A presentation engine: the immutable slide model, the `.qslide` file format, a
+document controller with undo, and a canvas that draws a slide and edits it
+through that controller. An app builds its editor and viewer around them.
 
 It is the core of the Slides epic (#1152) and, like the other packages here,
 depends on nothing in the Quark app.
@@ -75,7 +75,7 @@ history of earlier presentations:
 
 - slides: `addSlide`, `duplicateSlide`, `deleteSlide`, `moveSlide`, `setSlideNotes`
 - elements: `addElement`, `moveElements`, `resizeElement`, `rotateElement`,
-  `deleteElements`, `reorderElement`, `editText`
+  `deleteElements`, `reorderElement`, `arrangeElements`, `editText`
 - history: `undo`, `redo`, `load`, and `batch` / `beginBatch` / `endBatch`
 
 A command that changes nothing records no step. Commands inside a batch apply
@@ -97,6 +97,46 @@ final notifier = SlideDocumentNotifier(deck);
 ListenableBuilder(listenable: notifier, builder: ...);
 notifier.controller.addSlide();
 ```
+
+## Canvas
+
+`SlideCanvas` draws a slide and, given a `SlideDocumentNotifier`, edits it.
+It depends on nothing but Flutter: colors come from the ambient
+`ColorScheme`, or from a `SlideCanvasStyle` the app fills with its own
+tokens, and pictures come from an `imageBuilder` the app supplies, since the
+package never loads a file.
+
+```dart
+SlideCanvas(
+  document: doc,
+  slideId: slideId,
+  selection: selection,
+  onSelectionChanged: (ids) => setState(() => selection = ids),
+  zoom: zoom, // 1 fits the box; SlideCanvas.minZoom to maxZoom
+  onZoomChanged: (z) => setState(() => zoom = z),
+  imageBuilder: (context, image) => Image.network(image.source, fit: image.fit),
+);
+
+SlideCanvas.readOnly(slide: slide, size: deck.size); // thumbnails, presenting
+```
+
+The slide is laid out at its logical size and scaled, so text wraps the
+same way at every zoom, and the device text scale does not resize slide
+content. Every gesture goes through `SlideDocumentController` and is one
+undo step: tap to select (Shift, Ctrl or Cmd to add), marquee on empty
+space, drag to move with snapping to the slide's and other elements' edges
+and centers (Alt to place freely), eight resize handles and a rotate handle
+drawn 12dp wide with 48dp hit areas, arrow keys to nudge (Shift for ten),
+Delete, Tab to step through elements, and Ctrl/Cmd `]` and `[` (with Shift:
+to front, to back) for stacking order, which `arrangeElements` also offers
+to a toolbar. Scroll, middle-drag or two fingers pan; Ctrl-scroll or a pinch
+zooms. The canvas does not animate.
+
+Each element's widget is keyed `slide_element_<id>` and reads to a screen
+reader through `elementLabel` (`defaultSlideElementLabel` in English); each
+handle is keyed `slide_handle_<id>`, `slide_handle_bottom_right` and so on.
+The math behind the gestures — `FrameGeometry`, `snapMove`,
+`SlideViewport` — is exported and tested on its own.
 
 ## Development
 
