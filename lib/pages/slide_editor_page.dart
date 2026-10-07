@@ -11,6 +11,7 @@ import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark/widgets/sharing/show_share_sheet.dart';
 import 'package:quark/widgets/slides/find/slide_find_controller.dart';
 import 'package:quark/widgets/slides/find/slide_find_layout.dart';
+import 'package:quark/widgets/slides/chart/slide_chart_picker.dart';
 import 'package:quark/widgets/slides/export/slide_export_button.dart';
 import 'package:quark/widgets/slides/insert/slide_quark_image_dialog.dart';
 import 'package:quark/widgets/slides/properties/slide_properties_panel.dart';
@@ -70,7 +71,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// "View only" indicator replaces the save chip, nothing is autosaved, and
 /// the edit tools, the properties fields, the slide panel's add, delete and
 /// reorder, the notes field and the canvas's editing are off. Selecting
-/// slides, zoom, find (without replace), Present and Export keep working.
+/// slides, zoom, find (without replace), Present and Export keep working,
+/// and the canvas still selects elements and table cells, copies, pans
+/// and zooms (`SlideCanvasInteraction.selectOnly`).
 ///
 /// Tables (#1160): the tool row's table button, or "Table" in a phone's
 /// Insert menu (a sheet), picks a size on a grid or with steppers, then
@@ -79,6 +82,14 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// its rows, columns, merges, style, cell color and borders, the text
 /// controls format its cells, and the properties panel shows its size and
 /// style.
+///
+/// Charts (#1160): the tool row's chart button, or "Chart" in a phone's
+/// Insert menu (a sheet), picks a kind from small live previews, then
+/// draws the chart on the slide or inserts it, with sample data, in the
+/// middle. With a chart selected the toolbar's Chart group — a phone's
+/// Format > Chart — changes its kind, title, legend, data labels,
+/// gridlines and series colors, and "Edit data" (or Enter on the canvas)
+/// opens its data sheet; the properties panel shows its kind and title.
 ///
 /// `?` or F1 anywhere in the editor, the toolbar's keyboard button, or
 /// "Keyboard shortcuts" in a phone's Format menu opens the shortcuts dialog
@@ -220,6 +231,25 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
         : _controller.useTool(SlideCanvasTool.table(rows, columns));
   }
 
+  /// The chart picker in a sheet, for a phone's Insert menu (#1160): a
+  /// pick closes the sheet, then arms the chart tool or inserts the chart.
+  Future<void> _openChartSheet() async {
+    final pick = await showQuarkSheet<(bool, ChartKind)>(
+      context,
+      title: 'Insert chart',
+      builder: (sheet) => SlideChartPicker(
+        theme: _controller.theme,
+        onDraw: (kind) => Navigator.of(sheet).pop((false, kind)),
+        onInsert: (kind) => Navigator.of(sheet).pop((true, kind)),
+      ),
+    );
+    if (pick == null) return;
+    final (insert, kind) = pick;
+    insert
+        ? _controller.insertChart(kind)
+        : _controller.useTool(SlideCanvasTool.chart(kind));
+  }
+
   void _openThemeSheet() =>
       _openSheet('Theme', () => SlideThemeControl(controller: _controller));
 
@@ -327,6 +357,7 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                       onOpenTransition: _openTransitionSheet,
                       onFind: _find.open,
                       onOpenTable: _openTableSheet,
+                      onOpenChart: _openChartSheet,
                       onShare: _controller.presentation == null ? null : _share,
                     ),
                   ),

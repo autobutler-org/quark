@@ -8,7 +8,7 @@ import 'package:quark_icons/quark_icons.dart';
 /// Each group shows only when [appliesTo] the selection — the clipboard
 /// always, so paste works with nothing selected, the text groups for a text
 /// box, a table or an open editing session, the table group for a table,
-/// the shape group for shapes and lines,
+/// the chart group for a chart, the shape group for shapes and lines,
 /// arrange for any element — so the row is driven by what is selected. On a
 /// phone each group is a submenu of "Format" named [label].
 ///
@@ -26,6 +26,10 @@ enum SlideToolbarGroup {
   /// Rows and columns, merging, the header row and bands, cell color and
   /// borders, and distributing rows and columns (#1160).
   table('Table', QuarkIcons.insert_table),
+
+  /// Kind, title, legend, data labels, gridlines, series colors and the
+  /// data sheet (#1160).
+  chart('Chart', QuarkIcons.insert_chart),
 
   /// Font family, size, bold, italic, underline, strikethrough and color.
   text('Text', QuarkIcons.format_menu),
@@ -56,6 +60,7 @@ enum SlideToolbarGroup {
     clipboard => true,
     text || paragraph => actions.canFormatText,
     table => actions.canEditTable,
+    chart => actions.canEditChart,
     shape => actions.canStyle,
     arrange => actions.hasSelection,
   };

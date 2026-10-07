@@ -21,7 +21,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// Key prefixes: `slide_format_menu` on the chip, [SlideToolbarGroup.key]
 /// on each group's submenu (the table's, "Table", is
-/// `slide_format_group_table`), `<key>_menu` on the font, color, width,
+/// `slide_format_group_table`; the chart's, "Chart", is
+/// `slide_format_group_chart`, whose "Title…" — `slide_chart_title_menu` —
+/// opens the properties sheet, where the title is typed, and whose
+/// "Series colors" is `slide_chart_colors_menu`), `<key>_menu` on the font, color, width,
 /// style, corner, opacity, borders and distribute submenus; items keep the keys the wide row gives
 /// them; `slide_format_theme` on "Theme", `slide_format_layout` on "Slide
 /// layout", `slide_format_transition` on "Transition", `slide_format_find` on "Find and replace", `slide_format_properties` on "Properties", `slide_zoom_menu` on
@@ -132,6 +135,31 @@ class SlidePhoneFormatMenu extends StatelessWidget {
           QuarkIcons.distribute_vertical,
           a.tableDistributions,
         ),
+      ],
+      SlideToolbarGroup.chart => [
+        choices(
+          'slide_chart_kind',
+          'Type: ${a.chartKindLabel}',
+          QuarkIcons.chart_kind,
+          a.chartKinds,
+        ),
+        MenuItemButton(
+          key: const ValueKey('slide_chart_title_menu'),
+          leadingIcon: const Icon(QuarkIcons.chart_title),
+          onPressed: onOpenProperties,
+          child: const Text('Title…'),
+        ),
+        for (final c in a.chartToggles) SlideChoiceMenuItem(choice: c),
+        SubmenuButton(
+          key: const ValueKey('slide_chart_colors_menu'),
+          leadingIcon: const Icon(QuarkIcons.chart_colors),
+          menuChildren: [
+            for (final c in a.chartColors) color(c),
+            SlideChoiceMenuItem(choice: a.chartThemeColors),
+          ],
+          child: const Text('Series colors'),
+        ),
+        SlideChoiceMenuItem(choice: a.chartEditData),
       ],
       SlideToolbarGroup.shape => [
         color(a.fill),

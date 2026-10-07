@@ -1,7 +1,8 @@
 # Slides Journeys
 
 Covers the Slides page (`/slides`), the slide editor for `.qslide` presentations, its toolbar and properties panel,
-inserting pictures, its speaker notes, and presenting (#1152, #1153, #1158, #1161, #1165, #1166, #1167, #1170).
+inserting pictures, tables and charts, its speaker notes, and presenting (#1152, #1153, #1158, #1160, #1161, #1165,
+#1166, #1167, #1170).
 
 ---
 
@@ -691,7 +692,9 @@ same drive as the presentation (`photos/cover.jpg`).
 - In view-only mode the toolbar's tools and formatting, undo and redo, the properties fields, the slide panel's add,
   duplicate, delete and reorder, the speaker notes field and editing on the canvas are off, and Insert, Theme and Slide
   layout are gone from a phone's menus.
-- Selecting slides, zoom, **Find** (without replace), **Present** and **Export** keep working.
+- Selecting slides, zoom, **Find** (without replace), **Present** and **Export** keep working. On the canvas, tapping,
+  marquee-dragging and Tab still select elements and table cells, Ctrl or Cmd C copies them, and the slide pans and
+  zooms; nothing can be moved, resized, deleted, pasted or typed into, and selected elements show no handles.
 - Pictures from folders the viewer cannot read show a lock instead of the image.
 - If two people edit at once, the last save wins; there is no merge.
 
@@ -765,3 +768,54 @@ same drive as the presentation (`photos/cover.jpg`).
   columns are added at its edges, and its rows or columns are deleted with the cells selected only).
 - Each command is one undo step and starts the autosave.
 - In view-only mode the **Table** group is gone and the properties panel's switches are off to input.
+- With a table selected, the keys in the shortcuts dialog's **Tables** section work: Enter or F2 edits a cell, the
+  arrow keys move between cells, Shift and an arrow grows the selection, Tab and Shift+Tab step through the cells (in
+  the cell editor too), Delete empties them and Esc lets go of them.
+
+### JN-SL-038: Insert a chart
+
+**Preconditions:** A presentation is open in the editor (JN-SL-004), and the person can edit it.
+
+**Steps:**
+
+1. Tap the chart button in the toolbar's tool row (on a phone: **Insert** › **Chart**, which opens a sheet).
+2. Pick **Bar chart**, **Horizontal bar chart**, **Line chart**, **Pie chart** or **Area chart**; each tile shows a
+   small live preview in the presentation's theme colors.
+3. Tap **Draw**, then click the slide to place the chart at its default size, or drag to size it.
+4. Or tap **Insert** to put it in the middle of the slide — the way in from the keyboard.
+
+**Expected result:**
+
+- The picker closes; while the chart tool is armed its button is lit.
+- The chart holds sample data — four quarters by three series (one series for a pie) — in the theme's accent colors,
+  and is selected once placed.
+- Inserting is one undo step and starts the autosave (JN-SL-009).
+- In view-only mode (JN-SL-034) the chart button and a phone's **Insert** menu are gone.
+
+### JN-SL-039: Edit a chart
+
+**Preconditions:** A slide with a chart is open in the editor (JN-SL-038), and the person can edit it.
+
+**Steps:**
+
+1. Select the chart. In the toolbar's **Chart** group (on a phone: **Format** › **Chart**), pick another chart type,
+   type a **Chart title** (on a phone: **Title…** opens the properties sheet), and turn **Legend**, **Data labels**
+   and **Gridlines** on or off.
+2. Open **Series colors** and pick a color for a series — the theme's colors first — or **Use theme colors** to go
+   back to the theme's accents.
+3. Tap **Edit data**, or press Enter with the chart selected. Edit the series names across the top, the categories
+   down the side and the values between; use **Add series**, **Add category** and the remove buttons; or copy cells
+   from a spreadsheet and tap **Paste** to replace the data. Tap **OK**.
+4. The properties panel (on a phone: **Format** › **Properties**) shows the chart's position and size, its type and
+   how much data it holds, and its title.
+
+**Expected result:**
+
+- Each change is one undo step and starts the autosave; the whole data sheet is one step, applied on **OK** only.
+  **Cancel** changes nothing.
+- A value that is not a number is flagged "Enter a number." and keeps **OK** off; a blank value counts as 0.
+- Data past 50 series, 500 categories or 5,000 values, or a paste with no table on the clipboard, is refused with a
+  message saying why, and the sheet keeps what it had.
+- A pie chart draws its first series only and has no gridlines to turn on.
+- In view-only mode the chart can still be selected and read by a screen reader, but the **Chart** group is gone,
+  Enter does nothing, and the properties panel's title takes no input.

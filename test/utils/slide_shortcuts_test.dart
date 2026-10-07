@@ -89,6 +89,37 @@ void main() {
     expect(ids('zzzz'), isEmpty);
   });
 
+  test('lists what the canvas binds for a selected table, and the chart '
+      'data shortcut (#1160)', () {
+    SlideShortcut byId(String id) =>
+        SlideShortcuts.all.firstWhere((s) => s.id == id);
+    for (final id in [
+      'table_edit_cell',
+      'table_move',
+      'table_extend',
+      'table_next_cell',
+      'table_previous_cell',
+      'table_clear_cells',
+      'table_leave_cells',
+    ]) {
+      expect(byId(id).context, SlideShortcutContext.table, reason: id);
+      expect(byId(id).section, SlideShortcutSection.tables, reason: id);
+    }
+    expect(byId('table_edit_cell').combos, [
+      ['Enter'],
+      ['F2'],
+    ]);
+    expect(
+      byId('table_editor_next_cell').context,
+      SlideShortcutContext.textEdit,
+    );
+    expect(byId('chart_edit_data').context, SlideShortcutContext.chart);
+    expect(byId('chart_edit_data').section, SlideShortcutSection.charts);
+    expect(byId('chart_edit_data').combos, [
+      ['Enter'],
+    ]);
+  });
+
   test('docs/slides-keyboard-shortcuts.md names every shortcut', () {
     final doc = File('docs/slides-keyboard-shortcuts.md').readAsStringSync();
     for (final shortcut in SlideShortcuts.all) {

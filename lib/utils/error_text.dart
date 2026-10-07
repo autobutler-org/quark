@@ -167,6 +167,26 @@ abstract final class Errors {
     _ => message(error, 'import the presentation'),
   };
 
+  /// A slide chart's data past what a chart holds (#1160): the limits of
+  /// `ChartData` in quark_slides.
+  static const String chartTooLarge =
+      'A chart holds at most 50 series, 500 categories and 5,000 values.';
+
+  /// A cell of a slide chart's data that has to be a number and is not.
+  static const String chartValueNotNumber = 'Enter a number.';
+
+  /// "Paste" in a chart's data with no table on the clipboard.
+  static const String chartPasteNoTable =
+      "The clipboard doesn't hold a table. Copy cells from a spreadsheet "
+      'first.';
+
+  /// A slide chart's data that could not be applied. Data past the chart
+  /// limits is refused with an [ArgumentError], which gets [chartTooLarge].
+  static String chartData(Object? error) => switch (error) {
+    ArgumentError() => chartTooLarge,
+    _ => message(error, 'update the chart'),
+  };
+
   /// A retry the Quark refused. Only a failed job can be retried, so a 409
   /// means this one didn't fail; a 422 means the file it used is gone; a 404
   /// means the Quark no longer knows the job, or no longer shows it to this

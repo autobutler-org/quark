@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
+import 'package:quark/widgets/slides/chart/slide_chart_data_dialog.dart';
 import 'package:quark/widgets/slides/toolbar/slide_phone_format_menu.dart';
 import 'package:quark/widgets/slides/toolbar/slide_phone_insert_menu.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_actions.dart';
@@ -14,7 +15,8 @@ import 'package:quark/widgets/slides/toolbar/slide_toolbar_actions.dart';
 /// what still works.
 ///
 /// It listens to [controller], its tools and its text editing session, so
-/// the menus follow the selection.
+/// the menus follow the selection. Format > Chart > "Edit data" opens the
+/// `SlideChartDataDialog`.
 ///
 /// Key prefixes: the menus' own (`slide_insert_menu`, `slide_format_menu`).
 class SlidePhoneToolbar extends StatelessWidget {
@@ -30,12 +32,16 @@ class SlidePhoneToolbar extends StatelessWidget {
     required this.onOpenTransition,
     required this.onFind,
     required this.onOpenTable,
+    required this.onOpenChart,
     this.onShare,
     super.key,
   });
 
   /// Opens the table picker sheet.
   final VoidCallback onOpenTable;
+
+  /// Opens the chart picker sheet.
+  final VoidCallback onOpenChart;
 
   /// Opens the theme picker sheet.
   final VoidCallback onOpenTheme;
@@ -79,12 +85,17 @@ class SlidePhoneToolbar extends StatelessWidget {
         controller,
         onImageFromDevice: onImageFromDevice,
         onImageFromQuark: onImageFromQuark,
+        onEditChartData: () => SlideChartDataDialog.edit(context, controller),
       );
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (!controller.isReadOnly)
-            SlidePhoneInsertMenu(actions: actions, onOpenTable: onOpenTable),
+            SlidePhoneInsertMenu(
+              actions: actions,
+              onOpenTable: onOpenTable,
+              onOpenChart: onOpenChart,
+            ),
           SlidePhoneFormatMenu(
             actions: actions,
             onOpenProperties: onOpenProperties,

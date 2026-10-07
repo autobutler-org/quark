@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:quark/widgets/slides/chart/slide_chart_colors_menu_button.dart';
+import 'package:quark/widgets/slides/chart/slide_chart_title_field.dart';
 import 'package:quark/widgets/slides/toolbar/slide_choice_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_choice_menu_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_color_menu_button.dart';
@@ -6,13 +8,16 @@ import 'package:quark/widgets/slides/toolbar/slide_font_size_stepper.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_actions.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_group.dart';
 import 'package:quark_icons/quark_icons.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 /// One [SlideToolbarGroup]'s controls laid out in the wide formatting row:
 /// for text, the font menu, the size stepper, the style toggles and the
 /// color; for a paragraph, the alignments and lists; for a table, the row
 /// and column inserts and deletes, merge and unmerge, the header row and
 /// banded rows toggles, the cell color, and the borders and distribute
-/// menus; for a shape, fill,
+/// menus; for a chart, the kind menu, the title field, the legend, data
+/// labels and gridlines toggles, the series colors menu and "Edit data";
+/// for a shape, fill,
 /// outline color, width and dash, corner radius and opacity; for arrange,
 /// the stacking-order and align menus, the distribute and match-size menus,
 /// group and ungroup while the selection allows them, and delete; for the
@@ -81,6 +86,36 @@ class SlideFormatGroupControls extends StatelessWidget {
           icon: QuarkIcons.distribute_vertical,
           tooltip: 'Distribute rows and columns',
           choices: a.tableDistributions,
+        ),
+      ],
+      SlideToolbarGroup.chart => [
+        SlideChoiceMenuButton(
+          buttonKey: 'slide_chart_kind',
+          icon: QuarkIcons.chart_kind,
+          label: a.chartKindLabel,
+          tooltip: 'Chart type',
+          choices: a.chartKinds,
+        ),
+        SizedBox(
+          width: 180,
+          child: SlideChartTitleField(
+            fieldKey: 'slide_chart_title',
+            value: a.controller.selectedChart?.options.title ?? '',
+            dense: true,
+            onSubmitted: (title) => a.controller.setChartOptions(title: title),
+          ),
+        ),
+        for (final c in a.chartToggles) SlideChoiceButton(choice: c),
+        SlideChartColorsMenuButton(
+          colors: a.chartColors,
+          reset: a.chartThemeColors,
+        ),
+        QuarkBarChip(
+          key: ValueKey(a.chartEditData.key),
+          icon: a.chartEditData.icon!,
+          label: a.chartEditData.label,
+          tooltip: "Edit the chart's data",
+          onPressed: a.chartEditData.onSelected,
         ),
       ],
       SlideToolbarGroup.shape => [

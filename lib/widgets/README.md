@@ -81,6 +81,12 @@ lib/widgets/
                                 channel's members; confirms owner changes
                                 and, for a channel, key-rotating ones
   slides/
+    chart/                      charts (#1160): the kind picker with live
+                                previews, the Edit data dialog (reads the
+                                clipboard, writes errors with Errors, applies
+                                through SlideEditorController), the series
+                                colors menu, the title field and the
+                                properties section
     import/                     importing a PowerPoint file: the Slides
                                 bar's Import row, the progress and summary
                                 dialogs, and importPowerPointAndOpen, which

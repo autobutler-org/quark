@@ -173,6 +173,22 @@ void main() {
     });
   });
 
+  group('Errors.chartData', () {
+    test('a grid past the chart limits names the limits', () {
+      expect(Errors.chartData(ArgumentError('too big')), Errors.chartTooLarge);
+      expect(Errors.chartTooLarge, contains('50 series'));
+    });
+
+    test('anything else reads like Errors.message', () {
+      expect(Errors.chartData(Exception('x')), "Couldn't update the chart.");
+    });
+
+    test('a value that is not a number and an empty paste have copy', () {
+      expect(Errors.chartValueNotNumber, 'Enter a number.');
+      expect(Errors.chartPasteNoTable, contains('spreadsheet'));
+    });
+  });
+
   group('jobs refused with a 403', () {
     test('a conversion says the folder is not writable', () {
       expect(

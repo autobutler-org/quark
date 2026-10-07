@@ -6,13 +6,14 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The phone slide toolbar's "Insert" menu: the wide tool row folded into a
 /// labeled chip — select, text, a "Shape" submenu of kinds, line, arrow,
-/// "Table", which opens the table picker in a sheet (#1160), and
+/// "Table" and "Chart", which open the table and chart pickers in a sheet
+/// (#1160), and
 /// an "Image" submenu of sources, and a "New slide" submenu of layouts
 /// (#1163) that adds a slide on the one picked after the selected slide. Choosing a drawing tool arms the canvas;
 /// the next tap on the slide places the element.
 ///
 /// Key prefixes: `slide_insert_menu` on the chip, `slide_insert_table` on
-/// "Table", `slide_insert_shape` and
+/// "Table", `slide_insert_chart` on "Chart", `slide_insert_shape` and
 /// `slide_insert_image` and `slide_insert_slide` on the submenus; items keep the keys the wide row
 /// gives them.
 class SlidePhoneInsertMenu extends StatelessWidget {
@@ -20,8 +21,12 @@ class SlidePhoneInsertMenu extends StatelessWidget {
   const SlidePhoneInsertMenu({
     required this.actions,
     required this.onOpenTable,
+    required this.onOpenChart,
     super.key,
   });
+
+  /// Opens the chart picker in a sheet.
+  final VoidCallback onOpenChart;
 
   /// Opens the table picker in a sheet.
   final VoidCallback onOpenTable;
@@ -56,6 +61,18 @@ class SlidePhoneInsertMenu extends StatelessWidget {
           child: const Text('Table'),
         ),
       ),
+      Semantics(
+        selected: actions.chartToolActive,
+        child: MenuItemButton(
+          key: const ValueKey('slide_insert_chart'),
+          leadingIcon: const Icon(QuarkIcons.insert_chart),
+          trailingIcon: actions.chartToolActive
+              ? const Icon(QuarkIcons.check)
+              : null,
+          onPressed: onOpenChart,
+          child: const Text('Chart'),
+        ),
+      ),
       SubmenuButton(
         key: const ValueKey('slide_insert_image'),
         leadingIcon: const Icon(QuarkIcons.add_image),
@@ -78,7 +95,7 @@ class SlidePhoneInsertMenu extends StatelessWidget {
       key: const ValueKey('slide_insert_menu'),
       icon: QuarkIcons.insert_menu,
       label: 'Insert',
-      tooltip: 'Insert text, shapes, lines, tables and pictures',
+      tooltip: 'Insert text, shapes, lines, tables, charts and pictures',
       keepLabel: true,
       onPressed: () => menu.isOpen ? menu.close() : menu.open(),
     ),

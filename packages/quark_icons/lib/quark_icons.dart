@@ -339,6 +339,33 @@ class QuarkIcons {
   /// No lines on the selected cells.
   static const IconData border_none = Icons.border_clear;
 
+  /// Insert a chart on a slide, and a slide chart's controls.
+  static const IconData insert_chart = Icons.insert_chart_outlined;
+
+  /// What kind of chart a slide chart is: bars, lines, a pie.
+  static const IconData chart_kind = Icons.bar_chart;
+
+  /// A chart's numbers, edited in a grid.
+  static const IconData chart_data = Icons.grid_on;
+
+  /// A chart's title.
+  static const IconData chart_title = Icons.title;
+
+  /// A chart's legend: which color is which series.
+  static const IconData chart_legend = Icons.list_alt;
+
+  /// The value written on each bar, point or slice of a chart.
+  static const IconData chart_data_labels = Icons.pin_outlined;
+
+  /// The lines across a chart's plot at each value tick.
+  static const IconData chart_gridlines = Icons.grid_4x4;
+
+  /// The colors of a chart's series.
+  static const IconData chart_colors = Icons.palette_outlined;
+
+  /// Read a grid of numbers from the clipboard into a chart.
+  static const IconData paste_data = Icons.content_paste_go;
+
   // ── Import / Export ────────────────────────────────────────────────────────────────
   /// Export data as a CSV file.
   static const IconData export_csv = Icons.file_download;

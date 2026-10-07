@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/slide_editor_controller.dart';
+import 'package:quark/widgets/slides/chart/slide_chart_data_dialog.dart';
 import 'package:quark/widgets/slides/toolbar/slide_format_row.dart';
 import 'package:quark/widgets/slides/toolbar/slide_tool_row.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_actions.dart';
@@ -20,7 +21,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// row are gone.
 ///
 /// It listens to [controller], its tools and its text editing session, so
-/// the toggles follow the selection and the caret. Every control acts
+/// the toggles follow the selection and the caret. The chart group's
+/// "Edit data" opens the `SlideChartDataDialog`. Every control acts
 /// through [controller]: one undo step each, and the autosave.
 ///
 /// Key prefixes: `slide_toolbar` on the toolbar; the rows' own.
@@ -78,6 +80,7 @@ class SlideToolbar extends StatelessWidget {
           controller,
           onImageFromDevice: onImageFromDevice,
           onImageFromQuark: onImageFromQuark,
+          onEditChartData: () => SlideChartDataDialog.edit(context, controller),
         );
         return DecoratedBox(
           key: const ValueKey('slide_toolbar'),

@@ -2,13 +2,20 @@ import 'package:flutter/foundation.dart';
 
 /// Where in the slides app a shortcut is live. Two shortcuts may share a
 /// combination only when their contexts differ: Escape deselects on the
-/// canvas, finishes a text edit, and ends a show.
+/// canvas, finishes a text edit, lets go of a table's cells, and ends a
+/// show. A table or chart context takes its keys before the canvas's.
 enum SlideShortcutContext {
   /// The editor, focus on the canvas or its panels, no text box open.
   canvas,
 
-  /// A text box being edited.
+  /// A text box, or a table cell, being edited.
   textEdit,
+
+  /// A table selected on the canvas, its cells selected or not (#1160).
+  table,
+
+  /// A chart selected on the canvas (#1160).
+  chart,
 
   /// A running presentation.
   present,
@@ -27,6 +34,12 @@ enum SlideShortcutSection {
 
   /// Typing inside a text box.
   text('Text'),
+
+  /// Moving through and editing a table's cells (#1160).
+  tables('Tables'),
+
+  /// Editing a chart (#1160).
+  charts('Charts'),
 
   /// Stacking order.
   arrange('Arrange'),
@@ -353,6 +366,98 @@ abstract final class SlideShortcuts {
       combos: [
         [mod, shift, 'Z'],
         [mod, 'Y'],
+      ],
+    ),
+    SlideShortcut(
+      id: 'table_edit_cell',
+      label: 'Edit the selected cell',
+      section: SlideShortcutSection.tables,
+      context: SlideShortcutContext.table,
+      combos: [
+        ['Enter'],
+        ['F2'],
+      ],
+    ),
+    SlideShortcut(
+      id: 'table_move',
+      label: 'Move to the next cell in that direction',
+      section: SlideShortcutSection.tables,
+      context: SlideShortcutContext.table,
+      combos: [
+        ['Arrow keys'],
+      ],
+    ),
+    SlideShortcut(
+      id: 'table_extend',
+      label: 'Grow or shrink the cell selection',
+      section: SlideShortcutSection.tables,
+      context: SlideShortcutContext.table,
+      combos: [
+        [shift, 'Arrow keys'],
+      ],
+    ),
+    SlideShortcut(
+      id: 'table_next_cell',
+      label: 'Select the next cell',
+      section: SlideShortcutSection.tables,
+      context: SlideShortcutContext.table,
+      combos: [
+        ['Tab'],
+      ],
+    ),
+    SlideShortcut(
+      id: 'table_previous_cell',
+      label: 'Select the previous cell',
+      section: SlideShortcutSection.tables,
+      context: SlideShortcutContext.table,
+      combos: [
+        [shift, 'Tab'],
+      ],
+    ),
+    SlideShortcut(
+      id: 'table_clear_cells',
+      label: 'Empty the selected cells',
+      section: SlideShortcutSection.tables,
+      context: SlideShortcutContext.table,
+      combos: [
+        ['Delete'],
+        ['Backspace'],
+      ],
+    ),
+    SlideShortcut(
+      id: 'table_leave_cells',
+      label: 'Let go of the cells, keeping the table selected',
+      section: SlideShortcutSection.tables,
+      context: SlideShortcutContext.table,
+      combos: [
+        ['Esc'],
+      ],
+    ),
+    SlideShortcut(
+      id: 'table_editor_next_cell',
+      label: 'Edit the next cell',
+      section: SlideShortcutSection.tables,
+      context: SlideShortcutContext.textEdit,
+      combos: [
+        ['Tab'],
+      ],
+    ),
+    SlideShortcut(
+      id: 'table_editor_previous_cell',
+      label: 'Edit the previous cell',
+      section: SlideShortcutSection.tables,
+      context: SlideShortcutContext.textEdit,
+      combos: [
+        [shift, 'Tab'],
+      ],
+    ),
+    SlideShortcut(
+      id: 'chart_edit_data',
+      label: "Edit the selected chart's data",
+      section: SlideShortcutSection.charts,
+      context: SlideShortcutContext.chart,
+      combos: [
+        ['Enter'],
       ],
     ),
     SlideShortcut(
