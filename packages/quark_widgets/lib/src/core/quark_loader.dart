@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../theme/quark_tokens.dart';
+import '../theme/reduce_motion.dart';
 import 'quark_loader/quark_loader_painter.dart';
 
 /// Quark's indeterminate loading indicator: three orbit rings, tilted 60
@@ -11,9 +12,8 @@ import 'quark_loader/quark_loader_painter.dart';
 /// The rings are drawn in `QuarkTokens.primary` and the track in
 /// `QuarkTokens.border`.
 ///
-/// Under reduced motion, when either `MediaQuery.disableAnimationsOf` (Android's
-/// "Remove animations", the browser's `prefers-reduced-motion`) or the
-/// platform's `accessibilityFeatures.reduceMotion` (iOS Reduce Motion) is set,
+/// Under reduced motion, when `reduceMotionOf` says so (Android's "Remove
+/// animations", the browser's `prefers-reduced-motion`, or iOS Reduce Motion),
 /// the rings hold a fixed tilt and the whole loader gently pulses its opacity
 /// instead, so it never reads as a frozen frame.
 ///
@@ -62,13 +62,7 @@ class _QuarkLoaderState extends State<QuarkLoader>
   void didChangeAccessibilityFeatures() => setState(_updateMotion);
 
   void _updateMotion() {
-    final reduce =
-        MediaQuery.disableAnimationsOf(context) ||
-        WidgetsBinding
-            .instance
-            .platformDispatcher
-            .accessibilityFeatures
-            .reduceMotion;
+    final reduce = reduceMotionOf(context);
     if (reduce == _reduceMotion) return;
     _reduceMotion = reduce;
     _controller

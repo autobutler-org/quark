@@ -30,6 +30,23 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // A Material spinner turns whatever the reduced-motion flags say (#2607);
+  // the loader pulses instead.
+  testBothViewports('keeps a pulsing loader under reduced motion', (
+    tester,
+    size,
+  ) async {
+    reduceMotion(tester);
+    await pumpAt(
+      tester,
+      const DiscoveredQuarkList(quarks: [], isLoading: true),
+      size: size,
+    );
+
+    expect(find.byType(QuarkLoader), findsOneWidget);
+    expect(findProgressIndicators(), findsNothing);
+  });
+
   testBothViewports('says so when the search found nothing', (
     tester,
     size,

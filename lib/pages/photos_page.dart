@@ -480,16 +480,21 @@ class PhotosPageState extends State<PhotosPage>
   }
 
   /// The collapsed layout stacks the sidebar above the grid, so a tap on a
-  /// sidebar row would change a grid scrolled out of sight. Bring it back.
+  /// sidebar row would change a grid scrolled out of sight. Bring it back,
+  /// with a jump under reduced motion (#2607).
   void _scrollToGrid() {
     if (!_compactLayout || !_scrollController.hasClients) return;
     final box = _navPanelKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
-    _scrollController.animateTo(
-      box.size.height,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-    );
+    if (reduceMotionOf(context)) {
+      _scrollController.jumpTo(box.size.height);
+    } else {
+      _scrollController.animateTo(
+        box.size.height,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   /// Switches to All photos to pick photos for [album], and back to the album

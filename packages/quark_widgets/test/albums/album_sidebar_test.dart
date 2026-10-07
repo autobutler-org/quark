@@ -179,16 +179,30 @@ void main() {
     expect(events, ['sort:name_desc']);
   });
 
-  testBothViewports('shows a progress bar while loading', (tester, size) async {
+  testBothViewports('shows a loader while loading', (tester, size) async {
     await pumpAt(
       tester,
       bounded(sidebar(isLoading: true, withAllPhotos: true)),
       size: size,
     );
 
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.byType(QuarkLoader), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(find.text('Trips'), findsNothing);
     expect(find.byKey(_allPhotos), findsOneWidget);
+  });
+
+  // A Material progress bar sweeps whatever the reduced-motion flags say
+  // (#2607); the loader pulses instead.
+  testBothViewports('keeps a pulsing loader under reduced motion', (
+    tester,
+    size,
+  ) async {
+    reduceMotion(tester);
+    await pumpAt(tester, bounded(sidebar(isLoading: true)), size: size);
+
+    expect(find.byType(QuarkLoader), findsOneWidget);
+    expect(findProgressIndicators(), findsNothing);
   });
 
   testBothViewports('says so when there are no albums', (tester, size) async {

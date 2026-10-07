@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_loader.dart';
 import '../models/album_item.dart';
 import '../models/album_sort.dart';
 import '../theme/quark_tokens.dart';
@@ -105,7 +106,7 @@ class AlbumSidebar extends StatelessWidget {
   /// the sort button out.
   final ValueChanged<AlbumSort>? onSortChanged;
 
-  /// Whether the albums are loading. Shows a progress bar in place of the
+  /// Whether the albums are loading. Shows a `QuarkLoader` in place of the
   /// list.
   final bool isLoading;
 
@@ -200,7 +201,7 @@ class AlbumSidebar extends StatelessWidget {
             padding: EdgeInsets.symmetric(
               horizontal: tokens.spacingSm + tokens.spacingXs,
             ),
-            child: const LinearProgressIndicator(),
+            child: const Center(child: QuarkLoader(size: 20)),
           )
         else if (error != null)
           Padding(
