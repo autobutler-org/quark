@@ -257,3 +257,53 @@ func TestRepairGroupFolders(t *testing.T) {
 		t.Errorf("second run = %+v, %v; want nothing repaired", again, err)
 	}
 }
+
+// refuseGroupGrants makes every group grant fail, as a full disk would, so a
+// creation fails after its folder is made.
+func refuseGroupGrants(t *testing.T, database *db.DatabaseSqlc) {
+	t.Helper()
+	if _, err := database.Db.Exec(`CREATE TRIGGER refuse_group_grant BEFORE INSERT ON path_access
+		WHEN NEW.group_id IS NOT NULL BEGIN SELECT RAISE(ABORT, 'disk full'); END`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCreateGroupFailedGrantRemovesItsFolder(t *testing.T) {
+	database := dbtest.NewDB(t)
+	dir := filesDirFor(t, database)
+	refuseGroupGrants(t, database)
+
+	if _, err := grouputil.CreateGroup(context.Background(), createParams(t, database, "Family")); err == nil {
+		t.Fatal("CreateGroup succeeded though its grant was refused")
+	}
+	if isDir(t, dir, "groups/Family") {
+		t.Error("a failed creation left the folder it made")
+	}
+	if rows := groupRows(t, database); len(rows) != 0 {
+		t.Errorf("rows = %v, want none", rows)
+	}
+	var groups int
+	if err := database.Db.QueryRow(`SELECT COUNT(*) FROM groups WHERE name = 'Family'`).Scan(&groups); err != nil || groups != 0 {
+		t.Errorf("groups named Family = %d, %v; want the creation rolled back", groups, err)
+	}
+}
+
+func TestCreateGroupFailedGrantKeepsAnAdoptedFolder(t *testing.T) {
+	database := dbtest.NewDB(t)
+	dir := filesDirFor(t, database)
+	kept := filepath.Join(dir, "groups", "Family", "photo.jpg")
+	if err := os.MkdirAll(filepath.Dir(kept), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(kept, []byte("jpeg"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refuseGroupGrants(t, database)
+
+	if _, err := grouputil.CreateGroup(context.Background(), createParams(t, database, "Family")); err == nil {
+		t.Fatal("CreateGroup succeeded though its grant was refused")
+	}
+	if _, err := os.Stat(kept); err != nil {
+		t.Errorf("a failed creation touched a folder it adopted: %v", err)
+	}
+}
