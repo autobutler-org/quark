@@ -583,3 +583,23 @@ The Quark has at least one feature in beta, such as Chat.
 
 - Non-admins get no **This Quark's default** section, and the Quark refuses the change from them.
 - A refused change says so ("Couldn't save your theme color…") and puts the previous color back.
+
+---
+
+### JN-ST-032: See how the app reaches the Quark from any page
+
+**Preconditions:** The mobile app is signed in to a Quark (the indicator never shows on web).
+
+**Steps:**
+
+1. On any main page, tap the connection indicator at the end of the app bar (home, cloud, or crossed-out cloud).
+2. Read the sheet, then tap **Your Quark**.
+
+**Expected result:**
+
+- Step 1 opens a **Connection** sheet saying, in plain words, whether the app is talking to the Quark on the home
+  network, through remote access, or can't reach it at all, with what that means (#2857).
+- The **Your Quark** row says whether remote access is on, off, connecting, or couldn't connect. When the Quark
+  can't be asked, it says only *Remote access settings*.
+- Step 2 closes the sheet and opens `/settings/network`.
+- Nothing in the sheet names Tailscale, an address, or a raw error.
