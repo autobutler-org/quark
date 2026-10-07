@@ -158,14 +158,15 @@ void main() {
       expect(c.selectedSlideId, 'n0');
 
       await openMenuAndTap(tester, 's1', 'slide_duplicate');
-      expect([for (final s in c.slides) s.id], ['s1', 'n1', 'n0', 's2']);
+      final copy = c.selectedSlideId!;
+      expect([for (final s in c.slides) s.id], ['s1', copy, 'n0', 's2']);
 
-      await openMenuAndTap(tester, 'n1', 'slide_delete');
+      await openMenuAndTap(tester, copy, 'slide_delete');
       expect([for (final s in c.slides) s.id], ['s1', 'n0', 's2']);
 
       await tester.tap(find.byKey(const ValueKey('slide_editor_undo')));
       await tester.pumpAndSettle();
-      expect([for (final s in c.slides) s.id], ['s1', 'n1', 'n0', 's2']);
+      expect([for (final s in c.slides) s.id], ['s1', copy, 'n0', 's2']);
       await tester.tap(find.byKey(const ValueKey('slide_editor_redo')));
       await tester.pumpAndSettle();
       expect([for (final s in c.slides) s.id], ['s1', 'n0', 's2']);
@@ -173,6 +174,27 @@ void main() {
       await letAutosaveRun(tester);
     });
   }
+
+  testWidgets('a new slide shows title and body placeholders (#2899)', (
+    tester,
+  ) async {
+    tap.setViewport(tester, tap.wideViewport);
+    await pumpEditor(tester, slides: 1);
+    await tester.tap(find.byKey(const ValueKey('slide_panel_add')));
+    await tester.pumpAndSettle();
+    final stage = find.byKey(const ValueKey('slide_editor_stage'));
+    for (final prompt in ['Click to add title', 'Click to add text']) {
+      expect(
+        find.descendant(
+          of: stage,
+          matching: find.text(prompt, findRichText: true),
+        ),
+        findsOneWidget,
+        reason: prompt,
+      );
+    }
+    await letAutosaveRun(tester);
+  });
 
   testWidgets('tapping a thumbnail selects it', (tester) async {
     tap.setViewport(tester, tap.wideViewport);

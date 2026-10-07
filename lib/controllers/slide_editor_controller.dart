@@ -127,7 +127,8 @@ enum SlideSaveState {
 /// **Themes and layouts** (#1163). [applyTheme] restyles the deck and
 /// [setSlideLayout] and [resetSlideToLayout] rebuild the selected slide on
 /// a layout, one undo step each. [addSlide] builds the new slide on the
-/// selected slide's layout unless it is given one.
+/// selected slide's layout unless it is given one, and on title and
+/// content after a title or blank slide (#2899).
 ///
 /// **Transitions** (#1164). [slideTransition] is the selected slide's own,
 /// [effectiveTransition] the one it plays; [setSlideTransition] and
@@ -549,15 +550,24 @@ class SlideEditorController extends ChangeNotifier {
   }
 
   /// Adds a slide after the selected one, built on [layoutId] or else on
-  /// the selected slide's layout, and selects it.
+  /// the selected slide's layout, and selects it. After a title slide or a
+  /// blank one, which every new presentation starts with, the default is
+  /// title and content, so the new slide shows its "Click to add"
+  /// placeholders rather than an empty canvas (#2899).
   void addSlide({String? layoutId}) {
     final doc = _doc;
     if (doc == null || _readOnly) return;
     _commitNotes();
     final at = selectedIndex + 1;
+    final copied = selectedLayoutId;
     _showSlide(
       doc.controller.insertSlideWithLayout(
-        layoutId ?? selectedLayoutId ?? SlideLayout.blankId,
+        layoutId ??
+            (copied == null ||
+                    copied == SlideLayout.blankId ||
+                    copied == SlideLayout.title.id
+                ? SlideLayout.titleAndContent.id
+                : copied),
         index: at == 0 ? slides.length : at,
       ),
     );

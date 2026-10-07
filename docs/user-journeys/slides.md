@@ -103,7 +103,9 @@ inserting pictures, tables and charts, its speaker notes, and presenting (#1152,
 
 **Expected result:**
 
-- A new blank slide appears after the selected one and is selected, scrolled into view.
+- A new slide appears after the selected one and is selected, scrolled into view. It copies the selected slide's layout;
+  after a title or blank slide it is a title and content slide, its "Click to add title" and "Click to add text"
+  placeholders showing where to type (#2899).
 - The duplicate appears right after its original and is selected.
 - The deleted slide is gone and the slide that took its place is selected.
 - **Delete** is disabled while only one slide is left.

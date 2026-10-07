@@ -4,7 +4,8 @@ import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The slide panel's split "New slide" action (#1163): a tap on the add
-/// button adds a slide on the current slide's layout ([onAdd]); a long
+/// button adds a slide ([onAdd]) — on the current slide's layout, or title
+/// and content after a title or blank slide (#2899); a long
 /// press on it, or the chevron beside it, opens a menu of [layouts] to
 /// build the new slide on ([onAddWithLayout]).
 ///
@@ -26,7 +27,7 @@ class SlideNewSlideButton extends StatelessWidget {
   /// The layouts the menu offers, in order.
   final List<SlideLayout> layouts;
 
-  /// Adds a slide on the current slide's layout.
+  /// Adds a slide on the default layout for the current slide.
   final VoidCallback onAdd;
 
   /// Adds a slide on the layout with the id given.

@@ -813,6 +813,7 @@ void main() {
     late Object? exportFailure;
 
     SlideEditorController exportController() {
+      var next = 0;
       final controller = SlideEditorController(
         filePath: 'talks/Quarterly review.qslide',
         deviceSerial: 'usb1',
@@ -828,7 +829,7 @@ void main() {
           events.add('export $path $serial $fileName');
           return '/downloads/$fileName';
         },
-        newId: () => 'n${events.length}',
+        newId: () => 'n${next++}',
       );
       addTearDown(controller.dispose);
       return controller;
@@ -1147,17 +1148,36 @@ void main() {
       expect(c.canUndo, isFalse);
     });
 
-    test('add copies the selected slide\'s layout', () async {
+    test('add after a title or blank slide gives title and content, with '
+        'placeholders (#2899)', () async {
       final c = controllerFor(titled());
       await c.load();
       c.addSlide();
-      expect(c.selectedSlide!.layoutId, SlideLayout.title.id);
-      expect(c.selectedSlide!.elements, hasLength(2));
+      expect(c.selectedSlide!.layoutId, SlideLayout.titleAndContent.id);
       expect(ids(c), ['s1', c.selectedSlideId, 's2']);
 
       c.selectSlide('s2');
       c.addSlide();
-      expect(c.selectedSlide!.layoutId, SlideLayout.blankId);
+      expect(c.selectedSlide!.layoutId, SlideLayout.titleAndContent.id);
+      final boxes = c.selectedSlide!.elements.whereType<TextBox>();
+      expect(
+        [for (final b in boxes) b.placeholder],
+        ['Click to add title', 'Click to add text'],
+      );
+    });
+
+    test('add copies any other layout of the selected slide', () async {
+      final c = controllerFor(titled());
+      await c.load();
+      c.addSlide(layoutId: SlideLayout.twoContent.id);
+      c.addSlide();
+      expect(c.selectedLayoutId, SlideLayout.twoContent.id);
+    });
+
+    test('add with the blank layout still builds a blank slide', () async {
+      final c = controllerFor(titled());
+      await c.load();
+      c.addSlide(layoutId: SlideLayout.blankId);
       expect(c.selectedSlide!.elements, isEmpty);
     });
 
