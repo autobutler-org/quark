@@ -5,6 +5,7 @@ import '../model/element_frame.dart';
 import '../model/slide.dart';
 import '../model/slide_element.dart';
 import 'slide_handle.dart';
+import 'slide_tree.dart';
 
 /// Rotates [point] about the origin by [degrees], clockwise on screen (y
 /// grows downward).
@@ -165,9 +166,17 @@ extension ElementHitTest on SlideElement {
   /// Most elements are hit anywhere inside their rotated frame. A line is
   /// hit within half its stroke width, or [tolerance], of the segment it
   /// draws, since its frame can be zero-thin and a thin diagonal line covers
-  /// little of its frame.
+  /// little of its frame. A group is hit where one of its children is, not
+  /// in the gaps between them.
   bool hitTest(Offset point, {double tolerance = 0}) {
     final element = this;
+    if (element is GroupElement) {
+      final local =
+          frame.toLocal(point) + Offset(frame.width, frame.height) / 2;
+      return element.children.any(
+        (child) => child.hitTest(local, tolerance: tolerance),
+      );
+    }
     if (element is! LineElement) return frame.contains(point);
     final w = frame.width / 2;
     final h = frame.height / 2;
@@ -205,14 +214,13 @@ extension SlideHitTest on Slide {
           if (_encloses(area, element.frame.bounds)) element.id,
       ];
 
-  /// The smallest box holding the bounds of every element in [ids], or
-  /// `null` when none of them is on the slide.
+  /// The smallest box holding the bounds of every element in [ids] — on the
+  /// slide or inside a group — or `null` when none of them is on the slide.
   Rect? boundsOf(Iterable<String> ids) {
-    final wanted = ids.toSet();
     Rect? union;
-    for (final element in elements) {
-      if (!wanted.contains(element.id)) continue;
-      final bounds = element.frame.bounds;
+    for (final id in ids.toSet()) {
+      final bounds = frameOnSlide(id)?.bounds;
+      if (bounds == null) continue;
       union = union?.expandToInclude(bounds) ?? bounds;
     }
     return union;

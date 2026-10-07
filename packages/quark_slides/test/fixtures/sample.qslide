@@ -101,6 +101,72 @@
             "height": 100
           },
           "source": "asset:logo-1"
+        },
+        {
+          "id": "e8",
+          "type": "group",
+          "frame": {
+            "x": 100,
+            "y": 100,
+            "width": 600,
+            "height": 400,
+            "rotation": 30
+          },
+          "children": [
+            {
+              "id": "e9",
+              "type": "text",
+              "frame": {
+                "x": 0,
+                "y": 0,
+                "width": 600,
+                "height": 100
+              },
+              "paragraphs": [
+                {
+                  "runs": [
+                    {
+                      "text": "Grouped"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "e10",
+              "type": "group",
+              "frame": {
+                "x": 0,
+                "y": 200,
+                "width": 400,
+                "height": 200
+              },
+              "children": [
+                {
+                  "id": "e11",
+                  "type": "shape",
+                  "frame": {
+                    "x": 0,
+                    "y": 0,
+                    "width": 200,
+                    "height": 200
+                  },
+                  "kind": "star"
+                },
+                {
+                  "id": "e12",
+                  "type": "image",
+                  "frame": {
+                    "x": 200,
+                    "y": 0,
+                    "width": 200,
+                    "height": 200
+                  },
+                  "source": "photos/cat.jpg"
+                }
+              ]
+            }
+          ]
         }
       ],
       "notes": "Welcome everyone."

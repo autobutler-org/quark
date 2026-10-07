@@ -4,6 +4,8 @@ import 'package:flutter/widgets.dart';
 
 import '../model/slide_element.dart';
 import 'slide_canvas_style.dart';
+import 'slide_element_label.dart';
+import 'slide_group_view.dart';
 import 'slide_image_source.dart';
 import 'slide_line_painter.dart';
 import 'slide_placeholder_view.dart';
@@ -19,11 +21,13 @@ import 'slide_text_box_view.dart';
 /// screen reader's tap action. Pointer input is not handled here: the canvas
 /// hit tests the slide's geometry itself.
 ///
-/// While a text box is being edited the canvas passes its [editor], which
-/// takes the place of the box's view and speaks for itself to a screen
-/// reader. [showPlaceholder] shows an empty text box's placeholder. A shape
-/// or line is drawn at its opacity; an image reads as its alt text through
-/// [label].
+/// While a text box is being edited the canvas passes its id as
+/// [editingId] and its [editor], which takes the place of the box's view —
+/// inside a group as well — and speaks for itself to a screen reader.
+/// [showPlaceholder] shows an empty text box's placeholder. A shape or line
+/// is drawn at its opacity; an image reads as its alt text through [label].
+/// A group draws its children inside its frame (see [SlideGroupView]), each
+/// named by [elementLabel].
 class SlideElementView extends StatelessWidget {
   /// Creates the view of [element].
   const SlideElementView({
@@ -34,6 +38,8 @@ class SlideElementView extends StatelessWidget {
     this.imageBuilder,
     this.selected = false,
     this.onSelect,
+    this.elementLabel = defaultSlideElementLabel,
+    this.editingId,
     this.editor,
     this.showPlaceholder = false,
     this.excluded = false,
@@ -58,7 +64,15 @@ class SlideElementView extends StatelessWidget {
   /// selected — on a read-only slide.
   final VoidCallback? onSelect;
 
-  /// The in-place editor drawn instead of the element, or `null`.
+  /// Names a group's children for a screen reader.
+  final SlideElementLabel elementLabel;
+
+  /// The id of the text box being edited, here or inside this group, or
+  /// `null`.
+  final String? editingId;
+
+  /// The in-place editor drawn instead of the element [editingId], or
+  /// `null`.
   final Widget? editor;
 
   /// Whether an empty text box shows its placeholder.
@@ -80,7 +94,7 @@ class SlideElementView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final frame = element.frame;
-    final editor = this.editor;
+    final editor = element.id == editingId ? this.editor : null;
     final Widget content = switch (element) {
       TextBox() when editor != null => editor,
       final TextBox box => SlideTextBoxView(
@@ -100,6 +114,16 @@ class SlideElementView extends StatelessWidget {
           ),
         ),
       ImageElement() || UnknownElement() => SlidePlaceholderView(style: style),
+      final GroupElement group => SlideGroupView(
+          group: group,
+          style: style,
+          elementLabel: elementLabel,
+          imageBuilder: imageBuilder,
+          editingId: editingId,
+          editor: this.editor,
+          showPlaceholder: showPlaceholder,
+          excluded: excluded,
+        ),
     };
     final opacity = switch (element) {
       ShapeElement(:final opacity) || LineElement(:final opacity) => opacity,
@@ -124,7 +148,8 @@ class SlideElementView extends StatelessWidget {
                     label: label,
                     selected: onSelect == null ? null : selected,
                     onTap: onSelect,
-                    excludeSemantics: true,
+                    // A group's children read on their own, inside it.
+                    excludeSemantics: element is! GroupElement,
                     child: drawn,
                   ),
       ),

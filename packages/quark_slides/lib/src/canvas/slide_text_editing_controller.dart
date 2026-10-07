@@ -3,6 +3,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../controller/slide_document_controller.dart';
+import '../geometry/slide_tree.dart';
 import '../model/presentation.dart';
 import '../model/rich_text.dart';
 import '../model/slide_element.dart';
@@ -176,7 +177,7 @@ class SlideTextEditingController extends ChangeNotifier {
     if (isEditing) commit();
     final doc = _doc;
     final element =
-        doc?.presentation.slideById(_slideId!)?.elementById(elementId);
+        doc?.presentation.slideById(_slideId!)?.findElement(elementId);
     if (element is! TextBox) {
       throw ArgumentError.value(elementId, 'elementId', 'is not a text box');
     }
@@ -211,7 +212,7 @@ class SlideTextEditingController extends ChangeNotifier {
     final removeIfEmpty = _removeIfEmpty;
     _end();
     final slideId = _slideId!;
-    final current = doc.presentation.slideById(slideId)?.elementById(
+    final current = doc.presentation.slideById(slideId)?.findElement(
           draft.id,
         );
     if (current is! TextBox) return;
@@ -535,7 +536,7 @@ class SlideTextEditingController extends ChangeNotifier {
     final slide = _doc?.presentation.slideById(_slideId ?? '');
     if (slide == null) return const [];
     return [
-      for (final e in slide.elements)
+      for (final e in slide.allElements)
         if (e is TextBox && _selection.contains(e.id)) e,
     ];
   }

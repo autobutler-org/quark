@@ -6,21 +6,6 @@ import 'package:quark_slides/quark_slides.dart';
 
 import '../support/canvas_harness.dart';
 
-/// Taps [global] twice, 100 ms apart, as a double tap.
-Future<void> doubleTap(
-  WidgetTester tester,
-  Offset global, {
-  PointerDeviceKind kind = PointerDeviceKind.touch,
-}) async {
-  for (final ms in [0, 100]) {
-    final gesture = await tester.createGesture(kind: kind);
-    await gesture.down(global, timeStamp: Duration(milliseconds: ms));
-    await gesture.up(timeStamp: Duration(milliseconds: ms + 20));
-    await tester.pump();
-  }
-  await tester.pump();
-}
-
 /// The editor's paragraph field that has focus.
 EditableText focusedField(WidgetTester tester) => tester.widget<EditableText>(
       find.byWidgetPredicate((w) => w is EditableText && w.focusNode.hasFocus),
