@@ -3,8 +3,9 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// What the theme picker says over its cards for a presentation with no
-/// theme (#1163) — one made before themes, or one whose theme was taken
-/// off: it is drawn in the app's colors and keeps working, and
+/// theme (#1163). `SlidesService` gives every deck it creates or opens one
+/// (#2867), so this covers a deck whose theme was taken off: it is drawn in
+/// the app's colors and keeps working, and
 /// [onApply] gives it a theme in one step.
 ///
 /// Key prefixes: `slide_theme_none` on the note, `slide_theme_apply` on its

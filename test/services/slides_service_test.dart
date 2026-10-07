@@ -105,6 +105,30 @@ void main() {
     expect(await SlidesService.load('talks/Pitch.qslide'), deck);
   });
 
+  // A deck with no theme is drawn in the app's colors but exports in
+  // PowerPoint's light defaults, so the two disagree (#2867).
+  test('a new presentation carries the light theme', () {
+    final deck = SlidesService.newPresentation('Pitch');
+    expect(deck.theme, SlideThemes.light);
+    expect(QslideCodec.decode(QslideCodec.encode(deck)).theme, deck.theme);
+  });
+
+  test('a presentation saved without a theme opens in the light one', () async {
+    download = QslideCodec.encode(
+      SlidesService.newPresentation('Pitch').copyWith(theme: null),
+    );
+    final loaded = await SlidesService.load('talks/Pitch.qslide');
+    expect(loaded.theme, SlideThemes.light);
+  });
+
+  test('a presentation keeps the theme it was saved with', () async {
+    download = QslideCodec.encode(
+      SlidesService.newPresentation('Pitch').copyWith(theme: SlideThemes.dark),
+    );
+    final loaded = await SlidesService.load('talks/Pitch.qslide');
+    expect(loaded.theme, SlideThemes.dark);
+  });
+
   test('an empty file opens as a new presentation named after it', () async {
     final loaded = await SlidesService.load('talks/Empty.qslide');
     expect(loaded.title, 'Empty');
