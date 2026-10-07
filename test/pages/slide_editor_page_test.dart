@@ -919,6 +919,46 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('a mouse click opens the phone menus\' submenus, after '
+        'hovering them too (#2898)', (tester) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final c = await pumpDrawn(tester);
+      c.selectElements({'shape'});
+      await tester.pump();
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+
+      /// Rests the mouse on [row], as a hand reaching for it does, then
+      /// clicks it.
+      Future<void> hoverAndClick(String row) async {
+        await mouse.moveTo(tester.getCenter(key(row)));
+        await tester.pumpAndSettle();
+        await mouse.down(tester.getCenter(key(row)));
+        await mouse.up();
+        await tester.pumpAndSettle();
+      }
+
+      for (final (menu, row, item) in [
+        ('slide_insert_menu', 'slide_insert_shape', 'slide_tool_shape_star'),
+        ('slide_insert_menu', 'slide_insert_slide', 'slide_new_slide_blank'),
+        (
+          'slide_format_menu',
+          SlideToolbarGroup.clipboard.key,
+          'slide_duplicate',
+        ),
+      ]) {
+        await tester.tap(key(menu));
+        await tester.pumpAndSettle();
+        await hoverAndClick(row);
+        expect(key(item), findsOneWidget, reason: '$row opens on a click');
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+      }
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('a phone folds the toolbar into Insert and Format menus '
         'in the bar, with Properties in a sheet', (tester) async {
       tap.setViewport(tester, tap.narrowViewport);
