@@ -237,3 +237,80 @@ func TestVaultSession_KeyReturnsCopy(t *testing.T) {
 		t.Fatal("Key() should return a copy, not a reference to the internal key")
 	}
 }
+
+func TestVaultSession_KeyExpires(t *testing.T) {
+	s := NewVaultSession()
+	key := []byte("12345678901234567890123456789012")
+
+	s.Unlock(key, 50*time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
+
+	got, ok := s.Key()
+	if ok || got != nil {
+		t.Fatal("Key() should return nil, false after the timeout")
+	}
+	if !s.IsLocked() {
+		t.Fatal("an expired Key() call should lock the session")
+	}
+}
+
+func TestVaultSession_ZeroTimeoutNeverLocks(t *testing.T) {
+	s := NewVaultSession()
+	key := []byte("12345678901234567890123456789012")
+
+	s.Unlock(key, 0)
+	time.Sleep(10 * time.Millisecond)
+
+	if s.IsLocked() {
+		t.Fatal("a zero timeout should disable auto-lock")
+	}
+	if _, ok := s.Key(); !ok {
+		t.Fatal("Key() should stay available with a zero timeout")
+	}
+}
+
+func TestVaultSession_UnlockZeroesPreviousKey(t *testing.T) {
+	s := NewVaultSession()
+	first := []byte("12345678901234567890123456789012")
+	second := bytes.Repeat([]byte{0x5a}, 32)
+
+	s.Unlock(first, 5*time.Second)
+	previous := s.key
+	s.Unlock(second, 5*time.Second)
+
+	if !bytes.Equal(previous, make([]byte, len(previous))) {
+		t.Fatal("Unlock should zero the previous key before replacing it")
+	}
+	got, ok := s.Key()
+	if !ok || !bytes.Equal(got, second) {
+		t.Fatal("Key() should return the new key after a second Unlock")
+	}
+}
+
+func TestVaultSession_LockWithReason(t *testing.T) {
+	s := NewVaultSession()
+	key := []byte("12345678901234567890123456789012")
+
+	s.Unlock(key, 5*time.Second)
+	stored := s.key
+	s.LockWithReason("storage device disconnected")
+
+	if !s.IsLocked() {
+		t.Fatal("session should be locked after LockWithReason()")
+	}
+	if _, ok := s.Key(); ok {
+		t.Fatal("Key() should return false after LockWithReason()")
+	}
+	if !bytes.Equal(stored, make([]byte, len(stored))) {
+		t.Fatal("LockWithReason should zero the key")
+	}
+	if got := s.LockReason(); got != "storage device disconnected" {
+		t.Fatalf("LockReason() = %q, want the reason passed to LockWithReason", got)
+	}
+
+	s.Unlock(key, 5*time.Second)
+	s.Lock()
+	if got := s.LockReason(); got != "" {
+		t.Fatalf("LockReason() = %q after Lock(), want it cleared", got)
+	}
+}
