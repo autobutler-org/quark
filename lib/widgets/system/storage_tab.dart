@@ -143,6 +143,8 @@ class _StorageTabState extends State<StorageTab>
                 labelText: 'Username',
                 border: OutlineInputBorder(),
               ),
+              autocorrect: false,
+              autofillHints: const [AutofillHints.username],
             ),
             const SizedBox(height: 8),
             TextField(

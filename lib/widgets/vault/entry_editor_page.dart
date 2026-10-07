@@ -84,6 +84,7 @@ class _EntryEditorPageState extends State<EntryEditorPage> {
                 labelText: 'Username / Email',
                 border: OutlineInputBorder(),
               ),
+              autocorrect: false,
             ),
             const SizedBox(height: 12),
             TextField(
