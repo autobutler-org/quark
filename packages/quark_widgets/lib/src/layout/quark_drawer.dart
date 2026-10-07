@@ -29,7 +29,7 @@ enum QuarkDrawerSection {
   /// The spreadsheet list.
   sheets,
 
-  /// The presentation list.
+  /// The presentation list, a beta: its row carries a [QuarkBetaBadge].
   slides,
 
   /// Chat, a beta: its row carries a [QuarkBetaBadge].
@@ -49,7 +49,11 @@ enum QuarkDrawerSection {
 }
 
 /// The sections still in beta, whose rows carry a [QuarkBetaBadge].
-const _betaSections = {QuarkDrawerSection.calendar, QuarkDrawerSection.chat};
+const _betaSections = {
+  QuarkDrawerSection.calendar,
+  QuarkDrawerSection.slides,
+  QuarkDrawerSection.chat,
+};
 
 /// The app's navigation drawer: one row per [QuarkDrawerSection] the caller
 /// offers, with the current one marked.
@@ -69,7 +73,7 @@ const _betaSections = {QuarkDrawerSection.calendar, QuarkDrawerSection.chat};
 /// (#2230). Adding and editing Quarks stays in Settings, a row below. With
 /// one it is a plain label.
 ///
-/// A section still in beta, Calendar and Chat for now, carries a
+/// A section still in beta, Calendar, Slides and Chat for now, carries a
 /// [QuarkBetaBadge] beside its label.
 ///
 /// Key prefixes: `drawer_<section>` on each row, for example `drawer_photos`

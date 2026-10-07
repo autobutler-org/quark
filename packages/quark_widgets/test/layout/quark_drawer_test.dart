@@ -332,6 +332,7 @@ void main() {
     );
     for (final section in [
       QuarkDrawerSection.calendar,
+      QuarkDrawerSection.slides,
       QuarkDrawerSection.chat,
     ]) {
       final row = find.byKey(ValueKey('drawer_${section.name}'));

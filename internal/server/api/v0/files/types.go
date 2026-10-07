@@ -15,10 +15,8 @@ func (r *router) Routes() []*serverutil.Route {
 		deleteFilesRoute,
 		downloadArchiveFileRoute,
 		downloadFileRoute,
-		exportPptxRoute,
 		exportXlsxRoute,
 		extractFileRoute,
-		importPptxRoute,
 		listArchiveRoute,
 		listFilesByTypeRoute,
 		listFilesRoute,
@@ -34,6 +32,17 @@ func (r *router) Routes() []*serverutil.Route {
 		uploadSessionChunkRoute,
 		getUploadSessionRoute,
 		deleteUploadSessionRoute,
+	}
+}
+
+// slidesRouter holds the PowerPoint export and import routes, which sit
+// behind the slides beta's flag (#2868).
+type slidesRouter struct{}
+
+func (r *slidesRouter) Routes() []*serverutil.Route {
+	return []*serverutil.Route{
+		exportPptxRoute,
+		importPptxRoute,
 	}
 }
 

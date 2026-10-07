@@ -20,7 +20,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// more: the router checks with the Quark before it opens one of those pages,
 /// and the Quark refuses their requests from anyone else.
 ///
-/// Chat and Calendar are offered while an admin has their beta on, following
+/// Chat, Calendar and Slides are offered while an admin has their beta on, following
 /// [AppSettings.featureFlags]; the router asks the Quark again before it opens
 /// the page.
 ///
@@ -78,7 +78,9 @@ class AppDrawer extends StatelessWidget {
         onTapTrash: goTo(QuarkDrawerSection.trash, AppRoutes.trash),
         onTapDocs: goTo(QuarkDrawerSection.docs, AppRoutes.docs),
         onTapSheets: goTo(QuarkDrawerSection.sheets, AppRoutes.sheets),
-        onTapSlides: goTo(QuarkDrawerSection.slides, AppRoutes.slides),
+        onTapSlides: settings.isFeatureEnabled(FeatureFlag.slides)
+            ? goTo(QuarkDrawerSection.slides, AppRoutes.slides)
+            : null,
         onTapChat: settings.isFeatureEnabled(FeatureFlag.chat)
             ? goTo(QuarkDrawerSection.chat, AppRoutes.chat)
             : null,

@@ -29,6 +29,9 @@ class FeatureFlag {
   /// The key of the calendar beta (#2609).
   static const calendar = 'calendar';
 
+  /// The key of the slides beta (#2868).
+  static const slides = 'slides';
+
   /// The flag's stable key, such as [chat].
   final String key;
 

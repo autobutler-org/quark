@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/file_browser_controller.dart';
 import 'package:quark/controllers/file_browser_events_controller.dart';
+import 'package:quark/models/feature_flag.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/path_grant.dart';
 import 'package:quark/pages/image_viewer_page.dart';
@@ -2325,10 +2326,23 @@ class _FileBrowserPageState extends State<FileBrowserPage>
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        ValueListenableBuilder<bool>(
-                          valueListenable: AppSettings.instance.isAdmin,
-                          builder: (context, isAdmin, _) => FileBrowserView(
-                            isAdmin: isAdmin,
+                        ListenableBuilder(
+                          listenable: Listenable.merge([
+                            AppSettings.instance.isAdmin,
+                            AppSettings.instance.featureFlags,
+                          ]),
+                          builder: (context, _) => FileBrowserView(
+                            isAdmin: AppSettings.instance.isAdmin.value,
+                            // Open as presentation goes with the slides beta
+                            // (#2868).
+                            menuActions:
+                                AppSettings.instance.isFeatureEnabled(
+                                  FeatureFlag.slides,
+                                )
+                                ? FileBrowserView.defaultMenuActions
+                                : FileBrowserView.defaultMenuActions.difference(
+                                    const {FileMenuAction.openAsPresentation},
+                                  ),
                             filesFuture: _isSearchMode
                                 ? (_searchFuture ??
                                       Future.value(const <FileNode>[]))

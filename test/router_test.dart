@@ -972,6 +972,7 @@ void main() {
     Future<void> signIn({
       required bool chatEnabled,
       bool calendarEnabled = true,
+      bool slidesEnabled = true,
     }) async {
       await reset();
       await settings.addHost(
@@ -992,6 +993,12 @@ void main() {
           label: 'Calendar',
           description: '',
           enabled: calendarEnabled,
+        ),
+        FeatureFlag(
+          key: FeatureFlag.slides,
+          label: 'Slides',
+          description: '',
+          enabled: slidesEnabled,
         ),
       ];
       featureFlagsProbe = () async => flags;
@@ -1035,6 +1042,20 @@ void main() {
       await signIn(chatEnabled: true, calendarEnabled: false);
       final r = await pumpGated(tester, '/calendar/week');
       expect(at(r), AppRoutes.files);
+    });
+
+    testWidgets('slides turned off sends its pages to Files (#2868)', (
+      tester,
+    ) async {
+      await signIn(chatEnabled: true, slidesEnabled: false);
+      for (final location in [
+        AppRoutes.slides,
+        '/slides/talks/q1.qslide',
+        '/slides/talks/q1.qslide/present',
+      ]) {
+        final r = await pumpGated(tester, location);
+        expect(at(r), AppRoutes.files, reason: location);
+      }
     });
 
     testWidgets('calendar on keeps its views, with chat off', (tester) async {
@@ -1357,6 +1378,7 @@ void main() {
         }
         await settings.setSessionToken(null);
         authStatusProbe = AuthService.checkStatus;
+        featureFlagsProbe = FeatureFlagsService.list;
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
             .setMockMethodCallHandler(secureStorage, null);
       });
@@ -1365,6 +1387,15 @@ void main() {
       );
       await settings.acceptTerms();
       authStatusProbe = () async => const AuthStatus(setupComplete: true);
+      // The slides beta is on, or the gate would send the link to Files.
+      featureFlagsProbe = () async => const [
+        FeatureFlag(
+          key: FeatureFlag.slides,
+          label: 'Slides',
+          description: '',
+          enabled: true,
+        ),
+      ];
 
       final link = AppRoutes.slideFile('talks/q 1.qslide', serial: 's1');
       final r = GoRouter(
