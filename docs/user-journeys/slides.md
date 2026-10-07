@@ -694,3 +694,29 @@ same drive as the presentation (`photos/cover.jpg`).
 - Selecting slides, zoom, **Find** (without replace), **Present** and **Export** keep working.
 - Pictures from folders the viewer cannot read show a lock instead of the image.
 - If two people edit at once, the last save wins; there is no merge.
+
+### JN-SL-035: Choose a slide's transition
+
+**Preconditions:** A presentation with at least two slides is open in the editor (JN-SL-004), and the person can edit it.
+
+**Steps:**
+
+1. Select a slide. Tap **Transition** in the toolbar, or find **Transition** in the properties panel (on a phone:
+   **Format** › **Transition**, which opens a sheet).
+2. Pick **None**, **Fade**, **Push**, **Wipe** or **Zoom**.
+3. For **Push** or **Wipe**, pick the direction the slides travel: **Left**, **Right**, **Up** or **Down**.
+4. Drag the length slider between 200 and 2000 ms; the number beside it follows.
+5. Tap **Preview** to play the transition once in the panel, from the slide before into this one.
+6. Tap **Apply to all slides** to use it for the whole presentation.
+
+**Expected result:**
+
+- Each choice is one undo step and starts the autosave; a drag of the slider is one step.
+- A slide with a transition shows a small marker on its thumbnail in the slide panel; a screen reader hears "Slide 2,
+  Push transition, left".
+- The direction appears only for Push and Wipe, and the length only for a kind other than None.
+- **Apply to all slides** sets the presentation's transition and clears every slide's own, as one undo step.
+- Presenting plays the transition when arriving at the slide (JN-SL-016); with reduced motion on, the preview and
+  the show use a short fade instead.
+- In view-only mode (JN-SL-034) the panel shows the transition with its choices off, and the toolbar chip and the
+  phone's menu entry are gone.

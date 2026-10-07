@@ -98,6 +98,12 @@ lib/widgets/
                                 SlideLayoutControl and SlidePickerMenuButton
                                 read SlideEditorController and call its
                                 commands
+    transition/                 the transition picker (#1164): its kind,
+                                direction and length fields, the preview
+                                stage and the thumbnail marker are data in,
+                                callbacks out; SlideTransitionControl and
+                                SlideTransitionMenuButton read
+                                SlideEditorController and call its commands
     toolbar/                    the slide toolbar: SlideToolbarActions maps
                                 the controller into choices, the rows and
                                 phone menus draw them; SlideToolbarGroup is

@@ -12,7 +12,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// into a labeled chip, one submenu per [SlideToolbarGroup] that applies to
 /// the selection, holding every control the row has, then "Theme" and
 /// "Slide layout" (#1163), which open their pickers in a bottom sheet,
-/// "Find and replace" (#1176), which opens the find bar,
+/// "Transition" (#1164), which opens the slide's transition picker in a
+/// sheet, "Find and replace" (#1176), which opens the find bar,
 /// "Properties",
 /// which opens the properties sheet, "Share" (#1170), which opens the share
 /// sheet (key `slide_format_share`), "Zoom", which the phone's bar has
@@ -22,7 +23,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// on each group's submenu, `<key>_menu` on the font, color, width, style,
 /// corner and opacity submenus; items keep the keys the wide row gives
 /// them; `slide_format_theme` on "Theme", `slide_format_layout` on "Slide
-/// layout", `slide_format_find` on "Find and replace", `slide_format_properties` on "Properties", `slide_zoom_menu` on
+/// layout", `slide_format_transition` on "Transition", `slide_format_find` on "Find and replace", `slide_format_properties` on "Properties", `slide_zoom_menu` on
 /// "Zoom" and `slide_menu_zoom_out`, `slide_menu_zoom_fit` and
 /// `slide_menu_zoom_in` on its items, `slide_format_shortcuts` on
 /// "Keyboard shortcuts".
@@ -34,6 +35,7 @@ class SlidePhoneFormatMenu extends StatelessWidget {
     required this.onShowShortcuts,
     required this.onOpenTheme,
     required this.onOpenLayout,
+    required this.onOpenTransition,
     required this.onFind,
     this.onShare,
     this.readOnly = false,
@@ -45,6 +47,9 @@ class SlidePhoneFormatMenu extends StatelessWidget {
 
   /// Opens the selected slide's layout picker in a sheet.
   final VoidCallback onOpenLayout;
+
+  /// Opens the selected slide's transition picker in a sheet.
+  final VoidCallback onOpenTransition;
 
   /// Opens the find bar.
   final VoidCallback onFind;
@@ -192,6 +197,12 @@ class SlidePhoneFormatMenu extends StatelessWidget {
             leadingIcon: const Icon(QuarkIcons.slide_layout),
             onPressed: onOpenLayout,
             child: const Text('Slide layout'),
+          ),
+          MenuItemButton(
+            key: const ValueKey('slide_format_transition'),
+            leadingIcon: const Icon(QuarkIcons.slide_transition),
+            onPressed: onOpenTransition,
+            child: const Text('Transition'),
           ),
         ],
         MenuItemButton(

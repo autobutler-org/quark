@@ -103,6 +103,7 @@ class SlideEditorBody extends StatelessWidget {
       onAddWithLayout: (layoutId) => c.addSlide(layoutId: layoutId),
       layouts: c.layouts,
       theme: presentation.theme,
+      defaultTransition: presentation.defaultTransition,
       onDuplicate: c.duplicateSlide,
       onDelete: c.deleteSlide,
       onMove: c.moveSlide,

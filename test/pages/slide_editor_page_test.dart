@@ -1095,6 +1095,154 @@ void main() {
     });
   });
 
+  group('transitions (#1164)', () {
+    Finder key(String k) => find.byKey(ValueKey(k));
+
+    testWidgets('a wide window picks a kind, direction and length from the '
+        'panel, marks the slide and undoes each step', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpEditor(tester);
+      expect(key('slide_transition_kind_none'), findsOneWidget);
+      expect(key('slide_transition_direction_left'), findsNothing);
+      expect(key('slide_transition_duration'), findsNothing);
+      expect(key('slide_transition_marker'), findsNothing);
+
+      await tester.ensureVisible(key('slide_transition_kind_push'));
+      await tester.tap(key('slide_transition_kind_push'));
+      await tester.pumpAndSettle();
+      expect(c.slideTransition?.kind, SlideTransitionKind.push);
+      expect(c.saveState, SlideSaveState.dirty);
+      expect(key('slide_transition_marker'), findsOneWidget);
+
+      await tester.ensureVisible(key('slide_transition_direction_up'));
+      await tester.tap(key('slide_transition_direction_up'));
+      await tester.pumpAndSettle();
+      expect(c.slideTransition?.direction, SlideTransitionDirection.up);
+
+      await tester.ensureVisible(key('slide_transition_duration'));
+      await tester.drag(key('slide_transition_duration'), const Offset(400, 0));
+      await tester.pumpAndSettle();
+      expect(c.slideTransition?.durationMs, SlideTransitionSpec.maxDurationMs);
+      expect(find.text('2000 ms'), findsOneWidget);
+
+      // Length, direction and kind were one undo step each.
+      c.undo();
+      expect(
+        c.slideTransition?.durationMs,
+        SlideTransitionSpec.defaultDurationMs,
+      );
+      c.undo();
+      expect(c.slideTransition?.direction, SlideTransitionDirection.left);
+      c.undo();
+      await tester.pumpAndSettle();
+      expect(c.slideTransition, isNull);
+      expect(c.canUndo, isFalse);
+      expect(key('slide_transition_marker'), findsNothing);
+
+      await tester.ensureVisible(key('slide_transition_kind_wipe'));
+      await tester.tap(key('slide_transition_kind_wipe'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(key('slide_transition_apply_all'));
+      await tester.tap(key('slide_transition_apply_all'));
+      await tester.pumpAndSettle();
+      expect(c.presentation!.defaultTransition.kind, SlideTransitionKind.wipe);
+      expect(c.slides.every((s) => s.transition == null), isTrue);
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('Preview plays the transition once in the panel', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpEditor(tester);
+      c.setSlideTransition(const SlideTransitionSpec.fade());
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(key('slide_transition_preview'));
+      await tester.tap(key('slide_transition_preview'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(SlideTransitionView), findsOneWidget);
+      // Both slides are on the stage mid-way.
+      expect(
+        find.descendant(
+          of: key('slide_transition_stage'),
+          matching: find.byType(SlideCanvas),
+        ),
+        findsNWidgets(2),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: key('slide_transition_stage'),
+          matching: find.byType(SlideCanvas),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('the Transition chip opens the picker beside the panel\'s', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpEditor(tester);
+      await tester.tap(key('slide_transition_button'));
+      await tester.pumpAndSettle();
+      expect(key('slide_transition_kind_zoom'), findsNWidgets(2));
+      await tester.tap(key('slide_transition_kind_zoom').first);
+      await tester.pumpAndSettle();
+      expect(c.slideTransition?.kind, SlideTransitionKind.zoom);
+      expect(tester.takeException(), isNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('a phone opens the picker from Format in a sheet', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final c = await pumpEditor(tester);
+      await tester.tap(key('slide_format_menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_format_transition'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('slide_transition_kind_fade'));
+      await tester.pumpAndSettle();
+      expect(c.slideTransition?.kind, SlideTransitionKind.fade);
+      expect(key('slide_transition_duration'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tapAt(const Offset(180, 20));
+      await tester.pumpAndSettle();
+      await letAutosaveRun(tester);
+    });
+
+    testWidgets('a view-only deck shows the transition with its choices off', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final c = await pumpEditor(tester, readOnly: true);
+      expect(key('slide_transition_kind_none'), findsOneWidget);
+      await tester.ensureVisible(key('slide_transition_kind_fade'));
+      await tester.tap(key('slide_transition_kind_fade'));
+      await tester.pumpAndSettle();
+      expect(c.slideTransition, isNull);
+      expect(key('slide_transition_apply_all'), findsNothing);
+    });
+
+    testLargeText('the picker fits', (tester, size) async {
+      final c = await pumpEditor(tester);
+      c.setSlideTransition(
+        const SlideTransitionSpec(kind: SlideTransitionKind.wipe),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await letAutosaveRun(tester);
+    });
+  });
+
   group('themes and layouts (#1163)', () {
     Finder key(String k) => find.byKey(ValueKey(k));
 
@@ -1569,6 +1717,7 @@ void main() {
         'slide_tool_image',
         'slide_theme_button',
         'slide_layout_button',
+        'slide_transition_button',
         'slide_format_hint',
       ]) {
         expect(key(gone), findsNothing, reason: gone);
@@ -1617,6 +1766,7 @@ void main() {
       expect(key('slide_zoom_menu'), findsOneWidget);
       expect(key('slide_format_theme'), findsNothing);
       expect(key('slide_format_layout'), findsNothing);
+      expect(key('slide_format_transition'), findsNothing);
       for (final group in SlideToolbarGroup.values) {
         expect(key(group.key), findsNothing, reason: group.key);
       }

@@ -43,6 +43,7 @@ class SlidePanel extends StatefulWidget {
     this.imageBuilder,
     this.onPresent,
     this.theme,
+    this.defaultTransition = SlideTransitionSpec.none,
     this.layouts = const [],
     this.onAddWithLayout,
     this.readOnly = false,
@@ -55,6 +56,10 @@ class SlidePanel extends StatefulWidget {
 
   /// The presentation's theme, which the thumbnails are drawn in.
   final SlideTheme? theme;
+
+  /// The transition slides without their own play; a slide whose transition
+  /// is not none wears a marker (#1164).
+  final SlideTransitionSpec defaultTransition;
 
   /// The layouts a new slide can be built on.
   final List<SlideLayout> layouts;
@@ -156,6 +161,7 @@ class _SlidePanelState extends State<SlidePanel> {
       :imageBuilder,
       :onPresent,
       :theme,
+      :defaultTransition,
       :layouts,
       :onAddWithLayout,
       :readOnly,
@@ -189,6 +195,7 @@ class _SlidePanelState extends State<SlidePanel> {
           slide: slide,
           size: size,
           theme: theme,
+          transition: slide.transition ?? defaultTransition,
           number: index + 1,
           selected: slide.id == selectedSlideId,
           onSelect: () => onSelect(slide.id),

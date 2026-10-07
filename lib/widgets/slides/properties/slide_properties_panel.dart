@@ -6,6 +6,7 @@ import 'package:quark/widgets/slides/theme/slide_layout_control.dart';
 import 'package:quark/widgets/slides/theme/slide_theme_control.dart';
 import 'package:quark/widgets/slides/toolbar/slide_color_palette.dart';
 import 'package:quark/widgets/slides/toolbar/slide_toolbar_choice.dart';
+import 'package:quark/widgets/slides/transition/slide_transition_control.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -14,8 +15,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// position, size and rotation as numbers, a selected picture's alt text,
 /// and the slide's background color (#1174) from the toolbar's swatches or
 /// a hex code — "Theme background" clears it so the slide follows the
-/// theme — then the slide's layout and the presentation's theme (#1163):
-/// [SlideLayoutControl] and [SlideThemeControl].
+/// theme — then the slide's layout, its transition (#1164) and the presentation's
+/// theme (#1163): [SlideLayoutControl], [SlideTransitionControl] and
+/// [SlideThemeControl].
 ///
 /// A wide screen shows it down the right of the canvas, collapsible from
 /// the toolbar; a phone opens it as a bottom sheet from the toolbar's
@@ -24,7 +26,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// A view-only presentation ([SlideEditorController.isReadOnly]) shows the
 /// position, size and alt text in fields that take no input, and leaves out
-/// the background, layout and theme sections.
+/// the background, layout and theme sections and shows the transition
+/// with its choices off.
 ///
 /// Position and size are in slide units (a 16:9 slide is 1920 by 1080),
 /// rotation in degrees clockwise.
@@ -162,6 +165,11 @@ class SlidePropertiesPanel extends StatelessWidget {
             QuarkSection(
               title: 'Slide layout',
               child: SlideLayoutControl(controller: controller),
+            ),
+          if (controller.selectedSlide != null)
+            QuarkSection(
+              title: 'Transition',
+              child: SlideTransitionControl(controller: controller),
             ),
           if (!readOnly)
             QuarkSection(

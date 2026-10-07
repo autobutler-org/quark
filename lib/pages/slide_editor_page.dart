@@ -23,6 +23,7 @@ import 'package:quark/widgets/slides/slide_share_bar_button.dart';
 import 'package:quark/widgets/slides/slide_view_only_badge.dart';
 import 'package:quark/widgets/slides/theme/slide_layout_control.dart';
 import 'package:quark/widgets/slides/theme/slide_theme_control.dart';
+import 'package:quark/widgets/slides/transition/slide_transition_control.dart';
 import 'package:quark/widgets/slides/toolbar/slide_phone_toolbar.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -199,6 +200,11 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
     () => SlideLayoutControl(controller: _controller),
   );
 
+  void _openTransitionSheet() => _openSheet(
+    'Transition',
+    () => SlideTransitionControl(controller: _controller),
+  );
+
   @override
   Widget build(BuildContext context) {
     final canPop = Navigator.of(context).canPop();
@@ -290,6 +296,7 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                       onShowShortcuts: _showShortcuts,
                       onOpenTheme: _openThemeSheet,
                       onOpenLayout: _openLayoutSheet,
+                      onOpenTransition: _openTransitionSheet,
                       onFind: _find.open,
                       onShare: _controller.presentation == null ? null : _share,
                     ),

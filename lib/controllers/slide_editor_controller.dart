@@ -129,6 +129,10 @@ enum SlideSaveState {
 /// a layout, one undo step each. [addSlide] builds the new slide on the
 /// selected slide's layout unless it is given one.
 ///
+/// **Transitions** (#1164). [slideTransition] is the selected slide's own,
+/// [effectiveTransition] the one it plays; [setSlideTransition] and
+/// [applyTransitionToAll] change them, one undo step each.
+///
 /// **Pictures** (#1158). [insertImageFromDevice] picks a file, streams it up
 /// beside the presentation and puts it on the slide at the size its header
 /// gives; [insertImageFromQuark] does the same for a file already on the
@@ -823,6 +827,37 @@ class SlideEditorController extends ChangeNotifier {
     if (_readOnly || doc == null || slideId == null) return;
     textEditing.commit();
     doc.controller.resetSlideToLayout(slideId);
+  }
+
+  // ── Transitions ───────────────────────────────────────────────────────────
+
+  /// The selected slide's own transition; null when it follows the deck.
+  SlideTransitionSpec? get slideTransition => selectedSlide?.transition;
+
+  /// The transition the selected slide plays: its own, or the deck's.
+  SlideTransitionSpec get effectiveTransition {
+    final slide = selectedSlide;
+    final deck = presentation;
+    return slide == null || deck == null
+        ? SlideTransitionSpec.none
+        : deck.transitionFor(slide);
+  }
+
+  /// Gives the selected slide [spec], or with null lets it follow the deck,
+  /// as one undo step.
+  void setSlideTransition(SlideTransitionSpec? spec) {
+    final doc = _doc;
+    final slideId = _selectedSlideId;
+    if (_readOnly || doc == null || slideId == null) return;
+    textEditing.commit();
+    doc.controller.setSlideTransition(slideId, spec);
+  }
+
+  /// Makes [spec] every slide's transition, as one undo step.
+  void applyTransitionToAll(SlideTransitionSpec spec) {
+    if (_readOnly) return;
+    textEditing.commit();
+    _doc?.controller.applyTransitionToAll(spec);
   }
 
   // ── Slide background ──────────────────────────────────────────────────────
