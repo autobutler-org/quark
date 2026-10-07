@@ -103,20 +103,25 @@ class _CalendarPageState extends State<CalendarPage>
 
   /// Goes to [view] around [date], keeping the filter unless [mine] or
   /// [person] replaces it.
+  ///
+  /// The page shows it at once and the URL follows: the router asks the Quark
+  /// whether the calendar is on before every calendar URL, and waiting for
+  /// that round trip left the arrows a beat behind the click (#2888). When the
+  /// route lands, [_followRoute] finds it already on show.
   void _go(
     CalendarView view,
     DateTime date, {
     bool? mine,
     String? person,
     bool everyone = false,
-  }) => context.go(
-    AppRoutes.calendarView(
-      view,
-      date: date,
-      mine: everyone ? false : (mine ?? _calendar.mineOnly),
-      person: everyone || mine == true ? null : (person ?? _calendar.person),
-    ),
-  );
+  }) {
+    final mineOnly = everyone ? false : (mine ?? _calendar.mineOnly);
+    final who = everyone || mine == true ? null : (person ?? _calendar.person);
+    unawaited(_calendar.show(view, date, mineOnly: mineOnly, person: who));
+    context.go(
+      AppRoutes.calendarView(view, date: date, mine: mineOnly, person: who),
+    );
+  }
 
   Future<void> _edit(CalendarEventItem item) {
     final event = _calendar.eventById(item.eventId);

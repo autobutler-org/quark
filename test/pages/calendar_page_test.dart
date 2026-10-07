@@ -104,14 +104,16 @@ void main() {
   Future<GoRouter> pumpCalendar(
     WidgetTester tester,
     String location,
-    Size size,
-  ) async {
+    Size size, {
+    GoRouterRedirect? redirect,
+  }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
     final r = GoRouter(
       initialLocation: location,
+      redirect: redirect,
       routes: tabbedRoutes(
         path: AppRoutes.calendar,
         tabs: CalendarView.values,
@@ -194,6 +196,59 @@ void main() {
         await tester.pumpAndSettle();
       }
       expect(at(r), '/calendar/day?date=2026-09-28');
+    });
+
+    // #2888: the app's router asks the Quark whether the calendar is on before
+    // every calendar URL, so a step waits a round trip for its route. The
+    // arrows step the page at once and the URL catches up, so the heading and
+    // the grid move together on the tap rather than after the probe.
+    testWidgets('$name: the arrows step at once and the URL follows (#2888)', (
+      tester,
+    ) async {
+      const probe = Duration(milliseconds: 500);
+      final r = await pumpCalendar(
+        tester,
+        AppRoutes.calendarView(CalendarView.week, date: DateTime(2026, 10, 7)),
+        size,
+        redirect: (_, _) async {
+          await Future<void>.delayed(probe);
+          return null;
+        },
+      );
+      await tester.pump(probe);
+      await tester.pumpAndSettle();
+
+      String heading() => tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byType(CalendarPeriodHeader),
+              matching: find.byType(Text),
+            ),
+          )
+          .data!;
+      String week(int from, int to) => CalendarLabels.range(
+        DateTime(2026, 10, from),
+        DateTime(2026, 10, to),
+        short: size.width < QuarkAppBarBottom.collapseBreakpoint,
+      );
+
+      expect(heading(), week(4, 10));
+      await tester.tap(find.byKey(const ValueKey('calendar_next')));
+      await tester.pump();
+      expect(heading(), week(11, 17));
+      expect(
+        find.byKey(const ValueKey('calendar_day_header_2026-10-11')),
+        findsOneWidget,
+      );
+
+      // A second step before the first route lands goes on from it.
+      await tester.tap(find.byKey(const ValueKey('calendar_next')));
+      await tester.pump();
+      expect(heading(), week(18, 24));
+      await tester.pump(probe * 2);
+      await tester.pumpAndSettle();
+      expect(heading(), week(18, 24));
+      expect(at(r), '/calendar/week?date=2026-10-21');
     });
 
     testWidgets('$name: New event opens the form and saves it', (tester) async {
