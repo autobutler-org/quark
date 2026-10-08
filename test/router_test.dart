@@ -1062,6 +1062,40 @@ void main() {
       }
     });
 
+    // #2935: every view or week change used to ask the Quark for its flags.
+    testWidgets('moving between calendar views asks for the flags once', (
+      tester,
+    ) async {
+      await signIn(chatEnabled: true);
+      // A cold deep link: nothing has loaded the flags for this session yet.
+      settings.featureFlags.value = const [];
+      await settings.setSessionToken('calendar-token');
+      final probe = featureFlagsProbe;
+      var asked = 0;
+      featureFlagsProbe = () {
+        asked++;
+        return probe();
+      };
+
+      final r = await pumpGated(tester, '/calendar/week');
+      for (final location in [
+        '/calendar/day',
+        '/calendar/month',
+        '/calendar/week?date=2026-10-12',
+        '/calendar/week?date=2026-10-19',
+      ]) {
+        r.go(location);
+        await tester.pumpAndSettle();
+        expect(at(r), location);
+      }
+      expect(asked, 1);
+
+      // Another session is another answer.
+      await settings.setSessionToken('other-token');
+      await tester.pumpAndSettle();
+      expect(asked, 2);
+    });
+
     testWidgets('calendar on keeps its views, with chat off', (tester) async {
       await signIn(chatEnabled: false);
       final r = await pumpGated(tester, '/calendar/week');
