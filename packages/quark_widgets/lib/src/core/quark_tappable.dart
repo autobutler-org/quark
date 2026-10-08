@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../theme/quark_tokens.dart';
 
 /// A custom tappable surface a keyboard can reach: it takes focus on Tab,
-/// runs [onTap] on Enter or Space as well as on a tap, and draws a two-pixel
-/// [QuarkTokens.primary] ring around [child] while it holds keyboard focus.
+/// runs [onTap] on Enter or Space as well as on a tap, and draws a
+/// [QuarkTokens.primary] ring [QuarkTokens.focusRingWidth] wide around
+/// [child] while it holds keyboard focus.
 ///
 /// A bare `GestureDetector` answers a finger and a mouse and nothing else, so
 /// a breadcrumb, a file type card or a photo was out of reach of anyone on a
@@ -93,7 +94,10 @@ class _QuarkTappableState extends State<QuarkTappable> {
           position: DecorationPosition.foreground,
           decoration: _showFocus && enabled
               ? BoxDecoration(
-                  border: Border.all(color: tokens.primary, width: 2),
+                  border: Border.all(
+                    color: tokens.primary,
+                    width: tokens.focusRingWidth,
+                  ),
                   borderRadius: widget.borderRadius,
                 )
               : const BoxDecoration(),
