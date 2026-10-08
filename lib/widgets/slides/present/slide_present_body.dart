@@ -20,7 +20,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// Moving a mouse, or touching the screen, brings the bar back; a click
 /// steps through the slides without waking it, so a presenter clicking
-/// through is not left with the bar over every slide.
+/// through is not left with the bar over every slide. A tap where the hidden
+/// bar sits wakes it instead of stepping (#2932).
 ///
 /// Pictures are [SlideImage]s fetched through the Quark's authenticated
 /// download URL ([SlidePresentController.imageUrl]).
@@ -86,6 +87,7 @@ class SlidePresentBody extends StatelessWidget {
       onTogglePresenterView: collapsed ? null : c.togglePresenterView,
       isFullscreen: c.isFullscreen,
       onToggleFullscreen: c.canToggleFullscreen ? c.toggleFullscreen : null,
+      onWake: c.wakeControls,
     );
 
     return MouseRegion(

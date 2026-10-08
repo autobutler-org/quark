@@ -240,6 +240,36 @@ void main() {
     await finish(tester, c);
   });
 
+  for (final (name, size) in [
+    ('narrow', tap.narrowViewport),
+    ('wide', tap.wideViewport),
+  ]) {
+    for (final kind in [PointerDeviceKind.touch, PointerDeviceKind.mouse]) {
+      testWidgets('a ${kind.name} tap on the hidden bar wakes it and does not '
+          'step (#2932, $name)', (tester) async {
+        tap.setViewport(tester, size);
+        final c = await pumpPresent(tester, start: 1);
+        double opacity() => tester
+            .widget<AnimatedOpacity>(
+              find.byKey(const ValueKey('slide_present_controls')),
+            )
+            .opacity;
+        await tester.pump(SlidePresentController.controlsIdle);
+        await tester.pumpAndSettle();
+        expect(opacity(), 0);
+        final exit = find.byKey(const ValueKey('slide_present_exit'));
+        await tester.tapAt(tester.getCenter(exit), kind: kind);
+        await tester.pumpAndSettle();
+        expect(c.index, 1, reason: 'a tap on the hidden X must not step');
+        expect(opacity(), 1);
+        await tester.tap(exit, kind: kind);
+        await tester.pumpAndSettle();
+        expect(find.text('editor talks/Deck.qslide'), findsOneWidget);
+        c.dispose();
+      });
+    }
+  }
+
   testWidgets('the presenter view shows the next slide, notes and clock', (
     tester,
   ) async {
