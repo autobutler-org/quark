@@ -33,7 +33,7 @@ require (
 	golang.org/x/time v0.16.0
 	howett.net/plist v1.0.1
 	modernc.org/sqlite v1.60.1
-	tailscale.com v1.104.0
+	tailscale.com v1.104.1
 )
 
 require (
