@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quark/utils/slide_present_config.dart';
 import 'package:quark/widgets/slides/slide_editor_canvas.dart';
 import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
@@ -9,10 +10,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// A tap or click on the right two thirds steps forward and on the left
 /// third steps back; a swipe left steps forward and a swipe right steps
-/// back. A new slide comes on with its [transition] (#1164), played by a
-/// [SlideTransitionView], which turns it into a short cross-fade under
-/// reduced motion — Android's "Remove animations", the browser's
-/// `prefers-reduced-motion`, or iOS Reduce Motion.
+/// back. A swipe counts once it has gone far enough or is let go fast
+/// enough, by [SlidePresentConfig] (#2936). A new slide comes on with its
+/// [transition] (#1164), played by a [SlideTransitionView], which turns it
+/// into a short cross-fade under reduced motion — Android's "Remove
+/// animations", the browser's `prefers-reduced-motion`, or iOS Reduce Motion.
 ///
 /// A screen reader hears [label]; it steps with the control bar's buttons,
 /// which is why the tap areas are not offered to it.
@@ -30,7 +32,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///   onPrevious: c.previous,
 /// );
 /// ```
-class SlidePresentStage extends StatelessWidget {
+class SlidePresentStage extends StatefulWidget {
   /// Shows [slide] at [size].
   const SlidePresentStage({
     required this.slide,
@@ -73,45 +75,53 @@ class SlidePresentStage extends StatelessWidget {
   /// Draws image elements and background images.
   final SlideImageBuilder? imageBuilder;
 
-  /// How fast a horizontal fling has to be, in logical pixels a second, to
-  /// count as a swipe.
-  static const double swipeVelocity = 300;
+  @override
+  State<SlidePresentStage> createState() => _SlidePresentStageState();
+}
+
+/// Stateful only for where a swipe began.
+class _SlidePresentStageState extends State<SlidePresentStage> {
+  double _startX = 0;
+
+  void _endSwipe(DragEndDetails details) {
+    final traveled = details.globalPosition.dx - _startX;
+    final fling = details.primaryVelocity ?? 0;
+    final way = traveled.abs() >= SlidePresentConfig.swipeDistance
+        ? traveled
+        : (fling.abs() > SlidePresentConfig.swipeVelocity ? fling : 0);
+    if (way > 0) widget.onPrevious?.call();
+    if (way < 0) widget.onNext?.call();
+  }
 
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
     return Semantics(
       container: true,
-      label: label,
+      label: widget.label,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         excludeFromSemantics: true,
         onTapUp: (details) {
           final width = context.size?.width ?? 0;
           final step = details.localPosition.dx < width / 3
-              ? onPrevious
-              : onNext;
+              ? widget.onPrevious
+              : widget.onNext;
           step?.call();
         },
-        onHorizontalDragEnd: (details) {
-          final velocity = details.primaryVelocity ?? 0;
-          if (velocity <= -SlidePresentStage.swipeVelocity) {
-            onNext?.call();
-          } else if (velocity >= SlidePresentStage.swipeVelocity) {
-            onPrevious?.call();
-          }
-        },
+        onHorizontalDragStart: (details) => _startX = details.globalPosition.dx,
+        onHorizontalDragEnd: _endSwipe,
         child: ColoredBox(
           color: tokens.background,
           child: SlideTransitionView(
-            slideId: slide.id,
-            transition: transition,
-            reverse: reverse,
+            slideId: widget.slide.id,
+            transition: widget.transition,
+            reverse: widget.reverse,
             child: SlideCanvas.readOnly(
-              slide: slide,
-              size: size,
-              theme: theme,
-              imageBuilder: imageBuilder,
+              slide: widget.slide,
+              size: widget.size,
+              theme: widget.theme,
+              imageBuilder: widget.imageBuilder,
               style: SlideEditorCanvas.styleOf(context),
             ),
           ),
