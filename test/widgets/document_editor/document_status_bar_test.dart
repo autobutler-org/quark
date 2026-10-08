@@ -94,4 +94,32 @@ void main() {
       });
     });
   }
+
+  // #2605: the page brightness toggle shrink-wrapped to a 24px target, and
+  // on a phone the bar already overflowed its width.
+  for (final (label, size) in [
+    ('narrow', const Size(360, 640)),
+    ('wide', const Size(1280, 800)),
+  ]) {
+    testWidgets('the page brightness toggle is a 48dp target ($label)', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await pumpBar(
+        tester,
+        tokens: QuarkTokens.dark,
+        brightness: Brightness.dark,
+      );
+
+      expect(
+        tester.getSize(find.byType(IconButton)),
+        const Size.square(kMinInteractiveDimension),
+      );
+      final handle = tester.ensureSemantics();
+      await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+      handle.dispose();
+    });
+  }
 }

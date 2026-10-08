@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// One icon-and-label pair in the document editor's status bar.
+/// One icon-and-label pair in the document editor's status bar. The label
+/// trails off in an ellipsis when the bar is too narrow for it.
 class DocumentStatusItem extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -23,11 +24,15 @@ class DocumentStatusItem extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: color),
         const SizedBox(width: 5),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: QuarkTokens.of(context).mutedForeground,
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              color: QuarkTokens.of(context).mutedForeground,
+            ),
           ),
         ),
       ],
