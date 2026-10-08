@@ -145,7 +145,7 @@ class RemoteAccessPanel extends StatelessWidget {
         ] else
           Text(
             'An admin turns this on for the whole household. Ask an admin '
-            'to turn it on in Settings, on the Network tab.',
+            'of your Quark to turn it on.',
             key: const ValueKey('remote_access_member_note'),
             style: caption,
           ),

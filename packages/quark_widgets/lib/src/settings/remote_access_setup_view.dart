@@ -171,11 +171,6 @@ class RemoteAccessSetupView extends StatelessWidget {
                   done: done,
                   active: connecting,
                 ),
-                RemoteAccessSetupStep(
-                  key: const ValueKey('remote_access_setup_step_3'),
-                  label: 'Making sure it works',
-                  done: done,
-                ),
               ],
             ),
           ),

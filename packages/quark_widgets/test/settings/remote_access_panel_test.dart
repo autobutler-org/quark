@@ -77,6 +77,14 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('remote_access_set_up')), findsNothing);
+    // The panel is already on Settings, Network: sending the reader there
+    // again reads like a wrong turn (#2901).
+    final note = tester.widget<Text>(
+      find.byKey(const ValueKey('remote_access_member_note')),
+    );
+    expect(note.data, isNot(contains('Settings')));
+    expect(note.data, isNot(contains('Network')));
+    expect(note.data, contains('Ask an admin'));
   });
 
   testBothViewports('says coming soon when it is not available', (

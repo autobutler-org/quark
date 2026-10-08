@@ -10,7 +10,8 @@ class HelpSupportCard extends StatelessWidget {
   /// Creates the card.
   const HelpSupportCard({super.key});
 
-  static const _supportUrl = 'https://quark.autobutler.org/support';
+  /// Where Quark's help lives, in the browser.
+  static const supportUrl = 'https://quark.autobutler.org/support';
   static const _bugUrl =
       'https://github.com/autobutler-org/quark/issues/new?template=bug.yaml';
 
@@ -29,7 +30,7 @@ class HelpSupportCard extends StatelessWidget {
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: () => launchUrl(
-                Uri.parse(_supportUrl),
+                Uri.parse(supportUrl),
                 mode: LaunchMode.externalApplication,
               ),
               icon: const Icon(QuarkIcons.help_outline, size: 16),

@@ -208,10 +208,12 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
   every few seconds, with no reload.
 - Closing the sheet partway leaves setup running. The section reads **Connecting…**, then **On**, with *Reachable
   away from home*. The remote address is never shown (the app keeps it for its own routing, #1880).
-- A non-admin sees what remote access is and that an admin turns it on for the household, with no button.
+- A non-admin sees what remote access is and that an admin turns it on for the household, with no button and no
+  directions to the page they are already on (#2901).
 - If the Quark cannot start remote access, at boot or on enable, or the tailnet rejects its key, the sheet closes
   and the section says **Couldn't connect**: it is still switched on, the Quark keeps trying, and it lists what to
-  try, with **Try again**, **Turn off** and **Get help**. The reason is in the Quark's log, never on screen.
+  try, with **Try again**, **Turn off** and **Get help**, which opens the support page in the browser and leaves the
+  section where it is (#2902). The reason is in the Quark's log, never on screen.
 - After a restart the Quark reconnects with its saved enrollment and does not fetch a new key.
 
 ---
@@ -600,6 +602,7 @@ The Quark has at least one feature in beta, such as Chat.
 - Step 1 opens a **Connection** sheet saying, in plain words, whether the app is talking to the Quark on the home
   network, through remote access, or can't reach it at all, with what that means (#2857).
 - The **Your Quark** row says whether remote access is on, off, connecting, or couldn't connect. When the Quark
-  can't be asked, it says only *Remote access settings*.
+  is still being asked it says *Checking remote access…*, and when it can't be asked it says it couldn't load the
+  status (#2904).
 - Step 2 closes the sheet and opens `/settings/network`.
 - Nothing in the sheet names Tailscale, an address, or a raw error.

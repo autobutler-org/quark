@@ -9,7 +9,9 @@ import 'connection_indicator.dart';
 /// What `ConnectionIndicator` means, spelled out: the content of the sheet a
 /// tap on the indicator opens. It says how the app is reaching its Quark
 /// right now, in the caller's [label] and [detail], and links to the Quark's
-/// remote access settings with [remoteAccess] as a word.
+/// remote access settings with [remoteAccess] as a word. While the caller is
+/// still reading it the row says so ([isCheckingRemoteAccess]), and when the
+/// read failed it shows the caller's [remoteAccessError].
 ///
 /// Key prefixes: `connection_sheet_status` on the header,
 /// `connection_sheet_settings` on the settings row.
@@ -31,6 +33,8 @@ class ConnectionStatusView extends StatelessWidget {
     required this.label,
     required this.detail,
     this.remoteAccess,
+    this.isCheckingRemoteAccess = false,
+    this.remoteAccessError,
     this.onOpenSettings,
     super.key,
   });
@@ -47,6 +51,12 @@ class ConnectionStatusView extends StatelessWidget {
   /// What the Quark's remote access is doing, or null when it is not known.
   final RemoteAccessState? remoteAccess;
 
+  /// Whether [remoteAccess] is still being read.
+  final bool isCheckingRemoteAccess;
+
+  /// Why [remoteAccess] could not be read, in the caller's words, or null.
+  final String? remoteAccessError;
+
   /// Opens the Quark's remote access settings. Null hides the row.
   final VoidCallback? onOpenSettings;
 
@@ -55,6 +65,7 @@ class ConnectionStatusView extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
     final (icon, color) = ConnectionIndicator.glyphFor(mode, tokens);
     final onOpenSettings = this.onOpenSettings;
+    final remoteAccessError = this.remoteAccessError;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -101,6 +112,8 @@ class ConnectionStatusView extends StatelessWidget {
             leading: const Icon(QuarkIcons.devices),
             title: const Text('Your Quark'),
             subtitle: Text(switch (remoteAccess) {
+              null when isCheckingRemoteAccess => 'Checking remote access…',
+              null when remoteAccessError != null => remoteAccessError,
               null => 'Remote access settings',
               RemoteAccessState.off => 'Remote access is off',
               RemoteAccessState.connecting => 'Remote access is connecting',

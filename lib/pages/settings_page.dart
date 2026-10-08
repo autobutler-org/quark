@@ -638,8 +638,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   onSetUp: _setUpRemoteAccess,
                   onTurnOff: _turnOffRemoteAccess,
                   onTryAgain: _retryRemoteAccess,
-                  onGetHelp: () =>
-                      context.go(AppRoutes.settingsTab(SettingsTab.about)),
                 ),
               ),
               connectedDevices: ConnectedDevicesCard(
