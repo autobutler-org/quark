@@ -160,6 +160,101 @@ void main() {
       expect(QuarkColors.radiusLg, QuarkTokens.dark.radiusLg);
     });
   });
+
+  /// #2601: the high-contrast sets aim for WCAG AAA.
+  group('high-contrast tokens', () {
+    for (final (name, tokens) in [
+      ('dark', QuarkTokens.highContrastDark),
+      ('light', QuarkTokens.highContrastLight),
+    ]) {
+      final surfaces = {
+        'background': tokens.background,
+        'card': tokens.card,
+        'sidebar': tokens.sidebar,
+        'input': tokens.input,
+        'chrome': tokens.chrome,
+      };
+
+      test('$name: every text token is 7:1 on every surface', () {
+        final texts = {
+          'foreground': tokens.foreground,
+          'cardForeground': tokens.cardForeground,
+          'secondaryForeground': tokens.secondaryForeground,
+          'mutedForeground': tokens.mutedForeground,
+          'primary': tokens.primary,
+          'error': tokens.error,
+          'chromeForeground': tokens.chromeForeground,
+          'chromeSecondaryForeground': tokens.chromeSecondaryForeground,
+          'chromeMutedForeground': tokens.chromeMutedForeground,
+          'chromePrimary': tokens.chromePrimary,
+        };
+        for (final text in texts.entries) {
+          for (final surface in surfaces.entries) {
+            expect(
+              contrastRatio(text.value, surface.value),
+              greaterThanOrEqualTo(7),
+              reason: '${text.key} on ${surface.key}',
+            );
+          }
+        }
+      });
+
+      test('$name: text on the accent and error fills is 7:1', () {
+        expect(
+          contrastRatio(tokens.primaryForeground, tokens.primary),
+          greaterThanOrEqualTo(7),
+        );
+        expect(
+          contrastRatio(tokens.primaryForeground, tokens.chromePrimary),
+          greaterThanOrEqualTo(7),
+        );
+        expect(
+          contrastRatio(tokens.errorForeground, tokens.error),
+          greaterThanOrEqualTo(7),
+        );
+      });
+
+      test('$name: warning and success are 4.5:1 on every surface', () {
+        for (final accent in [tokens.warning, tokens.success]) {
+          for (final surface in surfaces.entries) {
+            expect(
+              contrastRatio(accent, surface.value),
+              greaterThanOrEqualTo(4.5),
+              reason: '$accent on ${surface.key}',
+            );
+          }
+        }
+      });
+
+      test('$name: borders are 3:1 on every surface', () {
+        for (final border in [tokens.border, tokens.chromeBorder]) {
+          for (final surface in surfaces.entries) {
+            expect(
+              contrastRatio(border, surface.value),
+              greaterThanOrEqualTo(3),
+              reason: 'border on ${surface.key}',
+            );
+          }
+        }
+      });
+
+      test('$name: the focus ring is at least three pixels', () {
+        expect(tokens.focusRingWidth, greaterThanOrEqualTo(3));
+      });
+
+      test('$name: copyWith round-trips to an equal value', () {
+        expect(tokens.copyWith(), tokens);
+        expect(tokens.copyWith().hashCode, tokens.hashCode);
+      });
+    }
+
+    test('focusRingWidth takes part in copyWith, equality and lerp', () {
+      final edited = QuarkTokens.dark.copyWith(focusRingWidth: 5);
+      expect(edited.focusRingWidth, 5);
+      expect(edited, isNot(QuarkTokens.dark));
+      expect(QuarkTokens.dark.lerp(edited, 0.5).focusRingWidth, 3.5);
+    });
+  });
 }
 
 /// A color no token has, to tell an edited field from the rest.

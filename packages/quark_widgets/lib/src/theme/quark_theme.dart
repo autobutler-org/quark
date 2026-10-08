@@ -31,6 +31,17 @@ abstract final class QuarkTheme {
   static ThemeData light({required QuarkThemeColor themeColor}) =>
       from(themeColor.tokensFor(Brightness.light), Brightness.light);
 
+  /// Quark's high-contrast dark theme, built from
+  /// [QuarkTokens.highContrastDark]. It takes no theme color: a tinted surface
+  /// would cost the contrast it exists for.
+  static ThemeData highContrastDark() =>
+      from(QuarkTokens.highContrastDark, Brightness.dark);
+
+  /// Quark's high-contrast light theme, built from
+  /// [QuarkTokens.highContrastLight].
+  static ThemeData highContrastLight() =>
+      from(QuarkTokens.highContrastLight, Brightness.light);
+
   /// Builds a [ThemeData] for [brightness] out of [tokens].
   ///
   /// Every color, radius, and border in the returned theme comes from [tokens],
@@ -106,17 +117,23 @@ abstract final class QuarkTheme {
           borderRadius: BorderRadius.circular(tokens.radiusMd),
           borderSide: BorderSide(color: tokens.border),
         ),
-        // Two pixels, not one. A keyboard user has no pointer to tell them
+        // [QuarkTokens.focusRingWidth], two pixels or more, not one. A keyboard user has no pointer to tell them
         // where they are, and a focused field that differs from a resting one
         // only in hue is invisible to anyone who cannot separate those two
         // colors (#2028).
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(tokens.radiusMd),
-          borderSide: BorderSide(color: tokens.primary, width: 2),
+          borderSide: BorderSide(
+            color: tokens.primary,
+            width: tokens.focusRingWidth,
+          ),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(tokens.radiusMd),
-          borderSide: BorderSide(color: tokens.error, width: 2),
+          borderSide: BorderSide(
+            color: tokens.error,
+            width: tokens.focusRingWidth,
+          ),
         ),
         labelStyle: TextStyle(color: tokens.secondaryForeground),
         hintStyle: TextStyle(color: tokens.mutedForeground),
@@ -202,8 +219,8 @@ abstract final class QuarkTheme {
     );
   }
 
-  /// The outline a button wears while it holds keyboard focus: two pixels of
-  /// [QuarkTokens.primary].
+  /// The outline a button wears while it holds keyboard focus:
+  /// [QuarkTokens.focusRingWidth] pixels of [QuarkTokens.primary].
   ///
   /// Material's own focus cue for a button is a faint overlay tint, which on a
   /// filled button sits on top of a color it barely differs from. A keyboard
@@ -220,7 +237,7 @@ abstract final class QuarkTheme {
   }) {
     return WidgetStateProperty.resolveWith((states) {
       if (states.contains(WidgetState.focused)) {
-        return BorderSide(color: tokens.primary, width: 2);
+        return BorderSide(color: tokens.primary, width: tokens.focusRingWidth);
       }
       return resting == null ? null : BorderSide(color: resting);
     });

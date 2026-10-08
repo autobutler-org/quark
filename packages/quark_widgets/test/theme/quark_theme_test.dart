@@ -221,6 +221,8 @@ void main() {
     for (final (name, tokens, brightness) in [
       ('dark', QuarkTokens.dark, Brightness.dark),
       ('light', QuarkTokens.light, Brightness.light),
+      ('high-contrast dark', QuarkTokens.highContrastDark, Brightness.dark),
+      ('high-contrast light', QuarkTokens.highContrastLight, Brightness.light),
     ]) {
       test('$name: a focused field is thicker, not just another color', () {
         final decoration = QuarkTheme.from(
@@ -248,12 +250,79 @@ void main() {
           final focused = side.resolve({WidgetState.focused});
           expect(focused, isNotNull);
           expect(focused!.color, tokens.primary);
-          expect(focused.width, 2);
+          expect(focused.width, tokens.focusRingWidth);
+          expect(focused.width, greaterThanOrEqualTo(2));
           // And nothing extra while it is merely sitting there.
           final resting = side.resolve(<WidgetState>{});
-          expect(resting?.width ?? 0, lessThan(2));
+          expect(resting?.width ?? 0, lessThan(focused.width));
         }
       });
     }
+  });
+
+  /// #2601: the high-contrast pair, for the platform's contrast setting and
+  /// the Settings switch.
+  group('high contrast', () {
+    test('highContrastDark() and highContrastLight() wear their tokens', () {
+      for (final (theme, tokens, brightness) in [
+        (
+          QuarkTheme.highContrastDark(),
+          QuarkTokens.highContrastDark,
+          Brightness.dark,
+        ),
+        (
+          QuarkTheme.highContrastLight(),
+          QuarkTokens.highContrastLight,
+          Brightness.light,
+        ),
+      ]) {
+        expect(theme.brightness, brightness);
+        expect(theme.extension<QuarkTokens>(), tokens);
+        expect(theme.colorScheme.primary, tokens.primary);
+        expect(theme.scaffoldBackgroundColor, tokens.background);
+      }
+    });
+
+    test('the focus ring is heavier than the everyday one', () {
+      for (final (everyday, high) in [
+        (QuarkTokens.dark, QuarkTokens.highContrastDark),
+        (QuarkTokens.light, QuarkTokens.highContrastLight),
+      ]) {
+        expect(high.focusRingWidth, greaterThan(everyday.focusRingWidth));
+        final decoration = QuarkTheme.from(
+          high,
+          Brightness.light,
+        ).inputDecorationTheme;
+        final focused = decoration.focusedBorder! as OutlineInputBorder;
+        expect(focused.borderSide.width, high.focusRingWidth);
+      }
+    });
+
+    testWidgets('the platform setting picks the high-contrast theme', (
+      tester,
+    ) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(highContrast: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      late QuarkTokens seen;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
+          highContrastTheme: QuarkTheme.highContrastLight(),
+          themeMode: ThemeMode.light,
+          home: Builder(
+            builder: (context) {
+              seen = QuarkTokens.of(context);
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+
+      expect(seen, QuarkTokens.highContrastLight);
+    });
   });
 }

@@ -66,14 +66,28 @@ class QuarkApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = AppSettings.instance;
     return ListenableBuilder(
-      listenable: Listenable.merge([settings.themeMode, settings.themeColor]),
+      listenable: Listenable.merge([
+        settings.themeMode,
+        settings.themeColor,
+        settings.highContrast,
+      ]),
       builder: (context, _) {
         final themeColor = settings.themeColor.value;
+        // The platform's contrast setting picks the high-contrast pair on its
+        // own; the Settings switch, for platforms without one, picks it for
+        // the everyday slots too (#2601).
+        final highContrast = settings.highContrast.value;
         return MaterialApp.router(
           debugShowCheckedModeBanner: false,
           title: 'Quark',
-          theme: QuarkTheme.light(themeColor: themeColor),
-          darkTheme: QuarkTheme.dark(themeColor: themeColor),
+          theme: highContrast
+              ? QuarkTheme.highContrastLight()
+              : QuarkTheme.light(themeColor: themeColor),
+          darkTheme: highContrast
+              ? QuarkTheme.highContrastDark()
+              : QuarkTheme.dark(themeColor: themeColor),
+          highContrastTheme: QuarkTheme.highContrastLight(),
+          highContrastDarkTheme: QuarkTheme.highContrastDark(),
           themeMode: settings.themeMode.value,
           routerConfig: router,
           scaffoldMessengerKey: rootScaffoldMessengerKey,
