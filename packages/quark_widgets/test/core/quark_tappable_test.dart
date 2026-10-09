@@ -60,6 +60,28 @@ void main() {
     expect(border.top.width, 2);
   });
 
+  testBothViewports('draws a wider ring under the high-contrast theme', (
+    tester,
+    size,
+  ) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: QuarkTheme.highContrastDark(),
+        home: Scaffold(body: tappable(onTap: () {})),
+      ),
+    );
+
+    await tabTo(tester, find.byKey(key));
+
+    final ring = tester.widget<DecoratedBox>(findFocusRing(find.byKey(key)));
+    final border = (ring.decoration as BoxDecoration).border! as Border;
+    expect(QuarkTokens.highContrastDark.focusRingWidth, greaterThan(2));
+    expect(border.top.width, QuarkTokens.highContrastDark.focusRingWidth);
+  });
+
   testWidgets('without a handler it takes no focus', (tester) async {
     await pumpAt(
       tester,
