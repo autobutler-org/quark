@@ -121,6 +121,7 @@ func CreateGroup(ctx context.Context, params CreateGroupParams) (CreateGroupResu
 	if err != nil {
 		return CreateGroupResult{}, err
 	}
+	// The FilesDir fallback is removed in #2650.
 	if params.Files == nil && params.FilesDir != "" {
 		if params.Files, err = vfs.NewLocalVFS(params.FilesDir, vfs.FilesNamespace("")); err != nil {
 			return CreateGroupResult{}, err
