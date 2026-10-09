@@ -142,6 +142,7 @@ export 'src/theme/quark_contrast.dart';
 export 'src/theme/quark_theme.dart';
 export 'src/theme/quark_theme_color.dart';
 export 'src/theme/quark_tokens.dart';
+export 'src/theme/reduce_motion.dart';
 export 'src/users/access_requests_tile.dart';
 export 'src/users/create_user_dialog.dart';
 export 'src/users/group_list.dart';

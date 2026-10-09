@@ -116,7 +116,7 @@ class SettingsAboutTab extends StatelessWidget {
                 const Center(
                   child: Padding(
                     padding: EdgeInsets.all(16),
-                    child: CircularProgressIndicator(),
+                    child: QuarkLoader(),
                   ),
                 )
               else ...[

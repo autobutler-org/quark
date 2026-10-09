@@ -239,7 +239,8 @@ class _ImageViewerPageState extends State<ImageViewerPage>
 
   // A PageView carries the swipe so the photo tracks the finger and settles
   // with an animation (#1707). The keyboard and the chevrons drive the same
-  // controller so every route to the next photo animates the same way.
+  // controller so every route to the next photo animates the same way, and
+  // jumps instead under reduced motion (#2607).
   //
   // The step counts from the newest requested photo rather than the one on
   // screen, so a second press while the first is still downloading moves on
@@ -251,11 +252,15 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       _navigate(target);
       return;
     }
-    _pageController.animateToPage(
-      target,
-      duration: _kPageAnimDuration,
-      curve: Curves.easeOut,
-    );
+    if (reduceMotionOf(context)) {
+      _pageController.jumpToPage(target);
+    } else {
+      _pageController.animateToPage(
+        target,
+        duration: _kPageAnimDuration,
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   Future<void> _onPageChanged(int index) async {
@@ -496,6 +501,11 @@ class _ImageViewerPageState extends State<ImageViewerPage>
     }
   }
 
+  /// Turns the photo through [_rotationValue], or lands it at the end at once
+  /// under reduced motion (#2607).
+  void _playRotation() =>
+      _rotationAnim.forward(from: reduceMotionOf(context) ? 1 : 0);
+
   Future<void> _rotate() async {
     if (!_isQuarkPhoto) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -519,7 +529,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
       begin: oldAngle,
       end: newAngle,
     ).animate(CurvedAnimation(parent: _rotationAnim, curve: Curves.easeOut));
-    _rotationAnim.forward(from: 0);
+    _playRotation();
 
     try {
       await FilesService.rotatePhoto(
@@ -552,7 +562,7 @@ class _ImageViewerPageState extends State<ImageViewerPage>
           CurvedAnimation(parent: _rotationAnim, curve: Curves.easeOut),
         );
       });
-      _rotationAnim.forward(from: 0);
+      _playRotation();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(Errors.message(e, 'rotate the photo'))),
       );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_loader.dart';
 import '../models/host_item.dart';
 import '../theme/quark_tokens.dart';
 
@@ -61,11 +62,7 @@ class DiscoveredQuarkList extends StatelessWidget {
         return Row(
           key: const ValueKey('discovered_quark_searching'),
           children: [
-            const SizedBox(
-              height: 14,
-              width: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
+            const QuarkLoader(size: 14),
             SizedBox(width: tokens.spacingSm),
             Flexible(
               child: Text('Looking for Quarks on this network…', style: muted),

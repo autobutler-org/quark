@@ -73,13 +73,7 @@ class ConnectedDevicesCard extends StatelessWidget {
           if (isLoading)
             const Padding(
               padding: EdgeInsets.all(8),
-              child: Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
+              child: Center(child: QuarkLoader(size: 20)),
             )
           else if (error != null)
             ListTile(

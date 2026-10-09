@@ -74,6 +74,21 @@ void testLargeText(
   }
 }
 
+/// Turns on the platform's reduce-motion flag (iOS Reduce Motion) for the
+/// rest of the test, the one reduced-motion signal `MediaQuery` does not
+/// carry (#2607).
+void reduceMotion(WidgetTester tester) {
+  tester.platformDispatcher.accessibilityFeaturesTestValue =
+      const FakeAccessibilityFeatures(reduceMotion: true);
+  addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+}
+
+/// Every Material progress indicator on screen, whatever its subtype.
+/// `find.byType(ProgressIndicator)` matches none of them: it compares the
+/// exact runtime type.
+Finder findProgressIndicators() =>
+    find.byWidgetPredicate((widget) => widget is ProgressIndicator);
+
 /// Expects no text on screen to be cut short by a box too small for it.
 ///
 /// A fixed-height parent does not throw an overflow when its text grows: the
