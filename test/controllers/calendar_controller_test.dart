@@ -208,6 +208,27 @@ void main() {
     expect(c.isLoading, isFalse);
   });
 
+  // #2540: a failed refresh after a load keeps what was on show, so the page
+  // can show it under the error, and a retry that works clears the error.
+  test('a later failed load keeps the events, and a retry clears it', () async {
+    final server = _Server([vet]);
+    final c = server.controller();
+    await c.refresh();
+    expect(c.occurrences.map((e) => e.eventId), [14]);
+
+    server.failWith = ApiException(500, 'load');
+    await c.refresh();
+    expect(c.error, isA<ApiException>());
+    expect(c.isInitialLoad, isFalse);
+    expect(c.occurrences.map((e) => e.eventId), [14]);
+    expect(c.upcoming.first.events.map((e) => e.eventId), [14]);
+
+    server.failWith = null;
+    await c.refresh();
+    expect(c.error, isNull);
+    expect(c.occurrences.map((e) => e.eventId), [14]);
+  });
+
   test('another client changing the calendar reloads it', () async {
     final server = _Server([]);
     final c = server.controller();
