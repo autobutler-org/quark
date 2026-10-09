@@ -68,7 +68,6 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	archive, err := fileutil.FindArchive(fileutil.FindArchiveParams{
 		Ctx:      c.Request.Context(),
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		FilePath: relPath,
 		Serial:   serial,
 	})

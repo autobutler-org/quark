@@ -11,6 +11,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // A group's folder, groups/<name>, carries the group's grant. A member moving
@@ -22,8 +23,12 @@ func newGroupHarness(t *testing.T, admin bool) accessHarness {
 	t.Helper()
 	h := newAccessHarness(t, admin)
 	ctx := context.Background()
+	files, err := vfs.NewLocalVFS(h.filesDir, vfs.FilesNamespace(""))
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{"Family", "Friends"} {
-		created, err := grouputil.CreateGroup(ctx, grouputil.CreateGroupParams{Database: h.database, FilesDir: h.filesDir, Name: name})
+		created, err := grouputil.CreateGroup(ctx, grouputil.CreateGroupParams{Database: h.database, Files: files, Name: name})
 		if err != nil {
 			t.Fatal(err)
 		}

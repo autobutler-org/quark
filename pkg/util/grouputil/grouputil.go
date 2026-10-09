@@ -98,11 +98,6 @@ type CreateGroupParams struct {
 	// is made.
 	Files vfs.VFS
 	Name  string
-	// FilesDir is a files directory on disk, read only when Files is nil.
-	// Nothing in production sets it: it stays only while
-	// internal/server/api/v0/files/group_folder_integration_test.go, which
-	// #2642 holds, still does, and #2650 removes it.
-	FilesDir string
 }
 
 // CreateGroupResult is the new group, with no members, and its folder.
@@ -120,12 +115,6 @@ func CreateGroup(ctx context.Context, params CreateGroupParams) (CreateGroupResu
 	name, err := validateName(params.Name)
 	if err != nil {
 		return CreateGroupResult{}, err
-	}
-	// The FilesDir fallback is removed in #2650.
-	if params.Files == nil && params.FilesDir != "" {
-		if params.Files, err = vfs.NewLocalVFS(params.FilesDir, vfs.FilesNamespace("")); err != nil {
-			return CreateGroupResult{}, err
-		}
 	}
 	var result CreateGroupResult
 	madeDir := ""

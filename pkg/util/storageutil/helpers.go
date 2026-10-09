@@ -3,7 +3,6 @@ package storageutil
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,32 +89,6 @@ func resolvePending(base, p string, evalSymlinks func(string) (string, error)) (
 		}
 		suffix = filepath.Join(filepath.Base(current), suffix)
 		current = filepath.Dir(current)
-	}
-}
-
-// createFree creates target, or the first numbered name beside it that is
-// free, and returns the file open for writing; its Name is the path it took.
-// The create is exclusive, so two requests racing for one name each get a
-// file of their own, where a stat for a free name followed by os.Create would
-// hand both the same name and let the second truncate the first.
-func createFree(target string) (*os.File, error) {
-	var f *os.File
-	_, err := takeFreeName(target, func(p string) (err error) {
-		f, err = os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
-		return err
-	})
-	return f, err
-}
-
-// takeFreeName calls create with target and then each numbered name beside it
-// until one does not already exist, and returns the path create last tried.
-func takeFreeName(target string, create func(p string) error) (string, error) {
-	dir, name := filepath.Split(target)
-	for n := 0; ; n++ {
-		p := filepath.Join(dir, NumberedName(name, n))
-		if err := create(p); !errors.Is(err, fs.ErrExist) {
-			return p, err
-		}
 	}
 }
 

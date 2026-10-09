@@ -3,8 +3,6 @@ package workerutil
 import (
 	"testing"
 	"time"
-
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
 ////////////////
@@ -12,7 +10,7 @@ import (
 ////////////////
 
 func TestNewWorker_ChannelAccessors(t *testing.T) {
-	w := NewWorker(storageutil.NewStorageService(storageutil.NewDetector()))
+	w := NewWorker()
 	if w.GetQuitChannel() == nil {
 		t.Error("GetQuitChannel returned nil")
 	}
@@ -22,7 +20,7 @@ func TestNewWorker_ChannelAccessors(t *testing.T) {
 }
 
 func TestWorker_Process_Quit(t *testing.T) {
-	w := NewWorker(storageutil.NewStorageService(storageutil.NewDetector()))
+	w := NewWorker()
 	quit := w.GetQuitChannel()
 	done := make(chan struct{})
 	go func() {
@@ -44,7 +42,7 @@ func TestWorker_Process_Quit(t *testing.T) {
 }
 
 func TestWorker_LogErrors_ReceivesError(t *testing.T) {
-	w := NewWorker(storageutil.NewStorageService(storageutil.NewDetector()))
+	w := NewWorker()
 	errCh := w.GetErrorChannel()
 	// Run LogErrors in a goroutine, send an error, and check that it does not panic
 	go func() {
@@ -62,20 +60,3 @@ func TestWorker_LogErrors_ReceivesError(t *testing.T) {
 type logErrorMock struct{}
 
 func (logErrorMock) Error() string { return "mock error" }
-
-///////////////////////
-// Integration tests //
-///////////////////////
-
-// TestWorker_GetBackupToDeviceChannel verifies the channel is non-nil and
-
-// TestWorker_GetBackupToDeviceChannel_NonNil verifies the channel accessor
-// returns a non-nil channel. Sending to it is not tested here because
-// BackupToDevice makes real OS/hardware calls.
-func TestWorker_GetBackupToDeviceChannel_NonNil(t *testing.T) {
-	w := NewWorker(storageutil.NewStorageService(storageutil.NewDetector()))
-	ch := w.GetBackupToDeviceChannel()
-	if ch == nil {
-		t.Fatal("GetBackupToDeviceChannel returned nil")
-	}
-}

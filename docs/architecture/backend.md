@@ -85,9 +85,9 @@ classDiagram
     Dependencies --> DatabaseSqlc : quark.db
     Dependencies --> DatabaseRaw : quark.health.db
     Dependencies --> StorageService : managed devices
-    Dependencies --> Registry : namespace "files"
+    Dependencies --> Registry : a files namespace per device
     Registry --> StorageServiceVFS
-    StorageServiceVFS --> StorageService
+    StorageServiceVFS --> StorageService : finds its device
     Dependencies --> Bus
     Dependencies --> Queue
     Queue --> DatabaseSqlc : jobs table

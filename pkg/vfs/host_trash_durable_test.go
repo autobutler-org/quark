@@ -1,9 +1,11 @@
-package storageutil_test
+package vfs
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -11,9 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestTrashFilesImpl_SidecarIsWrittenWhole checks the sidecar recording an
+// TestHostTrash_SidecarIsWrittenWhole checks the sidecar recording an
 // item's original location is a whole, private file with no temp beside it.
-func TestTrashFilesImpl_SidecarIsWrittenWhole(t *testing.T) {
+func TestHostTrash_SidecarIsWrittenWhole(t *testing.T) {
 	filesDir := filepath.Join(t.TempDir(), "files")
 	writeFile(t, filesDir, "docs/notes.txt", "hello")
 
@@ -26,16 +28,18 @@ func TestTrashFilesImpl_SidecarIsWrittenWhole(t *testing.T) {
 	assertNoWriteTemps(t, storageutil.TrashRoot(filesDir))
 }
 
-// TestTrashFilesImpl_FailedSidecarPutsTheItemBack stands in for a crash
+// TestHostTrash_FailedSidecarPutsTheItemBack stands in for a crash
 // between flushing the sidecar and renaming it into place (#2611): the item
-// goes back where it was, and the trash holds neither a sidecar nor its temp.
-func TestTrashFilesImpl_FailedSidecarPutsTheItemBack(t *testing.T) {
+// goes back where it was, and the trash holds no sidecar.
+func TestHostTrash_FailedSidecarPutsTheItemBack(t *testing.T) {
 	errCut := errors.New("power cut")
-	storageutil.FailAtomicRenameForTesting(t, errCut)
+	saved := writeTrashSidecar
+	t.Cleanup(func() { writeTrashSidecar = saved })
+	writeTrashSidecar = func(string, io.Reader, os.FileMode) error { return errCut }
 	filesDir := filepath.Join(t.TempDir(), "files")
 	writeFile(t, filesDir, "docs/notes.txt", "hello")
 
-	_, err := storageutil.TrashFilesImpl(storageutil.TrashFilesParams{FilePaths: []string{"docs/notes.txt"}}, filesDir)
+	_, err := hostTrash(filesDir, []string{"docs/notes.txt"}, TrashOptions{})
 
 	require.ErrorIs(t, err, errCut)
 	got, err := os.ReadFile(filepath.Join(filesDir, "docs", "notes.txt"))
@@ -44,4 +48,16 @@ func TestTrashFilesImpl_FailedSidecarPutsTheItemBack(t *testing.T) {
 	entries, err := os.ReadDir(storageutil.TrashRoot(filesDir))
 	require.NoError(t, err)
 	assert.Empty(t, entries)
+}
+
+// assertNoWriteTemps fails when a write left its temp in dir.
+func assertNoWriteTemps(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), storageutil.WriteTempPrefix) {
+			t.Fatalf("temp %s left behind", e.Name())
+		}
+	}
 }
