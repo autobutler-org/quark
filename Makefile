@@ -1093,16 +1093,21 @@ test/unit/backend: internal/server/public/stub.txt ## Run unit tests for backend
 			-func=coverage.out.ignored
 	fi
 
-# Optional test tuning. Empty leaves the runner's default: one test file per core,
-# no sharding. TOTAL_SHARDS and SHARD_INDEX (0-based) split the app suite only.
-FLUTTER_TEST_CONCURRENCY ?=
+# Test tuning. Each suite is a `flutter test` run, and each run spawns several
+# flutter_tester processes, so memory use is roughly FRONTEND_SUITE_JOBS x
+# FLUTTER_TEST_CONCURRENCY processes.
+#   FRONTEND_SUITE_JOBS      suites run side by side by test/unit/frontend (default 1;
+#                            CI raises it, a laptop should not). One at a time peaked
+#                            at 3.4 GB against 5.5 GB for all six together, for 11%
+#                            more wall time (#2931).
+#   FLUTTER_TEST_CONCURRENCY test files per suite run in parallel (default 2; set it
+#                            empty, FLUTTER_TEST_CONCURRENCY=, for the runner's own
+#                            default of one per core).
+# TOTAL_SHARDS and SHARD_INDEX (0-based) split the app suite only.
+FRONTEND_SUITE_JOBS ?= 1
+FLUTTER_TEST_CONCURRENCY ?= 2
 TOTAL_SHARDS ?=
 SHARD_INDEX ?=
-# How many suites test/unit/frontend runs at once. Each suite already runs one test
-# file per core, so side-by-side suites mostly add RAM: one at a time peaked at
-# 3.4 GB against 5.5 GB for all six together, for 11% more wall time (#2931).
-# A machine with RAM to spare can raise it, e.g. FRONTEND_SUITE_JOBS=6.
-FRONTEND_SUITE_JOBS ?= 1
 # Every package with a test/ directory, so a new package is picked up on its own.
 FRONTEND_PACKAGE_TESTS := $(patsubst packages/%/test,test/unit/frontend/packages/%,$(wildcard packages/*/test))
 
