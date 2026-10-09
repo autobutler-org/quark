@@ -304,22 +304,21 @@ class AppRoutes {
         : base;
   }
 
-  /// Build a URL for a specific presentation file.
+  /// Build a URL for a specific presentation file, open at the [slide]th
+  /// slide counting from 1 when given (#2900).
   /// e.g. slideFile('talks/q1.qslide') → '/slides/talks/q1.qslide'
-  static String slideFile(String path, {String? serial}) {
-    final clean = encodeFilePath(path);
-    final base = '$slides/$clean';
-    return (serial != null && serial.isNotEmpty)
-        ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
-        : base;
-  }
+  static String slideFile(String path, {String? serial, int? slide}) =>
+      _slideUrl('$slides/${encodeFilePath(path)}', serial, slide);
 
   /// Build a URL presenting a presentation file (#1165), from the [slide]th
   /// slide counting from 1 when given.
   /// e.g. slidePresent('talks/q1.qslide', slide: 3)
   ///   → '/slides/talks/q1.qslide/present?slide=3'
-  static String slidePresent(String path, {String? serial, int? slide}) {
-    final base = '$slides/${encodeFilePath(path)}/present';
+  static String slidePresent(String path, {String? serial, int? slide}) =>
+      _slideUrl('$slides/${encodeFilePath(path)}/present', serial, slide);
+
+  /// [base] with the `?serial=` and `?slide=` the slide routes read.
+  static String _slideUrl(String base, String? serial, int? slide) {
     final query = [
       if (serial != null && serial.isNotEmpty)
         'serial=${Uri.encodeQueryComponent(serial)}',
@@ -458,16 +457,48 @@ GoRoute slidePresentRoute({
 }) => GoRoute(
   path: '${AppRoutes.slides}/:path(.*)/present',
   builder: (context, state) {
-    final slide = int.tryParse(state.uri.queryParameters['slide'] ?? '');
     final extra = state.extra;
     return builder(
       state.pathParameters['path'] ?? '',
       state.uri.queryParameters['serial'] ?? '',
-      slide == null ? 0 : slide - 1,
+      _slideIndex(state),
       extra is Presentation ? extra : null,
     );
   },
 );
+
+/// The route editing a `.qslide`: `/slides/<path>` — anything including
+/// slashes — with `?serial=` for a file on another drive and `?slide=N` to
+/// open at the Nth slide (counting from 1, as [AppRoutes.slideFile] writes
+/// it), which is how ending a presentation lands on the slide it ended on
+/// (#2900). Top-level for the same reason as /docs (#1749).
+///
+/// [builder] gets the file, the serial and the slide to open at counting
+/// from 0.
+GoRoute slideEditorRoute({
+  Widget Function(String filePath, String serial, int startIndex) builder =
+      _slideEditorPage,
+}) => GoRoute(
+  path: '${AppRoutes.slides}/:path(.*)',
+  builder: (context, state) => builder(
+    state.pathParameters['path'] ?? '',
+    state.uri.queryParameters['serial'] ?? '',
+    _slideIndex(state),
+  ),
+);
+
+Widget _slideEditorPage(String filePath, String serial, int startIndex) =>
+    SlideEditorPage(
+      filePath: filePath,
+      deviceSerial: serial,
+      startIndex: startIndex,
+    );
+
+/// The `?slide=N` a slide route was given, counting from 0; 0 without one.
+int _slideIndex(GoRouterState state) {
+  final slide = int.tryParse(state.uri.queryParameters['slide'] ?? '');
+  return slide == null ? 0 : slide - 1;
+}
 
 Widget _slidePresentPage(
   String filePath,
@@ -657,16 +688,7 @@ final router = GoRouter(
       builder: (context, state) => const SlidesPage(),
     ),
     slidePresentRoute(),
-    GoRoute(
-      // Matches /slides/<anything including slashes> — opens the slide
-      // editor. Top-level for the same reason as /docs above (#1749).
-      path: '${AppRoutes.slides}/:path(.*)',
-      builder: (context, state) {
-        final filePath = state.pathParameters['path'] ?? '';
-        final serial = state.uri.queryParameters['serial'] ?? '';
-        return SlideEditorPage(filePath: filePath, deviceSerial: serial);
-      },
-    ),
+    slideEditorRoute(),
     ...tabbedRoutes(
       path: AppRoutes.calendar,
       tabs: CalendarView.values,

@@ -127,6 +127,43 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkSubmenuButton',
+    group: 'Core',
+    build: (context, log) => Align(
+      alignment: Alignment.topLeft,
+      child: MenuAnchor(
+        menuChildren: [
+          QuarkSubmenuButton(
+            leadingIcon: const Icon(QuarkIcons.shapes),
+            menuChildren: [
+              for (final shape in ['Rectangle', 'Oval', 'Star'])
+                MenuItemButton(
+                  onPressed: () => log('MenuItemButton($shape).onPressed'),
+                  child: Text(shape),
+                ),
+            ],
+            child: const Text('Shape'),
+          ),
+          QuarkSubmenuButton(
+            leadingIcon: const Icon(QuarkIcons.add_image),
+            menuChildren: [
+              for (final source in ['This device', 'Quark'])
+                MenuItemButton(
+                  onPressed: () => log('MenuItemButton($source).onPressed'),
+                  child: Text(source),
+                ),
+            ],
+            child: const Text('Image'),
+          ),
+        ],
+        builder: (context, menu, _) => TextButton(
+          onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+          child: const Text('Insert'),
+        ),
+      ),
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkLoader',
     group: 'Core',
     build: (context, log) => Wrap(

@@ -32,10 +32,10 @@ import 'package:quark_slides/quark_slides.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The editor for one presentation, at `/slides/<path>?serial=` (#1161): the
-/// slide panel to add, duplicate, delete and reorder slides, the canvas
-/// editing the selected slide in the middle (#1153) with its zoom in the
-/// bar's second row, undo and redo from the bar or the keyboard, and an
-/// autosave whose state the bar shows. A failed save says so and keeps the
+/// slide panel to add, duplicate, delete (with an Undo snack bar, #2897) and
+/// reorder slides, the canvas editing the selected slide in the middle
+/// (#1153) with its zoom in the bar's second row, undo and redo from the
+/// bar or the keyboard, and an autosave whose state the bar shows. A failed save says so and keeps the
 /// edits for a retry. Each slide's speaker notes are typed under the canvas
 /// (#1166).
 ///
@@ -49,7 +49,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The bar's Present chip, and a slide's "Present from this slide", open
 /// the presentation full-window at `/slides/<path>/present` (#1165). The
 /// presentation as it is on screen goes along, so nothing waits for the
-/// save the chip starts on the way.
+/// save the chip starts on the way. Ending it comes back at
+/// `/slides/<path>?slide=N`, open on the slide the show ended on (#2900).
 ///
 /// The bar's export button saves the presentation as a PowerPoint file
 /// (#1172), saving unsaved edits first; a failure is a snack bar.
@@ -96,13 +97,14 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// (#1168).
 ///
 /// Nothing is pushed underneath it when it opens at its own URL, so its back
-/// button and a system back land in the folder that holds the file, as the
-/// sheet and doc editors do (#1749).
+/// button and a system back land in the Slides list at `/slides`, where New
+/// and Open came from, rather than in Files (#2896).
 class SlideEditorPage extends StatefulWidget {
   /// Opens the presentation at [filePath] on the device [deviceSerial].
   const SlideEditorPage({
     required this.filePath,
     this.deviceSerial = '',
+    this.startIndex = 0,
     this.controller,
     super.key,
   });
@@ -113,8 +115,12 @@ class SlideEditorPage extends StatefulWidget {
   /// The device the file is on; empty for the Quark's own storage.
   final String deviceSerial;
 
+  /// The slide to open at, counting from 0: where a presentation ended
+  /// (#2900), or the start.
+  final int startIndex;
+
   /// The page's state, for tests that pass fake services; built from
-  /// [filePath] and [deviceSerial] when null.
+  /// [filePath], [deviceSerial] and [startIndex] when null.
   final SlideEditorController? controller;
 
   @override
@@ -127,6 +133,7 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
       SlideEditorController(
         filePath: widget.filePath,
         deviceSerial: widget.deviceSerial,
+        startIndex: widget.startIndex,
       );
 
   late final SlideFindController _find = SlideFindController.forEditor(
@@ -161,8 +168,7 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
     ).showSnackBar(SnackBar(content: Text(Errors.message(error, action))));
   };
 
-  void _leaveForContainingFolder() =>
-      context.go(AppRoutes.containingFolder(widget.filePath));
+  void _leaveForSlides() => context.go(AppRoutes.slides);
 
   void _present(String slideId) {
     // Saving first writes notes still waiting for a pause into the
@@ -178,6 +184,25 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
       ),
       extra: presentation,
     );
+  }
+
+  /// Deletes the slide [slideId] and says so in a snack bar whose Undo puts
+  /// it back while nothing else has changed (#2897).
+  void _deleteSlide(String slideId) {
+    _controller.deleteSlide(slideId);
+    if (!_controller.canUndoDeleteSlide) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('Slide deleted'),
+          action: SnackBarAction(
+            key: const ValueKey('slide_delete_undo'),
+            label: 'Undo',
+            onPressed: _controller.undoDeleteSlide,
+          ),
+        ),
+      );
   }
 
   Future<void> _insertImageFromQuark() async {
@@ -268,18 +293,16 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
     final canPop = Navigator.of(context).canPop();
     return PopScope(
       // With nothing underneath, a system back would close the app; it
-      // leaves for the containing folder, as the bar's back button does.
+      // leaves for the Slides list, as the bar's back button does.
       canPop: canPop,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && !canPop) _leaveForContainingFolder();
+        if (!didPop && !canPop) _leaveForSlides();
       },
       child: ListenableBuilder(
         listenable: _controller,
         builder: (context, _) => Scaffold(
           appBar: AppBar(
-            leading: canPop
-                ? null
-                : BackButton(onPressed: _leaveForContainingFolder),
+            leading: canPop ? null : BackButton(onPressed: _leaveForSlides),
             title: Text(
               fileNameWithoutExtension(
                 widget.filePath,
@@ -373,6 +396,7 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
                   onImageFromDevice: _controller.insertImageFromDevice,
                   onImageFromQuark: _insertImageFromQuark,
                   onShowShortcuts: _showShortcuts,
+                  onDeleteSlide: _deleteSlide,
                 ),
               ),
             ),

@@ -127,7 +127,8 @@ enum SlideSaveState {
 /// **Themes and layouts** (#1163). [applyTheme] restyles the deck and
 /// [setSlideLayout] and [resetSlideToLayout] rebuild the selected slide on
 /// a layout, one undo step each. [addSlide] builds the new slide on the
-/// selected slide's layout unless it is given one.
+/// selected slide's layout unless it is given one, and on title and
+/// content after a title or blank slide (#2899).
 ///
 /// **Transitions** (#1164). [slideTransition] is the selected slide's own,
 /// [effectiveTransition] the one it plays; [setSlideTransition] and
@@ -171,6 +172,7 @@ class SlideEditorController extends ChangeNotifier {
   SlideEditorController({
     required this.filePath,
     this.deviceSerial = '',
+    this.startIndex = 0,
     this.loadPresentation = SlidesService.load,
     this.savePresentation = SlidesService.save,
     this.mediaUrl = FilesService.constructMediaUrl,
@@ -195,6 +197,10 @@ class SlideEditorController extends ChangeNotifier {
 
   /// The device the file is on; empty for the Quark's own storage.
   final String deviceSerial;
+
+  /// The slide [load] selects, counting from 0 and clamped to the deck, so
+  /// ending a presentation comes back to the slide it ended on (#2900).
+  final int startIndex;
   final LoadPresentationFn loadPresentation;
   final SavePresentationFn savePresentation;
 
@@ -323,6 +329,11 @@ class SlideEditorController extends ChangeNotifier {
   bool _disposed = false;
   bool _notesOpen = false;
   ({String slideId, String text})? _pendingNotes;
+
+  /// The last slide [deleteSlide] removed, and the presentation as that
+  /// left it.
+  ({String slideId, Presentation after})? _deleted;
+
   Timer? _notesTimer;
   bool _propertiesOpen = true;
   ({String name, double progress})? _imageUpload;
@@ -482,7 +493,12 @@ class SlideEditorController extends ChangeNotifier {
         ..addListener(_onDocumentChanged);
       _saved = loaded;
       _saveError = null;
-      _showSlide(loaded.slides.firstOrNull?.id);
+      final slides = loaded.slides;
+      _showSlide(
+        slides.isEmpty
+            ? null
+            : slides[startIndex.clamp(0, slides.length - 1)].id,
+      );
     } catch (e) {
       _loadError = e;
     }
@@ -539,15 +555,24 @@ class SlideEditorController extends ChangeNotifier {
   }
 
   /// Adds a slide after the selected one, built on [layoutId] or else on
-  /// the selected slide's layout, and selects it.
+  /// the selected slide's layout, and selects it. After a title slide or a
+  /// blank one, which every new presentation starts with, the default is
+  /// title and content, so the new slide shows its "Click to add"
+  /// placeholders rather than an empty canvas (#2899).
   void addSlide({String? layoutId}) {
     final doc = _doc;
     if (doc == null || _readOnly) return;
     _commitNotes();
     final at = selectedIndex + 1;
+    final copied = selectedLayoutId;
     _showSlide(
       doc.controller.insertSlideWithLayout(
-        layoutId ?? selectedLayoutId ?? SlideLayout.blankId,
+        layoutId ??
+            (copied == null ||
+                    copied == SlideLayout.blankId ||
+                    copied == SlideLayout.title.id
+                ? SlideLayout.titleAndContent.id
+                : copied),
         index: at == 0 ? slides.length : at,
       ),
     );
@@ -572,10 +597,28 @@ class SlideEditorController extends ChangeNotifier {
     if (index < 0) return;
     _commitNotes();
     doc.controller.deleteSlide(slideId);
+    _deleted = (slideId: slideId, after: doc.controller.presentation);
     if (slideId == _selectedSlideId) {
       _showSlide(slides[index.clamp(0, slides.length - 1)].id);
     }
     _notify();
+  }
+
+  /// Whether [undoDeleteSlide] would put back the last deleted slide: true
+  /// until anything else changes the presentation (#2897).
+  bool get canUndoDeleteSlide =>
+      _deleted != null && identical(_deleted!.after, presentation);
+
+  /// Puts back the slide the last [deleteSlide] removed and shows it, as
+  /// the delete's Undo toast does (#2897). Nothing once anything else has
+  /// changed the presentation, so the toast never takes back a later edit.
+  void undoDeleteSlide() {
+    final deleted = _deleted;
+    if (deleted == null || !canUndoDeleteSlide) return;
+    _deleted = null;
+    // Nothing changed since the delete, so the last step is the delete.
+    undo();
+    selectSlide(deleted.slideId);
   }
 
   /// Moves the slide [slideId] to [toIndex] in show order.

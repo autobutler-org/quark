@@ -31,7 +31,7 @@ class SlideChartColorsMenuButton extends StatelessWidget {
   Widget build(BuildContext context) => MenuAnchor(
     menuChildren: [
       for (final choice in colors)
-        SubmenuButton(
+        QuarkSubmenuButton(
           key: ValueKey('${choice.key}_menu'),
           leadingIcon: Icon(choice.icon),
           menuChildren: [SlideColorPalette(choice: choice)],

@@ -183,6 +183,23 @@ void main() {
     c.dispose();
   });
 
+  testWidgets('exiting returns the editor to the slide shown (#2900)', (
+    tester,
+  ) async {
+    tap.setViewport(tester, tap.wideViewport);
+    final c = await pumpPresent(tester, slides: 4);
+    await press(tester, LogicalKeyboardKey.arrowRight);
+    await press(tester, LogicalKeyboardKey.arrowRight);
+    expect(c.index, 2);
+    await press(tester, LogicalKeyboardKey.escape);
+    expect(find.text('editor talks/Deck.qslide'), findsOneWidget);
+    expect(
+      router.routeInformationProvider.value.uri.toString(),
+      AppRoutes.slideFile('talks/Deck.qslide', slide: 3),
+    );
+    c.dispose();
+  });
+
   testWidgets('starts at the slide the link asks for', (tester) async {
     tap.setViewport(tester, tap.wideViewport);
     final c = await pumpPresent(tester, start: 2);

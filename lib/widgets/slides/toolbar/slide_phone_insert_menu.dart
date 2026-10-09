@@ -39,7 +39,7 @@ class SlidePhoneInsertMenu extends StatelessWidget {
     menuChildren: [
       SlideChoiceMenuItem(choice: actions.select),
       SlideChoiceMenuItem(choice: actions.text),
-      SubmenuButton(
+      QuarkSubmenuButton(
         key: const ValueKey('slide_insert_shape'),
         leadingIcon: const Icon(QuarkIcons.shapes),
         menuChildren: [
@@ -73,7 +73,7 @@ class SlidePhoneInsertMenu extends StatelessWidget {
           child: const Text('Chart'),
         ),
       ),
-      SubmenuButton(
+      QuarkSubmenuButton(
         key: const ValueKey('slide_insert_image'),
         leadingIcon: const Icon(QuarkIcons.add_image),
         menuChildren: [
@@ -81,7 +81,7 @@ class SlidePhoneInsertMenu extends StatelessWidget {
         ],
         child: const Text('Image'),
       ),
-      SubmenuButton(
+      QuarkSubmenuButton(
         key: const ValueKey('slide_insert_slide'),
         leadingIcon: const Icon(QuarkIcons.slide_layout),
         menuChildren: [

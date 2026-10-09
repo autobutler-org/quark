@@ -89,6 +89,10 @@ void main() {
         AppRoutes.slideFile('talks/q1.qslide', serial: 's 1'),
         '/slides/talks/q1.qslide?serial=s+1',
       );
+      expect(
+        AppRoutes.slideFile('talks/q1.qslide', serial: 's 1', slide: 3),
+        '/slides/talks/q1.qslide?serial=s+1&slide=3',
+      );
     });
   });
 
@@ -1361,6 +1365,32 @@ void main() {
       r.go(AppRoutes.slideFile('talks/present.qslide'));
       await tester.pumpAndSettle();
       expect(find.text('editor talks/present.qslide'), findsOneWidget);
+    });
+
+    testWidgets('an editor link opens the presentation at its slide (#2900)', (
+      tester,
+    ) async {
+      final r = GoRouter(
+        initialLocation: AppRoutes.slideFile(
+          'talks/edit.qslide',
+          serial: 's1',
+          slide: 3,
+        ),
+        routes: [
+          slideEditorRoute(
+            builder: (filePath, serial, startIndex) =>
+                Text('editor $filePath $serial $startIndex'),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+      expect(find.text('editor talks/edit.qslide s1 2'), findsOneWidget);
+
+      r.go(AppRoutes.slideFile('talks/edit.qslide'));
+      await tester.pumpAndSettle();
+      expect(find.text('editor talks/edit.qslide  0'), findsOneWidget);
     });
 
     testWidgets('a signed-out presentation link comes back after signing in', (

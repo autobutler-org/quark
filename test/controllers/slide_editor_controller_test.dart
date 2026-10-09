@@ -67,6 +67,19 @@ void main() {
     expect(c.canUndo, isFalse);
   });
 
+  test('loads at the start slide, clamped to the deck (#2900)', () async {
+    for (final (start, selected) in [(2, 's3'), (9, 's3'), (-1, 's1')]) {
+      final c = SlideEditorController(
+        filePath: 'talks/deck.qslide',
+        startIndex: start,
+        loadPresentation: (path, {serial}) async => deck(3),
+      );
+      addTearDown(c.dispose);
+      await c.load();
+      expect(c.selectedSlideId, selected, reason: 'start $start');
+    }
+  });
+
   test('a failed load is kept as the thrown object', () async {
     final failure = Exception('boom');
     final c = SlideEditorController(
@@ -135,6 +148,26 @@ void main() {
     c.duplicateSlide('s2');
     expect(ids(c), ['s1', 's2', 'n0']);
     expect(c.selectedSlideId, 'n0');
+  });
+
+  test('a delete is undone from its toast only while nothing changed since '
+      '(#2897)', () async {
+    final c = controllerFor(deck(3));
+    await c.load();
+    expect(c.canUndoDeleteSlide, isFalse);
+    c.deleteSlide('s2');
+    expect(c.canUndoDeleteSlide, isTrue);
+    c.undoDeleteSlide();
+    expect(ids(c), ['s1', 's2', 's3']);
+    expect(c.selectedSlideId, 's2', reason: 'the restored slide is shown');
+    expect(c.canUndoDeleteSlide, isFalse);
+
+    c.deleteSlide('s2');
+    c.addSlide();
+    expect(c.canUndoDeleteSlide, isFalse);
+    final before = ids(c);
+    c.undoDeleteSlide();
+    expect(ids(c), before, reason: 'the later edit is not undone');
   });
 
   test('delete moves the selection and never removes the last slide', () async {
@@ -800,6 +833,7 @@ void main() {
     late Object? exportFailure;
 
     SlideEditorController exportController() {
+      var next = 0;
       final controller = SlideEditorController(
         filePath: 'talks/Quarterly review.qslide',
         deviceSerial: 'usb1',
@@ -815,7 +849,7 @@ void main() {
           events.add('export $path $serial $fileName');
           return '/downloads/$fileName';
         },
-        newId: () => 'n${events.length}',
+        newId: () => 'n${next++}',
       );
       addTearDown(controller.dispose);
       return controller;
@@ -1134,17 +1168,36 @@ void main() {
       expect(c.canUndo, isFalse);
     });
 
-    test('add copies the selected slide\'s layout', () async {
+    test('add after a title or blank slide gives title and content, with '
+        'placeholders (#2899)', () async {
       final c = controllerFor(titled());
       await c.load();
       c.addSlide();
-      expect(c.selectedSlide!.layoutId, SlideLayout.title.id);
-      expect(c.selectedSlide!.elements, hasLength(2));
+      expect(c.selectedSlide!.layoutId, SlideLayout.titleAndContent.id);
       expect(ids(c), ['s1', c.selectedSlideId, 's2']);
 
       c.selectSlide('s2');
       c.addSlide();
-      expect(c.selectedSlide!.layoutId, SlideLayout.blankId);
+      expect(c.selectedSlide!.layoutId, SlideLayout.titleAndContent.id);
+      final boxes = c.selectedSlide!.elements.whereType<TextBox>();
+      expect(
+        [for (final b in boxes) b.placeholder],
+        ['Click to add title', 'Click to add text'],
+      );
+    });
+
+    test('add copies any other layout of the selected slide', () async {
+      final c = controllerFor(titled());
+      await c.load();
+      c.addSlide(layoutId: SlideLayout.twoContent.id);
+      c.addSlide();
+      expect(c.selectedLayoutId, SlideLayout.twoContent.id);
+    });
+
+    test('add with the blank layout still builds a blank slide', () async {
+      final c = controllerFor(titled());
+      await c.load();
+      c.addSlide(layoutId: SlideLayout.blankId);
       expect(c.selectedSlide!.elements, isEmpty);
     });
 

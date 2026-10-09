@@ -71,6 +71,7 @@ inserting pictures, tables and charts, its speaker notes, and presenting (#1152,
   the middle.
 - The bar's second row reads "Slide 1 of N".
 - On a phone the panel is a strip across the top; on a wide window it runs down the left.
+- The bar's back arrow, or a system back, returns to the Slides list at `/slides` (#2896).
 
 ---
 
@@ -102,9 +103,12 @@ inserting pictures, tables and charts, its speaker notes, and presenting (#1152,
 
 **Expected result:**
 
-- A new blank slide appears after the selected one and is selected, scrolled into view.
+- A new slide appears after the selected one and is selected, scrolled into view. It copies the selected slide's layout;
+  after a title or blank slide it is a title and content slide, its "Click to add title" and "Click to add text"
+  placeholders showing where to type (#2899).
 - The duplicate appears right after its original and is selected.
-- The deleted slide is gone and the slide that took its place is selected.
+- The deleted slide is gone and the slide that took its place is selected. A "Slide deleted" snack bar offers **Undo**,
+  which puts the slide back and selects it until anything else changes the presentation (#2897).
 - **Delete** is disabled while only one slide is left.
 
 ---
@@ -297,7 +301,8 @@ same drive as the presentation (`photos/cover.jpg`).
   over 0.2 to 2 seconds (#1164). Stepping back plays it the other way; a presentation without transitions cuts. Under
   reduced motion every transition is a short fade with no movement. The presenter view's next-slide preview never
   animates.
-- Escape or **End the presentation** returns to the editor.
+- Escape or **End the presentation** returns to the editor at `/slides/<path>?slide=N`, on the slide the show ended on
+  (#2900).
 
 ---
 

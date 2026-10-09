@@ -77,18 +77,18 @@ class SlidePhoneFormatMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final a = actions;
-    SubmenuButton choices(
+    QuarkSubmenuButton choices(
       String key,
       String label,
       IconData icon,
       List<SlideToolbarChoice> choices,
-    ) => SubmenuButton(
+    ) => QuarkSubmenuButton(
       key: ValueKey('${key}_menu'),
       leadingIcon: Icon(icon),
       menuChildren: [for (final c in choices) SlideChoiceMenuItem(choice: c)],
       child: Text(label),
     );
-    SubmenuButton color(SlideColorChoice choice) => SubmenuButton(
+    QuarkSubmenuButton color(SlideColorChoice choice) => QuarkSubmenuButton(
       key: ValueKey('${choice.key}_menu'),
       leadingIcon: Icon(choice.icon),
       menuChildren: [SlideColorPalette(choice: choice)],
@@ -150,7 +150,7 @@ class SlidePhoneFormatMenu extends StatelessWidget {
           child: const Text('Title…'),
         ),
         for (final c in a.chartToggles) SlideChoiceMenuItem(choice: c),
-        SubmenuButton(
+        QuarkSubmenuButton(
           key: const ValueKey('slide_chart_colors_menu'),
           leadingIcon: const Icon(QuarkIcons.chart_colors),
           menuChildren: [
@@ -223,7 +223,7 @@ class SlidePhoneFormatMenu extends StatelessWidget {
     return MenuAnchor(
       menuChildren: [
         for (final group in groups)
-          SubmenuButton(
+          QuarkSubmenuButton(
             key: ValueKey(group.key),
             leadingIcon: Icon(group.icon),
             menuChildren: controls(group),
@@ -261,7 +261,7 @@ class SlidePhoneFormatMenu extends StatelessWidget {
           onPressed: onOpenProperties,
           child: const Text('Properties'),
         ),
-        SubmenuButton(
+        QuarkSubmenuButton(
           key: const ValueKey('slide_zoom_menu'),
           leadingIcon: const Icon(QuarkIcons.zoom_in),
           menuChildren: [

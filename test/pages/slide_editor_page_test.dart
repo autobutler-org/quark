@@ -158,14 +158,15 @@ void main() {
       expect(c.selectedSlideId, 'n0');
 
       await openMenuAndTap(tester, 's1', 'slide_duplicate');
-      expect([for (final s in c.slides) s.id], ['s1', 'n1', 'n0', 's2']);
+      final copy = c.selectedSlideId!;
+      expect([for (final s in c.slides) s.id], ['s1', copy, 'n0', 's2']);
 
-      await openMenuAndTap(tester, 'n1', 'slide_delete');
+      await openMenuAndTap(tester, copy, 'slide_delete');
       expect([for (final s in c.slides) s.id], ['s1', 'n0', 's2']);
 
       await tester.tap(find.byKey(const ValueKey('slide_editor_undo')));
       await tester.pumpAndSettle();
-      expect([for (final s in c.slides) s.id], ['s1', 'n1', 'n0', 's2']);
+      expect([for (final s in c.slides) s.id], ['s1', copy, 'n0', 's2']);
       await tester.tap(find.byKey(const ValueKey('slide_editor_redo')));
       await tester.pumpAndSettle();
       expect([for (final s in c.slides) s.id], ['s1', 'n0', 's2']);
@@ -173,6 +174,42 @@ void main() {
       await letAutosaveRun(tester);
     });
   }
+
+  testWidgets('a new slide shows title and body placeholders (#2899)', (
+    tester,
+  ) async {
+    tap.setViewport(tester, tap.wideViewport);
+    await pumpEditor(tester, slides: 1);
+    await tester.tap(find.byKey(const ValueKey('slide_panel_add')));
+    await tester.pumpAndSettle();
+    final stage = find.byKey(const ValueKey('slide_editor_stage'));
+    for (final prompt in ['Click to add title', 'Click to add text']) {
+      expect(
+        find.descendant(
+          of: stage,
+          matching: find.text(prompt, findRichText: true),
+        ),
+        findsOneWidget,
+        reason: prompt,
+      );
+    }
+    await letAutosaveRun(tester);
+  });
+
+  testWidgets('deleting a slide offers Undo in a snack bar (#2897)', (
+    tester,
+  ) async {
+    tap.setViewport(tester, tap.wideViewport);
+    final c = await pumpEditor(tester, slides: 3);
+    await openMenuAndTap(tester, 's2', 'slide_delete');
+    expect([for (final s in c.slides) s.id], ['s1', 's3']);
+    expect(find.text('Slide deleted'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('slide_delete_undo')));
+    await tester.pumpAndSettle();
+    expect([for (final s in c.slides) s.id], ['s1', 's2', 's3']);
+    expect(c.selectedSlideId, 's2');
+    await letAutosaveRun(tester);
+  });
 
   testWidgets('tapping a thumbnail selects it', (tester) async {
     tap.setViewport(tester, tap.wideViewport);
@@ -529,6 +566,67 @@ void main() {
     });
   });
 
+  group('leaving (#2896)', () {
+    /// Pumps the editor at its own URL with nothing underneath it, beside
+    /// the Slides list and Files it could leave for.
+    Future<GoRouter> pumpAtUrl(WidgetTester tester) async {
+      final controller = SlideEditorController(
+        filePath: 'talks/Deck.qslide',
+        loadPresentation: (path, {serial}) async => deck(2),
+        savePresentation: (path, p, {serial}) async => saved.add(p),
+      );
+      addTearDown(controller.dispose);
+      final router = GoRouter(
+        initialLocation: AppRoutes.slideFile('talks/Deck.qslide'),
+        routes: [
+          GoRoute(
+            path: AppRoutes.slides,
+            builder: (_, _) => const Text('slides list'),
+          ),
+          GoRoute(
+            path: '${AppRoutes.files}/:path(.*)',
+            builder: (_, state) =>
+                Text('files ${state.pathParameters['path']}'),
+          ),
+          GoRoute(
+            path: '${AppRoutes.slides}/:path(.*)',
+            builder: (_, state) => SlideEditorPage(
+              filePath: state.pathParameters['path']!,
+              controller: controller,
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        MaterialApp.router(
+          theme: QuarkTheme.light(themeColor: QuarkThemeColor.classic),
+          routerConfig: router,
+        ),
+      );
+      await tester.pumpAndSettle();
+      return router;
+    }
+
+    testWidgets('the back arrow returns to the Slides list', (tester) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final router = await pumpAtUrl(tester);
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.text('slides list'), findsOneWidget);
+      expect(router.routeInformationProvider.value.uri.path, AppRoutes.slides);
+    });
+
+    testWidgets('a system back returns to the Slides list', (tester) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final router = await pumpAtUrl(tester);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('slides list'), findsOneWidget);
+      expect(router.routeInformationProvider.value.uri.path, AppRoutes.slides);
+    });
+  });
+
   group('toolbar, properties and pictures (#1167, #1158)', () {
     Presentation drawn() => Presentation(
       title: 'Deck',
@@ -818,6 +916,46 @@ void main() {
       await tester.tap(key('slide_insert_menu'));
       await tester.pumpAndSettle();
       expect(key('slide_insert_image'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a mouse click opens the phone menus\' submenus, after '
+        'hovering them too (#2898)', (tester) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final c = await pumpDrawn(tester);
+      c.selectElements({'shape'});
+      await tester.pump();
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+
+      /// Rests the mouse on [row], as a hand reaching for it does, then
+      /// clicks it.
+      Future<void> hoverAndClick(String row) async {
+        await mouse.moveTo(tester.getCenter(key(row)));
+        await tester.pumpAndSettle();
+        await mouse.down(tester.getCenter(key(row)));
+        await mouse.up();
+        await tester.pumpAndSettle();
+      }
+
+      for (final (menu, row, item) in [
+        ('slide_insert_menu', 'slide_insert_shape', 'slide_tool_shape_star'),
+        ('slide_insert_menu', 'slide_insert_slide', 'slide_new_slide_blank'),
+        (
+          'slide_format_menu',
+          SlideToolbarGroup.clipboard.key,
+          'slide_duplicate',
+        ),
+      ]) {
+        await tester.tap(key(menu));
+        await tester.pumpAndSettle();
+        await hoverAndClick(row);
+        expect(key(item), findsOneWidget, reason: '$row opens on a click');
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+      }
       expect(tester.takeException(), isNull);
     });
 
