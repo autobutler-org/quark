@@ -43,8 +43,11 @@ CASES=(
     # The instant an upload gets its real name: the window that used to leave
     # an empty file behind.
     "upload|timing=after::op=rename::from_rgx=/\.vfs-write-::to_rgx=/file-"
-    # A resumable upload or a device upload linked into place.
+    # A resumable upload linked into place.
     "upload|timing=after::op=link::from_rgx=/upload-::to_rgx=/file-"
+    # A device-serial upload, or any write refusing a taken name, linked into
+    # place from its temp.
+    "upload|timing=after::op=link::from_rgx=/\.vfs-write-::to_rgx=/file-"
     # Any flush at all.
     "upload|timing=before::op=fsync::from_rgx=/"
     # A vault transaction whose journal is on disk and whose database is not.

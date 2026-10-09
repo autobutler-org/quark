@@ -6,25 +6,16 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/gin-gonic/gin"
 )
 
 // One collision rule on every upload path (#2016). A name that is taken is a
-// 409 whether the file goes through the VFS or the StorageService, in one
-// multipart request or in chunks, and it is never silently renamed. The client
+// 409 on the internal drive or a USB one, in one multipart request or in
+// chunks, and it is never silently renamed. The client
 // answers the 409 by asking again with keepBoth (the server picks a free name)
 // or overwrite (the upload replaces the file).
 func TestUploadNameConflict(t *testing.T) {
 	t.Parallel()
 
-	engines := []struct {
-		name   string
-		engine func(t *testing.T) (*gin.Engine, string)
-	}{
-		{name: "storage service", engine: newTestEngine},
-		{name: "vfs", engine: newStorageVFSTestEngine},
-	}
 	cases := []struct {
 		name  string
 		query string
@@ -58,15 +49,15 @@ func TestUploadNameConflict(t *testing.T) {
 		},
 	}
 
-	for _, eng := range engines {
+	for _, eng := range uploadTargets {
 		for _, tc := range cases {
 			t.Run(eng.name+"/"+tc.name, func(t *testing.T) {
 				t.Parallel()
 				e, filesDir := eng.engine(t)
-				if w := uploadFile(t, e, "/api/v0/files/upload/notes", "clash.txt", "original"); w.Code != http.StatusOK {
+				if w := uploadFile(t, e, eng.on("/api/v0/files/upload/notes"), "clash.txt", "original"); w.Code != http.StatusOK {
 					t.Fatalf("first upload returned %d: %s", w.Code, w.Body.String())
 				}
-				w := uploadFile(t, e, "/api/v0/files/upload/notes"+tc.query, "clash.txt", "second")
+				w := uploadFile(t, e, eng.on("/api/v0/files/upload/notes"+tc.query), "clash.txt", "second")
 				if w.Code != tc.code {
 					t.Fatalf("second upload returned %d, want %d: %s", w.Code, tc.code, w.Body.String())
 				}
@@ -81,19 +72,12 @@ func TestUploadNameConflict(t *testing.T) {
 func TestUploadReportsLandedPaths(t *testing.T) {
 	t.Parallel()
 
-	engines := []struct {
-		name   string
-		engine func(t *testing.T) (*gin.Engine, string)
-	}{
-		{name: "storage service", engine: newTestEngine},
-		{name: "vfs", engine: newStorageVFSTestEngine},
-	}
-	for _, eng := range engines {
+	for _, eng := range uploadTargets {
 		t.Run(eng.name, func(t *testing.T) {
 			t.Parallel()
 			e, _ := eng.engine(t)
 			for _, want := range []string{"notes/clash.txt", "notes/clash_(1).txt"} {
-				w := uploadFile(t, e, "/api/v0/files/upload/notes?keepBoth=true", "clash.txt", "x")
+				w := uploadFile(t, e, eng.on("/api/v0/files/upload/notes?keepBoth=true"), "clash.txt", "x")
 				if w.Code != http.StatusOK {
 					t.Fatalf("upload returned %d: %s", w.Code, w.Body.String())
 				}
@@ -117,21 +101,14 @@ func TestUploadReportsLandedPaths(t *testing.T) {
 func TestUploadSessionNameConflict(t *testing.T) {
 	t.Parallel()
 
-	engines := []struct {
-		name   string
-		engine func(t *testing.T) (*gin.Engine, string)
-	}{
-		{name: "storage service", engine: newTestEngine},
-		{name: "vfs", engine: newStorageVFSTestEngine},
-	}
-	for _, eng := range engines {
+	for _, eng := range uploadTargets {
 		t.Run(eng.name+"/opening on a taken name is a conflict", func(t *testing.T) {
 			t.Parallel()
 			e, filesDir := eng.engine(t)
-			if w := uploadFile(t, e, "/api/v0/files/upload/notes", "clash.bin", "original"); w.Code != http.StatusOK {
+			if w := uploadFile(t, e, eng.on("/api/v0/files/upload/notes"), "clash.bin", "original"); w.Code != http.StatusOK {
 				t.Fatalf("first upload returned %d: %s", w.Code, w.Body.String())
 			}
-			w := openSession(t, e, map[string]any{"rootDir": "notes", "fileName": "clash.bin", "totalSize": 4})
+			w := openSession(t, e, eng.session(map[string]any{"rootDir": "notes", "fileName": "clash.bin", "totalSize": 4}))
 			if w.Code != http.StatusConflict {
 				t.Fatalf("open session returned %d, want %d: %s", w.Code, http.StatusConflict, w.Body.String())
 			}
@@ -140,12 +117,12 @@ func TestUploadSessionNameConflict(t *testing.T) {
 		t.Run(eng.name+"/keep both commits under a free name", func(t *testing.T) {
 			t.Parallel()
 			e, filesDir := eng.engine(t)
-			if w := uploadFile(t, e, "/api/v0/files/upload/notes", "clash.bin", "original"); w.Code != http.StatusOK {
+			if w := uploadFile(t, e, eng.on("/api/v0/files/upload/notes"), "clash.bin", "original"); w.Code != http.StatusOK {
 				t.Fatalf("first upload returned %d: %s", w.Code, w.Body.String())
 			}
-			w := openSession(t, e, map[string]any{
+			w := openSession(t, e, eng.session(map[string]any{
 				"rootDir": "notes", "fileName": "clash.bin", "totalSize": 4, "keepBoth": true,
-			})
+			}))
 			if w.Code != http.StatusOK {
 				t.Fatalf("open session returned %d: %s", w.Code, w.Body.String())
 			}
@@ -163,9 +140,9 @@ func TestUploadSessionNameConflict(t *testing.T) {
 		t.Run(eng.name+"/both choices at once is refused", func(t *testing.T) {
 			t.Parallel()
 			e, _ := eng.engine(t)
-			w := openSession(t, e, map[string]any{
+			w := openSession(t, e, eng.session(map[string]any{
 				"fileName": "x.bin", "totalSize": 4, "keepBoth": true, "overwrite": true,
-			})
+			}))
 			if w.Code != http.StatusBadRequest {
 				t.Fatalf("open session returned %d, want %d: %s", w.Code, http.StatusBadRequest, w.Body.String())
 			}

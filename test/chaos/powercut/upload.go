@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/uploadutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -21,26 +22,46 @@ const (
 	uploadDeadline = 30 * time.Second
 )
 
+// powercutSerial names the USB drive the device-serial uploads go to.
+const powercutSerial = "POWERCUT"
+
 // uploadLayout is where each upload path lands under the mount: the files
 // namespace a multipart upload writes through, the staging directory a
-// resumable upload commits from, and a managed device's own data directory.
+// resumable upload commits from, and a managed device's mount point and the
+// files directory Quark keeps on it.
 type uploadLayout struct {
-	files, staging, device string
+	files, staging, device, deviceFiles string
 }
 
 func layoutUnder(dir string) uploadLayout {
+	device := filepath.Join(dir, "device")
 	return uploadLayout{
-		files:   filepath.Join(dir, "files"),
-		staging: filepath.Join(dir, "staging"),
-		device:  filepath.Join(dir, "device"),
+		files:       filepath.Join(dir, "files"),
+		staging:     filepath.Join(dir, "staging"),
+		device:      device,
+		deviceFiles: storageutil.ConstructFilesDir(storageutil.GetDataDirForDevice(device)),
 	}
+}
+
+// usbDrive is a USB drive known only by its serial.
+type usbDrive struct {
+	storageutil.UsbDevice
+}
+
+func (usbDrive) GetSerial() string { return powercutSerial }
+
+// usbDetector reports one USB drive mounted at mountPoint.
+type usbDetector struct{ mountPoint string }
+
+func (d usbDetector) DetectDevices() ([]storageutil.Device, error) {
+	return []storageutil.Device{{Name: "USB", MountPoint: d.mountPoint, UsbInfo: usbDrive{}}}, nil
 }
 
 // writeUploads lands files through the three ways an upload reaches the disk,
 // in turn, until the mount dies under it or it runs out of work.
 func writeUploads(ctx context.Context, dir string, l *ledger) error {
 	layout := layoutUnder(dir)
-	for _, d := range []string{layout.files, layout.staging, filepath.Join(layout.device, "files")} {
+	for _, d := range []string{layout.files, layout.staging, layout.deviceFiles} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return err
 		}
@@ -49,9 +70,16 @@ func writeUploads(ctx context.Context, dir string, l *ledger) error {
 	if err != nil {
 		return err
 	}
-	device := &storageutil.ManagedDevice{
-		DataDir:  layout.device,
-		FilesDir: filepath.Join(layout.device, "files"),
+	// The device's namespace is found the way an upload with ?serial= finds
+	// it: registered per device, looked up through the upload destination.
+	registry := vfs.NewRegistry()
+	svc := storageutil.NewStorageService(usbDetector{mountPoint: layout.device})
+	if _, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{Registry: registry, Storage: svc}); err != nil {
+		return err
+	}
+	device := uploadutil.Destination{Registry: registry}.FilesVFS(powercutSerial)
+	if device == nil {
+		return errors.New("the device namespace was not registered")
 	}
 
 	deadline := time.Now().Add(uploadDeadline)
@@ -69,8 +97,9 @@ func writeUploads(ctx context.Context, dir string, l *ledger) error {
 			err = stageAndMoveIn(ctx, fsys, layout.staging, name, i)
 		default:
 			// An upload to a named device.
-			landed = filepath.Join("device", "files", name)
-			err = uploadToDevice(device, name, i)
+			rel, _ := filepath.Rel(dir, filepath.Join(layout.deviceFiles, name))
+			landed = rel
+			err = uploadToDevice(ctx, device, name, i)
 		}
 		if err != nil {
 			return fmt.Errorf("upload %s: %w", landed, err)
@@ -103,7 +132,7 @@ func stageAndMoveIn(ctx context.Context, fsys *vfs.LocalVFS, staging, name strin
 
 // uploadToDevice streams the file through the multipart path an upload to a
 // named device takes.
-func uploadToDevice(device *storageutil.ManagedDevice, name string, i int) error {
+func uploadToDevice(ctx context.Context, device vfs.VFS, name string, i int) error {
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 	go func() {
@@ -120,9 +149,11 @@ func uploadToDevice(device *storageutil.ManagedDevice, name string, i int) error
 	}()
 	defer func() { _ = pr.Close() }()
 
-	_, err := storageutil.UploadFilesStreamedImpl(storageutil.UploadFilesStreamedParams{
+	_, err := uploadutil.WriteMultipartVFS(uploadutil.WriteMultipartParams{
+		Ctx:    ctx,
+		FS:     device,
 		Reader: multipart.NewReader(pr, mw.Boundary()),
-	}, device, "")
+	})
 	return err
 }
 
@@ -149,7 +180,7 @@ func checkUploads(dir, ledgerPath string) error {
 
 	visible := 0
 	layout := layoutUnder(dir)
-	for _, root := range []string{layout.files, filepath.Join(layout.device, "files")} {
+	for _, root := range []string{layout.files, layout.deviceFiles} {
 		err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 			if errors.Is(err, fs.ErrNotExist) {
 				return nil

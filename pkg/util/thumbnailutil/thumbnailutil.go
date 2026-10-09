@@ -181,6 +181,10 @@ type StoreClientThumbnailParams struct {
 	// SourcePath is the file the thumbnail is of, streamed for its content
 	// hash. Empty stores only the perceptual hash.
 	SourcePath string
+	// Source, when set, is the file the thumbnail is of, already open — read
+	// in place of SourcePath, so a caller holding a vfs.File needs no host
+	// path for it.
+	Source io.ReadSeeker
 	// Reader is the JPEG, read to EOF or one byte past the size limit.
 	Reader io.Reader
 	// IsVideo skips the perceptual hash, which only photos are compared by.

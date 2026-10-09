@@ -680,19 +680,20 @@ func TestSmallFileStillUploadsInOneMultipartRequest(t *testing.T) {
 	}
 }
 
-// A file with a serial named on it has no VFS namespace to land in and takes
-// the StorageService instead. Both destinations have to reassemble the chunks
-// the same way.
-func TestResumableUploadThroughTheStorageService(t *testing.T) {
+// A file with a serial named on it lands in that device's namespace, which has
+// to reassemble the chunks the same way the internal drive's does (#2643).
+func TestResumableUploadToADevice(t *testing.T) {
 	t.Parallel()
 
-	engine, filesDir := newTestEngine(t)
+	h := newDeviceUploadHarness(t)
+	engine, filesDir := h.engine, h.usbDir
 	content := randomContent(t, 5<<20)
 
 	w := openSession(t, engine, map[string]any{
 		"rootDir":   "clips",
-		"fileName":  "no-vfs.bin",
+		"fileName":  "on-device.bin",
 		"totalSize": len(content),
+		"serial":    testUsbSerial,
 	})
 	if w.Code != http.StatusOK {
 		t.Fatalf("open session returned %d: %s", w.Code, w.Body.String())
@@ -704,7 +705,7 @@ func TestResumableUploadThroughTheStorageService(t *testing.T) {
 	if !final.Complete {
 		t.Fatalf("the last chunk did not complete the upload: %+v", final)
 	}
-	if got, want := sha256File(t, filepath.Join(filesDir, "clips", "no-vfs.bin")), sha256Hex(content); got != want {
+	if got, want := sha256File(t, filepath.Join(filesDir, "clips", "on-device.bin")), sha256Hex(content); got != want {
 		t.Errorf("upload hashes to %s, want %s", got, want)
 	}
 }

@@ -97,7 +97,6 @@ func ConvertXlsxToQsheet(params ConvertXlsxParams) (ConvertXlsxResult, error) {
 	// .qsheet is never held whole on either side.
 	dest := uploadutil.Destination{
 		Registry: params.Registry,
-		Storage:  params.Storage,
 		// The event for the temporary file would announce a path that is about
 		// to be renamed; the move below publishes the one that matters.
 		EventBus: nil,
