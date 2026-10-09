@@ -59,7 +59,7 @@ abstract final class QuarkTheme {
       onSecondary: tokens.secondaryForeground,
       error: tokens.error,
       onError: tokens.errorForeground,
-      outline: tokens.border,
+      outline: tokens.outline,
       outlineVariant: tokens.border,
       // Left to `fromSeed`, the containers are Material tones of the accent
       // that match no Quark surface, and a bar filled with one drifts from
@@ -76,12 +76,6 @@ abstract final class QuarkTheme {
         tokens.card,
       ),
     );
-
-    // The recessive track behind an off switch: the input fill reads as a well
-    // on dark, but disappears on light, where the hairline is the right weight.
-    final switchTrackOff = brightness == Brightness.dark
-        ? tokens.input
-        : tokens.border;
 
     return ThemeData(
       brightness: brightness,
@@ -117,11 +111,11 @@ abstract final class QuarkTheme {
         fillColor: tokens.input,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(tokens.radiusMd),
-          borderSide: BorderSide(color: tokens.border),
+          borderSide: BorderSide(color: tokens.outline),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(tokens.radiusMd),
-          borderSide: BorderSide(color: tokens.border),
+          borderSide: BorderSide(color: tokens.outline),
         ),
         // [QuarkTokens.focusRingWidth], two pixels or more, not one. A keyboard user has no pointer to tell them
         // where they are, and a focused field that differs from a resting one
@@ -178,16 +172,24 @@ abstract final class QuarkTheme {
         textColor: tokens.foreground,
         iconColor: tokens.secondaryForeground,
       ),
+      // An on switch is a solid accent track with the accent's foreground
+      // for a thumb; a translucent accent track was 1.4:1 on a light card
+      // (#2600). An off track is the input fill inside an [QuarkTokens.outline]
+      // edge: the fill alone disappears on a light card.
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return tokens.primary;
+          if (states.contains(WidgetState.selected)) {
+            return tokens.primaryForeground;
+          }
           return tokens.mutedForeground;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return tokens.primary.withValues(alpha: 0.3);
-          }
-          return switchTrackOff;
+          if (states.contains(WidgetState.selected)) return tokens.primary;
+          return tokens.input;
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return tokens.primary;
+          return tokens.outline;
         }),
       ),
       checkboxTheme: CheckboxThemeData(
@@ -195,7 +197,7 @@ abstract final class QuarkTheme {
           if (states.contains(WidgetState.selected)) return tokens.primary;
           return Colors.transparent;
         }),
-        side: BorderSide(color: tokens.border, width: 1.5),
+        side: BorderSide(color: tokens.outline, width: 1.5),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(tokens.radiusSm),
         ),

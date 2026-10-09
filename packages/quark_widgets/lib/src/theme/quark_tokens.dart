@@ -37,6 +37,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     required this.card,
     required this.sidebar,
     required this.border,
+    required this.outline,
     required this.input,
     required this.mutedForeground,
     required this.secondaryForeground,
@@ -78,8 +79,15 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// the shipped sets, but they read [chrome] now.
   final Color sidebar;
 
-  /// Hairlines: outlines, dividers, and unfocused input borders.
+  /// Decorative hairlines: dividers, and the edges of cards, menus and
+  /// dialogs. WCAG 1.4.11 exempts these, so they stay quiet; a boundary that
+  /// identifies a control uses [outline].
   final Color border;
+
+  /// The boundary of a control that has nothing else to show where it is:
+  /// unfocused text fields, checkbox sides and an off switch's track. It
+  /// clears 3:1 on every content surface (WCAG 1.4.11, #2600).
+  final Color outline;
 
   /// The fill behind text fields and other editable inputs.
   final Color input;
@@ -182,11 +190,16 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   final List<Color> eventColors;
 
   /// The dark token set, and Quark's default appearance.
+  ///
+  /// Held to WCAG AA (#2600): every text token, the status colors included,
+  /// is at least 4.5:1 on every surface it is drawn on, text on a fill is
+  /// 4.5:1 on that fill, and [outline] and the accent are 3:1.
   static const QuarkTokens dark = QuarkTokens(
     background: Color(0xFF070D19),
     card: Color(0xFF0F172A),
     sidebar: Color(0xFF0C1220),
     border: Color(0xFF1E293B),
+    outline: Color(0xFF64748B),
     input: Color(0xFF131C2E),
     mutedForeground: Color(0xFF7587A1),
     secondaryForeground: Color(0xFF94A3B8),
@@ -201,7 +214,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     chromeMutedForeground: Color(0xFF7587A1),
     chromePrimary: Color(0xFF72A7C0),
     error: Color(0xFFEF4444),
-    errorForeground: Color(0xFFFFFFFF),
+    errorForeground: Color(0xFF0F172A),
     warning: Color(0xFFF59E0B),
     success: Color(0xFF10B981),
     radiusSm: 4,
@@ -223,12 +236,13 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     ],
   );
 
-  /// The light token set.
+  /// The light token set, held to the same targets as [dark].
   static const QuarkTokens light = QuarkTokens(
     background: Color(0xFFF8FAFC),
     card: Color(0xFFFFFFFF),
     sidebar: Color(0xFFF1F5F9),
     border: Color(0xFFE2E8F0),
+    outline: Color(0xFF768599),
     input: Color(0xFFFFFFFF),
     mutedForeground: Color(0xFF606F85),
     secondaryForeground: Color(0xFF475569),
@@ -242,10 +256,10 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     chromeSecondaryForeground: Color(0xFF475569),
     chromeMutedForeground: Color(0xFF606F85),
     chromePrimary: Color(0xFF3A6B82),
-    error: Color(0xFFDC2626),
+    error: Color(0xFFB91C1C),
     errorForeground: Color(0xFFFFFFFF),
-    warning: Color(0xFFF59E0B),
-    success: Color(0xFF10B981),
+    warning: Color(0xFF9A4A07),
+    success: Color(0xFF047857),
     radiusSm: 4,
     radiusMd: 8,
     radiusLg: 12,
@@ -275,6 +289,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     card: Color(0xFF0A0A0A),
     sidebar: Color(0xFF000000),
     border: Color(0xFFA3A3A3),
+    outline: Color(0xFFA3A3A3),
     input: Color(0xFF000000),
     mutedForeground: Color(0xFFCCCCCC),
     secondaryForeground: Color(0xFFE5E5E5),
@@ -318,6 +333,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     card: Color(0xFFFFFFFF),
     sidebar: Color(0xFFF5F5F5),
     border: Color(0xFF595959),
+    outline: Color(0xFF595959),
     input: Color(0xFFFFFFFF),
     mutedForeground: Color(0xFF404040),
     secondaryForeground: Color(0xFF262626),
@@ -387,6 +403,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     Color? card,
     Color? sidebar,
     Color? border,
+    Color? outline,
     Color? input,
     Color? mutedForeground,
     Color? secondaryForeground,
@@ -420,6 +437,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
       card: card ?? this.card,
       sidebar: sidebar ?? this.sidebar,
       border: border ?? this.border,
+      outline: outline ?? this.outline,
       input: input ?? this.input,
       mutedForeground: mutedForeground ?? this.mutedForeground,
       secondaryForeground: secondaryForeground ?? this.secondaryForeground,
@@ -460,6 +478,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
       card: Color.lerp(card, other.card, t)!,
       sidebar: Color.lerp(sidebar, other.sidebar, t)!,
       border: Color.lerp(border, other.border, t)!,
+      outline: Color.lerp(outline, other.outline, t)!,
       input: Color.lerp(input, other.input, t)!,
       mutedForeground: Color.lerp(mutedForeground, other.mutedForeground, t)!,
       secondaryForeground: Color.lerp(
@@ -525,6 +544,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
         other.card == card &&
         other.sidebar == sidebar &&
         other.border == border &&
+        other.outline == outline &&
         other.input == input &&
         other.mutedForeground == mutedForeground &&
         other.secondaryForeground == secondaryForeground &&
@@ -560,6 +580,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     card,
     sidebar,
     border,
+    outline,
     input,
     mutedForeground,
     secondaryForeground,

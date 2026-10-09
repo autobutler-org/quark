@@ -38,6 +38,11 @@ final List<ColorField> colorFields = [
     read: (t) => t.border,
     write: (t, v) => t.copyWith(border: v),
   ),
+  (
+    name: 'outline',
+    read: (t) => t.outline,
+    write: (t, v) => t.copyWith(outline: v),
+  ),
   (name: 'input', read: (t) => t.input, write: (t, v) => t.copyWith(input: v)),
   (
     name: 'mutedForeground',
