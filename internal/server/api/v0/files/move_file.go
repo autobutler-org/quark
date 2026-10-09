@@ -60,7 +60,6 @@ func moveFile(c *gin.Context) *serverutil.Response {
 	if _, err := fileutil.MoveFile(fileutil.MoveFileParams{
 		Ctx:             c.Request.Context(),
 		Registry:        deps.VFSRegistry(),
-		Storage:         deps.StorageService(),
 		EventBus:        deps.EventBus(),
 		Database:        deps.Database(),
 		OldFilePath:     req.OldFilePath,

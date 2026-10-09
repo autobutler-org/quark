@@ -58,7 +58,6 @@ func exportPptx(c *gin.Context) *serverutil.Response {
 	_, err = fileutil.ExportQslideToPptx(fileutil.ExportPptxParams{
 		Ctx:      c.Request.Context(),
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		FilePath: filePath,
 		Serial:   serial,
 		CanRead: func(imagePath string) bool {

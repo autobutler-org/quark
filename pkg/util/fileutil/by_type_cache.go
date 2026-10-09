@@ -8,6 +8,7 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // byTypeCacheMaxEntries bounds how many (type, device set) listings are kept.
@@ -121,14 +122,21 @@ func (c *ByTypeCache) put(key string, gen uint64, files []FileNode) {
 	c.entries[key] = byTypeEntry{files: files, storedAt: c.now()}
 }
 
-// byTypeKey names a listing by its type and the device roots it walks, so a
-// disk plugged in or out is a different listing rather than a stale one.
-func byTypeKey(fileType storageutil.FileType, serials []string, devices []storageutil.ManagedDevice) string {
+// byTypeKey names a listing by its type and the device namespaces it walks,
+// so a disk plugged in or out is a different listing rather than a stale one.
+func byTypeKey(fileType storageutil.FileType, serials []string, registry vfs.Registry) string {
 	parts := []string{string(fileType)}
 	parts = append(parts, slices.Sorted(slices.Values(serials))...)
 	parts = append(parts, "\x01")
-	for _, d := range devices {
-		parts = append(parts, DeviceSerial(d)+"\x02"+d.FilesDir)
+	var namespaces []string
+	if registry != nil {
+		for _, ns := range registry.List("") {
+			if _, ok := vfs.FilesNamespaceSerial(ns.ID); ok {
+				namespaces = append(namespaces, ns.ID+"\x02"+ns.MountPath)
+			}
+		}
 	}
+	slices.Sort(namespaces)
+	parts = append(parts, namespaces...)
 	return strings.Join(parts, "\x00")
 }

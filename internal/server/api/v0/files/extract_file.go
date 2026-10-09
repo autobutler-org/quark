@@ -58,7 +58,7 @@ func extractFile(c *gin.Context) *serverutil.Response {
 	// Non-zip types (rar/tar/7z/gz) require mholt/archiver OS-path handling,
 	// so those always fall through to StorageService.
 	if serial == "" && strings.ToLower(filepath.Ext(filePath)) == ".zip" {
-		if fsys := fileutil.FilesVFS(deps.VFSRegistry()); fsys != nil {
+		if fsys, err := fileutil.FilesVFS(deps.VFSRegistry(), ""); err == nil {
 			extracted, err := fileutil.ExtractZipVFS(c.Request.Context(), fsys, filePath)
 			if err != nil {
 				// The access log only ever showed the status code, so an

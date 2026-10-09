@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,19 +38,32 @@ func TestParseRecentLimit(t *testing.T) {
 	}
 }
 
-// --- SelectDevices ---
+// --- FilesVFS ---
 
-func TestSelectDevices(t *testing.T) {
-	devices := []storageutil.ManagedDevice{{FilesDir: "/tmp/internal/files"}}
+// FilesVFS picks the namespace by serial, and never answers an unknown serial
+// with the internal drive (#2642).
+func TestFilesVFSLooksUpTheDevice(t *testing.T) {
+	internal := vfs.NewMemVFS(vfs.FilesNamespace(""))
+	usb := vfs.NewMemVFS(vfs.FilesNamespace("USB-1"))
+	registry := registryWith(t, internal)
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("USB-1")}, usb); err != nil {
+		t.Fatal(err)
+	}
 
-	if got := fileutil.SelectDevices(devices, nil); len(got) != 1 {
-		t.Errorf("no serials should select every device, got %d", len(got))
+	if got, err := fileutil.FilesVFS(registry, ""); err != nil || got != internal {
+		t.Errorf("the empty serial: got %v, %v; want the internal drive", got, err)
 	}
-	if got := fileutil.SelectDevices(devices, []string{""}); len(got) != 1 {
-		t.Errorf("the empty serial should select the internal device, got %d", len(got))
+	if got, err := fileutil.FilesVFS(registry, "USB-1"); err != nil || got != usb {
+		t.Errorf("USB-1: got %v, %v; want its namespace", got, err)
 	}
-	if got := fileutil.SelectDevices(devices, []string{"NOPE"}); len(got) != 0 {
-		t.Errorf("an unknown serial should select nothing, got %d", len(got))
+	var notFound *fileutil.NotFoundError
+	if _, err := fileutil.FilesVFS(registry, "NOPE"); !errors.As(err, &notFound) || !errors.Is(err, fileutil.ErrNoDevice) {
+		t.Errorf("an unknown serial: got %v, want a NotFoundError wrapping ErrNoDevice", err)
+	}
+	for name, reg := range map[string]vfs.Registry{"nil": nil, "empty": vfs.NewRegistry()} {
+		if _, err := fileutil.FilesVFS(reg, "USB-1"); !errors.Is(err, fileutil.ErrNoFilesNamespace) {
+			t.Errorf("%s registry: got %v, want ErrNoFilesNamespace", name, err)
+		}
 	}
 }
 
@@ -203,30 +217,84 @@ func TestZipVFSDirTrimsABasePathInAnySpelling(t *testing.T) {
 	assertZipNames(t, zr, "My Folder/one.txt")
 }
 
-// --- ZipDir ---
+// --- ZipVFSDir on a device ---
 
-func TestZipDirWrapsEntriesInTheFolder(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+// A device folder zips through its namespace the way the internal drive's
+// does (#2642): the storage layer's own names stay out, and a symlink no
+// longer fails the whole download, as the os.DirFS walk that served devices
+// before made it. Whether a link's target goes in is the access check's call,
+// which TestDownloadDeviceFolderKeepsToWhatTheCallerReads covers.
+func TestZipVFSDirOnADevice(t *testing.T) {
+	mountPoint := t.TempDir()
+	filesDir := filepath.Join(mountPoint, "quark", "data", "files")
+	if err := os.MkdirAll(filepath.Join(filesDir, "folder", "sub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for name, content := range map[string]string{"one.txt": "one", "sub/two.txt": "two"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+	for name, content := range map[string]string{"folder/one.txt": "one", "folder/sub/two.txt": "two", "outside.txt": "secret"} {
+		if err := os.WriteFile(filepath.Join(filesDir, name), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-
-	var buf bytes.Buffer
-	if err := fileutil.ZipDir(&buf, dir, "My Folder"); err != nil {
-		t.Fatalf("ZipDir failed: %v", err)
+	if err := os.Symlink(filepath.Join(filesDir, "outside.txt"), filepath.Join(filesDir, "folder", "link.txt")); err != nil {
+		t.Fatal(err)
+	}
+	internalName := storageutil.WriteTempPrefix + "partial"
+	if err := os.WriteFile(filepath.Join(filesDir, "folder", internalName), []byte("partial"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 
+	svc := storageutil.NewStorageService(&oneUSBDetector{mountPoint: mountPoint, serial: "USB-ZIP"})
+	registry := vfs.NewRegistry()
+	if _, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{Registry: registry, Storage: svc}); err != nil {
+		t.Fatal(err)
+	}
+	fsys, ok := registry.Get(vfs.FilesNamespace("USB-ZIP"))
+	if !ok {
+		t.Fatal("the device namespace was not registered")
+	}
+	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	if err := fileutil.ZipVFSDir(context.Background(), fsys, "folder", "folder", system.Access, &buf); err != nil {
+		t.Fatalf("ZipVFSDir failed: %v", err)
+	}
 	zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
 	if err != nil {
 		t.Fatalf("the zip is unreadable: %v", err)
 	}
-	assertZipNames(t, zr, "My Folder/one.txt", "My Folder/sub/two.txt")
+	assertZipNames(t, zr, "folder/one.txt", "folder/sub/two.txt")
+	for _, f := range zr.File {
+		if strings.Contains(f.Name, storageutil.WriteTempPrefix) {
+			t.Errorf("internal name %q reached the archive", f.Name)
+		}
+	}
 }
+
+// oneUSBDetector presents a single USB device rooted at mountPoint.
+type oneUSBDetector struct {
+	mountPoint string
+	serial     string
+}
+
+func (d *oneUSBDetector) DetectDevices() ([]storageutil.Device, error) {
+	return []storageutil.Device{{
+		Name:       "USB Disk",
+		MountPoint: d.mountPoint,
+		UsbInfo:    serialUsbDevice{serial: d.serial},
+	}}, nil
+}
+
+// serialUsbDevice implements only GetSerial; any other call panics on the
+// nil embedded interface.
+type serialUsbDevice struct {
+	storageutil.UsbDevice
+	serial string
+}
+
+func (u serialUsbDevice) GetSerial() string { return u.serial }
 
 // --- helpers ---
 

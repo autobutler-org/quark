@@ -75,7 +75,6 @@ func (v *StorageServiceVFS) List(ctx context.Context, path string, filter *ListF
 	}
 
 	sawListing := false
-	sawNotFound := false
 
 	for _, device := range devices {
 		if full() {
@@ -95,15 +94,14 @@ func (v *StorageServiceVFS) List(ctx context.Context, path string, filter *ListF
 			if ctx != nil && ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
-			if path != "" {
-				sawNotFound = true
-			}
 			continue
 		}
 		sawListing = true
 	}
 
-	if path != "" && sawNotFound && !sawListing {
+	// A path no device produced — the device is gone, or never had it — is
+	// not found; only the namespace root lists empty.
+	if path != "" && !sawListing {
 		return nil, ErrNotFound
 	}
 

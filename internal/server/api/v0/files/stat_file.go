@@ -1,9 +1,12 @@
 package v0_files
 
 import (
+	"errors"
+
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
@@ -44,38 +47,23 @@ func statFile(c *gin.Context) *serverutil.Response {
 		return serverutil.NotFound(errNoAccess)
 	}
 
-	// VFS path: always preferred when available.
-	if reg := deps.VFSRegistry(); reg != nil {
-		if fsys, ok := reg.Get("files"); ok {
-			fi, err := fsys.Stat(c.Request.Context(), filePath)
-			if err != nil {
-				if err == vfs.ErrNotFound {
-					return serverutil.NotFound(err)
-				}
-				return serverutil.InternalServerError(err)
-			}
-			return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(StatFileJSON{
-				IsDir:    fi.IsDir,
-				FileType: string(storageutil.DetermineFileTypeFromPath(fi.Path)),
-				Name:     fi.Name,
-			})
-		}
-	}
-
-	// Fallback: StorageService direct call.
-	serial := c.Query("serial")
-	result, err := deps.StorageService().StatFile(storageutil.StatFileParams{
-		FilePath:     filePath,
-		DeviceSerial: serial,
-	})
+	// The namespace of the device the request names: the serial used to be
+	// dropped here, so a device path was stat-ed on the internal drive (#2642).
+	fsys, err := fileutil.FilesVFS(deps.VFSRegistry(), c.Query("serial"))
 	if err != nil {
+		return fileError(err)
+	}
+	fi, err := fsys.Stat(c.Request.Context(), filePath)
+	if errors.Is(err, vfs.ErrNotFound) {
 		return serverutil.NotFound(err)
 	}
-
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(StatFileJSON{
-		IsDir:    result.IsDir,
-		FileType: string(result.FileType),
-		Name:     result.Name,
+		IsDir:    fi.IsDir,
+		FileType: string(storageutil.DetermineFileTypeFromPath(fi.Path)),
+		Name:     fi.Name,
 	})
 }
 

@@ -66,9 +66,8 @@ func newHomesFixture(t *testing.T, aliceFiles, bobFiles int) homesFixture {
 		t.Fatal(err)
 	}
 	branches := map[string]SearchFilesParams{
-		"index":     {Index: index, Registry: registry, Storage: svc},
-		"vfs":       {Registry: registry, Storage: svc},
-		"disk walk": {Storage: svc},
+		"index": {Index: index, Registry: registry},
+		"vfs":   {Registry: registry},
 	}
 	for name, params := range branches {
 		params.Ctx = ctx

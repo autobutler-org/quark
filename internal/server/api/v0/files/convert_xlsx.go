@@ -56,7 +56,6 @@ func convertXlsx(c *gin.Context) *serverutil.Response {
 	result, err := fileutil.ConvertXlsxToQsheet(fileutil.ConvertXlsxParams{
 		Ctx:       c.Request.Context(),
 		Registry:  deps.VFSRegistry(),
-		Storage:   deps.StorageService(),
 		EventBus:  deps.EventBus(),
 		FilePath:  filePath,
 		Serial:    serial,

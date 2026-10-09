@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/pptxutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -18,11 +17,8 @@ import (
 type ExportPptxParams struct {
 	// Ctx bounds the reads.
 	Ctx context.Context
-	// Registry reads through the VFS when no serial routes past it.
+	// Registry holds the namespace of the device Serial names.
 	Registry vfs.Registry
-	// Storage serves the request for a device-scoped path, or when there is
-	// no VFS namespace to route to.
-	Storage *storageutil.StorageService
 	// FilePath is the files-relative path of the .qslide.
 	FilePath string
 	// Serial identifies the device, empty for the internal one. Pictures are
@@ -64,7 +60,7 @@ func ExportQslideToPptx(params ExportPptxParams) (ExportPptxResult, error) {
 		}
 	}
 
-	source, _, err := openExportFile(params.Ctx, params.Registry, params.Storage, params.FilePath, params.Serial)
+	source, _, err := openExportFile(params.Ctx, params.Registry, params.FilePath, params.Serial)
 	if err != nil {
 		return ExportPptxResult{}, err
 	}
@@ -78,7 +74,7 @@ func ExportQslideToPptx(params ExportPptxParams) (ExportPptxResult, error) {
 			if !ok || params.CanRead == nil || !params.CanRead(imagePath) {
 				return nil, 0, errNoSlideImage
 			}
-			return openExportFile(params.Ctx, params.Registry, params.Storage, imagePath, params.Serial)
+			return openExportFile(params.Ctx, params.Registry, imagePath, params.Serial)
 		},
 	})
 	if errors.Is(err, pptxutil.ErrNotQslide) || errors.Is(err, pptxutil.ErrTooLarge) {

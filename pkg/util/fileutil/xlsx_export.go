@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/xlsxutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -16,11 +15,8 @@ import (
 type ExportXlsxParams struct {
 	// Ctx bounds the read.
 	Ctx context.Context
-	// Registry reads through the VFS when no serial routes past it.
+	// Registry holds the namespace of the device Serial names.
 	Registry vfs.Registry
-	// Storage serves the request for a device-scoped path, or when there is
-	// no VFS namespace to route to.
-	Storage *storageutil.StorageService
 	// FilePath is the files-relative path of the .qsheet.
 	FilePath string
 	// Serial identifies the device, empty for the internal one.
@@ -55,7 +51,7 @@ func ExportQsheetToXlsx(params ExportXlsxParams) (ExportXlsxResult, error) {
 		}
 	}
 
-	source, _, err := openExportFile(params.Ctx, params.Registry, params.Storage, params.FilePath, params.Serial)
+	source, _, err := openExportFile(params.Ctx, params.Registry, params.FilePath, params.Serial)
 	if err != nil {
 		return ExportXlsxResult{}, err
 	}
@@ -73,45 +69,22 @@ func XlsxExportName(filePath string) string {
 }
 
 // openExportFile opens the file an export reads, as a stream, with its size
-// in bytes: through the VFS when no serial routes past it, through the storage
-// service otherwise.
-func openExportFile(
-	ctx context.Context, registry vfs.Registry, storage *storageutil.StorageService, filePath, serial string,
-) (io.ReadCloser, int64, error) {
-	if serial == "" {
-		if fsys := FilesVFS(registry); fsys != nil {
-			info, err := fsys.Stat(ctx, filePath)
-			if err != nil {
-				return nil, 0, notFound(err)
-			}
-			if info.IsDir {
-				return nil, 0, &UnsupportedError{Err: fmt.Errorf("not a file: %s", filePath)}
-			}
-			r, err := fsys.Open(ctx, filePath)
-			if err != nil {
-				return nil, 0, notFound(err)
-			}
-			return r, info.Size, nil
-		}
-	}
-	if storage == nil {
-		return nil, 0, ErrNoFilesNamespace
-	}
-	opened, err := OpenDownload(OpenDownloadParams{
-		Storage:  storage,
-		FilePath: filePath,
-		Serial:   serial,
-	})
+// in bytes, from the namespace of the device serial names.
+func openExportFile(ctx context.Context, registry vfs.Registry, filePath, serial string) (io.ReadCloser, int64, error) {
+	fsys, err := FilesVFS(registry, serial)
 	if err != nil {
 		return nil, 0, err
 	}
-	if opened.File == nil {
+	info, err := fsys.Stat(ctx, filePath)
+	if err != nil {
+		return nil, 0, notFound(err)
+	}
+	if info.IsDir {
 		return nil, 0, &UnsupportedError{Err: fmt.Errorf("not a file: %s", filePath)}
 	}
-	info, err := opened.File.Stat()
+	r, err := fsys.Open(ctx, filePath)
 	if err != nil {
-		_ = opened.File.Close()
-		return nil, 0, err
+		return nil, 0, notFound(err)
 	}
-	return opened.File, info.Size(), nil
+	return r, info.Size, nil
 }

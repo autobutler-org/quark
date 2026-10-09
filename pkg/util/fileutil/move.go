@@ -2,8 +2,11 @@ package fileutil
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"path"
+	"strings"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
@@ -14,11 +17,13 @@ import (
 
 // MoveFileParams moves or renames a file.
 type MoveFileParams struct {
-	// Ctx bounds the VFS move.
+	// Ctx bounds the move.
 	Ctx context.Context
-	// Registry moves through the VFS for a same-device rename.
+	// Registry holds the namespaces of the devices moved between.
 	Registry vfs.Registry
-	// Storage moves the file when a device serial routes past the VFS.
+	// Storage is ignored: every move goes through Registry (#2642). It stays
+	// only until the group folder rename stops passing it (#2648), and #2650
+	// removes it.
 	Storage *storageutil.StorageService
 	// EventBus is told where the file went.
 	EventBus *eventbus.Bus
@@ -29,7 +34,7 @@ type MoveFileParams struct {
 	OldFilePath string
 	NewFilePath string
 	// OldDeviceSerial and NewDeviceSerial name the devices, empty for the
-	// internal one. Either one set makes this a cross-device move.
+	// internal one. Two different serials make this a cross-device move.
 	OldDeviceSerial string
 	NewDeviceSerial string
 }
@@ -44,26 +49,8 @@ func MoveFile(params MoveFileParams) (MoveFileResult, error) {
 			return MoveFileResult{}, invalidPath(p)
 		}
 	}
-	// Use VFS.Move for same-device renames (no serials); fall through to StorageService for cross-device ops.
-	moved := false
-	if params.OldDeviceSerial == "" && params.NewDeviceSerial == "" {
-		if fsys := FilesVFS(params.Registry); fsys != nil {
-			if err := fsys.Move(params.Ctx, params.OldFilePath, params.NewFilePath); err != nil {
-				return MoveFileResult{}, err
-			}
-			moved = true
-		}
-	}
-
-	if !moved {
-		if _, err := params.Storage.MoveFile(storageutil.MoveFileParams{
-			OldFilePath:     params.OldFilePath,
-			NewFilePath:     params.NewFilePath,
-			OldDeviceSerial: params.OldDeviceSerial,
-			NewDeviceSerial: params.NewDeviceSerial,
-		}); err != nil {
-			return MoveFileResult{}, err
-		}
+	if err := movePath(params); err != nil {
+		return MoveFileResult{}, err
 	}
 
 	// The file has already moved, so a failure here is logged rather than
@@ -105,12 +92,10 @@ func MoveFile(params MoveFileParams) (MoveFileResult, error) {
 
 // CreateFolderParams creates one folder under an existing directory.
 type CreateFolderParams struct {
-	// Ctx bounds the VFS create.
+	// Ctx bounds the create.
 	Ctx context.Context
-	// Registry creates through the VFS when no serial routes past it.
+	// Registry holds the namespace of the device Serial names.
 	Registry vfs.Registry
-	// Storage creates the folder for a device-scoped request.
-	Storage *storageutil.StorageService
 	// EventBus is told about the new folder.
 	EventBus *eventbus.Bus
 	// FolderDir is the directory the folder is created in.
@@ -133,35 +118,106 @@ type CreateFolderResult struct {
 // CreateFolder creates a folder and announces it.
 func CreateFolder(params CreateFolderParams) (CreateFolderResult, error) {
 	folderPath := path.Join(params.FolderDir, params.FolderName)
-	existed, err := fileExists(params.Ctx, params.Registry, params.Storage, params.Serial, folderPath)
+	fsys, err := FilesVFS(params.Registry, params.Serial)
 	if err != nil {
 		return CreateFolderResult{}, err
 	}
-
-	// Use VFS.MkdirAll for no-serial folder creation; fall back for device-scoped ops.
-	created := false
-	if params.Serial == "" {
-		if fsys := FilesVFS(params.Registry); fsys != nil {
-			if err := fsys.MkdirAll(params.Ctx, folderPath); err != nil {
-				return CreateFolderResult{}, err
-			}
-			created = true
-		}
+	existed, err := exists(params.Ctx, fsys, folderPath)
+	if err != nil {
+		return CreateFolderResult{}, err
 	}
-
-	if !created {
-		if _, err := params.Storage.CreateFolder(storageutil.CreateFolderParams{
-			FolderDir:    params.FolderDir,
-			FolderName:   params.FolderName,
-			DeviceSerial: params.Serial,
-		}); err != nil {
-			return CreateFolderResult{}, err
-		}
+	if err := fsys.MkdirAll(params.Ctx, folderPath); err != nil {
+		return CreateFolderResult{}, err
 	}
 
 	params.EventBus.Publish(eventbus.Event{
-		Kind: eventbus.EventNewFolder,
-		Path: folderPath,
+		Kind:         eventbus.EventNewFolder,
+		Path:         folderPath,
+		DeviceSerial: params.Serial,
 	})
 	return CreateFolderResult{Path: folderPath, Created: !existed}, nil
+}
+
+// movePath moves the file or folder itself: a rename within one device's
+// namespace, or a copy and a delete between two.
+func movePath(params MoveFileParams) error {
+	src, err := FilesVFS(params.Registry, params.OldDeviceSerial)
+	if err != nil {
+		return err
+	}
+	if params.OldDeviceSerial == params.NewDeviceSerial {
+		return src.Move(params.Ctx, params.OldFilePath, params.NewFilePath)
+	}
+	dst, err := FilesVFS(params.Registry, params.NewDeviceSerial)
+	if err != nil {
+		return err
+	}
+	return moveBetween(params.Ctx, src, params.OldFilePath, dst, params.NewFilePath)
+}
+
+// moveBetween moves srcPath in src to dstPath in dst, two devices a rename
+// cannot cross. Every file goes over through [vfs.CopyBetween], which lands it
+// under its name only once it is whole, and the source goes only after
+// everything has been copied: a move that fails partway leaves the source as
+// it was and no half-written file under the destination.
+//
+// A file replaces a file already at dstPath, as a rename does. A folder is
+// refused with [vfs.ErrConflict] when dstPath is taken, where a rename onto a
+// folder with anything in it fails too.
+func moveBetween(ctx context.Context, src vfs.VFS, srcPath string, dst vfs.VFS, dstPath string) error {
+	info, err := src.Stat(ctx, srcPath)
+	if err != nil {
+		return err
+	}
+	if info.IsDir {
+		taken, err := exists(ctx, dst, dstPath)
+		if err != nil {
+			return err
+		}
+		if taken {
+			return fmt.Errorf("%w: %s already exists", vfs.ErrConflict, dstPath)
+		}
+	}
+	if parent := path.Dir(cleanRelPath(dstPath)); parent != "." {
+		if err := dst.MkdirAll(ctx, parent); err != nil {
+			return err
+		}
+	}
+	if !info.IsDir {
+		if err := vfs.CopyBetween(ctx, src, srcPath, dst, dstPath, vfs.CopyOptions{}); err != nil {
+			return err
+		}
+		return src.Delete(ctx, srcPath, vfs.DeleteOptions{})
+	}
+
+	entries, err := src.List(ctx, srcPath, &vfs.ListFilter{Recursive: true})
+	if err != nil {
+		return err
+	}
+	if err := dst.MkdirAll(ctx, dstPath); err != nil {
+		return err
+	}
+	base := cleanRelPath(srcPath)
+	for _, entry := range entries {
+		rel := strings.TrimPrefix(strings.TrimPrefix(entry.Path, base), "/")
+		target := path.Join(dstPath, rel)
+		if entry.IsDir {
+			err = dst.MkdirAll(ctx, target)
+		} else {
+			err = vfs.CopyBetween(ctx, src, entry.Path, dst, target, vfs.CopyOptions{IfNoneMatch: "*"})
+		}
+		if err != nil {
+			return fmt.Errorf("move %s: %w", entry.Path, err)
+		}
+	}
+	return src.Delete(ctx, srcPath, vfs.DeleteOptions{Recursive: true})
+}
+
+// exists reports whether something occupies p in fsys.
+func exists(ctx context.Context, fsys vfs.VFS, p string) (bool, error) {
+	_, err := fsys.Stat(ctx, p)
+	if errors.Is(err, vfs.ErrNotFound) {
+		return false, nil
+	}
+	return err == nil, err
 }

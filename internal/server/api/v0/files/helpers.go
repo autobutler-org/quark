@@ -2,7 +2,6 @@ package v0_files
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -15,7 +14,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
-	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/uploadutil"
@@ -162,87 +160,6 @@ func acquireZipSlot(c *gin.Context, deps deputil.Dependencies, p string) (releas
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "server busy, please retry"})
 	}
 	return release, ok
-}
-
-// downloadFileVFS handles file downloads via the VFS layer.
-// RAW files (needing OS path for dcraw/LibRaw) are excluded before calling this.
-func downloadFileVFS(c *gin.Context, deps deputil.Dependencies, fsys vfs.VFS, access accessutil.Access, filePath string, wantsJPEG bool) *serverutil.Response {
-	ctx := c.Request.Context()
-
-	opened, err := fileutil.OpenVFSDownload(fileutil.OpenVFSDownloadParams{
-		Ctx:       ctx,
-		FS:        fsys,
-		FilePath:  filePath,
-		WantsJPEG: wantsJPEG,
-	})
-	if err != nil {
-		return fileError(err)
-	}
-
-	switch opened.Kind {
-	case fileutil.DownloadFolder:
-		release, ok := acquireZipSlot(c, deps, filePath)
-		if !ok {
-			return nil
-		}
-		defer release()
-		// Zip and stream the directory contents.
-		c.Writer.Header().Set("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("attachment; filename=%q", opened.FileName)))
-		c.Writer.Header().Set("Content-Type", "application/octet-stream")
-		if err := fileutil.ZipVFSDir(ctx, fsys, filePath, strings.TrimSuffix(opened.FileName, ".zip"), access, c.Writer); err != nil {
-			return zipError(c, filePath, err)
-		}
-		return nil
-
-	case fileutil.DownloadJPEG:
-		// Acquire IO semaphore for JPEG conversion.
-		if sem := deps.IOSemaphore().For(iosemutil.Decode); sem != nil {
-			if !sem.AcquireDefault(ctx) {
-				slog.Warn("download: IO semaphore timed out for VFS JPEG conversion",
-					"path", filePath,
-					"available", sem.Available(),
-					"cap", sem.Cap(),
-				)
-				c.Header("Retry-After", "5")
-				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "server busy, please retry"})
-				return nil
-			}
-			defer sem.Release()
-		}
-
-		r, err := fsys.Open(ctx, filePath)
-		if err != nil {
-			return serverutil.NotFound(err)
-		}
-		defer r.Close()
-
-		img, err := fileutil.DecodeImage(r)
-		if err != nil {
-			return decodeError(err)
-		}
-
-		c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))
-		c.Header("Content-Type", opened.ContentType)
-		c.Status(http.StatusOK)
-		if err := fileutil.EncodeJPEG(c.Writer, img); err != nil {
-			slog.Error("download: VFS JPEG stream encode failed", "path", filePath, "err", err)
-		}
-		return nil
-	}
-
-	r, err := fsys.Open(ctx, filePath)
-	if err != nil {
-		return serverutil.NotFound(err)
-	}
-	defer r.Close()
-
-	c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))
-	c.Header("Content-Type", opened.ContentType)
-
-	// A vfs.File seeks, so http.ServeContent honors HTTP range requests
-	// (RFC 7233) — required for video seeking and resumable downloads.
-	http.ServeContent(c.Writer, c.Request, opened.Info.Name, opened.Info.ModTime, r)
-	return nil
 }
 
 // uploadDestination is where an upload lands, for both the multipart endpoint

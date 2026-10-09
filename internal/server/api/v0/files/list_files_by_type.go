@@ -41,7 +41,6 @@ func listFilesByType(c *gin.Context) *serverutil.Response {
 	result, err := fileutil.ListByType(fileutil.ListByTypeParams{
 		Ctx:      c.Request.Context(),
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		Serials:  c.QueryArray("serial"),
 		Access:   access,
 		FileType: storageutil.FileType(fileTypeParam),

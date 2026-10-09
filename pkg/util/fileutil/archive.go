@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/fs"
 	"log"
-	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -48,7 +47,7 @@ type ListArchiveResult struct {
 func ListArchive(params ListArchiveParams) (ListArchiveResult, error) {
 	// VFS path: only when no serial is provided.
 	if params.Serial == "" {
-		if fsys := FilesVFS(params.Registry); fsys != nil {
+		if fsys, err := FilesVFS(params.Registry, ""); err == nil {
 			return listArchiveVFS(params, fsys)
 		}
 	}
@@ -260,11 +259,13 @@ func OpenArchiveEntry(params OpenArchiveEntryParams) (OpenArchiveEntryResult, er
 
 // FindArchiveParams asks whether a files path names an entry inside an archive.
 type FindArchiveParams struct {
-	// Ctx bounds the VFS stat.
+	// Ctx bounds the stat.
 	Ctx context.Context
-	// Registry serves the stat when no serial routes past it.
+	// Registry holds the namespace of the device Serial names.
 	Registry vfs.Registry
-	// Storage resolves the path for a device-scoped request.
+	// Storage is ignored: the stat goes through Registry (#2642). It stays
+	// only until the thumbnail handler stops passing it (#2645), and #2650
+	// removes it.
 	Storage *storageutil.StorageService
 	// FilePath is the requested path, relative to the device files directory.
 	FilePath string
@@ -314,46 +315,33 @@ func FindArchive(params FindArchiveParams) (FindArchiveResult, error) {
 	return FindArchiveResult{}, nil
 }
 
-// statFilesPath stats a files path the way OpenArchiveEntry reads it: through
-// the VFS when no serial routes past it, otherwise through the StorageService.
-// A path that does not resolve is nil with no error; the caller's own lookup
-// of the full path reports it.
+// statFilesPath stats a files path on the namespace of the device the request
+// names. A path that does not resolve — on a device that is not attached, too
+// — is nil with no error; the caller's own lookup of the full path reports it.
 func statFilesPath(params FindArchiveParams, filePath string) (*vfs.FileInfo, error) {
-	if params.Serial == "" {
-		if fsys := FilesVFS(params.Registry); fsys != nil {
-			info, err := fsys.Stat(params.Ctx, filePath)
-			if errors.Is(err, vfs.ErrNotFound) || storageutil.IsNotExist(err) {
-				return nil, nil
-			}
-			if err != nil {
-				return nil, fmt.Errorf("failed to stat %s: %w", filePath, err)
-			}
-			return &info, nil
-		}
-	}
-
-	resolved, err := params.Storage.DownloadFile(storageutil.DownloadFileParams{
-		FilePath:     filePath,
-		DeviceSerial: params.Serial,
-	})
-	if err != nil {
+	fsys, err := FilesVFS(params.Registry, params.Serial)
+	var notFound *NotFoundError
+	if errors.As(err, &notFound) {
 		return nil, nil
 	}
-	info, err := os.Stat(resolved.FullPath)
-	if storageutil.IsNotExist(err) {
+	if err != nil {
+		return nil, err
+	}
+	info, err := fsys.Stat(params.Ctx, filePath)
+	if errors.Is(err, vfs.ErrNotFound) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat %s: %w", filePath, err)
 	}
-	return &vfs.FileInfo{IsDir: info.IsDir(), ModTime: info.ModTime()}, nil
+	return &info, nil
 }
 
 // openArchiveEntryStream finds an entry and opens its decompressed stream.
 func openArchiveEntryStream(params OpenArchiveEntryParams) (OpenArchiveEntryResult, error) {
 	// VFS path: only when no serial is provided.
 	if params.Serial == "" {
-		if fsys := FilesVFS(params.Registry); fsys != nil {
+		if fsys, err := FilesVFS(params.Registry, ""); err == nil {
 			return openArchiveEntryVFS(params, fsys)
 		}
 	}

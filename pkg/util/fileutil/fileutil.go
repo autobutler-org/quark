@@ -3,9 +3,9 @@
 // download pipeline that zips a folder or re-encodes an image on its way out,
 // and the mutations (delete, move, new folder) the browser sends back.
 //
-// Every entry point takes the two sources these endpoints have always had —
-// the VFS namespace when one is registered, the StorageService walking managed
-// devices otherwise — and makes that choice here rather than in a handler.
+// Every entry point reads and writes through the VFS registry, which holds one
+// namespace per managed device (#2639): a request's serial picks the namespace
+// with [FilesVFS], and an unscoped listing fans out over all of them (#2642).
 //
 // HTTP concerns stay with the caller: [NotFoundError] and [ErrNoFilesNamespace]
 // are what a status code is derived from, and the response headers, the IO
@@ -16,18 +16,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
-
-// filesNamespace is the VFS namespace holding the local file store. Registered
-// by deputil.DefaultDependencies; absent in older deployments and in tests that
-// exercise the StorageService directly.
-const filesNamespace = "files"
-
-// DefaultDeviceSerial is the serial the internal (non-USB) device is reported
-// under: it has no USB descriptor to take one from.
-const DefaultDeviceSerial = ""
 
 // FileNode is a file or folder as the listing endpoints report it.
 type FileNode struct {
@@ -83,44 +73,28 @@ func (e *InvalidRequestError) Error() string { return e.Err.Error() }
 
 func (e *InvalidRequestError) Unwrap() error { return e.Err }
 
-// FilesVFS returns the VFS backing the local files namespace, or nil when
-// there is none to route to and the StorageService has to serve the request.
-func FilesVFS(registry vfs.Registry) vfs.VFS {
+// ErrNoDevice reports a serial with no files namespace: a storage device that
+// is not attached. The handler answers it with 404.
+var ErrNoDevice = errors.New("storage device not found")
+
+// FilesVFS returns the namespace holding the files of the device with this
+// serial, the internal drive's for the empty serial. A registry without the
+// internal drive's namespace is [ErrNoFilesNamespace]; a serial with no
+// namespace of its own is a [NotFoundError] wrapping [ErrNoDevice], never the
+// internal drive.
+func FilesVFS(registry vfs.Registry, serial string) (vfs.VFS, error) {
 	if registry == nil {
-		return nil
+		return nil, ErrNoFilesNamespace
 	}
-	fsys, ok := registry.Get(filesNamespace)
-	if !ok {
-		return nil
+	fsys, ok := registry.Get(vfs.FilesNamespace(serial))
+	switch {
+	case ok:
+		return fsys, nil
+	case serial == "":
+		return nil, ErrNoFilesNamespace
 	}
-	return fsys
-}
-
-// DeviceSerial reports the serial a managed device is addressed by. The
-// internal device has no USB descriptor, so it answers to the empty serial.
-func DeviceSerial(device storageutil.ManagedDevice) string {
-	if device.UsbInfo != nil {
-		return device.UsbInfo.GetSerial()
+	if _, ok := registry.Get(vfs.FilesNamespace("")); !ok {
+		return nil, ErrNoFilesNamespace
 	}
-	return DefaultDeviceSerial
-}
-
-// SelectDevices narrows the managed devices to the requested serials. No
-// serials at all means every device, which is what an unscoped listing wants.
-func SelectDevices(devices []storageutil.ManagedDevice, serials []string) []storageutil.ManagedDevice {
-	if len(serials) == 0 {
-		return devices
-	}
-	// Build a set for quick lookup
-	serialSet := make(map[string]bool, len(serials))
-	for _, s := range serials {
-		serialSet[s] = true
-	}
-	var selected []storageutil.ManagedDevice
-	for _, d := range devices {
-		if serialSet[DeviceSerial(d)] {
-			selected = append(selected, d)
-		}
-	}
-	return selected
+	return nil, notFound(ErrNoDevice)
 }

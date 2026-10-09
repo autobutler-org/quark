@@ -71,14 +71,14 @@ func favorite(t *testing.T, q *db.Queries, userID int64, serial, relPath string)
 // that already had rows and a sibling folder sharing the moved folder's prefix.
 func TestMoveFileCarriesFavoritesAndAlbumItems(t *testing.T) {
 	ctx := context.Background()
-	fsys := vfs.NewMemVFS(filesNamespace)
+	fsys := vfs.NewMemVFS(vfs.FilesNamespace(""))
 	for _, p := range []string{"a.jpg", "trip/b.jpg", "trip/sub/c.jpg", "trips/d.jpg"} {
 		if err := fsys.Write(ctx, p, strings.NewReader("x"), vfs.WriteOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	registry := vfs.NewRegistry()
-	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, fsys); err != nil {
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, fsys); err != nil {
 		t.Fatal(err)
 	}
 	database := dbtest.NewDB(t)
@@ -230,14 +230,14 @@ func hashPhoto(t *testing.T, q *db.Queries, serial, relPath string) {
 // so the duplicates view never lists a path that is no longer there (#1666).
 func TestMoveFileDropsPhotoHashes(t *testing.T) {
 	ctx := context.Background()
-	fsys := vfs.NewMemVFS(filesNamespace)
+	fsys := vfs.NewMemVFS(vfs.FilesNamespace(""))
 	for _, p := range []string{"a.jpg", "trip/b.jpg", "trips/c.jpg"} {
 		if err := fsys.Write(ctx, p, strings.NewReader("x"), vfs.WriteOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	registry := vfs.NewRegistry()
-	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, fsys); err != nil {
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, fsys); err != nil {
 		t.Fatal(err)
 	}
 	database := dbtest.NewDB(t)

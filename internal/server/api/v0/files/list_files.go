@@ -37,7 +37,6 @@ func listFiles(c *gin.Context) *serverutil.Response {
 	result, err := fileutil.ListFiles(fileutil.ListFilesParams{
 		Ctx:      c.Request.Context(),
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		Access:   access,
 		RootDir:  c.Query("rootDir"),
 		Serials:  c.QueryArray("serial"),

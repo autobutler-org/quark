@@ -390,8 +390,8 @@ func (s *Store) handleEvent(params WatchParams, evt eventbus.Event) {
 	if evt.DeviceSerial != "" {
 		return
 	}
-	fsys := fileutil.FilesVFS(params.Registry)
-	if fsys == nil {
+	fsys, err := fileutil.FilesVFS(params.Registry, "")
+	if err != nil {
 		return
 	}
 	ctx := context.Background()

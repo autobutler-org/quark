@@ -11,7 +11,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
-	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
 	"github.com/gin-gonic/gin"
@@ -62,33 +61,27 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 	// be revalidated, and both serving paths answer If-Modified-Since with a 304.
 	c.Header("Cache-Control", "no-cache")
 
-	// VFS path: only when serial is empty (no device routing needed) and not a
-	// RAW file needing OS-path conversion. RAW → JPEG requires dcraw/LibRaw which
-	// only works with a real filesystem path, so those always fall through to
-	// StorageService even when VFS is present.
-	if serial == "" && (!wantsJPEG || !photoutil.IsRawFile(filePath)) {
-		if fsys := fileutil.FilesVFS(deps.VFSRegistry()); fsys != nil {
-			return downloadFileVFS(c, deps, fsys, access, filePath, wantsJPEG)
-		}
+	// One path for every device: the namespace of the device the request
+	// names (#2642). A RAW file asked for as JPEG is the one case that needs a
+	// host path, which the namespace hands over for the conversion tool.
+	fsys, err := fileutil.FilesVFS(deps.VFSRegistry(), serial)
+	if err != nil {
+		return fileError(err)
 	}
-
-	// StorageService fallback (serial routing, RAW conversion, etc.)
-	opened, err := fileutil.OpenDownload(fileutil.OpenDownloadParams{
-		Storage:   deps.StorageService(),
+	ctx := c.Request.Context()
+	opened, err := fileutil.OpenVFSDownload(fileutil.OpenVFSDownloadParams{
+		Ctx:       ctx,
+		FS:        fsys,
 		FilePath:  filePath,
-		Serial:    serial,
 		WantsJPEG: wantsJPEG,
 	})
 	if err != nil {
 		return fileError(err)
 	}
-	if opened.File != nil {
-		defer opened.File.Close()
-	}
 
 	switch opened.Kind {
 	case fileutil.DownloadFolder:
-		release, ok := acquireZipSlot(c, deps, opened.FullPath)
+		release, ok := acquireZipSlot(c, deps, filePath)
 		if !ok {
 			return nil
 		}
@@ -98,10 +91,10 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 		// client and the download landed with no .zip extension.
 		c.Writer.Header().Set("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("attachment; filename=%q", opened.FileName)))
 		c.Writer.Header().Set("Content-Type", "application/octet-stream")
-		if err := fileutil.ZipDir(c.Writer, opened.FullPath, strings.TrimSuffix(opened.FileName, ".zip")); err != nil {
-			return zipError(c, opened.FullPath, err)
+		if err := fileutil.ZipVFSDir(ctx, fsys, filePath, strings.TrimSuffix(opened.FileName, ".zip"), access, c.Writer); err != nil {
+			return zipError(c, filePath, err)
 		}
-		return nil // response written directly to writer
+		return nil
 
 	case fileutil.DownloadRawJPEG, fileutil.DownloadJPEG:
 		// Acquire IO semaphore: JPEG conversion is the most memory-intensive IO
@@ -113,9 +106,9 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 			class = iosemutil.Raw
 		}
 		if sem := deps.IOSemaphore().For(class); sem != nil {
-			if !sem.AcquireDefault(c.Request.Context()) {
+			if !sem.AcquireDefault(ctx) {
 				slog.Warn("download: IO semaphore timed out for JPEG conversion",
-					"path", opened.FullPath,
+					"path", filePath,
 					"available", sem.Available(),
 					"cap", sem.Cap(),
 				)
@@ -133,34 +126,48 @@ func downloadFile(c *gin.Context) *serverutil.Response {
 			// that a mid-encode failure arrives after the headers, so it can
 			// only be logged — same as the branch below.
 			c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))
-			c.Header("Content-Type", "image/jpeg")
+			c.Header("Content-Type", opened.ContentType)
 			c.Status(http.StatusOK)
-			if err := fileutil.WriteRawJPEG(c.Writer, opened.FullPath); err != nil {
-				slog.Error("download: RAW to JPEG stream failed", "path", opened.FullPath, "err", err)
+			if err := fileutil.WriteRawJPEG(c.Writer, opened.HostPath); err != nil {
+				slog.Error("download: RAW to JPEG stream failed", "path", filePath, "err", err)
 			}
 			return nil
 		}
 
-		img, err := fileutil.DecodeImage(opened.File)
+		r, err := fsys.Open(ctx, filePath)
+		if err != nil {
+			return serverutil.NotFound(err)
+		}
+		defer r.Close()
+
+		img, err := fileutil.DecodeImage(r)
 		if err != nil {
 			return decodeError(err)
 		}
 
 		c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))
-		c.Header("Content-Type", "image/jpeg")
+		c.Header("Content-Type", opened.ContentType)
 		c.Status(http.StatusOK)
 		if err := fileutil.EncodeJPEG(c.Writer, img); err != nil {
 			// Headers already committed; log only.
-			slog.Error("download: JPEG stream encode failed", "path", opened.FullPath, "err", err)
+			slog.Error("download: JPEG stream encode failed", "path", filePath, "err", err)
 		}
 		return nil
 	}
 
-	opened.File.Close() // close before c.File re-opens it
+	r, err := fsys.Open(ctx, filePath)
+	if err != nil {
+		return serverutil.NotFound(err)
+	}
+	defer r.Close()
+
 	c.Header("Content-Disposition", contentDisposition(c, opened.FileName, fmt.Sprintf("inline; filename=%s", opened.FileName)))
 	c.Header("Content-Type", opened.ContentType)
-	c.File(opened.FullPath)
-	return nil // response written directly via c.File
+
+	// A vfs.File seeks, so http.ServeContent honors HTTP range requests
+	// (RFC 7233) — required for video seeking and resumable downloads.
+	http.ServeContent(c.Writer, c.Request, opened.Info.Name, opened.Info.ModTime, r)
+	return nil
 }
 
 var downloadFileRoute = serverutil.ApiRoute(
