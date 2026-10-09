@@ -121,3 +121,19 @@ func TestListSharedWithMeNeedsADatabase(t *testing.T) {
 		t.Errorf("ListSharedWithMe with no database = %v, want ErrNoDatabase", err)
 	}
 }
+
+// TestListSharedWithMeLabelsAnOwnerAtTheRoot: an owner row on the files root
+// itself still labels a share beneath it.
+func TestListSharedWithMeLabelsAnOwnerAtTheRoot(t *testing.T) {
+	f := newFixture(t)
+	alice := createUser(t, f.database, "alice")
+	f.grant(t, alice, "", "", accessutil.Owner)
+	f.grant(t, f.userID, "", "Trip", accessutil.Read)
+
+	want := []accessutil.SharedItem{
+		{RelPath: "Trip", Level: "read", Owner: "alice"},
+	}
+	if got := f.sharedWithMe(t, accessutil.Principal{UserID: f.userID}, "bob"); !reflect.DeepEqual(got, want) {
+		t.Errorf("shared with bob = %+v, want %+v", got, want)
+	}
+}

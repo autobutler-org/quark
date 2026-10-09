@@ -291,3 +291,44 @@ func TestStructuralRootsCannotBeShared(t *testing.T) {
 		t.Errorf("admin removes a row already on users: %v", err)
 	}
 }
+
+// TestGrantsListEveryoneFirstAndTheNearestOfEqualGrants: direct grants put
+// the everyone group first even when an account's name sorts before it, and of
+// two inherited grants at the same level the one on the nearer folder is shown.
+func TestGrantsListEveryoneFirstAndTheNearestOfEqualGrants(t *testing.T) {
+	s := newSharing(t)
+	ctx := context.Background()
+	aaron := createUser(t, s.database, "aaron")
+	carol := createUser(t, s.database, "carol")
+	var everyone int64
+	if err := s.database.Db.QueryRow(`SELECT id FROM groups WHERE builtin = 1`).Scan(&everyone); err != nil {
+		t.Fatal(err)
+	}
+	s.grant(t, s.userID, "", "family", accessutil.Owner)
+	s.grant(t, aaron, "", "family/sub", accessutil.Read)
+	if err := s.database.Queries.SetGroupPathAccess(ctx, db.SetGroupPathAccessParams{
+		RelPath: "family/sub", GroupID: sql.NullInt64{Int64: everyone, Valid: true}, Level: "read",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s.grant(t, carol, "", "", accessutil.Read)
+	s.grant(t, carol, "", "family", accessutil.Read)
+	bob := s.as(t, s.userID)
+
+	result, err := s.list(t, bob, "family/sub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Grants) < 2 || !result.Grants[0].Builtin || result.Grants[1].UserID != aaron {
+		t.Errorf("direct grants = %+v, want everyone first, then aaron", result.Grants)
+	}
+	var carolFrom []string
+	for _, grant := range result.Grants {
+		if grant.UserID == carol {
+			carolFrom = append(carolFrom, grant.From)
+		}
+	}
+	if len(carolFrom) != 1 || carolFrom[0] != "family" {
+		t.Errorf("carol's inherited grant comes from %v, want only the nearer family", carolFrom)
+	}
+}

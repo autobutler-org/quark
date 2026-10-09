@@ -156,3 +156,40 @@ func TestCacheIsBounded(t *testing.T) {
 		t.Fatalf("Refills() = %d, want 3: bob was evicted for carol", got)
 	}
 }
+
+// TestCacheHoldsUpToItsCapacity: a cache of two keeps two accounts, so asking
+// for both again goes to the database for neither.
+func TestCacheHoldsUpToItsCapacity(t *testing.T) {
+	f := newFixture(t)
+	carol := createUser(t, f.database, "carol")
+	bus := eventbus.New()
+	cache := accessutil.NewCache(accessutil.CacheParams{Capacity: 2})
+	bus.Publish(eventbus.Event{Kind: eventbus.EventAccessChanged})
+	seq := bus.Seq()
+
+	f.get(t, cache, bus, f.userID, seq)
+	f.get(t, cache, bus, carol, seq)
+	f.get(t, cache, bus, f.userID, seq)
+	f.get(t, cache, bus, carol, seq)
+	if got := cache.Refills(); got != 2 {
+		t.Fatalf("Refills() = %d, want 2: both accounts fit", got)
+	}
+}
+
+// TestCacheRefillCoversEventsAlreadyOnTheBus: a refill asked for an older
+// event is tagged with the newest one already published, so asking about that
+// newest event next needs no second load.
+func TestCacheRefillCoversEventsAlreadyOnTheBus(t *testing.T) {
+	f := newFixture(t)
+	bus := eventbus.New()
+	cache := accessutil.NewCache(accessutil.CacheParams{})
+	for range 3 {
+		bus.Publish(eventbus.Event{Kind: eventbus.EventAccessChanged})
+	}
+
+	f.get(t, cache, bus, f.userID, bus.Seq()-2)
+	f.get(t, cache, bus, f.userID, bus.Seq())
+	if got := cache.Refills(); got != 1 {
+		t.Fatalf("Refills() = %d, want 1: the first load already saw every event", got)
+	}
+}
