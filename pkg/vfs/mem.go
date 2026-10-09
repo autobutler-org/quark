@@ -193,6 +193,9 @@ func (m *MemVFS) Open(ctx context.Context, path string) (File, error) {
 	p := cleanPath(path)
 	entry, ok := m.files[p]
 	if !ok {
+		if m.dirs[p] {
+			return nil, ErrIsDirectory
+		}
 		return nil, ErrNotFound
 	}
 	return bytesFile{bytes.NewReader(entry.data)}, nil
@@ -245,12 +248,16 @@ func (m *MemVFS) Write(ctx context.Context, path string, r io.Reader, opts Write
 	return nil
 }
 
-// Delete removes the file or directory at the given path.
+// Delete removes the file or directory at the given path. The root is
+// [ErrPermissionDenied].
 func (m *MemVFS) Delete(ctx context.Context, path string, opts DeleteOptions) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	p := cleanPath(path)
+	if p == "" {
+		return ErrPermissionDenied
+	}
 
 	// Check if it's a file
 	if _, ok := m.files[p]; ok {

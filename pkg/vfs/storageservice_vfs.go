@@ -2,7 +2,6 @@ package vfs
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"io/fs"
 	"mime"
@@ -218,94 +217,75 @@ func mimeTypeForName(name string) string {
 	return mime.TypeByExtension(ext)
 }
 
-// Stat returns metadata for a single path.
+// Stat returns metadata for a single path. Only a path that does not exist
+// is [ErrNotFound]; a permission failure is [ErrPermissionDenied] (#2640).
 func (v *StorageServiceVFS) Stat(_ context.Context, path string) (FileInfo, error) {
-	if err := v.attached(); err != nil {
+	absPath, err := v.resolve(path)
+	if err != nil {
 		return FileInfo{}, err
 	}
-	result, err := v.svc.StatFile(storageutil.StatFileParams{FilePath: path, DeviceSerial: v.serial})
+	fi, err := os.Stat(absPath)
 	if err != nil {
-		return FileInfo{}, ErrNotFound
+		return FileInfo{}, hostErr(err)
 	}
-	mimeType := mimeTypeForName(result.Name)
 	return FileInfo{
-		Name:      result.Name,
+		Name:      fi.Name(),
 		Path:      cleanPath(path),
-		IsDir:     result.IsDir,
-		Size:      result.Size,
-		ModTime:   result.ModTime,
-		MimeType:  mimeType,
+		IsDir:     fi.IsDir(),
+		Size:      fi.Size(),
+		ModTime:   fi.ModTime(),
+		MimeType:  mimeTypeForName(fi.Name()),
 		Namespace: v.namespaceID,
 	}, nil
 }
 
-// Open returns a reader for the file at the given path.
+// Open returns the file at the given path. It resolves the path the way Stat
+// and Write do, against the managed device's files directory, which may differ
+// from the default one — see #1538, where re-deriving from GetFilesDir() made
+// Stat and Open disagree and downloads returned an empty body. A directory is
+// [ErrIsDirectory].
 func (v *StorageServiceVFS) Open(_ context.Context, path string) (File, error) {
-	if err := v.attached(); err != nil {
+	absPath, err := v.resolve(path)
+	if err != nil {
 		return nil, err
 	}
-	result, err := v.svc.DownloadFile(storageutil.DownloadFileParams{FilePath: path, DeviceSerial: v.serial})
-	if err != nil {
-		return nil, ErrNotFound
-	}
-	if result.IsFolder {
-		return nil, ErrNotFound
-	}
-	// Use the path DownloadFile already resolved. It accounts for the managed
-	// device's files directory, which may differ from the default one — see
-	// #1538, where re-deriving from GetFilesDir() here made Stat and Open
-	// disagree and downloads returned an empty body.
-	//
-	// DownloadFile validates via safeJoin internally; Clean again so static
-	// analyzers (CodeQL go/path-injection) can follow the traversal guard
-	// rather than seeing tainted data reach os.Open.
-	safePath := filepath.Clean(result.FullPath)
-	f, err := os.Open(safePath) //nolint:gosec // path validated by DownloadFile's safeJoin + Clean
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("open %s: %w", path, err)
-	}
-	return f, nil
+	return hostOpen(absPath)
 }
 
 // Write writes a file into the files directory of the managed device that
 // backs this namespace. The internal namespace falls back to the default files
-// directory when no device is present; a device namespace does not. Resolving the same way Stat and Open do keeps a written
-// file findable by a subsequent read (#1538).
+// directory when no device is present; a device namespace does not. Resolving
+// the same way Stat and Open do keeps a written file findable by a subsequent
+// read (#1538).
 //
 // The bytes stream into a temp file beside the destination and are renamed
 // into place: writing straight to the real name put a growing, half-written
-// file in every listing for the length of an upload (#1828).
+// file in every listing for the length of an upload (#1828). With IfNoneMatch
+// "*" a taken name is refused in the same step (#2640).
 func (v *StorageServiceVFS) Write(_ context.Context, path string, r io.Reader, opts WriteOptions) error {
-	safePath, err := v.writePath(path)
+	absPath, err := v.resolve(path)
 	if err != nil {
 		return err
 	}
-	if opts.IfNoneMatch == "*" {
-		if _, statErr := os.Stat(safePath); statErr == nil {
-			return ErrConflict
-		}
-	}
-	return storageutil.WriteFileAtomic(safePath, r)
+	return hostWrite(absPath, r, opts)
 }
 
 // MoveFileIn places the host file at srcAbs at path, renaming it rather than
 // copying it when it can. See [FileMover].
 func (v *StorageServiceVFS) MoveFileIn(ctx context.Context, srcAbs string, path string, opts WriteOptions) error {
-	safePath, err := v.writePath(path)
+	absPath, err := v.resolve(path)
 	if err != nil {
 		return err
 	}
-	return moveFileIn(srcAbs, safePath, opts, func(r io.Reader) error {
+	return moveFileIn(srcAbs, absPath, opts, func(r io.Reader) error {
 		return v.Write(ctx, path, r, opts)
 	})
 }
 
-// writePath resolves a namespace path to the host path Write and MoveFileIn
-// put it at.
-func (v *StorageServiceVFS) writePath(path string) (string, error) {
+// resolve turns a namespace path into the host path under this namespace's
+// files directory. A path escaping it is [ErrPermissionDenied]; a device
+// namespace whose device is gone is [ErrNotFound].
+func (v *StorageServiceVFS) resolve(path string) (string, error) {
 	filesDir, err := v.filesDir()
 	if err != nil {
 		return "", err
@@ -319,16 +299,18 @@ func (v *StorageServiceVFS) writePath(path string) (string, error) {
 	return filepath.Clean(safePath), nil
 }
 
-// Delete removes one or more files via the StorageService.
-func (v *StorageServiceVFS) Delete(_ context.Context, path string, _ DeleteOptions) error {
-	if err := v.attached(); err != nil {
+// Delete removes the file or directory at path. A directory with entries is
+// [ErrNotEmpty] unless opts.Recursive is set, and the namespace root is
+// [ErrPermissionDenied].
+func (v *StorageServiceVFS) Delete(_ context.Context, path string, opts DeleteOptions) error {
+	if cleanPath(path) == "" {
+		return ErrPermissionDenied
+	}
+	absPath, err := v.resolve(path)
+	if err != nil {
 		return err
 	}
-	_, err := v.svc.DeleteFiles(storageutil.DeleteFilesParams{
-		FilePaths:    []string{path},
-		DeviceSerial: v.serial,
-	})
-	return err
+	return hostDelete(absPath, opts)
 }
 
 // MkdirAll creates a directory (and parents) in the vault.
@@ -367,7 +349,7 @@ func (v *StorageServiceVFS) Copy(ctx context.Context, src, dst string, opts Copy
 // HostPath returns the host path of path on this namespace's device. A device
 // namespace whose device is gone is [ErrNotFound]. See [HostPather].
 func (v *StorageServiceVFS) HostPath(_ context.Context, path string) (string, error) {
-	return v.writePath(path)
+	return v.resolve(path)
 }
 
 // Watch is not supported by this implementation.

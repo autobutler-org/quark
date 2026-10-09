@@ -2,10 +2,13 @@ package storageutil_test
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -151,5 +154,79 @@ func assertNoWriteTemps(t *testing.T, dir string) {
 		if strings.HasPrefix(e.Name(), storageutil.WriteTempPrefix) {
 			t.Fatalf("temp %s left behind", e.Name())
 		}
+	}
+}
+
+// An exclusive write refuses a taken name and leaves what is there alone.
+func TestWriteFileAtomicExclusiveRefusesATakenName(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "photo.jpg")
+	if err := storageutil.WriteFileAtomicExclusive(dst, strings.NewReader("first")); err != nil {
+		t.Fatalf("first write: %v", err)
+	}
+	if err := storageutil.WriteFileAtomicExclusive(dst, strings.NewReader("second")); !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("second write: err = %v, want fs.ErrExist", err)
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(got) != "first" {
+		t.Fatalf("content = %q, want the first write untouched", got)
+	}
+	assertNoWriteTemps(t, dir)
+}
+
+// Of many writers racing for one name, exactly one wins, with or without hard
+// links. A stat before the rename let several through (#2640).
+func TestWriteFileAtomicExclusiveOneRacerWins(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(*testing.T)
+	}{
+		{"hard links", func(*testing.T) {}},
+		{"no hard links", storageutil.NoHardLinksForTesting},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setup(t)
+			dir := t.TempDir()
+			dst := filepath.Join(dir, "upload.bin")
+
+			const racers = 16
+			errs := make(chan error, racers)
+			var wg sync.WaitGroup
+			for i := range racers {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					errs <- storageutil.WriteFileAtomicExclusive(dst, strings.NewReader(fmt.Sprintf("racer %d", i)))
+				}()
+			}
+			wg.Wait()
+			close(errs)
+
+			wins := 0
+			for err := range errs {
+				switch {
+				case err == nil:
+					wins++
+				case !errors.Is(err, fs.ErrExist):
+					t.Errorf("a losing racer got %v, want fs.ErrExist", err)
+				}
+			}
+			if wins != 1 {
+				t.Fatalf("%d racers won, want exactly 1", wins)
+			}
+			got, err := os.ReadFile(dst)
+			if err != nil {
+				t.Fatalf("read: %v", err)
+			}
+			if !strings.HasPrefix(string(got), "racer ") {
+				t.Fatalf("content = %q, want one racer's whole write", got)
+			}
+			assertNoWriteTemps(t, dir)
+		})
 	}
 }

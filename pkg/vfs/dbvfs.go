@@ -144,13 +144,22 @@ func (v *DBVFS) Open(ctx context.Context, p string) (File, error) {
 }
 
 // Write creates or replaces the file at path with data from r, creating its
-// parent directories. With WriteOptions.IfNoneMatch="*" it refuses an existing
-// entry with ErrConflict in the same statement that inserts, so two writers
-// racing for one name cannot both win.
+// parent directories. With WriteOptions.IfNoneMatch="*" a name already taken
+// is ErrConflict before r is read, and the insert itself refuses one taken
+// meanwhile, so two writers racing for one name cannot both win.
 func (v *DBVFS) Write(ctx context.Context, p string, r io.Reader, opts WriteOptions) error {
 	p = cleanPath(p)
 	if p == "" {
 		return ErrIsDirectory
+	}
+	if opts.IfNoneMatch == "*" {
+		_, err := v.Stat(ctx, p)
+		if err == nil {
+			return ErrConflict
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return err
+		}
 	}
 
 	content, err := readBounded(r)
@@ -201,9 +210,13 @@ func (v *DBVFS) Write(ctx context.Context, p string, r io.Reader, opts WriteOpti
 }
 
 // Delete removes the entry at path. Without opts.Recursive, a directory with
-// children is [ErrNotEmpty]. A missing path is [ErrNotFound].
+// children is [ErrNotEmpty]. A missing path is [ErrNotFound], and the root is
+// [ErrPermissionDenied].
 func (v *DBVFS) Delete(ctx context.Context, p string, opts DeleteOptions) error {
 	p = cleanPath(p)
+	if p == "" {
+		return ErrPermissionDenied
+	}
 	prefix := childPrefix(p)
 
 	query := `DELETE FROM vfs_db_entries WHERE namespace=? AND (path=? OR substr(path, 1, ?)=?)`
@@ -233,7 +246,7 @@ func (v *DBVFS) Delete(ctx context.Context, p string, opts DeleteOptions) error 
 	if err != nil {
 		return fmt.Errorf("dbvfs delete: %w", err)
 	}
-	if n == 0 && p != "" {
+	if n == 0 {
 		return ErrNotFound
 	}
 	return nil
