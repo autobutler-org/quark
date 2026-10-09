@@ -55,6 +55,9 @@ type StartSnapshotBackupParams struct {
 	Ctx context.Context
 	// Queries reads the device roles and the vault config.
 	Queries *db.Queries
+	// Database is the live database, whose chat tables the snapshot exports.
+	// Nil skips the chat export.
+	Database *sql.DB
 	// Storage lists the managed devices to copy from.
 	Storage *storageutil.StorageService
 	// Registry holds every attached device's files namespace, the target's
@@ -140,6 +143,7 @@ func StartSnapshotBackup(params StartSnapshotBackupParams) (StartSnapshotBackupR
 		Store:              params.Store,
 		EventBus:           params.EventBus,
 		Vault:              vaultParams,
+		ChatDB:             params.Database,
 		IOSemaphore:        params.IOSemaphore,
 	}
 	go func() {

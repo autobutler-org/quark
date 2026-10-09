@@ -1,9 +1,11 @@
-// Package backup snapshots the vault and managed-device files onto a target
-// device, keeps them in sync as files change, and verifies restores.
+// Package backup snapshots the vault, the chat tables and managed-device files
+// onto a target device, keeps the files in sync as they change, and verifies
+// and restores what it wrote.
 package backup
 
 import (
 	"context"
+	"database/sql"
 	"sync"
 	"time"
 
@@ -117,13 +119,26 @@ type VaultImportResult struct {
 	FoldersSkipped  int `json:"foldersSkipped"`
 }
 
+// ChatImportResult reports what [ImportChat] restored.
+type ChatImportResult struct {
+	Channels int `json:"channels"`
+	Messages int `json:"messages"`
+	// UnmatchedUsers is the usernames in the backup with no account on this
+	// Quark, sorted. Their messages read as a deleted account's, and their
+	// memberships, reactions and chat keys were not restored.
+	UnmatchedUsers []string `json:"unmatchedUsers"`
+}
+
 type SnapshotBackupParams struct {
 	TargetDeviceSerial string
 	Job                *BackupJob
 	Store              BackupJobStore
 	EventBus           *eventbus.Bus
 	Vault              *VaultExportParams
-	IOSemaphore        *iosemutil.Semaphore // throttles file copies to yield to interactive requests
+	// ChatDB is the live database whose chat tables are exported beside the
+	// files. Nil skips the chat export.
+	ChatDB      *sql.DB
+	IOSemaphore *iosemutil.Semaphore // throttles file copies to yield to interactive requests
 }
 
 type SyncWorker struct {

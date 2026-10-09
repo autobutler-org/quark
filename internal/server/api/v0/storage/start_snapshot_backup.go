@@ -45,6 +45,7 @@ func startSnapshotBackup(c *gin.Context) *serverutil.Response {
 	result, err := backup.StartSnapshotBackup(backup.StartSnapshotBackupParams{
 		Ctx:                c.Request.Context(),
 		Queries:            deps.Database().Queries,
+		Database:           deps.Database().Db,
 		Storage:            deps.StorageService(),
 		Registry:           deps.VFSRegistry(),
 		Store:              deps.BackupJobStore(),

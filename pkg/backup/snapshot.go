@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"path"
@@ -139,7 +140,15 @@ func SnapshotBackup(
 		}
 	}
 
-	// Phase 4: generate integrity manifest.
+	// Phase 4: chat export. It needs no password, so every snapshot of a
+	// Quark with a database carries one.
+	if params.ChatDB != nil {
+		if err := exportChatTo(ctx, params.ChatDB, target); err != nil {
+			return failJob(ctx, params, fmt.Errorf("chat export: %w", err))
+		}
+	}
+
+	// Phase 5: generate integrity manifest.
 	manifest, err := GenerateManifest(ctx, target)
 	if err != nil {
 		return failJob(ctx, params, fmt.Errorf("generate manifest: %w", err))
@@ -148,7 +157,7 @@ func SnapshotBackup(
 		return failJob(ctx, params, fmt.Errorf("write manifest: %w", err))
 	}
 
-	// Phase 5: complete.
+	// Phase 6: complete.
 	completedAt := time.Now()
 	job.Status = BackupStatusCompleted
 	job.Progress = 1.0
@@ -203,20 +212,35 @@ func scanTree(ctx context.Context, fsys vfs.VFS) (files int, bytes int64, err er
 	return
 }
 
-// exportVaultTo writes the vault export onto the target. SQLite writes the
-// export and can only open it by a host path, so this is the one place the
-// target's host directory is asked for.
+// exportVaultTo writes the vault export onto the target.
 func exportVaultTo(ctx context.Context, vault *VaultExportParams, target vfs.VFS) error {
-	hp, ok := target.(vfs.HostPather)
-	if !ok {
-		return errors.New("target device has no host directory")
-	}
-	dir, err := hp.HostPath(ctx, "")
+	dir, err := hostDir(ctx, target)
 	if err != nil {
 		return err
 	}
 	_, err = ExportVault(ctx, vault.Queries, vault.LiveKey, vault.RecoveryPassword, dir)
 	return err
+}
+
+// exportChatTo writes the chat export onto the target.
+func exportChatTo(ctx context.Context, chatDB *sql.DB, target vfs.VFS) error {
+	dir, err := hostDir(ctx, target)
+	if err != nil {
+		return err
+	}
+	_, err = ExportChat(ctx, chatDB, dir)
+	return err
+}
+
+// hostDir is the target's host directory. SQLite writes the vault and chat
+// exports and can only open them by a host path, so they are the one reason
+// the target's host directory is asked for.
+func hostDir(ctx context.Context, target vfs.VFS) (string, error) {
+	hp, ok := target.(vfs.HostPather)
+	if !ok {
+		return "", errors.New("target device has no host directory")
+	}
+	return hp.HostPath(ctx, "")
 }
 
 // deviceDirName produces a filesystem-safe directory name for a source device.
