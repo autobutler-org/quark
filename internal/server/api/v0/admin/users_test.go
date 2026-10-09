@@ -39,6 +39,10 @@ type adminHarness struct {
 
 func newAdminHarness(t *testing.T) adminHarness {
 	t.Helper()
+	// Deleting an account removes its picture and settings from the data
+	// directory, which resolves from HOME, so every harness gets one of its
+	// own rather than the developer's.
+	t.Setenv("HOME", t.TempDir())
 	// Creating and approving an account make a folder (#1908), and so do
 	// creating and renaming a group (#2016), all in the files namespace.
 	files := vfs.NewMemVFS("files")
