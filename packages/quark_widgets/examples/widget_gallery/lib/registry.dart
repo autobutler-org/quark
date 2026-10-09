@@ -223,6 +223,22 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkStepIndicator',
+    group: 'Core',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final index in const [0, 1, 2]) ...[
+          QuarkStepIndicator(
+            steps: const ['Create account', 'Recovery phrase', 'Theme'],
+            currentIndex: index,
+          ),
+          const SizedBox(height: 24),
+        ],
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'CopyButton',
     group: 'Core',
     build: (context, log) => Wrap(

@@ -32,6 +32,8 @@ Covers first-boot setup, login, logout, and password recovery.
 
 **Notes:**
 
+- Each of the three steps says where it is above its content, with a bar filled that far: "Step 1 of 3 — Create
+  account", "Step 2 of 3 — Recovery phrase", "Step 3 of 3 — Theme" (#2026).
 - Recovery phrase is shown exactly once and is not recoverable from the UI after dismissal.
 - The app makes the phrase, not the Quark, and sends the Quark only a key derived from it (#2430).
 - Weak password or mismatched confirm should show inline validation errors before submit.
