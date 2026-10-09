@@ -10,7 +10,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 type BackupJobStatus string
@@ -23,10 +23,12 @@ const (
 	BackupStatusFailed    BackupJobStatus = "FAILED"
 )
 
+// SourceDevice is one managed device a snapshot copies from.
 type SourceDevice struct {
-	Name     string
-	Serial   string
-	FilesDir string
+	Name   string
+	Serial string
+	// Files is the device's files namespace.
+	Files vfs.VFS
 }
 
 type SourceDeviceProgress struct {
@@ -127,7 +129,7 @@ type SnapshotBackupParams struct {
 type SyncWorker struct {
 	mu       sync.Mutex
 	bus      *eventbus.Bus
-	storage  *storageutil.StorageService
+	registry vfs.Registry
 	queries  *db.Queries
 	unsub    func()
 	cancel   context.CancelFunc
@@ -136,14 +138,15 @@ type SyncWorker struct {
 	maxQueue int
 	ioSem    *iosemutil.Semaphore // throttles file copies to yield to interactive requests
 
-	// Overridable for testing.
-	resolveTarget      func(ctx context.Context) (string, error)
-	resolveInternalDir func() (string, error)
+	// targetSerial names the drive to mirror onto. Overridable for testing.
+	targetSerial func(ctx context.Context) (serial string, ok bool, err error)
 }
 
 type SyncWorkerParams struct {
-	Bus         *eventbus.Bus
-	Storage     *storageutil.StorageService
+	Bus *eventbus.Bus
+	// Registry holds the internal drive's files namespace and the
+	// default-storage drive's, the two live sync copies between.
+	Registry    vfs.Registry
 	Queries     *db.Queries
 	IOSemaphore *iosemutil.Semaphore // optional; throttles background file copies
 }
@@ -151,12 +154,11 @@ type SyncWorkerParams struct {
 func NewSyncWorker(params SyncWorkerParams) *SyncWorker {
 	w := &SyncWorker{
 		bus:      params.Bus,
-		storage:  params.Storage,
+		registry: params.Registry,
 		queries:  params.Queries,
 		maxQueue: 10000,
 		ioSem:    params.IOSemaphore,
 	}
-	w.resolveTarget = w.defaultResolveTarget
-	w.resolveInternalDir = w.defaultResolveInternalDir
+	w.targetSerial = w.defaultTargetSerial
 	return w
 }

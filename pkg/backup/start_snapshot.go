@@ -10,9 +10,11 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/vaultcrypto"
+	"github.com/autobutler-org/quark/pkg/vfs"
 
 	"github.com/google/uuid"
 )
@@ -53,8 +55,11 @@ type StartSnapshotBackupParams struct {
 	Ctx context.Context
 	// Queries reads the device roles and the vault config.
 	Queries *db.Queries
-	// Storage resolves the target device and the sources to copy from.
+	// Storage lists the managed devices to copy from.
 	Storage *storageutil.StorageService
+	// Registry holds every attached device's files namespace, the target's
+	// and the sources'.
+	Registry vfs.Registry
 	// Store holds the job while it runs.
 	Store BackupJobStore
 	// EventBus carries progress to anyone watching.
@@ -99,14 +104,17 @@ func StartSnapshotBackup(params StartSnapshotBackupParams) (StartSnapshotBackupR
 		}
 	}
 
-	// Find the target managed device.
-	targetDev, err := params.Storage.FindManagedDeviceBySerial(params.TargetDeviceSerial)
-	if err != nil || targetDev == nil {
+	// Find the target device's namespace. The internal drive cannot be one.
+	if params.TargetDeviceSerial == "" {
+		return StartSnapshotBackupResult{}, ErrTargetNotManaged
+	}
+	target, err := fileutil.FilesVFS(params.Registry, params.TargetDeviceSerial)
+	if err != nil {
 		return StartSnapshotBackupResult{}, ErrTargetNotManaged
 	}
 
 	// Gather all source devices (everything that isn't the target).
-	sources, err := gatherSourceDevices(params.Storage, params.TargetDeviceSerial)
+	sources, err := gatherSourceDevices(params.Storage, params.Registry, params.TargetDeviceSerial)
 	if err != nil {
 		return StartSnapshotBackupResult{}, fmt.Errorf("failed to gather sources: %w", err)
 	}
@@ -138,7 +146,7 @@ func StartSnapshotBackup(params StartSnapshotBackupParams) (StartSnapshotBackupR
 		if vaultParams != nil {
 			defer vaultcrypto.ZeroKey(vaultParams.LiveKey)
 		}
-		if err := SnapshotBackup(context.Background(), snapshotParams, sources, targetDev); err != nil {
+		if err := SnapshotBackup(context.Background(), snapshotParams, sources, target); err != nil {
 			log.Printf("snapshot backup failed: %v", err)
 		}
 	}()
@@ -197,8 +205,9 @@ func prepareVaultExport(params StartSnapshotBackupParams) (*VaultExportParams, e
 }
 
 // gatherSourceDevices lists every managed device the backup should copy from —
-// which is all of them but the one being copied onto.
-func gatherSourceDevices(storage *storageutil.StorageService, targetSerial string) ([]SourceDevice, error) {
+// which is all of them but the one being copied onto. A device with no files
+// namespace has been unplugged since it was listed, and is left out.
+func gatherSourceDevices(storage *storageutil.StorageService, registry vfs.Registry, targetSerial string) ([]SourceDevice, error) {
 	managed, err := storage.GetManagedDevices()
 	if err != nil {
 		return nil, err
@@ -214,10 +223,15 @@ func gatherSourceDevices(storage *storageutil.StorageService, targetSerial strin
 		if serial == targetSerial {
 			continue
 		}
+		files, err := fileutil.FilesVFS(registry, serial)
+		if err != nil {
+			log.Printf("snapshot backup: skipping %s: %v", name, err)
+			continue
+		}
 		sources = append(sources, SourceDevice{
-			Name:     name,
-			Serial:   serial,
-			FilesDir: d.FilesDir,
+			Name:   name,
+			Serial: serial,
+			Files:  files,
 		})
 	}
 	return sources, nil

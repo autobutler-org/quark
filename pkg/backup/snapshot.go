@@ -2,23 +2,21 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io"
-	"io/fs"
-	"os"
-	"path/filepath"
+	"path"
 	"strings"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 func SnapshotBackup(
 	ctx context.Context,
 	params SnapshotBackupParams,
 	sources []SourceDevice,
-	target *storageutil.ManagedDevice,
+	target vfs.VFS,
 ) error {
 	job := params.Job
 	now := time.Now()
@@ -42,7 +40,7 @@ func SnapshotBackup(
 			DeviceSerial: src.Serial,
 			DeviceName:   src.Name,
 		}
-		files, bytes, err := scanDir(src.FilesDir)
+		files, bytes, err := scanTree(ctx, src.Files)
 		if err != nil {
 			return failJob(ctx, params, fmt.Errorf("scan %s: %w", src.Name, err))
 		}
@@ -60,41 +58,25 @@ func SnapshotBackup(
 	job.UpdatedAt = time.Now()
 	_ = params.Store.Update(ctx, job)
 
-	tmpDir := filepath.Join(target.DataDir, "tmp")
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		return failJob(ctx, params, fmt.Errorf("create tmp dir: %w", err))
-	}
-
 	lastPublish := time.Time{}
 	for i, src := range sources {
-		dirName := deviceDirName(src.Name, src.Serial)
-		targetBase := filepath.Join(target.FilesDir, dirName)
+		targetBase := deviceDirName(src.Name, src.Serial)
 
-		srcFS := os.DirFS(src.FilesDir)
-		err := fs.WalkDir(srcFS, ".", func(relPath string, d fs.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-
+		err := vfs.Walk(ctx, src.Files, "", func(srcInfo vfs.FileInfo) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
 
-			targetPath := filepath.Join(targetBase, relPath)
+			relPath := srcInfo.Path
+			targetPath := path.Join(targetBase, relPath)
 
-			if d.IsDir() {
-				return os.MkdirAll(targetPath, 0755)
-			}
-
-			srcPath := filepath.Join(src.FilesDir, relPath)
-			srcInfo, err := os.Stat(srcPath)
-			if err != nil {
-				return fmt.Errorf("stat source: %w", err)
+			if srcInfo.IsDir {
+				return target.MkdirAll(ctx, targetPath)
 			}
 
 			// Smart skip: if target exists with matching size and mtime >= source, skip.
-			if tgtInfo, err := os.Stat(targetPath); err == nil {
-				if tgtInfo.Size() == srcInfo.Size() && !tgtInfo.ModTime().Before(srcInfo.ModTime()) {
+			if tgtInfo, err := target.Stat(ctx, targetPath); err == nil && !tgtInfo.IsDir {
+				if tgtInfo.Size == srcInfo.Size && !tgtInfo.ModTime.Before(srcInfo.ModTime) {
 					job.FilesSkipped++
 					job.SourceDevices[i].FilesSkipped++
 					return nil
@@ -109,15 +91,15 @@ func SnapshotBackup(
 				defer params.IOSemaphore.Release()
 			}
 
-			// Atomic copy: write to temp file then rename.
-			if err := atomicCopy(srcPath, targetPath, srcInfo, tmpDir); err != nil {
+			// The copy lands under its real name only once it is whole.
+			if err := vfs.CopyBetween(ctx, src.Files, relPath, target, targetPath, vfs.CopyOptions{}); err != nil {
 				return fmt.Errorf("copy %s: %w", relPath, err)
 			}
 
 			job.FilesCopied++
-			job.BytesCopied += srcInfo.Size()
+			job.BytesCopied += srcInfo.Size
 			job.SourceDevices[i].FilesCopied++
-			job.SourceDevices[i].BytesCopied += srcInfo.Size()
+			job.SourceDevices[i].BytesCopied += srcInfo.Size
 
 			if job.TotalFiles > 0 {
 				job.Progress = float64(job.FilesCopied+job.FilesSkipped) / float64(job.TotalFiles)
@@ -152,17 +134,17 @@ func SnapshotBackup(
 
 	// Phase 3: vault export (if requested).
 	if params.Vault != nil {
-		if _, err := ExportVault(ctx, params.Vault.Queries, params.Vault.LiveKey, params.Vault.RecoveryPassword, target.FilesDir); err != nil {
+		if err := exportVaultTo(ctx, params.Vault, target); err != nil {
 			return failJob(ctx, params, fmt.Errorf("vault export: %w", err))
 		}
 	}
 
 	// Phase 4: generate integrity manifest.
-	manifest, err := GenerateManifest(target.FilesDir)
+	manifest, err := GenerateManifest(ctx, target)
 	if err != nil {
 		return failJob(ctx, params, fmt.Errorf("generate manifest: %w", err))
 	}
-	if err := WriteManifest(manifest, target.FilesDir); err != nil {
+	if err := WriteManifest(ctx, manifest, target); err != nil {
 		return failJob(ctx, params, fmt.Errorf("write manifest: %w", err))
 	}
 
@@ -209,62 +191,32 @@ func failJob(ctx context.Context, params SnapshotBackupParams, err error) error 
 	return err
 }
 
-func scanDir(root string) (files int, bytes int64, err error) {
-	err = filepath.WalkDir(root, func(_ string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
+// scanTree counts the files under fsys and the bytes they hold.
+func scanTree(ctx context.Context, fsys vfs.VFS) (files int, bytes int64, err error) {
+	err = vfs.Walk(ctx, fsys, "", func(fi vfs.FileInfo) error {
+		if !fi.IsDir {
+			files++
+			bytes += fi.Size
 		}
-		if d.IsDir() {
-			return nil
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		files++
-		bytes += info.Size()
 		return nil
 	})
 	return
 }
 
-func atomicCopy(src, dst string, srcInfo os.FileInfo, tmpDir string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		return err
+// exportVaultTo writes the vault export onto the target. SQLite writes the
+// export and can only open it by a host path, so this is the one place the
+// target's host directory is asked for.
+func exportVaultTo(ctx context.Context, vault *VaultExportParams, target vfs.VFS) error {
+	hp, ok := target.(vfs.HostPather)
+	if !ok {
+		return errors.New("target device has no host directory")
 	}
-
-	tmp, err := os.CreateTemp(tmpDir, "backup-*")
+	dir, err := hp.HostPath(ctx, "")
 	if err != nil {
 		return err
 	}
-	tmpPath := tmp.Name()
-
-	srcFile, err := os.Open(src)
-	if err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
-		return err
-	}
-
-	_, err = io.Copy(tmp, srcFile)
-	srcFile.Close()
-	tmp.Close()
-	if err != nil {
-		os.Remove(tmpPath)
-		return err
-	}
-
-	// Preserve mtime so smart-skip works on future backups.
-	if err := os.Chtimes(tmpPath, srcInfo.ModTime(), srcInfo.ModTime()); err != nil {
-		os.Remove(tmpPath)
-		return err
-	}
-
-	if err := os.Rename(tmpPath, dst); err != nil {
-		os.Remove(tmpPath)
-		return err
-	}
-	return nil
+	_, err = ExportVault(ctx, vault.Queries, vault.LiveKey, vault.RecoveryPassword, dir)
+	return err
 }
 
 // deviceDirName produces a filesystem-safe directory name for a source device.

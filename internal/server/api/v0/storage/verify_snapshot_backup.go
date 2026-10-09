@@ -1,11 +1,13 @@
 package v0_storage
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/autobutler-org/quark/pkg/backup"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/gin-gonic/gin"
 )
@@ -19,6 +21,7 @@ import (
 // @Param body body object true "{deviceSerial: string, full: bool}"
 // @Success 200 {object} object
 // @Failure 400 {object} serverutil.Response
+// @Failure 404 {object} serverutil.Response "the device is not attached"
 // @Failure 500 {object} serverutil.Response
 // @Security BearerAuth
 // @Router /storage/devices/snapshot-backup/verify [post]
@@ -36,13 +39,17 @@ func verifySnapshotBackup(c *gin.Context) *serverutil.Response {
 		return serverutil.BadRequest(fmt.Errorf("invalid request: %w", err))
 	}
 
-	dev, err := deps.StorageService().FindManagedDeviceBySerial(req.DeviceSerial)
-	if err != nil || dev == nil {
-		return serverutil.BadRequest(fmt.Errorf("device not found"))
-	}
-
-	result, err := backup.VerifyBackup(dev.FilesDir, req.Full)
-	if err != nil {
+	result, err := backup.VerifyBackup(backup.VerifyBackupParams{
+		Ctx:          c.Request.Context(),
+		Registry:     deps.VFSRegistry(),
+		DeviceSerial: req.DeviceSerial,
+		Full:         req.Full,
+	})
+	var notFound *fileutil.NotFoundError
+	switch {
+	case errors.As(err, &notFound):
+		return serverutil.NotFound(err)
+	case err != nil:
 		return serverutil.BadRequest(fmt.Errorf("verify failed: %w", err))
 	}
 

@@ -89,7 +89,7 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	}()
 	syncWorker := backup.NewSyncWorker(backup.SyncWorkerParams{
 		Bus:         deps.EventBus(),
-		Storage:     deps.StorageService(),
+		Registry:    deps.VFSRegistry(),
 		Queries:     deps.Database().Queries,
 		IOSemaphore: deps.IOSemaphore().For(iosemutil.Copy),
 	})

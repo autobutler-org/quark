@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 func makeBackupDir(t *testing.T, files map[string]string) string {
@@ -17,13 +19,23 @@ func makeBackupDir(t *testing.T, files map[string]string) string {
 	return dir
 }
 
+// localFS is a disk-backed files namespace over dir.
+func localFS(t *testing.T, dir string) vfs.VFS {
+	t.Helper()
+	fsys, err := vfs.NewLocalVFS(dir, vfs.FilesNamespace(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fsys
+}
+
 func TestGenerateManifest(t *testing.T) {
 	dir := makeBackupDir(t, map[string]string{
 		"photos/a.jpg": "photo-a",
 		"docs/b.txt":   "doc-b",
 	})
 
-	m, err := GenerateManifest(dir)
+	m, err := GenerateManifest(t.Context(), localFS(t, dir))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,10 +62,10 @@ func TestManifest_ExcludesItself(t *testing.T) {
 		"file.txt": "data",
 	})
 
-	m, _ := GenerateManifest(dir)
-	WriteManifest(m, dir)
+	m, _ := GenerateManifest(t.Context(), localFS(t, dir))
+	WriteManifest(t.Context(), m, localFS(t, dir))
 
-	m2, _ := GenerateManifest(dir)
+	m2, _ := GenerateManifest(t.Context(), localFS(t, dir))
 	if _, ok := m2.Files[manifestFilename]; ok {
 		t.Error("manifest should exclude itself")
 	}
@@ -65,12 +77,12 @@ func TestManifest_ExcludesItself(t *testing.T) {
 func TestWriteAndReadManifest(t *testing.T) {
 	dir := makeBackupDir(t, map[string]string{"a.txt": "hello"})
 
-	m, _ := GenerateManifest(dir)
-	if err := WriteManifest(m, dir); err != nil {
+	m, _ := GenerateManifest(t.Context(), localFS(t, dir))
+	if err := WriteManifest(t.Context(), m, localFS(t, dir)); err != nil {
 		t.Fatal(err)
 	}
 
-	read, err := ReadManifest(dir)
+	read, err := ReadManifest(t.Context(), localFS(t, dir))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,10 +99,10 @@ func TestVerifyBackup_AllOK(t *testing.T) {
 		"a.txt": "aaa",
 		"b.txt": "bbb",
 	})
-	m, _ := GenerateManifest(dir)
-	WriteManifest(m, dir)
+	m, _ := GenerateManifest(t.Context(), localFS(t, dir))
+	WriteManifest(t.Context(), m, localFS(t, dir))
 
-	result, err := VerifyBackup(dir, true)
+	result, err := verifyTree(t.Context(), localFS(t, dir), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,12 +120,12 @@ func TestVerifyBackup_MissingFile(t *testing.T) {
 		"a.txt": "aaa",
 		"b.txt": "bbb",
 	})
-	m, _ := GenerateManifest(dir)
-	WriteManifest(m, dir)
+	m, _ := GenerateManifest(t.Context(), localFS(t, dir))
+	WriteManifest(t.Context(), m, localFS(t, dir))
 
 	os.Remove(filepath.Join(dir, "b.txt"))
 
-	result, _ := VerifyBackup(dir, true)
+	result, _ := verifyTree(t.Context(), localFS(t, dir), true)
 	if len(result.Missing) != 1 || result.Missing[0] != "b.txt" {
 		t.Errorf("expected b.txt missing, got %v", result.Missing)
 	}
@@ -126,12 +138,12 @@ func TestVerifyBackup_CorruptedFile(t *testing.T) {
 	dir := makeBackupDir(t, map[string]string{
 		"a.txt": "original",
 	})
-	m, _ := GenerateManifest(dir)
-	WriteManifest(m, dir)
+	m, _ := GenerateManifest(t.Context(), localFS(t, dir))
+	WriteManifest(t.Context(), m, localFS(t, dir))
 
 	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("tampered"), 0644)
 
-	result, _ := VerifyBackup(dir, true)
+	result, _ := verifyTree(t.Context(), localFS(t, dir), true)
 	if len(result.Corrupted) != 1 || result.Corrupted[0] != "a.txt" {
 		t.Errorf("expected a.txt corrupted, got %v", result.Corrupted)
 	}
@@ -141,12 +153,12 @@ func TestVerifyBackup_AddedFile(t *testing.T) {
 	dir := makeBackupDir(t, map[string]string{
 		"a.txt": "aaa",
 	})
-	m, _ := GenerateManifest(dir)
-	WriteManifest(m, dir)
+	m, _ := GenerateManifest(t.Context(), localFS(t, dir))
+	WriteManifest(t.Context(), m, localFS(t, dir))
 
 	os.WriteFile(filepath.Join(dir, "new.txt"), []byte("new"), 0644)
 
-	result, _ := VerifyBackup(dir, true)
+	result, _ := verifyTree(t.Context(), localFS(t, dir), true)
 	if len(result.Added) != 1 || result.Added[0] != "new.txt" {
 		t.Errorf("expected new.txt added, got %v", result.Added)
 	}
@@ -156,20 +168,20 @@ func TestVerifyBackup_QuickMode(t *testing.T) {
 	dir := makeBackupDir(t, map[string]string{
 		"a.txt": "aaa",
 	})
-	m, _ := GenerateManifest(dir)
-	WriteManifest(m, dir)
+	m, _ := GenerateManifest(t.Context(), localFS(t, dir))
+	WriteManifest(t.Context(), m, localFS(t, dir))
 
 	// Same size but different content — quick mode uses size only, should pass.
 	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("bbb"), 0644)
 
-	result, _ := VerifyBackup(dir, false)
+	result, _ := verifyTree(t.Context(), localFS(t, dir), false)
 	if result.OK != 1 {
 		t.Errorf("quick mode should pass on same-size file, got OK=%d corrupted=%v", result.OK, result.Corrupted)
 	}
 
 	// Different size — quick mode should catch.
 	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("longer content"), 0644)
-	result, _ = VerifyBackup(dir, false)
+	result, _ = verifyTree(t.Context(), localFS(t, dir), false)
 	if len(result.Corrupted) != 1 {
 		t.Errorf("quick mode should catch size mismatch, got corrupted=%v", result.Corrupted)
 	}
@@ -177,7 +189,7 @@ func TestVerifyBackup_QuickMode(t *testing.T) {
 
 func TestVerifyBackup_NoManifest(t *testing.T) {
 	dir := t.TempDir()
-	_, err := VerifyBackup(dir, true)
+	_, err := verifyTree(t.Context(), localFS(t, dir), true)
 	if err == nil {
 		t.Error("expected error when manifest is missing")
 	}
@@ -188,8 +200,8 @@ func TestVerifyBackup_NoManifest(t *testing.T) {
 // cannot leave an empty manifest (#2611).
 func TestWriteManifestReplacesTheFileWhole(t *testing.T) {
 	dir := makeBackupDir(t, map[string]string{"a.txt": "hello"})
-	m, _ := GenerateManifest(dir)
-	if err := WriteManifest(m, dir); err != nil {
+	m, _ := GenerateManifest(t.Context(), localFS(t, dir))
+	if err := WriteManifest(t.Context(), m, localFS(t, dir)); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, manifestFilename)
@@ -202,7 +214,7 @@ func TestWriteManifestReplacesTheFileWhole(t *testing.T) {
 	}
 
 	m.TotalFiles = 42
-	if err := WriteManifest(m, dir); err != nil {
+	if err := WriteManifest(t.Context(), m, localFS(t, dir)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -213,7 +225,7 @@ func TestWriteManifestReplacesTheFileWhole(t *testing.T) {
 	if string(linked) != string(old) {
 		t.Fatal("manifest was rewritten in place")
 	}
-	read, err := ReadManifest(dir)
+	read, err := ReadManifest(t.Context(), localFS(t, dir))
 	if err != nil {
 		t.Fatal(err)
 	}
