@@ -7,6 +7,7 @@ import 'package:quark/controllers/chat_channel_keys_controller.dart';
 import 'package:quark/models/chat_channel_keys.dart';
 import 'package:quark/services/chat_crypto.dart';
 import 'package:quark/services/events_service.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 
 const _channel = 7;
 
@@ -294,6 +295,74 @@ void main() {
     expect(await carol.ensureKeys(_channel), isFalse);
     sameKey(alice, carol, 1);
     await events.close();
+  });
+
+  /// The member_set or member_removed event alice's change of account
+  /// [userId] came back with, unsigned.
+  ChatChannelEvent memberEvent(
+    int userId,
+    Set<ChatPermission>? permissions, {
+    int actor = 1,
+  }) {
+    final names = permissions?.map((p) => '"${p.id}"').join(',');
+    final event = ChatChannelEvent(
+      id: quark.events.length + 1,
+      channelId: _channel,
+      kind: permissions == null
+          ? ChatChannelEvent.memberRemoved
+          : ChatChannelEvent.memberSet,
+      actorId: actor,
+      payload: permissions == null
+          ? '{"userId":$userId,"name":"u$userId"}'
+          : '{"userId":$userId,"name":"u$userId","permissions":[$names]}',
+      createdAt: DateTime.utc(2026),
+    );
+    quark.events.add(event);
+    return event;
+  }
+
+  test('adding a member fills their grant without any event', () async {
+    // #2624: the account that adds a member shares the key as soon as the
+    // Quark accepts the change, not when chat_key_needed reaches it.
+    publish(1);
+    final alice = quark.client(1);
+    await alice.ensureKeys(_channel);
+    publish(3);
+    final permissions = ChatPermissionPreset.member.permissions;
+
+    await alice.signMemberChange(
+      memberEvent(3, permissions),
+      userId: 3,
+      permissions: permissions,
+    );
+
+    expect(quark.grants.containsKey((1, 3)), isTrue);
+    expect(alice.verifyEvent(quark.events.last), isTrue);
+    final carol = quark.client(3);
+    expect(await carol.ensureKeys(_channel), isFalse);
+    sameKey(alice, carol, 1);
+  });
+
+  test('leaving a channel asks nothing more of its keys', () async {
+    publish(1);
+    publish(2);
+    final alice = quark.client(1);
+    await alice.ensureKeys(_channel);
+    var fetches = 0;
+    final bob = ChatChannelKeysController(
+      identity: () => quark.members[2],
+      crypto: () => crypto,
+      userId: () => 2,
+      fetchKeys: (_) async {
+        fetches++;
+        throw StateError('bob is no longer a member');
+      },
+      signEvent: (_, _, _) async {},
+    );
+
+    await bob.signMemberChange(memberEvent(2, null, actor: 2), userId: 2);
+
+    expect(fetches, 0);
   });
 
   test('events sign and verify, and a tampered one does not', () async {

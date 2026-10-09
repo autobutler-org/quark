@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 	"slices"
 	"strings"
 	"unicode"
@@ -203,7 +204,10 @@ func memberIDs(ctx context.Context, queries *db.Queries, channelID int64) ([]int
 }
 
 // afterMembershipChange records the change as a channel event, tells everyone
-// who was or now is a member, and returns the members as they now stand.
+// who was or now is a member, asks the key holders to fill a newcomer's grants
+// or rotate, and returns the members as they now stand. The ask goes out here
+// rather than waiting on WatchKeyNeeds (#2624), which stays as the fallback
+// for changes that don't come through SetMember or RemoveMember.
 func afterMembershipChange(ctx context.Context, queries *db.Queries, bus *eventbus.Bus, channelID int64, before []int64, dataDir string,
 	kind string, actor int64, payload memberEventPayload) (ListMembersResult, error) {
 	after, err := memberIDs(ctx, queries, channelID)
@@ -215,6 +219,11 @@ func afterMembershipChange(ctx context.Context, queries *db.Queries, bus *eventb
 		return ListMembersResult{}, err
 	}
 	publish(bus, channelID, append(before, after...))
+	// The change is committed: a failure here leaves the grant to the watcher
+	// or the next client to open the channel, not the request.
+	if _, err := notifyChannel(ctx, queries, bus, channelID); err != nil {
+		log.Printf("[chatutil] key needs for channel %d: %v", channelID, err)
+	}
 	result, err := listMembers(ctx, queries, channelID, dataDir)
 	result.Event = &event
 	return result, err

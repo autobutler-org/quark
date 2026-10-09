@@ -145,6 +145,12 @@ class ChatChannelKeysController extends ChangeNotifier {
   /// which is what this account just asked for. Anything else, or a failure to sign, is
   /// logged and left unsigned, so every member sees the line as unverified;
   /// the change itself already happened.
+  ///
+  /// Then, unless this account just left, it runs [ensureKeys] on the
+  /// channel, so a member it added gets their grants and a member it removed
+  /// gets the key rotated as soon as the Quark accepts the change (#2624),
+  /// rather than when `chat_key_needed` reaches some holder. That event stays
+  /// the fallback, and a failure here is only logged.
   Future<void> signMemberChange(
     ChatChannelEvent? event, {
     int? userId,
@@ -164,6 +170,12 @@ class ChatChannelKeysController extends ChangeNotifier {
       await signEvent(event);
     } catch (e) {
       debugPrint('chat: could not sign event ${event.id}: $e');
+    }
+    if (permissions == null && userId != null && userId == _userId()) return;
+    try {
+      await ensureKeys(event.channelId);
+    } catch (e) {
+      debugPrint('chat: channel ${event.channelId} keys: $e');
     }
   }
 
