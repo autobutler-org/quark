@@ -159,7 +159,7 @@ func (v *LocalVFS) List(ctx context.Context, path string, filter *ListFilter) ([
 		return nil
 	}
 
-	if err := collect(absPath, ""); err != nil && !errors.Is(err, errListBudgetSpent) {
+	if err := collect(absPath, cleanPath(path)); err != nil && !errors.Is(err, errListBudgetSpent) {
 		return nil, err
 	}
 
@@ -179,7 +179,7 @@ func (v *LocalVFS) Stat(ctx context.Context, path string) (FileInfo, error) {
 		}
 		return FileInfo{}, err
 	}
-	return v.infoFromStat(path, absPath, fi)
+	return v.infoFromStat(cleanPath(path), absPath, fi)
 }
 
 // Open opens the file at the given path for reading.
@@ -294,6 +294,16 @@ func (v *LocalVFS) Move(_ context.Context, src, dst string) error {
 		return err
 	}
 	return os.Rename(srcAbs, dstAbs)
+}
+
+// Copy copies the file at src to dst through Write. See [VFS.Copy].
+func (v *LocalVFS) Copy(ctx context.Context, src, dst string, opts CopyOptions) error {
+	return copyFile(ctx, v, src, v, dst, opts)
+}
+
+// HostPath returns the host path of path under the root. See [HostPather].
+func (v *LocalVFS) HostPath(_ context.Context, path string) (string, error) {
+	return v.abs(path)
 }
 
 // Watch is not supported by LocalVFS and always returns ErrWatchNotSupported.

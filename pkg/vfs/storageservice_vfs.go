@@ -230,7 +230,7 @@ func (v *StorageServiceVFS) Stat(_ context.Context, path string) (FileInfo, erro
 	mimeType := mimeTypeForName(result.Name)
 	return FileInfo{
 		Name:      result.Name,
-		Path:      path,
+		Path:      cleanPath(path),
 		IsDir:     result.IsDir,
 		Size:      result.Size,
 		ModTime:   result.ModTime,
@@ -359,6 +359,17 @@ func (v *StorageServiceVFS) Move(_ context.Context, src, dst string) error {
 	return err
 }
 
+// Copy copies the file at src to dst through Write. See [VFS.Copy].
+func (v *StorageServiceVFS) Copy(ctx context.Context, src, dst string, opts CopyOptions) error {
+	return copyFile(ctx, v, src, v, dst, opts)
+}
+
+// HostPath returns the host path of path on this namespace's device. A device
+// namespace whose device is gone is [ErrNotFound]. See [HostPather].
+func (v *StorageServiceVFS) HostPath(_ context.Context, path string) (string, error) {
+	return v.writePath(path)
+}
+
 // Watch is not supported by this implementation.
 func (v *StorageServiceVFS) Watch(_ context.Context, _ string) (<-chan WatchEvent, error) {
 	return nil, ErrWatchNotSupported
@@ -373,7 +384,7 @@ func deviceFileInfoToVFS(f *storageutil.DeviceFileInfo, nsID, dirPath, relPath s
 	mimeType := mimeTypeForName(f.Name())
 	return FileInfo{
 		Name:      f.Name(),
-		Path:      filepath.ToSlash(filepath.Join(dirPath, relPath)),
+		Path:      cleanPath(filepath.Join(dirPath, relPath)),
 		Size:      f.Size(),
 		IsDir:     f.IsDir(),
 		MimeType:  mimeType,

@@ -296,7 +296,9 @@ func ZipVFSDir(ctx context.Context, fsys vfs.VFS, basePath string, root string, 
 			return fmt.Errorf("failed to open %s: %w", entry.Path, err)
 		}
 		// Compute a relative path inside the zip (trim the base filePath prefix).
-		rel := strings.TrimPrefix(entry.Path, basePath)
+		// Entry paths come back in the VFS's one form, so the base is
+		// trimmed in that form too.
+		rel := strings.TrimPrefix(entry.Path, accessutil.Canonical(basePath))
 		rel = path.Join(root, strings.TrimPrefix(rel, "/"))
 		zw, err := zipWriter.CreateHeader(&zip.FileHeader{
 			Name:               rel,

@@ -1,6 +1,7 @@
 package vfs
 
 import (
+	"context"
 	"errors"
 	"io"
 	"io/fs"
@@ -68,4 +69,23 @@ func moveFileIn(srcAbs string, dstAbs string, opts WriteOptions, write func(io.R
 	}
 	_ = os.Remove(srcAbs)
 	return nil
+}
+
+// copyFile is the body of every [VFS.Copy] and of [CopyBetween]: it streams
+// the source into dst's Write, the atomic write path, so a reader of dst sees
+// either nothing or the whole copy.
+func copyFile(ctx context.Context, src VFS, srcPath string, dst VFS, dstPath string, opts CopyOptions) error {
+	info, err := src.Stat(ctx, srcPath)
+	if err != nil {
+		return err
+	}
+	if info.IsDir {
+		return ErrIsDirectory
+	}
+	f, err := src.Open(ctx, srcPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	return dst.Write(ctx, dstPath, f, WriteOptions{ContentType: info.MimeType, IfNoneMatch: opts.IfNoneMatch})
 }

@@ -181,6 +181,28 @@ func TestZipVFSDirWrapsEntriesInTheFolder(t *testing.T) {
 	assertZipNames(t, zr, "My Folder/one.txt", "My Folder/sub/two.txt")
 }
 
+// The VFS returns paths in one form, with no leading or trailing slash, so a
+// base path spelled "/folder/" must still be trimmed off every entry rather
+// than nest the whole tree under the archive folder a second time (#2640).
+func TestZipVFSDirTrimsABasePathInAnySpelling(t *testing.T) {
+	fsys := vfs.NewMemVFS("files")
+	writeMem(t, fsys, "folder/one.txt", "one")
+
+	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := fileutil.ZipVFSDir(context.Background(), fsys, "/folder/", "My Folder", system.Access, &buf); err != nil {
+		t.Fatalf("ZipVFSDir failed: %v", err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	if err != nil {
+		t.Fatalf("the zip is unreadable: %v", err)
+	}
+	assertZipNames(t, zr, "My Folder/one.txt")
+}
+
 // --- ZipDir ---
 
 func TestZipDirWrapsEntriesInTheFolder(t *testing.T) {

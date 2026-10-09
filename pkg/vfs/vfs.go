@@ -26,6 +26,10 @@ type VFS interface {
 	Delete(ctx context.Context, path string, opts DeleteOptions) error
 	MkdirAll(ctx context.Context, path string) error
 	Move(ctx context.Context, src, dst string) error
+	// Copy copies the file at src to dst within the namespace. It streams
+	// through Write, so a copy is never visible under dst half-written, and
+	// honors opts.IfNoneMatch as Write does. A directory is [ErrIsDirectory].
+	Copy(ctx context.Context, src, dst string, opts CopyOptions) error
 	Watch(ctx context.Context, path string) (<-chan WatchEvent, error)
 }
 
@@ -39,6 +43,16 @@ type File interface {
 	io.ReadCloser
 	io.Seeker
 	io.ReaderAt
+}
+
+// HostPather is implemented by namespaces backed by a host directory. It
+// exists for two uses only: handing a path to an external process (dcraw,
+// exiftool, ffmpeg) and symlink resolution in accessutil. A caller never passes
+// the result to os.Open; that is what [VFS.Open] is for.
+type HostPather interface {
+	// HostPath returns the absolute host path of path, which need not exist.
+	// A path that escapes the namespace is [ErrPermissionDenied].
+	HostPath(ctx context.Context, path string) (string, error)
 }
 
 // FileMover is implemented by namespaces backed by a host directory. A caller
@@ -87,6 +101,12 @@ type WriteOptions struct {
 	ExpectedSize int64
 }
 
+// CopyOptions controls [VFS.Copy] and [CopyBetween].
+type CopyOptions struct {
+	// IfNoneMatch "*" refuses a dst that already exists with [ErrConflict].
+	IfNoneMatch string
+}
+
 type DeleteOptions struct {
 	Recursive bool
 }
@@ -113,6 +133,8 @@ var (
 	ErrWatchNotSupported = errors.New("vfs: watch not supported by this implementation")
 	ErrNamespaceConflict = errors.New("vfs: namespace already registered")
 	ErrConflict          = errors.New("vfs: conflict")
+	// ErrIsDirectory reports a file operation, such as Copy, on a directory.
+	ErrIsDirectory = errors.New("vfs: is a directory")
 	// ErrTooLarge reports a write over [MaxInMemoryWriteBytes] into a namespace
 	// that holds content in memory.
 	ErrTooLarge = errors.New("vfs: content too large for an in-memory namespace")
@@ -311,4 +333,12 @@ type ListDevicesParams struct {
 // is [ErrNotFound].
 func ListDevices(params ListDevicesParams) ([]FileInfo, error) {
 	return listDevices(params)
+}
+
+// CopyBetween copies the file at srcPath in src to dstPath in dst, which may be
+// another namespace — a copy or a move from one device to another. Like
+// [VFS.Copy], it streams through dst's Write, so the copy is never visible
+// half-written, and it honors opts.IfNoneMatch.
+func CopyBetween(ctx context.Context, src VFS, srcPath string, dst VFS, dstPath string, opts CopyOptions) error {
+	return copyFile(ctx, src, srcPath, dst, dstPath, opts)
 }

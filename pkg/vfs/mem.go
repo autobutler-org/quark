@@ -18,8 +18,10 @@ type memEntry struct {
 	info FileInfo
 }
 
+// cleanPath is the one path form every implementation accepts and returns:
+// relative, slash-separated, no leading or trailing slash, "" for the root —
+// accessutil.Canonical's form (#2640).
 func cleanPath(path string) string {
-	// Normalize path: remove leading slashes, clean
 	p := filepath.ToSlash(filepath.Clean("/" + path))
 	p = strings.TrimPrefix(p, "/")
 	return p
@@ -352,6 +354,11 @@ func (m *MemVFS) Move(_ context.Context, src, dst string) error {
 	delete(m.dirs, s)
 	m.dirs[d] = true
 	return nil
+}
+
+// Copy copies the file at src to dst through Write. See [VFS.Copy].
+func (m *MemVFS) Copy(ctx context.Context, src, dst string, opts CopyOptions) error {
+	return copyFile(ctx, m, src, m, dst, opts)
 }
 
 // Watch is not supported by MemVFS and always returns ErrWatchNotSupported.
