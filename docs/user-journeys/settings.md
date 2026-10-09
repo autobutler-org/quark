@@ -112,11 +112,17 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 
 **Steps:**
 
-1. Locate the theme toggle (app bar icon or settings section).
-2. Tap to cycle through light → dark → system (or select from a picker).
+1. Navigate to `/settings/general` and find **Theme**.
+2. Pick **System**, **Light** or **Dark**.
+3. Tap the theme toggle in the app bar, on Settings or on any other page.
 
 **Expected result:**
 
+- **Theme** in Settings is the full control: it is the only place to choose **System**.
+- The app bar toggle is the shortcut between light and dark. Its icon and tooltip name the mode a tap switches to; on
+  **System** it shows the automatic icon and a tap picks **Light**.
+- Both change the same setting: after step 3 the **Theme** selection has moved to match, and after step 2 the toggle
+  offers the other mode.
 - UI theme changes immediately.
 - Setting is persisted across app restarts.
 
