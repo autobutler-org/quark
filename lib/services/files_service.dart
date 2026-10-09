@@ -1042,12 +1042,12 @@ class FilesService with AuthenticatedService {
     return endpointUri.replace(query: querySegments.join('&'));
   }
 
-  /// [endpoint] with the file and device query every per-file GET takes.
   /// The download endpoint's URL for [filePath], with no credential in it:
   /// for a reader that sends [authHeaders] itself, as the PDF viewer does.
   static Uri downloadUrl(String filePath, {String? serial}) =>
       _buildDownloadUri(filePath, serial: serial);
 
+  /// [endpoint] with the file and device query every per-file GET takes.
   static Uri _buildDownloadUri(
     String filePath, {
     String? serial,
