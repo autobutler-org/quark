@@ -152,6 +152,36 @@ void main() {
       find.byKey(const ValueKey('calendar_event_1_2026-09-26')).first,
     );
     expect(event, _weekend);
+  }, variant: TargetPlatformVariant.desktop());
+
+  testWidgets('on a touch platform a tap on an event chip opens its date '
+      '(#2939)', (tester) async {
+    final opened = <DateTime>[];
+    final events = <CalendarEventItem>[];
+    await pumpAt(
+      tester,
+      _grid(events: [_weekend], onDayTap: opened.add, onEventTap: events.add),
+      size: wideViewport,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('calendar_event_1_2026-09-26')).first,
+    );
+    expect(opened, [DateTime(2026, 9, 26)]);
+    expect(events, isEmpty);
+  });
+
+  testWidgets('on a touch platform a chip keeps its tap when the date has '
+      'none to take it', (tester) async {
+    final events = <CalendarEventItem>[];
+    await pumpAt(
+      tester,
+      _grid(events: [_weekend], onEventTap: events.add),
+      size: wideViewport,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('calendar_event_1_2026-09-26')).first,
+    );
+    expect(events, [_weekend]);
   });
 
   testWidgets('goes dense on a phone: no times, narrow weekday names', (
@@ -424,12 +454,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('every date can be pressed by a screen reader', (
-    tester,
-    size,
-  ) async {
+  testBothViewports('every date can be pressed by a screen reader, and is a '
+      '48dp target', (tester, size) async {
     final tapped = <DateTime>[];
-    await pumpAt(tester, _grid(onDayTap: tapped.add), size: size);
+    await pumpAt(
+      tester,
+      _grid(onDayTap: tapped.add, onEventTap: (_) {}),
+      size: size,
+    );
     final handle = tester.ensureSemantics();
 
     final day = tester.getSemantics(
@@ -438,9 +470,9 @@ void main() {
     day.owner!.performAction(day.id, SemanticsAction.tap);
     expect(tapped, [DateTime(2026, 9, 29)]);
     handle.dispose();
-    // A desktop cell's event chips are drawn to its scale, which #2605 leaves
-    // open, so the size check is off there. A phone cell has no chips, only
-    // dots, so the cell is the one target and meets 48dp (#2541).
-    await expectTapTargetGuidelines(tester, checkSize: size == narrowViewport);
+    // The cell is the one target at both sizes: a phone cell holds dots
+    // (#2541), and a wide one's chips hand their tap to it on a touch
+    // platform (#2939).
+    await expectTapTargetGuidelines(tester);
   });
 }

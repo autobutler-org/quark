@@ -150,6 +150,8 @@ class MetricCard extends StatelessWidget {
                         style: TextStyle(fontSize: 11, color: coreColor),
                       ),
                       padding: EdgeInsets.zero,
+                      // A label with no tap of its own, so shrinking it
+                      // takes nothing from a touch target (#2939).
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       visualDensity: VisualDensity.compact,
                       side: BorderSide(color: coreColor.withValues(alpha: 0.4)),

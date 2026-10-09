@@ -123,6 +123,11 @@ the date on show is the `date` query (`?date=2026-09-29`). Reminders show inside
 - The form opens as **Edit event** with the event's fields.
 - The change shows once saved; after the delete the event is gone, every repeat of a repeating event included.
 
+**Notes:** On a phone or tablet the calendar's targets are sized for a finger, 48dp (#2939), so two places open the
+day first, where the event has room to be tapped: an event's line in Month on a tablet (a phone's Month shows dots, and
+already does), and events in Week that overlap into lanes too narrow for a finger. With a mouse each opens its event
+directly.
+
 ---
 
 ### JN-CA-007: Set a reminder and see it come due

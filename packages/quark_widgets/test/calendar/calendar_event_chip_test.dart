@@ -6,7 +6,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 import '../support/pump.dart';
 
-/// The one-line event chip: its two shapes, its dense size, and its key.
+/// The one-line event chip: its two shapes, its dense size, its key, and the
+/// 48dp target it is on a touch platform.
 final _timed = CalendarEventItem(
   eventId: 7,
   title: 'Plumber visit',
@@ -44,13 +45,11 @@ void main() {
   ) async {
     await pumpAt(tester, Center(child: _chip(_allDay)), size: size);
     expect(find.text('Rent due'), findsOneWidget);
-    final material = tester.widget<Material>(
-      find
-          .ancestor(of: find.text('Rent due'), matching: find.byType(Material))
-          .first,
+    final bar = tester.widget<Ink>(
+      find.ancestor(of: find.text('Rent due'), matching: find.byType(Ink)),
     );
     expect(
-      material.color,
+      (bar.decoration! as BoxDecoration).color,
       QuarkTokens.dark.eventColors[2].withValues(alpha: 0.24),
     );
   });
@@ -93,7 +92,47 @@ void main() {
     chip.owner!.performAction(chip.id, SemanticsAction.tap);
     expect(taps, 1);
     handle.dispose();
-    // Drawn to a month cell's scale, which #2605 leaves open.
-    await expectTapTargetGuidelines(tester, checkSize: false);
+    await expectTapTargetGuidelines(tester);
+  });
+
+  group('touch targets (#2939)', () {
+    final key = find.byKey(const ValueKey('calendar_event_7_2026-09-29'));
+
+    for (final dense in [false, true]) {
+      testBothViewports('a ${dense ? 'dense ' : ''}chip that takes taps '
+          'answers across 48dp around its bar', (tester, size) async {
+        var taps = 0;
+        await pumpAt(
+          tester,
+          Center(
+            child: _chip(_timed, dense: dense, onTap: () => taps++),
+          ),
+          size: size,
+        );
+        expect(tester.getSize(key).height, kMinInteractiveDimension);
+        expect(
+          tester.getSize(find.byType(Ink)).height,
+          dense ? CalendarEventChip.denseHeight : CalendarEventChip.height,
+        );
+        // Well clear of the bar, and still the chip.
+        await tester.tapAt(tester.getCenter(key) + const Offset(0, 20));
+        expect(taps, 1);
+        await expectTapTargetGuidelines(tester);
+      });
+    }
+
+    testBothViewports('a chip with no tap keeps its line', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(tester, Center(child: _chip(_timed)), size: size);
+      expect(tester.getSize(key).height, CalendarEventChip.height);
+      await expectTapTargetGuidelines(tester);
+    });
+
+    testWidgets('a desktop keeps the mouse-sized chip', (tester) async {
+      await pumpAt(tester, Center(child: _chip(_timed, onTap: () {})));
+      expect(tester.getSize(key).height, CalendarEventChip.height);
+    }, variant: TargetPlatformVariant.desktop());
   });
 }

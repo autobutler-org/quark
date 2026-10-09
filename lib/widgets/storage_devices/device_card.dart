@@ -170,6 +170,8 @@ class DeviceCard extends StatelessWidget {
                     ),
                     labelStyle: theme.textTheme.bodySmall,
                     padding: const EdgeInsets.symmetric(horizontal: 4),
+                    // A label with no tap of its own, so shrinking it takes
+                    // nothing from a touch target (#2939).
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
                   );

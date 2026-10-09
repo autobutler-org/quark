@@ -31,7 +31,12 @@ import 'calendar_month_grid/month_day_cell.dart';
 /// Tapping a date calls [onDayTap], which is also what its "+N more" does:
 /// the Day view is where every event on it fits. A long press calls
 /// [onDayLongPress], and on desktop, hovering a date shows an add button that
-/// calls [onAddTap].
+/// calls [onAddTap]. Tapping an event calls [onEventTap] with a mouse; on a
+/// touch platform, where an event's line is too thin to hit, that tap is the
+/// date's too when there is an [onDayTap] (#2939). The date is then the one
+/// target, and at least 48dp while the grid is at least 336dp wide and its
+/// rows share 48dp each: a narrower phone, or one on its side, squeezes it
+/// under that.
 ///
 /// Key prefixes: `calendar_day_<yyyy-mm-dd>` on each date,
 /// `calendar_add_<yyyy-mm-dd>` on its hover add button,
@@ -95,7 +100,8 @@ class CalendarMonthGrid extends StatelessWidget {
   /// Called with the date whose hover add button was pressed. Null hides it.
   final ValueChanged<DateTime>? onAddTap;
 
-  /// Called with the event whose chip was tapped.
+  /// Called with the event whose chip was tapped. Not on a touch platform
+  /// when [onDayTap] is given, where a tap on a chip is a tap on its date.
   final ValueChanged<CalendarEventItem>? onEventTap;
 
   /// Called by the empty month's "Add an event". Null hides the button.

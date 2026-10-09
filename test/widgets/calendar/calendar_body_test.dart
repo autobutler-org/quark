@@ -143,26 +143,38 @@ void main() {
     });
   }
 
-  // #2603, #2605: every view's controls are labeled, and Upcoming's are 48dp.
-  // The day, week and month grids draw slots, day cells and event chips to
-  // the calendar's scale, which quark_widgets exempts from the size check
-  // until those views are redesigned, so they are held to labels only.
+  // #2603, #2605, #2939: every view's controls are labeled 48dp targets, the
+  // day, week and month grids' slots, dates and events among them.
   for (final size in const [narrowViewport, wideViewport]) {
     for (final view in CalendarView.values) {
-      testWidgets('${view.slug} is labeled tap targets at $size', (
+      testWidgets('${view.slug} is labeled 48dp tap targets at $size', (
         tester,
       ) async {
+        final noon = DateTime(today.year, today.month, today.day, 12);
         await pumpBody(
           tester,
           size,
           view: view,
           isInitialLoad: false,
           error: "Couldn't load your calendar.",
+          occurrences: [
+            // A quarter hour, the block a finger used to miss.
+            CalendarEventItem(
+              eventId: 1,
+              title: 'Standup',
+              start: noon,
+              end: noon.add(const Duration(minutes: 15)),
+            ),
+            CalendarEventItem(
+              eventId: 2,
+              title: 'Rent due',
+              start: today,
+              end: CalendarDates.addDays(today, 1),
+              allDay: true,
+            ),
+          ],
         );
-        await expectTapTargetGuidelines(
-          tester,
-          checkSize: view == CalendarView.upcoming,
-        );
+        await expectTapTargetGuidelines(tester);
       });
     }
   }

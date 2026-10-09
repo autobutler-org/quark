@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:quark_widgets/src/calendar/calendar_time_grid/time_grid_hour_gutter.dart';
 import 'package:quark_widgets/src/calendar/calendar_time_grid/time_grid_layout.dart';
 
 import '../support/pump.dart';
@@ -33,6 +34,20 @@ final _garden = CalendarEventItem(
   end: DateTime(2026, 9, 30),
   allDay: true,
 );
+final _blip = _at(8, 'Blip', 14, 0, 5);
+
+/// Two more all-day events on [_today], enough with [_garden] to overflow
+/// its cell into a "+N" line.
+final _moreAllDay = [
+  for (final (id, title) in [(9, 'Rent due'), (10, 'Bins out')])
+    CalendarEventItem(
+      eventId: id,
+      title: title,
+      start: _today,
+      end: DateTime(2026, 9, 30),
+      allDay: true,
+    ),
+];
 
 Widget _grid({
   required List<DateTime> days,
@@ -87,6 +102,28 @@ void main() {
       final blip = _at(6, 'Blip', 9, 0, 5);
       final placed = layoutDay(_today, [blip]).single;
       expect(placed.endMinute - placed.startMinute, minimumBlockMinutes);
+    });
+
+    test('draws nothing shorter than the minimum it is asked for', () {
+      final placed = layoutDay(_today, [_blip, _vet], minimumMinutes: 48);
+      expect([
+        for (final p in placed) p.endMinute - p.startMinute,
+      ], everyElement(greaterThanOrEqualTo(48)));
+      expect(placed.first.startMinute, 14 * 60);
+    });
+
+    test('backs a short event up from midnight to keep its height', () {
+      final nightcap = _at(11, 'Nightcap', 23, 50, 10);
+      final placed = layoutDay(_today, [nightcap], minimumMinutes: 48).single;
+      expect((placed.startMinute, placed.endMinute), (24 * 60 - 48, 24 * 60));
+    });
+
+    test('numbers each group of overlapping events', () {
+      final placed = {
+        for (final p in layoutDay(_today, [_vet, _lunch, _call])) p.item: p,
+      };
+      expect(placed[_call]!.group, placed[_lunch]!.group);
+      expect(placed[_vet]!.group, isNot(placed[_call]!.group));
     });
 
     test('skips all-day events and other dates', () {
@@ -204,21 +241,243 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testBothViewports('its slots, events and dates can be pressed by a screen '
-      'reader', (tester, size) async {
-    await pumpAt(
-      tester,
-      _grid(
-        days: CalendarDates.weekOf(_today),
-        onSlotTap: (_) {},
-        onEventTap: (_) {},
-        onDayTap: (_) {},
-      ),
-      size: size,
-    );
+  group('touch targets (#2939)', () {
+    final week = CalendarDates.weekOf(_today);
+    final crowd = find.byKey(const ValueKey('calendar_crowd_2026-09-29_720'));
+    final lunch = find.byKey(const ValueKey('calendar_event_2_2026-09-29'));
+    final blip = find.byKey(const ValueKey('calendar_event_8_2026-09-29'));
 
-    // Event blocks are as tall as their events last, which #2605 leaves open.
-    await expectTapTargetGuidelines(tester, checkSize: false);
+    for (final (name, days) in [
+      ('week', week),
+      ('day', [_today]),
+    ]) {
+      testBothViewports("a $name's slots, events, all-day lines and dates "
+          'are labeled 48dp targets a screen reader can press', (
+        tester,
+        size,
+      ) async {
+        await pumpAt(
+          tester,
+          _grid(
+            days: days,
+            events: [_call, _lunch, _vet, _blip, _garden, ..._moreAllDay],
+            onSlotTap: (_) {},
+            onEventTap: (_) {},
+            onDayTap: (_) {},
+          ),
+          size: size,
+        );
+
+        expect(
+          find.byKey(const ValueKey('calendar_all_day_more_2026-09-29')),
+          findsOneWidget,
+        );
+        await expectTapTargetGuidelines(tester);
+      });
+    }
+
+    testBothViewports('a five-minute event is drawn a target tall', (
+      tester,
+      size,
+    ) async {
+      await pumpAt(
+        tester,
+        _grid(days: [_today], events: [_blip], onEventTap: (_) {}),
+        size: size,
+      );
+      expect(
+        tester.getSize(blip).height,
+        greaterThanOrEqualTo(kMinInteractiveDimension),
+      );
+    });
+
+    testWidgets('a desktop draws a five-minute event to the mouse-sized '
+        'minimum', (tester) async {
+      await pumpAt(
+        tester,
+        _grid(days: [_today], events: [_blip], onEventTap: (_) {}),
+      );
+      expect(
+        tester.getSize(blip).height,
+        minimumBlockMinutes * 56 / 60 - blockGap,
+      );
+    }, variant: TargetPlatformVariant.desktop());
+
+    testWidgets("a phone week's columns are each a target wide, with the "
+        'hours in a narrow gutter', (tester) async {
+      await pumpAt(
+        tester,
+        _grid(
+          days: week,
+          now: _now,
+          onSlotTap: (_) {},
+          onEventTap: (_) {},
+          onDayTap: (_) {},
+        ),
+        size: narrowViewport,
+      );
+      // Measured, not left to the guideline, which skips the headers and the
+      // last column for touching the screen's edge.
+      for (final key in [
+        for (final day in week)
+          ValueKey('calendar_day_header_${CalendarDates.key(day)}'),
+        const ValueKey('calendar_slot_2026-10-03_13'),
+        const ValueKey('calendar_event_3_2026-09-29'),
+        const ValueKey('calendar_event_4_2026-09-29'),
+      ]) {
+        final size = tester.getSize(find.byKey(key));
+        expect(
+          size.shortestSide,
+          greaterThanOrEqualTo(kMinInteractiveDimension),
+          reason: '$key is $size',
+        );
+      }
+      expect(find.text('12p'), findsOneWidget);
+      expect(find.text('12 PM'), findsNothing);
+      // The now line stays; its time has no room in the gutter.
+      expect(find.byKey(const ValueKey('calendar_now_line')), findsOneWidget);
+      expect(find.text('3:40pm'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a phone day and a wide week keep the full hour labels', (
+      tester,
+    ) async {
+      await pumpAt(tester, _grid(days: [_today]), size: narrowViewport);
+      expect(find.text('12 PM'), findsOneWidget);
+      await pumpAt(tester, _grid(days: week), size: wideViewport);
+      expect(find.text('12 PM'), findsOneWidget);
+    });
+
+    testWidgets("a phone week's overlapping events share one target that "
+        'opens the day', (tester) async {
+      final opened = <DateTime>[];
+      final events = <CalendarEventItem>[];
+      await pumpAt(
+        tester,
+        _grid(days: week, onEventTap: events.add, onDayTap: opened.add),
+        size: narrowViewport,
+      );
+      final handle = tester.ensureSemantics();
+
+      expect(
+        tester.getSemantics(crowd),
+        isSemantics(
+          isButton: true,
+          hasTapAction: true,
+          label: '2 events, show Tuesday, September 29',
+        ),
+      );
+      // The blocks still read, but neither is a button of its own.
+      expect(
+        tester.getSemantics(lunch),
+        isSemantics(label: 'Lunch with Sam, 12:30 – 1:30 PM'),
+      );
+      handle.dispose();
+
+      await tester.tap(lunch);
+      expect(opened, [_today]);
+      expect(events, isEmpty);
+      // An event on its own in the column keeps its own tap.
+      await tester.tap(
+        find.byKey(const ValueKey('calendar_event_3_2026-09-29')),
+      );
+      expect(events, [_vet]);
+    });
+
+    testWidgets('overlapping events with room for a target each keep their '
+        'own taps', (tester) async {
+      final events = <CalendarEventItem>[];
+      for (final (days, size) in [
+        (week, wideViewport),
+        ([_today], narrowViewport),
+      ]) {
+        await pumpAt(
+          tester,
+          _grid(days: days, onEventTap: events.add, onDayTap: (_) {}),
+          size: size,
+        );
+        expect(crowd, findsNothing);
+        await tester.tap(lunch);
+      }
+      expect(events, [_lunch, _lunch]);
+    });
+
+    testWidgets('a desktop week in a narrow window keeps its gutter, and '
+        'leaves narrow lanes their own taps', (tester) async {
+      final events = <CalendarEventItem>[];
+      await pumpAt(
+        tester,
+        _grid(days: week, now: _now, onEventTap: events.add, onDayTap: (_) {}),
+        size: narrowViewport,
+      );
+      expect(find.text('12 PM'), findsOneWidget);
+      expect(find.text('3:40pm'), findsOneWidget);
+      expect(crowd, findsNothing);
+      await tester.tap(lunch);
+      expect(events, [_lunch]);
+    }, variant: TargetPlatformVariant.desktop());
+
+    testWidgets('a week with no day to open leaves narrow lanes their own '
+        'taps', (tester) async {
+      final events = <CalendarEventItem>[];
+      await pumpAt(
+        tester,
+        _grid(days: week, onEventTap: events.add),
+        size: narrowViewport,
+      );
+      expect(crowd, findsNothing);
+      await tester.tap(lunch);
+      expect(events, [_lunch]);
+    });
+
+    testWidgets('an all-day overflow line says what it opens', (tester) async {
+      DateTime? opened;
+      await pumpAt(
+        tester,
+        _grid(
+          days: week,
+          events: [_garden, ..._moreAllDay],
+          onDayTap: (d) => opened = d,
+        ),
+        size: narrowViewport,
+      );
+      final handle = tester.ensureSemantics();
+      final more = find.byKey(
+        const ValueKey('calendar_all_day_more_2026-09-29'),
+      );
+      expect(
+        tester.getSemantics(more),
+        isSemantics(
+          isButton: true,
+          hasTapAction: true,
+          label: '2 more, show Tuesday, September 29',
+        ),
+      );
+      handle.dispose();
+      await tester.tap(more);
+      expect(opened, _today);
+    });
+
+    testLargeText("a phone week's narrow gutter scales its labels down "
+        'rather than clip them', (tester, size) async {
+      await pumpAt(
+        tester,
+        _grid(days: week, onSlotTap: (_) {}, onDayTap: (_) {}),
+        size: size,
+      );
+      expect(tester.takeException(), isNull);
+      if (size == narrowViewport) {
+        final gutter = tester.getSize(find.byType(TimeGridHourGutter)).width;
+        for (final label in ['12p', 'All\nday']) {
+          final box = find.ancestor(
+            of: find.text(label),
+            matching: find.byType(FittedBox),
+          );
+          expect(tester.getSize(box).width, lessThanOrEqualTo(gutter));
+        }
+      }
+    });
   });
 
   group('an empty day (#2538)', () {

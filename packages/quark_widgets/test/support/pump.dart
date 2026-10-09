@@ -137,18 +137,10 @@ Future<void> pumpInSheet(
 /// 48dp at one width can still be squeezed below it at the other. The size
 /// check skips a target touching the edge of the screen or of a scrollable, so
 /// pump the widget inset from both — a [Center] or a [Padding] is enough.
-///
-/// [checkSize] false skips the 48x48 check, for a widget that draws its
-/// targets to a scale of its own and says why where it is called.
-Future<void> expectTapTargetGuidelines(
-  WidgetTester tester, {
-  bool checkSize = true,
-}) async {
+Future<void> expectTapTargetGuidelines(WidgetTester tester) async {
   final handle = tester.ensureSemantics();
   await tester.pump();
-  if (checkSize) {
-    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
-  }
+  await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
   await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
   await expectLater(tester, meetsGuideline(buttonTapActionGuideline));
   handle.dispose();
