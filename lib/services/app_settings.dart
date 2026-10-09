@@ -142,6 +142,11 @@ class AppSettings {
   /// Off still honors the platform's setting.
   final ValueNotifier<bool> highContrast = ValueNotifier(false);
 
+  /// Whether the navigation controls are mirrored for the left hand (#1812):
+  /// the brand button and the drawer on the right, floating buttons on the
+  /// left.
+  final ValueNotifier<bool> leftHanded = ValueNotifier(false);
+
   final ValueNotifier<bool> demoMode = ValueNotifier(false);
 
   /// How the photo grid orders its items, and the direction — All photos,
@@ -295,6 +300,7 @@ class AppSettings {
   static const _ownerWelcomeHostsKey = 'ownerWelcomeHosts';
   static const _demoModeKey = 'demoMode';
   static const _highContrastKey = 'highContrast';
+  static const _leftHandedKey = 'leftHanded';
   static const _photoSortFieldKey = 'photoSortField';
   static const _photoSortOrderKey = 'photoSortOrder';
   static const _albumSortKey = 'albumSort';
@@ -321,6 +327,7 @@ class AppSettings {
         ? ThemeMode.dark
         : ThemeMode.system;
     highContrast.value = _prefs!.getBool(_highContrastKey) ?? false;
+    leftHanded.value = _prefs!.getBool(_leftHandedKey) ?? false;
     demoMode.value = _prefs!.getBool(_demoModeKey) ?? false;
 
     final sortFieldRaw = _prefs!.getString(_photoSortFieldKey);
@@ -786,6 +793,11 @@ class AppSettings {
   Future<void> setHighContrast(bool enabled) async {
     highContrast.value = enabled;
     await _prefs?.setBool(_highContrastKey, enabled);
+  }
+
+  Future<void> setLeftHanded(bool enabled) async {
+    leftHanded.value = enabled;
+    await _prefs?.setBool(_leftHandedKey, enabled);
   }
 
   Future<void> setDemoMode(bool enabled) async {

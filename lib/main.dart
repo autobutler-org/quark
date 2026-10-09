@@ -70,6 +70,7 @@ class QuarkApp extends StatelessWidget {
         settings.themeMode,
         settings.themeColor,
         settings.highContrast,
+        settings.leftHanded,
       ]),
       builder: (context, _) {
         final themeColor = settings.themeColor.value;
@@ -99,7 +100,12 @@ class QuarkApp extends StatelessWidget {
               jobs: JobsController.instance,
               connection: ConnectionController.instance,
               onNavigate: router.go,
-              child: child ?? const SizedBox.shrink(),
+              // Every page's bar, drawer and floating button reads this, so
+              // the whole app mirrors from the one setting (#1812).
+              child: QuarkHandedness(
+                leftHanded: settings.leftHanded.value,
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           ),
           localizationsDelegates: const [

@@ -43,14 +43,12 @@ class _BooksPageState extends State<BooksPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: QuarkAppBar(
-        label: 'Books',
-        icon: QuarkIcons.menu_book_outlined,
-        onRefresh: manualRefresh,
-        isRefreshing: isRefreshing,
-        actions: const [AppThemeToggle()],
-      ),
+    return QuarkPageScaffold(
+      title: 'Books',
+      icon: QuarkIcons.menu_book_outlined,
+      onRefresh: manualRefresh,
+      isRefreshing: isRefreshing,
+      actions: const [AppThemeToggle()],
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.books),
       body: ListenableBuilder(
         listenable: _controller,

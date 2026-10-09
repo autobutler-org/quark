@@ -797,6 +797,56 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkHandedness',
+    group: 'Layout',
+    build: (context, log) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final leftHanded in const [false, true]) ...[
+          Text(
+            leftHanded
+                ? 'left-handed: brand and drawer right, floating button left'
+                : 'right-handed: the default, and what no scope gives',
+          ),
+          const SizedBox(height: 8),
+          FramedViewport(
+            width: 360,
+            height: 320,
+            child: QuarkHandedness(
+              leftHanded: leftHanded,
+              child: QuarkPageScaffold(
+                title: 'Vault',
+                icon: QuarkIcons.lock_outline,
+                onRefresh: () => log('QuarkHandedness page refresh'),
+                actions: [
+                  QuarkBarIconButton(
+                    icon: QuarkIcons.search,
+                    tooltip: 'Search',
+                    onPressed: () => log('QuarkHandedness page search'),
+                  ),
+                ],
+                drawer: QuarkDrawer(
+                  activeSection: QuarkDrawerSection.vault,
+                  onTapFiles: () => log('QuarkDrawer.onTapFiles'),
+                ),
+                floatingActionButton: FloatingActionButton(
+                  // Two pages on one route: without its own tag the pair
+                  // would share the default hero.
+                  heroTag: 'handedness_fab_$leftHanded',
+                  tooltip: 'New entry',
+                  onPressed: () => log('QuarkHandedness page create'),
+                  child: const Icon(QuarkIcons.add),
+                ),
+                body: const Center(child: Text('The page body goes here')),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ],
+    ),
+  ),
+  GalleryEntry(
     name: 'QuarkSplitView',
     group: 'Layout',
     build: (context, log) => SplitViewDemo(log: log),

@@ -129,63 +129,61 @@ class _VaultPageState extends State<VaultPage>
   Widget build(BuildContext context) {
     final unlocked = _status?.initialized == true && !(_status?.locked ?? true);
     final showFab = unlocked && MediaQuery.of(context).size.width < 860;
-    return Scaffold(
-      appBar: QuarkAppBar(
-        label: 'Vault',
-        icon: QuarkIcons.lock_outline,
-        // A locked or uninitialized vault has nothing on screen to reload.
-        onRefresh: unlocked ? manualRefresh : null,
-        isRefreshing: isRefreshing,
-        actions: [
-          if (unlocked) ...[
-            // Below the floating button's breakpoint the button is the way
-            // in, and a second one in a full bar would crowd out the rest.
-            if (!showFab)
-              QuarkBarChip(
-                key: const ValueKey('vault_new_entry'),
-                icon: QuarkIcons.add_rounded,
-                label: 'New entry',
-                onPressed: () => _showEntryEditor(context),
-              ),
-            QuarkBarIconButton(
-              key: const ValueKey('vault_lock'),
-              icon: QuarkIcons.lock_open,
-              tooltip: 'Lock vault',
-              onPressed: _lockVault,
+    return QuarkPageScaffold(
+      title: 'Vault',
+      icon: QuarkIcons.lock_outline,
+      // A locked or uninitialized vault has nothing on screen to reload.
+      onRefresh: unlocked ? manualRefresh : null,
+      isRefreshing: isRefreshing,
+      actions: [
+        if (unlocked) ...[
+          // Below the floating button's breakpoint the button is the way
+          // in, and a second one in a full bar would crowd out the rest.
+          if (!showFab)
+            QuarkBarChip(
+              key: const ValueKey('vault_new_entry'),
+              icon: QuarkIcons.add_rounded,
+              label: 'New entry',
+              onPressed: () => _showEntryEditor(context),
             ),
-            MenuAnchor(
-              menuChildren: [
-                MenuItemButton(
-                  key: const ValueKey('vault_import'),
-                  leadingIcon: const Icon(QuarkIcons.upload_rounded),
-                  onPressed: () => _showImportDialog(context),
-                  child: const Text('Import'),
-                ),
-                MenuItemButton(
-                  key: const ValueKey('vault_export_json'),
-                  leadingIcon: const Icon(QuarkIcons.download_outlined),
-                  onPressed: () => _doExport('json'),
-                  child: const Text('Export as JSON'),
-                ),
-                MenuItemButton(
-                  key: const ValueKey('vault_export_csv'),
-                  leadingIcon: const Icon(QuarkIcons.download_outlined),
-                  onPressed: () => _doExport('csv'),
-                  child: const Text('Export as CSV'),
-                ),
-              ],
-              builder: (context, controller, _) => QuarkBarIconButton(
-                key: const ValueKey('vault_more'),
-                icon: QuarkIcons.more_vert,
-                tooltip: 'Import and export',
-                onPressed: () =>
-                    controller.isOpen ? controller.close() : controller.open(),
+          QuarkBarIconButton(
+            key: const ValueKey('vault_lock'),
+            icon: QuarkIcons.lock_open,
+            tooltip: 'Lock vault',
+            onPressed: _lockVault,
+          ),
+          MenuAnchor(
+            menuChildren: [
+              MenuItemButton(
+                key: const ValueKey('vault_import'),
+                leadingIcon: const Icon(QuarkIcons.upload_rounded),
+                onPressed: () => _showImportDialog(context),
+                child: const Text('Import'),
               ),
+              MenuItemButton(
+                key: const ValueKey('vault_export_json'),
+                leadingIcon: const Icon(QuarkIcons.download_outlined),
+                onPressed: () => _doExport('json'),
+                child: const Text('Export as JSON'),
+              ),
+              MenuItemButton(
+                key: const ValueKey('vault_export_csv'),
+                leadingIcon: const Icon(QuarkIcons.download_outlined),
+                onPressed: () => _doExport('csv'),
+                child: const Text('Export as CSV'),
+              ),
+            ],
+            builder: (context, controller, _) => QuarkBarIconButton(
+              key: const ValueKey('vault_more'),
+              icon: QuarkIcons.more_vert,
+              tooltip: 'Import and export',
+              onPressed: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
             ),
-          ],
-          const AppThemeToggle(),
+          ),
         ],
-      ),
+        const AppThemeToggle(),
+      ],
       drawer: const AppDrawer(activeSection: QuarkDrawerSection.vault),
       body: _buildBody(),
       floatingActionButton: showFab

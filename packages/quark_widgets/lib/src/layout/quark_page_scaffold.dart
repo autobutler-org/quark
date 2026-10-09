@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'edge_inset/quark_edge_inset.dart';
 import 'quark_app_bar.dart';
+import 'quark_handedness.dart';
 
 /// The shape every top-level Quark page wears: the shared app bar, the
 /// navigation drawer, a body, and an optional bar pinned to the bottom.
@@ -20,6 +21,10 @@ import 'quark_app_bar.dart';
 /// left alone: its content scrolls under the system bars, which is what a
 /// photo grid wants. Chrome the body pins to the bottom edge itself, such as
 /// a chat composer, is the body's to inset, with a [QuarkEdgeInset].
+///
+/// Under a left-handed [QuarkHandedness] scope the shell is mirrored (#1812):
+/// the drawer slides in from the right edge, where the bar's brand button has
+/// moved to, and [floatingActionButton] floats at the bottom left.
 ///
 /// Key prefixes: `brand_button` and `refresh_button`, from the [QuarkAppBar]
 /// it builds. The scaffold has nothing tappable of its own.
@@ -46,6 +51,7 @@ class QuarkPageScaffold extends StatelessWidget {
     this.isRefreshing = false,
     this.drawer,
     this.bottomBar,
+    this.floatingActionButton,
     this.appBar,
     super.key,
   });
@@ -70,13 +76,18 @@ class QuarkPageScaffold extends StatelessWidget {
   /// Whether that reload is already running. Ignored when [onRefresh] is null.
   final bool isRefreshing;
 
-  /// The navigation drawer, opened by the brand button. Null leaves the page
-  /// without one, and the brand button then does nothing.
+  /// The navigation drawer, opened by the brand button, on the left edge or,
+  /// when left-handed, the right. Null leaves the page without one, and the
+  /// brand button then does nothing.
   final Widget? drawer;
 
   /// A bar pinned below [body] and inset for the system bottom edge. Null
   /// renders no bar and gives the body the full height.
   final Widget? bottomBar;
+
+  /// A button floating over [body], at the bottom right, or the bottom left
+  /// when left-handed. Null renders none.
+  final Widget? floatingActionButton;
 
   /// Replaces the default [QuarkAppBar] entirely, for a page with a second
   /// mode. Null builds the default bar from [title], [icon], [actions], and
@@ -85,6 +96,7 @@ class QuarkPageScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final leftHanded = QuarkHandedness.isLeftHanded(context);
     return Scaffold(
       appBar:
           appBar ??
@@ -95,8 +107,13 @@ class QuarkPageScaffold extends StatelessWidget {
             onRefresh: onRefresh,
             isRefreshing: isRefreshing,
           ),
-      drawer: drawer,
+      drawer: leftHanded ? null : drawer,
+      endDrawer: leftHanded ? drawer : null,
       body: body,
+      floatingActionButton: floatingActionButton,
+      floatingActionButtonLocation: leftHanded
+          ? FloatingActionButtonLocation.startFloat
+          : null,
       bottomNavigationBar: bottomBar == null
           ? null
           : SafeArea(top: false, child: bottomBar!),

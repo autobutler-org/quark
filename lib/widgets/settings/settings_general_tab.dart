@@ -4,8 +4,8 @@ import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The General tab of Settings (#2350): backend hosts, theme, the high
-/// contrast switch (#2601), the theme color (#2740), the auto-refresh interval and demo mode, plus a link to the
-/// drives. Beta switches live on the Features tab (#2542).
+/// contrast switch (#2601), the left-handed switch (#1812), the theme color (#2740), the auto-refresh interval and
+/// demo mode, plus a link to the drives. Beta switches live on the Features tab (#2542).
 ///
 /// First because it holds the backend hosts, which every "manage hosts" link
 /// in the app lands on. The page owns the values; this tab renders them and
@@ -17,6 +17,8 @@ class SettingsGeneralTab extends StatelessWidget {
     required this.onThemeChanged,
     this.highContrast = false,
     this.onHighContrastChanged,
+    this.leftHanded = false,
+    this.onLeftHandedChanged,
     required this.themeColor,
     required this.followsQuarkThemeColor,
     required this.quarkThemeColor,
@@ -43,6 +45,12 @@ class SettingsGeneralTab extends StatelessWidget {
 
   /// Called when the user flips high contrast. Null hides the switch.
   final ValueChanged<bool>? onHighContrastChanged;
+
+  /// Whether the navigation controls are mirrored for the left hand.
+  final bool leftHanded;
+
+  /// Called when the user flips left-handed mode. Null hides the switch.
+  final ValueChanged<bool>? onLeftHandedChanged;
 
   /// The theme color the app wears: the user's own, or the Quark's while
   /// [followsQuarkThemeColor].
@@ -133,6 +141,19 @@ class SettingsGeneralTab extends StatelessWidget {
               ),
               value: highContrast,
               onChanged: onHighContrastChanged,
+            ),
+          ),
+        if (onLeftHandedChanged != null)
+          Card(
+            child: SwitchListTile(
+              key: const ValueKey('settings_left_handed'),
+              title: const Text('Left-handed mode'),
+              subtitle: const Text(
+                'Moves the menu button and the menu to the right, and '
+                'floating buttons to the left.',
+              ),
+              value: leftHanded,
+              onChanged: onLeftHandedChanged,
             ),
           ),
         if (onThemeColorChanged != null) ...[

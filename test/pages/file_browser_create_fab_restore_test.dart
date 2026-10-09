@@ -10,6 +10,8 @@ import 'package:quark/pages/file_browser_page.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/widgets/file_browser/file_browser_create_fab.dart';
+import 'package:quark/widgets/layout/app_drawer.dart';
+import 'package:quark_widgets/quark_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Answers every call with just enough of a backend for the listing to render:
@@ -182,4 +184,45 @@ void main() {
       expect(fabVisible(tester), isTrue, reason: 'back on the list (#1811)');
     }, createHttpClient: (c) => _ListingClient());
   });
+
+  // #1812: Files builds its own Scaffold, so it mirrors by reading the scope
+  // itself rather than through QuarkPageScaffold.
+  for (final leftHanded in [false, true]) {
+    testWidgets('left-handed $leftHanded puts the create FAB and the drawer '
+        'on the matching edges', (tester) async {
+      const size = Size(360, 640);
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await HttpOverrides.runZoned(() async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: QuarkHandedness(
+              leftHanded: leftHanded,
+              child: const FileBrowserPage(initialPath: '/'),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final fab = tester.getCenter(find.byType(FileBrowserCreateFab)).dx;
+        final brand = tester
+            .getCenter(find.byKey(const ValueKey('brand_button')))
+            .dx;
+        expect(fab < size.width / 2, leftHanded, reason: 'FAB at $fab');
+        expect(brand > size.width / 2, leftHanded, reason: 'brand at $brand');
+
+        await tester.tap(find.byKey(const ValueKey('brand_button')));
+        await tester.pumpAndSettle();
+
+        final drawer = tester.getRect(find.byType(AppDrawer));
+        expect(
+          leftHanded ? drawer.right : drawer.left,
+          leftHanded ? size.width : 0,
+        );
+        expect(tester.takeException(), isNull);
+      }, createHttpClient: (c) => _ListingClient());
+    });
+  }
 }
