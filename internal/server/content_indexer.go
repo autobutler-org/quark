@@ -2,14 +2,17 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"log"
-	"path/filepath"
+	"maps"
+	"slices"
+	"sync"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/searchutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // startContentIndexer subscribes to file events and keeps the FTS5 content
@@ -20,6 +23,10 @@ import (
 // Delete → remove index entry
 // Move   → remove old entry, index new path
 // Resync → backfill every device, as at startup
+//
+// Every file is read through its device's files namespace in the VFS
+// registry. A device plugged in later is backfilled once its namespace is
+// registered, and its entries are dropped when it is unplugged.
 //
 // Indexing is best-effort: failures are logged but never surfaced to the
 // caller. The index can always be rebuilt from disk.
@@ -33,61 +40,63 @@ func startContentIndexer(deps deputil.Dependencies) {
 		return
 	}
 	db := dbConn.Db
+	registry := deps.VFSRegistry()
+
+	if svc := deps.StorageService(); svc != nil {
+		devices := newContentDevices(registry)
+		svc.OnDevicesChanged(func() { go devices.sync(db, registry) })
+	}
 
 	ch, unsub := bus.Subscribe("content-indexer")
 	defer unsub()
 
 	for evt := range ch {
-		switch evt.Kind {
-		case eventbus.EventResync:
-			// The bus dropped events while this loop was busy (#2753), so
-			// index the whole tree again, as at startup.
-			backfillContentIndex(deps)
+		handleContentEvent(deps, db, registry, evt)
+	}
+}
 
-		case eventbus.EventUpload:
-			if evt.Path == "" {
-				continue
-			}
-			serial, absPath := resolveEventPath(deps, evt)
-			if absPath == "" {
-				continue
-			}
-			relPath := evt.Path
-			if err := searchutil.IndexFileWithTimeout(db, serial, relPath, absPath, indexTimeout); err != nil {
-				log.Printf("[content-indexer] index %s: %v", relPath, err)
-			}
+// handleContentEvent applies one file event to the content index.
+func handleContentEvent(deps deputil.Dependencies, db *sql.DB, registry vfs.Registry, evt eventbus.Event) {
+	if evt.Kind == eventbus.EventResync {
+		// The bus dropped events while this loop was busy (#2753), so
+		// index the whole tree again, as at startup.
+		backfillContentIndex(deps)
+		return
+	}
+	if evt.Path == "" {
+		return
+	}
+	serial := evt.DeviceSerial
+	switch evt.Kind {
+	case eventbus.EventUpload:
+		indexEventPath(db, registry, serial, evt.Path)
 
-		case eventbus.EventDelete:
-			if evt.Path == "" {
-				continue
-			}
-			serial := evt.DeviceSerial
-			if err := searchutil.DeleteContent(context.Background(), db, serial, evt.Path); err != nil {
-				log.Printf("[content-indexer] delete %s: %v", evt.Path, err)
-			}
-
-		case eventbus.EventMove:
-			if evt.Path == "" {
-				continue
-			}
-			serial := evt.DeviceSerial
-			// Remove old entry.
-			if err := searchutil.DeleteContent(context.Background(), db, serial, evt.Path); err != nil {
-				log.Printf("[content-indexer] delete old path %s: %v", evt.Path, err)
-			}
-			// Index new path if non-empty.
-			if evt.NewPath != "" {
-				serial2, absNew := resolveEventPath(deps, eventbus.Event{
-					Path:         evt.NewPath,
-					DeviceSerial: evt.DeviceSerial,
-				})
-				if absNew != "" {
-					if err := searchutil.IndexFileWithTimeout(db, serial2, evt.NewPath, absNew, indexTimeout); err != nil {
-						log.Printf("[content-indexer] index new path %s: %v", evt.NewPath, err)
-					}
-				}
-			}
+	case eventbus.EventDelete:
+		if err := searchutil.DeleteContent(context.Background(), db, serial, evt.Path); err != nil {
+			log.Printf("[content-indexer] delete %s: %v", evt.Path, err)
 		}
+
+	case eventbus.EventMove:
+		// Remove old entry.
+		if err := searchutil.DeleteContent(context.Background(), db, serial, evt.Path); err != nil {
+			log.Printf("[content-indexer] delete old path %s: %v", evt.Path, err)
+		}
+		// Index new path if non-empty.
+		if evt.NewPath != "" {
+			indexEventPath(db, registry, serial, evt.NewPath)
+		}
+	}
+}
+
+// indexEventPath indexes relPath on the device with serial through its files
+// namespace. A device with no namespace is skipped, and so is the trash.
+func indexEventPath(db *sql.DB, registry vfs.Registry, serial, relPath string) {
+	fsys, ok := registry.Get(vfs.FilesNamespace(serial))
+	if !ok {
+		return
+	}
+	if err := searchutil.IndexFileWithTimeout(db, fsys, serial, relPath, indexTimeout); err != nil {
+		log.Printf("[content-indexer] index %s: %v", relPath, err)
 	}
 }
 
@@ -110,53 +119,67 @@ func backfillContentIndex(deps deputil.Dependencies) {
 	if dbConn == nil || dbConn.Db == nil {
 		return
 	}
-	devices, err := deps.StorageService().GetManagedDevices()
-	if err != nil {
-		log.Printf("[content-indexer] backfill: list devices: %v", err)
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), backfillTimeout)
 	defer cancel()
-
-	for _, dev := range devices {
-		serial := ""
-		if dev.UsbInfo != nil {
-			serial = dev.UsbInfo.GetSerial()
-		}
-		res, err := searchutil.BackfillTree(ctx, dbConn.Db, serial, dev.FilesDir)
-		if err != nil {
-			log.Printf("[content-indexer] backfill %s: %v", dev.FilesDir, err)
-			continue
-		}
-		log.Printf(
-			"[content-indexer] backfill %s: scanned %d, indexed %d, failed %d",
-			dev.FilesDir, res.Scanned, res.Indexed, res.Failed,
-		)
+	namespaces := vfs.FilesNamespaces(deps.VFSRegistry())
+	for _, serial := range slices.Sorted(maps.Keys(namespaces)) {
+		backfillDevice(ctx, dbConn.Db, serial, namespaces[serial])
 	}
 }
 
-// resolveEventPath maps an event's DeviceSerial + relative path to an
-// absolute filesystem path. Returns ("", "") when the device cannot be found.
-func resolveEventPath(deps deputil.Dependencies, evt eventbus.Event) (serial, absPath string) {
-	// Trashed files are not searchable; the backfill skips the trash too.
-	if storageutil.IsTrashPath(evt.Path) {
-		return "", ""
-	}
-	serial = evt.DeviceSerial
-	devices, err := deps.StorageService().GetManagedDevices()
+// backfillDevice indexes the files already on one device.
+func backfillDevice(ctx context.Context, db *sql.DB, serial string, fsys vfs.VFS) {
+	res, err := searchutil.BackfillTree(ctx, searchutil.BackfillTreeParams{DB: db, Serial: serial, FS: fsys})
 	if err != nil {
-		return "", ""
+		log.Printf("[content-indexer] backfill %s: %v", vfs.FilesNamespace(serial), err)
+		return
 	}
-	for _, dev := range devices {
-		devSerial := ""
-		if dev.UsbInfo != nil {
-			devSerial = dev.UsbInfo.GetSerial()
+	log.Printf(
+		"[content-indexer] backfill %s: scanned %d, indexed %d, failed %d",
+		vfs.FilesNamespace(serial), res.Scanned, res.Indexed, res.Failed,
+	)
+}
+
+// contentDevices is the set of devices the content index covers, kept in step
+// with the registry's files namespaces as drives come and go.
+type contentDevices struct {
+	mu    sync.Mutex
+	known map[string]bool
+}
+
+// newContentDevices starts from the namespaces registered now, which the
+// startup backfill covers.
+func newContentDevices(registry vfs.Registry) *contentDevices {
+	known := make(map[string]bool)
+	for serial := range vfs.FilesNamespaces(registry) {
+		known[serial] = true
+	}
+	return &contentDevices{known: known}
+}
+
+// sync backfills every device whose namespace appeared and drops the entries
+// of every device whose namespace went away. The internal drive is never
+// dropped.
+func (d *contentDevices) sync(db *sql.DB, registry vfs.Registry) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	present := vfs.FilesNamespaces(registry)
+	for serial := range d.known {
+		if _, ok := present[serial]; ok || serial == "" {
+			continue
 		}
-		if devSerial == serial || (serial == "" && dev.UsbInfo == nil) {
-			abs := filepath.Join(dev.FilesDir, evt.Path)
-			return devSerial, abs
+		delete(d.known, serial)
+		if err := searchutil.DeleteContentBySerial(context.Background(), db, serial); err != nil {
+			log.Printf("[content-indexer] drop %s: %v", vfs.FilesNamespace(serial), err)
 		}
 	}
-	return "", ""
+	ctx, cancel := context.WithTimeout(context.Background(), backfillTimeout)
+	defer cancel()
+	for _, serial := range slices.Sorted(maps.Keys(present)) {
+		if d.known[serial] {
+			continue
+		}
+		d.known[serial] = true
+		backfillDevice(ctx, db, serial, present[serial])
+	}
 }

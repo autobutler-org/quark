@@ -3,6 +3,7 @@ package searchutil
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/autobutler-org/quark/internal/db/dbtest"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	_ "modernc.org/sqlite"
 )
 
@@ -71,7 +73,7 @@ func TestExtractText_PlainText(t *testing.T) {
 	if err := os.WriteFile(path, []byte("hello world"), 0644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	got := ExtractText(path)
+	got := extractTemp(t, path)
 	if got != "hello world" {
 		t.Errorf("ExtractText = %q, want %q", got, "hello world")
 	}
@@ -83,30 +85,72 @@ func TestExtractText_NonIndexable(t *testing.T) {
 	if err := os.WriteFile(path, []byte("fake jpeg"), 0644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	got := ExtractText(path)
+	got := extractTemp(t, path)
 	if got != "" {
 		t.Errorf("ExtractText of non-indexable file should return \"\", got %q", got)
 	}
 }
 
-func TestExtractText_MissingFile(t *testing.T) {
-	got := ExtractText("/nonexistent/path/file.txt")
-	if got != "" {
-		t.Errorf("ExtractText of missing file should return \"\", got %q", got)
+// A file of any size costs at most MaxExtractBytes of reading: the reader is
+// never drained past the cap.
+func TestExtractText_Truncation(t *testing.T) {
+	r := &countingReader{}
+	got := ExtractText("big.txt", r)
+	if len(got) > MaxExtractBytes {
+		t.Errorf("ExtractText returned %d bytes, want <= %d", len(got), MaxExtractBytes)
+	}
+	if r.n > MaxExtractBytes {
+		t.Errorf("ExtractText read %d bytes, want <= %d", r.n, MaxExtractBytes)
 	}
 }
 
-func TestExtractText_Truncation(t *testing.T) {
-	// Create a file larger than MaxExtractBytes.
-	dir := t.TempDir()
-	path := filepath.Join(dir, "big.txt")
-	big := strings.Repeat("a", MaxExtractBytes+100)
-	if err := os.WriteFile(path, []byte(big), 0644); err != nil {
-		t.Fatalf("write: %v", err)
+// countingReader is an endless stream of 'a' that counts what was read.
+type countingReader struct{ n int }
+
+func (r *countingReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = 'a'
 	}
-	got := ExtractText(path)
-	if len(got) > MaxExtractBytes {
-		t.Errorf("ExtractText returned %d bytes, want <= %d", len(got), MaxExtractBytes)
+	r.n += len(p)
+	return len(p), nil
+}
+
+// --- IndexFile ---
+
+// failOpenVFS is a namespace whose every Open fails, to prove a file is never
+// opened.
+type failOpenVFS struct{ vfs.VFS }
+
+func (failOpenVFS) Open(context.Context, string) (vfs.File, error) {
+	return nil, errors.New("opened")
+}
+
+func TestIndexFile(t *testing.T) {
+	ctx := context.Background()
+	db := newTestDB(t)
+	mem := vfs.NewMemVFS("files")
+	if err := mem.Write(ctx, "docs/plan.md", strings.NewReader("echo"), vfs.WriteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := IndexFile(ctx, db, mem, "", "docs/plan.md"); err != nil {
+		t.Fatalf("IndexFile: %v", err)
+	}
+	hits, err := Search(ctx, db, "echo", 10)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(hits) != 1 || hits[0].RelPath != "docs/plan.md" {
+		t.Errorf("hits = %+v, want docs/plan.md", hits)
+	}
+
+	if err := IndexFile(ctx, db, mem, "", "docs/missing.md"); !errors.Is(err, vfs.ErrNotFound) {
+		t.Errorf("IndexFile(missing) = %v, want ErrNotFound", err)
+	}
+	// Neither a binary file nor anything in the trash is opened.
+	for _, p := range []string{"photo.jpg", ".trash/20240101T000000Z_ab_x.md"} {
+		if err := IndexFile(ctx, db, failOpenVFS{mem}, "", p); err != nil {
+			t.Errorf("IndexFile(%s) = %v, want a no-op", p, err)
+		}
 	}
 }
 
