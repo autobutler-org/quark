@@ -118,6 +118,12 @@ each USB drive (`vfs.FilesNamespace`), each a `StorageServiceVFS` rooted at that
 storage service finds the devices; it has no file operations of its own, and the disk work behind a device
 namespace (listing, walking, moving, the trash) is private to `pkg/vfs`.
 
+The compiler keeps the storage service's file operations out of reach; `scripts/check-go-structure.bash` covers
+what it cannot see, a path built by hand. Handlers may not import `os`, and the files directory, a namespace's
+host path (`vfs.HostPather`, for external tools such as dcraw and ffmpeg) and `os` file calls under `pkg/util/`
+are each confined to a commented allowlist in that script. The packages on the `os` list own data outside the
+user's files: the thumbnail cache, upload and transcode staging, settings, system configuration.
+
 ```mermaid
 classDiagram
     class VFS {

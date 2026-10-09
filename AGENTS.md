@@ -335,6 +335,11 @@ Streaming and memory above.
   `pkg/vfs`.
 - **`HostPather` has two permitted uses:** handing a path to an external process (dcraw, exiftool, ffmpeg)
   and symlink resolution in `accessutil`. Never pass its result to `os.Open`; that is what `VFS.Open` is for.
+- **`make check/lint/go` enforces this.** `scripts/check-go-structure.bash` fails a handler that imports `os`,
+  and any read of the files directory, any `HostPather`, or any `os` file call under `pkg/util/` or
+  `pkg/backup/` outside its allowlist. The fix it names is the one above: call the namespace from
+  `deps.VFSRegistry()`. Data that is not the user's files — caches, staging, settings, system config — is why
+  a package is on the `os` allowlist.
 - **The trash is `vfs.Trasher`.** A user delete trashes through the device's namespace and `VFS.Delete` is the
   permanent removal. A trashed item is addressed as `.trash/<trash name>/...`, which `Stat`, `Open` and
   `HostPath` resolve into the trash beside the files directory.
@@ -364,8 +369,15 @@ changes the file tree — upload, move, delete, new folder, conversion, restore 
 - **`scripts/check-go-structure.bash`** enforces the layout rules above, which no general-purpose linter can
   see: every package under `pkg/` and every router package under `internal/server/api/` has its `<pkg>.go`
   interface file and declares nothing private in it, no `v<N>_` filename prefix disagrees with the version
-  directory it sits in, and no handler package imports the low-level packages (`os/exec`, `syscall`,
-  `golang.org/x/sys/unix`, database drivers) that belong in `pkg/util/` or `internal/db/`.
+  directory it sits in, and no handler package imports the low-level packages (`os`, `os/exec`, `syscall`,
+  `golang.org/x/sys/unix`, database drivers) that belong in `pkg/util/` or `internal/db/`. It also keeps file
+  access going through `pkg/vfs` (see that section above): the files directory (`storageutil.GetFilesDir`,
+  `GetFilesDirForDevice`, `ConstructFilesDir`, a `ManagedDevice`'s `.FilesDir`), `vfs.HostPather` and its
+  `photoutil.HostPath` wrapper, and `os` file calls under `pkg/util/` and `pkg/backup/` are each confined to an
+  allowlist at the top of the script, and every entry carries a comment saying why it is there. A new
+  exception goes on that list with its reason, never behind a `//nolint`. `scripts/check-go-structure-test.bash`
+  (`make test/structure/go`, run first by `check/structure/go`) plants one violation of each rule in a fixture
+  module and fails unless the check catches it.
 - **`scripts/check-migration-numbers.bash`** (`make check/migrations`, its own CI job) fails when a migration
   under `internal/db/migrations/` is numbered at or below the base branch's highest, when two migrations share
   a number, when the numbers have a gap in them, or when an `.up.sql` has no `.down.sql` or vice
