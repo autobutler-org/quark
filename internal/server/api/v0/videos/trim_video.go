@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
@@ -15,7 +13,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/videoutil"
 	"github.com/gin-gonic/gin"
 )
@@ -63,75 +60,43 @@ func trimVideo(c *gin.Context) *serverutil.Response {
 		return resp
 	}
 
-	// Resolve files directory.
-	filesDir, err := storageutil.GetFilesDir()
-	if err != nil {
-		return serverutil.InternalServerError(err)
+	fsys := filesVFS(deps, req.Serial)
+	if fsys == nil {
+		return serverutil.NotFound(fmt.Errorf("video not found: %s", req.RelPath))
 	}
-	if deviceDir, ok := deps.StorageService().FindDeviceFilesDirBySerial(req.Serial); ok {
-		filesDir = deviceDir
-	}
-
-	cleanFilesDir := filepath.Clean(filesDir)
-	fullPath := filepath.Join(cleanFilesDir, req.RelPath)
-	if !strings.HasPrefix(fullPath, cleanFilesDir+string(filepath.Separator)) {
-		return serverutil.BadRequest(fmt.Errorf("invalid relPath"))
-	}
-
-	// Validate against video duration.
-	probeCtx, probeCancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-	defer probeCancel()
-	info, err := videoutil.Probe(probeCtx, fullPath)
-	if err != nil {
-		return serverutil.NotFound(fmt.Errorf("video not found or not readable: %s", req.RelPath))
-	}
-	// An end at or past the end of the video means "to the end", and Trim keeps
-	// the rest of the file for it. The client picks endMs from its player's
-	// duration, which is not this probe's and can land a millisecond past it.
-	start := time.Duration(req.StartMs) * time.Millisecond
-	if start >= info.Duration {
-		return serverutil.BadRequest(fmt.Errorf(
-			"startMs (%d) is at or past the end of the video (%d ms)", req.StartMs, info.Duration.Milliseconds(),
-		))
-	}
-	end := min(time.Duration(req.EndMs)*time.Millisecond, info.Duration)
-
-	// Build output filename: {stem}_trimmed{ext}, where ext is the format the
-	// clip is written in.
-	ext := filepath.Ext(filepath.Base(req.RelPath))
-	stem := strings.TrimSuffix(filepath.Base(req.RelPath), ext)
-	if format := "." + string(videoutil.TrimFormat(req.RelPath)); !strings.EqualFold(ext, format) {
-		ext = format
-	}
-	outName := stem + "_trimmed" + ext
-	outFull := storageutil.GetNonConflictingPath(filepath.Join(filepath.Dir(fullPath), outName))
-	outRel, err := filepath.Rel(cleanFilesDir, outFull)
-	if err != nil {
-		return serverutil.InternalServerError(fmt.Errorf("resolve output path: %w", err))
+	if isRoot(req.RelPath) {
+		return serverutil.BadRequest(errInvalidPath)
 	}
 
 	// Stream copy is fast (header rewrite only); 5 minutes is generous headroom.
 	trimCtx, trimCancel := context.WithTimeout(c.Request.Context(), 5*time.Minute)
 	defer trimCancel()
 
-	result, err := videoutil.Trim(trimCtx, videoutil.TrimParams{Source: fullPath, Output: outFull, Start: start, End: end})
-	if errors.Is(err, videoutil.ErrCannotTrim) {
+	result, err := videoutil.TrimFile(trimCtx, videoutil.TrimFileParams{
+		FS:    fsys,
+		Path:  req.RelPath,
+		Start: time.Duration(req.StartMs) * time.Millisecond,
+		End:   time.Duration(req.EndMs) * time.Millisecond,
+	})
+	switch {
+	case errors.Is(err, videoutil.ErrStartPastEnd):
+		return serverutil.BadRequest(fmt.Errorf("startMs (%d) is at or past the end of the video: %w", req.StartMs, err))
+	case errors.Is(err, videoutil.ErrCannotTrim):
 		return serverutil.NewResponse().WithStatusCode(http.StatusUnprocessableEntity).WithError(err)
+	case err != nil:
+		return openError(err, req.RelPath)
 	}
-	if err != nil {
-		return serverutil.InternalServerError(fmt.Errorf("trim video: %w", err))
-	}
-	// GetNonConflictingPath picked a name nothing had, so the clip is always a
-	// new file and never takes ownership of one that was already there.
-	grantOwner(c, deps, access, req.Serial, outRel)
+	// TrimFile wrote the clip under a name nothing had, so it is always a new
+	// file and never takes ownership of one that was already there.
+	grantOwner(c, deps, access, req.Serial, result.Path)
 	// The event a conversion publishes for its output, so open file browsers
 	// list the clip now rather than at their next refresh.
 	if bus := deps.EventBus(); bus != nil {
-		bus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: outRel, DeviceSerial: req.Serial})
+		bus.Publish(eventbus.Event{Kind: eventbus.EventUpload, Path: result.Path, DeviceSerial: req.Serial})
 	}
 
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).
-		WithData(trimVideoResponse{RelPath: outRel, ActualStartMs: result.Start.Milliseconds()})
+		WithData(trimVideoResponse{RelPath: result.Path, ActualStartMs: result.Start.Milliseconds()})
 }
 
 var trimVideoRoute = serverutil.ApiRoute(

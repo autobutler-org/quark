@@ -4,15 +4,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
+	"path"
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/videoutil"
 	"github.com/gin-gonic/gin"
 )
@@ -67,30 +65,12 @@ func getMetadata(c *gin.Context) *serverutil.Response {
 		return serverutil.NotFound(errNoAccess)
 	}
 
-	// Resolve the files directory — same pattern as photos.
-	filesDir, err := storageutil.GetFilesDir()
-	if err != nil {
-		return serverutil.InternalServerError(err)
+	video, resp := openVideo(c, deps, serial, relPath)
+	if resp != nil {
+		return resp
 	}
-	if deviceDir, ok := deps.StorageService().FindDeviceFilesDirBySerial(serial); ok {
-		filesDir = deviceDir
-	}
-
-	cleanFilesDir := filepath.Clean(filesDir)
-	fullPath, err := storageutil.SafeJoin(cleanFilesDir, relPath)
-	if err != nil || fullPath == cleanFilesDir {
-		return serverutil.BadRequest(fmt.Errorf("invalid relPath"))
-	}
-
-	stat, err := os.Stat(fullPath)
-	if os.IsNotExist(err) {
-		return serverutil.NotFound(fmt.Errorf("video not found: %s", relPath))
-	}
-	if err != nil {
-		return serverutil.InternalServerError(err)
-	}
-
-	info, err := videoutil.Probe(c.Request.Context(), fullPath)
+	defer video.Close()
+	info, err := videoutil.ProbeSource(c.Request.Context(), video)
 	if err != nil {
 		return serverutil.InternalServerError(fmt.Errorf("probe video: %w", err))
 	}
@@ -123,9 +103,9 @@ func getMetadata(c *gin.Context) *serverutil.Response {
 	}
 
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(VideoMetadataJSON{
-		FileName:   filepath.Base(relPath),
-		FileSize:   stat.Size(),
-		MTime:      stat.ModTime().Unix(),
+		FileName:   path.Base(relPath),
+		FileSize:   video.Size,
+		MTime:      video.ModTime.Unix(),
 		Duration:   roundTo(info.Duration.Seconds(), 3),
 		Width:      info.Width,
 		Height:     info.Height,

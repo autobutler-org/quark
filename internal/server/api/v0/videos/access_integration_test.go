@@ -20,12 +20,13 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/transcodeutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
 // systemDevice is the internal drive at "/", whose files directory is the one
-// storageutil.GetFilesDir resolves under HOME, the same directory the video
-// handlers fall back to.
+// storageutil.GetFilesDir resolves under HOME, served as the "files"
+// namespace.
 type systemDevice struct{}
 
 func (systemDevice) DetectDevices() ([]storageutil.Device, error) {
@@ -57,13 +58,18 @@ func newVideoHarness(t *testing.T) videoHarness {
 		t.Fatal(err)
 	}
 	storage := storageutil.NewStorageService(systemDevice{})
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, vfs.NewStorageServiceVFS(storage, vfs.FilesNamespace(""))); err != nil {
+		t.Fatal(err)
+	}
 	queue := jobutil.NewQueue(jobutil.NewQueueParams{Database: database})
 	queue.Register(jobutil.RegisterParams{
 		Kind:    transcodeutil.Kind,
-		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{Storage: storage, Database: database}),
+		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{Storage: storage, Registry: registry, Database: database}),
 	})
 	deps := deputil.NewDependencies().
 		WithStorageService(storage).
+		WithVFSRegistry(registry).
 		WithDatabase(database).
 		WithJobQueue(queue)
 	system := accessutil.System

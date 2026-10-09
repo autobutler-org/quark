@@ -7,6 +7,11 @@ import (
 	"github.com/autobutler-org/sprocket/pkg/sprocket"
 )
 
+// maxFreeNameAttempts bounds how many names PlaceUnderFreeName tries. Each
+// taken name costs one attempt, since nothing checks a name ahead of writing
+// it.
+const maxFreeNameAttempts = 1000
+
 // formatSpec is one Format: the sprocket container it names and its display
 // label.
 type formatSpec struct {
