@@ -154,7 +154,7 @@ sequenceDiagram
 | USB monitor            | `server.usbDeviceMonitor`       | every 5 s            | auto-mounts new drives                                    |
 | Vault device monitor   | `server.vaultDeviceMonitor`     | every 10 s           | locks the vault when its drive disappears                 |
 | Session purge          | `authutil`                      | startup + 24 h       | deletes expired sessions                                  |
-| Trash purge            | `storageutil` + `accessutil`    | startup + 1 h        | deletes expired trash and its access rows                 |
+| Trash purge            | `trashutil` + `accessutil`      | startup + 1 h        | deletes expired trash on every device namespace, and its access rows |
 | Upload sweeper         | `uploadutil.SessionStore`       | interval             | removes abandoned chunked uploads                         |
 
 ## Event bus

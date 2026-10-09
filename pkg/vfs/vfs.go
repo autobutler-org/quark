@@ -356,7 +356,10 @@ func FilesNamespaceSerial(namespaceID string) (string, bool) {
 	if namespaceID == filesNamespacePrefix {
 		return "", true
 	}
-	return deviceNamespaceSerial(namespaceID)
+	if serial, ok := deviceNamespaceSerial(namespaceID); ok {
+		return serial, true
+	}
+	return "", false
 }
 
 // SyncDeviceNamespacesParams names the registry to reconcile and the storage
