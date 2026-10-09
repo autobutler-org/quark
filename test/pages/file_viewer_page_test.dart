@@ -59,6 +59,7 @@ void main() {
     String folder,
     String file, {
     Future<Uint8List?> Function(String, {String? serial})? downloadBytes,
+    String? from,
   }) async {
     final view = router.configuration.routes.whereType<GoRoute>().firstWhere(
       (route) => route.path == '${AppRoutes.viewFile}/:path(.*)',
@@ -78,6 +79,10 @@ void main() {
             ),
           ),
         GoRoute(
+          path: AppRoutes.books,
+          builder: (_, _) => const Scaffold(body: Text('books')),
+        ),
+        GoRoute(
           path: AppRoutes.files,
           builder: (_, _) => const Scaffold(body: Text('files')),
           routes: [
@@ -92,7 +97,7 @@ void main() {
     addTearDown(r.dispose);
     await tester.pumpWidget(MaterialApp.router(routerConfig: r));
     await tester.pump();
-    r.go(AppRoutes.viewFilePath(file));
+    r.go(AppRoutes.viewFilePath(file, from: from));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     return r;
@@ -136,6 +141,39 @@ void main() {
     expect(find.byType(PdfViewerPage), findsNothing);
     // Back from here must not bounce into the viewer again.
     expect(history, ['/files/papers', '/files/papers']);
+  });
+
+  // #1678: a book opened from Books used to close into its folder in Files.
+  testWidgets('closing returns to the page the viewer was opened from', (
+    tester,
+  ) async {
+    final r = await openFromFolder(
+      tester,
+      'papers',
+      'papers/report.pdf',
+      from: AppRoutes.books,
+    );
+    expect(at(r), '/view/papers/report.pdf?from=/books');
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    expect(at(r), AppRoutes.books);
+    expect(find.text('books'), findsOneWidget);
+  });
+
+  testWidgets('a made-up origin still closes into the folder', (tester) async {
+    final r = await openFromFolder(
+      tester,
+      'papers',
+      'papers/report.pdf',
+      from: 'https://example.com/books',
+    );
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    expect(at(r), '/files/papers');
   });
 
   testWidgets('a system back closes it to the folder', (tester) async {

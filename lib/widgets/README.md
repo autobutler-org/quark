@@ -13,6 +13,10 @@ on its page's decoupling issue (see #1600), after which it moves too.
 
 ```text
 lib/widgets/
+  books/
+    books_body.dart             the Books list: reuses SlidesErrorView, which
+                                opens Settings and writes its sentence with
+                                Errors
   calendar/
     calendar_bar_bottom.dart    the Calendar page's second bar row: period,
                                 Today, and the view switch folding to a menu

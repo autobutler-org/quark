@@ -112,6 +112,16 @@ void main() {
         AppRoutes.slidePresent('a/deck.qslide', from: AppRoutes.slides),
         '/slides/a/deck.qslide/present?from=/slides',
       );
+      // #1678: a viewer carries it too, so a book closes back to Books.
+      expect(
+        AppRoutes.viewFilePath('a b/novel.epub', from: AppRoutes.books),
+        '/view/a%20b/novel.epub?from=/books',
+      );
+      expect(
+        AppRoutes.viewFilePath('a/novel.epub', serial: 's1', from: '/books'),
+        '/view/a/novel.epub?serial=s1&from=/books',
+      );
+      expect(AppRoutes.viewFilePath('a/novel.epub'), '/view/a/novel.epub');
     });
 
     test('an origin with a query of its own survives the trip', () {
@@ -1361,6 +1371,15 @@ void main() {
       expect(at(), link);
       expect(find.text('view photos/beach 1.jpg'), findsOneWidget);
     });
+  });
+
+  // #1678
+  test('the app routes /books to the Books page', () {
+    final route = router.configuration.routes.whereType<GoRoute>().singleWhere(
+      (route) => route.path == AppRoutes.books,
+    );
+    expect(AppRoutes.books, '/books');
+    expect(route.builder, isNotNull);
   });
 
   group('slides routes', () {

@@ -22,8 +22,9 @@ import 'package:quark/utils/file_kind.dart';
 /// never get here: `viewFileRedirect` sends them to their editors.
 ///
 /// Closing the viewer — its back button, Escape in the photo viewer, a system
-/// back — replaces this history entry with the file's folder, so browser back
-/// from the folder never bounces into the viewer again.
+/// back — replaces this history entry with the page the URL's `?from=` names
+/// (#1678), or the file's folder without one, so browser back from there
+/// never bounces into the viewer again.
 class FileViewerPage extends StatefulWidget {
   /// The file's path on the Quark, as the route's `:path` delivers it.
   final String filePath;
@@ -72,7 +73,8 @@ class _FileViewerPageState extends State<FileViewerPage> {
     Router.neglect(
       context,
       () => context.go(
-        AppRoutes.containingFolder(widget.filePath, serial: widget.serial),
+        AppRoutes.editorOrigin(context) ??
+            AppRoutes.containingFolder(widget.filePath, serial: widget.serial),
       ),
     );
   }

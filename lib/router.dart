@@ -5,6 +5,7 @@ import 'package:quark/models/calendar_view.dart';
 import 'package:quark/models/feature_flag.dart';
 import 'package:quark/models/trash_item.dart';
 import 'package:quark/pages/account_and_data_page.dart';
+import 'package:quark/pages/books_page.dart';
 import 'package:quark/pages/calendar_page.dart';
 import 'package:quark/pages/chat_page.dart';
 import 'package:quark/pages/docs_page.dart';
@@ -117,6 +118,9 @@ class AppRoutes {
   static const docs = '/docs';
   static const sheets = '/sheets';
   static const slides = '/slides';
+
+  /// The Books page: every PDF and EPUB on the Quark (#1678).
+  static const books = '/books';
   static const vault = '/vault';
 
   /// The System page (#2351): the Quark's health, its drives and its jobs,
@@ -229,13 +233,15 @@ class AppRoutes {
   /// Build a deep-link URL that opens [path] in the correct viewer.
   /// e.g. viewFile('photos/beach.jpg') → '/view/photos/beach.jpg'
   /// Device serial is passed as a query param when non-empty.
-  static String viewFilePath(String path, {String? serial}) {
-    final clean = encodeFilePath(path);
-    final base = '$viewFile/$clean';
-    return (serial != null && serial.isNotEmpty)
-        ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
-        : base;
-  }
+  ///
+  /// [from] is the location it is being opened from, for [editorOrigin]: the
+  /// viewer closes back to it rather than to the file's folder (#1678).
+  static String viewFilePath(String path, {String? serial, String? from}) =>
+      _editorUrl(
+        '$viewFile/${encodeFilePath(path)}',
+        serial: serial,
+        from: from,
+      );
 
   /// The Photos page showing the album [link] names (see `albumLink`), or All
   /// photos for null.
@@ -729,6 +735,10 @@ final router = GoRouter(
     GoRoute(
       path: AppRoutes.slides,
       builder: (context, state) => const SlidesPage(),
+    ),
+    GoRoute(
+      path: AppRoutes.books,
+      builder: (context, state) => const BooksPage(),
     ),
     slidePresentRoute(),
     slideEditorRoute(),
