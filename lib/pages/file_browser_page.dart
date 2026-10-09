@@ -1964,7 +1964,11 @@ class _FileBrowserPageState extends State<FileBrowserPage>
       // reload or a shared link reopens it (#2328). Types with no viewer of
       // their own get download + "Open with…" there, which beats the "No
       // supported editor" dead end they used to hit (#1184).
-      case FileKind.image || FileKind.svg || FileKind.video || FileKind.audio:
+      case FileKind.image ||
+          FileKind.svg ||
+          FileKind.video ||
+          FileKind.audio ||
+          FileKind.pdf:
       case _ when usesGenericFileViewer(kind):
         _goToEditor(
           filePath,

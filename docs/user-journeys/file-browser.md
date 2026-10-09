@@ -308,16 +308,20 @@ Covers browsing, uploading, downloading, and managing files via the file browser
 
 ### JN-FB-019: Open a generic/unsupported file (native open)
 
-**Preconditions:** A file of a type without a dedicated viewer (e.g. `.zip`, `.pdf`) exists in Files.
+**Preconditions:** A file of a type without a dedicated viewer (e.g. `.docx`, `.epub`) exists in Files.
 
 **Steps:**
 
 1. Tap the file.
+2. Tap **Download**, or off web **Open with…**.
 
 **Expected result:**
 
-- App attempts to open the file with the OS native handler.
+- The generic viewer opens at the file's `/view/<path>` URL, showing its name and type.
+- **Download** saves the file to the device. **Open with…** hands it to the OS native handler.
 - If no handler is available, a clear error or fallback message is shown.
+
+**Notes:** A `.pdf` has its own viewer (JN-FB-045).
 
 ---
 
@@ -880,3 +884,37 @@ them goes there. Files inside an archive still open over the browser and have no
 - The trash and the folder picker do not offer the choice; they show Device and Size.
 - A 360-pixel-wide phone has room for about two columns beside Name. More than that still fit without
   overflowing, but each one is cut short.
+
+---
+
+### JN-FB-045: Read a PDF in the app
+
+**Preconditions:** A `.pdf` exists in a folder in Files.
+
+**Steps:**
+
+1. Tap the PDF, or open its `/view/<path>` URL directly.
+2. Scroll through the pages, and zoom in and out.
+3. Tap **Download** in the top bar, or off web **Open with…**.
+
+**Expected result:**
+
+- The PDF opens in the app at its `/view/<path>` URL (JN-FB-043) on web, iOS and Android, under a top bar
+  naming the file. Nothing is downloaded to the device to read it.
+- On web the browser's own PDF viewer shows it under that bar, with the browser's scrolling, zoom, page
+  controls, search and printing.
+- On iOS and Android the pages are a scrolling column that can be zoomed, with a thumb on the right edge that
+  shows the page number and can be dragged. A loader shows until the first pages are ready, and a PDF that
+  cannot be loaded shows a "Couldn't open the file" message in place of the pages.
+- **Download** saves the file to the device. **Open with…** hands it to another app; it is not offered on web.
+
+**Notes:**
+
+- A browser with no PDF viewer of its own, as on most phones, gets the same pages-and-thumb viewer as the
+  mobile apps. There it fetches the whole file before the first page appears; the apps fetch the parts they
+  need as pages are shown.
+- iOS no longer jumps straight to the system preview: the PDF opens in the app there too, and **Open with…**
+  reaches the system one.
+- The viewer needs no internet connection: the PDF engine ships inside the app, the web build included.
+- A PDF inside an archive (JN-FB-020) still downloads; it has no viewer there.
+- Word, Excel, PowerPoint and EPUB files still open in the generic viewer (JN-FB-019).

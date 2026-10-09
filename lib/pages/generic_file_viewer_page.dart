@@ -2,13 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/models/file_node.dart';
-import 'package:quark/pages/generic_file_viewer_open_stub.dart'
-    if (dart.library.io) 'package:quark/pages/generic_file_viewer_open_native.dart'
-    as native_open;
-import 'package:quark/services/files_service.dart';
-import 'package:quark/utils/error_text.dart';
-import 'package:quark/utils/file_kind.dart';
-import 'package:quark/utils/files_route_path_utils.dart';
+import 'package:quark/utils/file_viewer_actions.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
@@ -31,18 +25,6 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
   bool _downloading = false;
   bool _opening = false;
 
-  @override
-  void initState() {
-    super.initState();
-    if (opensStraightInSystemViewer(
-      fileKindForName(widget.node.name),
-      isWeb: kIsWeb,
-      platform: defaultTargetPlatform,
-    )) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _handleOpenWith());
-    }
-  }
-
   String get _extension {
     final name = widget.node.name;
     final idx = name.lastIndexOf('.');
@@ -55,59 +37,29 @@ class _GenericFileViewerPageState extends State<GenericFileViewerPage> {
     return '${_extension.substring(1).toUpperCase()} file';
   }
 
+  String? get _serial =>
+      widget.node.deviceSerial.isEmpty ? null : widget.node.deviceSerial;
+
   Future<void> _handleDownload() async {
-    if (_downloading) return;
     setState(() => _downloading = true);
-    try {
-      await FilesService.saveFile(
-        widget.node.apiPath,
-        serial: widget.node.deviceSerial.isEmpty
-            ? null
-            : widget.node.deviceSerial,
-        fileName: widget.node.name,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Downloaded ${widget.node.name}')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.message(e, 'download the file'))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _downloading = false);
-    }
+    await downloadViewedFile(
+      context,
+      path: widget.node.apiPath,
+      serial: _serial,
+      name: widget.node.name,
+    );
+    if (mounted) setState(() => _downloading = false);
   }
 
   Future<void> _handleOpenWith() async {
-    if (_opening || kIsWeb) return;
     setState(() => _opening = true);
-    try {
-      final path = await FilesService.downloadForOpenWith(
-        widget.node.apiPath,
-        serial: widget.node.deviceSerial.isEmpty
-            ? null
-            : widget.node.deviceSerial,
-        fileName: widget.node.name,
-      );
-      final message = await native_open.openFileWithSystem(path);
-      if (message.isNotEmpty && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(Errors.message(e, 'open the file'))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _opening = false);
-    }
+    await openViewedFileWithSystem(
+      context,
+      path: widget.node.apiPath,
+      serial: _serial,
+      name: widget.node.name,
+    );
+    if (mounted) setState(() => _opening = false);
   }
 
   @override
