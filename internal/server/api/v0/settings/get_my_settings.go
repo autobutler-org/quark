@@ -9,7 +9,7 @@ import (
 
 // getMySettings godoc
 // @Summary Get your own settings
-// @Description Returns the settings the caller chose for their own account. themeColor overrides the Quark's theme color; the empty string, which is also what an account that has chosen nothing gets, means follow the Quark.
+// @Description Returns the settings the caller chose for their own account. themeColor overrides the Quark's theme color; the empty string, which is also what an account that has chosen nothing gets, means follow the Quark. disabledNotifications lists the notification types the caller turned off, and is left out when every type is on.
 // @Tags settings
 // @Produce json
 // @Success 200 {object} usersettingsutil.Settings

@@ -12,13 +12,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 
+	"github.com/autobutler-org/quark/pkg/util/notificationutil"
 	"github.com/autobutler-org/quark/pkg/util/settingsutil"
 )
 
 // MaxRequestBytes caps a settings request body. The settings are a handful of
-// short strings.
+// short strings and a list of notification types that cannot repeat.
 const MaxRequestBytes int64 = 4 << 10
 
 // ErrInvalid reports settings that are not well-formed: a body that is not
@@ -31,6 +33,29 @@ type Settings struct {
 	// ThemeColor overrides the Quark's theme color for this account. Empty means
 	// follow the Quark. See settingsutil.ValidateThemeColor for what it may hold.
 	ThemeColor string `json:"themeColor"`
+	// DisabledNotifications is the notification types this account turned
+	// off. Empty means every type is on.
+	DisabledNotifications []notificationutil.Type `json:"disabledNotifications,omitempty"`
+}
+
+// Validate reports settings with a value its field rejects as ErrInvalid: a
+// malformed theme color, or a notification type that is unknown or listed
+// twice.
+func (s Settings) Validate() error {
+	if err := settingsutil.ValidateThemeColor(s.ThemeColor); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalid, err)
+	}
+	for i, t := range s.DisabledNotifications {
+		if !t.Valid() {
+			return fmt.Errorf("%w: unknown notification type %q", ErrInvalid, t)
+		}
+		// A repeat changes nothing, and refusing it keeps the stored file
+		// within the MaxRequestBytes that Load reads.
+		if slices.Contains(s.DisabledNotifications[:i], t) {
+			return fmt.Errorf("%w: notification type %q is listed twice", ErrInvalid, t)
+		}
+	}
+	return nil
 }
 
 // LoadParams names the account whose settings to read.
@@ -96,8 +121,8 @@ func Decode(r io.Reader) (Settings, error) {
 	if _, err := dec.Token(); err != io.EOF {
 		return Settings{}, fmt.Errorf("%w: more than one JSON value", ErrInvalid)
 	}
-	if err := settingsutil.ValidateThemeColor(s.ThemeColor); err != nil {
-		return Settings{}, fmt.Errorf("%w: %w", ErrInvalid, err)
+	if err := s.Validate(); err != nil {
+		return Settings{}, err
 	}
 	return s, nil
 }
@@ -125,8 +150,8 @@ func Load(params LoadParams) (LoadResult, error) {
 // Save replaces an account's settings. Settings with a value its field
 // rejects are ErrInvalid and nothing is written.
 func Save(params SaveParams) (SaveResult, error) {
-	if err := settingsutil.ValidateThemeColor(params.Settings.ThemeColor); err != nil {
-		return SaveResult{}, fmt.Errorf("%w: %w", ErrInvalid, err)
+	if err := params.Settings.Validate(); err != nil {
+		return SaveResult{}, err
 	}
 	if err := os.MkdirAll(Dir(params.DataDir), 0o700); err != nil {
 		return SaveResult{}, fmt.Errorf("create user settings directory: %w", err)

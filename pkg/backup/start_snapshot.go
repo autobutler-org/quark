@@ -78,6 +78,9 @@ type StartSnapshotBackupParams struct {
 	Password string
 	// RecoveryPassword encrypts the exported vault. Empty skips the export.
 	RecoveryPassword string
+	// DataDir is the Quark's data directory (storageutil.GetDataDir), where a
+	// completed snapshot is recorded. Empty records nothing.
+	DataDir string
 }
 
 // StartSnapshotBackupResult reports the job that was started. The backup is
@@ -145,6 +148,7 @@ func StartSnapshotBackup(params StartSnapshotBackupParams) (StartSnapshotBackupR
 		Vault:              vaultParams,
 		ChatDB:             params.Database,
 		IOSemaphore:        params.IOSemaphore,
+		DataDir:            params.DataDir,
 	}
 	go func() {
 		if vaultParams != nil {

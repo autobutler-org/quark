@@ -6421,6 +6421,43 @@ const docTemplate = `{
                 }
             }
         },
+        "/notifications": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the caller's current notifications. The list is derived on each request and not stored, so a notification is there for as long as its condition holds. An admin gets backup_due while this Quark has no completed snapshot backup on record, and backup_stale, with lastBackupAt, once the last one is 30 days old; other accounts get neither. A type listed in the caller's disabledNotifications setting (PUT /settings/me) is left out. link is the app route to open. There is no notification event: refetch on backup_completed, after changing your own settings, and when the app comes back to the foreground.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "List your notifications",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/notificationutil.ListResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/photos": {
             "get": {
                 "security": [
@@ -7156,7 +7193,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the settings the caller chose for their own account. themeColor overrides the Quark's theme color; the empty string, which is also what an account that has chosen nothing gets, means follow the Quark.",
+                "description": "Returns the settings the caller chose for their own account. themeColor overrides the Quark's theme color; the empty string, which is also what an account that has chosen nothing gets, means follow the Quark. disabledNotifications lists the notification types the caller turned off, and is left out when every type is on.",
                 "produces": [
                     "application/json"
                 ],
@@ -7191,7 +7228,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Replaces the settings of the caller's own account with the body. themeColor is a preset name (a lowercase letter, then up to 31 lowercase letters, digits or hyphens) or a custom color as lowercase #rrggbb; the empty string, or leaving it out, means follow the Quark. A field the settings do not have is refused. Publishes no event: the change concerns only the caller.",
+                "description": "Replaces the settings of the caller's own account with the body. themeColor is a preset name (a lowercase letter, then up to 31 lowercase letters, digits or hyphens) or a custom color as lowercase #rrggbb; the empty string, or leaving it out, means follow the Quark. disabledNotifications lists the notification types (backup_due, backup_stale) the caller does not want, each at most once; because the body replaces the settings whole, leaving it out turns every type back on. A field the settings do not have, an unknown notification type and a repeated one are refused. Publishes no event: the change concerns only the caller.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11399,6 +11436,45 @@ const docTemplate = `{
                 "StatusCanceled"
             ]
         },
+        "notificationutil.ListResult": {
+            "type": "object",
+            "properties": {
+                "notifications": {
+                    "description": "Notifications is never nil, so an account with none reads [].",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/notificationutil.Notification"
+                    }
+                }
+            }
+        },
+        "notificationutil.Notification": {
+            "type": "object",
+            "properties": {
+                "lastBackupAt": {
+                    "description": "LastBackupAt is when the last snapshot backup completed. Only\nTypeBackupStale carries it.",
+                    "type": "string"
+                },
+                "link": {
+                    "description": "Link is the app route to open when the notification is tapped.",
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/notificationutil.Type"
+                }
+            }
+        },
+        "notificationutil.Type": {
+            "type": "string",
+            "enum": [
+                "backup_due",
+                "backup_stale"
+            ],
+            "x-enum-varnames": [
+                "TypeBackupDue",
+                "TypeBackupStale"
+            ]
+        },
         "photoutil.AlbumRef": {
             "type": "object",
             "properties": {
@@ -11667,6 +11743,13 @@ const docTemplate = `{
         "usersettingsutil.Settings": {
             "type": "object",
             "properties": {
+                "disabledNotifications": {
+                    "description": "DisabledNotifications is the notification types this account turned\noff. Empty means every type is on.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/notificationutil.Type"
+                    }
+                },
                 "themeColor": {
                     "description": "ThemeColor overrides the Quark's theme color for this account. Empty means\nfollow the Quark. See settingsutil.ValidateThemeColor for what it may hold.",
                     "type": "string"
