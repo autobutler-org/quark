@@ -11,7 +11,6 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -21,10 +20,6 @@ type MoveFileParams struct {
 	Ctx context.Context
 	// Registry holds the namespaces of the devices moved between.
 	Registry vfs.Registry
-	// Storage is ignored: every move goes through Registry (#2642). It stays
-	// only until the group folder rename stops passing it (#2648), and #2650
-	// removes it.
-	Storage *storageutil.StorageService
 	// EventBus is told where the file went.
 	EventBus *eventbus.Bus
 	// Database holds the favorites and album items that follow the file. Nil
