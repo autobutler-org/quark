@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:quark/controllers/account_request_history_controller.dart';
 import 'package:quark/controllers/groups_controller.dart';
 import 'package:quark/controllers/users_controller.dart';
 import 'package:quark/router.dart';
@@ -10,14 +11,16 @@ import 'package:quark/utils/auto_refresh_mixin.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/widgets/layout/app_drawer.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
+import 'package:quark/widgets/users/recent_decisions/recent_decisions_list.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The admin-only Users page (#1662), in two tabs.
 ///
 /// **Accounts**: account requests waiting for approval, every account on the
-/// Quark with what an admin can do to each, adding an account, and whether
-/// the Quark takes requests at all. **Groups** (#1910): the groups, creating,
+/// Quark with what an admin can do to each, adding an account, whether the
+/// Quark takes requests at all, and the requests admins recently approved or
+/// denied (#2730). **Groups** (#1910): the groups, creating,
 /// renaming and deleting one, and who is in each.
 ///
 /// Each tab has its own URL (#2349): the router passes the [tab] to show and
@@ -48,7 +51,12 @@ class _UsersPageState extends State<UsersPage>
     selfUsername: AppSettings.instance.username,
   );
   final _groups = GroupsController();
-  late final Listenable _controllers = Listenable.merge([_controller, _groups]);
+  final _history = AccountRequestHistoryController();
+  late final Listenable _controllers = Listenable.merge([
+    _controller,
+    _groups,
+    _history,
+  ]);
   StreamSubscription<FileEvent>? _eventSub;
 
   @override
@@ -69,12 +77,13 @@ class _UsersPageState extends State<UsersPage>
     _eventSub?.cancel();
     _controller.dispose();
     _groups.dispose();
+    _history.dispose();
     super.dispose();
   }
 
   @override
   Future<void> refresh() async {
-    await Future.wait([_controller.load(), _groups.load()]);
+    await Future.wait([_controller.load(), _groups.load(), _history.load()]);
   }
 
   /// Waits for [action] and says why it failed, if it did. [failure] is the
@@ -91,6 +100,14 @@ class _UsersPageState extends State<UsersPage>
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Waits for an approve or deny and, when it worked, reloads the decisions
+  /// it just added to. Returns what [decision] did, for [_report].
+  Future<Object?> _decide(Future<Object?> decision) async {
+    final error = await decision;
+    if (error == null) unawaited(_history.load());
+    return error;
   }
 
   /// Opens the add-account dialog. It rebuilds with the controller, so a
@@ -263,6 +280,11 @@ class _UsersPageState extends State<UsersPage>
         final groupsShownError = g.hasLoaded || groupsLoadError == null
             ? null
             : Errors.message(groupsLoadError, 'load groups');
+        final h = _history;
+        final historyLoadError = h.error;
+        final historyShownError = h.hasLoaded || historyLoadError == null
+            ? null
+            : Errors.message(historyLoadError, 'load recent decisions');
         return QuarkPageScaffold(
           title: 'Users',
           icon: QuarkIcons.person_outline,
@@ -289,12 +311,12 @@ class _UsersPageState extends State<UsersPage>
                         error: shownError,
                         busyUsernames: c.busyUsernames,
                         onApprove: (username) => _report(
-                          c.approve(username),
+                          _decide(c.approve(username)),
                           "approve $username's request",
                           success: 'Approved $username. They can sign in now.',
                         ),
                         onDeny: (username) => _report(
-                          c.deny(username),
+                          _decide(c.deny(username)),
                           "deny $username's request",
                           success: "Denied $username's request.",
                         ),
@@ -341,6 +363,15 @@ class _UsersPageState extends State<UsersPage>
                         onEnable: (username) =>
                             _report(c.enable(username), 'enable $username'),
                         onDelete: _confirmDelete,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    QuarkSection(
+                      title: 'Recent decisions',
+                      child: RecentDecisionsList(
+                        decisions: h.decisions,
+                        isLoading: !h.hasLoaded && historyLoadError == null,
+                        error: historyShownError,
                       ),
                     ),
                   ],
