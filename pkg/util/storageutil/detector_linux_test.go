@@ -59,7 +59,7 @@ func TestDetectRootDevice_ReportsTheDataDirFilesystem(t *testing.T) {
 	}
 
 	// The data directory need not exist yet: a fresh install detects first.
-	device, err := detectRootDevice(filepath.Join(shm, "quark-2467-missing", "data"), false)
+	device, err := detectRootDevice(nearestExisting(filepath.Join(shm, "quark-2467-missing", "data")), false)
 	if err != nil {
 		t.Fatalf("detectRootDevice() error = %v", err)
 	}
