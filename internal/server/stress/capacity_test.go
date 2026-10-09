@@ -22,7 +22,11 @@ func TestCapacity(t *testing.T) {
 		t.Fatal(err)
 	}
 	setup := api{base: cfg.base, http: &http.Client{Timeout: 30 * time.Second}}
-	adminToken, err := setup.login(cfg.adminUser, cfg.adminPass)
+	adminKey, err := setup.authKey(cfg.adminUser, cfg.adminPass)
+	if err != nil {
+		t.Fatalf("admin auth key: %v", err)
+	}
+	adminToken, err := setup.login(cfg.adminUser, adminKey)
 	if err != nil {
 		t.Fatalf("admin login: %v", err)
 	}

@@ -13,7 +13,7 @@ this repository.
 ### Repo map
 
 ```text
-cmd/quark/                    entrypoint: install, serve, version
+cmd/quark/                    entrypoint: install, serve, version, auth-key
 internal/db/                  sqlc-generated queries and golang-migrate migrations
 internal/server/routes.go     where every router is mounted
 internal/server/api/v0/<x>/   HTTP handlers, one directory per URL segment

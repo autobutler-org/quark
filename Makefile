@@ -1064,8 +1064,11 @@ test/stress/capacity: build/backend ## Simulate STRESS_USERS app clients against
 		sleep 1
 	done
 	export QUARK_USER=stress QUARK_PASSWORD=stress-password
+	# The Quark takes an auth key, never the password (#2430), so setup gets
+	# the key `quark auth-key` derives from it (#2713).
+	AUTH_KEY="$$(./build/quark auth-key --host $(PERF_BASE_URL) -u "$$QUARK_USER" <<< "$$QUARK_PASSWORD")"
 	curl -sSf -o /dev/null -X POST -H 'Content-Type: application/json' \
-		-d "{\"username\":\"$$QUARK_USER\",\"password\":\"$$QUARK_PASSWORD\"}" \
+		-d "{\"username\":\"$$QUARK_USER\",\"authKey\":\"$$AUTH_KEY\"}" \
 		$(PERF_BASE_URL)/api/v0/auth/setup
 	QUARK_BASE_URL=$(PERF_BASE_URL) QUARK_PID=$$SERVER_PID STRESS_REPORT="$$PWD/$$WORK_DIR/report.md" \
 		STRESS_USERS=$(STRESS_USERS) STRESS_DURATION=$(STRESS_DURATION) \
@@ -1162,11 +1165,12 @@ test/chaos/local: build/backend ## Run the API stress suite against a temporary 
 	fi
 	# Until setup completes the auth middleware lets every /api route through,
 	# so the suite's 401 checks need a real account first. The Quark takes an
-	# auth key, never the password (#2430), and a shell cannot derive one until
-	# `quark auth-key` exists (#2713), so the account gets a fixed key and the
-	# suite gets setup's session token in place of a password to sign in with.
+	# auth key, never the password (#2430), so setup gets the key
+	# `quark auth-key` derives from it (#2713), and the suite gets setup's
+	# session token to sign in with.
+	AUTH_KEY="$$(./build/quark auth-key --host $(PERF_BASE_URL) -u stress <<< stress-password)"
 	export QUARK_ACCESS_TOKEN="$$(curl -sSf -X POST -H 'Content-Type: application/json' \
-		-d '{"username":"stress","authKey":"c3RyZXNzLWF1dGgta2V5LXN0cmVzcy1hdXRoLWtleS0="}' \
+		-d "{\"username\":\"stress\",\"authKey\":\"$$AUTH_KEY\"}" \
 		$(PERF_BASE_URL)/api/v0/auth/setup | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
 	if [ -z "$$QUARK_ACCESS_TOKEN" ]; then
 		echo "setup on $(PERF_BASE_URL) returned no session token; last lines of $$WORK_DIR/server.log:" >&2

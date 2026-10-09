@@ -14,9 +14,12 @@ package authutil
 
 import (
 	"context"
+	"crypto/hkdf"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -33,6 +36,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 
+	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -364,6 +368,52 @@ type GetSaltResult struct {
 	// client gives it one at sign-in, or recovers it once with the raw phrase
 	// and a new phrase's key.
 	LegacyRecovery bool
+}
+
+// DeriveKeyParams is a secret and the salt its key is derived with.
+type DeriveKeyParams struct {
+	// Secret is the password, or with Recovery the recovery phrase.
+	Secret string
+	// Salt is the account's salt as GET /auth/salt returns it: the standard
+	// base64 of 16 bytes.
+	Salt string
+	// Recovery derives the recovery key of a phrase rather than the auth key
+	// of a password.
+	Recovery bool
+}
+
+// DeriveKeyResult is a derived key.
+type DeriveKeyResult struct {
+	// Key is the standard base64 of 32 bytes: authKey, or recoveryKey, as a
+	// request carries it.
+	Key string
+}
+
+// DeriveKey derives the key a client sends in a password's or a recovery
+// phrase's place (#2430), for a client that has no app to do it (#2713):
+//
+//	master = Argon2id13(secret, salt, t=3, m=64 MiB, p=1), 32 bytes
+//	key    = HKDF-SHA256(master, no salt, info "auth" or "recovery-auth"), 32 bytes
+//
+// A phrase is lowercased and trimmed first. This is ChatCrypto.deriveAuthKeys
+// and deriveRecoveryKeys in the app, and TestDeriveKey_MatchesTheApp pins it
+// to the app's vectors. The Quark never calls it on a request: it is handed
+// keys, not secrets, and each call costs 64 MiB.
+func DeriveKey(params DeriveKeyParams) (DeriveKeyResult, error) {
+	salt, err := base64.StdEncoding.DecodeString(params.Salt)
+	if err != nil || len(salt) != authSaltSize {
+		return DeriveKeyResult{}, fmt.Errorf("salt %q is not the base64 of %d bytes", params.Salt, authSaltSize)
+	}
+	secret, info := params.Secret, "auth"
+	if params.Recovery {
+		secret, info = normalizeRecoveryPhrase(params.Secret), "recovery-auth"
+	}
+	master := argon2.IDKey([]byte(secret), salt, 3, 64*1024, 1, authKeySize)
+	key, err := hkdf.Key(sha256.New, master, nil, info, authKeySize)
+	if err != nil {
+		return DeriveKeyResult{}, fmt.Errorf("derive the key: %w", err)
+	}
+	return DeriveKeyResult{Key: base64.StdEncoding.EncodeToString(key)}, nil
 }
 
 // LoginResult contains the result of a successful login.

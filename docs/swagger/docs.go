@@ -13533,7 +13533,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/api/v0",
 	Schemes:          []string{},
 	Title:            "Quark API",
-	Description:      "The REST API a Quark device serves to its Flutter clients. Every endpoint except\n/auth/setup, /auth/login, /auth/salt, /auth/recover, /auth/recover/keys,\n/auth/request-account and /auth/status needs a session token. Sign in with POST /auth/login,\nthen click Authorize and enter the word Bearer, a space, and the token. Login takes the auth\nkey a client derives from the password and the salt GET /auth/salt returns; the password\nalone is refused with 426 (#2430). Deriving that key here by hand is not\npossible yet; sign in with the app, or wait for quark auth-key (#2713).",
+	Description:      "The REST API a Quark device serves to its Flutter clients. Every endpoint except\n/auth/setup, /auth/login, /auth/salt, /auth/recover, /auth/recover/keys,\n/auth/request-account and /auth/status needs a session token. Sign in with POST /auth/login,\nthen click Authorize and enter the word Bearer, a space, and the token. Login takes the auth\nkey a client derives from the password and the salt GET /auth/salt returns; the password\nalone is refused with 426 (#2430). A script gets that key from quark auth-key,\ngiven this Quark's address as --host and the username as -u (#2713).",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

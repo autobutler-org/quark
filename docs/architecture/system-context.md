@@ -43,13 +43,14 @@ flowchart TB
 
 ## Processes and entry points
 
-`cmd/quark/main.go` is a cobra CLI with three commands:
+`cmd/quark/main.go` is a cobra CLI with four commands:
 
 | Command         | What it does                                                                        |
 | --------------- | ----------------------------------------------------------------------------------- |
 | `quark install` | writes the service unit (`internal/install`) and places the binary for the service user |
 | `quark serve`   | builds `deputil.DefaultDependencies()` and calls `server.StartServer`                 |
 | `quark version` | prints the build version                                                            |
+| `quark auth-key` | derives the auth key a script signs in with, from a Quark's salt and a prompted password ([auth.md](../auth.md)) |
 
 `quark install --system-only` runs as root before every service start, so its setup reaches devices already in
 the field. On a host with apt it also calls `pkg/util/aptutil`: a drop-in at

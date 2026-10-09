@@ -7,9 +7,8 @@ sends those in their place (#2430). An account made before auth keys, a **legacy
 password once, beside its new auth key, at its next sign-in, and its raw phrase once, beside both new keys, if it
 recovers before it has a recovery key; each moves the account to keys and clears the raw secret's hash. Every other
 body carrying a raw `password`, `newPassword` or `recoveryPhrase` is what only an app from before auth keys sends,
-and gets **426** with an `error` telling the user to update the app. Some curl examples below cannot be typed by hand
-for that reason: the key has to be derived first, and the planned `quark auth-key` command (#2713) is what will do it
-from a shell.
+and gets **426** with an `error` telling the user to update the app. A script derives the key first, with
+[`quark auth-key`](#deriving-the-keys) (#2713).
 
 The examples below use `http://localhost:8080`, which is what `make watch/backend` (or `make serve/backend`)
 serves. If you're running the secure mode instead, the base URL is `https://localhost` and `curl` needs `-k`,
@@ -17,7 +16,29 @@ because the certificate is self-signed.
 
 ## Deriving the keys
 
-Ask for the account's salt first; this needs no session:
+From a shell, `quark auth-key` does all of it: it asks the Quark for the account's salt, derives the key on your
+machine, and prints it. The password never leaves the machine.
+
+```bash
+quark auth-key --host http://localhost:8080 -u you
+```
+
+It asks for the password without echoing it, or reads it from stdin when stdin is not a terminal
+(`quark auth-key ... < password.txt`). The password is never a flag, where it would land in shell history and `ps`.
+Only the key goes to stdout, so a script can capture it:
+
+```bash
+Q=http://localhost:8080
+KEY="$(quark auth-key --host "$Q" -u you)"
+curl -X POST "$Q/api/v0/auth/login" -H "Content-Type: application/json" -d "{\"username\": \"you\", \"authKey\": \"$KEY\"}"
+curl -u "you:$KEY" "$Q/api/v0/auth/sessions"
+```
+
+`--recovery` reads the recovery phrase instead and prints its recovery key. `-k` skips the certificate check, as
+`curl -k` does, for a Quark serving its self-signed certificate. The `<auth key>` and `<recovery key>` in the examples
+below are what these print.
+
+By hand, ask for the account's salt first; this needs no session:
 
 ```bash
 curl 'http://localhost:8080/api/v0/auth/salt?username=you'
@@ -37,7 +58,7 @@ recoveryKey = HKDF-SHA256(ikm = master, salt = none, info = "recovery-auth"), 32
 ```
 
 Each key is sent as the standard base64 of its 32 bytes; anything else is a 400. `ChatCrypto` in the app is the
-reference implementation.
+reference implementation, and `authutil.DeriveKey`, which `quark auth-key` runs, is pinned to the same test vectors.
 
 The Quark stores each key as `sha256:` and the hex SHA-256 of that base64 string, and compares in constant time
 (#2765). Argon2id is the slow, memory-hard step in front of every password guess, so a second slow hash on the Quark
