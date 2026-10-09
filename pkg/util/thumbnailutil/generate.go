@@ -1,6 +1,7 @@
 package thumbnailutil
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -74,8 +75,8 @@ func GenerateFromReader(params GenerateFromReaderParams) (GenerateResult, error)
 		result.Thumbnail = photoutil.ApplyRotation(result.Thumbnail, params.RotationQuarters)
 	}
 
-	if source, ok := params.Reader.(io.ReadSeeker); ok && params.Queries != nil {
-		storeHashes(params.Queries, params.Serial, params.RelPath, result.DHash, source)
+	if params.Queries != nil {
+		storeHashes(params.Queries, params.Serial, params.RelPath, result.DHash, params.Reader)
 	}
 
 	modTime, err := writeCache(params.CachedPath, result.Thumbnail, params.Ext == ".png")
@@ -83,6 +84,21 @@ func GenerateFromReader(params GenerateFromReaderParams) (GenerateResult, error)
 		return GenerateResult{}, err
 	}
 	return GenerateResult{CachedModTime: modTime}, nil
+}
+
+// BufferSource holds a source that cannot seek, such as an archive entry, in
+// memory so [GenerateFromReader] can take it. It reads at most
+// [MaxBufferedSourceBytes]; a larger source is [ErrUnsupportedSource] rather
+// than a truncated image.
+func BufferSource(r io.Reader) (io.ReadSeeker, error) {
+	data, err := io.ReadAll(io.LimitReader(r, MaxBufferedSourceBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > MaxBufferedSourceBytes {
+		return nil, fmt.Errorf("%w: source is over %d bytes", ErrUnsupportedSource, MaxBufferedSourceBytes)
+	}
+	return bytes.NewReader(data), nil
 }
 
 // storeHashes records a photo's hashes for duplicate detection. A failure is

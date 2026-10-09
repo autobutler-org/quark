@@ -21,12 +21,24 @@ import (
 type VFS interface {
 	List(ctx context.Context, path string, filter *ListFilter) ([]FileInfo, error)
 	Stat(ctx context.Context, path string) (FileInfo, error)
-	Open(ctx context.Context, path string) (io.ReadCloser, error)
+	Open(ctx context.Context, path string) (File, error)
 	Write(ctx context.Context, path string, r io.Reader, opts WriteOptions) error
 	Delete(ctx context.Context, path string, opts DeleteOptions) error
 	MkdirAll(ctx context.Context, path string) error
 	Move(ctx context.Context, src, dst string) error
 	Watch(ctx context.Context, path string) (<-chan WatchEvent, error)
+}
+
+// File is an open file in a namespace. Every implementation can seek and read
+// at an offset, so a caller that needs random access — http.ServeContent, a zip
+// central directory, an image decoder rereading EXIF — takes it directly rather
+// than type-asserting the reader or buffering a stream to get it (#2640). The
+// disk-backed namespaces return an *os.File; MemVFS and DBVFS, which hold
+// bounded content in memory, return a reader over it.
+type File interface {
+	io.ReadCloser
+	io.Seeker
+	io.ReaderAt
 }
 
 // FileMover is implemented by namespaces backed by a host directory. A caller

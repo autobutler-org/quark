@@ -2,7 +2,6 @@ package fileutil
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -408,47 +407,27 @@ func openArchiveEntryVFS(params OpenArchiveEntryParams, fsys vfs.VFS) (OpenArchi
 }
 
 // readZipVFS opens an archive in the VFS namespace for random access, which is
-// what a zip reader needs. The namespaces that hand back an *os.File (local
-// disk, storage service) supply that directly; only a namespace whose Open is a
-// plain stream has to be buffered. Buffering unconditionally is what turned a
-// 4 GiB archive into a 500 — io.ReadAll wanted ~12 GiB of heap to hold it
-// (#1705). The returned Closer owns the archive and must outlive every entry
-// reader taken from it.
+// what a zip reader needs. A vfs.File reads at an offset, so nothing is
+// buffered: buffering is what turned a 4 GiB archive into a 500 — io.ReadAll
+// wanted ~12 GiB of heap to hold it (#1705). The returned Closer owns the
+// archive and must outlive every entry reader taken from it.
 func readZipVFS(ctx context.Context, fsys vfs.VFS, filePath string) (*zip.Reader, io.Closer, error) {
-	r, err := fsys.Open(ctx, filePath)
+	f, err := fsys.Open(ctx, filePath)
 	if err != nil {
 		return nil, nil, notFound(err)
 	}
-
-	if ra, ok := r.(io.ReaderAt); ok {
-		if info, statErr := fsys.Stat(ctx, filePath); statErr == nil && info.Size > 0 {
-			zr, err := zip.NewReader(ra, info.Size)
-			if err != nil {
-				r.Close()
-				return nil, nil, fmt.Errorf("failed to open zip archive: %w", err)
-			}
-			return zr, r, nil
-		}
-	}
-
-	defer r.Close()
-
-	data, err := io.ReadAll(r)
+	size, err := f.Seek(0, io.SeekEnd)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read archive: %w", err)
+		f.Close()
+		return nil, nil, fmt.Errorf("failed to size archive: %w", err)
 	}
-
-	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	zr, err := zip.NewReader(f, size)
 	if err != nil {
+		f.Close()
 		return nil, nil, fmt.Errorf("failed to open zip archive: %w", err)
 	}
-	return zr, nopCloser{}, nil
+	return zr, f, nil
 }
-
-// nopCloser closes the buffered archive that has nothing to close.
-type nopCloser struct{}
-
-func (nopCloser) Close() error { return nil }
 
 // entryReader keeps the archive open behind a streaming entry and closes it
 // with the entry.

@@ -183,7 +183,7 @@ func (v *LocalVFS) Stat(ctx context.Context, path string) (FileInfo, error) {
 }
 
 // Open opens the file at the given path for reading.
-func (v *LocalVFS) Open(ctx context.Context, path string) (io.ReadCloser, error) {
+func (v *LocalVFS) Open(ctx context.Context, path string) (File, error) {
 	absPath, err := v.abs(path)
 	if err != nil {
 		return nil, err

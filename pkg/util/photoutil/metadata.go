@@ -212,16 +212,13 @@ func statPhoto(params MetadataParams) (photoStat, error) {
 
 		imgFormat := ImageFormatFromPath(params.RelPath)
 		if imgFormat != 0 {
-			if rc, openErr := params.FS.Open(params.Ctx, params.RelPath); openErr == nil {
-				rs, seekErr := AsReadSeeker(rc)
-				if seekErr == nil {
-					if data, exifErr := DecodeExif(rs, imgFormat); exifErr == nil && data != nil {
-						stat.exif = SummarizeExif(data)
-						stat.width = data.Width
-						stat.height = data.Height
-					}
+			if f, openErr := params.FS.Open(params.Ctx, params.RelPath); openErr == nil {
+				if data, exifErr := DecodeExif(f, imgFormat); exifErr == nil && data != nil {
+					stat.exif = SummarizeExif(data)
+					stat.width = data.Width
+					stat.height = data.Height
 				}
-				rc.Close()
+				f.Close()
 			}
 		}
 		return stat, nil

@@ -240,7 +240,7 @@ func (v *StorageServiceVFS) Stat(_ context.Context, path string) (FileInfo, erro
 }
 
 // Open returns a reader for the file at the given path.
-func (v *StorageServiceVFS) Open(_ context.Context, path string) (io.ReadCloser, error) {
+func (v *StorageServiceVFS) Open(_ context.Context, path string) (File, error) {
 	if err := v.attached(); err != nil {
 		return nil, err
 	}

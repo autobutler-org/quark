@@ -1,7 +1,6 @@
 package fileutil
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -18,14 +17,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/xlsxutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
-
-// MaxBufferedXlsxBytes bounds the one namespace a workbook cannot be read from
-// in place. A zip is read from its central directory backwards, so it needs
-// random access; the namespaces that hand back an *os.File give that for free,
-// and only a namespace whose Open is a plain stream has to be buffered. That
-// case is bounded rather than trusted — buffering whatever arrives is what
-// turned a 4 GiB archive into a 500 (#1705).
-const MaxBufferedXlsxBytes = 64 << 20 // 64 MiB
 
 // ConvertXlsxParams converts one .xlsx or .xlsm into the .qsheet the Sheets
 // editor opens, written beside the workbook it came from.
@@ -288,31 +279,17 @@ func openXlsxSource(params ConvertXlsxParams) (io.ReaderAt, int64, io.Closer, er
 	return opened.File, info.Size(), opened.File, nil
 }
 
-// openXlsxVFS opens a workbook in the VFS namespace for random access, falling
-// back to a bounded copy for a namespace whose Open is a plain stream.
+// openXlsxVFS opens a workbook in the VFS namespace for random access. A
+// vfs.File reads at an offset, so the workbook is read in place.
 func openXlsxVFS(ctx context.Context, fsys vfs.VFS, filePath string) (io.ReaderAt, int64, io.Closer, error) {
-	r, err := fsys.Open(ctx, filePath)
+	f, err := fsys.Open(ctx, filePath)
 	if err != nil {
 		return nil, 0, nil, notFound(err)
 	}
-
-	if ra, ok := r.(io.ReaderAt); ok {
-		if info, statErr := fsys.Stat(ctx, filePath); statErr == nil && info.Size > 0 {
-			return ra, info.Size, r, nil
-		}
-	}
-
-	defer r.Close()
-	// Reading one byte past the limit is what tells an oversized workbook from
-	// one that merely fills it.
-	buf, err := io.ReadAll(io.LimitReader(r, MaxBufferedXlsxBytes+1))
+	size, err := f.Seek(0, io.SeekEnd)
 	if err != nil {
+		f.Close()
 		return nil, 0, nil, err
 	}
-	if int64(len(buf)) > MaxBufferedXlsxBytes {
-		return nil, 0, nil, &UnsupportedError{
-			Err: fmt.Errorf("workbook is larger than %d bytes and this storage cannot be read in place", MaxBufferedXlsxBytes),
-		}
-	}
-	return bytes.NewReader(buf), int64(len(buf)), nopCloser{}, nil
+	return f, size, f, nil
 }

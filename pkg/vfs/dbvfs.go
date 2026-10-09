@@ -121,7 +121,7 @@ func (v *DBVFS) Stat(ctx context.Context, p string) (FileInfo, error) {
 
 // Open returns a ReadCloser for the file content at path.
 // Returns ErrNotFound if the path doesn't exist or is a directory.
-func (v *DBVFS) Open(ctx context.Context, p string) (io.ReadCloser, error) {
+func (v *DBVFS) Open(ctx context.Context, p string) (File, error) {
 	p = dbCleanPath(p)
 	var (
 		isDir   bool
@@ -140,7 +140,7 @@ func (v *DBVFS) Open(ctx context.Context, p string) (io.ReadCloser, error) {
 	if isDir {
 		return nil, ErrNotFound
 	}
-	return io.NopCloser(bytes.NewReader(content)), nil
+	return bytesFile{bytes.NewReader(content)}, nil
 }
 
 // Write creates or replaces the file at path with data from r.

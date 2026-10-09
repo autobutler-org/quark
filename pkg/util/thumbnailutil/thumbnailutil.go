@@ -81,8 +81,8 @@ const MaxClientThumbnailBytes int64 = 2 << 20
 var ErrUnsupportedSource = errors.New("unsupported thumbnail source")
 
 // MaxBufferedSourceBytes caps a source that cannot seek, such as an archive
-// entry. Decoding reads EXIF back out of the stream, so [GenerateFromReader]
-// holds such a source in memory whole.
+// entry. Decoding reads EXIF back out of the stream, so [BufferSource] holds
+// such a source in memory whole.
 // ponytail: a larger entry gets no thumbnail; spool it to a temp file if big
 // scans inside archives need one.
 const MaxBufferedSourceBytes int64 = 64 << 20
@@ -145,15 +145,15 @@ type GenerateParams struct {
 // the VFS path, which has no OS path to hand to an external tool. Video and
 // RAW sources are not supported here.
 type GenerateFromReaderParams struct {
-	// Queries stores the photo's hashes for duplicate detection when Reader
-	// can seek, which a VFS file can. Nil skips them, as an archive entry
-	// does: it is not a library photo.
+	// Queries stores the photo's hashes for duplicate detection. Nil skips
+	// them, as an archive entry does: it is not a library photo.
 	Queries *db.Queries
 	// Serial and RelPath identify the photo the hashes belong to.
 	Serial  string
 	RelPath string
-	// Reader streams the source image.
-	Reader io.Reader
+	// Reader is the source image. Decoding reads EXIF back out of it, so it
+	// seeks: a vfs.File does, and [BufferSource] makes a bounded stream that.
+	Reader io.ReadSeeker
 	// Ext is the lowercase source extension, used for format detection.
 	Ext string
 	// Width and Height are the target dimensions.

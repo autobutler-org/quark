@@ -184,7 +184,7 @@ func (m *MemVFS) Stat(ctx context.Context, path string) (FileInfo, error) {
 }
 
 // Open opens the file at the given path for reading.
-func (m *MemVFS) Open(ctx context.Context, path string) (io.ReadCloser, error) {
+func (m *MemVFS) Open(ctx context.Context, path string) (File, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -193,7 +193,7 @@ func (m *MemVFS) Open(ctx context.Context, path string) (io.ReadCloser, error) {
 	if !ok {
 		return nil, ErrNotFound
 	}
-	return io.NopCloser(bytes.NewReader(entry.data)), nil
+	return bytesFile{bytes.NewReader(entry.data)}, nil
 }
 
 // Write writes the content of r to the given path.
