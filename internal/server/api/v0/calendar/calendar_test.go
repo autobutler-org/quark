@@ -160,6 +160,8 @@ func TestEventRequestErrors(t *testing.T) {
 		{"create a timed reminder after the start", http.MethodPost, "/api/v0/calendar/events", `{` + timed + `,"reminderMinutes":-1}`, http.StatusBadRequest},
 		{"create a reminder past a week", http.MethodPost, "/api/v0/calendar/events", `{` + timed + `,"reminderMinutes":10081}`, http.StatusBadRequest},
 		{"create an all-day reminder past its day", http.MethodPost, "/api/v0/calendar/events", `{` + allDay + `,"reminderMinutes":-1440}`, http.StatusBadRequest},
+		{"create in an unknown time zone", http.MethodPost, "/api/v0/calendar/events", `{` + timed + `,"timeZone":"Not/AZone"}`, http.StatusBadRequest},
+		{"update to an unknown time zone", http.MethodPut, "/api/v0/calendar/events/99", `{` + timed + `,"timeZone":"Not/AZone"}`, http.StatusBadRequest},
 		{"update to a color past the last", http.MethodPut, "/api/v0/calendar/events/99", `{` + timed + `,"colorIndex":99}`, http.StatusBadRequest},
 		{"update to a reminder past a week", http.MethodPut, "/api/v0/calendar/events/99", `{` + timed + `,"reminderMinutes":999999}`, http.StatusBadRequest},
 	}

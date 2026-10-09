@@ -4130,7 +4130,9 @@ paths:
         not fall before the first occurrence's date, null or absent repeats forever,
         and a one-off event ignores it. reminderMinutes counts back from the start,
         0 to a week; an all-day event's may be negative down to -1439 so it falls
-        on its own day (-540 is 9 AM). colorIndex is 0 to 5.
+        on its own day (-540 is 9 AM). colorIndex is 0 to 5. timeZone is the IANA
+        zone the event was made in, like America/New_York, or empty when the client
+        does not know it; any other name is a 400.
       parameters:
       - description: The event
         in: body

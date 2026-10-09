@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	// The device image may not ship /usr/share/zoneinfo; embedding the IANA
+	// database keeps isIANAZone from rejecting every real zone there.
+	_ "time/tzdata"
 	"unicode/utf8"
 
 	"github.com/autobutler-org/quark/internal/db"
@@ -53,6 +56,8 @@ func validate(input EventInput) (EventInput, error) {
 		return input, invalid(fmt.Sprintf("the notes can be at most %d characters", MaxNotesLength))
 	case len(input.TimeZone) > MaxTimeZoneLength:
 		return input, invalid("the time zone name is too long")
+	case input.TimeZone != "" && !isIANAZone(input.TimeZone):
+		return input, invalid("the time zone must be an IANA name, like America/New_York")
 	case input.Start.IsZero() || input.End.IsZero():
 		return input, invalid("a start and an end are required")
 	case !input.End.After(input.Start):
@@ -100,6 +105,17 @@ func validate(input EventInput) (EventInput, error) {
 		}
 	}
 	return input, nil
+}
+
+// isIANAZone reports whether name is a zone in the IANA database. "Local" is
+// rejected: time.LoadLocation reads it as the server's own zone, which says
+// nothing about where the event was made.
+func isIANAZone(name string) bool {
+	if name == "Local" {
+		return false
+	}
+	_, err := time.LoadLocation(name)
+	return err == nil
 }
 
 // isMidnight reports whether t, in UTC, falls exactly on a date boundary.

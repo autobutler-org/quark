@@ -199,6 +199,35 @@ void main() {
     expect(inMessage('b', find.text('Ada')), findsOneWidget);
   });
 
+  // The 48dp reaction and menu buttons used to stand beside the header as
+  // well as the body, so a header soaked up part of their height and the gap
+  // under a group's first message came out smaller than the rest (#2890).
+  testBothViewports('spaces one author\'s run of messages evenly', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      QuarkMessageList(
+        messages: [
+          msg('c', day1.add(const Duration(minutes: 2)), body: 'three'),
+          msg('b', day1.add(const Duration(minutes: 1)), body: 'two'),
+          msg('a', day1, body: 'one'),
+        ],
+        onCopy: (_) {},
+        onDelete: (_) {},
+        onReact: (_, _) {},
+      ),
+      size: size,
+    );
+
+    Rect body(String id) =>
+        tester.getRect(find.byKey(ValueKey('message_body_$id')));
+    expect(inMessage('a', find.text('Ada')), findsOneWidget);
+    expect(inMessage('b', find.text('Ada')), findsNothing);
+    expect(body('b').top - body('a').bottom, body('c').top - body('b').bottom);
+  });
+
   testBothViewports('draws the special lines their own way', (
     tester,
     size,
