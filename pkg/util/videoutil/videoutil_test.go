@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"image"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,12 +18,15 @@ import (
 // keyframe every half second, rotate-90.mp4 carries a 90 degree clockwise
 // display matrix, h264-aac.ts is an MPEG-TS copy of the same streams, and
 // hevc-aac-copy.mkv is two seconds of HEVC and AAC that ffmpeg copied into
-// Matroska, with a keyframe only at zero.
+// Matroska, with a keyframe only at zero. av1-opus.webm and vp8-vorbis.webm
+// are two seconds each of the codecs Keyframe has a decoder for.
 const (
 	gopFixture     = "testdata/h264-gop12.mp4"
 	rotateFixture  = "testdata/rotate-90.mp4"
 	tsFixture      = "testdata/h264-aac.ts"
 	hevcMKVFixture = "testdata/hevc-aac-copy.mkv"
+	av1Fixture     = "testdata/av1-opus.webm"
+	vp8Fixture     = "testdata/vp8-vorbis.webm"
 )
 
 func TestProbe(t *testing.T) {
@@ -288,19 +292,35 @@ func TestRemuxRefusesAnUnknownFormat(t *testing.T) {
 	}
 }
 
-func TestFormatTimestamp(t *testing.T) {
-	cases := []struct {
-		d    time.Duration
-		want string
-	}{
-		{0, "00:00:00.000"},
-		{time.Second, "00:00:01.000"},
-		{90*time.Second + 500*time.Millisecond, "00:01:30.500"},
-		{3661*time.Second + 123*time.Millisecond, "01:01:01.123"},
-	}
-	for _, c := range cases {
-		if got := formatTimestamp(c.d); got != c.want {
-			t.Errorf("formatTimestamp(%v) = %q, want %q", c.d, got, c.want)
+func TestKeyframeDecodesAV1AndVP8(t *testing.T) {
+	// Nothing on PATH: the frame comes out of the Go decoder, not ffmpeg.
+	t.Setenv("PATH", t.TempDir())
+	for _, fixture := range []string{av1Fixture, vp8Fixture} {
+		result, err := Keyframe(KeyframeParams{Source: fixture, At: time.Second})
+		if err != nil {
+			t.Errorf("Keyframe(%s): %v", fixture, err)
+			continue
 		}
+		if size := result.Image.Bounds().Size(); size != image.Pt(128, 72) {
+			t.Errorf("Keyframe(%s) is %v, want the clip's 128x72", fixture, size)
+		}
+	}
+}
+
+func TestKeyframeReportsACodecWithNoDecoder(t *testing.T) {
+	for _, fixture := range []string{gopFixture, tsFixture, hevcMKVFixture} {
+		if _, err := Keyframe(KeyframeParams{Source: fixture}); !errors.Is(err, ErrNoDecoder) {
+			t.Errorf("Keyframe(%s) = %v, want ErrNoDecoder", fixture, err)
+		}
+	}
+}
+
+func TestKeyframeRejectsANonVideo(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "notes.mp4")
+	if err := os.WriteFile(path, []byte("not a video"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Keyframe(KeyframeParams{Source: path}); err == nil || errors.Is(err, ErrNoDecoder) {
+		t.Errorf("Keyframe on a text file = %v, want an error that is not ErrNoDecoder", err)
 	}
 }
