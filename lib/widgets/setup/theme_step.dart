@@ -9,10 +9,17 @@ import 'package:quark_icons/quark_icons.dart';
 /// persists the preference via [AppSettings]. The user can proceed with
 /// any selection; the default is whatever [AppSettings] loaded on startup
 /// (i.e. System on first boot).
+///
+/// It is the last step, so [footer] is where the setup page puts what else
+/// the new owner can do before starting: naming the Quark (#2344).
 class ThemeStep extends StatelessWidget {
   final VoidCallback onContinue;
 
-  const ThemeStep({super.key, required this.onContinue});
+  /// Shown between the theme options and the button — the setup page's
+  /// device name field. Nothing when null.
+  final Widget? footer;
+
+  const ThemeStep({super.key, required this.onContinue, this.footer});
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +80,8 @@ class ThemeStep extends StatelessWidget {
             ),
 
             const SizedBox(height: 32),
+
+            ?footer,
 
             FilledButton(
               onPressed: onContinue,

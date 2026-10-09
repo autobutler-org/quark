@@ -82,6 +82,13 @@ lib/widgets/
     add_to_album_sheet.dart     AddToAlbumSheet host for a photo in an album
                                 view: calls AlbumService, shows snack bars
   settings/
+    hostname_field.dart         the device name field and its Rename button;
+                                data in, callbacks out, app-side for now
+                                because it checks names with hostname_rules
+    hostname_section.dart       hosts HostnameField around HostnameController:
+                                the admin's device name card on the Network
+                                tab and on setup's last step, absent on a
+                                Quark that can't be renamed
     repair_installation_section.dart
                                 hosts RepairController: the repair button and
                                 its confirmation, or the one-time install step
@@ -220,7 +227,7 @@ maps the Quark's status onto the package `RemoteAccessPanel`),
 along by `RemoteAccessController`) and `connected_devices_card.dart`. The page still loads everything and hands each
 tab its values and callbacks; the tabs stay app-side because they take the
 app's service models and host `HostManager`, `SessionsSection`,
-`SshAccessSection` and
+`HostnameSection`, `SshAccessSection` and
 `RepairInstallationSection`.
 
 ## Adding a widget

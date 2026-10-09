@@ -37,6 +37,7 @@ Covers first-boot setup, login, logout, and password recovery.
 - Recovery phrase is shown exactly once and is not recoverable from the UI after dismissal.
 - The app makes the phrase, not the Quark, and sends the Quark only a key derived from it (#2430).
 - Weak password or mismatched confirm should show inline validation errors before submit.
+- On a Quark that can be renamed, step 11 also offers to name it (JN-AUTH-019).
 - Username uniqueness is enforced server-side; duplicate should surface an error on step 6.
 
 ---
@@ -426,3 +427,46 @@ from before auth keys; or a Quark that has not been updated to take auth keys.
   address it has signed in from still gets through.
 - Lockouts are held in memory only. A restart of the Quark clears them, and none travel with a drive moved to another
   Quark.
+
+---
+
+### JN-AUTH-019: Name the Quark during setup
+
+**Preconditions:** A Quark running as its installed Linux service, with no owner account. Setup has reached the
+theme step (JN-AUTH-001, step 11). The app reaches the Quark at `https://quark.local`.
+
+**Steps:**
+
+1. Under the theme options, find **Name this Quark**. The **Device name** field holds the current name, `quark`,
+   and the line under it reads "On your network as quark.local".
+2. Replace the name with `kitchen`.
+3. Tap **Rename**.
+4. Tap **Get started**.
+
+**Expected result:**
+
+- **Rename** is disabled until the name differs from the current one, and shows a loader while the rename runs.
+- The Quark is renamed with no reboot. The section says "This Quark is now at kitchen.local." and the line under the
+  field reads "On your network as kitchen.local".
+- The app's saved address for this Quark moves from `https://quark.local` to `https://kitchen.local`, keeping its
+  name in the host list and the owner's session, so step 4 lands on `/files` without signing in again.
+
+**Notes:**
+
+- The name is one label of 1 to 63 lowercase letters, numbers or hyphens, with at least one letter and no hyphen at
+  the start or end. Anything else, `My Kitchen` or `kitchen.local` say, is refused under the field with that rule
+  and nothing is sent. An empty field reads "Name is required".
+- When another device on the network already has the name, the Quark takes the next free one. The line under the
+  field then reads "On your network as kitchen-2.local, because another device already had the name kitchen.", and
+  the saved address moves to `kitchen-2.local`.
+- Only an address that used the old `.local` name is moved. An IP address, a remote access address or another name
+  is left as it is.
+- The web app is loaded from the Quark itself, so it has no saved address to move. When the page was opened at the
+  old name the section adds "Open https://kitchen.local to keep using it."; the browser treats that as a new
+  address, so it asks for a sign-in.
+- The section is absent on a Quark that can't be renamed: one not running Linux, one run by hand and not as the
+  installed service, and one too old to offer it. Setup is otherwise unchanged there.
+- Naming is optional. **Get started** finishes setup whether or not the Quark was renamed.
+- A failed rename shows an error under the button and changes nothing.
+- An admin does the same later under Settings → Network → **Device name**. An app with that section open when
+  another admin renames the Quark moves its saved address the same way.
