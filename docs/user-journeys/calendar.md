@@ -235,3 +235,31 @@ repeats forever.
 
 **Notes:** The choice is kept on this device, not on the Quark: another phone or browser has its own (#2521). The
 control is hidden while the calendar is turned off for this Quark (#2609).
+
+---
+
+### JN-CA-012: Drag an event to a new time or length
+
+**Preconditions:** A timed event exists, and Day or Week is on show.
+
+**Steps:**
+
+1. With a mouse, drag the event up or down, or in Week across to another day, and let go.
+2. Drag its bottom edge down and let go.
+3. On a phone or tablet, hold the event first, then drag; hold its bottom edge to drag its end.
+4. With a keyboard, focus the event and press **Alt** with an arrow; hold **Shift** too to move its end.
+
+**Expected result:**
+
+- The event moves in 15-minute steps, and a preview shows the times it would land on until it is let go.
+- Dragging the event keeps its length; dragging its bottom edge moves its end alone, and never past its start.
+- **Alt+Up** and **Alt+Down** move it 15 minutes, **Alt+Left** and **Alt+Right** a day in Week, and
+  **Alt+Shift+Up** and **Alt+Shift+Down** move its end. The focus stays on the event.
+- The event shows at its new time at once and stays there once saved. If the save fails, a message says so and the
+  event goes back.
+- A repeating event moves as a whole series: every repeat shifts by as much, as it does from the form (JN-CA-006).
+
+**Notes:** A move stays on the dates on show and keeps the start on its own day; the form reaches anywhere else
+(#2526). On a phone a swipe over an event still scrolls the timeline, which is why a drag starts with a hold. The
+timeline does not scroll under a drag. All-day events, and events in Week that overlap into lanes too narrow for a
+finger, are not dragged: the form moves the first, and the Day view has room for the second.
