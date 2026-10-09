@@ -13,6 +13,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/videoutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // Kind is the jobutil kind transcode jobs are stored, registered, and listed
@@ -38,19 +39,19 @@ var (
 	// ErrInvalidQuality is returned for a quality other than original, such as
 	// the small quality a re-encode used to offer.
 	ErrInvalidQuality = errors.New("quality must be original: a conversion copies the streams and never re-encodes them")
-	// ErrInvalidPath is returned for an empty relPath or one that escapes the
-	// device files directory.
+	// ErrInvalidPath is returned for an empty relPath, the device's root, or a
+	// path that escapes it.
 	ErrInvalidPath = errors.New("invalid relPath")
-	// ErrSourceNotFound is returned when the source is missing or is not a
-	// readable video.
+	// ErrSourceNotFound is returned when the source is missing, is not a
+	// readable video, or is on a device that is not attached.
 	ErrSourceNotFound = errors.New("video not found or not readable")
 	// ErrCreatorForbidden fails a job whose creator can no longer read the
 	// source or write its folder (#1979).
 	ErrCreatorForbidden = errors.New("the account that queued this job can no longer read the video or save files in its folder")
 )
 
-// Params is what a transcode job stores. Paths are resolved again every time
-// the job runs, so a retry sees the device's current files directory.
+// Params is what a transcode job stores. The device's namespace is looked up
+// again every time the job runs, so a retry sees whether it is still attached.
 type Params struct {
 	RelPath string           `json:"relPath"`
 	Serial  string           `json:"serial"`
@@ -67,9 +68,10 @@ type RemuxFunc func(ctx context.Context, params videoutil.RemuxParams) error
 
 // EnqueueParams describes a transcode request.
 type EnqueueParams struct {
-	Queue   *jobutil.Queue
-	Storage *storageutil.StorageService
-	Params  Params
+	Queue *jobutil.Queue
+	// Registry holds the device files namespaces the source is found in.
+	Registry vfs.Registry
+	Params   Params
 	// UserID is the account queueing the transcode, which the job runs as. 0
 	// records none.
 	UserID int64
@@ -83,9 +85,9 @@ type EnqueueResult struct {
 // Enqueue checks the request and queues the job. It returns ErrInvalidFormat,
 // ErrInvalidQuality, or ErrInvalidPath for a bad request, including a format
 // that cannot hold the source's codecs, and ErrSourceNotFound when the source
-// does not probe as a video.
+// does not probe as a video or its device is not attached.
 func Enqueue(ctx context.Context, params EnqueueParams) (EnqueueResult, error) {
-	src, err := resolveSource(params.Storage, params.Params)
+	src, err := resolveSource(ctx, params.Registry, params.Params)
 	if err != nil {
 		return EnqueueResult{}, err
 	}
@@ -109,7 +111,12 @@ func Enqueue(ctx context.Context, params EnqueueParams) (EnqueueResult, error) {
 
 // NewHandlerParams configures NewHandler.
 type NewHandlerParams struct {
+	// Storage loads a job's creator and finds the device data dir an output
+	// is staged in.
 	Storage *storageutil.StorageService
+	// Registry holds the device files namespaces sources are read from and
+	// outputs land in. Without one every job fails with ErrSourceNotFound.
+	Registry vfs.Registry
 	// Database holds the accounts and access rows a job's creator is checked
 	// against. A job with a creator fails without one.
 	Database *db.DatabaseSqlc
@@ -120,9 +127,11 @@ type NewHandlerParams struct {
 	Remux RemuxFunc
 }
 
-// NewHandler returns the jobutil Handler for Kind, in its one lane. Run writes
-// the output into the device data dir's tmp/transcode-jobs, outside the files
-// tree, moves it beside the source on success without replacing any file,
+// NewHandler returns the jobutil Handler for Kind, in its one lane. Run reads
+// the source through its device's files namespace, writes the output into the
+// device data dir's tmp/transcode-jobs, outside the files tree, moves it
+// beside the source through the namespace on success without replacing any
+// file,
 // removes it on failure or cancel, and publishes the same upload event a new
 // file does. Run acts as the account that queued the job:
 // it needs read on the source and write on its folder when it starts and again
@@ -136,7 +145,7 @@ func NewHandler(params NewHandlerParams) jobutil.Handler {
 	if remux == nil {
 		remux = videoutil.Remux
 	}
-	h := handler{storage: params.Storage, database: params.Database, bus: params.EventBus, remux: remux}
+	h := handler{storage: params.Storage, registry: params.Registry, database: params.Database, bus: params.EventBus, remux: remux}
 	return jobutil.Handler{
 		Run:      h.run,
 		Validate: h.validate,

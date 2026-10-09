@@ -25,6 +25,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/transcodeutil"
 	"github.com/autobutler-org/quark/pkg/util/videoutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -51,6 +52,7 @@ func (fakeUsb) GetSerial() string { return testSerial }
 type harness struct {
 	engine   *gin.Engine
 	filesDir string
+	registry vfs.Registry
 	queue    *jobutil.Queue
 	events   <-chan eventbus.Event
 }
@@ -69,14 +71,22 @@ func newHarness(t *testing.T) harness {
 	events, unsub := bus.Subscribe("videos-test")
 	t.Cleanup(unsub)
 	storage := storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint})
+	// The disk's namespace, as the server registers it on mount (#2639).
+	registry := vfs.NewRegistry()
+	if _, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{Registry: registry, Storage: storage}); err != nil {
+		t.Fatal(err)
+	}
 	database := dbtest.NewDB(t)
 	queue := jobutil.NewQueue(jobutil.NewQueueParams{Database: database, EventBus: bus})
 	queue.Register(jobutil.RegisterParams{
-		Kind:    transcodeutil.Kind,
-		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{Storage: storage, Database: database, EventBus: bus}),
+		Kind: transcodeutil.Kind,
+		Handler: transcodeutil.NewHandler(transcodeutil.NewHandlerParams{
+			Storage: storage, Registry: registry, Database: database, EventBus: bus,
+		}),
 	})
 	deps := deputil.NewDependencies().
 		WithStorageService(storage).
+		WithVFSRegistry(registry).
 		WithDatabase(database).
 		WithEventBus(bus).
 		WithJobQueue(queue)
@@ -89,7 +99,7 @@ func newHarness(t *testing.T) harness {
 		c.Next()
 	})
 	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_videos.NewRouter())
-	return harness{engine: engine, filesDir: filesDir, queue: queue, events: events}
+	return harness{engine: engine, filesDir: filesDir, registry: registry, queue: queue, events: events}
 }
 
 func (h harness) post(body string) *httptest.ResponseRecorder {
@@ -439,5 +449,62 @@ func TestGetMetadata(t *testing.T) {
 	if body.Duration != 3 || body.Width != 128 || body.Height != 72 || body.VideoCodec != "h264" ||
 		body.AudioCodec != "aac" || body.Framerate != 24 || body.Rotation != 0 || body.Bitrate <= 0 {
 		t.Fatalf("metadata = %+v, want 3s of 128x72 h264 and aac at 24 fps", body)
+	}
+}
+
+// TestAnUnattachedDeviceIsNotFound names a serial no attached device has. Every
+// route answers 404 and leaves the internal drive alone, though it holds a
+// video at the same path: the serial has no namespace, and nothing falls back
+// to another one.
+func TestAnUnattachedDeviceIsNotFound(t *testing.T) {
+	h := newHarness(t)
+	internal := vfs.NewMemVFS(vfs.FilesNamespace(""))
+	clip, err := os.Open(gopFixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clip.Close()
+	if err := internal.Write(context.Background(), "clip.mp4", clip, vfs.WriteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, internal); err != nil {
+		t.Fatal(err)
+	}
+
+	const gone = "unplugged"
+	for name, w := range map[string]*httptest.ResponseRecorder{
+		"metadata":  h.get("/api/v0/videos/metadata?relPath=clip.mp4&serial=" + gone),
+		"formats":   h.get("/api/v0/videos/transcode/formats?relPath=clip.mp4&serial=" + gone),
+		"trim":      h.trim(fmt.Sprintf(`{"relPath":"clip.mp4","serial":%q,"startMs":0,"endMs":1000}`, gone)),
+		"transcode": h.post(fmt.Sprintf(`{"relPath":"clip.mp4","serial":%q,"format":"mkv"}`, gone)),
+	} {
+		if w.Code != http.StatusNotFound {
+			t.Errorf("%s returned %d, want 404: %s", name, w.Code, w.Body.String())
+		}
+	}
+	list, err := internal.List(context.Background(), "", nil)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("the internal drive holds %v (%v), want only clip.mp4", list, err)
+	}
+}
+
+// TestTrimNeverReplacesAFile trims a clip whose name, and its first numbered
+// name, are taken: both keep their bytes and the clip takes the next name.
+func TestTrimNeverReplacesAFile(t *testing.T) {
+	h := newHarness(t)
+	h.writeClip(t, "clip.mp4")
+	for _, name := range []string{"clip_trimmed.mp4", "clip_trimmed_(1).mp4"} {
+		if err := os.WriteFile(filepath.Join(h.filesDir, name), []byte("mine"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w := h.trim(fmt.Sprintf(`{"relPath":"clip.mp4","serial":%q,"startMs":0,"endMs":1000}`, testSerial))
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"clip_trimmed_(2).mp4"`) {
+		t.Fatalf("trim returned %d %s, want 200 with clip_trimmed_(2).mp4", w.Code, w.Body.String())
+	}
+	for _, name := range []string{"clip_trimmed.mp4", "clip_trimmed_(1).mp4"} {
+		if got, _ := os.ReadFile(filepath.Join(h.filesDir, name)); string(got) != "mine" {
+			t.Errorf("%s holds %q, want it untouched", name, got)
+		}
 	}
 }

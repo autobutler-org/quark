@@ -30,15 +30,12 @@ const stagingDirName = "transcode-jobs"
 // stagingPattern names staged outputs. prepareStaging clears only these.
 const stagingPattern = "transcode-*"
 
-// maxMoveAttempts bounds how often moveIntoPlace picks a new name after a file
-// takes the one it chose. Each retry means yet another file appeared at that
-// exact name in the moment since it was checked.
-const maxMoveAttempts = 5
-
-// resolveSource checks the format and quality and turns relPath into a path
-// inside the files directory of the device with that serial, or the system
-// files directory when no device has it.
-func resolveSource(storage *storageutil.StorageService, p Params) (source, error) {
+// resolveSource checks the format and quality and finds relPath in the files
+// namespace of the device with that serial (#2639). A device that is not
+// attached has no namespace, so its videos are ErrSourceNotFound rather than
+// whatever the internal drive holds at the same path. A path escaping the
+// namespace is ErrInvalidPath, and one holding no file ErrSourceNotFound.
+func resolveSource(ctx context.Context, registry vfs.Registry, p Params) (source, error) {
 	if !p.Format.Valid() {
 		return source{}, fmt.Errorf("%w: %q is not a video format this device converts to", ErrInvalidFormat, p.Format)
 	}
@@ -48,35 +45,43 @@ func resolveSource(storage *storageutil.StorageService, p Params) (source, error
 	if p.RelPath == "" {
 		return source{}, fmt.Errorf("%w: relPath is required", ErrInvalidPath)
 	}
-	if strings.EqualFold(filepath.Ext(p.RelPath), "."+string(p.Format)) {
+	if strings.EqualFold(path.Ext(p.RelPath), "."+string(p.Format)) {
 		return source{}, fmt.Errorf("%w: the video is already %s", ErrInvalidFormat, p.Format.Label())
 	}
-	filesDir, ok := storage.FindDeviceFilesDirBySerial(p.Serial)
-	if !ok {
-		systemDir, err := storageutil.GetFilesDir()
-		if err != nil {
-			return source{}, err
-		}
-		filesDir = systemDir
+	var fsys vfs.VFS
+	if registry != nil {
+		fsys, _ = registry.Get(vfs.FilesNamespace(p.Serial))
 	}
-
-	cleanFilesDir := filepath.Clean(filesDir)
-	fullPath, err := storageutil.SafeJoin(cleanFilesDir, p.RelPath)
-	if err != nil || fullPath == cleanFilesDir {
+	if fsys == nil {
+		return source{}, fmt.Errorf("%w: no attached device has serial %q", ErrSourceNotFound, p.Serial)
+	}
+	info, err := fsys.Stat(ctx, p.RelPath)
+	switch {
+	case errors.Is(err, vfs.ErrPermissionDenied):
 		return source{}, ErrInvalidPath
+	case err != nil:
+		return source{}, fmt.Errorf("%w: %s: %w", ErrSourceNotFound, p.RelPath, err)
+	case info.Path == "":
+		return source{}, ErrInvalidPath
+	case info.IsDir:
+		return source{}, fmt.Errorf("%w: %s is a folder", ErrSourceNotFound, p.RelPath)
 	}
-	return source{filesDir: cleanFilesDir, fullPath: fullPath, relPath: relPath(cleanFilesDir, fullPath)}, nil
+	return source{fsys: fsys, serial: p.Serial, relPath: info.Path}, nil
+}
+
+// open opens the source for reading. A file that has gone is
+// ErrSourceNotFound.
+func (src source) open(ctx context.Context) (videoutil.Source, error) {
+	video, err := videoutil.OpenSource(ctx, videoutil.OpenSourceParams{FS: src.fsys, Path: src.relPath})
+	if err != nil {
+		return videoutil.Source{}, fmt.Errorf("%w: %s: %w", ErrSourceNotFound, src.relPath, err)
+	}
+	return video, nil
 }
 
 // jobName is the job's display text: "Convert clip.mov to MKV".
 func jobName(src source, p Params) string {
-	return "Convert " + filepath.Base(src.relPath) + " to " + p.Format.Label()
-}
-
-func relPath(filesDir, path string) string {
-	// Both paths are built from filesDir, so Rel cannot fail.
-	rel, _ := filepath.Rel(filesDir, path)
-	return rel
+	return "Convert " + path.Base(src.relPath) + " to " + p.Format.Label()
 }
 
 func decodeParams(raw json.RawMessage) (Params, error) {
@@ -87,35 +92,35 @@ func decodeParams(raw json.RawMessage) (Params, error) {
 	return p, nil
 }
 
-// validate refuses a retry whose source no longer resolves to a file.
+// validate refuses a retry whose source no longer resolves to a file, or
+// whose device is no longer attached.
 func (h handler) validate(raw json.RawMessage) error {
 	p, err := decodeParams(raw)
 	if err != nil {
 		return err
 	}
-	src, err := resolveSource(h.storage, p)
-	if err != nil {
-		return err
-	}
-	if info, err := os.Stat(src.fullPath); err != nil || !info.Mode().IsRegular() {
-		return fmt.Errorf("%w: %s", ErrSourceNotFound, p.RelPath)
-	}
-	return nil
+	_, err = resolveSource(context.Background(), h.registry, p)
+	return err
 }
 
 // lane puts every job in LaneCopy once the source probes as a video whose
 // codecs the target format holds, which is the table the formats endpoint
 // lists from and Remux acts on.
-func (h handler) lane(_ context.Context, raw json.RawMessage) (string, error) {
+func (h handler) lane(ctx context.Context, raw json.RawMessage) (string, error) {
 	p, err := decodeParams(raw)
 	if err != nil {
 		return "", err
 	}
-	src, err := resolveSource(h.storage, p)
+	src, err := resolveSource(ctx, h.registry, p)
 	if err != nil {
 		return "", err
 	}
-	targets, err := videoutil.Targets(src.fullPath)
+	video, err := src.open(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer video.Close()
+	targets, err := videoutil.Targets(video)
 	if err != nil {
 		return "", fmt.Errorf("%w: %s", ErrSourceNotFound, p.RelPath)
 	}
@@ -130,7 +135,7 @@ func (h handler) run(ctx context.Context, raw json.RawMessage, report func(float
 	if err != nil {
 		return err
 	}
-	src, err := resolveSource(h.storage, p)
+	src, err := resolveSource(ctx, h.registry, p)
 	if err != nil {
 		return err
 	}
@@ -139,26 +144,12 @@ func (h handler) run(ctx context.Context, raw json.RawMessage, report func(float
 	}
 
 	ext := "." + string(p.Format)
-	staging, err := prepareStaging(src.filesDir)
-	if err != nil {
-		return err
-	}
-	file, err := os.CreateTemp(staging, stagingPattern+ext)
-	if err != nil {
-		return fmt.Errorf("create staging file: %w", err)
-	}
-	staged := file.Name()
-	_ = file.Close()
+	staged, err := h.remuxToStaging(ctx, src, p.Format, ext, report)
 	// Cleans up after a failure or cancel; once the move succeeds the staged
 	// name is already gone.
-	defer func() { _ = os.Remove(staged) }()
-
-	err = h.remux(ctx, videoutil.RemuxParams{
-		Source:     src.fullPath,
-		Output:     staged,
-		Format:     p.Format,
-		OnProgress: report,
-	})
+	if staged != "" {
+		defer func() { _ = os.Remove(staged) }()
+	}
 	if err != nil {
 		return err
 	}
@@ -171,11 +162,10 @@ func (h handler) run(ctx context.Context, raw json.RawMessage, report func(float
 	if err != nil {
 		return err
 	}
-	final, err := moveIntoPlace(ctx, src, staged, ext)
+	output, err := moveIntoPlace(ctx, src, staged, ext)
 	if err != nil {
 		return err
 	}
-	output := relPath(src.filesDir, final)
 
 	// The creator owns the output, as they would a file they uploaded (#1904).
 	// It has already landed, so a failure is logged rather than failing the
@@ -203,6 +193,32 @@ func (h handler) run(ctx context.Context, raw json.RawMessage, report func(float
 	return nil
 }
 
+// remuxToStaging remuxes the source into a new file in its device's staging
+// dir and returns that file's host path, which is set whenever the file was
+// created, failure or not, so the caller can remove it.
+func (h handler) remuxToStaging(ctx context.Context, src source, format videoutil.Format, ext string, report func(float64)) (string, error) {
+	video, err := src.open(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer video.Close()
+	staging, err := prepareStaging(stagingDataDir(h.storage, src.serial))
+	if err != nil {
+		return "", err
+	}
+	file, err := os.CreateTemp(staging, stagingPattern+ext)
+	if err != nil {
+		return "", fmt.Errorf("create staging file: %w", err)
+	}
+	err = h.remux(ctx, videoutil.RemuxParams{
+		Source:     video,
+		Output:     file,
+		Format:     format,
+		OnProgress: report,
+	})
+	return file.Name(), errors.Join(err, file.Close())
+}
+
 // checkCreator loads the access of the account that queued the job, as it
 // stands now, and requires read on the source and write on its folder
 // (#1979). A job with no creator runs as the system.
@@ -224,14 +240,27 @@ func (h handler) checkCreator(ctx context.Context, p Params, src source) (access
 	return creator, nil
 }
 
-// prepareStaging returns the staging directory for the device whose files dir
-// is filesDir (ConstructFilesDir puts it directly under the data dir), emptied
-// of outputs an earlier process left behind. Two jobs run at the same
+// stagingDataDir is the data dir of the device with this serial, which holds
+// its tmp area: on the same filesystem as its files, so moving a staged
+// output into place is a link rather than a copy. A device the storage
+// service cannot report stages under the system data dir; the move then
+// copies.
+func stagingDataDir(storage *storageutil.StorageService, serial string) string {
+	if storage != nil {
+		if device, err := storage.FindManagedDeviceBySerial(serial); err == nil && device != nil && device.DataDir != "" {
+			return device.DataDir
+		}
+	}
+	return storageutil.GetDataDir()
+}
+
+// prepareStaging returns the staging directory under dataDir's tmp area,
+// emptied of outputs an earlier process left behind. Two jobs run at the same
 // time, so only files older than this process are removed: anything
 // newer may be another job's output still being written. Clearing here rather
 // than at startup covers every device without enumerating them.
-func prepareStaging(filesDir string) (string, error) {
-	dir := filepath.Join(filepath.Dir(filesDir), "tmp", stagingDirName)
+func prepareStaging(dataDir string) (string, error) {
+	dir := filepath.Join(dataDir, "tmp", stagingDirName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create staging dir: %w", err)
 	}
@@ -246,28 +275,26 @@ func prepareStaging(filesDir string) (string, error) {
 }
 
 // moveIntoPlace moves the staged output beside the source under the first free
-// name, never replacing a file, and returns where it landed. The output name is
-// chosen now, when the remux is done, so it reflects files that appeared while
-// it ran. LocalVFS.MoveFileIn hard-links when it can and otherwise streams
-// a copy through a hidden write temp, the same way a finished upload lands.
-// A LocalVFS rooted at the source's files dir serves device serials too, which
-// the registered files namespace does not.
+// name, never replacing a file, and returns its path in the namespace. The
+// name is chosen now, when the remux is done, and by trying it rather than
+// looking first, so it reflects files that appeared while the remux ran.
+// MoveFileIn hard-links when it can and otherwise streams a copy through a
+// hidden write temp, the same way a finished upload lands.
 func moveIntoPlace(ctx context.Context, src source, staged, ext string) (string, error) {
-	fsys, err := vfs.NewLocalVFS(src.filesDir, "")
+	mover, ok := src.fsys.(vfs.FileMover)
+	if !ok {
+		return "", errors.New("move transcoded file into place: the namespace cannot take a staged file")
+	}
+	name := path.Base(src.relPath)
+	out, err := videoutil.PlaceUnderFreeName(videoutil.PlaceUnderFreeNameParams{
+		Dir:  path.Dir(src.relPath),
+		Name: strings.TrimSuffix(name, path.Ext(name)) + ext,
+		Place: func(p string) error {
+			return mover.MoveFileIn(ctx, staged, p, vfs.WriteOptions{IfNoneMatch: "*"})
+		},
+	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("move transcoded file into place: %w", err)
 	}
-	stem := strings.TrimSuffix(filepath.Base(src.fullPath), filepath.Ext(src.fullPath))
-	want := filepath.Join(filepath.Dir(src.fullPath), stem+ext)
-	for attempt := 0; attempt < maxMoveAttempts; attempt++ {
-		final := storageutil.GetNonConflictingPath(want)
-		err := fsys.MoveFileIn(ctx, staged, filepath.ToSlash(relPath(src.filesDir, final)), vfs.WriteOptions{IfNoneMatch: "*"})
-		if err == nil {
-			return final, nil
-		}
-		if !errors.Is(err, vfs.ErrConflict) {
-			return "", fmt.Errorf("move transcoded file into place: %w", err)
-		}
-	}
-	return "", fmt.Errorf("move transcoded file into place: a new file took the chosen name %d times", maxMoveAttempts)
+	return out, nil
 }

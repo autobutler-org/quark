@@ -1,14 +1,10 @@
 package v0_videos
 
 import (
-	"fmt"
-	"path/filepath"
-
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/videoutil"
 	"github.com/gin-gonic/gin"
 )
@@ -41,20 +37,13 @@ func listTranscodeFormats(c *gin.Context) *serverutil.Response {
 		if !access.Check(serial, relPath, accessutil.Read).Readable {
 			return serverutil.NotFound(errNoAccess)
 		}
-		filesDir, err := storageutil.GetFilesDir()
-		if err != nil {
-			return serverutil.InternalServerError(err)
+		video, resp := openVideo(c, deps, serial, relPath)
+		if resp != nil {
+			return resp
 		}
-		if deviceDir, ok := deps.StorageService().FindDeviceFilesDirBySerial(serial); ok {
-			filesDir = deviceDir
-		}
-		cleanFilesDir := filepath.Clean(filesDir)
-		fullPath, err := storageutil.SafeJoin(cleanFilesDir, relPath)
-		if err != nil || fullPath == cleanFilesDir {
-			return serverutil.BadRequest(fmt.Errorf("invalid relPath"))
-		}
-		if formats, err = videoutil.Targets(fullPath); err != nil {
-			return serverutil.NotFound(fmt.Errorf("video not found or not readable: %s", relPath))
+		defer video.Close()
+		if formats, err = videoutil.Targets(video); err != nil {
+			return openError(err, relPath)
 		}
 	}
 	resp := transcodeFormatsResponse{Formats: make([]transcodeFormatJSON, 0, len(formats))}
