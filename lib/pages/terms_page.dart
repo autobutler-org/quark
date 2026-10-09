@@ -2,21 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:quark/widgets/layout/chrome_app_bar.dart';
 import 'package:quark/services/app_settings.dart';
 import 'package:quark/widgets/terms/agree_button.dart';
+import 'package:quark/widgets/terms/terms_host_intro.dart';
 import 'package:quark/widgets/terms/terms_summary.dart';
 import 'package:quark/widgets/terms/terms_section.dart';
 import 'package:quark/widgets/layout/theme_toggle_button.dart';
 
 /// Terms and Conditions acceptance gate.
 ///
-/// Shown on first launch (or after a reset) before the user can access the app.
-/// Tapping "I Agree" persists the acceptance via [AppSettings] and navigates
-/// straight to wherever the user belongs next — setup, login, or the file
-/// browser.
+/// Shown before the user can access a Quark whose terms they have not accepted:
+/// on first launch, after a reset, and right after adding a Quark, which makes
+/// it the active one. In that state it opens with a [TermsHostIntro] naming
+/// the Quark, so the terms read as a step of connecting to it (#2064). Tapping
+/// "I Agree" persists the acceptance via [AppSettings] and navigates straight
+/// to wherever the user belongs next — setup, login, or the file browser.
 class TermsPage extends StatelessWidget {
   const TermsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final settings = AppSettings.instance;
+    final host = settings.activeHostEntry;
     // As the gate, this page is alone on the navigator, so Android's Back
     // used to close the app from it (#2067). There is nowhere behind it to
     // go — every route leads back here until the terms are accepted — so
@@ -40,26 +45,32 @@ class TermsPage extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
+                  children: [
+                    // Only as the gate: opened from Settings to reread, the
+                    // terms are already accepted and need no reason.
+                    if (host != null && !settings.hasAcceptedTerms.value) ...[
+                      TermsHostIntro(hostName: host.name),
+                      const SizedBox(height: 20),
+                    ],
+                    const Text(
                       'Terms and Conditions',
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    SizedBox(height: 16),
-                    Text(
+                    const SizedBox(height: 16),
+                    const Text(
                       'Last updated: September 8, 2026',
                       style: TextStyle(color: Colors.grey),
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     // Before the document, not instead of it: a new owner
                     // meeting a wall of legal text has no way to find the three
                     // facts that actually shape how they use the thing (#2027).
-                    TermsSummary(),
-                    SizedBox(height: 28),
-                    TermsSection(
+                    const TermsSummary(),
+                    const SizedBox(height: 28),
+                    const TermsSection(
                       title: 'Definitions',
                       body:
                           'AutoButler (or AutoButler LLC, "we", "us", "our") '
@@ -76,7 +87,7 @@ class TermsPage extends StatelessWidget {
                           'AutoButler-operated web properties (including '
                           'waitlist and marketing pages).',
                     ),
-                    TermsSection(
+                    const TermsSection(
                       title: '1. Personal Use',
                       body:
                           'Quark is designed for personal use to manage and '
@@ -84,7 +95,7 @@ class TermsPage extends StatelessWidget {
                           'the Software to store or distribute content that '
                           'violates applicable laws or the rights of others.',
                     ),
-                    TermsSection(
+                    const TermsSection(
                       title: '2. Your Data',
                       body:
                           'You retain full ownership of all data you store with '
@@ -100,7 +111,7 @@ class TermsPage extends StatelessWidget {
                           'and backup of your data and for any third-party '
                           'services you connect.',
                     ),
-                    TermsSection(
+                    const TermsSection(
                       title: '3. No Warranty',
                       body:
                           'Quark and the Software are provided "as is", without '
@@ -112,7 +123,7 @@ class TermsPage extends StatelessWidget {
                           'separately at the point of sale or in the applicable '
                           'product materials.',
                     ),
-                    TermsSection(
+                    const TermsSection(
                       title: '4. Acceptable Use',
                       body:
                           'You agree not to use Quark for any unlawful purpose, '
@@ -126,7 +137,7 @@ class TermsPage extends StatelessWidget {
                           'are solely responsible for your own compliance with '
                           'applicable laws.',
                     ),
-                    TermsSection(
+                    const TermsSection(
                       title: '5. Limitation of Liability',
                       body:
                           'To the maximum extent permitted by law, AutoButler '
@@ -136,7 +147,7 @@ class TermsPage extends StatelessWidget {
                           'or the Website, even if advised of the possibility '
                           'of such damages.',
                     ),
-                    TermsSection(
+                    const TermsSection(
                       title: '6. Website / Waitlist',
                       body:
                           'If you join a waitlist, create an account on the '
@@ -147,7 +158,7 @@ class TermsPage extends StatelessWidget {
                           'emails, if any, will follow applicable consent and '
                           'unsubscribe rules.',
                     ),
-                    TermsSection(
+                    const TermsSection(
                       title: '7. Changes to These Terms',
                       body:
                           'We may update these Terms from time to time. For '
@@ -158,7 +169,7 @@ class TermsPage extends StatelessWidget {
                           'acceptance of the revised Terms, except where '
                           'applicable law requires a different process.',
                     ),
-                    TermsSection(
+                    const TermsSection(
                       title: '8. Contact',
                       body:
                           'Questions about these Terms: '

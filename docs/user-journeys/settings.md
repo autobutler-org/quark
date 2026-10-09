@@ -53,6 +53,8 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 
 - New host appears in the hosts list.
 - App can be switched to connect to the new host.
+- Saving makes the new host the active one, so its terms come next (JN-AUTH-008). The terms page opens with a
+  line naming the Quark just added and saying every Quark asks for this the first time you connect to it (#2064).
 
 ---
 
