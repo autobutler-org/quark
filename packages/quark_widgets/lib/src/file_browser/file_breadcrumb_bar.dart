@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../core/quark_tappable.dart';
 import '../theme/quark_tokens.dart';
 
 /// The path trail above a file listing: an up button, a home glyph, and one
@@ -96,30 +97,27 @@ class FileBreadcrumbBar extends StatelessWidget {
                       message: atRoot
                           ? 'You are in the top folder'
                           : 'Go to the top folder',
-                      child: MouseRegion(
-                        cursor: atRoot
-                            ? SystemMouseCursors.basic
-                            : SystemMouseCursors.click,
-                        child: GestureDetector(
-                          key: const ValueKey('breadcrumb_home'),
-                          behavior: HitTestBehavior.opaque,
-                          onTap: atRoot ? null : onGoHome,
-                          child: Container(
-                            constraints: const BoxConstraints(
-                              minWidth: kMinInteractiveDimension,
-                              minHeight: kMinInteractiveDimension,
-                            ),
-                            child: Center(
-                              widthFactor: 1,
-                              heightFactor: 1,
-                              child: Icon(
-                                QuarkIcons.home_rounded,
-                                size: 20,
-                                color: atRoot
-                                    ? Theme.of(context).colorScheme.onSurface
-                                          .withValues(alpha: 0.4)
-                                    : Theme.of(context).colorScheme.primary,
-                              ),
+                      // Reachable by Tab and pressed with Enter or Space,
+                      // with a ring to show it has focus (#2604).
+                      child: QuarkTappable(
+                        key: const ValueKey('breadcrumb_home'),
+                        onTap: atRoot ? null : onGoHome,
+                        borderRadius: BorderRadius.circular(tokens.radiusMd),
+                        child: Container(
+                          constraints: const BoxConstraints(
+                            minWidth: kMinInteractiveDimension,
+                            minHeight: kMinInteractiveDimension,
+                          ),
+                          child: Center(
+                            widthFactor: 1,
+                            heightFactor: 1,
+                            child: Icon(
+                              QuarkIcons.home_rounded,
+                              size: 20,
+                              color: atRoot
+                                  ? Theme.of(context).colorScheme.onSurface
+                                        .withValues(alpha: 0.4)
+                                  : Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ),
@@ -175,15 +173,16 @@ class FileBreadcrumbBar extends StatelessWidget {
 
       final targetPath = '/${segments.take(index + 1).join('/')}';
       children.add(
-        // A button to a screen reader, and at least 48dp to a finger, however
-        // short the folder's name (#2603, #2605).
+        // A button to a screen reader, at least 48dp to a finger, however
+        // short the folder's name, and reachable from the keyboard (#2603,
+        // #2604, #2605).
         Semantics(
           container: true,
           button: true,
-          child: GestureDetector(
+          child: QuarkTappable(
             key: ValueKey('breadcrumb_segment_$index'),
-            behavior: HitTestBehavior.opaque,
             onTap: () => onPathSelected(targetPath),
+            borderRadius: BorderRadius.circular(tokens.radiusMd),
             child: Container(
               constraints: const BoxConstraints(
                 minWidth: kMinInteractiveDimension,

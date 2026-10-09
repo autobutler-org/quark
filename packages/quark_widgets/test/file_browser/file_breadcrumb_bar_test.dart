@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/keyboard.dart';
 import '../support/pump.dart';
 
 void main() {
@@ -178,5 +180,28 @@ void main() {
       isFalse,
     );
     handle.dispose();
+  });
+
+  // #2604: home and the ancestors were bare gesture detectors a keyboard
+  // could not reach.
+  testBothViewports('home and every ancestor work from the keyboard', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpBar(tester, path: '/photos/2024', size: size, events: events);
+
+    final home = find.byKey(const ValueKey('breadcrumb_home'));
+    await tabTo(tester, home);
+    expect(findFocusRing(home), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+
+    final segment = find.byKey(const ValueKey('breadcrumb_segment_0'));
+    await tabTo(tester, segment);
+    expect(findFocusRing(segment), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+
+    expect(events, ['home', 'select:/photos']);
   });
 }

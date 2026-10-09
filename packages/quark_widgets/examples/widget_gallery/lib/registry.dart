@@ -164,6 +164,33 @@ final List<GalleryEntry> registry = [
     ),
   ),
   GalleryEntry(
+    name: 'QuarkTappable',
+    group: 'Core',
+    // Tab onto the card to see the focus ring; Enter or Space presses it.
+    build: (context, log) {
+      final tokens = QuarkTokens.of(context);
+      return Align(
+        alignment: Alignment.topLeft,
+        child: Semantics(
+          button: true,
+          child: QuarkTappable(
+            onTap: () => log('QuarkTappable.onTap'),
+            borderRadius: BorderRadius.circular(tokens.radiusMd),
+            child: Container(
+              padding: EdgeInsets.all(tokens.spacingMd),
+              decoration: BoxDecoration(
+                color: tokens.card,
+                border: Border.all(color: tokens.border),
+                borderRadius: BorderRadius.circular(tokens.radiusMd),
+              ),
+              child: const Text('A card a keyboard can press'),
+            ),
+          ),
+        ),
+      );
+    },
+  ),
+  GalleryEntry(
     name: 'QuarkLoader',
     group: 'Core',
     build: (context, log) => Wrap(

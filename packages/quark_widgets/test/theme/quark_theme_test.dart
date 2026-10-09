@@ -241,6 +241,8 @@ void main() {
           theme.filledButtonTheme.style,
           theme.outlinedButtonTheme.style,
           theme.textButtonTheme.style,
+          // #2604: a bare icon button had only Material's faint tint.
+          theme.iconButtonTheme.style,
         ]) {
           final side = style!.side!;
           final focused = side.resolve({WidgetState.focused});

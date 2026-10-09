@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../core/quark_tappable.dart';
 import '../../theme/quark_tokens.dart';
 import '../new_file_dialog.dart';
 
 /// One selectable file type in [NewFileDialog]'s type picker. A screen reader
-/// hears it as a button, and whether it is the selected type (#2603).
+/// hears it as a button, and whether it is the selected type (#2603); a
+/// keyboard reaches it with Tab and picks it with Enter or Space (#2604).
 ///
 /// Key prefix: `new_file_type_<extension without the dot, or `generic`>`.
 class NewFileTypeCard extends StatelessWidget {
@@ -39,15 +41,16 @@ class NewFileTypeCard extends StatelessWidget {
     final inset = borderWidth - 1;
 
     // One of a set of choices to a screen reader, saying which is picked
-    // (#2603).
+    // (#2603), and one Tab stop to a keyboard (#2604).
     return Semantics(
       container: true,
       button: true,
       inMutuallyExclusiveGroup: true,
       selected: isSelected,
-      child: GestureDetector(
+      child: QuarkTappable(
         key: ValueKey('new_file_type_$slug'),
         onTap: onTap,
+        borderRadius: BorderRadius.circular(tokens.radiusMd),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           width: 88,

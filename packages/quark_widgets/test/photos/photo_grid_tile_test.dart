@@ -1,11 +1,13 @@
-import 'dart:ui' show Tristate;
+import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
+import '../support/keyboard.dart';
 import '../support/pump.dart';
 
 void main() {
@@ -222,5 +224,46 @@ void main() {
       Tristate.isTrue,
     );
     handle.dispose();
+  });
+
+  // #2604: the tile was a bare gesture detector a keyboard could not reach.
+  testBothViewports('opens from the keyboard and shows where focus is', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpTile(tester, size: size, events: events, withMenu: true);
+
+    final tile = find.byKey(const ValueKey('photo_tile_p1'));
+    await tabTo(tester, tile);
+    expect(findFocusRing(tile), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(events, ['tap']);
+  });
+
+  testBothViewports('with a menu it is still one labeled button', (
+    tester,
+    size,
+  ) async {
+    final events = <String>[];
+    await pumpTile(tester, size: size, events: events, withMenu: true);
+    final handle = tester.ensureSemantics();
+
+    final node = tester.getSemantics(
+      find.byKey(const ValueKey('photo_tile_p1')),
+    );
+    // The test thumbnail's own caption merges in after the tile's name.
+    expect(node.label, startsWith('beach.jpg'));
+    expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    expect(
+      node.getSemanticsData().hasAction(SemanticsAction.longPress),
+      isTrue,
+    );
+    tester.semantics.longPress(find.semantics.byLabel(RegExp('^beach')));
+    expect(events, ['menu']);
+    handle.dispose();
+    await expectTapTargetGuidelines(tester);
   });
 }
