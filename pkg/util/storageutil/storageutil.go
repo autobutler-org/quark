@@ -3,14 +3,12 @@
 package storageutil
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -251,24 +249,6 @@ func DetermineFileTypeFromPath(filePath string) FileType {
 	}
 }
 
-func DetermineFileType(rootDir string, file *DeviceFileInfo) FileType {
-	if file == nil {
-		return FileTypeSpacer
-	}
-	if file.IsDir() {
-		return FileTypeFolder
-	}
-	filesDir, err := GetFilesDir()
-	if err != nil {
-		return FileTypeGeneric
-	}
-	stat, err := os.Stat(filepath.Join(filesDir, rootDir, file.Name()))
-	if err != nil || stat == nil {
-		return FileTypeGeneric // If we can't stat the file, treat it as generic
-	}
-	return DetermineFileTypeFromPath(file.Name())
-}
-
 func SizeBytesToString(size_bytes int64) string {
 	if size_bytes < 1024 {
 		return fmt.Sprintf("%d B", size_bytes)
@@ -316,133 +296,7 @@ const VersionsDirName = ".quark-versions"
 // reserved, and an old trash is hidden until its first use moves it out. Every
 // other dotfile is the user's — a `.env` they uploaded must stay visible.
 func IsInternalName(name string) bool {
-	return name == trashPathPrefix || name == VersionsDirName || strings.HasPrefix(name, WriteTempPrefix)
-}
-
-func StatFilesInDir(dir string, deviceName string, devicePath string, deviceSerial string) ([]*DeviceFileInfo, error) {
-	entries, err := os.ReadDir(dir)
-	files := make([]*DeviceFileInfo, 0, len(entries))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("%w: %s", ErrPathNotFound, dir)
-		}
-		return nil, fmt.Errorf("error reading the directory %s: %w", dir, err) // coverage: ignore - requires filesystem permission errors
-	}
-	for _, entry := range entries {
-		if IsInternalName(entry.Name()) {
-			continue
-		}
-		var fileInfo fs.FileInfo
-		fullPath := filepath.Join(dir, entry.Name())
-		if entry.IsDir() {
-			folderSize, err := GetFolderSize(fullPath)
-			if err != nil {
-				return nil, fmt.Errorf("error getting size for folder %s: %w", entry.Name(), err) // coverage: ignore - requires filesystem errors during folder traversal
-			}
-			fileInfo = NewCustomFileInfo().WithName(entry.Name()).WithSize(folderSize)
-		} else {
-			info, err := entry.Info()
-			if err != nil {
-				return nil, fmt.Errorf("error getting info for file %s: %w", entry.Name(), err) // coverage: ignore - requires filesystem errors on stat
-			}
-			fileInfo = info
-		}
-		// Wrap in DeviceFileInfo with device info
-		files = append(files, NewDeviceFileInfo(fileInfo, deviceName, devicePath, fullPath, deviceSerial))
-	}
-	// Sort files by directory first, then by name
-	slices.SortFunc(files, func(a, b *DeviceFileInfo) int {
-		if a.IsDir() && !b.IsDir() {
-			return -1 // a is a directory, b is a file
-		} else if !a.IsDir() && b.IsDir() {
-			return 1 // coverage: ignore - a is a file, b is a directory
-		}
-		return strings.Compare(a.Name(), b.Name())
-	})
-	return files, nil
-}
-
-// WalkedFile is one entry produced by WalkFilesInDir: the entry itself plus
-// its path relative to the directory the walk started from.
-type WalkedFile struct {
-	Info *DeviceFileInfo
-	// RelPath is slash-separated and relative to the walk root, e.g.
-	// "sub/deep.qdoc". StatFilesInDir's single-level listing only ever needs
-	// a base name, which is why callers that walk need this instead.
-	RelPath string
-}
-
-// WalkFilesInDir recursively walks dir and calls visit for every entry beneath
-// it, in lexical order, parents before children. The root itself is not
-// visited.
-//
-// visit may return fs.SkipDir to skip the current directory's contents or
-// fs.SkipAll to stop the walk; both are reported as success. Any other error
-// stops the walk and is returned.
-//
-// Symlinks are reported but never followed, so the walk cannot escape dir or
-// loop — the same containment the single-level StatFilesInDir listing has.
-//
-// Directory entries carry the filesystem's own size rather than the size of
-// their contents. StatFilesInDir computes subtree sizes with GetFolderSize,
-// which is a full walk per directory and so quadratic when the caller is
-// already walking; LocalVFS reports raw directory sizes for the same reason.
-func WalkFilesInDir(
-	ctx context.Context,
-	dir string,
-	deviceName string,
-	devicePath string,
-	deviceSerial string,
-	visit func(WalkedFile) error,
-) error {
-	root := filepath.Clean(dir)
-	if _, err := os.Stat(root); err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("%w: %s", ErrPathNotFound, dir)
-		}
-		return fmt.Errorf("error reading the directory %s: %w", dir, err)
-	}
-
-	return filepath.WalkDir(root, func(fullPath string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			// An unreadable subdirectory must not abort the whole listing —
-			// skip it and keep walking the rest of the tree.
-			if entry != nil && entry.IsDir() {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		if ctx != nil && ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if fullPath == root {
-			return nil
-		}
-
-		rel, relErr := filepath.Rel(root, fullPath)
-		if relErr != nil {
-			return nil // coverage: ignore - WalkDir only yields paths under root
-		}
-		rel = filepath.ToSlash(rel)
-
-		if IsInternalName(entry.Name()) {
-			if entry.IsDir() {
-				return fs.SkipDir
-			}
-			return nil
-		}
-
-		info, infoErr := entry.Info()
-		if infoErr != nil {
-			// The entry vanished mid-walk; nothing to report for it.
-			return nil // coverage: ignore - requires a concurrent delete
-		}
-
-		return visit(WalkedFile{
-			Info:    NewDeviceFileInfo(info, deviceName, devicePath, fullPath, deviceSerial),
-			RelPath: rel,
-		})
-	})
+	return name == TrashPathPrefix || name == VersionsDirName || strings.HasPrefix(name, WriteTempPrefix)
 }
 
 // NumberedName is fileName with _(n) before its extension: NumberedName("a.txt",
@@ -459,31 +313,6 @@ func NumberedName(fileName string, n int) string {
 		stem = "file"
 	}
 	return fmt.Sprintf("%s_(%d)%s", stem, n, ext)
-}
-
-// GetNonConflictingPath returns a file path that doesn't conflict with existing files.
-// If the target path already exists, it appends _(n) before the file extension,
-// incrementing n until a non-existent path is found.
-// For example: file.txt -> file_(1).txt -> file_(2).txt, etc.
-func GetNonConflictingPath(targetPath string) string {
-	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
-		// File doesn't exist, return the target path as-is
-		return targetPath
-	}
-
-	// File exists, need to find a non-conflicting name
-	ext := filepath.Ext(targetPath)
-	nameWithoutExt := targetPath[:len(targetPath)-len(ext)]
-	dir := filepath.Dir(targetPath)
-
-	i := 1
-	for {
-		newPath := filepath.Join(dir, fmt.Sprintf("%s_(%d)%s", filepath.Base(nameWithoutExt), i, ext))
-		if _, err := os.Stat(newPath); os.IsNotExist(err) {
-			return newPath
-		}
-		i++
-	}
 }
 
 // SetupFilesDir prepares the system storage root. Called once on startup.
@@ -555,92 +384,6 @@ func GetAvailableSpaceInBytes(fileDir string) uint64 {
 		return 0
 	}
 	return stat.Bavail * uint64(stat.Bsize)
-}
-
-// StatFilesInMultipleDirs reads files from multiple directories and merges them
-// into a unified view, preserving device information for each file
-func StatFilesInMultipleDirs(dirsWithDeviceInfo []DirWithDevice) ([]*DeviceFileInfo, error) {
-	// Map to merge files by name
-	fileMap := make(map[string][]*DeviceFileInfo)
-
-	// Read files from each device
-	for _, dirInfo := range dirsWithDeviceInfo {
-		entries, err := os.ReadDir(dirInfo.Dir)
-		if err != nil {
-			// Skip directories that don't exist or can't be read
-			continue
-		}
-
-		for _, entry := range entries {
-			var fileInfo fs.FileInfo
-			fullPath := filepath.Join(dirInfo.Dir, entry.Name())
-
-			if entry.IsDir() {
-				folderSize, err := GetFolderSize(fullPath)
-				if err != nil {
-					continue // coverage: ignore - requires filesystem errors during folder size calculation
-				}
-				fileInfo = NewCustomFileInfo().WithName(entry.Name()).WithSize(folderSize)
-			} else {
-				info, err := entry.Info()
-				if err != nil {
-					continue // coverage: ignore - requires filesystem errors on stat
-				}
-				fileInfo = info
-			}
-
-			// Wrap with device information
-			deviceFileInfo := NewDeviceFileInfo(fileInfo, dirInfo.DeviceName, dirInfo.DevicePath, fullPath, dirInfo.DeviceSerial)
-
-			// Add to map (multiple devices may have same file name)
-			fileMap[entry.Name()] = append(fileMap[entry.Name()], deviceFileInfo)
-		}
-	}
-
-	// Flatten the map to a slice
-	var files []*DeviceFileInfo
-	for _, fileList := range fileMap {
-		files = append(files, fileList...)
-	}
-
-	// Sort files by directory first, then by name
-	slices.SortFunc(files, func(a, b *DeviceFileInfo) int {
-		if a.IsDir() && !b.IsDir() {
-			return -1 // coverage: ignore - a is a directory, b is a file
-		} else if !a.IsDir() && b.IsDir() {
-			return 1
-		}
-		return strings.Compare(a.Name(), b.Name())
-	})
-
-	return files, nil
-}
-
-// DirWithDevice associates a directory path with its device information
-type DirWithDevice struct {
-	Dir          string
-	DeviceName   string
-	DevicePath   string
-	DeviceSerial string
-}
-
-// DoesFileExist checks if a file exists at the given path
-// Returns true if the file exists, false otherwise
-func DoesFileExist(fullPath string) bool {
-	_, err := os.Stat(fullPath)
-	return err == nil
-}
-
-// FindFileAcrossDevices searches for a file across multiple devices
-// Returns the full path to the first matching file
-func FindFileAcrossDevices(dirsWithDevice []DirWithDevice, relPath string) (string, error) {
-	for _, dirInfo := range dirsWithDevice {
-		fullPath := filepath.Join(dirInfo.Dir, relPath)
-		if DoesFileExist(fullPath) {
-			return fullPath, nil
-		}
-	}
-	return "", fmt.Errorf("file not found: %s", relPath)
 }
 
 // InitializeDeviceDataDir creates the quark data directory structure on a device

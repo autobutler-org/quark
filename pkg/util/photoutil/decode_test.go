@@ -109,9 +109,6 @@ func TestThumbnailPaths_RefusePixelsOverTheCap(t *testing.T) {
 	if _, err := GenerateThumbnail(GenerateThumbnailParams{FilePath: path, Width: 64, Height: 64}); !errors.Is(err, ErrImageTooLarge) {
 		t.Errorf("GenerateThumbnail = %v, want ErrImageTooLarge", err)
 	}
-	if _, _, err := ImageToThumbnail(path, 64, 64); !errors.Is(err, ErrImageTooLarge) {
-		t.Errorf("ImageToThumbnail = %v, want ErrImageTooLarge", err)
-	}
 	if _, err := DHashFile(path); !errors.Is(err, ErrImageTooLarge) {
 		t.Errorf("DHashFile = %v, want ErrImageTooLarge", err)
 	}

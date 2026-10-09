@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,20 +10,55 @@ import (
 
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // drives is three files directories: the internal drive, the default-storage
 // drive live sync mirrors it onto, and one more plugged-in drive (#2791).
 type drives struct {
 	internal, target, other string
+	// storage detects the three, so each one's trash is reached through its
+	// device namespace, the way fileutil.DeleteFiles reaches it.
+	storage *storageutil.StorageService
 }
+
+// drivesDetector reports a fixed set of devices.
+type drivesDetector []storageutil.Device
+
+func (d drivesDetector) DetectDevices() ([]storageutil.Device, error) { return d, nil }
+
+// serialUsb implements only GetSerial; any other call panics on the nil
+// embedded interface.
+type serialUsb struct {
+	storageutil.UsbDevice
+	serial string
+}
+
+func (u serialUsb) GetSerial() string { return u.serial }
 
 const otherSerial = "other-drive"
 
 // newDrivesWorker returns a sync worker wired to three temp-dir drives.
 func newDrivesWorker(t *testing.T) (*SyncWorker, *eventbus.Bus, drives) {
 	t.Helper()
-	d := drives{internal: t.TempDir(), target: t.TempDir(), other: t.TempDir()}
+	dirs := map[string]string{}
+	var devices drivesDetector
+	for _, serial := range []string{"", targetSerial, otherSerial} {
+		mountPoint := t.TempDir()
+		dirs[serial] = filepath.Join(mountPoint, "quark", "data", "files")
+		if err := os.MkdirAll(dirs[serial], 0o755); err != nil {
+			t.Fatal(err)
+		}
+		device := storageutil.Device{Name: "Internal", MountPoint: mountPoint, IsInternal: true}
+		if serial != "" {
+			device = storageutil.Device{Name: "USB " + serial, MountPoint: mountPoint, UsbInfo: serialUsb{serial: serial}}
+		}
+		devices = append(devices, device)
+	}
+	d := drives{
+		internal: dirs[""], target: dirs[targetSerial], other: dirs[otherSerial],
+		storage: storageutil.NewStorageService(devices),
+	}
 	w := newSyncWorker(localNamespaces(t, map[string]string{
 		"": d.internal, targetSerial: d.target, otherSerial: d.other,
 	}), targetSerial)
@@ -56,21 +92,28 @@ func runEvents(t *testing.T, w *SyncWorker, bus *eventbus.Bus, d drives, events 
 	}
 }
 
-// trash moves relPath into filesDir's trash the way fileutil.DeleteFiles does
-// and returns the delete event DeleteFiles publishes for it.
-func trash(t *testing.T, filesDir, serial, relPath string) (eventbus.Event, storageutil.TrashedItem) {
+// trash moves relPath into the trash of the drive serial names, through its
+// namespace the way fileutil.DeleteFiles does, and returns the delete event
+// DeleteFiles publishes for it.
+func trash(t *testing.T, d drives, serial, relPath string) (eventbus.Event, vfs.TrashedItem) {
 	t.Helper()
-	res, err := storageutil.TrashFilesImpl(storageutil.TrashFilesParams{
-		FilePaths:    []string{relPath},
-		DeviceSerial: serial,
-	}, filesDir)
+	trashed, err := vfs.NewDeviceStorageServiceVFS(d.storage, serial).Trash(context.Background(), []string{relPath}, vfs.TrashOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Trashed) != 1 {
-		t.Fatalf("trashed %d items, want 1", len(res.Trashed))
+	if len(trashed) != 1 {
+		t.Fatalf("trashed %d items, want 1", len(trashed))
 	}
-	return eventbus.Event{Kind: eventbus.EventDelete, Path: relPath, DeviceSerial: serial}, res.Trashed[0]
+	return eventbus.Event{Kind: eventbus.EventDelete, Path: relPath, DeviceSerial: serial}, trashed[0]
+}
+
+// restore puts a trashed item back on the drive serial names.
+func restore(t *testing.T, d drives, serial string, item vfs.TrashedItem) {
+	t.Helper()
+	refs := []vfs.TrashRef{{TrashName: item.TrashName}}
+	if _, err := vfs.NewDeviceStorageServiceVFS(d.storage, serial).RestoreTrash(context.Background(), refs); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func assertContent(t *testing.T, dir, rel, want string) {
@@ -101,7 +144,7 @@ func TestSyncWorker_TrashOnInternal_KeepsFilesOnOtherDrives(t *testing.T) {
 	writeTestFile(t, d.target, rel, "internal") // the mirror's copy
 	writeTestFile(t, d.other, rel, "unrelated") // a different file, same name
 
-	evt, _ := trash(t, d.internal, "", rel)
+	evt, _ := trash(t, d, "", rel)
 	runEvents(t, w, bus, d, evt)
 
 	assertMissing(t, d.internal, rel)
@@ -118,7 +161,7 @@ func TestSyncWorker_TrashOnUSB_KeepsFilesOnOtherDrives(t *testing.T) {
 	writeTestFile(t, d.target, rel, "target")
 	writeTestFile(t, d.other, rel, "other")
 
-	evt, _ := trash(t, d.other, otherSerial, rel)
+	evt, _ := trash(t, d, otherSerial, rel)
 	runEvents(t, w, bus, d, evt)
 
 	assertContent(t, d.internal, rel, "internal")
@@ -134,7 +177,7 @@ func TestSyncWorker_TrashFolder_KeepsFoldersOnOtherDrives(t *testing.T) {
 	}
 	writeTestFile(t, d.other, "trip/only-here.jpg", "only")
 
-	evt, _ := trash(t, d.internal, "", "trip")
+	evt, _ := trash(t, d, "", "trip")
 	runEvents(t, w, bus, d, evt)
 
 	assertMissing(t, d.internal, "trip")
@@ -154,12 +197,8 @@ func TestSyncWorker_RestoreFromTrash_OnInternal(t *testing.T) {
 	writeTestFile(t, d.target, rel, "mine")
 	writeTestFile(t, d.other, rel, "unrelated")
 
-	del, item := trash(t, d.internal, "", rel)
-	if _, err := storageutil.RestoreTrashImpl(storageutil.RestoreTrashParams{
-		Items: []storageutil.TrashRef{{TrashName: item.TrashName}},
-	}, d.internal); err != nil {
-		t.Fatal(err)
-	}
+	del, item := trash(t, d, "", rel)
+	restore(t, d, "", item)
 	// The event trashutil.Restore publishes for a restored file.
 	restored := eventbus.Event{Kind: eventbus.EventUpload, Path: rel}
 	runEvents(t, w, bus, d, del, restored)
@@ -178,12 +217,8 @@ func TestSyncWorker_RestoreFromTrash_OnUSB_LeavesTarget(t *testing.T) {
 	writeTestFile(t, d.target, rel, "target")
 	writeTestFile(t, d.other, rel, "other")
 
-	del, item := trash(t, d.other, otherSerial, rel)
-	if _, err := storageutil.RestoreTrashImpl(storageutil.RestoreTrashParams{
-		Items: []storageutil.TrashRef{{TrashName: item.TrashName}},
-	}, d.other); err != nil {
-		t.Fatal(err)
-	}
+	del, item := trash(t, d, otherSerial, rel)
+	restore(t, d, otherSerial, item)
 	restored := eventbus.Event{Kind: eventbus.EventUpload, Path: rel, DeviceSerial: otherSerial}
 	runEvents(t, w, bus, d, del, restored)
 

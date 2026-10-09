@@ -24,6 +24,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -54,6 +55,9 @@ type listResponse struct {
 type harness struct {
 	engine   *gin.Engine
 	filesDir string
+	// files is the internal drive's namespace, for trashing behind the API's
+	// back.
+	files    *vfs.StorageServiceVFS
 	events   <-chan eventbus.Event
 	database *db.DatabaseSqlc
 	// principal is who requests act as; it starts as an admin and as()
@@ -75,8 +79,9 @@ func newHarness(t *testing.T) harness {
 	events, unsub := bus.Subscribe("trash-test")
 	t.Cleanup(unsub)
 	database := dbtest.NewDB(t)
+	svc := storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint})
 	deps := deputil.NewDependencies().
-		WithStorageService(storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint})).
+		WithStorageService(svc).
 		WithEventBus(bus).
 		WithDatabase(database)
 
@@ -92,7 +97,10 @@ func newHarness(t *testing.T) harness {
 	group := engine.Group("/api/v0")
 	serverutil.RegisterRouterWithGroup(group, v0_trash.NewRouter())
 	serverutil.RegisterRouterWithGroup(group, v0_files.NewRouter())
-	return harness{engine: engine, filesDir: filesDir, events: events, database: database, principal: principal}
+	return harness{
+		engine: engine, filesDir: filesDir, files: vfs.NewStorageServiceVFS(svc, vfs.FilesNamespace("")),
+		events: events, database: database, principal: principal,
+	}
 }
 
 // rows lists every access row's path, sorted.
@@ -324,9 +332,7 @@ func TestTrashInASharedFolder(t *testing.T) {
 	h.deleteFile(t, "shared", "d.txt")
 	// A sidecar written before the trash was per user records nobody as having
 	// trashed the item.
-	if _, err := storageutil.TrashFilesImpl(storageutil.TrashFilesParams{
-		RootDir: "shared", FilePaths: []string{"legacy.txt"},
-	}, h.filesDir); err != nil {
+	if _, err := h.files.Trash(context.Background(), []string{"legacy.txt"}, vfs.TrashOptions{RootDir: "shared"}); err != nil {
 		t.Fatal(err)
 	}
 	h.as(admin)

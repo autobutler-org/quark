@@ -9,7 +9,6 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
-	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -192,11 +191,6 @@ type FindArchiveParams struct {
 	Ctx context.Context
 	// Registry holds the namespace of the device Serial names.
 	Registry vfs.Registry
-	// Storage is consulted only when Registry holds no files namespace at
-	// all, which production never does: every stat goes through Registry
-	// (#2642). It stays until the thumbnail handler and its tests stop
-	// relying on it (#2645), and #2650 removes it.
-	Storage *storageutil.StorageService
 	// FilePath is the requested path, relative to the device files directory.
 	FilePath string
 	// Serial identifies the device, empty for the internal one.
@@ -250,9 +244,6 @@ func FindArchive(params FindArchiveParams) (FindArchiveResult, error) {
 // — is nil with no error; the caller's own lookup of the full path reports it.
 func statFilesPath(params FindArchiveParams, filePath string) (*vfs.FileInfo, error) {
 	fsys, err := FilesVFS(params.Registry, params.Serial)
-	if errors.Is(err, ErrNoFilesNamespace) && params.Storage != nil {
-		return statStoragePath(params, filePath)
-	}
 	var notFound *NotFoundError
 	if errors.As(err, &notFound) {
 		return nil, nil
@@ -268,28 +259,6 @@ func statFilesPath(params FindArchiveParams, filePath string) (*vfs.FileInfo, er
 		return nil, fmt.Errorf("failed to stat %s: %w", filePath, err)
 	}
 	return &info, nil
-}
-
-// statStoragePath stats a files path through the StorageService. It serves
-// only a caller with no files namespace at all, which production never is:
-// the thumbnail handler's tests still run that way until #2645 moves them onto
-// the registry, and #2650 deletes this with the Storage field.
-func statStoragePath(params FindArchiveParams, filePath string) (*vfs.FileInfo, error) {
-	resolved, err := params.Storage.DownloadFile(storageutil.DownloadFileParams{
-		FilePath:     filePath,
-		DeviceSerial: params.Serial,
-	})
-	if err != nil {
-		return nil, nil
-	}
-	info, err := os.Stat(resolved.FullPath)
-	if storageutil.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to stat %s: %w", filePath, err)
-	}
-	return &vfs.FileInfo{IsDir: info.IsDir(), ModTime: info.ModTime()}, nil
 }
 
 // openArchiveEntryStream finds an entry and opens its decompressed stream.

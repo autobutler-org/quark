@@ -113,7 +113,7 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	// Keep each file's version history beside it as it is moved, and drop it
 	// once the file leaves the trash for good (#1173).
 	deps.FileVersions().Watch(fileversionutil.WatchParams{
-		Bus: deps.EventBus(), Registry: deps.VFSRegistry(), Storage: deps.StorageService(),
+		Bus: deps.EventBus(), Registry: deps.VFSRegistry(),
 	})
 
 	// Start the FTS5 content indexer — indexes uploaded text files and
@@ -490,7 +490,7 @@ func StartServer(deps deputil.Dependencies, opts StartOptions) error {
 		return fmt.Errorf("failed to initialize system collector: %w", err)
 	}
 
-	deps.WithWorker(workerutil.NewWorker(deps.StorageService()))
+	deps.WithWorker(workerutil.NewWorker())
 	syncWorker, stopJobs, err := setupServices(deps)
 	if err != nil {
 		return fmt.Errorf("failed to setup services: %w", err)

@@ -1,4 +1,4 @@
-package storageutil_test
+package vfs
 
 import (
 	"context"
@@ -32,22 +32,22 @@ func seedTree(t *testing.T, root string, rel ...string) {
 	}
 }
 
-func collectWalk(t *testing.T, root string) []storageutil.WalkedFile {
+func collectWalk(t *testing.T, root string) []walkedFile {
 	t.Helper()
-	var got []storageutil.WalkedFile
-	err := storageutil.WalkFilesInDir(context.Background(), root, "dev", "/data", "SERIAL",
-		func(f storageutil.WalkedFile) error {
+	var got []walkedFile
+	err := hostWalkDir(context.Background(), root, "dev", "/data", "SERIAL",
+		func(f walkedFile) error {
 			got = append(got, f)
 			return nil
 		},
 	)
 	if err != nil {
-		t.Fatalf("WalkFilesInDir: %v", err)
+		t.Fatalf("hostWalkDir: %v", err)
 	}
 	return got
 }
 
-func relPaths(files []storageutil.WalkedFile) []string {
+func relPaths(files []walkedFile) []string {
 	out := make([]string, 0, len(files))
 	for _, f := range files {
 		out = append(out, f.RelPath)
@@ -56,9 +56,9 @@ func relPaths(files []storageutil.WalkedFile) []string {
 	return out
 }
 
-// The core of #1605: nested files must be reachable. StatFilesInDir, which this
+// The core of #1605: nested files must be reachable. hostListDir, which this
 // replaces at every recursive call site, only ever saw the top level.
-func TestWalkFilesInDir_ReachesNestedFiles(t *testing.T) {
+func TestHostWalkDir_ReachesNestedFiles(t *testing.T) {
 	root := t.TempDir()
 	seedTree(t, root, "top.txt", "sub/deep.qdoc", "sub/nested/deeper.txt", "empty/")
 
@@ -69,7 +69,7 @@ func TestWalkFilesInDir_ReachesNestedFiles(t *testing.T) {
 	}
 }
 
-func TestWalkFilesInDir_RelPathIsSlashSeparatedAndRootRelative(t *testing.T) {
+func TestHostWalkDir_RelPathIsSlashSeparatedAndRootRelative(t *testing.T) {
 	root := t.TempDir()
 	seedTree(t, root, "a/b/c.txt")
 
@@ -86,7 +86,7 @@ func TestWalkFilesInDir_RelPathIsSlashSeparatedAndRootRelative(t *testing.T) {
 	}
 }
 
-func TestWalkFilesInDir_DoesNotVisitTheRoot(t *testing.T) {
+func TestHostWalkDir_DoesNotVisitTheRoot(t *testing.T) {
 	root := t.TempDir()
 	seedTree(t, root, "only.txt")
 
@@ -97,7 +97,7 @@ func TestWalkFilesInDir_DoesNotVisitTheRoot(t *testing.T) {
 	}
 }
 
-func TestWalkFilesInDir_CarriesDeviceMetadata(t *testing.T) {
+func TestHostWalkDir_CarriesDeviceMetadata(t *testing.T) {
 	root := t.TempDir()
 	seedTree(t, root, "sub/deep.txt")
 
@@ -110,13 +110,13 @@ func TestWalkFilesInDir_CarriesDeviceMetadata(t *testing.T) {
 
 // fs.SkipAll is how a bounded caller stops a walk over a large library instead
 // of materializing every file first.
-func TestWalkFilesInDir_SkipAllStopsTheWalk(t *testing.T) {
+func TestHostWalkDir_SkipAllStopsTheWalk(t *testing.T) {
 	root := t.TempDir()
 	seedTree(t, root, "a.txt", "b.txt", "c.txt", "sub/d.txt")
 
 	var seen int
-	err := storageutil.WalkFilesInDir(context.Background(), root, "dev", "", "",
-		func(storageutil.WalkedFile) error {
+	err := hostWalkDir(context.Background(), root, "dev", "", "",
+		func(walkedFile) error {
 			seen++
 			if seen == 2 {
 				return fs.SkipAll
@@ -132,13 +132,13 @@ func TestWalkFilesInDir_SkipAllStopsTheWalk(t *testing.T) {
 	}
 }
 
-func TestWalkFilesInDir_SkipDirSkipsSubtree(t *testing.T) {
+func TestHostWalkDir_SkipDirSkipsSubtree(t *testing.T) {
 	root := t.TempDir()
 	seedTree(t, root, "keep.txt", "pruned/hidden.txt", "pruned/deeper/also.txt")
 
 	var seen []string
-	err := storageutil.WalkFilesInDir(context.Background(), root, "dev", "", "",
-		func(f storageutil.WalkedFile) error {
+	err := hostWalkDir(context.Background(), root, "dev", "", "",
+		func(f walkedFile) error {
 			if f.RelPath == "pruned" {
 				return fs.SkipDir
 			}
@@ -147,7 +147,7 @@ func TestWalkFilesInDir_SkipDirSkipsSubtree(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Fatalf("WalkFilesInDir: %v", err)
+		t.Fatalf("hostWalkDir: %v", err)
 	}
 	sort.Strings(seen)
 	if strings.Join(seen, ",") != "keep.txt" {
@@ -155,23 +155,23 @@ func TestWalkFilesInDir_SkipDirSkipsSubtree(t *testing.T) {
 	}
 }
 
-func TestWalkFilesInDir_VisitErrorStopsAndPropagates(t *testing.T) {
+func TestHostWalkDir_VisitErrorStopsAndPropagates(t *testing.T) {
 	root := t.TempDir()
 	seedTree(t, root, "a.txt", "b.txt")
 
 	sentinel := errors.New("stop here")
-	err := storageutil.WalkFilesInDir(context.Background(), root, "dev", "", "",
-		func(storageutil.WalkedFile) error { return sentinel },
+	err := hostWalkDir(context.Background(), root, "dev", "", "",
+		func(walkedFile) error { return sentinel },
 	)
 	if !errors.Is(err, sentinel) {
 		t.Errorf("expected the visit error to propagate, got %v", err)
 	}
 }
 
-func TestWalkFilesInDir_MissingDirReportsPathNotFound(t *testing.T) {
-	err := storageutil.WalkFilesInDir(
+func TestHostWalkDir_MissingDirReportsPathNotFound(t *testing.T) {
+	err := hostWalkDir(
 		context.Background(), filepath.Join(t.TempDir(), "nope"), "dev", "", "",
-		func(storageutil.WalkedFile) error { return nil },
+		func(walkedFile) error { return nil },
 	)
 	if !errors.Is(err, storageutil.ErrPathNotFound) {
 		t.Errorf("expected ErrPathNotFound, got %v", err)
@@ -179,15 +179,15 @@ func TestWalkFilesInDir_MissingDirReportsPathNotFound(t *testing.T) {
 }
 
 // A recursive walk over a large library has to be cancellable.
-func TestWalkFilesInDir_HonorsContextCancellation(t *testing.T) {
+func TestHostWalkDir_HonorsContextCancellation(t *testing.T) {
 	root := t.TempDir()
 	seedTree(t, root, "a.txt", "b.txt", "c.txt")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := storageutil.WalkFilesInDir(ctx, root, "dev", "", "",
-		func(storageutil.WalkedFile) error {
+	err := hostWalkDir(ctx, root, "dev", "", "",
+		func(walkedFile) error {
 			t.Error("visit should not be called after cancellation")
 			return nil
 		},
@@ -199,7 +199,7 @@ func TestWalkFilesInDir_HonorsContextCancellation(t *testing.T) {
 
 // Symlinks are reported but never followed, so the walk cannot escape the root
 // or loop — the same containment the single-level listing has.
-func TestWalkFilesInDir_DoesNotFollowSymlinks(t *testing.T) {
+func TestHostWalkDir_DoesNotFollowSymlinks(t *testing.T) {
 	outside := t.TempDir()
 	seedTree(t, outside, "secret.txt")
 
@@ -217,7 +217,7 @@ func TestWalkFilesInDir_DoesNotFollowSymlinks(t *testing.T) {
 }
 
 // A self-referential symlink must not hang the walk.
-func TestWalkFilesInDir_SurvivesSymlinkLoop(t *testing.T) {
+func TestHostWalkDir_SurvivesSymlinkLoop(t *testing.T) {
 	root := t.TempDir()
 	seedTree(t, root, "sub/file.txt")
 	if err := os.Symlink(root, filepath.Join(root, "sub", "loop")); err != nil {
@@ -237,18 +237,68 @@ func TestListingsSkipInternalEntriesButNotDotfiles(t *testing.T) {
 	seedTree(t, root, ".vfs-write-123", ".trash/gone.txt", ".env", "docs/.vfs-write-9", "docs/a.txt")
 
 	if got, want := strings.Join(relPaths(collectWalk(t, root)), ","), ".env,docs,docs/a.txt"; got != want {
-		t.Errorf("WalkFilesInDir visited %s, want %s", got, want)
+		t.Errorf("hostWalkDir visited %s, want %s", got, want)
 	}
 
-	files, err := storageutil.StatFilesInDir(root, "dev", "/data", "SERIAL")
+	files, err := hostListDir(root, "dev", "/data", "SERIAL")
 	if err != nil {
-		t.Fatalf("StatFilesInDir: %v", err)
+		t.Fatalf("hostListDir: %v", err)
 	}
 	names := make([]string, 0, len(files))
 	for _, f := range files {
 		names = append(names, f.Name())
 	}
 	if got, want := strings.Join(names, ","), "docs/,.env"; got != want {
-		t.Errorf("StatFilesInDir listed %s, want %s", got, want)
+		t.Errorf("hostListDir listed %s, want %s", got, want)
+	}
+}
+
+// A single-level listing puts folders before files.
+func TestHostListDir_FoldersFirst(t *testing.T) {
+	root := t.TempDir()
+	seedTree(t, root, "file1.txt", "file2.txt", "subdir/")
+
+	files, err := hostListDir(root, "TestDevice", "/test", "")
+	if err != nil {
+		t.Fatalf("hostListDir: %v", err)
+	}
+	if len(files) != 3 {
+		t.Fatalf("got %d entries, want 3", len(files))
+	}
+	if !files[0].IsDir() {
+		t.Error("want the folder first")
+	}
+}
+
+// A file's version store (#1173) is Quark's bookkeeping, not the user's: the
+// folder listing and the recursive walk every by-type and recent view uses
+// both skip it, while the file it versions stays visible. The file-name
+// index skips it too (indexutil.TestBuildPopulatesIndex).
+func TestVersionStoreIsHidden(t *testing.T) {
+	if !storageutil.IsInternalName(storageutil.VersionsDirName) {
+		t.Fatalf("IsInternalName(%q) = false, want true", storageutil.VersionsDirName)
+	}
+	filesDir := t.TempDir()
+	seedTree(t, filesDir,
+		"docs/pitch.qslide",
+		"docs/"+storageutil.VersionsDirName+"/pitch.qslide/20261005T101530Z-3f9a0c1d.snap",
+		"docs/"+storageutil.VersionsDirName+"/pitch.qslide/index.json",
+	)
+
+	listed, err := hostListDir(filepath.Join(filesDir, "docs"), "versions", filesDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 || listed[0].Name() != "pitch.qslide" {
+		t.Errorf("docs listing has %d entries, want only pitch.qslide", len(listed))
+	}
+	var walked []string
+	for _, f := range collectWalk(t, filesDir) {
+		if !f.Info.IsDir() {
+			walked = append(walked, f.RelPath)
+		}
+	}
+	if len(walked) != 1 || walked[0] != "docs/pitch.qslide" {
+		t.Errorf("walk = %v, want only docs/pitch.qslide", walked)
 	}
 }

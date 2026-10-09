@@ -78,20 +78,6 @@ func FilterPhotoFiles(files []fs.FileInfo) []fs.FileInfo {
 	return photoFiles
 }
 
-// ImageToThumbnail decodes an image file, turns it upright, and scales and
-// center-crops it to width × height. It returns the decoded format too.
-func ImageToThumbnail(filePath string, width, height uint) (image.Image, string, error) {
-	img, orientation, format, err := decodeImageFile(filePath)
-	if err != nil {
-		return nil, "", err
-	}
-	cropped, err := uprightThumbnail(img, orientation, width, height)
-	if err != nil {
-		return nil, "", fmt.Errorf("error cropping image file %s: %w", filePath, err)
-	}
-	return cropped, format, nil
-}
-
 // ApplyRotation rotates img by quarters × 90° clockwise.
 // Negative values are normalized: -1 → 3, -2 → 2, etc.
 func ApplyRotation(img image.Image, quarters int64) image.Image {

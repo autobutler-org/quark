@@ -1,9 +1,6 @@
 package storageutil
 
 import (
-	"errors"
-	"io/fs"
-	"os"
 	"slices"
 	"sync"
 	"time"
@@ -217,64 +214,6 @@ func (s *StorageService) FindManagedDeviceBySerial(serial string) (*ManagedDevic
 		}
 	}
 	return nil, nil
-}
-
-// FindDeviceFilesDirBySerial returns the files directory of the managed device
-// with the given USB serial. It reports false when the serial is empty, no
-// device matches, or the devices cannot be listed, so callers keep whatever
-// default files directory they already resolved.
-func (s *StorageService) FindDeviceFilesDirBySerial(serial string) (string, bool) {
-	if serial == "" {
-		return "", false
-	}
-	devices, err := s.GetManagedRoots()
-	if err != nil {
-		return "", false // coverage: ignore - requires device detection failure
-	}
-	for _, d := range devices {
-		if d.UsbInfo != nil && d.UsbInfo.GetSerial() == serial {
-			return d.FilesDir, true
-		}
-	}
-	return "", false
-}
-
-// FileExists returns a check for whether a file is still on disk, given its
-// device serial ("" for the internal drive) and its path under that device's
-// files directory. Each device's directory is resolved once, so one check can
-// be run over many files. When a directory cannot be resolved the check says
-// the file exists, since it cannot tell otherwise.
-func (s *StorageService) FileExists() func(serial, relPath string) bool {
-	dirs := map[string]string{}
-	return func(serial, relPath string) bool {
-		base, ok := dirs[serial]
-		if !ok {
-			if dir, found := s.findFilesDir(serial); found {
-				base = dir
-			} else if dir, err := GetFilesDir(); err == nil {
-				base = dir
-			}
-			dirs[serial] = base
-		}
-		if base == "" {
-			return true
-		}
-		full, err := SafeJoin(base, relPath)
-		if err != nil {
-			return false
-		}
-		_, err = os.Stat(full)
-		return !errors.Is(err, fs.ErrNotExist)
-	}
-}
-
-// findFilesDir is FindDeviceFilesDirBySerial, answering false on a nil
-// service rather than panicking.
-func (s *StorageService) findFilesDir(serial string) (string, bool) {
-	if s == nil {
-		return "", false
-	}
-	return s.FindDeviceFilesDirBySerial(serial)
 }
 
 // GetDeviceStatuses returns all detected devices with their enable status.

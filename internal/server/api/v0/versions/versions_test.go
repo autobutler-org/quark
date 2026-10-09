@@ -303,7 +303,7 @@ func TestVersions_HostileInputIsRefused(t *testing.T) {
 func TestVersions_FollowTheFileThroughMoveTrashAndEmpty(t *testing.T) {
 	h := newHarness(t, true)
 	h.deps.FileVersions().Watch(fileversionutil.WatchParams{
-		Bus: h.deps.EventBus(), Registry: h.deps.VFSRegistry(), Storage: h.svc,
+		Bus: h.deps.EventBus(), Registry: h.deps.VFSRegistry(),
 	})
 	h.write(t, "docs/deck.qslide", "A")
 	v := h.snapshot(t, "docs/deck.qslide", "A")

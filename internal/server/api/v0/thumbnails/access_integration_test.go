@@ -78,6 +78,18 @@ func newThumbnailHarness(t *testing.T) thumbnailHarness {
 	return thumbnailHarness{engine: engine, filesDir: filesDir, database: database, userID: user.ID, principal: principal}
 }
 
+// trash moves rel into the internal drive's trash through its namespace and
+// returns the trash name it took.
+func (h thumbnailHarness) trash(t *testing.T, rel string) string {
+	t.Helper()
+	files := vfs.NewStorageServiceVFS(storageutil.NewStorageService(systemDevice{}), vfs.FilesNamespace(""))
+	trashed, err := files.Trash(context.Background(), []string{rel}, vfs.TrashOptions{})
+	if err != nil || len(trashed) != 1 {
+		t.Fatalf("trashing %s: %v, %+v", rel, err, trashed)
+	}
+	return trashed[0].TrashName
+}
+
 func (h thumbnailHarness) asUser()  { *h.principal = accessutil.Principal{UserID: h.userID} }
 func (h thumbnailHarness) asAdmin() { *h.principal = accessutil.System }
 
@@ -185,11 +197,7 @@ func TestThumbnailAccess_ArchiveEntry(t *testing.T) {
 func TestThumbnail_TrashedImage(t *testing.T) {
 	h := newThumbnailHarness(t)
 	writeJPEG(t, h.filesDir, "a.jpg")
-	result, err := storageutil.TrashFilesImpl(storageutil.TrashFilesParams{FilePaths: []string{"a.jpg"}}, h.filesDir)
-	if err != nil || len(result.Trashed) != 1 {
-		t.Fatalf("trashing a.jpg: %v, %+v", err, result)
-	}
-	p := "/api/v0/thumbnails/" + storageutil.TrashPath(result.Trashed[0].TrashName, "")
+	p := "/api/v0/thumbnails/" + storageutil.TrashPath(h.trash(t, "a.jpg"), "")
 	if code := h.get(p); code != http.StatusOK {
 		t.Errorf("GET %s = %d, want 200", p, code)
 	}

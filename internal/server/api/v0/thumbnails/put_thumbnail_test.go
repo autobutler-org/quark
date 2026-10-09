@@ -168,11 +168,7 @@ func TestThumbnail_TrashedFileAsksAgain(t *testing.T) {
 	if w := h.put(t, "/api/v0/thumbnails/clip.mov", map[string][]byte{"thumbnail": jpegOf(t, 400, 300)}); w.Code != http.StatusNoContent {
 		t.Fatalf("PUT = %d: %s", w.Code, w.Body.String())
 	}
-	result, err := storageutil.TrashFilesImpl(storageutil.TrashFilesParams{FilePaths: []string{"clip.mov"}}, h.filesDir)
-	if err != nil || len(result.Trashed) != 1 {
-		t.Fatalf("trashing clip.mov: %v, %+v", err, result)
-	}
-	if !clientRender(t, h.do("/api/v0/thumbnails/"+storageutil.TrashPath(result.Trashed[0].TrashName, "")+"?size=sm")) {
+	if !clientRender(t, h.do("/api/v0/thumbnails/"+storageutil.TrashPath(h.trash(t, "clip.mov"), "")+"?size=sm")) {
 		t.Error("want clientRender for the trashed copy")
 	}
 }

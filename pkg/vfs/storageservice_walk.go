@@ -24,7 +24,7 @@ func (v *StorageServiceVFS) Walk(ctx context.Context, path string, visit WalkFun
 	if device != nil {
 		name, dataDir = device.Name, device.DataDir
 	}
-	err = storageutil.WalkFilesInDir(ctx, dir, name, dataDir, v.serial, func(f storageutil.WalkedFile) error {
+	err = hostWalkDir(ctx, dir, name, dataDir, v.serial, func(f walkedFile) error {
 		return visit(deviceFileInfoToVFS(f.Info, v.namespaceID, path, f.RelPath))
 	})
 	if errors.Is(err, storageutil.ErrPathNotFound) {

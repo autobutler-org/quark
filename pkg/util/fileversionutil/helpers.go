@@ -408,14 +408,15 @@ func (s *Store) handleEvent(params WatchParams, evt eventbus.Event) {
 			s.pendingMu.Unlock()
 		}
 	case eventbus.EventTrashChanged:
-		s.sweepPending(ctx, fsys, params.Storage)
+		s.sweepPending(ctx, fsys)
 	}
 }
 
 // sweepPending sweeps every folder a file was trashed from, checking the
 // trash once for all of them. A folder is forgotten once it has no stores.
-func (s *Store) sweepPending(ctx context.Context, fsys vfs.VFS, storage *storageutil.StorageService) {
-	if storage == nil {
+func (s *Store) sweepPending(ctx context.Context, fsys vfs.VFS) {
+	trasher, ok := fsys.(vfs.Trasher)
+	if !ok {
 		return
 	}
 	s.pendingMu.Lock()
@@ -427,13 +428,13 @@ func (s *Store) sweepPending(ctx context.Context, fsys vfs.VFS, storage *storage
 	if len(dirs) == 0 {
 		return
 	}
-	trash, err := storage.ListTrash(storageutil.ListTrashParams{})
+	items, err := trasher.ListTrash(ctx)
 	if err != nil {
 		slog.Warn("versions: could not list the trash", "err", err)
 		return
 	}
-	restorable := make(map[string]bool, len(trash.Items))
-	for _, item := range trash.Items {
+	restorable := make(map[string]bool, len(items))
+	for _, item := range items {
 		restorable[cleanDir(item.OriginalPath)] = true
 	}
 	for _, dir := range dirs {
