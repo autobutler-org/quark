@@ -162,7 +162,7 @@ func TestSyncWorker_RestoreFromTrash_OnInternal(t *testing.T) {
 	}, d.internal); err != nil {
 		t.Fatal(err)
 	}
-	// The event storageutil.RestoreTrash publishes for a restored file.
+	// The event trashutil.Restore publishes for a restored file.
 	restored := eventbus.Event{Kind: eventbus.EventUpload, Path: rel}
 	runEvents(t, w, bus, d, del, restored)
 
@@ -182,8 +182,7 @@ func TestSyncWorker_RestoreFromTrash_OnUSB_LeavesTarget(t *testing.T) {
 
 	del, item := trash(t, d.other, otherSerial, rel)
 	if _, err := storageutil.RestoreTrashImpl(storageutil.RestoreTrashParams{
-		DeviceSerial: otherSerial,
-		Items:        []storageutil.TrashRef{{TrashName: item.TrashName}},
+		Items: []storageutil.TrashRef{{TrashName: item.TrashName}},
 	}, d.other); err != nil {
 		t.Fatal(err)
 	}

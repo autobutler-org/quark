@@ -13,8 +13,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/autobutler-org/quark/pkg/util/eventbus"
 )
 
 // TrashDir is the directory where a device's trashed files live: a visible
@@ -154,14 +152,6 @@ func (s *StorageService) trashFilesDir(serial string) (string, error) {
 		return "", fmt.Errorf("%w: %s", ErrDeviceNotFound, serial)
 	}
 	return GetFilesDir()
-}
-
-// publishTrashChanged tells open Trash pages to refresh. A nil bus is a caller
-// that does not care.
-func publishTrashChanged(bus *eventbus.Bus, serial string) {
-	if bus != nil {
-		bus.Publish(eventbus.Event{Kind: eventbus.EventTrashChanged, DeviceSerial: serial})
-	}
 }
 
 // newTrashName builds a trash name that cannot collide with another item
@@ -431,40 +421,25 @@ func resolveTrashItem(trashRoot, name string) (string, error) {
 	return itemPath, nil
 }
 
-// ReadTrashEntryParams names one trashed item.
-type ReadTrashEntryParams struct {
-	DeviceSerial string
-	TrashName    string
-}
-
-// ReadTrashEntryResult is what the trash recorded about the item. An item
-// whose sidecar is missing comes back with the zero entry: no original
-// location and nobody recorded as having trashed it.
-type ReadTrashEntryResult struct {
-	Entry TrashEntry
-}
-
-// ReadTrashEntry reads one item's sidecar, validating its name the way
-// restore and delete do, so a caller can decide who may act on the item before
-// anything is touched (#1905).
-func (s *StorageService) ReadTrashEntry(params ReadTrashEntryParams) (ReadTrashEntryResult, error) {
-	filesDir, err := s.trashFilesDir(params.DeviceSerial)
-	if err != nil {
-		return ReadTrashEntryResult{}, err
-	}
+// ReadTrashEntryImpl reads the sidecar of the item trashName names in
+// filesDir's trash, validating the name the way restore and delete do, so a
+// caller can decide who may act on the item before anything is touched
+// (#1905). An item whose sidecar is missing comes back with the zero entry: no
+// original location and nobody recorded as having trashed it.
+func ReadTrashEntryImpl(filesDir, trashName string) (TrashEntry, error) {
 	trashRoot, err := openTrash(filesDir)
 	if err != nil {
-		return ReadTrashEntryResult{}, err
+		return TrashEntry{}, err
 	}
-	itemPath, err := resolveTrashItem(trashRoot, params.TrashName)
+	itemPath, err := resolveTrashItem(trashRoot, trashName)
 	if err != nil {
-		return ReadTrashEntryResult{}, err
+		return TrashEntry{}, err
 	}
 	entry, err := readTrashEntry(itemPath)
 	if err != nil && !os.IsNotExist(err) {
-		return ReadTrashEntryResult{}, err
+		return TrashEntry{}, err
 	}
-	return ReadTrashEntryResult{Entry: entry}, nil
+	return entry, nil
 }
 
 // TrashRef addresses a trashed item, or something inside a trashed folder.
@@ -547,15 +522,6 @@ type TrashContentsItem struct {
 	ModifiedAt time.Time `json:"modifiedAt"`
 }
 
-// ListTrashContentsParams names a folder in the trash: a trashed folder, or a
-// folder inside one.
-type ListTrashContentsParams struct {
-	DeviceSerial string
-	TrashName    string
-	// Path is relative to the trashed item; empty lists the item itself.
-	Path string
-}
-
 // ListTrashContentsResult is what the folder holds, sorted by name.
 type ListTrashContentsResult struct {
 	Items []TrashContentsItem
@@ -567,23 +533,15 @@ type ListTrashContentsResult struct {
 	ExpiresAt time.Time
 }
 
-// ListTrashContents lists a folder in the device's trash.
-func (s *StorageService) ListTrashContents(params ListTrashContentsParams) (ListTrashContentsResult, error) {
-	filesDir, err := s.trashFilesDir(params.DeviceSerial)
-	if err != nil {
-		return ListTrashContentsResult{}, err
-	}
-	return ListTrashContentsImpl(params, filesDir)
-}
-
-// ListTrashContentsImpl is the testable core of ListTrashContents. It never
-// returns a nil slice, so an empty folder serializes as [].
-func ListTrashContentsImpl(params ListTrashContentsParams, filesDir string) (ListTrashContentsResult, error) {
+// ListTrashContentsImpl lists a folder in filesDir's trash: the trashed folder
+// params names, or a folder inside it. It never returns a nil slice, so an
+// empty folder serializes as [].
+func ListTrashContentsImpl(params TrashRef, filesDir string) (ListTrashContentsResult, error) {
 	trashRoot, err := openTrash(filesDir)
 	if err != nil {
 		return ListTrashContentsResult{}, err
 	}
-	ref, err := resolveTrashRef(trashRoot, TrashRef{TrashName: params.TrashName, Path: params.Path})
+	ref, err := resolveTrashRef(trashRoot, params)
 	if err != nil {
 		return ListTrashContentsResult{}, err
 	}
@@ -634,11 +592,7 @@ func ListTrashContentsImpl(params ListTrashContentsParams, filesDir string) (Lis
 // RestoreTrashParams names the trashed items, or things inside trashed
 // folders, to put back.
 type RestoreTrashParams struct {
-	DeviceSerial string
-	Items        []TrashRef
-	// EventBus hears upload (a file) or new_folder (a folder) for each
-	// restored item, then trash_changed. Nil skips them.
-	EventBus *eventbus.Bus
+	Items []TrashRef
 }
 
 // RestoredItem is one item back at its original location.
@@ -650,38 +604,14 @@ type RestoredItem struct {
 	Source string
 }
 
-// RestoreTrashResult lists what was restored. When RestoreTrash fails partway
+// RestoreTrashResult lists what was restored. When RestoreTrashImpl fails partway
 // through, it still lists the items that made it back before the failure.
 type RestoreTrashResult struct {
 	Restored []RestoredItem
 }
 
-// RestoreTrash moves trashed items back to their original locations.
-func (s *StorageService) RestoreTrash(params RestoreTrashParams) (RestoreTrashResult, error) {
-	filesDir, err := s.trashFilesDir(params.DeviceSerial)
-	if err != nil {
-		return RestoreTrashResult{}, err
-	}
-	result, err := RestoreTrashImpl(params, filesDir)
-	if params.EventBus != nil {
-		// A restored item reappears the way an uploaded file or a new folder
-		// does, so open file lists, the file index and the content indexer
-		// all pick it up without learning a new event kind.
-		for _, item := range result.Restored {
-			kind := eventbus.EventUpload
-			if item.IsDir {
-				kind = eventbus.EventNewFolder
-			}
-			params.EventBus.Publish(eventbus.Event{Kind: kind, Path: item.Path, DeviceSerial: params.DeviceSerial})
-		}
-	}
-	if len(result.Restored) > 0 {
-		publishTrashChanged(params.EventBus, params.DeviceSerial)
-	}
-	return result, err
-}
-
-// RestoreTrashImpl is the testable core of RestoreTrash. Every item is checked
+// RestoreTrashImpl moves trashed items in filesDir's trash back to their
+// original locations. Every item is checked
 // before any is moved, so a batch that would conflict or names something
 // unknown changes nothing. It never overwrites: an occupied original path, or
 // two items in the batch landing on the same path or one inside the other, is
@@ -783,34 +713,19 @@ func checkRestoreParent(filesDir, restoreTo string) error {
 // DeleteTrashParams names trashed items, or things inside trashed folders, to
 // delete for good.
 type DeleteTrashParams struct {
-	DeviceSerial string
-	Items        []TrashRef
-	// EventBus hears trash_changed once anything is deleted. Nil skips it.
-	EventBus *eventbus.Bus
+	Items []TrashRef
 }
 
 // DeleteTrashResult counts the items deleted.
 type DeleteTrashResult struct {
 	Deleted int
 	// Removed lists each deleted item as a TrashPath, so what was keyed on it
-	// can go too. When DeleteTrash fails partway it still lists what went.
+	// can go too. When DeleteTrashImpl fails partway it still lists what went.
 	Removed []string
 }
 
-// DeleteTrash permanently deletes the named items from the device's trash.
-func (s *StorageService) DeleteTrash(params DeleteTrashParams) (DeleteTrashResult, error) {
-	filesDir, err := s.trashFilesDir(params.DeviceSerial)
-	if err != nil {
-		return DeleteTrashResult{}, err
-	}
-	result, err := DeleteTrashImpl(params, filesDir)
-	if result.Deleted > 0 {
-		publishTrashChanged(params.EventBus, params.DeviceSerial)
-	}
-	return result, err
-}
-
-// DeleteTrashImpl is the testable core of DeleteTrash. Every reference is
+// DeleteTrashImpl permanently deletes the named items from filesDir's trash.
+// Every reference is
 // validated before anything is deleted. Something inside a trashed folder is
 // deleted on its own; the folder stays in the trash.
 func DeleteTrashImpl(params DeleteTrashParams, filesDir string) (DeleteTrashResult, error) {
@@ -851,50 +766,16 @@ func removeTrashItem(itemPath string) error {
 	return nil
 }
 
-// EmptyTrashParams names the device whose trash to empty.
-type EmptyTrashParams struct {
-	DeviceSerial string
-	// EventBus hears trash_changed once anything is deleted. Nil skips it.
-	EventBus *eventbus.Bus
-}
-
-// EmptyTrashResult counts the items deleted.
-type EmptyTrashResult struct {
-	Deleted int
-	// Removed lists each deleted item as a TrashPath.
-	Removed []string
-}
-
-// EmptyTrash permanently deletes everything in the device's trash.
-func (s *StorageService) EmptyTrash(params EmptyTrashParams) (EmptyTrashResult, error) {
-	filesDir, err := s.trashFilesDir(params.DeviceSerial)
-	if err != nil {
-		return EmptyTrashResult{}, err
-	}
-	removed, err := removeTrashItems(filesDir, func(TrashItem) bool { return true })
-	if len(removed) > 0 {
-		publishTrashChanged(params.EventBus, params.DeviceSerial)
-	}
-	return EmptyTrashResult{Deleted: len(removed), Removed: removed}, err
-}
-
-// EmptyTrashImpl is the testable core of EmptyTrash.
-func EmptyTrashImpl(filesDir string) (int, error) {
-	removed, err := removeTrashItems(filesDir, func(TrashItem) bool { return true })
-	return len(removed), err
+// EmptyTrashImpl permanently deletes everything in filesDir's trash,
+// returning each item it deleted as a TrashPath.
+func EmptyTrashImpl(filesDir string) ([]string, error) {
+	return removeTrashItems(filesDir, func(TrashItem) bool { return true })
 }
 
 // PurgeExpiredTrashImpl deletes the items in filesDir's trash that were
-// trashed more than TrashRetentionDays before now, returning how many it
-// deleted.
-func PurgeExpiredTrashImpl(filesDir string, now time.Time) (int, error) {
-	removed, err := purgeExpired(filesDir, now)
-	return len(removed), err
-}
-
-// purgeExpired deletes the items in filesDir's trash that have expired by now,
-// returning each one it deleted as a TrashPath.
-func purgeExpired(filesDir string, now time.Time) ([]string, error) {
+// trashed more than TrashRetentionDays before now, returning each one it
+// deleted as a TrashPath.
+func PurgeExpiredTrashImpl(filesDir string, now time.Time) ([]string, error) {
 	return removeTrashItems(filesDir, func(item TrashItem) bool {
 		return !item.ExpiresAt.After(now)
 	})
@@ -919,65 +800,4 @@ func removeTrashItems(filesDir string, doom func(TrashItem) bool) ([]string, err
 		removed = append(removed, TrashPath(item.TrashName, ""))
 	}
 	return removed, nil
-}
-
-// PurgeExpiredTrashParams configures a sweep of every device's trash.
-type PurgeExpiredTrashParams struct {
-	// EventBus hears trash_changed for each device that lost an item. Nil skips it.
-	EventBus *eventbus.Bus
-}
-
-// TrashRemoval is one item a sweep deleted.
-type TrashRemoval struct {
-	DeviceSerial string
-	// Path is the item as a TrashPath.
-	Path string
-}
-
-// PurgeExpiredTrashResult counts the items the sweep deleted.
-type PurgeExpiredTrashResult struct {
-	Purged int
-	// Removed lists every item deleted, on every device.
-	Removed []TrashRemoval
-}
-
-// PurgeExpiredTrash deletes expired items from the trash of every managed
-// device and of the default files directory. A device that fails does not stop
-// the sweep; its error is joined into the one returned.
-func (s *StorageService) PurgeExpiredTrash(params PurgeExpiredTrashParams) (PurgeExpiredTrashResult, error) {
-	devices, err := s.GetManagedRoots()
-	if err != nil {
-		return PurgeExpiredTrashResult{}, err // coverage: ignore - requires device detection failure
-	}
-	serials := make(map[string]string, len(devices)+1) // filesDir → serial
-	for _, d := range devices {
-		serial := ""
-		if d.UsbInfo != nil {
-			serial = d.UsbInfo.GetSerial()
-		}
-		serials[d.FilesDir] = serial
-	}
-	if defaultDir, err := GetFilesDir(); err == nil {
-		if _, seen := serials[defaultDir]; !seen {
-			serials[defaultDir] = ""
-		}
-	}
-
-	var result PurgeExpiredTrashResult
-	var errs []error
-	now := time.Now().UTC()
-	for filesDir, serial := range serials {
-		removed, err := purgeExpired(filesDir, now)
-		result.Purged += len(removed)
-		for _, p := range removed {
-			result.Removed = append(result.Removed, TrashRemoval{DeviceSerial: serial, Path: p})
-		}
-		if len(removed) > 0 {
-			publishTrashChanged(params.EventBus, serial)
-		}
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", filesDir, err))
-		}
-	}
-	return result, errors.Join(errs...)
 }

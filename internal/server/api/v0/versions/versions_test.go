@@ -26,6 +26,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/fileversionutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/trashutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
@@ -337,7 +338,10 @@ func TestVersions_FollowTheFileThroughMoveTrashAndEmpty(t *testing.T) {
 		t.Fatalf("trashing the file dropped its history: %+v", versions)
 	}
 
-	if _, err := h.svc.EmptyTrash(storageutil.EmptyTrashParams{EventBus: h.deps.EventBus()}); err != nil {
+	if _, err := trashutil.Empty(trashutil.EmptyParams{
+		Device:   trashutil.Device{Registry: h.deps.VFSRegistry()},
+		EventBus: h.deps.EventBus(),
+	}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the history goes with the emptied trash", func() bool {

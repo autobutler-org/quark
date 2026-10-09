@@ -6,6 +6,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/trashutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -35,10 +36,8 @@ func listTrashContents(c *gin.Context) *serverutil.Response {
 	serial := c.Query("serial")
 	trashName := c.Query("trashName")
 
-	recorded, err := deps.StorageService().ReadTrashEntry(storageutil.ReadTrashEntryParams{
-		DeviceSerial: serial,
-		TrashName:    trashName,
-	})
+	device := trashDevice(c, deps, serial)
+	recorded, err := trashutil.ReadEntry(trashutil.ReadEntryParams{Device: device, TrashName: trashName})
 	if err != nil {
 		return trashError(err)
 	}
@@ -46,18 +45,17 @@ func listTrashContents(c *gin.Context) *serverutil.Response {
 		return serverutil.NotFound(storageutil.ErrTrashItemNotFound)
 	}
 
-	result, err := deps.StorageService().ListTrashContents(storageutil.ListTrashContentsParams{
-		DeviceSerial: serial,
-		TrashName:    trashName,
-		Path:         c.Query("path"),
+	result, err := trashutil.ListContents(trashutil.ListContentsParams{
+		Device: device,
+		Ref:    storageutil.TrashRef{TrashName: trashName, Path: c.Query("path")},
 	})
 	if err != nil {
 		return trashError(err)
 	}
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(listTrashContentsResponse{
-		Items:        result.Items,
-		OriginalPath: result.OriginalPath,
-		ExpiresAt:    result.ExpiresAt,
+		Items:        result.Contents.Items,
+		OriginalPath: result.Contents.OriginalPath,
+		ExpiresAt:    result.Contents.ExpiresAt,
 	})
 }
 

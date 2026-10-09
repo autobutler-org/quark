@@ -65,6 +65,63 @@ type FileMover interface {
 	MoveFileIn(ctx context.Context, srcAbs string, path string, opts WriteOptions) error
 }
 
+// Trasher is implemented by namespaces with a trash: a user delete moves an
+// item there, where it can be listed, restored or deleted for good, and
+// [VFS.Delete] stays the permanent removal (#2641). A trashed item keeps an
+// address in the namespace's path space, ".trash/<trash name>/...", and Stat,
+// Open and HostPath resolve that form into the trash.
+//
+// Every batch is checked whole before anything changes, and an operation that
+// fails partway still reports what it did before it stopped.
+type Trasher interface {
+	// Trash moves paths, relative to opts.RootDir, into the trash. A path that
+	// no longer exists is skipped.
+	Trash(ctx context.Context, paths []string, opts TrashOptions) ([]TrashedItem, error)
+	// ListTrash lists the trash, most recently trashed first.
+	ListTrash(ctx context.Context) ([]TrashItem, error)
+	// ReadTrashEntry returns what the trash recorded about one item: the zero
+	// entry when its record is missing.
+	ReadTrashEntry(ctx context.Context, trashName string) (TrashEntry, error)
+	// ListTrashContents lists a trashed folder, or a folder inside one.
+	ListTrashContents(ctx context.Context, ref TrashRef) (TrashContents, error)
+	// RestoreTrash puts items back where they came from, never overwriting.
+	RestoreTrash(ctx context.Context, refs []TrashRef) ([]RestoredItem, error)
+	// DeleteTrash deletes items for good, returning each as a trash path.
+	DeleteTrash(ctx context.Context, refs []TrashRef) ([]string, error)
+	// EmptyTrash deletes everything in the trash, returning each item as a
+	// trash path.
+	EmptyTrash(ctx context.Context) ([]string, error)
+	// PurgeExpiredTrash deletes the items whose retention ran out by now,
+	// returning each as a trash path.
+	PurgeExpiredTrash(ctx context.Context, now time.Time) ([]string, error)
+}
+
+// TrashOptions controls [Trasher.Trash].
+type TrashOptions struct {
+	// RootDir is the directory the trashed paths are relative to.
+	RootDir string
+	// TrashedBy is the user trashing the items, recorded so the trash shows
+	// each item to the people it concerns (#1905).
+	TrashedBy int64
+}
+
+// The trash's records are storageutil's, so the JSON the trash API answers
+// with is the one it always has.
+type (
+	// TrashedItem is one item [Trasher.Trash] moved into the trash.
+	TrashedItem = storageutil.TrashedItem
+	// TrashItem is one item in the trash.
+	TrashItem = storageutil.TrashItem
+	// TrashEntry is what the trash recorded about an item.
+	TrashEntry = storageutil.TrashEntry
+	// TrashRef addresses a trashed item, or something inside a trashed folder.
+	TrashRef = storageutil.TrashRef
+	// TrashContents is what a folder in the trash holds.
+	TrashContents = storageutil.ListTrashContentsResult
+	// RestoredItem is one item [Trasher.RestoreTrash] put back.
+	RestoredItem = storageutil.RestoredItem
+)
+
 type FileInfo struct {
 	Name        string    `json:"name"`
 	Path        string    `json:"path"`
@@ -290,6 +347,16 @@ func FilesNamespace(serial string) string {
 		return filesNamespacePrefix
 	}
 	return filesNamespacePrefix + ":" + serial
+}
+
+// FilesNamespaceSerial reports the serial of the device whose files a
+// namespace holds — the empty serial for the internal drive's "files" — and
+// false for any namespace that is not a [FilesNamespace].
+func FilesNamespaceSerial(namespaceID string) (string, bool) {
+	if namespaceID == filesNamespacePrefix {
+		return "", true
+	}
+	return deviceNamespaceSerial(namespaceID)
 }
 
 // SyncDeviceNamespacesParams names the registry to reconcile and the storage

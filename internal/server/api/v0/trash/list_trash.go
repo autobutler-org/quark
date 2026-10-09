@@ -6,6 +6,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/util/trashutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -31,9 +32,7 @@ func listTrash(c *gin.Context) *serverutil.Response {
 	}
 	serial := c.Query("serial")
 
-	result, err := deps.StorageService().ListTrash(storageutil.ListTrashParams{
-		DeviceSerial: serial,
-	})
+	result, err := trashutil.List(trashutil.ListParams{Device: trashDevice(c, deps, serial)})
 	if err != nil {
 		return trashError(err)
 	}

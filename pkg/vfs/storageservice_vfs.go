@@ -218,9 +218,10 @@ func mimeTypeForName(name string) string {
 }
 
 // Stat returns metadata for a single path. Only a path that does not exist
-// is [ErrNotFound]; a permission failure is [ErrPermissionDenied] (#2640).
+// is [ErrNotFound]; a permission failure is [ErrPermissionDenied] (#2640). A
+// ".trash/..." path names something in the trash (see [Trasher]).
 func (v *StorageServiceVFS) Stat(_ context.Context, path string) (FileInfo, error) {
-	absPath, err := v.resolve(path)
+	absPath, err := v.resolveRead(path)
 	if err != nil {
 		return FileInfo{}, err
 	}
@@ -243,9 +244,10 @@ func (v *StorageServiceVFS) Stat(_ context.Context, path string) (FileInfo, erro
 // and Write do, against the managed device's files directory, which may differ
 // from the default one — see #1538, where re-deriving from GetFilesDir() made
 // Stat and Open disagree and downloads returned an empty body. A directory is
-// [ErrIsDirectory].
+// [ErrIsDirectory]. A ".trash/..." path opens something in the trash, the way
+// Stat finds it.
 func (v *StorageServiceVFS) Open(_ context.Context, path string) (File, error) {
-	absPath, err := v.resolve(path)
+	absPath, err := v.resolveRead(path)
 	if err != nil {
 		return nil, err
 	}
@@ -283,12 +285,32 @@ func (v *StorageServiceVFS) MoveFileIn(ctx context.Context, srcAbs string, path 
 }
 
 // resolve turns a namespace path into the host path under this namespace's
-// files directory. A path escaping it is [ErrPermissionDenied]; a device
-// namespace whose device is gone is [ErrNotFound].
+// files directory, for an operation that changes it. A path escaping it is
+// [ErrPermissionDenied], and so is a ".trash/..." path: the trash changes
+// only through [Trasher]. A device namespace whose device is gone is
+// [ErrNotFound].
 func (v *StorageServiceVFS) resolve(path string) (string, error) {
+	if storageutil.IsTrashPath(cleanPath(path)) {
+		return "", ErrPermissionDenied
+	}
+	return v.resolveRead(path)
+}
+
+// resolveRead is resolve for an operation that only reads: a ".trash/..."
+// path resolves into the device's trash, which sits beside its files
+// directory (#2173), the way access, search and thumbnail rows address a
+// trashed item.
+func (v *StorageServiceVFS) resolveRead(path string) (string, error) {
 	filesDir, err := v.filesDir()
 	if err != nil {
 		return "", err
+	}
+	if rel := cleanPath(path); storageutil.IsTrashPath(rel) {
+		trashPath, err := storageutil.JoinTrashPath(filesDir, rel)
+		if err != nil {
+			return "", ErrPermissionDenied
+		}
+		return trashPath, nil
 	}
 	// filepath.Clean before SafeJoin so static analyzers (CodeQL go/path-injection)
 	// can follow the traversal guard rather than seeing tainted data reach the disk.
@@ -346,10 +368,11 @@ func (v *StorageServiceVFS) Copy(ctx context.Context, src, dst string, opts Copy
 	return copyFile(ctx, v, src, v, dst, opts)
 }
 
-// HostPath returns the host path of path on this namespace's device. A device
-// namespace whose device is gone is [ErrNotFound]. See [HostPather].
+// HostPath returns the host path of path on this namespace's device, in the
+// trash for a ".trash/..." path. A device namespace whose device is gone is
+// [ErrNotFound]. See [HostPather].
 func (v *StorageServiceVFS) HostPath(_ context.Context, path string) (string, error) {
-	return v.resolve(path)
+	return v.resolveRead(path)
 }
 
 // Watch is not supported by this implementation.
