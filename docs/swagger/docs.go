@@ -4363,7 +4363,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns the unique client IP + User-Agent combinations that have connected to the quark, most recently seen first. The list is bounded: the least recently seen are dropped past a cap and after a month unseen.",
+                "description": "Returns the unique client IP + User-Agent combinations that have connected to the quark, most recently seen first, with current set on the one that matches this request. The list is bounded: the least recently seen are dropped past a cap and after a month unseen.",
                 "produces": [
                     "application/json"
                 ],
@@ -12150,6 +12150,10 @@ const docTemplate = `{
         "v0_devices.ConnectedDeviceJSON": {
             "type": "object",
             "properties": {
+                "current": {
+                    "description": "Current is true for the row whose IP address and User-Agent match the\nrequest that asked for the list.",
+                    "type": "boolean"
+                },
                 "firstSeenAt": {
                     "type": "string"
                 },

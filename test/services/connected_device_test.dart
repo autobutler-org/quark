@@ -21,6 +21,20 @@ void main() {
       expect(device.firstSeenAt, DateTime.utc(2026, 3, 20, 10, 30));
       expect(device.lastSeenAt, DateTime.utc(2026, 3, 24, 22));
       expect(device.requestCount, 1500);
+      expect(device.current, isFalse);
+    });
+
+    test('reads current, which marks the caller\'s own row (#2051)', () {
+      final device = ConnectedDevice.fromJson({
+        'id': 1,
+        'ipAddress': '10.0.0.1',
+        'firstSeenAt': '2026-01-01T00:00:00Z',
+        'lastSeenAt': '2026-01-01T00:00:00Z',
+        'requestCount': 0,
+        'current': true,
+      });
+
+      expect(device.current, isTrue);
     });
 
     test('defaults userAgent to empty string when null', () {
