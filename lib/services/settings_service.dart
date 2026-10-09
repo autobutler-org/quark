@@ -48,45 +48,78 @@ class SettingsService with AuthenticatedService {
     final response = await instance.httpClient.get(
       apiBaseUri.resolve('/api/v0/settings/public'),
     );
-    return _readThemeColor(response, 'Failed to fetch public settings');
+    return _themeColorOf(
+      _readSettings(response, 'Failed to fetch public settings'),
+    );
   }
 
   /// Sets the Quark's default theme color to the storage string [themeColor]; empty
   /// clears it. Admin-only.
-  static Future<void> setQuarkThemeColor(String themeColor) =>
-      _putThemeColor('/api/v0/settings/theme-color', themeColor);
-
-  /// The signed-in user's own theme color as its storage string, empty when they
-  /// follow the Quark's.
-  static Future<String> getMyThemeColor() async {
-    final response = await instance.authenticatedGet(
-      apiBaseUri.resolve('/api/v0/settings/me'),
-    );
-    return _readThemeColor(response, 'Failed to fetch your settings');
-  }
-
-  /// Sets the signed-in user's own theme color to the storage string [themeColor];
-  /// empty follows the Quark's.
-  static Future<void> setMyThemeColor(String themeColor) =>
-      _putThemeColor('/api/v0/settings/me', themeColor);
-
-  static Future<void> _putThemeColor(String path, String themeColor) async {
+  static Future<void> setQuarkThemeColor(String themeColor) async {
     final response = await instance.authenticatedPut(
-      apiBaseUri.resolve(path),
+      apiBaseUri.resolve('/api/v0/settings/theme-color'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'themeColor': themeColor}),
     );
-    _readThemeColor(response, 'Failed to save the theme color');
+    _readSettings(response, 'Failed to save the theme color');
   }
 
-  static String _readThemeColor(http.Response response, String context) {
+  /// The signed-in user's own theme color as its storage string, empty when they
+  /// follow the Quark's.
+  static Future<String> getMyThemeColor() async =>
+      _themeColorOf(await getMySettings());
+
+  /// Sets the signed-in user's own theme color to the storage string [themeColor];
+  /// empty follows the Quark's. Every other setting is kept, see
+  /// [updateMySettings].
+  static Future<void> setMyThemeColor(String themeColor) =>
+      updateMySettings((current) => {...current, 'themeColor': themeColor});
+
+  /// The signed-in user's own settings as the Quark holds them: `themeColor`,
+  /// `disabledNotifications` (left out when every type is on), and whatever
+  /// a newer Quark adds.
+  static Future<Map<String, dynamic>> getMySettings() async {
+    final response = await instance.authenticatedGet(
+      apiBaseUri.resolve(_mySettingsPath),
+    );
+    return _readSettings(response, 'Failed to fetch your settings');
+  }
+
+  /// Saves the signed-in user's own settings as [change] makes them from the
+  /// current ones, and returns what the Quark saved.
+  ///
+  /// `PUT /settings/me` replaces the settings whole, so every write of one
+  /// field goes through here: it reads first and sends the rest back
+  /// unchanged. A theme color save that sent only the color would turn every
+  /// notification type back on (#2493).
+  static Future<Map<String, dynamic>> updateMySettings(
+    Map<String, dynamic> Function(Map<String, dynamic> current) change,
+  ) async {
+    final settings = change(await getMySettings());
+    final response = await instance.authenticatedPut(
+      apiBaseUri.resolve(_mySettingsPath),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(settings),
+    );
+    return _readSettings(response, 'Failed to save your settings');
+  }
+
+  static const _mySettingsPath = '/api/v0/settings/me';
+
+  static String _themeColorOf(Map<String, dynamic> settings) =>
+      settings['themeColor'] is String ? settings['themeColor'] as String : '';
+
+  /// The settings object in [response], empty when the body is not one.
+  /// Throws an [ApiException] carrying [context] for a non-success status.
+  static Map<String, dynamic> _readSettings(
+    http.Response response,
+    String context,
+  ) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, context);
     }
     final decoded = jsonDecode(response.body);
-    return decoded is Map && decoded['themeColor'] is String
-        ? decoded['themeColor'] as String
-        : '';
+    return decoded is Map<String, dynamic> ? decoded : {};
   }
 
   /// Fetches the active Quark's default theme color and, with a session, the

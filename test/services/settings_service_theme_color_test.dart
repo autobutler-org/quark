@@ -85,16 +85,48 @@ void main() {
         answer(200, {'themeColor': '#aabbcc'});
         final custom = QuarkThemeColor.fromSeed(const Color(0xFFAABBCC));
         await SettingsService.setMyThemeColor(custom.storageValue);
-        expect(requests.single.method, 'PUT');
-        expect(requests.single.url.path, '/api/v0/settings/me');
-        expect(jsonDecode(requests.single.body), {'themeColor': '#aabbcc'});
+        expect(requests.map((r) => r.method), ['GET', 'PUT']);
+        expect(requests.last.url.path, '/api/v0/settings/me');
+        expect(jsonDecode(requests.last.body), {'themeColor': '#aabbcc'});
       },
     );
 
     test('saves empty to follow the Quark', () async {
       answer(200, {'themeColor': ''});
       await SettingsService.setMyThemeColor('');
-      expect(jsonDecode(requests.single.body), {'themeColor': ''});
+      expect(jsonDecode(requests.last.body), {'themeColor': ''});
+    });
+
+    // `PUT /settings/me` replaces the settings whole, so a save that sent
+    // only the color would turn every notification type back on (#2493).
+    test('a theme color save carries disabledNotifications', () async {
+      answerWith(
+        (request) => http.Response(
+          request.method == 'GET'
+              ? jsonEncode({
+                  'themeColor': 'violet',
+                  'disabledNotifications': ['backup_due'],
+                })
+              : request.body,
+          200,
+        ),
+      );
+      await SettingsService.setMyThemeColor('lime');
+      expect(requests.map((r) => r.method), ['GET', 'PUT']);
+      expect(requests.every((r) => r.url.path == '/api/v0/settings/me'), true);
+      expect(jsonDecode(requests.last.body), {
+        'themeColor': 'lime',
+        'disabledNotifications': ['backup_due'],
+      });
+    });
+
+    test('updateMySettings does not save when the read fails', () async {
+      answer(500, {'error': 'boom'});
+      await expectLater(
+        SettingsService.updateMySettings((current) => current),
+        throwsA(isA<ApiException>()),
+      );
+      expect(requests.single.method, 'GET');
     });
 
     test("saves the Quark's default through the admin route", () async {
@@ -114,7 +146,11 @@ void main() {
           isA<ApiException>().having((e) => e.statusCode, 'statusCode', 403),
         ),
       );
-      answer(400, {'error': 'invalid theme color'});
+      answerWith(
+        (request) => request.method == 'GET'
+            ? http.Response('{}', 200)
+            : http.Response(jsonEncode({'error': 'invalid theme color'}), 400),
+      );
       await expectLater(
         SettingsService.setMyThemeColor('#AABBCC'),
         throwsA(

@@ -66,6 +66,12 @@ void main() {
     int saveStatus = 200,
   }) async {
     sharedHttpClientFactory = () => MockClient((request) async {
+      // A save of the user's own color reads their settings first, so it
+      // can send the rest back unchanged (#2493).
+      if (request.method == 'GET' &&
+          request.url.path == '/api/v0/settings/me') {
+        return http.Response('{}', 200);
+      }
       if (request.method != 'PUT') return http.Response('', 404);
       saves.add(request);
       return http.Response(request.body, saveStatus);
