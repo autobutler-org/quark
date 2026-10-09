@@ -8,7 +8,6 @@ import '../model/text_paragraph.dart';
 import '../model/text_run.dart';
 import '../theme/slide_theme.dart';
 import '../theme/slide_themes.dart';
-import 'slide_canvas_style.dart';
 
 /// How a [TextBox]'s text is styled and laid out, in slide units, shared by
 /// the canvas's text view, its in-place editor and the auto-grow measurer
@@ -21,7 +20,7 @@ import 'slide_canvas_style.dart';
 /// size multiplied by [shrinkScale].
 ///
 /// ```dart
-/// final layout = SlideTextLayout.fromStyle(style);
+/// const layout = SlideTextLayout();
 /// final height = layout.contentHeight(box); // what auto-grow fits to
 /// ```
 ///
@@ -40,10 +39,6 @@ class SlideTextLayout {
     this.fontFamily,
     this.theme,
   });
-
-  /// A layout with [style]'s text defaults.
-  factory SlideTextLayout.fromStyle(SlideCanvasStyle style) =>
-      SlideTextLayout(fontSize: style.fontSize, textColor: style.textColor);
 
   /// The layout of [box] in [theme]: unset runs take the size, family and
   /// color of the theme's style for the box's `TextBox.textRole`.
@@ -168,14 +163,10 @@ class SlideTextLayout {
   /// [TextBoxMeasurer] for `SlideDocumentController.measureText`.
   ///
   /// With no theme, the box is measured as a canvas draws a deck with none:
-  /// the light theme's type, with body text at [fontSize].
-  double measure(TextBox box, [SlideTheme? theme]) => SlideTextLayout.forBox(
-        box,
-        theme ??
-            SlideThemes.light.copyWith(
-              body: SlideThemes.light.body.copyWith(fontSize: fontSize),
-            ),
-      ).contentHeight(box);
+  /// in [SlideThemes.light].
+  double measure(TextBox box, [SlideTheme? theme]) =>
+      SlideTextLayout.forBox(box, theme ?? SlideThemes.light)
+          .contentHeight(box);
 
   /// The scale at which [box]'s text fits its frame's height: 1 when it
   /// already fits or the box does not shrink text, and never below

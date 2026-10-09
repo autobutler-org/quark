@@ -41,8 +41,7 @@ class SlidePreviewCard extends StatelessWidget {
   /// Picks the choice; null renders it disabled.
   final VoidCallback? onPressed;
 
-  /// The theme the preview is drawn in; null draws the canvas's fallback,
-  /// the app's own colors.
+  /// The theme the preview is drawn in; null draws `SlideThemes.light`.
   final SlideTheme? theme;
 
   /// How wide the card is.

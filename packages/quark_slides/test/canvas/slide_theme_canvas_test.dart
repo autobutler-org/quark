@@ -135,28 +135,43 @@ void main() {
   });
 
   group('a deck without a theme', () {
-    testBothViewports('takes the style\'s colors and the app\'s accents',
+    testBothViewports('draws in the light theme under any app theme',
         (tester, size) async {
-      await pumpCanvas(tester, SlideDocumentNotifier(themedDeck(null)),
-          size: size);
-      final scheme =
-          Theme.of(tester.element(find.byType(SlideCanvas))).colorScheme;
-      // SlideCanvasStyle.fromTheme keeps the default white slide.
-      expect(backgroundColor(tester), const Color(0xFFFFFFFF));
-      expect(shapeOf(tester, 'box'), paints..path(color: scheme.primary));
-      expect(textStyleOf(tester, 'title').fontSize, 60);
-      expect(textStyleOf(tester, 'title').color, const Color(0xFF000000));
-    });
-
-    test('the fallback theme is built from the style and scheme', () {
-      final scheme = ColorScheme.fromSeed(seedColor: Colors.teal);
-      final style = SlideCanvasStyle.fromTheme(ThemeData(colorScheme: scheme))
-          .copyWith(slideColor: const Color(0xFF101010), fontSize: 30);
-      final theme = slideFallbackTheme(style, scheme);
-      expect(theme.colors[ThemeColor.background], 0xFF101010);
-      expect(theme.colors[ThemeColor.accent2], scheme.secondary.toARGB32());
-      expect(theme.body.fontSize, 30);
-      expect(theme.title, SlideThemes.light.title);
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final document = SlideDocumentNotifier(themedDeck(null));
+      final light = SlideThemes.light;
+      for (final app in [
+        ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal)),
+        ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.pink,
+            brightness: Brightness.dark,
+          ),
+        ),
+      ]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: app,
+            home: Scaffold(body: SlideCanvas(document: document, slideId: 's')),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          backgroundColor(tester),
+          Color(light.colors[ThemeColor.background]),
+        );
+        expect(
+          shapeOf(tester, 'box'),
+          paints..path(color: Color(light.colors[ThemeColor.accent1])),
+        );
+        expect(textStyleOf(tester, 'title').fontSize, light.title.fontSize);
+        expect(
+          textStyleOf(tester, 'title').color,
+          Color(light.colors[ThemeColor.text]),
+        );
+      }
     });
   });
 

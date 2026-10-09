@@ -26,11 +26,11 @@ import '../model/slide_size.dart';
 import '../search/slide_match.dart';
 import '../table/table_edits.dart';
 import '../theme/slide_theme.dart';
+import '../theme/slide_themes.dart';
 import 'slide_canvas_interaction.dart';
 import 'slide_canvas_style.dart';
 import 'slide_chart_editing_controller.dart';
 import 'slide_chart_painter.dart';
-import 'slide_fallback_theme.dart';
 import 'slide_canvas_tool.dart';
 import 'slide_element_label.dart';
 import 'slide_tool_controller.dart';
@@ -146,9 +146,9 @@ import 'slide_text_layout.dart';
 /// **Themes.** Role colors (`SlideColor.theme`) and the unset styles of
 /// text resolve against the presentation's `SlideTheme` as the slide is
 /// painted — or, read-only, against [theme] — so a theme change repaints
-/// the deck. Without one, the canvas uses [slideFallbackTheme]: the
-/// style's slide and text colors and the ambient [ColorScheme]'s accents.
-/// A placeholder text box reads to a screen reader with its role first
+/// the deck. Without one, the canvas draws in [SlideThemes.light], whatever
+/// the app around it looks like: slide content never takes the host's
+/// colors. A placeholder text box reads to a screen reader with its role first
 /// ("Title: Quarterly review"; see [defaultSlideElementLabel]).
 ///
 /// **Clipboard.** Copied elements go to [clipboard] as versioned JSON (see
@@ -532,10 +532,10 @@ class _SlideCanvasState extends State<SlideCanvas> {
   SlideCanvasStyle get _style =>
       widget.style ?? SlideCanvasStyle.fromTheme(Theme.of(context));
 
-  /// The theme the slide is painted in: the deck's, or the fallback.
+  /// The theme the slide is painted in: the deck's, or the light one.
   SlideTheme get _theme =>
       (widget.readOnly ? widget.theme : widget.document!.presentation.theme) ??
-      slideFallbackTheme(_style, Theme.of(context).colorScheme);
+      SlideThemes.light;
 
   @override
   void initState() {

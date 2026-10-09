@@ -21,10 +21,8 @@ class SlideDocumentNotifier extends ChangeNotifier {
   /// Creates a notifier editing [presentation]; [newId], [maxUndoDepth]
   /// and [measureText] are passed to the [SlideDocumentController].
   ///
-  /// [measureText] defaults to [SlideTextLayout]'s, at the canvas's default
-  /// text size, so text boxes grow to fit their text; an app that draws
-  /// with a different `SlideCanvasStyle.fontSize` passes
-  /// `SlideTextLayout.fromStyle(style).measure`.
+  /// [measureText] defaults to [SlideTextLayout]'s, which measures a box in
+  /// the theme the canvas draws it in, so text boxes grow to fit their text.
   SlideDocumentNotifier(
     Presentation presentation, {
     String Function()? newId,

@@ -858,7 +858,7 @@ class SlideEditorController extends ChangeNotifier {
   // ── Theme and layouts ─────────────────────────────────────────────────────
 
   /// The presentation's theme; null for a deck with none, which the canvas
-  /// draws in the app's colors.
+  /// draws in `SlideThemes.light`.
   SlideTheme? get theme => presentation?.theme;
 
   /// The layouts a slide can be built on, in picker order.

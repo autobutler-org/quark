@@ -105,8 +105,8 @@ void main() {
     expect(await SlidesService.load('talks/Pitch.qslide'), deck);
   });
 
-  // A deck with no theme is drawn in the app's colors but exports in
-  // PowerPoint's light defaults, so the two disagree (#2867).
+  // A deck is drawn and exported in the light theme when it has none, so a
+  // new one says so in the file instead of leaving it implied (#2867).
   test('a new presentation carries the light theme', () {
     final deck = SlidesService.newPresentation('Pitch');
     expect(deck.theme, SlideThemes.light);

@@ -79,8 +79,8 @@ class SlidesService {
   );
 
   /// A new presentation called [title]: one title slide at the default 16:9
-  /// size, the title centered on it, in [SlideThemes.light] — a deck with no
-  /// theme is drawn in the app's colors but exports in PowerPoint's (#2867).
+  /// size, the title centered on it, in [SlideThemes.light], so the theme
+  /// it is drawn and exported in is the one saved in the file (#2867).
   static Presentation newPresentation(String title) {
     final size = SlideSize.widescreen;
     return Presentation(
@@ -130,7 +130,7 @@ class SlidesService {
   /// Downloads and decodes the presentation at [path]. An empty file opens as
   /// a new presentation named after it, the way an empty `.qsheet` opens as
   /// one blank sheet. A presentation saved without a theme opens in
-  /// [SlideThemes.light], the colors its PowerPoint export already has, and
+  /// [SlideThemes.light], the colors it is drawn and exported in anyway, and
   /// keeps it from its next save (#2867). A file that is not a presentation
   /// throws a [QslideFormatException].
   static Future<Presentation> load(String path, {String? serial}) async {
