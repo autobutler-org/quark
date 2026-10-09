@@ -7,6 +7,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
+	"github.com/autobutler-org/quark/pkg/util/requestlogutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 
 	"github.com/gin-gonic/gin"
@@ -14,7 +15,7 @@ import (
 
 // denyUser godoc
 // @Summary Deny an account request
-// @Description Deletes a pending account request. Its username is free again at once. Admin-only.
+// @Description Deletes a pending account request. Its username is free again at once. The denial is added to the account request history. Admin-only.
 // @Tags admin
 // @Param username path string true "Username of the pending request"
 // @Success 200
@@ -39,6 +40,7 @@ func denyUser(c *gin.Context) *serverutil.Response {
 	}); err != nil {
 		return accountErrorResponse(err)
 	}
+	recordDecision(c, c.Param("username"), requestlogutil.OutcomeDenied)
 	if bus := deps.EventBus(); bus != nil {
 		bus.Publish(eventbus.Event{Kind: eventbus.EventAccountChanged})
 	}

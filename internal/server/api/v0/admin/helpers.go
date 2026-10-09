@@ -2,11 +2,16 @@ package v0_admin
 
 import (
 	"errors"
+	"log/slog"
 	"strconv"
+	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/authutil"
+	"github.com/autobutler-org/quark/pkg/util/ctxutil"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
+	"github.com/autobutler-org/quark/pkg/util/requestlogutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -51,4 +56,22 @@ func idParam(c *gin.Context, name string, notFound error) (int64, error) {
 		return 0, notFound
 	}
 	return id, nil
+}
+
+// recordDecision adds an approval or a denial to the account request history
+// (#2730). The decision has already been made and cannot be taken back, so a
+// history that cannot be written is logged rather than failing the request.
+func recordDecision(c *gin.Context, username, outcome string) {
+	decidedBy, _ := ctxutil.Get[string](c, "username")
+	if _, err := requestlogutil.Append(requestlogutil.AppendParams{
+		DataDir: storageutil.GetDataDir(),
+		Entry: requestlogutil.Entry{
+			Username:  username,
+			Outcome:   outcome,
+			DecidedBy: decidedBy,
+			DecidedAt: time.Now().UTC(),
+		},
+	}); err != nil {
+		slog.Error("admin: could not record account request decision", "username", username, "outcome", outcome, "err", err)
+	}
 }

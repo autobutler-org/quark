@@ -14,6 +14,7 @@ func (r *router) Routes() []*serverutil.Route {
 		demoteUserRoute,
 		approveUserRoute,
 		denyUserRoute,
+		listAccountRequestHistoryRoute,
 		disableUserRoute,
 		enableUserRoute,
 		deleteUserRoute,
