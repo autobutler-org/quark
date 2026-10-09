@@ -1,125 +1,96 @@
 package bookutil
 
 import (
-	"os"
-	"path/filepath"
+	"context"
+	"errors"
+	"slices"
+	"strings"
 	"testing"
+
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
-func TestFindAllBooksRecursively(t *testing.T) {
-	// Create a temporary directory structure for testing
-	tmpDir := t.TempDir()
-
-	// Create test files
-	testFiles := []struct {
-		path    string
-		isBook  bool
-		content string
-	}{
-		{"book1.pdf", true, "pdf content"},
-		{"book2.epub", true, "epub content"},
-		{"readme.txt", false, "text content"},
-		{"subdir/book3.pdf", true, "nested pdf"},
-		{"subdir/image.jpg", false, "image"},
-		{"subdir/nested/book4.epub", true, "deeply nested epub"},
-	}
-
-	for _, tf := range testFiles {
-		fullPath := filepath.Join(tmpDir, tf.path)
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-			t.Fatalf("Failed to create directory: %v", err)
-		}
-		if err := os.WriteFile(fullPath, []byte(tf.content), 0644); err != nil {
-			t.Fatalf("Failed to create test file: %v", err)
+// memFS is an in-memory namespace holding paths.
+func memFS(t *testing.T, paths ...string) vfs.VFS {
+	t.Helper()
+	mem := vfs.NewMemVFS("files")
+	for _, p := range paths {
+		if err := mem.Write(context.Background(), p, strings.NewReader("content"), vfs.WriteOptions{}); err != nil {
+			t.Fatal(err)
 		}
 	}
+	return mem
+}
 
-	// Run the function
-	books, err := FindAllBooksRecursively(tmpDir)
+// bookPaths is the sorted paths FindBooks returns for fsys.
+func bookPaths(t *testing.T, fsys vfs.VFS) []string {
+	t.Helper()
+	result, err := FindBooks(context.Background(), FindBooksParams{FS: fsys})
 	if err != nil {
-		t.Fatalf("FindAllBooksRecursively failed: %v", err)
+		t.Fatalf("FindBooks: %v", err)
 	}
-
-	// Count expected books
-	expectedCount := 0
-	for _, tf := range testFiles {
-		if tf.isBook {
-			expectedCount++
-		}
+	paths := make([]string, 0, len(result.Books))
+	for _, book := range result.Books {
+		paths = append(paths, book.Path)
 	}
+	slices.Sort(paths)
+	return paths
+}
 
-	// Verify results
-	if len(books) != expectedCount {
-		t.Errorf("Expected %d books, got %d", expectedCount, len(books))
-	}
-
-	// Verify all found files are books
-	for _, book := range books {
-		ext := filepath.Ext(book.RelPath)
-		if ext != ".pdf" && ext != ".epub" {
-			t.Errorf("Found non-book file: %s", book.RelPath)
-		}
+func TestFindBooks(t *testing.T) {
+	fsys := memFS(t,
+		"book1.pdf", "book2.epub", "readme.txt",
+		"subdir/book3.pdf", "subdir/image.jpg", "subdir/nested/book4.epub",
+	)
+	want := []string{"book1.pdf", "book2.epub", "subdir/book3.pdf", "subdir/nested/book4.epub"}
+	if got := bookPaths(t, fsys); !slices.Equal(got, want) {
+		t.Errorf("books = %v, want %v", got, want)
 	}
 }
 
-func TestFindAllBooksRecursively_EmptyDirectory(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	books, err := FindAllBooksRecursively(tmpDir)
-	if err != nil {
-		t.Fatalf("FindAllBooksRecursively failed: %v", err)
-	}
-
-	if len(books) != 0 {
-		t.Errorf("Expected 0 books in empty directory, got %d", len(books))
+// Books in the trash, the version store or a half-written upload are not books on the shelf.
+func TestFindBooks_SkipsInternalNames(t *testing.T) {
+	fsys := memFS(t, "kept.pdf", ".trash/old.pdf", storageutil.VersionsDirName+"/kept.pdf/1.pdf")
+	if got := bookPaths(t, fsys); !slices.Equal(got, []string{"kept.pdf"}) {
+		t.Errorf("books = %v, want [kept.pdf]", got)
 	}
 }
 
-func TestFindAllBooksRecursively_NonExistentDirectory(t *testing.T) {
-	_, err := FindAllBooksRecursively("/nonexistent/path/that/does/not/exist")
-	if err == nil {
-		t.Error("Expected error for non-existent directory, got nil")
+func TestFindBooks_Empty(t *testing.T) {
+	result, err := FindBooks(context.Background(), FindBooksParams{FS: memFS(t)})
+	if err != nil {
+		t.Fatalf("FindBooks: %v", err)
+	}
+	if result.Books == nil || len(result.Books) != 0 {
+		t.Errorf("books = %#v, want an empty, non-nil list", result.Books)
 	}
 }
 
-func TestFindAllBooksRecursively_OnlyPDFs(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create only PDF files
-	for i := 1; i <= 3; i++ {
-		path := filepath.Join(tmpDir, "book"+string(rune(i))+"pdf.pdf")
-		if err := os.WriteFile(path, []byte("pdf"), 0644); err != nil {
-			t.Fatalf("Failed to create test file: %v", err)
-		}
-	}
-
-	books, err := FindAllBooksRecursively(tmpDir)
+// The size and modification time come through the namespace with each book.
+func TestFindBooks_CarriesFileInfo(t *testing.T) {
+	result, err := FindBooks(context.Background(), FindBooksParams{FS: memFS(t, "a/b.epub")})
 	if err != nil {
-		t.Fatalf("FindAllBooksRecursively failed: %v", err)
+		t.Fatalf("FindBooks: %v", err)
 	}
-
-	if len(books) != 3 {
-		t.Errorf("Expected 3 PDF books, got %d", len(books))
+	if len(result.Books) != 1 {
+		t.Fatalf("books = %+v, want one", result.Books)
+	}
+	if book := result.Books[0]; book.Name != "b.epub" || book.Size != int64(len("content")) || book.ModTime.IsZero() {
+		t.Errorf("book = %+v, want b.epub with its size and time", book)
 	}
 }
 
-func TestFindAllBooksRecursively_OnlyEPUBs(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create only EPUB files
-	for i := 1; i <= 2; i++ {
-		path := filepath.Join(tmpDir, "book"+string(rune(i))+"epub.epub")
-		if err := os.WriteFile(path, []byte("epub"), 0644); err != nil {
-			t.Fatalf("Failed to create test file: %v", err)
-		}
+func TestFindBooks_MissingRoot(t *testing.T) {
+	_, err := FindBooks(context.Background(), FindBooksParams{FS: missingFS{vfs.NewMemVFS("files")}})
+	if !errors.Is(err, vfs.ErrNotFound) {
+		t.Errorf("FindBooks = %v, want ErrNotFound", err)
 	}
+}
 
-	books, err := FindAllBooksRecursively(tmpDir)
-	if err != nil {
-		t.Fatalf("FindAllBooksRecursively failed: %v", err)
-	}
+// missingFS is a namespace whose root is gone.
+type missingFS struct{ vfs.VFS }
 
-	if len(books) != 2 {
-		t.Errorf("Expected 2 EPUB books, got %d", len(books))
-	}
+func (missingFS) List(context.Context, string, *vfs.ListFilter) ([]vfs.FileInfo, error) {
+	return nil, vfs.ErrNotFound
 }

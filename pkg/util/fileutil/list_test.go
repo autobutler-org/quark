@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -89,13 +90,9 @@ func TestVFSListingsCarryTheDevice(t *testing.T) {
 		t.Fatalf("ListByType failed: %v", err)
 	}
 	// Indexed search (#1896) only knew the serial.
-	devices, err := svc.GetManagedDevices()
-	if err != nil {
-		t.Fatal(err)
-	}
-	index := storageutil.NewFileIndex()
-	index.Build(devices)
-	indexed, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Storage: svc, Query: "photo", Access: system.Access})
+	index := indexutil.NewFileIndex()
+	index.Build(context.Background(), registry)
+	indexed, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Registry: registry, Storage: svc, Query: "photo", Access: system.Access})
 	if err != nil {
 		t.Fatalf("indexed SearchFiles failed: %v", err)
 	}
@@ -352,13 +349,9 @@ func TestSearchResultsCarrySizeAndPath(t *testing.T) {
 	}
 	want := listed.Files[0]
 
-	devices, err := svc.GetManagedDevices()
-	if err != nil {
-		t.Fatal(err)
-	}
-	index := storageutil.NewFileIndex()
-	index.Build(devices)
-	indexed, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Storage: svc, Access: system.Access, Query: "notes"})
+	index := indexutil.NewFileIndex()
+	index.Build(context.Background(), registry)
+	indexed, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Registry: registry, Storage: svc, Access: system.Access, Query: "notes"})
 	if err != nil {
 		t.Fatalf("indexed SearchFiles failed: %v", err)
 	}
@@ -402,12 +395,8 @@ func TestListingsCarryModifiedAt(t *testing.T) {
 
 	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: "USB-1565"})
 	registry := newDeviceRegistry(t, svc)
-	devices, err := svc.GetManagedDevices()
-	if err != nil {
-		t.Fatal(err)
-	}
-	index := storageutil.NewFileIndex()
-	index.Build(devices)
+	index := indexutil.NewFileIndex()
+	index.Build(context.Background(), registry)
 	ctx := context.Background()
 	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
 	if err != nil {
@@ -425,7 +414,7 @@ func TestListingsCarryModifiedAt(t *testing.T) {
 			return r.Files, err
 		},
 		"SearchFiles from the index": func() ([]FileNode, error) {
-			r, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Storage: svc, Access: access, Query: "notes"})
+			r, err := SearchFiles(SearchFilesParams{Ctx: ctx, Index: index, Registry: registry, Storage: svc, Access: access, Query: "notes"})
 			return r.Files, err
 		},
 		"SearchFiles through the VFS": func() ([]FileNode, error) {

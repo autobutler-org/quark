@@ -229,15 +229,24 @@ func (v *StorageServiceVFS) Stat(_ context.Context, path string) (FileInfo, erro
 	if err != nil {
 		return FileInfo{}, hostErr(err)
 	}
-	return FileInfo{
-		Name:      fi.Name(),
-		Path:      cleanPath(path),
-		IsDir:     fi.IsDir(),
-		Size:      fi.Size(),
-		ModTime:   fi.ModTime(),
-		MimeType:  mimeTypeForName(fi.Name()),
-		Namespace: v.namespaceID,
-	}, nil
+	info := FileInfo{
+		Name:         fi.Name(),
+		Path:         cleanPath(path),
+		IsDir:        fi.IsDir(),
+		Size:         fi.Size(),
+		ModTime:      fi.ModTime(),
+		MimeType:     mimeTypeForName(fi.Name()),
+		Namespace:    v.namespaceID,
+		DeviceSerial: v.serial,
+	}
+	// The device fields read the way List reports them, so a caller that
+	// stats a path it found elsewhere — a filename index hit — can show
+	// which device it is on (#2642).
+	if device, err := v.svc.FindManagedDeviceBySerial(v.serial); err == nil && device != nil {
+		info.DeviceName = device.Name
+		info.DevicePath = device.DataDir
+	}
+	return info, nil
 }
 
 // Open returns the file at the given path. It resolves the path the way Stat

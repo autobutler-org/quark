@@ -1,17 +1,21 @@
-package storageutil
+package indexutil
 
 // The index as it stood before #2760: a map per folder. The equivalence
 // tests in file_index_equiv_test.go hold the compact index to its results.
 
 import (
+	"context"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // refIndex is a thread-safe in-memory index of all files across managed devices.
-// It is built once at startup and updated incrementally via HandleEvent.
+// It reads the disk under each namespace's host path directly, so it shares
+// no walking code with FileIndex.
 //
 // Each device is a tree of folders, so an event naming a folder reaches
 // everything under it in one step: a delete unlinks the folder's node and a
@@ -19,13 +23,7 @@ import (
 // search rebuilds them on the way down.
 type refIndex struct {
 	mu    sync.RWMutex
-	roots map[string]*refRoot // key: FilesDir
-}
-
-// refRoot is one device's tree.
-type refRoot struct {
-	serial string // empty = internal
-	dir    *refDir
+	roots map[string]*refDir // key: device serial
 }
 
 // refDir is one folder: the names of the files directly in it and its
@@ -37,24 +35,27 @@ type refDir struct {
 
 // newRefIndex creates and returns an empty refIndex.
 func newRefIndex() *refIndex {
-	return &refIndex{roots: make(map[string]*refRoot)}
+	return &refIndex{roots: make(map[string]*refDir)}
 }
 
-// Build walks all managed devices and populates the index. The walk runs
-// before the lock is taken, so searches keep answering from the old index
-// while it does.
-func (idx *refIndex) Build(devices []ManagedDevice) {
-	roots := make(map[string]*refRoot, len(devices))
-	for _, dev := range devices {
-		serial := ""
-		if dev.UsbInfo != nil {
-			serial = dev.UsbInfo.GetSerial()
-		}
-		roots[dev.FilesDir] = &refRoot{serial: serial, dir: refScanDir(dev.FilesDir)}
+// Build reads every device namespace's tree from disk.
+func (idx *refIndex) Build(ctx context.Context, registry vfs.Registry) {
+	roots := make(map[string]*refDir)
+	for serial, fsys := range vfs.FilesNamespaces(registry) {
+		roots[serial] = refScanDir(refHostPath(ctx, fsys, ""))
 	}
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 	idx.roots = roots
+}
+
+// refHostPath is where path in fsys sits on disk.
+func refHostPath(ctx context.Context, fsys vfs.VFS, path string) string {
+	abs, err := fsys.(vfs.HostPather).HostPath(ctx, path)
+	if err != nil {
+		return ""
+	}
+	return abs
 }
 
 // Search returns all indexed files whose Name contains query (case-insensitive).
@@ -77,15 +78,15 @@ func (idx *refIndex) SearchEach(query string, serials map[string]bool, visit fun
 	lq := strings.ToLower(query)
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
-	for filesDir, root := range idx.roots {
-		if len(serials) > 0 && !serials[root.serial] {
+	for serial, root := range idx.roots {
+		if len(serials) > 0 && !serials[serial] {
 			continue
 		}
-		more := root.dir.collect("", func(name, relPath string) bool {
+		more := root.collect("", func(name, relPath string) bool {
 			if query != "" && !strings.Contains(strings.ToLower(name), lq) {
 				return true
 			}
-			return visit(IndexedFile{Name: name, RelPath: relPath, FilesDir: filesDir, DeviceSerial: root.serial})
+			return visit(IndexedFile{Name: name, RelPath: relPath, DeviceSerial: serial})
 		})
 		if !more {
 			return
@@ -94,50 +95,50 @@ func (idx *refIndex) SearchEach(query string, serials map[string]bool, visit fun
 }
 
 // HandleAdd adds or updates a file in the index.
-func (idx *refIndex) HandleAdd(filesDir, relPath, serial string) {
+func (idx *refIndex) HandleAdd(serial, relPath string) {
 	parts := splitRel(relPath)
 	if len(parts) == 0 || isInternalPath(parts) {
 		return
 	}
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
-	idx.root(filesDir, serial).dir.ensure(parts[:len(parts)-1]).putFile(parts[len(parts)-1])
+	idx.root(serial).ensure(parts[:len(parts)-1]).putFile(parts[len(parts)-1])
 }
 
 // HandleDelete removes a file or a folder, and everything in the folder,
 // from the index.
-func (idx *refIndex) HandleDelete(filesDir, relPath string) {
+func (idx *refIndex) HandleDelete(serial, relPath string) {
 	parts := splitRel(relPath)
 	if len(parts) == 0 {
 		return
 	}
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
-	if root := idx.roots[filesDir]; root != nil {
-		root.dir.lookup(parts[:len(parts)-1]).remove(parts[len(parts)-1])
+	if root := idx.roots[serial]; root != nil {
+		root.lookup(parts[:len(parts)-1]).remove(parts[len(parts)-1])
 	}
 }
 
 // HandleMove renames a file or a folder in the index; a folder takes
 // everything in it along. A path the index never held is read from disk at
 // its new location instead.
-func (idx *refIndex) HandleMove(filesDir, oldRelPath, newRelPath, serial string) {
+func (idx *refIndex) HandleMove(ctx context.Context, fsys vfs.VFS, serial, oldRelPath, newRelPath string) {
 	oldParts, newParts := splitRel(oldRelPath), splitRel(newRelPath)
 	if len(oldParts) == 0 || len(newParts) == 0 {
 		return
 	}
-	if !idx.reattach(filesDir, oldParts, newParts, serial) {
-		idx.HandleRescan(filesDir, newRelPath, serial)
+	if !idx.reattach(serial, oldParts, newParts) {
+		idx.HandleRescan(ctx, fsys, serial, newRelPath)
 	}
 }
 
 // reattach moves the node at oldParts to newParts, reporting whether there was
 // one. A move into an internal folder, the trash, only drops it.
-func (idx *refIndex) reattach(filesDir string, oldParts, newParts []string, serial string) bool {
+func (idx *refIndex) reattach(serial string, oldParts, newParts []string) bool {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
-	root := idx.root(filesDir, serial)
-	oldParent, oldName := root.dir.lookup(oldParts[:len(oldParts)-1]), oldParts[len(oldParts)-1]
+	root := idx.root(serial)
+	oldParent, oldName := root.lookup(oldParts[:len(oldParts)-1]), oldParts[len(oldParts)-1]
 	if oldParent == nil {
 		return false
 	}
@@ -150,7 +151,7 @@ func (idx *refIndex) reattach(filesDir string, oldParts, newParts []string, seri
 	if isInternalPath(newParts) {
 		return true
 	}
-	newParent, newName := root.dir.ensure(newParts[:len(newParts)-1]), newParts[len(newParts)-1]
+	newParent, newName := root.ensure(newParts[:len(newParts)-1]), newParts[len(newParts)-1]
 	if isFile {
 		newParent.putFile(newName)
 	} else {
@@ -167,19 +168,19 @@ func (idx *refIndex) reattach(filesDir string, oldParts, newParts []string, seri
 // path gone from disk is dropped. Folders the index already holds below the
 // first level are not reread, so an upload into a large tree costs one
 // directory read.
-func (idx *refIndex) HandleRescan(filesDir, relPath, serial string) {
+func (idx *refIndex) HandleRescan(ctx context.Context, fsys vfs.VFS, serial, relPath string) {
 	parts := splitRel(relPath)
 	if isInternalPath(parts) {
 		return
 	}
-	abs := filepath.Join(filesDir, filepath.FromSlash(strings.Join(parts, "/")))
+	abs := refHostPath(ctx, fsys, strings.Join(parts, "/"))
 	info, err := os.Stat(abs)
 	switch {
 	case err != nil:
-		idx.HandleDelete(filesDir, relPath)
+		idx.HandleDelete(serial, relPath)
 		return
 	case !info.IsDir():
-		idx.HandleAdd(filesDir, relPath, serial)
+		idx.HandleAdd(serial, relPath)
 		return
 	}
 	entries, err := os.ReadDir(abs)
@@ -190,14 +191,14 @@ func (idx *refIndex) HandleRescan(filesDir, relPath, serial string) {
 	// Walk the subfolders the index lacks before taking the write lock.
 	idx.mu.RLock()
 	var known *refDir
-	if root := idx.roots[filesDir]; root != nil {
-		known = root.dir.lookup(parts)
+	if root := idx.roots[serial]; root != nil {
+		known = root.lookup(parts)
 	}
 	fresh := &refDir{}
 	for _, entry := range entries {
 		name := entry.Name()
 		switch {
-		case IsInternalName(name):
+		case storageutil.IsInternalName(name):
 		case !entry.IsDir():
 			fresh.putFile(name)
 		case known != nil && known.dirs[name] != nil:
@@ -209,32 +210,30 @@ func (idx *refIndex) HandleRescan(filesDir, relPath, serial string) {
 	idx.mu.RUnlock()
 	for name, dir := range fresh.dirs {
 		if dir != nil {
-			fresh.dirs[name] = refScanDir(filepath.Join(abs, name))
+			fresh.dirs[name] = refScanDir(abs + "/" + name)
 		}
 	}
 
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
-	root := idx.root(filesDir, serial)
+	root := idx.root(serial)
 	if len(parts) == 0 {
-		fresh.adopt(root.dir)
-		root.dir = fresh
+		fresh.adopt(root)
+		idx.roots[serial] = fresh
 		return
 	}
-	parent := root.dir.ensure(parts[:len(parts)-1])
+	parent := root.ensure(parts[:len(parts)-1])
 	fresh.adopt(parent.dirs[parts[len(parts)-1]])
 	parent.putDir(parts[len(parts)-1], fresh)
 }
 
-// root returns the tree for filesDir, creating it, and records its serial.
-// Callers hold the write lock.
-func (idx *refIndex) root(filesDir, serial string) *refRoot {
-	root := idx.roots[filesDir]
+// root returns the tree for serial, creating it. Callers hold the write lock.
+func (idx *refIndex) root(serial string) *refDir {
+	root := idx.roots[serial]
 	if root == nil {
-		root = &refRoot{dir: &refDir{}}
-		idx.roots[filesDir] = root
+		root = &refDir{}
+		idx.roots[serial] = root
 	}
-	root.serial = serial
 	return root
 }
 
@@ -247,9 +246,9 @@ func refScanDir(abs string) *refDir {
 	}
 	for _, entry := range entries {
 		switch name := entry.Name(); {
-		case IsInternalName(name):
+		case storageutil.IsInternalName(name):
 		case entry.IsDir():
-			dir.putDir(name, refScanDir(filepath.Join(abs, name)))
+			dir.putDir(name, refScanDir(abs+"/"+name))
 		default:
 			dir.putFile(name)
 		}

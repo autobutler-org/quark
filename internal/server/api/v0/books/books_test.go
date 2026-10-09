@@ -14,6 +14,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deputil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -31,7 +32,7 @@ func newBooksEngine(t *testing.T) (*gin.Engine, string) {
 		t.Fatalf("failed to resolve files dir: %v", err)
 	}
 
-	deps := deputil.NewDependencies()
+	deps := deputil.NewDependencies().WithVFSRegistry(internalRegistry(t))
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
@@ -42,6 +43,18 @@ func newBooksEngine(t *testing.T) (*gin.Engine, string) {
 	group := engine.Group("/api/v0")
 	serverutil.RegisterRouterWithGroup(group, v0_books.NewRouter())
 	return engine, filesDir
+}
+
+// internalRegistry holds the internal drive's files namespace, the one the
+// books walk reads, over the files directory under HOME.
+func internalRegistry(t *testing.T) vfs.Registry {
+	t.Helper()
+	svc := storageutil.NewStorageService(systemDevice{})
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, vfs.NewStorageServiceVFS(svc, vfs.FilesNamespace(""))); err != nil {
+		t.Fatal(err)
+	}
+	return registry
 }
 
 func doGet(engine *gin.Engine, path string) *httptest.ResponseRecorder {
@@ -194,8 +207,51 @@ func TestListBooks_SubdirectoryRecursion(t *testing.T) {
 	if len(result) != 1 {
 		t.Fatalf("expected 1 book, got %d", len(result))
 	}
-	relPath, _ := result[0]["relPath"].(string)
-	if relPath == "" {
-		t.Errorf("expected relPath to be set")
+	if relPath, _ := result[0]["relPath"].(string); relPath != "fiction/scifi/dune.epub" {
+		t.Errorf("relPath = %q, want fiction/scifi/dune.epub", relPath)
+	}
+}
+
+// A book in the trash is not on the shelf: the walk never visits the trash,
+// in the files directory or beside it.
+func TestListBooks_SkipsTrash(t *testing.T) {
+	engine, filesDir := newBooksEngine(t)
+	for _, p := range []string{
+		filepath.Join(filesDir, "kept.pdf"),
+		filepath.Join(filesDir, ".trash", "old.pdf"),
+		filepath.Join(storageutil.TrashRoot(filesDir), "x", "trashed.pdf"),
+	} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("%PDF"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	w := doGet(engine, "/api/v0/books")
+	var result []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &result); w.Code != http.StatusOK || err != nil {
+		t.Fatalf("list = %d %s: %v", w.Code, w.Body.String(), err)
+	}
+	if len(result) != 1 || result[0]["relPath"] != "kept.pdf" {
+		t.Errorf("books = %v, want only kept.pdf", result)
+	}
+}
+
+// A server with no internal files namespace is misconfigured: 500, not a panic.
+func TestListBooks_NoNamespace(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	deps := deputil.NewDependencies().WithVFSRegistry(vfs.NewRegistry())
+	engine.Use(func(c *gin.Context) {
+		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", accessutil.System)
+		c.Next()
+	})
+	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_books.NewRouter())
+
+	if w := doGet(engine, "/api/v0/books"); w.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", w.Code)
 	}
 }

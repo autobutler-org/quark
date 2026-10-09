@@ -30,6 +30,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/fileversionutil"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/healthutil"
+	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/provisionutil"
@@ -96,8 +97,10 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 
 	// Build the file index and start watching for changes.
 	// All event-dispatch logic lives in FileIndex.BuildAndWatch.
-	idx := storageutil.NewFileIndex()
-	idx.BuildAndWatch(deps.EventBus(), deps.StorageService().GetManagedDevices)
+	idx := indexutil.NewFileIndex()
+	idx.BuildAndWatch(indexutil.BuildAndWatchParams{
+		Bus: deps.EventBus(), Registry: deps.VFSRegistry(), Storage: deps.StorageService(),
+	})
 	deps.WithFileIndex(idx)
 
 	// Keep the Docs and Sheets listings between requests until a file event

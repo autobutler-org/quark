@@ -74,7 +74,7 @@ classDiagram
         EventBus() eventbus.Bus
         JobQueue() jobutil.Queue
         Worker() workerutil.Worker
-        FileIndex() storageutil.FileIndex
+        FileIndex() indexutil.FileIndex
         UploadSessions() uploadutil.SessionStore
         VaultSession() vaultcrypto.VaultSession
         AuthRateLimiter() Limiter
@@ -149,7 +149,7 @@ sequenceDiagram
 | Job queue              | `jobutil` + `transcodeutil`     | enqueued job rows    | runs video transcodes per lane, publishes `job_*` events  |
 | Worker                 | `workerutil`                    | backup requests      | copies files to a backup device off the request path      |
 | Sync worker            | `pkg/backup`                    | file events          | keeps snapshots on a backup device in sync                |
-| File index             | `storageutil.FileIndex`         | fs watch + events    | in-memory index of files across managed devices          |
+| File index             | `indexutil.FileIndex`           | VFS walk + events    | in-memory index of files across managed devices          |
 | Content indexer        | `internal/server/content_indexer.go` | upload / move / delete | FTS5 rows for text documents; backfill at startup  |
 | USB monitor            | `server.usbDeviceMonitor`       | every 5 s            | auto-mounts new drives                                    |
 | Vault device monitor   | `server.vaultDeviceMonitor`     | every 10 s           | locks the vault when its drive disappears                 |

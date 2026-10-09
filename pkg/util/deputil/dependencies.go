@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/fileversionutil"
+	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
@@ -36,7 +37,7 @@ type dependencies struct {
 	downloadTokens *downloadutil.TokenStore
 	zipSlots       *downloadutil.ZipSlots
 	eventBus       *eventbus.Bus
-	fileIndex      *storageutil.FileIndex
+	fileIndex      *indexutil.FileIndex
 	fileVersions   *fileversionutil.Store
 	healthDatabase *db.DatabaseRaw
 	sshSystem      sshutil.System
@@ -99,7 +100,7 @@ func (d *dependencies) WithEventBus(b *eventbus.Bus) Dependencies {
 	return d
 }
 
-func (d *dependencies) WithFileIndex(idx *storageutil.FileIndex) Dependencies {
+func (d *dependencies) WithFileIndex(idx *indexutil.FileIndex) Dependencies {
 	d.fileIndex = idx
 	return d
 }
@@ -179,7 +180,7 @@ func (d *dependencies) EventBus() *eventbus.Bus {
 	return d.eventBus
 }
 
-func (d *dependencies) FileIndex() *storageutil.FileIndex {
+func (d *dependencies) FileIndex() *indexutil.FileIndex {
 	return d.fileIndex
 }
 

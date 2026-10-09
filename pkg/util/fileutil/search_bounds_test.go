@@ -12,7 +12,9 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/internal/db/dbtest"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // homesFixture is a USB drive holding two homes, users/alice and users/bob,
@@ -40,12 +42,8 @@ func newHomesFixture(t *testing.T, aliceFiles, bobFiles int) homesFixture {
 	}
 	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: serial})
 	registry := newDeviceRegistry(t, svc)
-	devices, err := svc.GetManagedDevices()
-	if err != nil {
-		t.Fatal(err)
-	}
-	index := storageutil.NewFileIndex()
-	index.Build(devices)
+	index := indexutil.NewFileIndex()
+	index.Build(context.Background(), registry)
 
 	ctx := context.Background()
 	database := dbtest.NewDB(t)
@@ -68,7 +66,7 @@ func newHomesFixture(t *testing.T, aliceFiles, bobFiles int) homesFixture {
 		t.Fatal(err)
 	}
 	branches := map[string]SearchFilesParams{
-		"index":     {Index: index, Storage: svc},
+		"index":     {Index: index, Registry: registry, Storage: svc},
 		"vfs":       {Registry: registry, Storage: svc},
 		"disk walk": {Storage: svc},
 	}
@@ -85,11 +83,12 @@ func newHomesFixture(t *testing.T, aliceFiles, bobFiles int) homesFixture {
 func TestSearchFilesNeverStatsUnreadableMatches(t *testing.T) {
 	f := newHomesFixture(t, 2, 3)
 	var statCalls []string
-	statFile = func(name string) (os.FileInfo, error) {
+	stat := statFile
+	statFile = func(ctx context.Context, fsys vfs.VFS, name string) (vfs.FileInfo, error) {
 		statCalls = append(statCalls, name)
-		return os.Stat(name)
+		return stat(ctx, fsys, name)
 	}
-	t.Cleanup(func() { statFile = os.Stat })
+	t.Cleanup(func() { statFile = stat })
 
 	params := f.branches["index"]
 	params.Query = ".txt"

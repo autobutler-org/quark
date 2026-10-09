@@ -2,7 +2,6 @@ package fileutil
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -10,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
+	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -427,8 +427,9 @@ type SearchFilesParams struct {
 	// Ctx bounds the VFS listing and the device walk.
 	Ctx context.Context
 	// Index answers the search outright when one has been built.
-	Index *storageutil.FileIndex
-	// Registry serves the fallback listing when there is no index.
+	Index *indexutil.FileIndex
+	// Registry resolves each index match to its device's namespace, and
+	// serves the fallback listing when there is no index.
 	Registry vfs.Registry
 	// Storage enumerates the managed devices for the disk walk.
 	Storage *storageutil.StorageService
@@ -450,9 +451,12 @@ type SearchFilesResult struct {
 // appliance costs a bounded amount of work and response (#2758).
 const MaxSearchResults = 500
 
-// statFile reads a match's size and modification time; a variable so a test can prove stat never
-// runs on an unreadable match.
-var statFile = os.Stat
+// statFile reads a match's size and modification time through its device's
+// namespace; a variable so a test can prove stat never runs on an unreadable
+// match.
+var statFile = func(ctx context.Context, fsys vfs.VFS, p string) (vfs.FileInfo, error) {
+	return fsys.Stat(ctx, p)
+}
 
 // SearchFiles finds up to MaxSearchResults files whose name contains the
 // query, keeping only the ones the caller can read (#1907): from the index
@@ -478,23 +482,10 @@ func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 		serialSet[s] = true
 	}
 
-	// The index records only the device's files directory and serial, so the
-	// name and path come from the managed device that owns that directory.
-	devicesByFilesDir := make(map[string]storageutil.ManagedDevice)
-	if params.Storage != nil {
-		devices, err := params.Storage.GetManagedRoots()
-		if err != nil {
-			return SearchFilesResult{}, err
-		}
-		for _, device := range devices {
-			devicesByFilesDir[device.FilesDir] = device
-		}
-	}
-
 	// The grants alone decide the first cut, in memory and under the
 	// index's lock, so a match the caller cannot read costs no disk access.
-	var matches []storageutil.IndexedFile
-	params.Index.SearchEach(params.Query, serialSet, func(f storageutil.IndexedFile) bool {
+	var matches []indexutil.IndexedFile
+	params.Index.SearchEach(params.Query, serialSet, func(f indexutil.IndexedFile) bool {
 		if params.Access.Level(f.DeviceSerial, f.RelPath) < accessutil.Read {
 			return true
 		}
@@ -508,28 +499,36 @@ func SearchFiles(params SearchFilesParams) (SearchFilesResult, error) {
 		if !readable(params.Access, f.DeviceSerial, f.RelPath) {
 			continue
 		}
+		// The index is keyed by serial; the match is read through that
+		// device's namespace. A device unplugged since is skipped.
+		var fsys vfs.VFS
+		if params.Registry != nil {
+			fsys, _ = params.Registry.Get(vfs.FilesNamespace(f.DeviceSerial))
+		}
+		if fsys == nil {
+			continue
+		}
 		// The index holds no size or modification time, which would go stale on
 		// every write, so stat at search time. A file deleted since it was indexed is skipped.
-		info, err := statFile(filepath.Join(f.FilesDir, f.RelPath))
+		info, err := statFile(params.Ctx, fsys, f.RelPath)
 		if err != nil {
 			continue
 		}
-		device := devicesByFilesDir[f.FilesDir]
 		// DirPath must be the full relative path (e.g. "docs/notes.txt"), not
 		// just the parent dir. The Flutter FileNode.apiPath getter uses
 		// DirPath as the full API path, consistent with how the directory
 		// listing populates it (filepath.Join(rootDir, file.Name())).
 		allFiles = append(allFiles, FileNode{
 			Name:         f.Name,
-			Size:         info.Size(),
+			Size:         info.Size,
 			DirPath:      f.RelPath,
 			FullPath:     f.RelPath,
 			IsDir:        false,
-			DeviceName:   device.Name,
-			DevicePath:   device.DataDir,
+			DeviceName:   info.DeviceName,
+			DevicePath:   info.DevicePath,
 			DeviceSerial: f.DeviceSerial,
 			FileType:     string(storageutil.DetermineFileTypeFromPath(f.RelPath)),
-			ModifiedAt:   info.ModTime(),
+			ModifiedAt:   info.ModTime,
 		})
 	}
 	return SearchFilesResult{Files: allFiles}, nil

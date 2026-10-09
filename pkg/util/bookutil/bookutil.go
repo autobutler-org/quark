@@ -1,56 +1,29 @@
-// Package bookutil finds book files (PDF and EPUB) on disk.
+// Package bookutil finds the book files (PDF and EPUB) in a files namespace.
 package bookutil
 
 import (
-	"fmt"
-	"io/fs"
-	"path/filepath"
+	"context"
 
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
-// RecursiveBookInfo stores a book with its relative path
-type RecursiveBookInfo struct {
-	FileInfo fs.FileInfo
-	RelPath  string
+// FindBooksParams names the namespace to search for books.
+type FindBooksParams struct {
+	// FS is the files namespace to walk, the whole of it.
+	FS vfs.VFS
 }
 
-// FindAllBooksRecursively finds all book files (PDF and EPUB) in a directory and its subdirectories
-func FindAllBooksRecursively(rootDir string) ([]RecursiveBookInfo, error) {
-	books := make([]RecursiveBookInfo, 0)
+// FindBooksResult is every book found, in walk order.
+type FindBooksResult struct {
+	// Books are the PDF and EPUB files; each Path is relative to the
+	// namespace root.
+	Books []vfs.FileInfo
+}
 
-	err := filepath.Walk(rootDir, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if path != rootDir && storageutil.IsInternalName(info.Name()) {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if info.IsDir() {
-			return nil
-		}
-
-		fileType := storageutil.DetermineFileTypeFromPath(info.Name())
-		if fileType == storageutil.FileTypePDF || fileType == storageutil.FileTypeEpub {
-			// Get relative path from rootDir
-			relPath, err := filepath.Rel(rootDir, path)
-			if err != nil {
-				return err // coverage: ignore - filepath.Rel only fails on cross-volume paths (different drives on Windows)
-			}
-			books = append(books, RecursiveBookInfo{
-				FileInfo: info,
-				RelPath:  relPath,
-			})
-		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("error walking directory %s: %w", rootDir, err)
-	}
-
-	return books, nil
+// FindBooks walks the whole namespace through vfs.Walk and returns its PDF and
+// EPUB files. The walk streams and is best-effort: an unreadable folder is
+// skipped, and the trash and other internal names are never visited. A
+// namespace whose root is missing is an error.
+func FindBooks(ctx context.Context, params FindBooksParams) (FindBooksResult, error) {
+	return findBooks(ctx, params)
 }
