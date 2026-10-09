@@ -103,6 +103,9 @@ dependencies:
   # the dart-define + tree-shaking keep it inactive in normal/release builds.
   flutter_probe_agent: ^0.19.0
   sodium: ^4.1.1+1
+  # The in-app PDF viewer (#1184), built on PDFium. Its web WASM ships in the
+  # app bundle, so the viewer works with no internet connection.
+  pdfrx: ^2.6.5
 
 # Patched desktop_drop: upstream's web handler calls webkitGetAsEntry()! on every
 # item in a drag, but that returns null for the string items a drag carries

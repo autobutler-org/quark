@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:quark/utils/file_kind.dart';
 
 /// The `/files` URL for [path]. This file holds the helpers that decide how a `/files` route opens a path: as a
@@ -40,8 +39,9 @@ bool hasSupportedFilesEditorForType(FileKind kind) =>
 ///
 /// These open in `GenericFileViewerPage` — download plus "Open with…" — rather
 /// than falling through to the "No supported editor" dead end. Named document
-/// types are included deliberately: without them a `.pdf` ends up worse off
+/// types are included deliberately: without them a `.docx` ends up worse off
 /// than an unclassified file, which reaches that page as `generic` (#1184).
+/// A PDF is not one of them: it has `PdfViewerPage`.
 ///
 /// `xlsx` is here for the same reason, and only as a fallback: the file
 /// browser offers to convert a workbook to a `.qsheet` before reaching this,
@@ -51,23 +51,11 @@ bool hasSupportedFilesEditorForType(FileKind kind) =>
 bool usesGenericFileViewer(FileKind kind) => const {
   FileKind.generic,
   FileKind.csv,
-  FileKind.pdf,
   FileKind.docx,
   FileKind.slideshow,
   FileKind.epub,
   FileKind.xlsx,
 }.contains(kind);
-
-/// Whether the generic viewer should hand [kind] to the system on arrival.
-///
-/// iOS previews a PDF in QuickLook with no app picker, so the "Open with…" tap
-/// only delays what would happen anyway (#1807). Android can offer several PDF
-/// apps, so the tap stays a real choice there; web has no system open at all.
-bool opensStraightInSystemViewer(
-  FileKind kind, {
-  required bool isWeb,
-  required TargetPlatform platform,
-}) => !isWeb && platform == TargetPlatform.iOS && kind == FileKind.pdf;
 
 /// The last path segment with [extension] removed, when it carries it.
 ///

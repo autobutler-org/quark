@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/pages/file_browser_page.dart';
-import 'package:quark/pages/generic_file_viewer_page.dart';
+import 'package:quark/pages/pdf_viewer_page.dart';
 import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
@@ -282,7 +282,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
 
       expect(router.state.uri.path, '/view/report.pdf');
-      expect(find.byType(GenericFileViewerPage), findsOneWidget);
+      expect(find.byType(PdfViewerPage), findsOneWidget);
       expect(find.byType(FileBrowserPage), findsNothing);
 
       // AutoRefreshMixin's timer used to reissue the doomed listing every
@@ -443,14 +443,14 @@ void main() {
   });
 
   testWidgets('clicking a pdf opens it at its own URL', (tester) async {
-    // #2328: the generic viewer was pushed and never touched the URL, so it
+    // #2328: the viewer was pushed and never touched the URL, so it
     // could not be reloaded, shared or closed with browser back.
     await HttpOverrides.runZoned(() async {
       final router = await clickFile(tester, '/files/papers', 'report.pdf');
       await tester.pump(const Duration(seconds: 1));
 
       expect(router.state.uri.path, '/view/papers/report.pdf');
-      expect(find.byType(GenericFileViewerPage), findsOneWidget);
+      expect(find.byType(PdfViewerPage), findsOneWidget);
     }, createHttpClient: overrides.createHttpClient);
   });
 

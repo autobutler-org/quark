@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/utils/file_kind.dart';
 import 'package:quark/utils/files_route_path_utils.dart';
@@ -67,7 +66,6 @@ void main() {
   group('usesGenericFileViewer', () {
     test('covers the document types that had no viewer', () {
       // These reached the "No supported editor" dead end before #1184.
-      expect(usesGenericFileViewer(FileKind.pdf), isTrue);
       expect(usesGenericFileViewer(FileKind.docx), isTrue);
       expect(usesGenericFileViewer(FileKind.slideshow), isTrue);
       expect(usesGenericFileViewer(FileKind.epub), isTrue);
@@ -93,39 +91,12 @@ void main() {
         FileKind.svg,
         FileKind.video,
         FileKind.audio,
+        FileKind.pdf,
         FileKind.text,
         FileKind.code,
         FileKind.archive,
       ]) {
         expect(usesGenericFileViewer(kind), isFalse, reason: kind.name);
-      }
-    });
-  });
-
-  group('opensStraightInSystemViewer', () {
-    bool opens(FileKind kind, {bool isWeb = false, TargetPlatform? platform}) =>
-        opensStraightInSystemViewer(
-          kind,
-          isWeb: isWeb,
-          platform: platform ?? TargetPlatform.iOS,
-        );
-
-    test('skips the "Open with" tap for a PDF on iOS', () {
-      // QuickLook is the only handler, so the tap bought nothing (#1807).
-      expect(opens(FileKind.pdf), isTrue);
-    });
-
-    test('keeps the tap where it is a real choice', () {
-      expect(opens(FileKind.pdf, platform: TargetPlatform.android), isFalse);
-      expect(opens(FileKind.pdf, isWeb: true), isFalse);
-      for (final kind in [
-        FileKind.docx,
-        FileKind.epub,
-        FileKind.xlsx,
-        FileKind.slideshow,
-        FileKind.generic,
-      ]) {
-        expect(opens(kind), isFalse, reason: kind.name);
       }
     });
   });

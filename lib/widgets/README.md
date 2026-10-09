@@ -86,6 +86,10 @@ lib/widgets/
                                 behind a confirmation
     ssh_access_section.dart     hosts SshAccessPanel around SshAccessController,
                                 with its confirmation, key and password dialogs
+  pdf_viewer/
+    browser_pdf_view.dart       the browser's own PDF viewer in an iframe, and
+                                whether the browser has one; web-only behind a
+                                conditional export, a stand-in elsewhere
   sharing/
     show_share_sheet.dart       opens ShareSheet around a ShareController for
                                 a ShareTarget, a file or folder or a chat

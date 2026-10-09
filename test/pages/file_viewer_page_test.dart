@@ -9,6 +9,7 @@ import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/file_viewer_page.dart';
 import 'package:quark/pages/generic_file_viewer_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
+import 'package:quark/pages/pdf_viewer_page.dart';
 import 'package:quark/pages/svg_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/router.dart';
@@ -103,13 +104,25 @@ void main() {
   Future<void> unmount(WidgetTester tester) =>
       tester.pumpWidget(const SizedBox());
 
-  testWidgets('a pdf opens the generic viewer at its own URL', (tester) async {
+  testWidgets('a pdf opens the pdf viewer at its own URL', (tester) async {
     final r = await openFromFolder(tester, 'papers', 'papers/my report.pdf');
 
     expect(at(r), '/view/papers/my%20report.pdf');
     expect(history.last, '/view/papers/my%20report.pdf');
+    // #1184: it used to land on the generic page, which only downloads.
+    expect(find.byType(GenericFileViewerPage), findsNothing);
+    final viewer = tester.widget<PdfViewerPage>(find.byType(PdfViewerPage));
+    expect(viewer.filePath, 'papers/my report.pdf');
+    expect(viewer.name, 'my report.pdf');
+    await unmount(tester);
+  });
+
+  testWidgets('a type with no viewer opens the generic one', (tester) async {
+    final r = await openFromFolder(tester, 'papers', 'papers/my report.docx');
+
+    expect(at(r), '/view/papers/my%20report.docx');
     expect(find.byType(GenericFileViewerPage), findsOneWidget);
-    expect(find.text('my report.pdf'), findsWidgets);
+    expect(find.text('my report.docx'), findsWidgets);
   });
 
   testWidgets('closing replaces the viewer with its folder', (tester) async {
@@ -120,7 +133,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(at(r), '/files/papers');
-    expect(find.byType(GenericFileViewerPage), findsNothing);
+    expect(find.byType(PdfViewerPage), findsNothing);
     // Back from here must not bounce into the viewer again.
     expect(history, ['/files/papers', '/files/papers']);
   });

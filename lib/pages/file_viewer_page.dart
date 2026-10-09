@@ -6,6 +6,7 @@ import 'package:quark/models/file_node.dart';
 import 'package:quark/pages/audio_player_page.dart';
 import 'package:quark/pages/generic_file_viewer_page.dart';
 import 'package:quark/pages/image_viewer_page.dart';
+import 'package:quark/pages/pdf_viewer_page.dart';
 import 'package:quark/pages/svg_viewer_page.dart';
 import 'package:quark/pages/video_viewer_page.dart';
 import 'package:quark/router.dart';
@@ -112,6 +113,12 @@ class _FileViewerPageState extends State<FileViewerPage> {
         ),
         FileKind.video => VideoViewerPage(
           url: _mediaUrl,
+          name: _name,
+          onClose: _close,
+        ),
+        FileKind.pdf => PdfViewerPage(
+          filePath: widget.filePath,
+          serial: _serial,
           name: _name,
           onClose: _close,
         ),
