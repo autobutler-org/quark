@@ -43,12 +43,32 @@ import 'calendar_time_grid/time_grid_hour_gutter.dart';
 /// stays away while [isLoading], and a week says nothing: its empty columns
 /// already read as free.
 ///
+/// With [onEventReschedule] a timed event can be moved and resized (#2526).
+/// Dragging it moves it, through the day and across to another date on show;
+/// dragging its bottom edge moves its end alone; both go in 15-minute steps,
+/// and a preview shows where it would land until it is let go. A mouse drags
+/// at once. A touch holds the event first, so a swipe over it still scrolls,
+/// and resizes from a hold on the strip along its bottom: its bottom 48dp, or
+/// its bottom half when it is shorter than 96dp, which is the one part of
+/// this under 48dp; tapping the event, for a caller's editor, is the
+/// full-size way to set its times. From the keyboard, with the event focused,
+/// Alt and an arrow do the same: up and down move it 15 minutes, left and
+/// right a day, and with Shift held up and down move its end; the focus stays
+/// on the event wherever it lands. A move keeps the start on its own date and
+/// on a date on show, and a resize stops 15 minutes short of the start. The
+/// timeline does not scroll under a drag, which reaches the hours on show.
+/// Nothing animates, so reduced motion changes nothing. The grid only reports
+/// the new times: the caller applies them, to the whole series when the event
+/// repeats, and passes the moved event back in [events]. A week's crowded
+/// group stays one target, and all-day events stay put.
+///
 /// Key prefixes: `calendar_slot_<yyyy-mm-dd>_<hour>` on each hour,
 /// `calendar_day_header_<yyyy-mm-dd>` on each week column's heading,
 /// `calendar_all_day_more_<yyyy-mm-dd>` on an all-day overflow line,
 /// `calendar_crowd_<yyyy-mm-dd>_<minute>` on a week's crowded group,
 /// `calendar_now_line` on the now line, `calendar_event_<item.key>` on
-/// each event, and `calendar_day_add` on the empty day's button.
+/// each event, `calendar_drag_preview` on a drag's preview, and
+/// `calendar_day_add` on the empty day's button.
 ///
 /// ```dart
 /// CalendarTimeGrid(
@@ -58,6 +78,7 @@ import 'calendar_time_grid/time_grid_hour_gutter.dart';
 ///   events: controller.occurrences,
 ///   onSlotTap: (start) => createAt(start),
 ///   onEventTap: (item) => edit(item.eventId),
+///   onEventReschedule: (item, start, end) => move(item, start, end),
 ///   onDayTap: (day) => showDay(day),
 /// );
 /// ```
@@ -71,6 +92,7 @@ class CalendarTimeGrid extends StatefulWidget {
     this.initialHour = 8,
     this.onSlotTap,
     this.onEventTap,
+    this.onEventReschedule,
     this.onDayTap,
     this.onAddEvent,
     this.isLoading = false,
@@ -98,6 +120,13 @@ class CalendarTimeGrid extends StatefulWidget {
   /// Called with the event that was tapped.
   final ValueChanged<CalendarEventItem>? onEventTap;
 
+  /// Called with a timed event and the start and end a drag or a key press
+  /// gave this occurrence of it. Null leaves events where they are: no drag,
+  /// no keys. The keys need [onEventTap] as well, since an event that takes
+  /// no tap takes no focus.
+  final void Function(CalendarEventItem item, DateTime start, DateTime end)?
+  onEventReschedule;
+
   /// Called with the date whose heading, all-day "+N" line, or crowded
   /// group of events was tapped.
   final ValueChanged<DateTime>? onDayTap;
@@ -117,6 +146,25 @@ class CalendarTimeGrid extends StatefulWidget {
 
 class _CalendarTimeGridState extends State<CalendarTimeGrid> {
   ScrollController? _scroll;
+
+  // An event as the drag in flight on it would leave it.
+  CalendarEventItem? _preview;
+
+  // The key of the event a key press last moved, which takes the focus when
+  // the move lands it in another column, so the next press still has it.
+  String? _focusKey;
+
+  void _reschedule(
+    CalendarEventItem item,
+    CalendarEventItem moved, {
+    required bool fromKeyboard,
+  }) {
+    setState(() {
+      _preview = null;
+      if (fromKeyboard) _focusKey = moved.key;
+    });
+    widget.onEventReschedule?.call(item, moved.start, moved.end);
+  }
 
   @override
   void didChangeDependencies() {
@@ -222,8 +270,17 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
                               snug: snug,
                               now: widget.now,
                               leftEdge: index > 0,
+                              days: days,
+                              preview: _preview,
+                              focusKey: _focusKey,
                               onSlotTap: widget.onSlotTap,
                               onEventTap: widget.onEventTap,
+                              onPreview: (preview) =>
+                                  setState(() => _preview = preview),
+                              onEventReschedule:
+                                  widget.onEventReschedule == null
+                                  ? null
+                                  : _reschedule,
                               onCrowdTap: days.length > 1 && onDayTap != null
                                   ? () => onDayTap(day)
                                   : null,

@@ -61,6 +61,22 @@ class CalendarEventItem {
   /// example `7_2026-09-29`. Every calendar widget builds its keys from it.
   String get key => '${eventId}_${CalendarDates.key(start)}';
 
+  /// A copy running from [start] to [end], everything else kept: where a drag
+  /// on the timeline would put this occurrence.
+  CalendarEventItem rescheduled(DateTime start, DateTime end) =>
+      CalendarEventItem(
+        eventId: eventId,
+        title: title,
+        start: start,
+        end: end,
+        allDay: allDay,
+        colorIndex: colorIndex,
+        location: location,
+        repeat: repeat,
+        repeatUntil: repeatUntil,
+        reminderMinutes: reminderMinutes,
+      );
+
   /// When this occurrence's reminder is due, or null without one.
   DateTime? get reminderAt => reminderMinutes == null
       ? null
