@@ -168,7 +168,6 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 		purge := func() {
 			res, err := trashutil.PurgeExpired(trashutil.PurgeExpiredParams{
 				Registry: deps.VFSRegistry(),
-				Storage:  deps.StorageService(),
 				EventBus: deps.EventBus(),
 			})
 			if err != nil {

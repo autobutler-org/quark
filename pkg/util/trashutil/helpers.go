@@ -19,34 +19,15 @@ func ctxOf(d Device) context.Context {
 	return d.Ctx
 }
 
-// registryOf is registry, or when it is nil the namespaces storage's managed
-// devices would register: the internal drive's and one per other device, the
-// way deputil.DefaultDependencies builds them.
-func registryOf(registry vfs.Registry, storage *storageutil.StorageService) (vfs.Registry, error) {
-	if registry != nil {
-		return registry, nil
-	}
-	registry = vfs.NewRegistry()
-	if storage == nil {
-		return registry, nil
-	}
-	internal := vfs.FilesNamespace("")
-	if err := registry.Register(vfs.Namespace{ID: internal}, vfs.NewStorageServiceVFS(storage, internal)); err != nil {
-		return nil, err // coverage: ignore - a fresh registry has no conflict
-	}
-	_, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{Registry: registry, Storage: storage})
-	return registry, err
-}
-
 // trasherFor resolves the trash of the device d names. A serial with no
-// namespace is storageutil.ErrDeviceNotFound, so a request for an unplugged
-// drive never lands on another device's trash.
+// namespace, or no registry at all, is storageutil.ErrDeviceNotFound, so a
+// request for an unplugged drive never lands on another device's trash.
 func trasherFor(d Device) (vfs.Trasher, error) {
-	registry, err := registryOf(d.Registry, d.Storage)
-	if err != nil {
-		return nil, err
+	var fsys vfs.VFS
+	ok := false
+	if d.Registry != nil {
+		fsys, ok = d.Registry.Get(vfs.FilesNamespace(d.Serial))
 	}
-	fsys, ok := registry.Get(vfs.FilesNamespace(d.Serial))
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", storageutil.ErrDeviceNotFound, d.Serial)
 	}
@@ -84,9 +65,9 @@ func publishRestored(bus *eventbus.Bus, serial string, restored []vfs.RestoredIt
 }
 
 func purgeExpired(params PurgeExpiredParams) (PurgeExpiredResult, error) {
-	registry, err := registryOf(params.Registry, params.Storage)
-	if err != nil {
-		return PurgeExpiredResult{}, err
+	registry := params.Registry
+	if registry == nil {
+		return PurgeExpiredResult{}, nil
 	}
 	ctx := params.Ctx
 	if ctx == nil {

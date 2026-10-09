@@ -168,7 +168,7 @@ func TestDeleteFilesForgetsFavoritesAndAlbumItems(t *testing.T) {
 	}
 
 	if _, err := DeleteFiles(DeleteFilesParams{
-		Storage:   storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: serial}),
+		Registry:  usbRegistry(t, mountPoint, serial),
 		EventBus:  eventbus.New(),
 		Database:  database,
 		RootDir:   "/",
@@ -284,7 +284,7 @@ func TestDeleteFilesDropsPhotoHashes(t *testing.T) {
 	hashPhoto(t, q, "", "gone.jpg") // same path, other device
 
 	if _, err := DeleteFiles(DeleteFilesParams{
-		Storage:   storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: serial}),
+		Registry:  usbRegistry(t, mountPoint, serial),
 		EventBus:  eventbus.New(),
 		Database:  database,
 		RootDir:   "/",
@@ -303,4 +303,18 @@ func TestDeleteFilesDropsPhotoHashes(t *testing.T) {
 	if got := hashKeys(t, q); !reflect.DeepEqual(got, want) {
 		t.Errorf("hashes = %v, want %v", got, want)
 	}
+}
+
+// usbRegistry registers the namespace of a USB drive mounted at mountPoint,
+// the way the server registers every device it finds.
+func usbRegistry(t *testing.T, mountPoint, serial string) vfs.Registry {
+	t.Helper()
+	registry := vfs.NewRegistry()
+	if _, err := vfs.SyncDeviceNamespaces(vfs.SyncDeviceNamespacesParams{
+		Registry: registry,
+		Storage:  storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: serial}),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return registry
 }

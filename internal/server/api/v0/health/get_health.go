@@ -1,8 +1,6 @@
 package v0_health
 
 import (
-	"os"
-
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/gin-gonic/gin"
 )
@@ -45,7 +43,6 @@ func (r *router) getHealthRoute() *serverutil.Route {
 		if corePercents == nil {
 			corePercents = []float64{}
 		}
-		hostname, _ := os.Hostname()
 		return serverutil.Ok().WithData(HealthJSON{
 			Healthy:            status.Healthy,
 			Alerts:             alerts,
@@ -59,7 +56,7 @@ func (r *router) getHealthRoute() *serverutil.Route {
 			DiskUsedBytes:      status.DiskUsedBytes,
 			DiskTotalBytes:     status.DiskTotalBytes,
 			TemperatureCelsius: status.TemperatureCelsius,
-			Hostname:           hostname,
+			Hostname:           status.Hostname,
 		})
 	})
 }

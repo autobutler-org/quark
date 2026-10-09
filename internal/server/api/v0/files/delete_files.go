@@ -67,7 +67,6 @@ func deleteFiles(c *gin.Context) *serverutil.Response {
 	}
 
 	params.Registry = deps.VFSRegistry()
-	params.Storage = deps.StorageService()
 	params.EventBus = deps.EventBus()
 	params.Database = deps.Database()
 	params.TrashedBy = access.Principal().UserID
