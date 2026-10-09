@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:photo_manager/photo_manager.dart';
+import 'package:quark/controllers/albums_cache.dart';
 import 'package:quark/controllers/photo_bytes_cache.dart';
 import 'package:quark/controllers/photos_list_cache.dart';
 import 'package:quark/models/file_node.dart';
@@ -74,7 +75,8 @@ class AddToAlbumOutcome {
 /// Starts out showing the first page and favorites the last visit left in
 /// [PhotosListCache], so coming back to Photos draws the grid at once while
 /// [refresh] runs; every good refresh and favorite toggle writes back to it
-/// (#1778).
+/// (#1778). The album tree, and the items of an album opened before, come
+/// out of [AlbumsCache] the same way (#1779).
 ///
 /// Service calls arrive as function parameters defaulting to the real static
 /// methods, so a test passes fakes without a mocking library.
@@ -172,6 +174,7 @@ class PhotosController extends ChangeNotifier {
         FilesService.deleteFile,
     PhotoBytesCache? bytesCache,
     PhotosListCache? listCache,
+    AlbumsCache? albumsCache,
     bool isWeb = kIsWeb,
   }) : _getPhotos = getPhotos,
        _loadDeviceAssets = loadDeviceAssets,
@@ -198,9 +201,15 @@ class PhotosController extends ChangeNotifier {
        _deleteFile = deleteFile,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
        _listCache = listCache ?? PhotosListCache.instance,
+       _albumsCache = albumsCache ?? AlbumsCache.instance,
        _isWeb = isWeb {
     // With no host there is a different page to show, not an old grid.
     if (_activeHost() == null) return;
+    final albums = _albumsCache.albums;
+    if (albums != null) {
+      _albums = albums;
+      _albumsLoading = false;
+    }
     _favoriteKeys.addAll(_listCache.favoriteKeys ?? const {});
     final cached = _listCache.photos(sort: _sortField, order: _sortOrder);
     if (cached == null) return;
@@ -215,9 +224,10 @@ class PhotosController extends ChangeNotifier {
   /// Every Quark-bound photo and album call is swapped for its
   /// [DemoPhotosService] stand-in, so nothing it shows comes from, or is
   /// asked of, a Quark. Device photos and uploads are left as they are. The
-  /// samples get a cache of their own, so they never show for the Quark.
+  /// samples get caches of their own, so they never show for the Quark.
   factory PhotosController.demo() => PhotosController(
     listCache: PhotosListCache(),
+    albumsCache: AlbumsCache(),
     getPhotos: DemoPhotosService.getPhotos,
     activeHost: DemoPhotosService.activeHost,
     listFavoriteKeys: DemoPhotosService.listFavoriteKeys,
@@ -317,6 +327,7 @@ class PhotosController extends ChangeNotifier {
   _deleteFile;
   final PhotoBytesCache _bytesCache;
   final PhotosListCache _listCache;
+  final AlbumsCache _albumsCache;
   final bool _isWeb;
 
   // ── Photos ─────────────────────────────────────────────────────────────────
@@ -365,6 +376,10 @@ class PhotosController extends ChangeNotifier {
 
   List<PhotoAlbum> _albums = const [];
   bool _albumsLoading = true;
+
+  /// Whether [_albums] is this visit's own answer from the Quark, not the
+  /// tree the last visit left in [_albumsCache].
+  bool _albumsFetched = false;
   final Set<int> _expandedAlbumIds = {};
 
   /// The album the grid was asked to show, or null for the library.
@@ -377,6 +392,9 @@ class PhotosController extends ChangeNotifier {
 
   /// The items of [_albumId], null until they arrive or when they failed.
   List<_Photo>? _albumItems;
+
+  /// The sort [_albumItems] arrived in.
+  (PhotoSortField, PhotoSortOrder)? _albumItemsSort;
   Object? _albumError;
 
   /// Bumped by every album items request, so a slow answer for an album the
@@ -524,7 +542,8 @@ class PhotosController extends ChangeNotifier {
     ];
   }
 
-  /// Whether the album tree has yet to load for the first time.
+  /// Whether there is no album tree to show yet: none has loaded, and the
+  /// last visit left none.
   bool get albumsLoading => _albumsLoading;
 
   /// The ids of every expanded album.
@@ -840,6 +859,10 @@ class PhotosController extends ChangeNotifier {
       serial: serial.isNotEmpty ? serial : null,
     );
     _listCache.setFavorite(id, isFavorite: isFavorite);
+    // The Favorites album is the starred photos, so its kept items are stale.
+    for (final album in _albums) {
+      if (album.isFavorites) _albumsCache.dropItems(album.id);
+    }
     if (isFavorite) {
       _favoriteKeys.add(id);
     } else {
@@ -951,16 +974,22 @@ class PhotosController extends ChangeNotifier {
 
   // ── Albums ─────────────────────────────────────────────────────────────────
 
-  /// Reloads the album tree. A failure leaves the last tree in place.
+  /// Reloads the album tree, and keeps it for the next visit. A failure
+  /// leaves the last tree in place.
   ///
   /// A successful load also resolves an `?album=` value still pending, and
   /// loads that album's items. A failed one leaves the value pending for the
   /// next load, whether a manual refresh, a pull, or a resume.
   Future<void> loadAlbums() async {
+    // Read before the request, so a tree from a Quark or account left
+    // mid-request is not kept for the one that replaced it.
+    final scope = _albumsCache.scope;
     var loaded = false;
     try {
       _albums = await _listAlbums(tree: true);
       loaded = true;
+      _albumsFetched = true;
+      if (scope == _albumsCache.scope) _albumsCache.putAlbums(_albums);
     } catch (e) {
       debugPrint('[photos_controller.dart] Error loading albums: $e');
     }
@@ -1015,14 +1044,19 @@ class PhotosController extends ChangeNotifier {
   );
 
   /// Shows the album [id] in the grid and loads its items, or goes back to
-  /// All photos for null, in whichever category was showing. Selection is a
-  /// library feature, so showing an album ends it.
+  /// All photos for null, in whichever category was showing. Items kept from
+  /// the last time the album was open show until the load answers. Selection
+  /// is a library feature, so showing an album ends it.
   Future<void> showAlbum(int? id) async {
     _pendingLink = null;
     if (id == _albumId) return;
     _albumId = id;
     _albumItems = null;
     _albumError = null;
+    final kept = id == null
+        ? null
+        : _albumsCache.items(id, sort: _sortField, order: _sortOrder);
+    if (kept != null) _showAlbumItems(kept, (_sortField, _sortOrder));
     if (id != null) {
       _selectionMode = false;
       _addingToAlbum = null;
@@ -1035,14 +1069,19 @@ class PhotosController extends ChangeNotifier {
   /// Shows the album an `?album=` [value] names (see
   /// `resolveAlbumLink`), or All photos for null, empty, or a value naming no
   /// album. Before the tree has loaded, or while an earlier value still waits
-  /// on a failed load, the value replaces the one waiting.
+  /// on a failed load, the value replaces the one waiting. So does a value
+  /// the tree kept from the last visit cannot name: the album may be newer
+  /// than that tree, so it waits for this visit's.
   Future<void> showAlbumLink(String? value) async {
     final wanted = value == null || value.isEmpty ? null : value;
     if (!_albumsLoading && _pendingLink == null) {
-      await showAlbum(
-        wanted == null ? null : link.resolveAlbumLink(_albums, wanted)?.id,
-      );
-      return;
+      final album = wanted == null
+          ? null
+          : link.resolveAlbumLink(_albums, wanted);
+      if (wanted == null || album != null || _albumsFetched) {
+        await showAlbum(album?.id);
+        return;
+      }
     }
     if (wanted == _pendingLink && _albumId == null) return;
     _pendingLink = wanted;
@@ -1122,31 +1161,49 @@ class PhotosController extends ChangeNotifier {
       path.relPath.substring(slash + 1),
       deviceSerial: path.serial.isEmpty ? null : path.serial,
     );
+    // Any album may have held it.
+    _albumsCache.dropItems();
     await refresh();
   }
 
-  /// Loads the items of the album being shown, if any. A failure is kept for
-  /// the page to word, in place of the items.
+  /// Loads the items of the album being shown, if any, and keeps them for
+  /// the next time it is opened. A failure leaves items already showing in
+  /// this sort in place; with none to show, it is kept for the page to word.
   Future<void> _loadAlbumItems() async {
     final id = _albumId;
     if (id == null) return;
     final request = ++_albumRequest;
+    // Read before the request, so an answer for a Quark, account or sort
+    // left mid-request is not kept for the one that replaced it.
+    final scope = _albumsCache.scope;
+    final sort = (_sortField, _sortOrder);
     try {
-      final items = await _listAlbumItems(
-        id,
-        sort: _sortField,
-        order: _sortOrder,
-      );
+      final items = await _listAlbumItems(id, sort: sort.$1, order: sort.$2);
       if (request != _albumRequest || _disposed) return;
-      _albumItems = items.map(_Photo.fromAlbumItem).toList(growable: false);
-      _albumError = null;
+      _showAlbumItems(items, sort);
+      if (scope == _albumsCache.scope) {
+        _albumsCache.putItems(id, items, sort: sort.$1, order: sort.$2);
+      }
     } catch (e) {
       if (request != _albumRequest || _disposed) return;
       debugPrint('[photos_controller.dart] Error loading album items: $e');
-      _albumItems = null;
-      _albumError = e;
+      if (_albumItems == null || _albumItemsSort != sort) {
+        _albumItems = null;
+        _albumError = e;
+      }
     }
     notifyListeners();
+  }
+
+  /// Puts [items], which arrived in [sort], in the grid as the showing
+  /// album's.
+  void _showAlbumItems(
+    List<PhotoAlbumItem> items,
+    (PhotoSortField, PhotoSortOrder) sort,
+  ) {
+    _albumItems = items.map(_Photo.fromAlbumItem).toList(growable: false);
+    _albumItemsSort = sort;
+    _albumError = null;
   }
 
   /// Expands the album [id], or folds it.

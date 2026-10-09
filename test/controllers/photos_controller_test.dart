@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:photo_manager/photo_manager.dart';
+import 'package:quark/controllers/albums_cache.dart';
 import 'package:quark/controllers/photo_bytes_cache.dart';
 import 'package:quark/controllers/photos_controller.dart';
 import 'package:quark/controllers/photos_list_cache.dart';
@@ -146,10 +147,12 @@ class _FakeQuark {
   /// another's photos. [scope] stands for the Quark and account (#1778).
   String scope = 'quark-a';
   late final PhotosListCache listCache = PhotosListCache(scope: () => scope);
+  late final AlbumsCache albumsCache = AlbumsCache(scope: () => scope);
 
   PhotosController controller() => PhotosController(
     isWeb: false,
     listCache: listCache,
+    albumsCache: albumsCache,
     activeHost: () => host,
     getPhotos:
         ({
@@ -494,6 +497,241 @@ void main() {
             .fileName,
         '7.jpg',
       );
+    });
+  });
+
+  group('album session cache (#1779)', () {
+    test('a return visit shows the album tree before any fetch', () async {
+      final quark = _FakeQuark();
+      await quark.controller().refresh();
+      quark.calls.clear();
+
+      final returning = quark.controller();
+
+      expect(quark.calls, isEmpty);
+      expect(returning.albumsLoading, isFalse);
+      expect(returning.albums.map((a) => a.name), [
+        'Favorites',
+        'Inbox',
+        'Trips',
+      ]);
+    });
+
+    test('a return visit to an album shows its items before any '
+        'fetch', () async {
+      final quark = _FakeQuark();
+      final first = quark.controller();
+      await first.refresh();
+      await first.showAlbum(1);
+      quark.calls.clear();
+
+      final returning = quark.controller();
+      final showing = returning.showAlbumLink('Trips');
+
+      expect(returning.selectedAlbumId, 1);
+      expect(returning.albumLoading, isFalse);
+      expect(returning.photos.map((p) => p.id), ['sd1:camera/1.jpg']);
+      await showing;
+    });
+
+    test('reopening an album shows its items before the fetch', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+      await controller.showAlbum(null);
+
+      final showing = controller.showAlbum(1);
+
+      expect(controller.albumLoading, isFalse);
+      expect(controller.photos.map((p) => p.id), ['sd1:camera/1.jpg']);
+      await showing;
+    });
+
+    test('the fetch behind a kept album replaces what was kept', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+      await controller.showAlbum(null);
+      quark.albumFiles[1] = ['camera/1.jpg', 'camera/2.jpg'];
+      quark.albums = [_album(1, 'Voyages'), ...quark.albums.skip(1)];
+
+      await controller.showAlbum(1);
+      expect(controller.photos, hasLength(2));
+
+      final returning = quark.controller();
+      expect(returning.albums.last.name, 'Trips');
+      await returning.refresh();
+      expect(returning.albums.last.name, 'Voyages');
+      expect(quark.controller().albums.last.name, 'Voyages');
+    });
+
+    test(
+      'a failed refresh keeps the album on screen and in the cache',
+      () async {
+        final quark = _FakeQuark();
+        final controller = quark.controller();
+        await controller.refresh();
+        await controller.showAlbum(1);
+        quark.albumItemsError = http.ClientException('connection refused');
+        quark.albumsError = http.ClientException('connection refused');
+
+        await controller.refresh();
+
+        expect(controller.albums, hasLength(3));
+        expect(controller.albumError, isNull);
+        expect(controller.photos.map((p) => p.id), ['sd1:camera/1.jpg']);
+
+        final returning = quark.controller();
+        final showing = returning.showAlbumLink('Trips');
+        expect(returning.photos.map((p) => p.id), ['sd1:camera/1.jpg']);
+        await showing;
+        expect(returning.photos.map((p) => p.id), ['sd1:camera/1.jpg']);
+      },
+    );
+
+    test('a failed refresh into another sort does not keep the old '
+        'order', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+      quark.albumItemsError = const ApiException(500);
+
+      await controller.setSort(PhotoSortField.name, PhotoSortOrder.asc);
+
+      expect(controller.photos, isEmpty);
+      expect(controller.albumError, isA<ApiException>());
+    });
+
+    test('items kept in one sort are not shown under another', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+      await controller.showAlbum(null);
+      AppSettings.instance.photoSortOrder.value = PhotoSortOrder.asc;
+
+      final returning = quark.controller();
+      final showing = returning.showAlbumLink('Trips');
+
+      expect(returning.albumLoading, isTrue);
+      await showing;
+    });
+
+    test('a link the kept tree cannot name waits for the fresh '
+        'tree', () async {
+      final quark = _FakeQuark();
+      await quark.controller().refresh();
+      quark.albums = [...quark.albums, _album(4, 'Hikes')];
+      quark.albumFiles[4] = ['camera/2.jpg'];
+
+      final returning = quark.controller();
+      await returning.showAlbumLink('Hikes');
+      expect(returning.albumLink, 'Hikes', reason: 'the URL keeps the link');
+
+      await returning.refresh();
+
+      expect(returning.selectedAlbumId, 4);
+      expect(returning.photos.map((p) => p.id), ['sd1:camera/2.jpg']);
+
+      await returning.showAlbumLink('Nowhere');
+      expect(returning.albumLink, isNull, reason: 'the fresh tree has spoken');
+    });
+
+    test('deleting a photo forgets the items of every album', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+      await controller.showAlbum(null);
+
+      await controller.deletePhoto('sd1:camera/1.jpg');
+
+      expect(
+        quark.albumsCache.items(
+          1,
+          sort: PhotoSortField.added,
+          order: PhotoSortOrder.desc,
+        ),
+        isNull,
+      );
+    });
+
+    test('a toggled favorite forgets the Favorites album\'s items', () async {
+      final quark = _FakeQuark()..favorites = {'sd1:camera/0.jpg'};
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(3);
+      await controller.showAlbum(1);
+
+      await controller.toggleFavorite('sd1:camera/1.jpg');
+      final showing = controller.showAlbum(3);
+
+      expect(controller.albumLoading, isTrue);
+      await showing;
+      expect(controller.photos, hasLength(2));
+      expect(
+        quark.albumsCache.items(
+          1,
+          sort: PhotoSortField.added,
+          order: PhotoSortOrder.desc,
+        ),
+        isNotNull,
+      );
+    });
+
+    test('another Quark never shows this one\'s albums', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      await controller.showAlbum(1);
+
+      quark.scope = 'quark-b';
+
+      final other = quark.controller();
+      expect(other.albums, isEmpty);
+      expect(other.albumsLoading, isTrue);
+      expect(
+        quark.albumsCache.items(
+          1,
+          sort: PhotoSortField.added,
+          order: PhotoSortOrder.desc,
+        ),
+        isNull,
+      );
+    });
+
+    test('an answer for the Quark that was left is not kept for the new '
+        'one', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      final pending = controller.refresh();
+      quark.scope = 'quark-b';
+      await pending;
+
+      expect(quark.controller().albums, isEmpty);
+    });
+
+    test('no album tree is shown when no host is chosen', () async {
+      final quark = _FakeQuark();
+      await quark.controller().refresh();
+      quark.host = null;
+
+      expect(quark.controller().albums, isEmpty);
+    });
+
+    test('Demo mode neither reads nor fills the shared cache', () async {
+      AlbumsCache.instance.putAlbums([_album(77, 'Kept')]);
+      addTearDown(AlbumsCache.instance.clear);
+
+      final demo = PhotosController.demo();
+      expect(demo.albums, isEmpty);
+      await demo.refresh();
+
+      expect(demo.albums, isNotEmpty);
+      expect(AlbumsCache.instance.albums!.single.name, 'Kept');
     });
   });
 
