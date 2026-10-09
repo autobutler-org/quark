@@ -180,10 +180,10 @@ void main() {
           margin: _margin,
         );
 
-        // Status colors are fixed. Dark surfaces give them 3:1; white does
-        // not (warning is 2.15:1 and success 2.54:1 on a classic light card,
-        // 1.96 and 2.32 on the classic light sidebar), so tinted surfaces are
-        // held to scoring no worse than the classic ones do.
+        // Status colors are fixed. The classic sets clear AA with them
+        // (#2600); a derived surface can land a little lighter or darker
+        // than classic's, so it is held to the boundary ratio, or to the
+        // classic score where that is lower.
         for (final (name, status) in [
           ('error', tokens.error),
           ('warning', tokens.warning),
@@ -196,6 +196,8 @@ void main() {
             math.min(_boundary, classicWorst(status)),
           );
         }
+
+        expectRatio('$id: outline', tokens.outline, content, _boundary);
 
         // What `onChrome` hands a widget in the bar is the same colors.
         final onChrome = tokens.onChrome;
@@ -222,8 +224,8 @@ void main() {
         }
       });
 
-      // Classic is written out by hand rather than derived, and #2600 still
-      // tracks its border. Text, muted text included (#2785), and the accent
+      // Classic is written out by hand rather than derived; its full pair
+      // table is quark_tokens_contrast_test.dart (#2600). Text, muted text included (#2785), and the accent
       // are held to AA on every surface they are drawn on.
       test('$mode: classic text and accent clear AA', () {
         final content = _content(classic);

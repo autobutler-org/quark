@@ -149,17 +149,21 @@ class QuarkThemeColor {
       until: (color) => accentOn(color, [...content, chrome]),
     );
     final foreground = _paint(dark ? at(0.30, 0.91) : at(0.45, 0.11));
+    // A derived theme draws its hairlines at the boundary ratio too, so
+    // dividers and control outlines are one color.
+    final outline = _moveLightness(
+      dark ? at(0.25, 0.40) : at(0.25, 0.62),
+      toward: away,
+      until: (color) => onContent(color, _boundary),
+    );
 
     return (dark ? QuarkTokens.dark : QuarkTokens.light).copyWith(
       background: background,
       card: card,
       input: input,
       sidebar: sidebar,
-      border: _moveLightness(
-        dark ? at(0.25, 0.40) : at(0.25, 0.62),
-        toward: away,
-        until: (color) => onContent(color, _boundary),
-      ),
+      border: outline,
+      outline: outline,
       foreground: foreground,
       cardForeground: foreground,
       secondaryForeground: _moveLightness(

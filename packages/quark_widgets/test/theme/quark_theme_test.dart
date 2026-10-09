@@ -22,7 +22,7 @@ void main() {
         expect(scheme.onSecondary, tokens.secondaryForeground);
         expect(scheme.error, tokens.error);
         expect(scheme.onError, tokens.errorForeground);
-        expect(scheme.outline, tokens.border);
+        expect(scheme.outline, tokens.outline);
         expect(scheme.outlineVariant, tokens.border);
         expect(theme.scaffoldBackgroundColor, tokens.background);
       });
@@ -55,7 +55,7 @@ void main() {
         final scheme = QuarkTheme.from(tokens, brightness).colorScheme;
         expect(
           contrastRatio(scheme.onError, scheme.error),
-          greaterThanOrEqualTo(3.0),
+          greaterThanOrEqualTo(4.5),
         );
       });
     }
@@ -107,7 +107,7 @@ void main() {
             tokens.primary,
           );
           expect(
-            theme.switchTheme.thumbColor!.resolve({WidgetState.selected}),
+            theme.switchTheme.trackColor!.resolve({WidgetState.selected}),
             tokens.primary,
           );
         }

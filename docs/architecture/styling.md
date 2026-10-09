@@ -24,12 +24,19 @@ flowchart LR
 ## The token set
 
 [`QuarkTokens`](../../packages/quark_widgets/lib/src/theme/quark_tokens.dart) is the single source of truth for
-every color, corner radius, and spacing value in the app: `background`, `card`, `sidebar`, `border`, `input`,
-three text colors, `primary`/`error`/`warning`/`success` accents, the `chrome` family for the app bar and the
+every color, corner radius, and spacing value in the app: `background`, `card`, `sidebar`, `border`, `outline`,
+`input`, three text colors, `primary`/`error`/`warning`/`success` accents, the `chrome` family for the app bar and the
 drawer, three radii (`radiusSm/Md/Lg`), and a five-step spacing scale (`spacingXs` through `spacingXl`).
 `QuarkTokens.dark` and `QuarkTokens.light` are the two sets Quark ships, and what the `classic` theme color
 yields; dark is the default. Every field is `required`, so a new token cannot silently default into a theme
 nobody has designed for.
+
+`border` is a decorative hairline: dividers and the edges of cards, menus and dialogs, which WCAG 1.4.11
+exempts. `outline` is the boundary of a control that has nothing else to show where it is — a text field, a
+checkbox side, an off switch's track — and clears 3:1. Both classic sets are held to WCAG AA by
+[`quark_tokens_contrast_test.dart`](../../packages/quark_widgets/test/theme/quark_tokens_contrast_test.dart)
+(#2600): every text token, the status colors included, at 4.5:1 on every surface it is drawn on, text on a fill
+at 4.5:1 on that fill, and `outline`, the focus ring and both switch states at 3:1.
 
 A widget reaches the current set with `QuarkTokens.of(context)` rather than a hardcoded `Color` or literal
 size. This is what lets the widget gallery's theme panel restyle the whole app live — a hardcoded value simply
@@ -108,7 +115,7 @@ holds and would otherwise leave pairs sitting exactly on the WCAG floor (#2785).
 | `background` | 0.45 / 0.968, lighter until luminance is 0.91 | 0.50 / 0.063 |
 | `card`, `input` | 0.60 / 0.990, same floor | 0.45 / 0.112, and 0.42 / 0.127 |
 | `sidebar` | 0.40 / 0.950, same floor | 0.45 / 0.086 |
-| `border` | 0.25 / 0.62, darker until 3:1 on every content surface | 0.25 / 0.40, lighter until the same |
+| `border`, `outline` | 0.25 / 0.62, darker until 3:1 on every content surface | 0.25 / 0.40, lighter until the same |
 | `foreground`, `cardForeground` | 0.45 / 0.11 | 0.30 / 0.91 |
 | `secondaryForeground` | 0.22 / 0.34, darker until 6:1 on content | 0.20 / 0.65, lighter until the same |
 | `mutedForeground` | 0.18 / 0.46, darker until 4.5:1 on content | 0.16 / 0.47, lighter until the same |
@@ -142,14 +149,14 @@ status colors, `primaryForeground` and the seeded Material slots are held to the
 | `chromePrimary` on the same, and on `chrome` and its tint | 4.5:1 |
 | `primaryForeground` on `primary` and on `chromePrimary` | 4.5:1 |
 | `primary` on `chrome` | 3:1 |
-| `border` on each content surface, `chromeBorder` on `chrome` | 3:1 |
+| `border` and `outline` on each content surface, `chromeBorder` on `chrome` | 3:1 |
 | `error`, `warning`, `success` on each content surface | 3:1, or what the color scores on the worst classic surface if that is lower |
 | The Material slots `QuarkTheme.from` leaves seeded: `onSurfaceVariant` on each content surface and on the mapped `surfaceContainerHighest`, `onPrimaryContainer`, `onErrorContainer` on their containers | 4.5:1 |
 
-The status row is relative because the shipped `warning` and `success` do not reach 3:1 on white: 2.15 and
-2.54 on a classic light card, 1.96 and 2.32 on the classic light sidebar. `classic` is written out rather than
-derived and is held to the ratios without the margin: its text, muted text included (#2785), and its accent on
-every surface and selection tint. Its borders are still #2600.
+The status colors are fixed rather than derived, and a derived surface can land a little lighter or darker than
+classic's, so they are held to the boundary ratio there; on the classic sets they clear 4.5:1. `classic` is
+written out rather than derived and is held to the ratios without the margin, in the full pair table of
+`quark_tokens_contrast_test.dart` described above.
 
 The same file holds the derivation to the design, so it cannot pass by going gray: the chrome and the accent
 stay within three degrees of the seed's hue, the chrome's channels spread at least 0.12 in light mode and 0.07
