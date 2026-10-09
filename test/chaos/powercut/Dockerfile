@@ -1,7 +1,9 @@
 # LazyFS, the FUSE file system run.bash cuts the power under (#2517). The powercut
 # writer and run.bash are mounted in by `make test/chaos/powercut`, so this image
 # only changes when LazyFS does.
-FROM ubuntu:24.04
+# Pulled from the AWS public mirror of the official image: CI runners share Docker Hub's
+# anonymous pull limit and a 429 there failed this job.
+FROM public.ecr.aws/docker/library/ubuntu:24.04
 
 ARG LAZYFS_COMMIT=fa7d32ee9710d55a7e529ac3c375f6616563c78b
 
