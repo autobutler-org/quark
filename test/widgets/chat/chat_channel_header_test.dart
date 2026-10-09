@@ -89,6 +89,35 @@ void main() {
       expect(key('chat_channel_menu_divider'), findsNothing);
     });
 
+    // #2429: search sits beside the settings, only where there is a timeline
+    // to search.
+    testWidgets('search shows only with a handler, and fires it at $size', (
+      tester,
+    ) async {
+      var searches = 0;
+      await pumpHeader(
+        tester,
+        size,
+        ChatChannelHeader(
+          name: 'design',
+          onSearch: () => searches++,
+          onEdit: () {},
+        ),
+      );
+      expect(find.byTooltip('Search messages'), findsOneWidget);
+      expect(
+        tester.getCenter(key('chat_channel_search')).dx,
+        lessThan(tester.getCenter(key('chat_channel_settings')).dx),
+      );
+      await tester.tap(key('chat_channel_search'));
+      await tester.pump();
+      expect(searches, 1);
+
+      await pumpHeader(tester, size, const ChatChannelHeader(name: 'design'));
+      expect(key('chat_channel_search'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('a private channel explains its lock at $size', (tester) async {
       await pumpHeader(
         tester,
@@ -116,6 +145,7 @@ void main() {
           name: 'design',
           topic: 'Mockups and reviews',
           isPrivate: true,
+          onSearch: () {},
           onEdit: () {},
           onMembers: () {},
           onLeave: () {},

@@ -13,8 +13,11 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// A private channel carries a lock whose tooltip says what that means
 /// (#2501).
 ///
-/// Keys: `chat_channel_settings` on the button; `chat_channel_private` on the
-/// lock; `chat_channel_edit`, `chat_channel_members`,
+/// With [onSearch] set, a search button sits before the settings (#2429).
+///
+/// Keys: `chat_channel_search` on the search button; `chat_channel_settings`
+/// on the settings button; `chat_channel_private` on the lock;
+/// `chat_channel_edit`, `chat_channel_members`,
 /// `chat_channel_menu_divider`, `chat_channel_leave` and
 /// `chat_channel_delete` on the menu's items.
 class ChatChannelHeader extends StatelessWidget {
@@ -23,6 +26,7 @@ class ChatChannelHeader extends StatelessWidget {
     required this.name,
     this.topic = '',
     this.isPrivate = false,
+    this.onSearch,
     this.onEdit,
     this.onMembers,
     this.onDelete,
@@ -42,6 +46,10 @@ class ChatChannelHeader extends StatelessWidget {
 
   /// Whether only the channel's members can see it, marked with a lock.
   final bool isPrivate;
+
+  /// Opens or closes the search of this channel's messages; null leaves the
+  /// button out.
+  final VoidCallback? onSearch;
 
   /// Opens the name and topic editor; null leaves it out of the menu.
   final VoidCallback? onEdit;
@@ -142,6 +150,13 @@ class ChatChannelHeader extends StatelessWidget {
             ],
           ),
         ),
+        if (onSearch case final onSearch?)
+          QuarkBarIconButton(
+            key: const ValueKey('chat_channel_search'),
+            icon: QuarkIcons.search,
+            tooltip: 'Search messages',
+            onPressed: onSearch,
+          ),
         if (items.isNotEmpty)
           MenuAnchor(
             menuChildren: items,

@@ -260,6 +260,20 @@ for later.
   itself once a member shares that version.
 - **Plaintext** is held in memory only, and is dropped when the channel is closed or chat locks.
 
+### Search (#2429)
+
+The Quark can't index text it can't read, so its file search doesn't cover chat. A channel's search runs in the
+app instead, over the messages that channel has loaded and decrypted in memory.
+
+- What is typed, and what it matches, never leave the device. Searching makes no request at all.
+- Nothing is written to disk: there is no index file to protect. A reload, closing the channel, locking chat or
+  signing out leaves nothing behind, and a channel the account has left has no messages in memory to search.
+- A message still waiting for its key has no text, so it isn't searched.
+- It reaches only as far back as the channel has loaded; the app says so, and offers to load older messages.
+
+A persistent index, encrypted under a key held in the device's secure storage, would let search cover history
+that isn't loaded and every channel at once. It isn't built yet.
+
 ### Routes
 
 All need `read_messages`: anyone else gets 404, delegated managers and admins included.
