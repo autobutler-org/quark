@@ -152,8 +152,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  ThemeMode _theme = ThemeMode.system;
-
   late final FeatureFlagsController _features =
       widget.featureFlags ?? FeatureFlagsController();
 
@@ -226,8 +224,9 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _disconnected = disconnected);
   }
 
-  /// Everything the theme color pickers show (#2740).
-  final Listenable _themeColors = Listenable.merge([
+  /// Everything the theme mode row (#2053) and color pickers (#2740) show.
+  final Listenable _themeSettings = Listenable.merge([
+    AppSettings.instance.themeMode,
     AppSettings.instance.themeColor,
     AppSettings.instance.quarkThemeColor,
     AppSettings.instance.userThemeColor,
@@ -240,8 +239,8 @@ class _SettingsPageState extends State<SettingsPage> {
     // Admin-only actions appear and disappear as the Quark reports the role.
     AppSettings.instance.isAdmin.addListener(_onAdminChanged);
     _features.addListener(_onAdminChanged);
-    // The theme color pickers follow the theme colors as they are fetched and saved.
-    _themeColors.addListener(_onAdminChanged);
+    // The theme row and color pickers follow the theme as it is fetched and saved.
+    _themeSettings.addListener(_onAdminChanged);
     _load();
   }
 
@@ -250,7 +249,6 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _load() {
-    _theme = AppSettings.instance.themeMode.value;
     _refreshIntervalSeconds = AppSettings.instance.refreshIntervalSeconds;
     _highContrast = AppSettings.instance.highContrast.value;
     _demoMode = AppSettings.instance.demoMode.value;
@@ -567,8 +565,7 @@ class _SettingsPageState extends State<SettingsPage> {
             label: 'General',
             child: SettingsGeneralTab(
               header: banner,
-              theme: _theme,
-              onThemeChanged: _setTheme,
+              theme: settings.themeMode.value,
               highContrast: _highContrast,
               onHighContrastChanged: _setHighContrast,
               themeColor: settings.themeColor.value,
@@ -706,11 +703,6 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
-  }
-
-  Future<void> _setTheme(ThemeMode mode) async {
-    await AppSettings.instance.setThemeMode(mode);
-    if (mounted) setState(() => _theme = mode);
   }
 
   Future<void> _setHighContrast(bool enabled) async {
@@ -855,7 +847,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void dispose() {
     AppSettings.instance.isAdmin.removeListener(_onAdminChanged);
     _features.removeListener(_onAdminChanged);
-    _themeColors.removeListener(_onAdminChanged);
+    _themeSettings.removeListener(_onAdminChanged);
     if (widget.featureFlags == null) _features.dispose();
     _remoteAccess.dispose();
     super.dispose();

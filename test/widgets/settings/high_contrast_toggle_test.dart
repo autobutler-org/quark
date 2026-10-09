@@ -49,7 +49,6 @@ void main() {
         home: Scaffold(
           body: SettingsGeneralTab(
             theme: ThemeMode.system,
-            onThemeChanged: (_) {},
             highContrast: highContrast,
             onHighContrastChanged: onHighContrastChanged,
             themeColor: QuarkThemeColor.classic,

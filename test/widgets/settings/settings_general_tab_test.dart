@@ -53,7 +53,6 @@ void main() {
         home: Scaffold(
           body: SettingsGeneralTab(
             theme: ThemeMode.system,
-            onThemeChanged: (_) {},
             themeColor: themeColor,
             followsQuarkThemeColor: followsQuarkThemeColor,
             quarkThemeColor: quarkThemeColor,

@@ -3,18 +3,18 @@ import 'package:quark/widgets/host_manager.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// The General tab of Settings (#2350): backend hosts, theme, the high
+/// The General tab of Settings (#2350): backend hosts, the theme mode, the high
 /// contrast switch (#2601), the theme color (#2740), the auto-refresh interval and demo mode, plus a link to the
 /// drives. Beta switches live on the Features tab (#2542).
 ///
 /// First because it holds the backend hosts, which every "manage hosts" link
 /// in the app lands on. The page owns the values; this tab renders them and
-/// reports changes.
+/// reports changes. The theme mode is shown, not changed, here: the header's
+/// theme button is the one control for it (#2053).
 class SettingsGeneralTab extends StatelessWidget {
   /// Creates the tab.
   const SettingsGeneralTab({
     required this.theme,
-    required this.onThemeChanged,
     this.highContrast = false,
     this.onHighContrastChanged,
     required this.themeColor,
@@ -32,11 +32,8 @@ class SettingsGeneralTab extends StatelessWidget {
     super.key,
   });
 
-  /// The selected theme.
+  /// The theme mode in effect, set with the header's theme button.
   final ThemeMode theme;
-
-  /// Called with the theme the user picked.
-  final ValueChanged<ThemeMode> onThemeChanged;
 
   /// Whether the high-contrast themes are switched on.
   final bool highContrast;
@@ -100,26 +97,20 @@ class SettingsGeneralTab extends StatelessWidget {
         HostManager(onChanged: onHostsChanged),
         const SizedBox(height: 24),
         const Text('Theme', style: heading),
-        RadioGroup<ThemeMode>(
-          groupValue: theme,
-          onChanged: (v) {
-            if (v != null) onThemeChanged(v);
-          },
-          child: const Column(
-            children: [
-              RadioListTile<ThemeMode>(
-                title: Text('System'),
-                value: ThemeMode.system,
-              ),
-              RadioListTile<ThemeMode>(
-                title: Text('Light'),
-                value: ThemeMode.light,
-              ),
-              RadioListTile<ThemeMode>(
-                title: Text('Dark'),
-                value: ThemeMode.dark,
-              ),
-            ],
+        ListTile(
+          key: const ValueKey('settings_theme_mode'),
+          leading: Icon(switch (theme) {
+            ThemeMode.system => QuarkIcons.brightness_auto_rounded,
+            ThemeMode.light => QuarkIcons.light_mode_rounded,
+            ThemeMode.dark => QuarkIcons.dark_mode_rounded,
+          }),
+          title: Text(switch (theme) {
+            ThemeMode.system => 'Matches your device',
+            ThemeMode.light => 'Light',
+            ThemeMode.dark => 'Dark',
+          }),
+          subtitle: const Text(
+            'Change it with the theme button at the top of the page.',
           ),
         ),
         if (onHighContrastChanged != null)

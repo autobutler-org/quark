@@ -112,12 +112,14 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 
 **Steps:**
 
-1. Locate the theme toggle (app bar icon or settings section).
-2. Tap to cycle through light → dark → system (or select from a picker).
+1. Locate the theme button in the app bar; it is the one control for the theme (#2053).
+2. Tap to cycle through matching the device → light → dark → matching the device. The tooltip names the
+   current mode and the next one.
 
 **Expected result:**
 
 - UI theme changes immediately.
+- The Theme row on the General tab of Settings shows the mode in effect and follows each tap.
 - Setting is persisted across app restarts.
 
 ---

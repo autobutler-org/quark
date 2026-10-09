@@ -6,54 +6,46 @@ import 'package:quark_widgets/quark_widgets.dart';
 import '../support/pump.dart';
 
 void main() {
-  testBothViewports('offers dark while the app is light', (tester, size) async {
-    final chosen = <ThemeMode>[];
-    await pumpAt(
+  for (final (mode, icon, tooltip, next) in [
+    (
+      ThemeMode.system,
+      QuarkIcons.brightness_auto_rounded,
+      'Theme matches your device. Switch to light',
+      ThemeMode.light,
+    ),
+    (
+      ThemeMode.light,
+      QuarkIcons.light_mode_rounded,
+      'Theme is light. Switch to dark',
+      ThemeMode.dark,
+    ),
+    (
+      ThemeMode.dark,
+      QuarkIcons.dark_mode_rounded,
+      'Theme is dark. Switch to match your device',
+      ThemeMode.system,
+    ),
+  ]) {
+    testBothViewports('shows ${mode.name} and moves on to ${next.name}', (
       tester,
-      ThemeToggleButton(mode: ThemeMode.light, onChanged: chosen.add),
-      size: size,
-    );
+      size,
+    ) async {
+      final chosen = <ThemeMode>[];
+      await pumpAt(
+        tester,
+        ThemeToggleButton(mode: mode, onChanged: chosen.add),
+        size: size,
+      );
 
-    expect(find.byIcon(QuarkIcons.dark_mode_rounded), findsOneWidget);
-    expect(find.byTooltip('Switch to dark mode'), findsOneWidget);
+      expect(find.byIcon(icon), findsOneWidget);
+      expect(find.byTooltip(tooltip), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('theme_toggle')));
-    await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('theme_toggle')));
+      await tester.pump();
 
-    expect(chosen, [ThemeMode.dark]);
-  });
-
-  testBothViewports('offers light while the app is dark', (tester, size) async {
-    final chosen = <ThemeMode>[];
-    await pumpAt(
-      tester,
-      ThemeToggleButton(mode: ThemeMode.dark, onChanged: chosen.add),
-      size: size,
-    );
-
-    expect(find.byIcon(QuarkIcons.light_mode_rounded), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('theme_toggle')));
-    await tester.pump();
-
-    expect(chosen, [ThemeMode.light]);
-  });
-
-  testWidgets('commits to light from the system setting', (tester) async {
-    final chosen = <ThemeMode>[];
-    await pumpAt(
-      tester,
-      ThemeToggleButton(mode: ThemeMode.system, onChanged: chosen.add),
-      size: narrowViewport,
-    );
-
-    expect(find.byIcon(QuarkIcons.brightness_auto_rounded), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('theme_toggle')));
-    await tester.pump();
-
-    expect(chosen, [ThemeMode.light]);
-  });
+      expect(chosen, [next]);
+    });
+  }
 
   testBothViewports('meets the tap target guidelines', (tester, size) async {
     await pumpAt(
