@@ -7,8 +7,10 @@ import 'package:quark/services/thumbnail_backfill.dart';
 /// [ThumbnailBackfill] to render and upload it (#2381), then builds it again.
 ///
 /// App-side because it calls a service. [builder] draws the thumbnail: it gets
-/// a `generation` to fold into its image cache key, so the reload after a
-/// backfill fetches afresh, and an `onFailed` to call from its error state.
+/// a `generation` to key its image with, so the reload after a backfill is a
+/// new element that fetches afresh, and an `onFailed` to call from its error
+/// state. The generation stays out of the image's cache key, which has to
+/// outlive the session (#1777).
 /// Only a tile that is built — one on screen — ever asks, and it asks once.
 ///
 /// ```dart
@@ -16,8 +18,10 @@ import 'package:quark/services/thumbnail_backfill.dart';
 ///   path: node.apiPath,
 ///   serial: node.deviceSerial,
 ///   builder: (context, generation, onFailed) => CachedNetworkImage(
-///     imageUrl: url,
-///     cacheKey: '$url#$generation',
+///     key: ValueKey(generation),
+///     imageUrl: url.toString(),
+///     cacheKey: ThumbnailCacheManager.keyFor(url),
+///     cacheManager: ThumbnailCacheManager.instance,
 ///     errorWidget: (context, url, error) {
 ///       onFailed();
 ///       return icon;

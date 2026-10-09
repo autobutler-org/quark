@@ -195,7 +195,8 @@ The photos page is decoupled (#1732): `PhotosController` makes its service
 calls, and what is left under `photos/` is the page's own parts. They hold no
 domain state and call no service, but they are app-side because they need
 something the package does not have or are only ever used by that page:
-`photo_thumbnail.dart` (photo_manager and `Image.network`),
+`photo_thumbnail.dart` (photo_manager, and `CachedNetworkImage` over the
+`ThumbnailCacheManager` disk cache),
 `photos_empty_state.dart`,
 the album dialogs and menu (`album_name_dialog.dart`,
 `delete_album_dialog.dart`, `album_actions_menu.dart`), the menu and
