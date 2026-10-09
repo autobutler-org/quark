@@ -1098,14 +1098,20 @@ test/unit/backend: internal/server/public/stub.txt ## Run unit tests for backend
 FLUTTER_TEST_CONCURRENCY ?=
 TOTAL_SHARDS ?=
 SHARD_INDEX ?=
+# How many suites test/unit/frontend runs at once. Each suite already runs one test
+# file per core, so side-by-side suites mostly add RAM: one at a time peaked at
+# 3.4 GB against 5.5 GB for all six together, for 11% more wall time (#2931).
+# A machine with RAM to spare can raise it, e.g. FRONTEND_SUITE_JOBS=6.
+FRONTEND_SUITE_JOBS ?= 1
 # Every package with a test/ directory, so a new package is picked up on its own.
 FRONTEND_PACKAGE_TESTS := $(patsubst packages/%/test,test/unit/frontend/packages/%,$(wildcard packages/*/test))
 
 .PHONY: test/unit/frontend
-test/unit/frontend: generate/frontend ## Run unit tests for frontend (optional FLUTTER_TEST_CONCURRENCY=<n>)
-	# generate/frontend finishes first; the suites then run side by side whether or
-	# not the caller passed -j. --output-sync keeps each suite's output in one block.
-	$(MAKE) -j --output-sync=target test/unit/frontend/app test/unit/frontend/packages
+test/unit/frontend: generate/frontend ## Run unit tests for frontend (optional FRONTEND_SUITE_JOBS=<n> FLUTTER_TEST_CONCURRENCY=<n>)
+	# generate/frontend finishes first; the suites then run FRONTEND_SUITE_JOBS at a
+	# time whatever -j the caller passed. --output-sync keeps each suite's output in
+	# one block.
+	$(MAKE) -j$(FRONTEND_SUITE_JOBS) --output-sync=target test/unit/frontend/app test/unit/frontend/packages
 
 .PHONY: test/unit/frontend/app
 test/unit/frontend/app: ## Run the app's unit tests (optional TOTAL_SHARDS=<n> SHARD_INDEX=<i>)
