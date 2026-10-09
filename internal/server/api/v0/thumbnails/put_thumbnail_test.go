@@ -127,31 +127,29 @@ func clientRender(t *testing.T, w *httptest.ResponseRecorder) bool {
 // or HEIC the device cannot render answers 404 with clientRender, the client
 // PUTs a thumbnail, and every size is then served from it.
 func TestThumbnail_ClientRenderMarkerThenPut(t *testing.T) {
-	for _, withVFS := range []bool{true, false} {
-		for _, rel := range []string{"clips/clip.mov", "photos/photo.heic"} {
-			h := newThumbnailHarness(t, withVFS)
-			writeUndecodable(t, h.filesDir, rel)
+	for _, rel := range []string{"clips/clip.mov", "photos/photo.heic"} {
+		h := newThumbnailHarness(t)
+		writeUndecodable(t, h.filesDir, rel)
 
-			if !clientRender(t, h.do("/api/v0/thumbnails/"+rel+"?size=sm")) {
-				t.Fatalf("withVFS=%v %s: want clientRender on the 404", withVFS, rel)
-			}
-
-			w := h.put(t, "/api/v0/thumbnails/"+rel, map[string][]byte{"thumbnail": jpegOf(t, 400, 300)})
-			if w.Code != http.StatusNoContent {
-				t.Fatalf("withVFS=%v PUT %s = %d: %s", withVFS, rel, w.Code, w.Body.String())
-			}
-
-			expectJPEG(t, h.do("/api/v0/thumbnails/"+rel+"?size=sm"), 96, 96)
-			expectJPEG(t, h.do("/api/v0/thumbnails/"+rel+"?size=md"), 240, 240)
-			expectJPEG(t, h.do("/api/v0/thumbnails/"+rel), 400, 400)
+		if !clientRender(t, h.do("/api/v0/thumbnails/"+rel+"?size=sm")) {
+			t.Fatalf("%s: want clientRender on the 404", rel)
 		}
+
+		w := h.put(t, "/api/v0/thumbnails/"+rel, map[string][]byte{"thumbnail": jpegOf(t, 400, 300)})
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("PUT %s = %d: %s", rel, w.Code, w.Body.String())
+		}
+
+		expectJPEG(t, h.do("/api/v0/thumbnails/"+rel+"?size=sm"), 96, 96)
+		expectJPEG(t, h.do("/api/v0/thumbnails/"+rel+"?size=md"), 240, 240)
+		expectJPEG(t, h.do("/api/v0/thumbnails/"+rel), 400, 400)
 	}
 }
 
 // TestThumbnail_MissingFileHasNoMarker: a file that is not there is a plain
 // 404, not an invitation to render.
 func TestThumbnail_MissingFileHasNoMarker(t *testing.T) {
-	h := newThumbnailHarness(t, false)
+	h := newThumbnailHarness(t)
 	w := h.do("/api/v0/thumbnails/gone.mov")
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("got %d, want 404", w.Code)
@@ -165,7 +163,7 @@ func TestThumbnail_MissingFileHasNoMarker(t *testing.T) {
 // a trashed item's TrashPath, which the thumbnail was not uploaded under, so
 // the device answers with the marker again rather than a stale thumbnail.
 func TestThumbnail_TrashedFileAsksAgain(t *testing.T) {
-	h := newThumbnailHarness(t, false)
+	h := newThumbnailHarness(t)
 	writeUndecodable(t, h.filesDir, "clip.mov")
 	if w := h.put(t, "/api/v0/thumbnails/clip.mov", map[string][]byte{"thumbnail": jpegOf(t, 400, 300)}); w.Code != http.StatusNoContent {
 		t.Fatalf("PUT = %d: %s", w.Code, w.Body.String())
@@ -180,7 +178,7 @@ func TestThumbnail_TrashedFileAsksAgain(t *testing.T) {
 }
 
 func TestPutThumbnail_Rejections(t *testing.T) {
-	h := newThumbnailHarness(t, false)
+	h := newThumbnailHarness(t)
 	writeUndecodable(t, h.filesDir, "clip.mov")
 	writeUndecodable(t, h.filesDir, "notes.txt")
 	valid := map[string][]byte{"thumbnail": jpegOf(t, 400, 300)}
@@ -206,7 +204,7 @@ func TestPutThumbnail_Rejections(t *testing.T) {
 }
 
 func TestPutThumbnail_NeedsWriteAccess(t *testing.T) {
-	h := newThumbnailHarness(t, false)
+	h := newThumbnailHarness(t)
 	writeUndecodable(t, h.filesDir, "shared/clip.mov")
 	parts := map[string][]byte{"thumbnail": jpegOf(t, 400, 300)}
 	h.asUser()

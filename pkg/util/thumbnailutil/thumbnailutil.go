@@ -26,7 +26,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // SemaphoreClass is the kind of work generating the thumbnail for the file at
@@ -76,8 +76,7 @@ var ErrSourceNotFound = errors.New("file not found")
 const MaxClientThumbnailBytes int64 = 2 << 20
 
 // ErrUnsupportedSource reports a source the thumbnail pipeline cannot decode —
-// an unknown format, a truncated file. Callers with a second source to try
-// (the VFS path falling back to the storage service) use it to fall through.
+// an unknown format, a truncated file.
 var ErrUnsupportedSource = errors.New("unsupported thumbnail source")
 
 // MaxBufferedSourceBytes caps a source that cannot seek, such as an archive
@@ -116,18 +115,20 @@ type PrepareResult struct {
 	Height           uint
 }
 
-// GenerateParams renders a thumbnail from a file on disk. Video sources get a
-// representative frame extracted with ffmpeg first.
+// GenerateParams renders the thumbnail of a file in a namespace. An image is
+// decoded from the namespace; a camera RAW and a video are handed to their
+// external tool by host path, the one thing those tools can take.
 type GenerateParams struct {
-	// Ctx bounds the ffmpeg probe and frame extraction.
+	// Ctx bounds the namespace reads, the ffmpeg probe and frame extraction.
 	Ctx context.Context
 	// Queries stores a photo's hashes for duplicate detection. Nil skips them.
 	Queries *db.Queries
-	// Serial and RelPath identify the photo the hashes belong to.
+	// FS is the namespace of the device the file is on.
+	FS vfs.VFS
+	// Serial and RelPath name the file: RelPath is its path in FS, and both
+	// key the photo's hashes.
 	Serial  string
 	RelPath string
-	// SourcePath is the file to render.
-	SourcePath string
 	// Ext is the lowercase source extension, which picks the cache encoding.
 	Ext string
 	// IsVideo selects the ffmpeg frame grab.
@@ -141,9 +142,9 @@ type GenerateParams struct {
 	CachedPath string
 }
 
-// GenerateFromReaderParams renders a thumbnail from an already-open stream —
-// the VFS path, which has no OS path to hand to an external tool. Video and
-// RAW sources are not supported here.
+// GenerateFromReaderParams renders a thumbnail from an already-open stream: a
+// library image [Generate] opened, an archive entry, an avatar. Video and RAW
+// sources are not supported here.
 type GenerateFromReaderParams struct {
 	// Queries stores the photo's hashes for duplicate detection. Nil skips
 	// them, as an archive entry does: it is not a library photo.
@@ -178,12 +179,8 @@ type StoreClientThumbnailParams struct {
 	// Serial and RelPath name the file, as a request spells them.
 	Serial  string
 	RelPath string
-	// SourcePath is the file the thumbnail is of, streamed for its content
-	// hash. Empty stores only the perceptual hash.
-	SourcePath string
-	// Source, when set, is the file the thumbnail is of, already open — read
-	// in place of SourcePath, so a caller holding a vfs.File needs no host
-	// path for it.
+	// Source is the file the thumbnail is of, already open, streamed for its
+	// content hash. Nil stores only the perceptual hash.
 	Source io.ReadSeeker
 	// Reader is the JPEG, read to EOF or one byte past the size limit.
 	Reader io.Reader
@@ -224,7 +221,8 @@ type FromClientThumbnailResult struct {
 // body to an existing file. Other parts are skipped.
 type StoreClientThumbnailsParams struct {
 	Queries *db.Queries
-	Storage *storageutil.StorageService
+	// Registry holds one namespace per device; the file is found in Serial's.
+	Registry vfs.Registry
 	// Serial and RelPath name the file, as the request did.
 	Serial  string
 	RelPath string

@@ -40,8 +40,8 @@ func (f *fakeDetector) DetectDevices() ([]storageutil.Device, error) {
 
 // newThumbnailEngine builds the thumbnails router over a temp HOME, so the
 // thumbnail cache and default files directory stay inside the test. With
-// withVFS the files namespace is a LocalVFS; without it every read goes
-// through the StorageService. It returns the directory files go in and the
+// withVFS the files namespace is a LocalVFS; without it, the storage
+// service's namespace the server registers. It returns the directory files go in and the
 // database.
 func newThumbnailEngine(t *testing.T, withVFS bool) (*gin.Engine, string, *db.DatabaseSqlc) {
 	t.Helper()
@@ -49,26 +49,25 @@ func newThumbnailEngine(t *testing.T, withVFS bool) (*gin.Engine, string, *db.Da
 
 	mountPoint := t.TempDir()
 	database := dbtest.NewDB(t)
-	deps := deputil.NewDependencies().
-		WithDatabase(database).
-		WithStorageService(storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint}))
+	svc := storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint})
+	deps := deputil.NewDependencies().WithDatabase(database).WithStorageService(svc)
 
 	dir, err := storageutil.GetFilesDirForDevice(mountPoint)
 	if err != nil {
 		t.Fatalf("GetFilesDirForDevice: %v", err)
 	}
+	var files vfs.VFS = vfs.NewStorageServiceVFS(svc, vfs.FilesNamespace(""))
 	if withVFS {
 		dir = t.TempDir()
-		localVFS, err := vfs.NewLocalVFS(dir, "files")
-		if err != nil {
+		if files, err = vfs.NewLocalVFS(dir, vfs.FilesNamespace("")); err != nil {
 			t.Fatalf("NewLocalVFS: %v", err)
 		}
-		reg := vfs.NewRegistry()
-		if err := reg.Register(vfs.Namespace{ID: "files"}, localVFS); err != nil {
-			t.Fatalf("Register: %v", err)
-		}
-		deps = deps.WithVFSRegistry(reg)
 	}
+	reg := vfs.NewRegistry()
+	if err := reg.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, files); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	deps = deps.WithVFSRegistry(reg)
 
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -179,13 +178,6 @@ func TestGetThumbnail_StoresPhotoHashes(t *testing.T) {
 	for name, withVFS := range map[string]bool{"vfs": true, "storage": false} {
 		t.Run(name, func(t *testing.T) {
 			engine, dir, database := newThumbnailEngine(t, withVFS)
-			if !withVFS {
-				// A photo with no serial resolves under HOME.
-				var err error
-				if dir, err = storageutil.GetFilesDir(); err != nil {
-					t.Fatal(err)
-				}
-			}
 			data := pngBytes(t)
 			if err := os.MkdirAll(filepath.Join(dir, "trip"), 0o755); err != nil {
 				t.Fatal(err)
@@ -261,12 +253,6 @@ func TestGetThumbnail_ImageOverPixelCapIsNotFound(t *testing.T) {
 	for name, withVFS := range map[string]bool{"vfs": true, "storage": false} {
 		t.Run(name, func(t *testing.T) {
 			engine, dir, _ := newThumbnailEngine(t, withVFS)
-			if !withVFS {
-				var err error
-				if dir, err = storageutil.GetFilesDir(); err != nil {
-					t.Fatal(err)
-				}
-			}
 			if err := os.WriteFile(filepath.Join(dir, "bomb.png"), oversizePNGHeader(), 0o644); err != nil {
 				t.Fatal(err)
 			}
@@ -275,5 +261,58 @@ func TestGetThumbnail_ImageOverPixelCapIsNotFound(t *testing.T) {
 				t.Errorf("got %d, want 404: %s", w.Code, w.Body.String())
 			}
 		})
+	}
+}
+
+// TestGetThumbnail_DeviceFile: a thumbnail for a file on a USB drive used to
+// be generated from a disk path built by hand (#2645). It is now read through
+// the drive's own namespace, which need not be on disk at all, and its hashes
+// are stored against the drive.
+func TestGetThumbnail_DeviceFile(t *testing.T) {
+	const serial = "USB-1"
+	t.Setenv("HOME", t.TempDir())
+	ctx := context.Background()
+	reg := vfs.NewRegistry()
+	usb := vfs.NewMemVFS(vfs.FilesNamespace(serial))
+	if err := reg.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, vfs.NewMemVFS(vfs.FilesNamespace(""))); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Register(vfs.Namespace{ID: vfs.FilesNamespace(serial)}, usb); err != nil {
+		t.Fatal(err)
+	}
+	data := pngBytes(t)
+	for p, content := range map[string][]byte{"trip/red.png": data, "trip/raw.cr2": []byte("raw")} {
+		if err := usb.Write(ctx, p, bytes.NewReader(content), vfs.WriteOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	database := dbtest.NewDB(t)
+	deps := deputil.NewDependencies().WithDatabase(database).WithVFSRegistry(reg)
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c = ctxutil.With(c, "deps", deps)
+		c = ctxutil.With(c, "principal", accessutil.System)
+		c.Next()
+	})
+	serverutil.RegisterRouterWithGroup(engine.Group("/api/v0"), v0_thumbnails.NewRouter())
+
+	expectSmallPNG(t, get(engine, "/api/v0/thumbnails/trip/red.png?size=sm&serial="+serial))
+	rows, err := database.Queries.ListNearDuplicates(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].DeviceSerial != serial || rows[0].RelPath != "trip/red.png" {
+		t.Errorf("rows = %+v, want trip/red.png on %s", rows, serial)
+	}
+
+	for _, p := range []string{
+		"/api/v0/thumbnails/trip/red.png?size=sm",                  // not on the internal drive
+		"/api/v0/thumbnails/trip/red.png?size=sm&serial=UNPLUGGED", // no such drive
+		"/api/v0/thumbnails/trip/raw.cr2?size=sm&serial=" + serial, // no host path to convert from
+	} {
+		if w := get(engine, p); w.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404: %s", p, w.Code, w.Body.String())
+		}
 	}
 }

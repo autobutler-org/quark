@@ -14,13 +14,39 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/videoutil"
 )
 
-// Generate renders the thumbnail for a file on disk and commits it to the
-// cache. Video sources get a representative frame extracted with ffmpeg first,
-// which then goes through the same image pipeline as a photo.
+// Generate renders the thumbnail of a file in a namespace and commits it to
+// the cache. It is the one generation path for a library file: an image is
+// decoded from the namespace through [GenerateFromReader], which stores its
+// hashes; a camera RAW is converted by an external tool from its host path
+// and hashed from the namespace; a video's frame is extracted by ffmpeg from
+// its host path and goes through the same image pipeline as a photo.
 func Generate(params GenerateParams) (GenerateResult, error) {
-	thumbSrcPath := params.SourcePath
+	if !params.IsVideo && !photoutil.IsRawFile(params.RelPath) {
+		source, err := params.FS.Open(params.Ctx, params.RelPath)
+		if err != nil {
+			return GenerateResult{}, fmt.Errorf("open %s: %w", params.RelPath, err)
+		}
+		defer source.Close()
+		return GenerateFromReader(GenerateFromReaderParams{
+			Queries:          params.Queries,
+			Serial:           params.Serial,
+			RelPath:          params.RelPath,
+			Reader:           source,
+			Ext:              params.Ext,
+			Width:            params.Width,
+			Height:           params.Height,
+			RotationQuarters: params.RotationQuarters,
+			CachedPath:       params.CachedPath,
+		})
+	}
+
+	hostPath, err := photoutil.HostPath(params.Ctx, params.FS, params.RelPath)
+	if err != nil {
+		return GenerateResult{}, err
+	}
+	thumbSrcPath := hostPath
 	if params.IsVideo {
-		framePath, cleanup, err := extractVideoFrame(params.Ctx, params.SourcePath)
+		framePath, cleanup, err := extractVideoFrame(params.Ctx, hostPath)
 		if err != nil {
 			return GenerateResult{}, err
 		}
@@ -43,10 +69,8 @@ func Generate(params GenerateParams) (GenerateResult, error) {
 		result.Thumbnail = photoutil.ApplyRotation(result.Thumbnail, params.RotationQuarters)
 	}
 
-	// The file was just read whole to decode it, so hashing its bytes reads
-	// them back from the page cache.
 	if !params.IsVideo && params.Queries != nil {
-		if source, err := os.Open(params.SourcePath); err != nil {
+		if source, err := params.FS.Open(params.Ctx, params.RelPath); err != nil {
 			slog.Warn("thumbnail: could not open photo to hash it", "path", params.RelPath, "err", err)
 		} else {
 			storeHashes(params.Queries, params.Serial, params.RelPath, result.DHash, source)
@@ -54,7 +78,7 @@ func Generate(params GenerateParams) (GenerateResult, error) {
 		}
 	}
 
-	modTime, err := writeCache(params.CachedPath, result.Thumbnail, !params.IsVideo && params.Ext == ".png")
+	modTime, err := writeCache(params.CachedPath, result.Thumbnail, false)
 	if err != nil {
 		return GenerateResult{}, err
 	}
@@ -63,8 +87,7 @@ func Generate(params GenerateParams) (GenerateResult, error) {
 
 // GenerateFromReader renders the thumbnail for an already-open source stream
 // and commits it to the cache. A source it cannot decode comes back as
-// [ErrUnsupportedSource] so a caller with another way to reach the file can
-// fall through to it.
+// [ErrUnsupportedSource].
 func GenerateFromReader(params GenerateFromReaderParams) (GenerateResult, error) {
 	result, err := photoutil.GenerateThumbnailFromReader(params.Reader, params.Ext, params.Width, params.Height)
 	if err != nil {

@@ -59,11 +59,11 @@ func putThumbnail(c *gin.Context) *serverutil.Response {
 	}
 
 	_, err = thumbnailutil.StoreClientThumbnails(thumbnailutil.StoreClientThumbnailsParams{
-		Queries: deps.Database().Queries,
-		Storage: deps.StorageService(),
-		Serial:  serial,
-		RelPath: relPath,
-		Reader:  reader,
+		Queries:  deps.Database().Queries,
+		Registry: deps.VFSRegistry(),
+		Serial:   serial,
+		RelPath:  relPath,
+		Reader:   reader,
 	})
 	switch {
 	case errors.Is(err, thumbnailutil.ErrSourceNotFound):

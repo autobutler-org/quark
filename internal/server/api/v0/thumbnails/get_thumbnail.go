@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/util/thumbnailutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 
 	"github.com/gin-gonic/gin"
 )
@@ -79,50 +79,24 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 		return getArchiveThumbnail(c, deps, archive, ext, filePath, serial, isVideo)
 	}
 
+	// Every file, on any device and in its trash, is read through the
+	// namespace of the device it is on (#2645).
+	fsys, err := photoutil.DeviceFS(deps.VFSRegistry(), serial)
+	if err != nil {
+		return serverutil.NotFound(fmt.Errorf("thumbnail not found: %s", filePath))
+	}
+	srcInfo, err := fsys.Stat(c.Request.Context(), relPath)
+	if errors.Is(err, vfs.ErrNotFound) || errors.Is(err, vfs.ErrPermissionDenied) || (err == nil && srcInfo.IsDir) {
+		return serverutil.NotFound(fmt.Errorf("thumbnail not found: %s", filePath))
+	}
+	if err != nil {
+		return serverutil.InternalServerError(err)
+	}
+
 	// A thumbnail a client rendered comes first (#2379); generating one here
 	// is the fallback.
-	if resp := getClientThumbnail(c, deps, relPath, filePath, serial); resp != clientThumbnailFallthrough {
+	if resp := getClientThumbnail(c, deps, relPath, filePath, serial, srcInfo.ModTime); resp != clientThumbnailFallthrough {
 		return resp
-	}
-
-	// VFS path: no-serial, non-RAW, non-video images only.
-	// RAW and video need OS paths for external tools (dcraw/ffmpeg).
-	// The trash sits outside the files namespace (#2173), so a trashed image
-	// takes the StorageService branch too.
-	isTrashed := storageutil.IsTrashPath(relPath)
-	if serial == "" && !isVideo && !isTrashed && !photoutil.IsRawFile(relPath) {
-		if reg := deps.VFSRegistry(); reg != nil {
-			if fsys, ok := reg.Get("files"); ok {
-				if resp := getThumbnailVFS(c, deps, fsys, relPath, ext, filePath, serial); resp != vfsThumbnailFallthrough {
-					return resp
-				}
-			}
-		}
-	}
-
-	// StorageService fallback: serial-scoped, RAW, video, or no VFS.
-	filesDir, err := storageutil.GetFilesDir()
-	if err != nil {
-		return serverutil.InternalServerError(err)
-	}
-	if deviceDir, ok := deps.StorageService().FindDeviceFilesDirBySerial(serial); ok {
-		filesDir = deviceDir
-	}
-
-	fullPath, err := storageutil.SafeJoin(filesDir, relPath)
-	if isTrashed {
-		fullPath, err = storageutil.JoinTrashPath(filesDir, relPath)
-	}
-	if err != nil {
-		return serverutil.NotFound(fmt.Errorf("thumbnail not found: %s", filePath))
-	}
-
-	srcInfo, err := os.Stat(fullPath)
-	if storageutil.IsNotExist(err) {
-		return serverutil.NotFound(fmt.Errorf("thumbnail not found: %s", filePath))
-	}
-	if err != nil {
-		return serverutil.InternalServerError(err)
 	}
 
 	prepared, err := thumbnailutil.Prepare(thumbnailutil.PrepareParams{
@@ -131,7 +105,7 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 		RelPath:    relPath,
 		FilePath:   filePath,
 		Size:       thumbnailutil.ParseSize(c.Query("size")),
-		SrcModTime: srcInfo.ModTime(),
+		SrcModTime: srcInfo.ModTime,
 	})
 	if err != nil {
 		return serverutil.InternalServerError(err)
@@ -141,7 +115,7 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 	if !prepared.Hit {
 		// Hold the semaphore for this kind of work: a backup or a burst of
 		// video thumbnails cannot take the slots photo thumbnails need.
-		class := thumbnailutil.SemaphoreClass(fullPath, isVideo)
+		class := thumbnailutil.SemaphoreClass(relPath, isVideo)
 		if sem := deps.IOSemaphore().For(class); sem != nil {
 			if !sem.AcquireDefault(c.Request.Context()) {
 				slog.Warn("thumbnail: IO semaphore timed out",
@@ -160,9 +134,9 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 		generated, genErr := thumbnailutil.Generate(thumbnailutil.GenerateParams{
 			Ctx:              c.Request.Context(),
 			Queries:          deps.Database().Queries,
+			FS:               fsys,
 			Serial:           serial,
 			RelPath:          relPath,
-			SourcePath:       fullPath,
 			Ext:              ext,
 			IsVideo:          isVideo,
 			Width:            prepared.Width,
@@ -173,9 +147,12 @@ func getThumbnail(c *gin.Context) *serverutil.Response {
 		// A video or HEIC the device could not render is one a client can:
 		// say so, so it renders one and PUTs it (#2379).
 		if genErr != nil && thumbnailutil.NeedsClientRender(relPath) {
-			return clientRenderNotFound(filePath, srcInfo.ModTime(), genErr)
+			return clientRenderNotFound(filePath, srcInfo.ModTime, genErr)
 		}
-		if errors.Is(genErr, thumbnailutil.ErrFFmpegUnavailable) || errors.Is(genErr, photoutil.ErrImageTooLarge) {
+		// A namespace with no host path has nothing to hand ffmpeg or a RAW
+		// converter, so its RAW and video files have no thumbnail.
+		if errors.Is(genErr, thumbnailutil.ErrFFmpegUnavailable) || errors.Is(genErr, photoutil.ErrImageTooLarge) ||
+			errors.Is(genErr, vfs.ErrNotFound) {
 			return serverutil.NotFound(genErr)
 		}
 		if genErr != nil {
