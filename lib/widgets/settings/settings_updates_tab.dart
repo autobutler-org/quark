@@ -92,6 +92,7 @@ class SettingsUpdatesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final error = Theme.of(context).colorScheme.error;
+    final linkInset = QuarkTokens.of(context).spacingSm;
     const autoUpdateHint = Text(
       'Quark will check for and install updates daily',
     );
@@ -134,13 +135,25 @@ class SettingsUpdatesTab extends StatelessWidget {
                     ),
                   ),
                 if (installedReleaseUrl != null && !isLoadingVersion)
-                  TextButton.icon(
-                    onPressed: () => onOpenReleaseNotes(installedReleaseUrl!),
-                    icon: const Icon(QuarkIcons.open_in_new, size: 16),
-                    label: const Text("What's in this release"),
-                    // Flush with the version above it, but still a 48dp
-                    // target (#2605).
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                  // Padded so the focus ring and the hover tint clear the
+                  // icon and the label (#2954), then pulled back by that
+                  // padding so the icon sits flush with the version above
+                  // it. Still a 48dp target (#2605).
+                  Transform.translate(
+                    offset: Offset(
+                      Directionality.of(context) == TextDirection.rtl
+                          ? linkInset
+                          : -linkInset,
+                      0,
+                    ),
+                    child: TextButton.icon(
+                      onPressed: () => onOpenReleaseNotes(installedReleaseUrl!),
+                      icon: const Icon(QuarkIcons.open_in_new, size: 16),
+                      label: const Text("What's in this release"),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.symmetric(horizontal: linkInset),
+                      ),
+                    ),
                   ),
                 const SizedBox(height: 16),
                 if (availableVersions.isEmpty &&
