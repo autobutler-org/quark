@@ -57,6 +57,10 @@ int firstWeekdayForLocale(Locale locale) {
 /// both but never moves the view (#320): an event made in November leaves
 /// November on screen.
 ///
+/// A drag or a key press on the timeline goes through [reschedule] (#2526),
+/// which shows the event at its new times at once and saves behind that, so
+/// the event does not jump back while the save is on its way.
+///
 /// It can narrow everything it shows to one person's events (#2544): the
 /// signed-in person's with [mineOnly], or a named person's with [person],
 /// which an admin picks from [people]. The calendar stays shared, so this is
@@ -116,6 +120,13 @@ class CalendarController extends ChangeNotifier {
   String? _person;
   List<String> _people = const [];
 
+  // Events [reschedule] has moved whose save and reload have not come back,
+  // by id: what the views show in place of the loaded event until they do.
+  final Map<int, CalendarEvent> _moved = {};
+
+  // The last save [reschedule] queued, so the next one waits its turn.
+  Future<void> _saves = Future.value();
+
   /// Whether only the signed-in person's events are shown.
   bool get mineOnly => _mineOnly;
 
@@ -132,6 +143,11 @@ class CalendarController extends ChangeNotifier {
     final person = _person;
     return person == null || event.owner == person;
   }
+
+  /// The events of [events] to show: those passing the filter, each where
+  /// [reschedule] last moved it.
+  Iterable<CalendarEvent> _shown(List<CalendarEvent> events) =>
+      events.where(_shows).map((event) => _moved[event.id] ?? event);
 
   /// The view on show.
   CalendarView get view => _view;
@@ -176,7 +192,7 @@ class CalendarController extends ChangeNotifier {
   List<CalendarEventItem> get occurrences {
     final span = days;
     return expandOccurrences(
-      _viewEvents.where(_shows),
+      _shown(_viewEvents),
       span.first,
       CalendarDates.addDays(span.last, 1),
     );
@@ -220,7 +236,7 @@ class CalendarController extends ChangeNotifier {
 
   List<CalendarEventItem> _upcomingItems() => [
     for (final item in expandOccurrences(
-      _upcomingEvents.where(_shows),
+      _shown(_upcomingEvents),
       today,
       CalendarDates.addDays(today, upcomingDays),
     ))
@@ -337,6 +353,62 @@ class CalendarController extends ChangeNotifier {
   Future<void> save(CalendarEventDraft draft, {int? id}) async {
     await saveEvent(draft, id: id);
     await refresh();
+  }
+
+  /// Moves the occurrence [item] to run from [start] to [end]: a drag or a
+  /// key press on the timeline (#2526).
+  ///
+  /// The stored event moves as far as the occurrence did, as many dates and
+  /// to the same times of day, so a repeating event moves as a whole series,
+  /// as it does from the editor. The views show the move at once. The save
+  /// follows, after any move asked before it so the last one asked is the
+  /// last one saved, and the reload after the save. Throws what the save
+  /// threw, with the event back where the Quark has it.
+  Future<void> reschedule(
+    CalendarEventItem item,
+    DateTime start,
+    DateTime end,
+  ) async {
+    final event = _moved[item.eventId] ?? eventById(item.eventId);
+    if (event == null) return;
+    final draft = event.toDraft();
+    final moved = draft.copyWith(
+      start: _carried(draft.start, item.start, start),
+      end: _carried(draft.end, item.end, end),
+    );
+    final shown = event.movedTo(moved.start, moved.end);
+    _moved[event.id] = shown;
+    notifyListeners();
+    final save = _saves.then((_) => saveEvent(moved, id: event.id));
+    _saves = save.then((_) {}, onError: (_) {});
+    try {
+      await save;
+    } finally {
+      // A later move of the same event shows until its own save is back.
+      if (identical(_moved[event.id], shown)) {
+        await refresh();
+        if (identical(_moved[event.id], shown)) _moved.remove(event.id);
+        notifyListeners();
+      }
+    }
+  }
+
+  /// [time] carried as far as an occurrence went [from] one time [to]
+  /// another: as many dates on, at [to]'s time of day. Dates are counted in
+  /// UTC, where no day is an hour short.
+  static DateTime _carried(DateTime time, DateTime from, DateTime to) {
+    final dates = DateTime.utc(
+      to.year,
+      to.month,
+      to.day,
+    ).difference(DateTime.utc(from.year, from.month, from.day)).inDays;
+    return DateTime(
+      time.year,
+      time.month,
+      time.day + dates,
+      to.hour,
+      to.minute,
+    );
   }
 
   /// Deletes event [id] and reloads. Throws what the delete threw.
