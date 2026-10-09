@@ -60,9 +60,15 @@ func statFile(c *gin.Context) *serverutil.Response {
 	if err != nil {
 		return serverutil.InternalServerError(err)
 	}
+	// A folder is a folder whatever it is named: "things.qdoc/" is not a
+	// document, which is what deep-link resolution asks this to tell apart.
+	fileType := storageutil.FileTypeFolder
+	if !fi.IsDir {
+		fileType = storageutil.DetermineFileTypeFromPath(fi.Path)
+	}
 	return serverutil.Ok().WithContentType(serverutil.ContentTypeJSON).WithData(StatFileJSON{
 		IsDir:    fi.IsDir,
-		FileType: string(storageutil.DetermineFileTypeFromPath(fi.Path)),
+		FileType: string(fileType),
 		Name:     fi.Name,
 	})
 }
