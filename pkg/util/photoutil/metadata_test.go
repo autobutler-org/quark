@@ -1,13 +1,14 @@
 package photoutil_test
 
 import (
+	"context"
 	"math"
-	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // --- RoundTo ---
@@ -176,86 +177,47 @@ func TestSummarizeExif_GPSFalse_NoCoords(t *testing.T) {
 
 // --- FindLivePhotoVideo ---
 
-func TestFindLivePhotoVideo_NonImageExt(t *testing.T) {
-	// Non-HEIC/JPG files: always returns ""
-	result := photoutil.FindLivePhotoVideo("/tmp/doc.pdf", "doc.pdf")
-	if result != "" {
-		t.Errorf("expected '' for non-image file, got %q", result)
+// memFS is a MemVFS holding an empty file at each path.
+func memFS(t *testing.T, paths ...string) vfs.VFS {
+	t.Helper()
+	fsys := vfs.NewMemVFS(vfs.FilesNamespace(""))
+	for _, p := range paths {
+		if err := fsys.Write(context.Background(), p, strings.NewReader("fake"), vfs.WriteOptions{}); err != nil {
+			t.Fatalf("write %s: %v", p, err)
+		}
 	}
+	return fsys
 }
 
-func TestFindLivePhotoVideo_NoVideoSibling(t *testing.T) {
-	tmp := t.TempDir()
-	imgPath := filepath.Join(tmp, "photo.jpg")
-	os.WriteFile(imgPath, []byte("fake"), 0600)
-	// No corresponding .mov/.mp4 exists — should return ""
-	result := photoutil.FindLivePhotoVideo(imgPath, "photo.jpg")
-	if result != "" {
-		t.Errorf("expected '' when no video sibling, got %q", result)
+func TestFindLivePhotoVideo(t *testing.T) {
+	cases := []struct {
+		name    string
+		files   []string
+		relPath string
+		want    string
+	}{
+		{"not an image a Live Photo can be", []string{"doc.pdf", "doc.mov"}, "doc.pdf", ""},
+		{"no video sibling", []string{"photo.jpg"}, "photo.jpg", ""},
+		{"mov sibling", []string{"photo.jpg", "photo.mov"}, "photo.jpg", "photo.mov"},
+		{"spelled as stored", []string{"burst.heic", "burst.MOV"}, "burst.heic", "burst.MOV"},
+		// The returned path keeps relPath's directory with the video's real
+		// name: the client is handed it as livePhotoVideoPath.
+		{"nested", []string{"albums/2024/photo.jpg", "albums/2024/photo.mov"}, "albums/2024/photo.jpg", "albums/2024/photo.mov"},
+		{"leading slash kept", []string{"albums/photo.jpg", "albums/photo.mov"}, "/albums/photo.jpg", "/albums/photo.mov"},
+		// A Live Photo's companion is a .mov, so it wins over a .mp4.
+		{"mov over mp4", []string{"photo.jpg", "photo.mp4", "photo.mov"}, "photo.jpg", "photo.mov"},
+		{"mp4 alone", []string{"photo.jpg", "photo.mp4"}, "photo.jpg", "photo.mp4"},
+		// A video whose stem merely starts with the image's is another file.
+		{"different stem", []string{"photo.jpg", "photo-2.mov"}, "photo.jpg", ""},
+		{"sibling folder only", []string{"photo.jpg", "other/photo.mov"}, "photo.jpg", ""},
+		{"missing folder", nil, "gone/photo.jpg", ""},
 	}
-}
-
-func TestFindLivePhotoVideo_WithMovSibling(t *testing.T) {
-	tmp := t.TempDir()
-	imgPath := filepath.Join(tmp, "photo.jpg")
-	movPath := filepath.Join(tmp, "photo.mov")
-	os.WriteFile(imgPath, []byte("fake"), 0600)
-	os.WriteFile(movPath, []byte("fake"), 0600)
-
-	result := photoutil.FindLivePhotoVideo(imgPath, "photo.jpg")
-	if result != "photo.mov" {
-		t.Errorf("expected 'photo.mov', got %q", result)
-	}
-}
-
-func TestFindLivePhotoVideo_HeicWithMov(t *testing.T) {
-	tmp := t.TempDir()
-	imgPath := filepath.Join(tmp, "burst.heic")
-	movPath := filepath.Join(tmp, "burst.MOV")
-	os.WriteFile(imgPath, []byte("fake"), 0600)
-	os.WriteFile(movPath, []byte("fake"), 0600)
-
-	result := photoutil.FindLivePhotoVideo(imgPath, "burst.heic")
-	if result != "burst.MOV" {
-		t.Errorf("expected 'burst.MOV', got %q", result)
-	}
-}
-
-// The returned path must keep the album directory from relPath while using the
-// video's real filename. Nothing covered a nested path before, and the name is
-// handed to the client as livePhotoVideoPath.
-func TestFindLivePhotoVideo_NestedRelPath(t *testing.T) {
-	tmp := t.TempDir()
-	os.WriteFile(filepath.Join(tmp, "photo.jpg"), []byte("fake"), 0600)
-	os.WriteFile(filepath.Join(tmp, "photo.mov"), []byte("fake"), 0600)
-
-	result := photoutil.FindLivePhotoVideo(filepath.Join(tmp, "photo.jpg"), "albums/2024/photo.jpg")
-	if result != "albums/2024/photo.mov" {
-		t.Errorf("expected 'albums/2024/photo.mov', got %q", result)
-	}
-}
-
-// A Live Photo's companion is a .mov, so it wins when a library holds both.
-func TestFindLivePhotoVideo_PrefersMovOverMp4(t *testing.T) {
-	tmp := t.TempDir()
-	os.WriteFile(filepath.Join(tmp, "photo.jpg"), []byte("fake"), 0600)
-	os.WriteFile(filepath.Join(tmp, "photo.mp4"), []byte("fake"), 0600)
-	os.WriteFile(filepath.Join(tmp, "photo.mov"), []byte("fake"), 0600)
-
-	result := photoutil.FindLivePhotoVideo(filepath.Join(tmp, "photo.jpg"), "photo.jpg")
-	if result != "photo.mov" {
-		t.Errorf("expected 'photo.mov', got %q", result)
-	}
-}
-
-// A video whose stem merely starts with the image's stem is a different file.
-func TestFindLivePhotoVideo_IgnoresDifferentStem(t *testing.T) {
-	tmp := t.TempDir()
-	os.WriteFile(filepath.Join(tmp, "photo.jpg"), []byte("fake"), 0600)
-	os.WriteFile(filepath.Join(tmp, "photo-2.mov"), []byte("fake"), 0600)
-
-	result := photoutil.FindLivePhotoVideo(filepath.Join(tmp, "photo.jpg"), "photo.jpg")
-	if result != "" {
-		t.Errorf("expected '' for a non-matching stem, got %q", result)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := photoutil.FindLivePhotoVideo(context.Background(), memFS(t, tc.files...), tc.relPath)
+			if got != tc.want {
+				t.Errorf("FindLivePhotoVideo(%q) = %q, want %q", tc.relPath, got, tc.want)
+			}
+		})
 	}
 }

@@ -6,13 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/autobutler-org/quark/internal/db"
+	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
@@ -51,10 +50,9 @@ type MetadataParams struct {
 	Queries *db.Queries
 	// UserID is the account whose favorite and albums are reported.
 	UserID int64
-	// Storage resolves the device files directory for a serial.
-	Storage *storageutil.StorageService
-	// FS reads the file through the VFS. Nil falls back to direct disk access.
-	FS vfs.VFS
+	// Registry holds one namespace per device; the photo is read through
+	// Serial's.
+	Registry vfs.Registry
 	// Serial is the device serial the file belongs to, empty for local files.
 	Serial string
 	// RelPath is the photo's path relative to its files directory.
@@ -85,7 +83,11 @@ type MetadataResult struct {
 // escapes its files directory as [ErrInvalidRelPath], so callers can map both to
 // the right status code.
 func Metadata(params MetadataParams) (MetadataResult, error) {
-	stat, err := statPhoto(params)
+	fsys, err := DeviceFS(params.Registry, params.Serial)
+	if err != nil {
+		return MetadataResult{}, fmt.Errorf("%w: %s", storageutil.ErrPathNotFound, params.RelPath)
+	}
+	stat, err := statPhoto(params, fsys)
 	if err != nil {
 		return MetadataResult{}, err
 	}
@@ -129,16 +131,7 @@ func Metadata(params MetadataParams) (MetadataResult, error) {
 		albumRefs = append(albumRefs, AlbumRef{ID: a.ID, Name: a.Name})
 	}
 
-	// Live-video companion: resolve via disk only (VFS doesn't expose sidecar detection).
-	liveVideoPath := ""
-	if filesDir, dirErr := storageutil.GetFilesDir(); dirErr == nil {
-		searchDir := filesDir
-		if deviceDir, ok := params.Storage.FindDeviceFilesDirBySerial(params.Serial); ok {
-			searchDir = deviceDir
-		}
-		fullPath := filepath.Join(filepath.Clean(searchDir), params.RelPath)
-		liveVideoPath = FindLivePhotoVideo(fullPath, params.RelPath)
-	}
+	liveVideoPath := FindLivePhotoVideo(params.Ctx, fsys, params.RelPath)
 
 	return MetadataResult{
 		FileSize:           stat.size,
@@ -196,111 +189,107 @@ type photoStat struct {
 	exif   *ExifSummary
 }
 
-// statPhoto stats the photo and decodes its EXIF, through the VFS when one was
-// supplied and straight off disk otherwise. EXIF is best effort: a file that
-// does not decode still reports its size and modification time.
-func statPhoto(params MetadataParams) (photoStat, error) {
-	if params.FS != nil {
-		fi, statErr := params.FS.Stat(params.Ctx, params.RelPath)
-		if statErr != nil {
-			if errors.Is(statErr, vfs.ErrNotFound) {
-				return photoStat{}, fmt.Errorf("%w: %s", storageutil.ErrPathNotFound, params.RelPath)
-			}
-			return photoStat{}, statErr
-		}
-		stat := photoStat{size: fi.Size, mtime: fi.ModTime.Unix()}
-
-		imgFormat := ImageFormatFromPath(params.RelPath)
-		if imgFormat != 0 {
-			if f, openErr := params.FS.Open(params.Ctx, params.RelPath); openErr == nil {
-				if data, exifErr := DecodeExif(f, imgFormat); exifErr == nil && data != nil {
-					stat.exif = SummarizeExif(data)
-					stat.width = data.Width
-					stat.height = data.Height
-				}
-				f.Close()
-			}
-		}
-		return stat, nil
-	}
-
-	filesDir, err := storageutil.GetFilesDir()
-	if err != nil {
-		return photoStat{}, err
-	}
-	if deviceDir, ok := params.Storage.FindDeviceFilesDirBySerial(params.Serial); ok {
-		filesDir = deviceDir
-	}
-	cleanFilesDir := filepath.Clean(filesDir)
-	fullPath, err := storageutil.SafeJoin(cleanFilesDir, params.RelPath)
-	if err != nil || fullPath == cleanFilesDir {
+// statPhoto stats the photo on fsys and decodes its EXIF. EXIF is best
+// effort: a file that does not decode still reports its size and modification
+// time.
+func statPhoto(params MetadataParams, fsys vfs.VFS) (photoStat, error) {
+	if accessutil.Canonical(params.RelPath) == "" {
 		return photoStat{}, ErrInvalidRelPath
 	}
-	fileStat, err := os.Stat(fullPath)
-	if os.IsNotExist(err) {
+	fi, err := fsys.Stat(params.Ctx, params.RelPath)
+	switch {
+	case errors.Is(err, vfs.ErrNotFound):
 		return photoStat{}, fmt.Errorf("%w: %s", storageutil.ErrPathNotFound, params.RelPath)
-	}
-	if err != nil {
+	case errors.Is(err, vfs.ErrPermissionDenied):
+		// A path that climbs out of the namespace.
+		return photoStat{}, ErrInvalidRelPath
+	case err != nil:
 		return photoStat{}, err
 	}
-	stat := photoStat{size: fileStat.Size(), mtime: fileStat.ModTime().Unix()}
+	stat := photoStat{size: fi.Size, mtime: fi.ModTime.Unix()}
 
-	imgFormat := ImageFormatFromPath(fullPath)
-	if imgFormat != 0 {
-		if f, openErr := os.Open(fullPath); openErr == nil {
-			if data, exifErr := DecodeExif(f, imgFormat); exifErr == nil && data != nil {
-				stat.exif = SummarizeExif(data)
-				stat.width = data.Width
-				stat.height = data.Height
-			}
-			f.Close()
-		}
+	imgFormat := ImageFormatFromPath(params.RelPath)
+	if imgFormat == 0 {
+		return stat, nil
+	}
+	f, err := fsys.Open(params.Ctx, params.RelPath)
+	if err != nil {
+		return stat, nil
+	}
+	defer f.Close()
+	if data, exifErr := DecodeExif(f, imgFormat); exifErr == nil && data != nil {
+		stat.exif = SummarizeExif(data)
+		stat.width = data.Width
+		stat.height = data.Height
 	}
 	return stat, nil
 }
 
-// FindLivePhotoVideo checks if a companion .MOV file exists for an image,
-// which indicates an iPhone Live Photo. Returns the relative path to the
-// video, or "" if none found.
+// FindLivePhotoVideo finds the companion .mov (or .mp4) of an image on fsys,
+// which marks an iPhone Live Photo, with one single-level listing of the
+// image's folder. It returns the video's path, in relPath's folder, or "" if
+// there is none.
 //
-// The sibling is found by reading the directory rather than by stat-ing
+// The sibling is found by listing the folder rather than by stat-ing
 // candidate spellings. A stat loop reports the spelling it guessed, not the
-// one on disk: on a case-insensitive filesystem (macOS, Windows) stat of
+// one stored: on a case-insensitive filesystem (macOS, Windows) stat of
 // "photo.MOV" succeeds for a file actually named "photo.mov", so the client
 // was handed a path that does not exist as spelled — and would 404 against a
 // case-sensitive filesystem holding the same library.
-func FindLivePhotoVideo(fullPath, relPath string) string {
-	ext := strings.ToLower(filepath.Ext(fullPath))
-	if ext != ".heic" && ext != ".heif" && ext != ".jpg" && ext != ".jpeg" {
+func FindLivePhotoVideo(ctx context.Context, fsys vfs.VFS, relPath string) string {
+	if !canHaveLiveVideo(relPath) {
 		return ""
 	}
-
-	entries, err := os.ReadDir(filepath.Dir(fullPath))
+	dir := path.Dir(accessutil.Canonical(relPath))
+	if dir == "." {
+		dir = ""
+	}
+	entries, err := fsys.List(ctx, dir, nil)
 	if err != nil {
 		return ""
 	}
+	name := liveVideoName(entries, path.Base(relPath))
+	if name == "" {
+		return ""
+	}
+	// Keep relPath's directory and swap in the real filename, so the
+	// returned path is spelled exactly as it is stored.
+	if d := path.Dir(relPath); d != "." && d != "/" {
+		return path.Join(d, name)
+	}
+	return name
+}
 
-	imageName := filepath.Base(fullPath)
-	stem := strings.TrimSuffix(imageName, filepath.Ext(imageName))
+// canHaveLiveVideo reports whether an image is a kind an iPhone pairs with a
+// Live Photo video: HEIC or JPEG.
+func canHaveLiveVideo(name string) bool {
+	switch strings.ToLower(path.Ext(name)) {
+	case ".heic", ".heif", ".jpg", ".jpeg":
+		return true
+	}
+	return false
+}
 
-	// .mov before .mp4: a Live Photo's companion is a .mov, and preferring it
-	// keeps the result stable for a library holding both. Within an extension
-	// os.ReadDir is already sorted, so the pick is deterministic either way.
+// liveVideoName picks, from a folder's entries, the video sharing imageName's
+// stem, ignoring case. A .mov comes before a .mp4: a Live Photo's companion
+// is a .mov, and preferring it keeps the pick stable for a folder holding
+// both. Within an extension the first name in byte order wins, whatever
+// order the listing came in.
+func liveVideoName(entries []vfs.FileInfo, imageName string) string {
+	stem := strings.TrimSuffix(imageName, path.Ext(imageName))
 	for _, want := range []string{".mov", ".mp4"} {
+		pick := ""
 		for _, e := range entries {
-			name := e.Name()
-			if e.IsDir() || !strings.EqualFold(filepath.Ext(name), want) {
+			ext := path.Ext(e.Name)
+			if e.IsDir || !strings.EqualFold(ext, want) || !strings.EqualFold(strings.TrimSuffix(e.Name, ext), stem) {
 				continue
 			}
-			if !strings.EqualFold(strings.TrimSuffix(name, filepath.Ext(name)), stem) {
-				continue
+			if pick == "" || e.Name < pick {
+				pick = e.Name
 			}
-			// Keep relPath's directory and swap in the real filename, so the
-			// returned path is spelled exactly as it is on disk.
-			if dir := path.Dir(relPath); dir != "." && dir != "/" {
-				return path.Join(dir, name)
-			}
-			return name
+		}
+		if pick != "" {
+			return pick
 		}
 	}
 	return ""

@@ -11,7 +11,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/serverutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
-	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
 )
 
@@ -62,22 +61,13 @@ func getMetadata(c *gin.Context) *serverutil.Response {
 		return serverutil.NotFound(errNoAccess)
 	}
 
-	// Stat and EXIF: use VFS when available, fall back to direct disk access.
-	var fsys vfs.VFS
-	if reg := deps.VFSRegistry(); reg != nil {
-		if registered, found := reg.Get("files"); found {
-			fsys = registered
-		}
-	}
-
 	result, err := photoutil.Metadata(photoutil.MetadataParams{
-		Ctx:     c.Request.Context(),
-		Queries: deps.Database().Queries,
-		UserID:  access.Principal().UserID,
-		Storage: deps.StorageService(),
-		FS:      fsys,
-		Serial:  serial,
-		RelPath: relPath,
+		Ctx:      c.Request.Context(),
+		Queries:  deps.Database().Queries,
+		UserID:   access.Principal().UserID,
+		Registry: deps.VFSRegistry(),
+		Serial:   serial,
+		RelPath:  relPath,
 	})
 	if err != nil {
 		switch {

@@ -1,7 +1,7 @@
 // Package photoutil reads, transforms, and thumbnails photo and video files:
-// discovering photos on disk, extracting EXIF metadata, correcting orientation,
-// converting camera RAW, generating thumbnails, and comparing images by
-// perceptual hash.
+// listing the photo library through each device's VFS namespace, extracting
+// EXIF metadata, correcting orientation, converting camera RAW, generating
+// thumbnails, and comparing images by perceptual hash.
 package photoutil
 
 import (
@@ -26,13 +26,6 @@ import (
 	// Registers the WebP decoder with image.Decode.
 	_ "golang.org/x/image/webp"
 )
-
-// PhotoInfo stores a photo with its relative path
-type PhotoInfo struct {
-	FileInfo     fs.FileInfo
-	RelPath      string
-	HasLiveVideo bool
-}
 
 // ExifData holds extracted EXIF fields in a format-agnostic way.
 // Works for JPEG, HEIC/HEIF, PNG, WebP, TIFF, and RAW formats.
@@ -83,61 +76,6 @@ func FilterPhotoFiles(files []fs.FileInfo) []fs.FileInfo {
 		}
 	}
 	return photoFiles
-}
-
-// FindAllPhotosRecursively finds all photo files in a directory and its subdirectories.
-// Also detects Live Photo companions (e.g. IMG_1234.HEIC + IMG_1234.MOV) by collecting
-// video basenames during the same walk — no extra disk I/O.
-func FindAllPhotosRecursively(rootDir string) ([]PhotoInfo, error) {
-	var photos []PhotoInfo
-	videoBasenames := make(map[string]bool)
-
-	err := filepath.Walk(rootDir, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if path != rootDir && storageutil.IsInternalName(info.Name()) {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if info.IsDir() {
-			return nil
-		}
-
-		fileType := storageutil.DetermineFileTypeFromPath(info.Name())
-		switch fileType {
-		case storageutil.FileTypeImage:
-			relPath, err := filepath.Rel(rootDir, path)
-			if err != nil {
-				return err // coverage: ignore - filepath.Rel only fails on cross-volume paths (different drives on Windows)
-			}
-			photos = append(photos, PhotoInfo{
-				FileInfo: info,
-				RelPath:  relPath,
-			})
-		case storageutil.FileTypeVideo:
-			ext := filepath.Ext(path)
-			videoBasenames[strings.TrimSuffix(path, ext)] = true
-		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("error walking directory %s: %w", rootDir, err)
-	}
-
-	for i := range photos {
-		ext := filepath.Ext(photos[i].RelPath)
-		lower := strings.ToLower(ext)
-		if lower == ".heic" || lower == ".heif" || lower == ".jpg" || lower == ".jpeg" {
-			fullBase := strings.TrimSuffix(filepath.Join(rootDir, photos[i].RelPath), ext)
-			photos[i].HasLiveVideo = videoBasenames[fullBase]
-		}
-	}
-
-	return photos, nil
 }
 
 // ImageToThumbnail decodes an image file, turns it upright, and scales and

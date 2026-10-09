@@ -3,6 +3,7 @@ package photoutil
 import (
 	"context"
 	"fmt"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
-	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
@@ -47,11 +47,8 @@ type PhotoSummary struct {
 type ListPhotosParams struct {
 	// Ctx bounds the VFS listing.
 	Ctx context.Context
-	// Registry lists through the VFS, one namespace per device. Nil falls back
-	// to walking the managed devices.
+	// Registry lists through the VFS, one namespace per device.
 	Registry vfs.Registry
-	// Storage enumerates the managed devices for the fallback walk.
-	Storage *storageutil.StorageService
 	// Serial restricts the listing to one device, empty for all of them.
 	Serial string
 	// Access drops the photos the caller cannot read, before sorting and
@@ -139,6 +136,24 @@ func ParseOrder(raw string) string {
 	return OrderDesc
 }
 
+// deviceSerial is the device a listed file is on, read from the namespace that
+// listed it, which every namespace reports, and from the file's own device
+// fields otherwise.
+func deviceSerial(fi vfs.FileInfo) string {
+	if serial, ok := vfs.FilesNamespaceSerial(fi.Namespace); ok {
+		return serial
+	}
+	return fi.DeviceSerial
+}
+
+// liveVideoKey keys a file by device and its path without the extension,
+// lowercased, so a photo finds its Live Photo video whatever case either
+// extension is spelled in.
+func liveVideoKey(serial, p string) DuplicatePhoto {
+	canonical := accessutil.Canonical(p)
+	return DuplicatePhoto{DeviceSerial: serial, RelPath: strings.ToLower(strings.TrimSuffix(canonical, path.Ext(canonical)))}
+}
+
 // sortPhotos orders photos by sortBy and order, defaulting to newest-first by
 // modification time — the fixed order ListPhotos used before #2509 — for a
 // zero-value or unrecognized sortBy/order. SortTaken orders by TakenAt,
@@ -179,81 +194,40 @@ func sortPhotos(photos []PhotoSummary, sortBy, order string) {
 // of walking the entire directory tree on every request. The walk itself is
 // fast — it's downstream operations like thumbnail generation that are slow.
 func ListPhotos(params ListPhotosParams) (ListPhotosResult, error) {
+	serialFilter := []string{}
+	if params.Serial != "" {
+		serialFilter = []string{params.Serial}
+	}
+	// Videos are listed too, only to mark the photos that are Live Photos.
+	infos, err := vfs.ListDevices(vfs.ListDevicesParams{
+		Ctx:      params.Ctx,
+		Registry: params.Registry,
+		Filter:   &vfs.ListFilter{Recursive: true, SerialFilter: serialFilter},
+	})
+	if err != nil {
+		return ListPhotosResult{}, err
+	}
+	liveVideos := map[DuplicatePhoto]bool{}
+	for _, fi := range infos {
+		if !fi.IsDir && strings.HasPrefix(fi.MimeType, "video/") {
+			liveVideos[liveVideoKey(deviceSerial(fi), fi.Path)] = true
+		}
+	}
 	var allPhotos []PhotoSummary
-
-	if params.Registry != nil {
-		// VFS path: recursive image listing across the device namespaces.
-		serialFilter := []string{}
-		if params.Serial != "" {
-			serialFilter = []string{params.Serial}
+	for _, fi := range infos {
+		serial := deviceSerial(fi)
+		if fi.IsDir || !strings.HasPrefix(fi.MimeType, "image/") ||
+			!params.Access.Check(serial, fi.Path, accessutil.Read).Readable {
+			continue
 		}
-		infos, listErr := vfs.ListDevices(vfs.ListDevicesParams{
-			Ctx:      params.Ctx,
-			Registry: params.Registry,
-			Filter: &vfs.ListFilter{
-				Recursive:    true,
-				MimePrefix:   "image/",
-				SerialFilter: serialFilter,
-			},
+		allPhotos = append(allPhotos, PhotoSummary{
+			RelPath:      fi.Path,
+			FileName:     fi.Name,
+			Size:         fi.Size,
+			MTime:        fi.ModTime.Unix(),
+			Serial:       serial,
+			HasLiveVideo: canHaveLiveVideo(fi.Name) && liveVideos[liveVideoKey(serial, fi.Path)],
 		})
-		if listErr != nil {
-			return ListPhotosResult{}, listErr
-		}
-		for _, fi := range infos {
-			if fi.IsDir || !params.Access.Check(fi.DeviceSerial, fi.Path, accessutil.Read).Readable {
-				continue
-			}
-			allPhotos = append(allPhotos, PhotoSummary{
-				RelPath:  fi.Path,
-				FileName: fi.Name,
-				Size:     fi.Size,
-				MTime:    fi.ModTime.Unix(),
-				Serial:   fi.DeviceSerial,
-			})
-		}
-	} else {
-		// Fallback: walk the managed devices.
-		devices, err := params.Storage.GetManagedRoots()
-		if err != nil {
-			return ListPhotosResult{}, err
-		}
-		if params.Serial != "" {
-			filtered := make([]storageutil.ManagedDevice, 0, 1)
-			for _, d := range devices {
-				deviceSerial := ""
-				if d.UsbInfo != nil {
-					deviceSerial = d.UsbInfo.GetSerial()
-				}
-				if deviceSerial == params.Serial {
-					filtered = append(filtered, d)
-				}
-			}
-			devices = filtered
-		}
-		for _, device := range devices {
-			deviceSerial := ""
-			if device.UsbInfo != nil {
-				deviceSerial = device.UsbInfo.GetSerial()
-			}
-			photos, err := FindAllPhotosRecursively(device.FilesDir)
-			if err != nil {
-				continue
-			}
-			for _, photo := range photos {
-				if !params.Access.Check(deviceSerial, photo.RelPath, accessutil.Read).Readable {
-					continue
-				}
-				info := photo.FileInfo
-				allPhotos = append(allPhotos, PhotoSummary{
-					RelPath:      photo.RelPath,
-					FileName:     info.Name(),
-					Size:         info.Size(),
-					MTime:        info.ModTime().Unix(),
-					Serial:       deviceSerial,
-					HasLiveVideo: photo.HasLiveVideo,
-				})
-			}
-		}
 	}
 
 	if params.Sort == SortTaken && params.Queries != nil {

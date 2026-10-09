@@ -3,6 +3,7 @@ package photoutil
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"slices"
@@ -11,6 +12,7 @@ import (
 	"github.com/autobutler-org/quark/internal/db"
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
+	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 const (
@@ -235,4 +237,19 @@ func comparePhotos(a, b DuplicatePhoto) int {
 		return c
 	}
 	return strings.Compare(a.RelPath, b.RelPath)
+}
+
+// ExistsIn is a [ListDuplicatesParams.Exists] that stats each photo through
+// its device's namespace in registry. Only a photo the namespace reports
+// missing is gone, along with every photo on a device with no namespace, as
+// one unplugged; any other failure to stat keeps the photo.
+func ExistsIn(ctx context.Context, registry vfs.Registry) func(serial, relPath string) bool {
+	return func(serial, relPath string) bool {
+		fsys, err := DeviceFS(registry, serial)
+		if err != nil {
+			return false
+		}
+		_, err = fsys.Stat(ctx, relPath)
+		return !errors.Is(err, vfs.ErrNotFound)
+	}
 }

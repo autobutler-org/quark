@@ -55,7 +55,6 @@ func listPhotos(c *gin.Context) *serverutil.Response {
 	result, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
 		Ctx:      c.Request.Context(),
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		Serial:   c.Query("serial"),
 		Access:   access,
 		Sort:     photoutil.ParseSort(c.Query("sort")),
