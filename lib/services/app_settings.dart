@@ -11,6 +11,7 @@ import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/models/feature_flag.dart';
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/photo_sort.dart';
+import 'package:quark/utils/emulator_loopback.dart';
 import 'package:quark_widgets/quark_widgets.dart'
     show AlbumSort, QuarkThemeColor;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -72,12 +73,10 @@ String get apiBaseUrl =>
 /// a loopback address is rewritten before any request goes out.
 Uri get apiBaseUri {
   final uri = Uri.parse(apiBaseUrl);
-  final isLoopback =
-      uri.host == 'localhost' || uri.host == '127.0.0.1' || uri.host == '::1';
   if (!kIsWeb &&
       defaultTargetPlatform == TargetPlatform.android &&
-      isLoopback) {
-    return uri.replace(host: '10.0.2.2');
+      isLoopbackHost(uri.host)) {
+    return uri.replace(host: emulatorHostAlias);
   }
   return uri;
 }
@@ -403,7 +402,7 @@ class AppSettings {
         // badCertificateCallback in AuthenticatedService for local-trust hosts.
         final loopback =
             !kIsWeb && defaultTargetPlatform == TargetPlatform.android
-            ? 'http://10.0.2.2:8080'
+            ? 'http://$emulatorHostAlias:8080'
             : 'http://localhost:8080';
         _hosts = [HostEntry(name: 'Local', hostAddress: loopback)];
       } else if (kIsWeb) {

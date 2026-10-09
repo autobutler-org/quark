@@ -5,6 +5,7 @@ import 'package:quark/services/auth_service.dart';
 import 'package:quark/services/quark_discovery.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/quark_widget.dart';
+import 'package:quark/widgets/hosts/emulator_loopback_hint.dart';
 import 'package:quark/widgets/nearby_quarks.dart';
 
 /// Add/edit dialog for a single Quark.
@@ -31,6 +32,9 @@ import 'package:quark/widgets/nearby_quarks.dart';
 /// On iOS and Android it also lists the Quarks found on the local network
 /// (#2312); tapping one fills in its address, and its name when the nickname
 /// is still empty.
+///
+/// On Android a typed `localhost` gets an [EmulatorLoopbackHint] under the
+/// address field (#2070).
 class HostDialog extends StatefulWidget {
   const HostDialog({
     super.key,
@@ -159,6 +163,7 @@ class _HostDialogState extends State<HostDialog> {
             },
             hintText: 'https://quark.local',
           ),
+          EmulatorLoopbackHint(controller: _address),
           const SizedBox(height: 6),
           if (_offersSaveAnyway)
             Text(
