@@ -88,6 +88,12 @@ abstract final class QuarkTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: tokens.background,
       useMaterial3: true,
+      // Material's desktop defaults (shrinkWrap targets, compact density) bring
+      // a stock button down to 32px. A touchscreen laptop, a Chromebook or a
+      // tablet asking for the desktop site all report a desktop platform, so
+      // every platform keeps the 48dp touch target (#2605, #2939).
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      visualDensity: VisualDensity.standard,
       extensions: <ThemeExtension<dynamic>>[tokens],
       appBarTheme: AppBarTheme(
         backgroundColor: tokens.chrome,
