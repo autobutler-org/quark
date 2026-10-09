@@ -845,12 +845,37 @@ bool _isUnderAny(Set<String> routes, String location) =>
 Future<List<FeatureFlag>> Function() featureFlagsProbe =
     FeatureFlagsService.list;
 
+/// The flags the gate below last had for one session on one Quark, so moving
+/// between a beta's views does not ask the Quark again on every navigation
+/// (#2935). [seen] is the [AppSettings.featureFlags] list at the time: a new
+/// one there — a sign-in, a reconnect, a `feature_flag_changed` event — is
+/// fresher than the cache and replaces it.
+({
+  String? host,
+  String? token,
+  List<FeatureFlag> seen,
+  List<FeatureFlag> flags,
+})?
+_featureFlagCache;
+
 /// Whether the Quark says the flag [key] is on. False when it cannot say.
+///
+/// Asks once per session on a Quark, then follows [AppSettings.featureFlags],
+/// which the settings events keep current.
 Future<bool> _featureIsEnabled(String key) async {
+  final settings = AppSettings.instance;
+  final host = settings.activeHost;
+  final token = settings.sessionToken;
+  final seen = settings.featureFlags.value;
+  final cache = _featureFlagCache;
   try {
-    return (await featureFlagsProbe()).any(
-      (flag) => flag.key == key && flag.enabled,
-    );
+    final flags = cache == null || cache.host != host || cache.token != token
+        ? await featureFlagsProbe()
+        : identical(cache.seen, seen)
+        ? cache.flags
+        : seen;
+    _featureFlagCache = (host: host, token: token, seen: seen, flags: flags);
+    return flags.any((flag) => flag.key == key && flag.enabled);
   } catch (_) {
     return false;
   }
