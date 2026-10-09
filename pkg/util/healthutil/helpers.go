@@ -3,6 +3,7 @@ package healthutil
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
@@ -65,6 +66,7 @@ func applyTempThreshold(status *HealthStatus, tempCelsius float64) {
 // guards cpuHighSince.
 func (c *Collector) readHost() HealthStatus {
 	status := HealthStatus{Healthy: true}
+	status.Hostname, _ = os.Hostname()
 
 	// CPU
 	if cores, err := cpu.Percent(100*time.Millisecond, true); err == nil {

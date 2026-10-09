@@ -30,7 +30,6 @@ func (d detector) DetectDevices() ([]storageutil.Device, error) { return d.devic
 // fixture is an internal drive and a USB drive with serial "A", each with a
 // file at docs/a.txt, and a registry holding both namespaces.
 type fixture struct {
-	svc         *storageutil.StorageService
 	registry    vfs.Registry
 	internalDir string
 	usbDir      string
@@ -51,7 +50,6 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	f := fixture{
-		svc:         svc,
 		registry:    registry,
 		internalDir: filepath.Join(internal, "quark", "data", "files"),
 		usbDir:      filepath.Join(usb, "quark", "data", "files"),
@@ -68,7 +66,7 @@ func newFixture(t *testing.T) fixture {
 }
 
 func (f fixture) device(serial string) trashutil.Device {
-	return trashutil.Device{Registry: f.registry, Storage: f.svc, Serial: serial}
+	return trashutil.Device{Registry: f.registry, Serial: serial}
 }
 
 // drain returns every event published so far.
@@ -164,7 +162,7 @@ func TestUnknownSerialIsDeviceNotFound(t *testing.T) {
 	}
 	_, err = trashutil.List(trashutil.ListParams{Device: trashutil.Device{Serial: "NOPE"}})
 	if !errors.Is(err, storageutil.ErrDeviceNotFound) {
-		t.Errorf("List with neither registry nor storage = %v, want ErrDeviceNotFound", err)
+		t.Errorf("List with no registry = %v, want ErrDeviceNotFound", err)
 	}
 }
 
@@ -178,23 +176,6 @@ func TestNamespaceWithoutTrash(t *testing.T) {
 	_, err := trashutil.List(trashutil.ListParams{Device: trashutil.Device{Registry: registry}})
 	if !errors.Is(err, trashutil.ErrNoTrash) {
 		t.Fatalf("List on a MemVFS = %v, want ErrNoTrash", err)
-	}
-}
-
-// TestNilRegistryStandsInTheDevices checks a caller with no registry still
-// reaches each device's own trash.
-func TestNilRegistryStandsInTheDevices(t *testing.T) {
-	f := newFixture(t)
-	device := trashutil.Device{Storage: f.svc, Serial: "A"}
-	if _, err := trashutil.Trash(trashutil.TrashParams{Device: device, Paths: []string{"docs/a.txt"}}); err != nil {
-		t.Fatal(err)
-	}
-	listed, err := trashutil.List(trashutil.ListParams{Device: device})
-	if err != nil || len(listed.Items) != 1 {
-		t.Fatalf("List = %+v, %v", listed, err)
-	}
-	if _, err := os.Stat(storageutil.TrashRoot(f.usbDir)); err != nil {
-		t.Errorf("A's trash was not used: %v", err)
 	}
 }
 

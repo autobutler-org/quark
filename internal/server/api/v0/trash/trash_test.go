@@ -80,8 +80,14 @@ func newHarness(t *testing.T) harness {
 	t.Cleanup(unsub)
 	database := dbtest.NewDB(t)
 	svc := storageutil.NewStorageService(&fakeDetector{mountPoint: mountPoint})
+	files := vfs.NewStorageServiceVFS(svc, vfs.FilesNamespace(""))
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, files); err != nil {
+		t.Fatal(err)
+	}
 	deps := deputil.NewDependencies().
 		WithStorageService(svc).
+		WithVFSRegistry(registry).
 		WithEventBus(bus).
 		WithDatabase(database)
 
@@ -98,7 +104,7 @@ func newHarness(t *testing.T) harness {
 	serverutil.RegisterRouterWithGroup(group, v0_trash.NewRouter())
 	serverutil.RegisterRouterWithGroup(group, v0_files.NewRouter())
 	return harness{
-		engine: engine, filesDir: filesDir, files: vfs.NewStorageServiceVFS(svc, vfs.FilesNamespace("")),
+		engine: engine, filesDir: filesDir, files: files,
 		events: events, database: database, principal: principal,
 	}
 }

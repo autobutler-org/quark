@@ -27,8 +27,6 @@ const MaxDeleteFiles = 1000
 type DeleteFilesParams struct {
 	// Registry holds the device's namespace, whose trash the files go to.
 	Registry vfs.Registry
-	// Storage backs the device's namespace when Registry is nil.
-	Storage *storageutil.StorageService
 	// EventBus is told about every deleted path, and that the trash changed.
 	EventBus *eventbus.Bus
 	// Database holds the album membership, favorite and rotation rows to clean up. Nil
@@ -83,7 +81,6 @@ func DeleteFiles(params DeleteFilesParams) (DeleteFilesResult, error) {
 	trashed, err := trashutil.Trash(trashutil.TrashParams{
 		Device: trashutil.Device{
 			Registry: params.Registry,
-			Storage:  params.Storage,
 			Serial:   params.Serial,
 		},
 		RootDir:   params.RootDir,
