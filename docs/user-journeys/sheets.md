@@ -31,7 +31,9 @@ Covers the Sheets page (`/sheets`) and the spreadsheet editor for `.qsheet` file
 **Expected result:**
 
 - Spreadsheet editor opens (`SpreadsheetEditorPage`) with the file contents loaded.
-- URL updates to `/sheets/<path-to-file>`.
+- URL updates to `/sheets/<path-to-file>?from=/sheets`.
+- The editor's back arrow, or a system back, returns to the Sheets list. A spreadsheet opened from Files returns to
+  its folder, as a deep link does (#2403).
 
 ---
 

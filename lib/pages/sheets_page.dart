@@ -116,11 +116,21 @@ class _SheetsPageState extends State<SheetsPage>
     });
   }
 
-  void _openSheet(FileNode node) =>
-      context.go(AppRoutes.sheetFile(node.apiPath, serial: node.deviceSerial));
+  void _openSheet(FileNode node) => context.go(
+    AppRoutes.sheetFile(
+      node.apiPath,
+      serial: node.deviceSerial,
+      from: AppRoutes.sheets,
+    ),
+  );
 
-  void _openDoc(FileNode node) =>
-      context.go(AppRoutes.docFile(node.apiPath, serial: node.deviceSerial));
+  void _openDoc(FileNode node) => context.go(
+    AppRoutes.docFile(
+      node.apiPath,
+      serial: node.deviceSerial,
+      from: AppRoutes.sheets,
+    ),
+  );
 
   Future<void> _renameFile(FileNode node) async {
     final renamed = await renameDocOrSheet(
@@ -159,6 +169,7 @@ class _SheetsPageState extends State<SheetsPage>
       context.go(
         AppRoutes.sheetFile(
           landed.firstOrNull ?? (dir.isEmpty ? fileName : '$dir/$fileName'),
+          from: AppRoutes.sheets,
         ),
       );
     } catch (e) {

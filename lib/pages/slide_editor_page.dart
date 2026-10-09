@@ -97,8 +97,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// (#1168).
 ///
 /// Nothing is pushed underneath it when it opens at its own URL, so its back
-/// button and a system back land in the Slides list at `/slides`, where New
-/// and Open came from, rather than in Files (#2896).
+/// button and a system back land on the page it was opened from (#2403), and
+/// for a link, which has none, in the Slides list at `/slides` (#2896).
 class SlideEditorPage extends StatefulWidget {
   /// Opens the presentation at [filePath] on the device [deviceSerial].
   const SlideEditorPage({
@@ -168,7 +168,8 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
     ).showSnackBar(SnackBar(content: Text(Errors.message(error, action))));
   };
 
-  void _leaveForSlides() => context.go(AppRoutes.slides);
+  void _leave() =>
+      context.go(AppRoutes.editorOrigin(context) ?? AppRoutes.slides);
 
   void _present(String slideId) {
     // Saving first writes notes still waiting for a pause into the
@@ -181,6 +182,7 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
         widget.filePath,
         serial: widget.deviceSerial,
         slide: presentation.indexOfSlide(slideId) + 1,
+        from: AppRoutes.editorOrigin(context),
       ),
       extra: presentation,
     );
@@ -293,16 +295,16 @@ class _SlideEditorPageState extends State<SlideEditorPage> {
     final canPop = Navigator.of(context).canPop();
     return PopScope(
       // With nothing underneath, a system back would close the app; it
-      // leaves for the Slides list, as the bar's back button does.
+      // leaves as the bar's back button does.
       canPop: canPop,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && !canPop) _leaveForSlides();
+        if (!didPop && !canPop) _leave();
       },
       child: ListenableBuilder(
         listenable: _controller,
         builder: (context, _) => Scaffold(
           appBar: AppBar(
-            leading: canPop ? null : BackButton(onPressed: _leaveForSlides),
+            leading: canPop ? null : BackButton(onPressed: _leave),
             title: Text(
               fileNameWithoutExtension(
                 widget.filePath,

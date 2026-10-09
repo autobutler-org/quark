@@ -493,8 +493,9 @@ void main() {
 
   group('presenting (#1165)', () {
     Future<(SlideEditorController, GoRouter)> pumpRouted(
-      WidgetTester tester,
-    ) async {
+      WidgetTester tester, {
+      String location = '/slides/talks/Deck.qslide',
+    }) async {
       final controller = SlideEditorController(
         filePath: 'talks/Deck.qslide',
         loadPresentation: (path, {serial}) async => deck(3),
@@ -502,7 +503,7 @@ void main() {
       );
       addTearDown(controller.dispose);
       final router = GoRouter(
-        initialLocation: AppRoutes.slideFile('talks/Deck.qslide'),
+        initialLocation: location,
         routes: [
           slidePresentRoute(
             builder: (filePath, serial, startIndex, initial) => Text(
@@ -564,12 +565,31 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets('presenting keeps the page the deck was opened from (#2403)', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final (_, router) = await pumpRouted(
+        tester,
+        location: '/slides/talks/Deck.qslide?from=/files/talks',
+      );
+      await tester.tap(find.byKey(const ValueKey('slide_editor_present')));
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.toString(),
+        '/slides/talks/Deck.qslide/present?slide=1&from=/files/talks',
+      );
+    });
   });
 
   group('leaving (#2896)', () {
     /// Pumps the editor at its own URL with nothing underneath it, beside
     /// the Slides list and Files it could leave for.
-    Future<GoRouter> pumpAtUrl(WidgetTester tester) async {
+    Future<GoRouter> pumpAtUrl(
+      WidgetTester tester, {
+      String location = '/slides/talks/Deck.qslide',
+    }) async {
       final controller = SlideEditorController(
         filePath: 'talks/Deck.qslide',
         loadPresentation: (path, {serial}) async => deck(2),
@@ -577,7 +597,7 @@ void main() {
       );
       addTearDown(controller.dispose);
       final router = GoRouter(
-        initialLocation: AppRoutes.slideFile('talks/Deck.qslide'),
+        initialLocation: location,
         routes: [
           GoRoute(
             path: AppRoutes.slides,
@@ -615,6 +635,36 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('slides list'), findsOneWidget);
       expect(router.routeInformationProvider.value.uri.path, AppRoutes.slides);
+    });
+
+    // #2403: the Slides list is where a deck opened from Files used to leave
+    // for too.
+    testWidgets('the back arrow returns to the folder it was opened from', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.wideViewport);
+      final router = await pumpAtUrl(
+        tester,
+        location: '/slides/talks/Deck.qslide?from=/files/talks',
+      );
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.text('files talks'), findsOneWidget);
+      expect(router.routeInformationProvider.value.uri.path, '/files/talks');
+    });
+
+    testWidgets('a system back returns to the folder it was opened from', (
+      tester,
+    ) async {
+      tap.setViewport(tester, tap.narrowViewport);
+      final router = await pumpAtUrl(
+        tester,
+        location: '/slides/talks/Deck.qslide?from=/files/talks',
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('files talks'), findsOneWidget);
+      expect(router.routeInformationProvider.value.uri.path, '/files/talks');
     });
 
     testWidgets('a system back returns to the Slides list', (tester) async {

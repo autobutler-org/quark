@@ -1949,7 +1949,15 @@ class _FileBrowserPageState extends State<FileBrowserPage>
         return;
 
       case FileKind.qslide:
-        _goToEditor(filePath, AppRoutes.slideFile(filePath));
+        // The slide editor leaves for the Slides list unless told where it
+        // was opened from (#2403).
+        _goToEditor(
+          filePath,
+          AppRoutes.slideFile(
+            filePath,
+            from: AppRoutes.containingFolder(filePath),
+          ),
+        );
         return;
 
       // Source and config files open in the same plaintext editor for now —

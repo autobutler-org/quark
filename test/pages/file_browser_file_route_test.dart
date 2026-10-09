@@ -66,10 +66,10 @@ class _RecordingClient implements HttpClient {
   static String _bodyFor(Uri url) {
     if (url.path.endsWith('/api/v0/files/stat')) {
       final path = url.queryParameters['filePath'] ?? '';
-      final isFile = path.endsWith('.pdf');
+      final isFile = path.endsWith('.pdf') || path.endsWith('.qslide');
       return jsonEncode({
         'isDir': !isFile,
-        'fileType': isFile ? 'pdf' : 'folder',
+        'fileType': isFile ? path.split('.').last : 'folder',
         'name': path.split('/').last,
       });
     }
@@ -253,6 +253,10 @@ void main() {
           (route) => route.path == '${AppRoutes.viewFile}/:path(.*)',
         ),
         GoRoute(
+          path: '${AppRoutes.slides}/:path(.*)',
+          builder: (_, _) => const Text('slide editor'),
+        ),
+        GoRoute(
           path: '/files',
           builder: (_, _) => const FileBrowserPage(),
           routes: [
@@ -296,6 +300,25 @@ void main() {
         reason:
             'GET /api/v0/files?rootDir=report.pdf can only 404 — the path '
             'names a file, not a directory',
+      );
+    }, createHttpClient: overrides.createHttpClient);
+  });
+
+  // The slide editor leaves for the Slides list unless told otherwise (#2896),
+  // which is not where a deck opened from Files came from (#2403).
+  testWidgets('a presentation opens saying which folder it came from', (
+    tester,
+  ) async {
+    await HttpOverrides.runZoned(() async {
+      final router = await pumpRouted(tester, '/files/talks/deck.qslide');
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text('slide editor'), findsOneWidget);
+      expect(
+        router.state.uri.toString(),
+        '/slides/talks/deck.qslide?from=/files/talks',
       );
     }, createHttpClient: overrides.createHttpClient);
   });

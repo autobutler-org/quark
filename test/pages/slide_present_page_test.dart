@@ -48,6 +48,7 @@ void main() {
     int start = 0,
     int slides = 3,
     Presentation? presentation,
+    String location = '/slides/talks/Deck.qslide/present',
   }) async {
     final controller = SlidePresentController(
       filePath: 'talks/Deck.qslide',
@@ -56,7 +57,7 @@ void main() {
       fullscreen: screen,
     );
     router = GoRouter(
-      initialLocation: AppRoutes.slidePresent('talks/Deck.qslide'),
+      initialLocation: location,
       routes: [
         slidePresentRoute(
           builder: (filePath, serial, startIndex, initial) => SlidePresentPage(
@@ -196,6 +197,22 @@ void main() {
     expect(
       router.routeInformationProvider.value.uri.toString(),
       AppRoutes.slideFile('talks/Deck.qslide', slide: 3),
+    );
+    c.dispose();
+  });
+
+  testWidgets('exiting keeps the page the deck was opened from (#2403)', (
+    tester,
+  ) async {
+    tap.setViewport(tester, tap.wideViewport);
+    final c = await pumpPresent(
+      tester,
+      location: '/slides/talks/Deck.qslide/present?from=/files/talks',
+    );
+    await press(tester, LogicalKeyboardKey.escape);
+    expect(
+      router.routeInformationProvider.value.uri.toString(),
+      '/slides/talks/Deck.qslide?slide=1&from=/files/talks',
     );
     c.dispose();
   });

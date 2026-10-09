@@ -286,46 +286,88 @@ class AppRoutes {
   /// Build a URL for a specific document file.
   /// e.g. docFile('reports/q1.qdoc') → '/docs/reports/q1.qdoc'
   /// Device serial is passed as a query param when non-empty.
-  static String docFile(String path, {String? serial}) {
-    final clean = encodeFilePath(path);
-    final base = '$docs/$clean';
-    return (serial != null && serial.isNotEmpty)
-        ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
-        : base;
-  }
+  ///
+  /// [from] is the location it is being opened from, for [editorOrigin].
+  static String docFile(String path, {String? serial, String? from}) =>
+      _editorUrl('$docs/${encodeFilePath(path)}', serial: serial, from: from);
 
   /// Build a URL for a specific spreadsheet file.
   /// e.g. sheetFile('data/budget.qsheet') → '/sheets/data/budget.qsheet'
-  static String sheetFile(String path, {String? serial}) {
-    final clean = encodeFilePath(path);
-    final base = '$sheets/$clean';
-    return (serial != null && serial.isNotEmpty)
-        ? '$base?serial=${Uri.encodeQueryComponent(serial)}'
-        : base;
-  }
+  ///
+  /// [from] is the location it is being opened from, for [editorOrigin].
+  static String sheetFile(String path, {String? serial, String? from}) =>
+      _editorUrl('$sheets/${encodeFilePath(path)}', serial: serial, from: from);
 
   /// Build a URL for a specific presentation file, open at the [slide]th
   /// slide counting from 1 when given (#2900).
   /// e.g. slideFile('talks/q1.qslide') → '/slides/talks/q1.qslide'
-  static String slideFile(String path, {String? serial, int? slide}) =>
-      _slideUrl('$slides/${encodeFilePath(path)}', serial, slide);
+  ///
+  /// [from] is the location it is being opened from, for [editorOrigin].
+  static String slideFile(
+    String path, {
+    String? serial,
+    int? slide,
+    String? from,
+  }) => _editorUrl(
+    '$slides/${encodeFilePath(path)}',
+    serial: serial,
+    slide: slide,
+    from: from,
+  );
 
   /// Build a URL presenting a presentation file (#1165), from the [slide]th
   /// slide counting from 1 when given.
   /// e.g. slidePresent('talks/q1.qslide', slide: 3)
   ///   → '/slides/talks/q1.qslide/present?slide=3'
-  static String slidePresent(String path, {String? serial, int? slide}) =>
-      _slideUrl('$slides/${encodeFilePath(path)}/present', serial, slide);
+  ///
+  /// [from] is where the editor it was started from was opened, carried so
+  /// ending the presentation hands it back to that editor.
+  static String slidePresent(
+    String path, {
+    String? serial,
+    int? slide,
+    String? from,
+  }) => _editorUrl(
+    '$slides/${encodeFilePath(path)}/present',
+    serial: serial,
+    slide: slide,
+    from: from,
+  );
 
-  /// [base] with the `?serial=` and `?slide=` the slide routes read.
-  static String _slideUrl(String base, String? serial, int? slide) {
+  /// [base] with the `?serial=`, `?slide=` and `?from=` the editor routes
+  /// read, each only when given.
+  static String _editorUrl(
+    String base, {
+    String? serial,
+    int? slide,
+    String? from,
+  }) {
     final query = [
       if (serial != null && serial.isNotEmpty)
         'serial=${Uri.encodeQueryComponent(serial)}',
       if (slide != null) 'slide=$slide',
+      // `/` is legal in a query and stays readable in the address bar, as in
+      // [photosAlbum].
+      if (from != null && from.isNotEmpty)
+        '$editorFromParam='
+            '${Uri.encodeQueryComponent(from).replaceAll('%2F', '/')}',
     ];
     return query.isEmpty ? base : '$base?${query.join('&')}';
   }
+
+  /// The query parameter on an editor's URL carrying the location it was
+  /// opened from (#2403). Every entry point opens an editor with `go`, at its
+  /// own URL (#2078), so nothing sits underneath it to pop back to; this is
+  /// how its back button still knows where the user came from.
+  static const editorFromParam = 'from';
+
+  /// Where the editor showing under [context] was opened from: the
+  /// [editorFromParam] on its URL when that is a path inside the app, and null
+  /// otherwise — a deep link, a pasted URL, or an origin somebody made up.
+  /// Each editor falls back to its own answer for those.
+  static String? editorOrigin(BuildContext context) => _inAppLocation(
+    GoRouterState.of(context).uri.queryParameters[editorFromParam],
+  );
 
   /// The files route for the folder that holds [filePath].
   /// e.g. containingFolder('reports/2024/q1.qdoc') → '/files/reports/2024'
@@ -656,8 +698,9 @@ final router = GoRouter(
       // editor route makes go_router build the section list underneath every
       // editor, so a deep link the user never navigated to still answers
       // "back" with a page they never visited, and leaving the editor left the
-      // folder the document lives in entirely (#1749). Pushing from the list
-      // still stacks the list underneath, so that back is unaffected.
+      // folder the document lives in entirely (#1749). The lists open an
+      // editor with `go`, so nothing is stacked underneath it either; where it
+      // was opened from rides in `?from=` instead (#2403).
       path: '${AppRoutes.docs}/:path(.*)',
       builder: (context, state) {
         final filePath = state.pathParameters['path'] ?? '';
@@ -1000,15 +1043,24 @@ Future<String?> authRedirect(BuildContext context, GoRouterState state) async {
 /// site, a `//host` link or the login page itself all mean Files, so a crafted
 /// link can't send a fresh sign-in anywhere else.
 String destinationAfterSignIn(String? from) {
-  final uri = Uri.tryParse(from ?? '');
-  if (uri == null ||
-      uri.hasScheme ||
-      uri.hasAuthority ||
-      !uri.path.startsWith('/') ||
-      _isUnderAny({AppRoutes.login}, uri.path)) {
-    return AppRoutes.files;
-  }
-  return uri.toString();
+  final location = _inAppLocation(from);
+  return location == null ||
+          _isUnderAny({AppRoutes.login}, Uri.parse(location).path)
+      ? AppRoutes.files
+      : location;
+}
+
+/// [location] when it is a path inside the app, and null otherwise. It comes
+/// out of a URL anyone can write, so another site and a `//host` link are
+/// both refused.
+String? _inAppLocation(String? location) {
+  final uri = Uri.tryParse(location ?? '');
+  return uri == null ||
+          uri.hasScheme ||
+          uri.hasAuthority ||
+          !uri.path.startsWith('/')
+      ? null
+      : uri.toString();
 }
 
 /// Where a user who has accepted terms but holds no session belongs:

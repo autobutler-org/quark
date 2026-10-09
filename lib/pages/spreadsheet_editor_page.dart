@@ -93,14 +93,17 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
   /// [AppBar] implies a back button only when the navigator can pop. The
   /// sheets list, a search hit and the file browser all open a sheet at its own
   /// URL (#2078), so nothing is underneath it and this is the button every
-  /// entry point gets. It lands in the folder that holds the sheet, not the
-  /// home folder (#1749).
-  Widget? _backButton() => Navigator.of(context).canPop()
-      ? null
-      : BackButton(onPressed: _leaveForContainingFolder);
+  /// entry point gets.
+  Widget? _backButton() =>
+      Navigator.of(context).canPop() ? null : BackButton(onPressed: _leave);
 
-  void _leaveForContainingFolder() =>
-      context.go(AppRoutes.containingFolder(widget.filePath));
+  /// Closes a sheet that has no history behind it, landing on the page it was
+  /// opened from (#2403). A sheet reached by a link has none, and lands in the
+  /// folder that holds it rather than the home folder (#1749).
+  void _leave() => context.go(
+    AppRoutes.editorOrigin(context) ??
+        AppRoutes.containingFolder(widget.filePath),
+  );
 
   @override
   void initState() {
@@ -413,6 +416,7 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
         AppRoutes.sheetFile(
           renamed,
           serial: widget.deviceSerial.isEmpty ? null : widget.deviceSerial,
+          from: AppRoutes.editorOrigin(context),
         ),
       );
     } finally {
@@ -507,10 +511,10 @@ class _SpreadsheetEditorPageState extends State<SpreadsheetEditorPage> {
     final canPop = Navigator.of(context).canPop();
     return PopScope(
       // With nothing underneath, a system back would close the app; it
-      // leaves for the containing folder, as the app bar's back button does.
+      // leaves as the app bar's back button does.
       canPop: canPop,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && !canPop) _leaveForContainingFolder();
+        if (!didPop && !canPop) _leave();
       },
       child: page,
     );
