@@ -13,7 +13,9 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// destination meant the same edit on every page, and one missed left that
 /// page's drawer without it. Each
 /// row goes to its page with `context.go`; the row for the page the drawer
-/// was opened from closes the drawer instead.
+/// was opened from closes the drawer instead. [QuarkDrawer] decides the order:
+/// the household's everyday pages first, then Trash, System, Users and
+/// Settings under "Manage" (#2046).
 ///
 /// Admin-only pages are offered to admins only, following
 /// [AppSettings.isAdmin]. That decides what the drawer shows and nothing

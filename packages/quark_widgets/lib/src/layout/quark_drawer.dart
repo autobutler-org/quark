@@ -7,6 +7,7 @@ import '../core/quark_beta_badge.dart';
 import '../models/host_item.dart';
 import '../theme/quark_tokens.dart';
 import 'quark_chrome.dart';
+import 'quark_drawer/quark_drawer_group_label.dart';
 import 'quark_drawer/quark_drawer_header.dart';
 
 /// The top-level destinations in [QuarkDrawer], one per main page.
@@ -58,8 +59,23 @@ const _betaSections = {
   QuarkDrawerSection.chat,
 };
 
+/// The sections for looking after the Quark, which follow the household's
+/// everyday pages under a "Manage" label.
+const _manageSections = {
+  QuarkDrawerSection.trash,
+  QuarkDrawerSection.system,
+  QuarkDrawerSection.users,
+  QuarkDrawerSection.settings,
+};
+
 /// The app's navigation drawer: one row per [QuarkDrawerSection] the caller
 /// offers, with the current one marked.
+///
+/// The rows come in two groups (#2046). The pages a household opens every day
+/// lead: Files, Photos, Calendar, Docs, Sheets, Slides, Books, Chat and Vault.
+/// The pages for looking after the Quark follow under a "Manage" label: Trash,
+/// System, Users and Settings. The label is drawn only when one of its rows
+/// is.
 ///
 /// The drawer navigates nothing itself. Each row calls back and the page
 /// routes, so the package stays free of the router.
@@ -80,7 +96,8 @@ const _betaSections = {
 /// [QuarkBetaBadge] beside its label.
 ///
 /// Key prefixes: `drawer_<section>` on each row, for example `drawer_photos`
-/// and `drawer_users`; `drawer_host` on the header when it names a Quark;
+/// and `drawer_users`; `drawer_group_manage` on the "Manage" label;
+/// `drawer_host` on the header when it names a Quark;
 /// `drawer_host_header` on the button that opens the switcher, and
 /// `drawer_host_<index>` on each Quark in it.
 ///
@@ -201,12 +218,6 @@ class QuarkDrawer extends StatelessWidget {
         onTapCalendar,
       ),
       (
-        QuarkDrawerSection.trash,
-        QuarkIcons.delete_outline,
-        'Trash',
-        onTapTrash,
-      ),
-      (
         QuarkDrawerSection.docs,
         QuarkIcons.description_outlined,
         'Docs',
@@ -231,8 +242,14 @@ class QuarkDrawer extends StatelessWidget {
         onTapBooks,
       ),
       (QuarkDrawerSection.chat, QuarkIcons.forum_outlined, 'Chat', onTapChat),
-      (QuarkDrawerSection.system, QuarkIcons.memory, 'System', onTapSystem),
       (QuarkDrawerSection.vault, QuarkIcons.lock_outline, 'Vault', onTapVault),
+      (
+        QuarkDrawerSection.trash,
+        QuarkIcons.delete_outline,
+        'Trash',
+        onTapTrash,
+      ),
+      (QuarkDrawerSection.system, QuarkIcons.memory, 'System', onTapSystem),
       (
         QuarkDrawerSection.users,
         QuarkIcons.person_outline,
@@ -246,6 +263,10 @@ class QuarkDrawer extends StatelessWidget {
         onTapSettings,
       ),
     ];
+    final firstManaged = rows
+        .where((row) => row.$4 != null && _manageSections.contains(row.$1))
+        .firstOrNull
+        ?.$1;
 
     return QuarkChrome(
       child: ListTileTheme.merge(
@@ -266,7 +287,12 @@ class QuarkDrawer extends StatelessWidget {
                 ),
               ),
               for (final (section, icon, label, onTap) in rows)
-                if (onTap != null)
+                if (onTap != null) ...[
+                  if (section == firstManaged)
+                    const QuarkDrawerGroupLabel(
+                      key: ValueKey('drawer_group_manage'),
+                      label: 'Manage',
+                    ),
                   ListTile(
                     key: ValueKey('drawer_${section.name}'),
                     leading: Icon(icon),
@@ -282,6 +308,7 @@ class QuarkDrawer extends StatelessWidget {
                     selected: activeSection == section,
                     onTap: onTap,
                   ),
+                ],
             ],
           ),
         ),
