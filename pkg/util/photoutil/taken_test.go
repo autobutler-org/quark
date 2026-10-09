@@ -161,7 +161,7 @@ func TestBackfillHashes_DatesHashedPhotosWithoutRehashing(t *testing.T) {
 func TestListPhotos_SortByTaken(t *testing.T) {
 	database := dbtest.NewDB(t)
 	ctx := context.Background()
-	mem := newPhotoMemVFS(t, "2019.jpg", "undated.jpg", "2023.jpg")
+	registry := newPhotoRegistry(t, "2019.jpg", "undated.jpg", "2023.jpg")
 	for relPath, taken := range map[string]time.Time{
 		"2019.jpg": time.Date(2019, 7, 4, 12, 0, 0, 0, time.UTC),
 		"2023.jpg": time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
@@ -176,7 +176,7 @@ func TestListPhotos_SortByTaken(t *testing.T) {
 	list := func(sortBy, order string) []photoutil.PhotoSummary {
 		t.Helper()
 		page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
-			Ctx: ctx, FS: mem, Access: systemAccess(t), Queries: database.Queries,
+			Ctx: ctx, Registry: registry, Access: systemAccess(t), Queries: database.Queries,
 			Sort: sortBy, Order: order, Limit: 50,
 		})
 		if err != nil {

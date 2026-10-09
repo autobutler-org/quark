@@ -97,26 +97,32 @@ func TestParseOrder(t *testing.T) {
 
 // --- ListPhotos (VFS path) ---
 
-func newPhotoMemVFS(t *testing.T, paths ...string) *vfs.MemVFS {
+// newPhotoRegistry is a registry whose internal "files" namespace is a MemVFS
+// holding paths.
+func newPhotoRegistry(t *testing.T, paths ...string) vfs.Registry {
 	t.Helper()
-	mem := vfs.NewMemVFS("files")
+	mem := vfs.NewMemVFS(vfs.FilesNamespace(""))
 	for _, p := range paths {
 		if err := mem.Write(context.Background(), p, strings.NewReader("x"), vfs.WriteOptions{}); err != nil {
 			t.Fatalf("write %s: %v", p, err)
 		}
 	}
-	return mem
+	registry := vfs.NewRegistry()
+	if err := registry.Register(vfs.Namespace{ID: vfs.FilesNamespace("")}, mem); err != nil {
+		t.Fatal(err)
+	}
+	return registry
 }
 
 func TestListPhotos_VFS_ListsImagesOnly(t *testing.T) {
-	mem := newPhotoMemVFS(t, "a.jpg", "sub/b.png", "notes.txt")
+	registry := newPhotoRegistry(t, "a.jpg", "sub/b.png", "notes.txt")
 
 	result, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
-		Ctx:    context.Background(),
-		FS:     mem,
-		Access: systemAccess(t),
-		Offset: 0,
-		Limit:  50,
+		Ctx:      context.Background(),
+		Registry: registry,
+		Access:   systemAccess(t),
+		Offset:   0,
+		Limit:    50,
 	})
 	if err != nil {
 		t.Fatalf("ListPhotos: %v", err)
@@ -132,10 +138,10 @@ func TestListPhotos_VFS_ListsImagesOnly(t *testing.T) {
 }
 
 func TestListPhotos_VFS_Paginates(t *testing.T) {
-	mem := newPhotoMemVFS(t, "a.jpg", "b.jpg", "c.jpg")
+	registry := newPhotoRegistry(t, "a.jpg", "b.jpg", "c.jpg")
 
 	page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
-		Ctx: context.Background(), FS: mem, Access: systemAccess(t), Offset: 1, Limit: 1,
+		Ctx: context.Background(), Registry: registry, Access: systemAccess(t), Offset: 1, Limit: 1,
 	})
 	if err != nil {
 		t.Fatalf("ListPhotos: %v", err)
@@ -147,10 +153,10 @@ func TestListPhotos_VFS_Paginates(t *testing.T) {
 }
 
 func TestListPhotos_VFS_SortByNameAscending(t *testing.T) {
-	mem := newPhotoMemVFS(t, "charlie.jpg", "alpha.jpg", "bravo.jpg")
+	registry := newPhotoRegistry(t, "charlie.jpg", "alpha.jpg", "bravo.jpg")
 
 	page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
-		Ctx: context.Background(), FS: mem, Access: systemAccess(t),
+		Ctx: context.Background(), Registry: registry, Access: systemAccess(t),
 		Sort: "name", Order: "asc", Offset: 0, Limit: 50,
 	})
 	if err != nil {
@@ -167,10 +173,10 @@ func TestListPhotos_VFS_SortByNameAscending(t *testing.T) {
 }
 
 func TestListPhotos_VFS_SortByNameDescending(t *testing.T) {
-	mem := newPhotoMemVFS(t, "alpha.jpg", "charlie.jpg", "bravo.jpg")
+	registry := newPhotoRegistry(t, "alpha.jpg", "charlie.jpg", "bravo.jpg")
 
 	page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
-		Ctx: context.Background(), FS: mem, Access: systemAccess(t),
+		Ctx: context.Background(), Registry: registry, Access: systemAccess(t),
 		Sort: "name", Order: "desc", Offset: 0, Limit: 50,
 	})
 	if err != nil {
@@ -187,10 +193,10 @@ func TestListPhotos_VFS_SortByNameDescending(t *testing.T) {
 }
 
 func TestListPhotos_VFS_OffsetBeyondTotal(t *testing.T) {
-	mem := newPhotoMemVFS(t, "a.jpg")
+	registry := newPhotoRegistry(t, "a.jpg")
 
 	page, err := photoutil.ListPhotos(photoutil.ListPhotosParams{
-		Ctx: context.Background(), FS: mem, Access: systemAccess(t), Offset: 99, Limit: 50,
+		Ctx: context.Background(), Registry: registry, Access: systemAccess(t), Offset: 99, Limit: 50,
 	})
 	if err != nil {
 		t.Fatalf("ListPhotos: %v", err)

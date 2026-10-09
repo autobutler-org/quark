@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"maps"
 	"net"
 	"os"
 	"os/signal"
@@ -344,7 +345,9 @@ func vaultDeviceMonitor(deps deputil.Dependencies) {
 
 // usbDeviceMonitor polls for newly connected USB storage devices and
 // auto-mounts them via storageutil.AutoMountDevice so they are immediately
-// operational without manual user intervention.
+// operational without manual user intervention. When the set of mounted USB
+// devices changes any other way — a drive pulled out — it invalidates the
+// device cache, which re-syncs the VFS device namespaces (#2639).
 func usbDeviceMonitor(deps deputil.Dependencies) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -357,6 +360,9 @@ func usbDeviceMonitor(deps deputil.Dependencies) {
 	// identical lines a day and buries everything else (#1788).
 	lastErr := ""
 
+	// The serials mounted at the last tick; nil until the first one.
+	var mounted map[string]bool
+
 	for range ticker.C {
 		devices, err := storageutil.ListUsbDevices(true)
 		if err != nil {
@@ -367,6 +373,12 @@ func usbDeviceMonitor(deps deputil.Dependencies) {
 			continue
 		}
 		lastErr = ""
+
+		nowMounted := mountedUsbSerials(devices)
+		if mounted != nil && !maps.Equal(mounted, nowMounted) {
+			deps.StorageService().InvalidateDeviceCache()
+		}
+		mounted = nowMounted
 
 		for _, device := range devices {
 			serial := device.GetSerial()
@@ -396,6 +408,17 @@ func usbDeviceMonitor(deps deputil.Dependencies) {
 			log.Printf("[storage] auto-mounted new device %s at %s", serial, result.MountTargetPath)
 		}
 	}
+}
+
+// mountedUsbSerials is the set of serials of the USB devices that are mounted.
+func mountedUsbSerials(devices []storageutil.UsbDevice) map[string]bool {
+	out := make(map[string]bool, len(devices))
+	for _, device := range devices {
+		if serial := device.GetSerial(); serial != "" && device.GetMountPath() != "" {
+			out[serial] = true
+		}
+	}
+	return out
 }
 
 func setupSwagger(router *gin.Engine) {

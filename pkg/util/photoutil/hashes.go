@@ -120,10 +120,10 @@ func DHashFile(filePath string) (string, error) {
 type BackfillHashesParams struct {
 	Ctx     context.Context
 	Queries *db.Queries
-	// FS and Storage enumerate the library the way [ListPhotos] does. Storage
-	// also resolves each photo to the file that is read.
-	FS      vfs.VFS
-	Storage *storageutil.StorageService
+	// Registry and Storage enumerate the library the way [ListPhotos] does.
+	// Storage also resolves each photo to the file that is read.
+	Registry vfs.Registry
+	Storage  *storageutil.StorageService
 	// IOSemaphore, when set, is held while each photo is read. Photos are
 	// read one at a time, so the pass takes at most one slot from requests.
 	IOSemaphore *iosemutil.Semaphore
@@ -160,7 +160,7 @@ func BackfillHashes(params BackfillHashesParams) (BackfillHashesResult, error) {
 		return BackfillHashesResult{}, err
 	}
 	library, err := ListPhotos(ListPhotosParams{
-		Ctx: params.Ctx, FS: params.FS, Storage: params.Storage,
+		Ctx: params.Ctx, Registry: params.Registry, Storage: params.Storage,
 		Access: system.Access, Limit: math.MaxInt,
 	})
 	if err != nil {

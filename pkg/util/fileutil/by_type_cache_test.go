@@ -11,7 +11,6 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/accessutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
-	"github.com/autobutler-org/quark/pkg/vfs"
 )
 
 // byTypeFixture is a USB device served through the VFS registry, the path the
@@ -29,10 +28,7 @@ func newByTypeFixture(t testing.TB) byTypeFixture {
 		t.Fatal(err)
 	}
 	svc := storageutil.NewStorageService(&usbDetector{mountPoint: mountPoint, serial: "USB-1780"})
-	registry := vfs.NewRegistry()
-	if err := registry.Register(vfs.Namespace{ID: filesNamespace}, vfs.NewStorageServiceVFS(svc, filesNamespace)); err != nil {
-		t.Fatal(err)
-	}
+	registry := newDeviceRegistry(t, svc)
 	system, err := accessutil.Load(accessutil.LoadParams{Principal: accessutil.System})
 	if err != nil {
 		t.Fatal(err)

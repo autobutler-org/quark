@@ -10,6 +10,7 @@ import (
 
 	"github.com/autobutler-org/quark/internal/server/middleware"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -148,5 +149,28 @@ func TestAccessLog_RedactsQueryToken(t *testing.T) {
 	}
 	if !strings.Contains(line, "/api/v0/videos/stream?filePath=clip.mp4&token=REDACTED") {
 		t.Fatalf("access log lost the request line: %q", line)
+	}
+}
+
+// mountUsbDevice implements the two UsbDevice calls mountedUsbSerials makes;
+// any other call panics on the nil embedded interface.
+type mountUsbDevice struct {
+	storageutil.UsbDevice
+	serial, mountPath string
+}
+
+func (d mountUsbDevice) GetSerial() string    { return d.serial }
+func (d mountUsbDevice) GetMountPath() string { return d.mountPath }
+
+// TestMountedUsbSerials checks the set usbDeviceMonitor compares between
+// ticks: a pulled drive leaves it, so the VFS device namespaces re-sync (#2639).
+func TestMountedUsbSerials(t *testing.T) {
+	got := mountedUsbSerials([]storageutil.UsbDevice{
+		mountUsbDevice{serial: "A", mountPath: "/mnt/a"},
+		mountUsbDevice{serial: "B"},
+		mountUsbDevice{mountPath: "/mnt/no-serial"},
+	})
+	if len(got) != 1 || !got["A"] {
+		t.Errorf("mountedUsbSerials = %v, want only A", got)
 	}
 }
