@@ -13,6 +13,8 @@ class GalleryThemePanel extends StatelessWidget {
     required this.brightness,
     required this.themeColor,
     required this.onToggleBrightness,
+    required this.highContrast,
+    required this.onToggleHighContrast,
     required this.onThemeColorChanged,
     required this.onTokensChanged,
     super.key,
@@ -26,6 +28,12 @@ class GalleryThemePanel extends StatelessWidget {
 
   /// The theme color the gallery's tokens were derived from.
   final QuarkThemeColor themeColor;
+
+  /// Whether the high-contrast tokens are showing, driving the switch.
+  final bool highContrast;
+
+  /// Called when the high-contrast switch is flipped.
+  final VoidCallback onToggleHighContrast;
 
   /// Called with the theme color picked. Its token set replaces [tokens].
   final ValueChanged<QuarkThemeColor> onThemeColorChanged;
@@ -52,6 +60,14 @@ class GalleryThemePanel extends StatelessWidget {
           value: brightness == Brightness.dark,
           onChanged: (_) => onToggleBrightness(),
         ),
+        SwitchListTile(
+          key: const ValueKey('gallery_high_contrast_switch'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: const Text('High contrast'),
+          value: highContrast,
+          onChanged: (_) => onToggleHighContrast(),
+        ),
         QuarkThemeColorPicker(
           value: themeColor,
           onChanged: onThemeColorChanged,
@@ -61,7 +77,7 @@ class GalleryThemePanel extends StatelessWidget {
           HexField(
             // Rebuild the controllers when the token set is swapped wholesale.
             key: ValueKey(
-              '${field.name}-$brightness-${themeColor.storageValue}',
+              '${field.name}-$brightness-${themeColor.storageValue}-$highContrast',
             ),
             name: field.name,
             value: field.read(tokens),

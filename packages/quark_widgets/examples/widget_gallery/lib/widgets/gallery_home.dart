@@ -7,6 +7,8 @@ class GalleryHome extends StatelessWidget {
   const GalleryHome({
     required this.brightness,
     required this.onToggleBrightness,
+    required this.highContrast,
+    required this.onToggleHighContrast,
     required this.index,
     required this.example,
     required this.themePanel,
@@ -19,6 +21,12 @@ class GalleryHome extends StatelessWidget {
 
   /// Called by the app bar's light/dark button.
   final VoidCallback onToggleBrightness;
+
+  /// Whether the high-contrast tokens are showing, driving the app bar icon.
+  final bool highContrast;
+
+  /// Called by the app bar's high-contrast button.
+  final VoidCallback onToggleHighContrast;
 
   /// The left panel, listing the registry.
   final Widget index;
@@ -40,6 +48,15 @@ class GalleryHome extends StatelessWidget {
       appBar: AppBar(
         title: const Text('QuarkWidgets Gallery'),
         actions: [
+          Tooltip(
+            message: 'Toggle high contrast',
+            child: IconButton(
+              key: const ValueKey('gallery_high_contrast_button'),
+              isSelected: highContrast,
+              icon: const Icon(Icons.contrast),
+              onPressed: onToggleHighContrast,
+            ),
+          ),
           Tooltip(
             message: 'Toggle light and dark',
             child: IconButton(

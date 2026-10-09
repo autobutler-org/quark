@@ -123,7 +123,7 @@ final List<ColorField> colorFields = [
     ),
 ];
 
-/// Every radius and spacing token, in the order the theme panel shows them.
+/// Every radius, spacing and focus ring token, in the order the theme panel shows them.
 final List<NumberField> numberFields = [
   (
     name: 'radiusSm',
@@ -172,6 +172,12 @@ final List<NumberField> numberFields = [
     max: 48,
     read: (t) => t.spacingXl,
     write: (t, v) => t.copyWith(spacingXl: v),
+  ),
+  (
+    name: 'focusRingWidth',
+    max: 8,
+    read: (t) => t.focusRingWidth,
+    write: (t, v) => t.copyWith(focusRingWidth: v),
   ),
 ];
 

@@ -30,6 +30,7 @@ class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
   Brightness _brightness = Brightness.dark;
   QuarkTokens _tokens = QuarkTokens.dark;
   QuarkThemeColor _themeColor = QuarkThemeColor.classic;
+  bool _highContrast = false;
   GalleryEntry _selected = registry.first;
   String _filter = '';
   final List<String> _events = [];
@@ -48,7 +49,24 @@ class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
           : Brightness.dark;
       // Start each side from the theme color's own token set rather than
       // carrying dark colors into the light theme.
-      _tokens = _themeColor.tokensFor(_brightness);
+      _tokens = _baseTokens();
+    });
+  }
+
+  /// The untouched token set for the current brightness, theme color and
+  /// contrast. High contrast takes no theme color, the way
+  /// [QuarkTheme.highContrastLight] and [QuarkTheme.highContrastDark] do.
+  QuarkTokens _baseTokens() {
+    if (!_highContrast) return _themeColor.tokensFor(_brightness);
+    return _brightness == Brightness.dark
+        ? QuarkTokens.highContrastDark
+        : QuarkTokens.highContrastLight;
+  }
+
+  void _toggleHighContrast() {
+    setState(() {
+      _highContrast = !_highContrast;
+      _tokens = _baseTokens();
     });
   }
 
@@ -57,7 +75,8 @@ class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
   void _setThemeColor(QuarkThemeColor themeColor) {
     setState(() {
       _themeColor = themeColor;
-      _tokens = themeColor.tokensFor(_brightness);
+      _highContrast = false;
+      _tokens = _baseTokens();
     });
   }
 
@@ -70,6 +89,8 @@ class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
       home: GalleryHome(
         brightness: _brightness,
         onToggleBrightness: _toggleBrightness,
+        highContrast: _highContrast,
+        onToggleHighContrast: _toggleHighContrast,
         index: GalleryIndexPanel(
           filter: _filter,
           selected: _selected,
@@ -81,6 +102,8 @@ class _WidgetGalleryAppState extends State<WidgetGalleryApp> {
           tokens: _tokens,
           brightness: _brightness,
           themeColor: _themeColor,
+          highContrast: _highContrast,
+          onToggleHighContrast: _toggleHighContrast,
           onToggleBrightness: _toggleBrightness,
           onThemeColorChanged: _setThemeColor,
           onTokensChanged: (tokens) => setState(() => _tokens = tokens),
