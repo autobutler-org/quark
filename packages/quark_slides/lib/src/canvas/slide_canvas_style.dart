@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// The colors and sizes a `SlideCanvas` draws its chrome with, and the
-/// defaults a slide's own content falls back on.
+/// The colors and sizes a `SlideCanvas` draws its chrome with: the
+/// selection, handles, guides, letterbox and search highlights. A slide's
+/// own content is colored by its deck's theme, never by this.
 ///
 /// The package does not know the host app's design tokens, so this is the
 /// value class an app feeds them through. Leave it out and
@@ -24,9 +25,6 @@ class SlideCanvasStyle {
     required this.guideColor,
     required this.backdropColor,
     required this.placeholderColor,
-    this.slideColor = const Color(0xFFFFFFFF),
-    this.textColor = const Color(0xFF000000),
-    this.fontSize = 36,
     this.handleSize = 12,
     this.handleHitSize = 48,
     this.rotateHandleOffset = 32,
@@ -65,15 +63,6 @@ class SlideCanvasStyle {
   /// image builder, or an element type this version does not know.
   final Color placeholderColor;
 
-  /// The slide color when neither the slide nor the theme sets one.
-  final Color slideColor;
-
-  /// The color of a text run that does not set one.
-  final Color textColor;
-
-  /// The font size, in slide units, of a text run that does not set one.
-  final double fontSize;
-
   /// The drawn size of a handle, in logical pixels.
   final double handleSize;
 
@@ -103,9 +92,6 @@ class SlideCanvasStyle {
     Color? guideColor,
     Color? backdropColor,
     Color? placeholderColor,
-    Color? slideColor,
-    Color? textColor,
-    double? fontSize,
     double? handleSize,
     double? handleHitSize,
     double? rotateHandleOffset,
@@ -119,9 +105,6 @@ class SlideCanvasStyle {
         guideColor: guideColor ?? this.guideColor,
         backdropColor: backdropColor ?? this.backdropColor,
         placeholderColor: placeholderColor ?? this.placeholderColor,
-        slideColor: slideColor ?? this.slideColor,
-        textColor: textColor ?? this.textColor,
-        fontSize: fontSize ?? this.fontSize,
         handleSize: handleSize ?? this.handleSize,
         handleHitSize: handleHitSize ?? this.handleHitSize,
         rotateHandleOffset: rotateHandleOffset ?? this.rotateHandleOffset,

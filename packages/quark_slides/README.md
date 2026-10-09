@@ -146,9 +146,9 @@ deck has none.
 **Drawing.** The canvas resolves every role and unset text style against
 the deck's theme as it paints; `SlideCanvas.readOnly` takes a `theme` for
 thumbnails and presenting. A deck with no theme is drawn in
-`slideFallbackTheme(style, colorScheme)`: the canvas style's slide and text
-colors with the app's `ColorScheme` accents, so it matches the app around
-it. A placeholder reads to a screen reader with its role first: "Title:
+`SlideThemes.light`, which is also what its PowerPoint export uses: slide
+content never takes the app's colors, so a deck looks the same in every
+app and every app theme. A placeholder reads to a screen reader with its role first: "Title:
 Quarterly review", or "Subtitle placeholder: Click to add subtitle" while
 empty (`ThemeTextRole.label`).
 

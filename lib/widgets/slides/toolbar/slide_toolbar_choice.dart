@@ -65,7 +65,7 @@ class SlideColorChoice {
   final String noneLabel;
 
   /// The presentation's theme, which its role swatches are drawn in; null
-  /// for a deck with none, drawn in the canvas's fallback.
+  /// for a deck with none, drawn in `SlideThemes.light`.
   final SlideTheme? theme;
 
   /// Sets the color, null for none; null while the control does not apply.

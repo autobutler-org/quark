@@ -603,8 +603,8 @@ same drive as the presentation (`photos/cover.jpg`).
   colors — as one undo step, and it is autosaved (JN-SL-009). Colors typed as hex or picked from **More colors** stay
   as they are.
 - The slide panel's thumbnails and the presentation (JN-SL-016) are drawn in the theme too.
-- A presentation made before themes, or one with none, reads **No theme** above the previews with an **Apply a theme**
-  button, which applies Light. Until then it opens, edits and saves as before, drawn in the app's colors.
+- A presentation made before themes opens in Light and keeps it from its next save. A slide's colors come from its
+  theme alone: they do not change with the app's light or dark mode or its accent color.
 
 ---
 

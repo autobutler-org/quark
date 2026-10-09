@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:quark/widgets/slides/slide_editor_canvas.dart';
 import 'package:quark/widgets/slides/toolbar/slide_hex_field.dart';
 import 'package:quark/widgets/slides/toolbar/slide_swatch_button.dart';
 import 'package:quark/widgets/slides/toolbar/slide_swatches.dart';
@@ -14,8 +13,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///
 /// A theme swatch writes the role, not its value, so the color follows
 /// the deck when its theme changes; it is drawn in [choice]'s theme, or in
-/// the canvas's fallback for a deck with none, which is how the canvas
-/// draws it too. The hex field shows a role color's value in that theme.
+/// [SlideThemes.light] for a deck with none, which is how the canvas draws
+/// it too. The hex field shows a role color's value in that theme.
 ///
 /// The swatches wrap, so the palette fits a phone's menu and the properties
 /// panel alike.
@@ -38,12 +37,7 @@ class SlideColorPalette extends StatelessWidget {
     final tokens = QuarkTokens.of(context);
     final onChanged = choice.onChanged;
     final current = choice.current;
-    final theme =
-        choice.theme ??
-        slideFallbackTheme(
-          SlideEditorCanvas.styleOf(context),
-          Theme.of(context).colorScheme,
-        );
+    final theme = choice.theme ?? SlideThemes.light;
     final caption = Theme.of(
       context,
     ).textTheme.labelSmall?.copyWith(color: tokens.mutedForeground);

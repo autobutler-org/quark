@@ -36,7 +36,7 @@ class SlideTextEditor extends StatelessWidget {
   final SlideCanvasStyle style;
 
   /// The theme the slide's role colors and unset text styles resolve
-  /// against: the deck's, or `slideFallbackTheme`.
+  /// against: the deck's, or `SlideThemes.light`.
   final SlideTheme theme;
 
   /// Screen pixels per slide unit.

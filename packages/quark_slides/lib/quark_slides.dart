@@ -42,7 +42,6 @@ export 'src/canvas/slide_canvas_style.dart';
 export 'src/canvas/slide_chart_painter.dart';
 export 'src/canvas/slide_canvas_tool.dart';
 export 'src/canvas/slide_element_label.dart';
-export 'src/canvas/slide_fallback_theme.dart';
 export 'src/canvas/slide_image_source.dart';
 export 'src/canvas/slide_shape_paths.dart';
 export 'src/canvas/slide_table_editing_controller.dart';

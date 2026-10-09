@@ -135,17 +135,14 @@ void main() {
     expect(picked, [const SlideColor.theme(ThemeColor.accent1)]);
   });
 
-  testWidgets('a deck with no theme draws roles in the app\'s colors', (
+  testWidgets('a deck with no theme draws roles in the light theme', (
     tester,
   ) async {
     await pump(tester);
     final swatch = tester.widget<SlideSwatchButton>(
       find.byKey(const ValueKey('fill_theme_accent1')),
     );
-    expect(
-      swatch.color,
-      QuarkTheme.light(themeColor: QuarkThemeColor.classic).colorScheme.primary,
-    );
+    expect(swatch.color, Color(SlideThemes.light.colors[ThemeColor.accent1]));
   });
 
   testWidgets('does nothing while the color does not apply', (tester) async {
