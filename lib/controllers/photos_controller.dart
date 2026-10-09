@@ -78,6 +78,11 @@ class AddToAlbumOutcome {
 /// (#1778). The album tree, and the items of an album opened before, come
 /// out of [AlbumsCache] the same way (#1779).
 ///
+/// A search by file name ([setSearchQuery], #2059) narrows whatever the grid
+/// shows. The library's matches come from the Quark's files search, so they
+/// reach past the pages loaded so far; an album's items and the device's
+/// photos are all on hand and are filtered here.
+///
 /// Service calls arrive as function parameters defaulting to the real static
 /// methods, so a test passes fakes without a mocking library.
 class PhotosController extends ChangeNotifier {
@@ -172,6 +177,10 @@ class PhotosController extends ChangeNotifier {
         })
         deleteFile =
         FilesService.deleteFile,
+    Future<List<FileNode>> Function(String query, {List<String>? serials})?
+        searchFiles =
+        FilesService.searchFiles,
+    Duration searchDelay = searchDebounce,
     PhotoBytesCache? bytesCache,
     PhotosListCache? listCache,
     AlbumsCache? albumsCache,
@@ -199,6 +208,8 @@ class PhotosController extends ChangeNotifier {
        _saveFile = saveFile,
        _copyPhoto = copyPhoto,
        _deleteFile = deleteFile,
+       _searchFiles = searchFiles,
+       _searchDelay = searchDelay,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
        _listCache = listCache ?? PhotosListCache.instance,
        _albumsCache = albumsCache ?? AlbumsCache.instance,
@@ -222,8 +233,8 @@ class PhotosController extends ChangeNotifier {
   /// A controller over Demo mode's bundled sample library (#1746).
   ///
   /// Every Quark-bound photo and album call is swapped for its
-  /// [DemoPhotosService] stand-in, so nothing it shows comes from, or is
-  /// asked of, a Quark. Device photos and uploads are left as they are. The
+  /// [DemoPhotosService] stand-in, and the Quark's search is left out, so
+  /// nothing it shows comes from, or is asked of, a Quark. Device photos and uploads are left as they are. The
   /// samples get caches of their own, so they never show for the Quark.
   factory PhotosController.demo() => PhotosController(
     listCache: PhotosListCache(),
@@ -247,6 +258,8 @@ class PhotosController extends ChangeNotifier {
           order = PhotoSortOrder.desc,
         }) async =>
             DemoPhotosService.listAlbumItems(id, sort: sort, order: order),
+    // The samples all arrive in the first page, so a search filters those.
+    searchFiles: null,
   );
 
   /// How many Quark photos one page fetches.
@@ -254,6 +267,9 @@ class PhotosController extends ChangeNotifier {
 
   /// How many device photos the first (and only) page fetches.
   static const int deviceAssetPageSize = 200;
+
+  /// How long typing has to pause before the Quark is asked to search.
+  static const Duration searchDebounce = Duration(milliseconds: 300);
 
   final Future<wire.PaginatedPhotosResponse> Function({
     int offset,
@@ -325,6 +341,11 @@ class PhotosController extends ChangeNotifier {
     String? deviceSerial,
   })
   _deleteFile;
+
+  /// The Quark's file name search, or null to search only what is loaded.
+  final Future<List<FileNode>> Function(String query, {List<String>? serials})?
+  _searchFiles;
+  final Duration _searchDelay;
   final PhotoBytesCache _bytesCache;
   final PhotosListCache _listCache;
   final AlbumsCache _albumsCache;
@@ -400,6 +421,23 @@ class PhotosController extends ChangeNotifier {
   /// Bumped by every album items request, so a slow answer for an album the
   /// user has already left cannot land on the one they moved to.
   int _albumRequest = 0;
+
+  // ── Search ─────────────────────────────────────────────────────────────────
+
+  /// What the grid is narrowed to, trimmed; empty shows everything.
+  String _query = '';
+
+  /// The Quark's matches for a query, in the grid's sort. They outlive a
+  /// change of query until the new answer lands, narrowed here meanwhile, so
+  /// typing never blanks the grid. Null when no search has answered.
+  ({String query, List<_Photo> photos})? _searchResults;
+  Object? _searchError;
+  bool _searchPending = false;
+  Timer? _searchTimer;
+
+  /// Bumped by every search and every change of query, so an answer for
+  /// text the user has typed past cannot land.
+  int _searchRequest = 0;
 
   /// The photos the grid shows for [selectedCategory], in the package's
   /// terms.
@@ -484,8 +522,26 @@ class PhotosController extends ChangeNotifier {
   /// The direction [sortField] orders in.
   PhotoSortOrder get sortOrder => _sortOrder;
 
-  /// Whether another page of Quark photos exists and the grid shows them.
+  /// The file name search the grid is narrowed to, or empty for none.
+  String get searchQuery => _query;
+
+  /// Whether the grid is waiting on the Quark to answer for [searchQuery].
+  bool get isSearching => _searchPending && _showsQuarkMatches;
+
+  /// What kept the Quark from answering for [searchQuery], for the page to
+  /// word, or null.
+  Object? get searchError => _showsQuarkMatches ? _searchError : null;
+
+  /// Whether the grid shows the Quark's answer to a search. An album and the
+  /// device's photos are filtered here, so neither waits on it nor fails
+  /// with it.
+  bool get _showsQuarkMatches =>
+      !_showsAlbum && (_isWeb || _category != PhotoCategory.mobile);
+
+  /// Whether another page of Quark photos exists and the grid shows them. A
+  /// search's matches arrive whole, so it never has one.
   bool get hasMore =>
+      _query.isEmpty &&
       !_showsAlbum &&
       _quarkLoaded &&
       _quark.length < _quarkTotal &&
@@ -631,12 +687,14 @@ class PhotosController extends ChangeNotifier {
           );
     final albums = loadAlbums();
     final albumItems = _loadAlbumItems();
+    final search = _search();
 
     final quarkPage = await quark;
     final mobilePhotos = await mobile;
     final favoriteKeys = await favorites;
     await albums;
     await albumItems;
+    await search;
     if (generation != _generation || _disposed) return;
 
     final sameScope = scope == _listCache.scope;
@@ -677,8 +735,9 @@ class PhotosController extends ChangeNotifier {
   /// Fetches the next page of Quark photos, if there is one and none is
   /// already in flight.
   Future<void> loadMoreQuarkPhotos() async {
-    // Album items arrive in one call; paging is the library's alone.
-    if (_showsAlbum) return;
+    // Album items and a search's matches arrive in one call; paging is the
+    // unfiltered library's alone.
+    if (_showsAlbum || _query.isNotEmpty) return;
     if (_isLoadingMore || !_quarkLoaded || _noHostSelected) return;
     if (_quark.length >= _quarkTotal) return;
     final generation = _generation;
@@ -772,21 +831,47 @@ class PhotosController extends ChangeNotifier {
   static String? _appActiveHost() => AppSettings.instance.activeHost;
 
   List<_Photo> _visible() {
-    if (_showsAlbum) return _albumItems ?? const [];
-    if (_isWeb) return _quark;
+    if (_showsAlbum) return _matching(_albumItems ?? const []);
+    final quark = _quarkMatches();
+    if (_isWeb) return quark;
+    final mobile = _matching(_mobile);
     return switch (_category) {
-      PhotoCategory.quark => _quark,
-      PhotoCategory.mobile => _mobile,
-      PhotoCategory.all => [..._quark, ..._mobile],
+      PhotoCategory.quark => quark,
+      PhotoCategory.mobile => mobile,
+      PhotoCategory.all => [...quark, ...mobile],
       PhotoCategory.favorites => [
-        for (final photo in [..._quark, ..._mobile])
+        for (final photo in [...quark, ...mobile])
           if (_favoriteKeys.contains(photo.id)) photo,
       ],
     };
   }
 
+  /// The [photos] whose name contains [_query], whatever its case.
+  List<_Photo> _matching(List<_Photo> photos) {
+    if (_query.isEmpty) return photos;
+    final query = _query.toLowerCase();
+    return [
+      for (final photo in photos)
+        if (photo.searchName.toLowerCase().contains(query)) photo,
+    ];
+  }
+
+  /// The Quark photos matching [_query]: the Quark's own answer once it has
+  /// one, and until then the matches among the last answer or, with none,
+  /// the pages loaded so far.
+  List<_Photo> _quarkMatches() {
+    final results = _searchResults;
+    if (results == null) return _matching(_quark);
+    return results.query == _query ? results.photos : _matching(results.photos);
+  }
+
   _Photo? _byId(String id) {
-    for (final photo in [..._quark, ..._mobile, ...?_albumItems]) {
+    for (final photo in [
+      ..._quark,
+      ..._mobile,
+      ...?_albumItems,
+      ...?_searchResults?.photos,
+    ]) {
       if (photo.id == id) return photo;
     }
     return null;
@@ -800,7 +885,82 @@ class PhotosController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _searchTimer?.cancel();
     super.dispose();
+  }
+
+  // ── Search ─────────────────────────────────────────────────────────────────
+
+  /// Narrows the grid to photos whose file name contains [text], or shows
+  /// everything again when it is blank (#2059).
+  ///
+  /// What is on hand narrows at once. The library's matches are then asked
+  /// of the Quark, once typing has paused for the search delay, so photos on
+  /// pages not loaded yet are found too.
+  void setSearchQuery(String text) {
+    final query = text.trim();
+    if (query == _query) return;
+    _query = query;
+    _searchError = null;
+    _searchRequest++;
+    _searchTimer?.cancel();
+    if (query.isEmpty) _searchResults = null;
+    _searchPending =
+        query.isNotEmpty && _searchFiles != null && _activeHost() != null;
+    if (_searchPending) _searchTimer = Timer(_searchDelay, _search);
+    notifyListeners();
+  }
+
+  /// Asks the Quark for the photos matching [_query]. The files search
+  /// answers with files of every kind, so only the images are kept.
+  ///
+  /// When it fails, matches already showing for the same query stay, the way
+  /// the grid survives a failed [refresh]; with none to keep, [searchError]
+  /// says why.
+  // ponytail: the files search stops at 500 files of any kind and knows no
+  // capture date or live video; a `q` on GET /photos would lift all three.
+  Future<void> _search() async {
+    final search = _searchFiles;
+    final query = _query;
+    if (query.isEmpty || search == null || _activeHost() == null) return;
+    final request = ++_searchRequest;
+    try {
+      final files = await search(query);
+      if (request != _searchRequest || _disposed) return;
+      _searchResults = (
+        query: query,
+        photos: _sortMatches([
+          for (final file in files)
+            if (!file.isDir && fileKindForName(file.name) == FileKind.image)
+              _Photo.fromFile(file),
+        ]),
+      );
+      _searchError = null;
+    } catch (e) {
+      debugPrint('[photos_controller.dart] Error searching photos: $e');
+      if (request != _searchRequest || _disposed) return;
+      if (_searchResults?.query != query) {
+        _searchResults = null;
+        _searchError = e;
+      }
+    }
+    _searchPending = false;
+    notifyListeners();
+  }
+
+  /// Puts a search's matches in [_sortField]/[_sortOrder], which the files
+  /// search knows nothing of. Both date sorts order by the modified time, the
+  /// only date it sends.
+  List<_Photo> _sortMatches(List<_Photo> photos) {
+    final sign = _sortOrder == PhotoSortOrder.asc ? 1 : -1;
+    final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+    return [...photos]..sort(
+      (a, b) =>
+          sign *
+          (_sortField == PhotoSortField.name
+              ? a.name.toLowerCase().compareTo(b.name.toLowerCase())
+              : (a.date ?? epoch).compareTo(b.date ?? epoch)),
+    );
   }
 
   // ── View choices ───────────────────────────────────────────────────────────
@@ -830,6 +990,14 @@ class PhotosController extends ChangeNotifier {
     if (field == _sortField && order == _sortOrder) return;
     _sortField = field;
     _sortOrder = order;
+    // The refresh below searches again, but may fail and keep these.
+    final results = _searchResults;
+    if (results != null) {
+      _searchResults = (
+        query: results.query,
+        photos: _sortMatches(results.photos),
+      );
+    }
     await AppSettings.instance.setPhotoSort(field, order);
     notifyListeners();
     await refresh();
@@ -1530,6 +1698,16 @@ class _Photo {
     takenDate: item.takenAt,
   );
 
+  /// A Quark-stored photo the files search found, keyed the way
+  /// [_Photo.fromWire] keys the same photo in the library.
+  factory _Photo.fromFile(FileNode file) => _Photo(
+    id: '${file.deviceSerial}:${file.apiPath}',
+    name: file.name,
+    relPath: file.apiPath,
+    serial: file.deviceSerial,
+    date: file.modifiedAt,
+  );
+
   /// A photo on this device.
   factory _Photo.fromAsset(AssetEntity asset) => _Photo(
     id: 'asset:${asset.id}',
@@ -1564,4 +1742,8 @@ class _Photo {
   final DateTime? takenDate;
 
   bool get isRemote => relPath != null;
+
+  /// What a search matches: the file name, which for a device photo is its
+  /// title, [name] being only its asset id.
+  String get searchName => asset?.title ?? name;
 }

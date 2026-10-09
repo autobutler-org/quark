@@ -197,7 +197,8 @@ domain state and call no service, but they are app-side because they need
 something the package does not have or are only ever used by that page:
 `photo_thumbnail.dart` (photo_manager, and `CachedNetworkImage` over the
 `ThumbnailCacheManager` disk cache),
-`photos_empty_state.dart`,
+`photos_empty_state.dart`, `photos_search_bar.dart` (the strip the page opens
+to search by file name, #2059),
 the album dialogs and menu (`album_name_dialog.dart`,
 `delete_album_dialog.dart`, `album_actions_menu.dart`), the menu and
 confirmation for a photo in an album view (`album_item_menu.dart`,
