@@ -58,7 +58,6 @@ func downloadArchiveFile(c *gin.Context) *serverutil.Response {
 	entry, err := fileutil.OpenArchiveEntry(fileutil.OpenArchiveEntryParams{
 		Ctx:         c.Request.Context(),
 		Registry:    deps.VFSRegistry(),
-		Storage:     deps.StorageService(),
 		ArchivePath: archivePath,
 		EntryPath:   entryPath,
 		Serial:      serial,

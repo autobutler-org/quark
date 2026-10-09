@@ -64,7 +64,6 @@ func getArchiveThumbnail(
 		entry, err := fileutil.OpenArchiveEntry(fileutil.OpenArchiveEntryParams{
 			Ctx:         c.Request.Context(),
 			Registry:    deps.VFSRegistry(),
-			Storage:     deps.StorageService(),
 			ArchivePath: archive.ArchivePath,
 			EntryPath:   archive.EntryPath,
 			Serial:      serial,

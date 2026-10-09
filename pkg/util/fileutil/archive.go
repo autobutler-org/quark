@@ -3,11 +3,12 @@ package fileutil
 import (
 	"archive/zip"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,21 +16,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/photoutil"
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
+	"github.com/mholt/archiver/v4"
 )
 
-// ListArchiveParams lists one level inside an archive. Nothing is extracted to
-// disk: the storage path reads entry headers only, and the VFS path has to
-// read the archive itself because a namespace has no OS path to hand a tool.
+// Every archive operation reads the archive out of the files namespace of the
+// device the request names, for every format Quark supports (#2644). A zip or
+// 7z is read in place through the vfs.File's ReadAt, a tar or rar is streamed,
+// and nothing is ever buffered whole: buffering is what turned a 4 GiB archive
+// into a 500 when io.ReadAll wanted ~12 GiB of heap to hold it (#1705).
+
+// ListArchiveParams lists one level inside an archive. Nothing is extracted:
+// only the entry headers are read.
 type ListArchiveParams struct {
-	// Ctx bounds the VFS read.
+	// Ctx bounds the read.
 	Ctx context.Context
-	// Registry serves the listing when no serial routes past it.
+	// Registry holds the namespace of the device Serial names.
 	Registry vfs.Registry
-	// Storage reads the archive for a device-scoped request.
-	Storage *storageutil.StorageService
 	// FilePath is the archive, relative to the device files directory.
 	FilePath string
 	// SubPath is the virtual directory inside the archive, empty for its root.
@@ -44,60 +50,71 @@ type ListArchiveResult struct {
 }
 
 // ListArchive returns the direct children of SubPath inside the archive at
-// FilePath, as virtual paths the client passes back to list deeper.
+// FilePath, folders first, as virtual paths the client passes back to list
+// deeper.
 func ListArchive(params ListArchiveParams) (ListArchiveResult, error) {
-	// VFS path: only when no serial is provided.
-	if params.Serial == "" {
-		if fsys, err := FilesVFS(params.Registry, ""); err == nil {
-			return listArchiveVFS(params, fsys)
-		}
+	archive, err := openFilesArchive(params.Ctx, params.Registry, params.Serial, params.FilePath)
+	if err != nil {
+		return ListArchiveResult{}, err
 	}
+	defer archive.Close()
 
-	// StorageService fallback.
-	entries, err := params.Storage.ListArchiveEntries(storageutil.ListArchiveParams{
-		FilePath:     params.FilePath,
-		SubPath:      params.SubPath,
-		DeviceSerial: params.Serial,
+	sub := entryName(params.SubPath)
+	prefix := ""
+	if sub != "" {
+		prefix = sub + "/"
+	}
+	// The virtual path the client passes back as filePath to list deeper.
+	virtualDir := path.Join(filepath.ToSlash(params.FilePath), sub)
+
+	seen := make(map[string]struct{})
+	result := []FileNode{}
+	err = archive.walk(params.Ctx, func(e archiveEntry) error {
+		rel, ok := strings.CutPrefix(e.name, prefix)
+		if !ok || rel == "" {
+			return nil
+		}
+		// Only the direct child: anything deeper names a folder, which the
+		// archive may only imply.
+		childName, _, deeper := strings.Cut(rel, "/")
+		if _, exists := seen[childName]; exists {
+			return nil
+		}
+		seen[childName] = struct{}{}
+
+		node := FileNode{
+			Name:         childName,
+			IsDir:        e.isDir || deeper,
+			DirPath:      path.Join(virtualDir, childName),
+			FullPath:     path.Join(virtualDir, childName),
+			DeviceSerial: params.Serial,
+		}
+		if !deeper {
+			// A folder the archive only implies has no size or time of its
+			// own; this entry's belong to something inside it.
+			node.Size = max(e.size, 0)
+			node.CompressedSize = e.compressedSize
+			node.ModifiedAt = archiveEntryTime(e.modTime)
+		}
+		if !node.IsDir {
+			node.FileType = string(storageutil.DetermineFileTypeFromPath(childName))
+		}
+		result = append(result, node)
+		return nil
 	})
 	if err != nil {
 		return ListArchiveResult{}, err
 	}
 
-	result := make([]FileNode, len(entries))
-	for i, e := range entries {
-		// Construct a virtual dirPath: filePath/subPath/name
-		// This is the path the client must pass back as filePath to list deeper.
-		virtualPath := params.FilePath
-		if params.SubPath != "" {
-			virtualPath = filepath.ToSlash(filepath.Join(virtualPath, params.SubPath))
+	slices.SortStableFunc(result, func(a, b FileNode) int {
+		if a.IsDir != b.IsDir {
+			if a.IsDir {
+				return -1
+			}
+			return 1
 		}
-		dirPath := filepath.ToSlash(filepath.Join(virtualPath, e.Name))
-
-		fileType := ""
-		if !e.IsDir {
-			fileType = string(storageutil.DetermineFileTypeFromPath(e.Name))
-		}
-
-		// Strip any archive extension segments from the path for display
-		// but preserve the full virtual path for navigation.
-		nameParts := strings.Split(e.Name, "/")
-		displayName := nameParts[len(nameParts)-1]
-
-		result[i] = FileNode{
-			Name:           displayName,
-			Size:           e.Size,
-			CompressedSize: e.CompressedSize,
-			IsDir:          e.IsDir,
-			DeviceName:     "",
-			DevicePath:     "",
-			DirPath:        dirPath,
-			FullPath:       dirPath,
-			DeviceSerial:   params.Serial,
-			FileType:       fileType,
-			ModifiedAt:     archiveEntryTime(e.ModTime),
-		}
-	}
-
+		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
 	return ListArchiveResult{Entries: result}, nil
 }
 
@@ -112,102 +129,13 @@ func archiveEntryTime(t time.Time) time.Time {
 	return t
 }
 
-// listArchiveVFS lists an archive read out of the VFS namespace.
-func listArchiveVFS(params ListArchiveParams, fsys vfs.VFS) (ListArchiveResult, error) {
-	zr, archive, err := readZipVFS(params.Ctx, fsys, params.FilePath)
-	if err != nil {
-		return ListArchiveResult{}, err
-	}
-	defer archive.Close()
-
-	// Normalize subPath (no leading/trailing slash).
-	normalizedSub := strings.Trim(filepath.ToSlash(params.SubPath), "/")
-	prefix := ""
-	if normalizedSub != "" {
-		prefix = normalizedSub + "/"
-	}
-
-	seen := make(map[string]struct{})
-	var result []FileNode
-
-	for _, f := range zr.File {
-		name := filepath.ToSlash(f.Name)
-		name = strings.Trim(name, "/")
-		if name == "" || name == normalizedSub {
-			continue
-		}
-		if !strings.HasPrefix(name, prefix) {
-			continue
-		}
-
-		rel := strings.TrimPrefix(name, prefix)
-		if rel == "" {
-			continue
-		}
-
-		// Only the direct child (first path component).
-		before, _, hasChildren := strings.Cut(rel, "/")
-		childName := rel
-		isDir := f.FileInfo().IsDir()
-		var size int64
-		var compressedSize int64
-		var modifiedAt time.Time
-		if hasChildren {
-			childName = before
-			isDir = true
-		} else {
-			size = int64(f.UncompressedSize64)
-			compressedSize = int64(f.CompressedSize64)
-			modifiedAt = archiveEntryTime(f.Modified)
-		}
-
-		if _, exists := seen[childName]; exists {
-			continue
-		}
-		seen[childName] = struct{}{}
-
-		// Construct the virtual path for client navigation.
-		virtualPath := params.FilePath
-		if normalizedSub != "" {
-			virtualPath = filepath.ToSlash(filepath.Join(virtualPath, normalizedSub))
-		}
-		dirPath := filepath.ToSlash(filepath.Join(virtualPath, childName))
-
-		fileType := ""
-		if !isDir {
-			fileType = string(storageutil.DetermineFileTypeFromPath(childName))
-		}
-
-		result = append(result, FileNode{
-			Name:           childName,
-			Size:           size,
-			CompressedSize: compressedSize,
-			IsDir:          isDir,
-			DeviceName:     "",
-			DevicePath:     "",
-			DirPath:        dirPath,
-			FullPath:       dirPath,
-			DeviceSerial:   params.Serial,
-			FileType:       fileType,
-			ModifiedAt:     modifiedAt,
-		})
-	}
-
-	if result == nil {
-		result = []FileNode{}
-	}
-	return ListArchiveResult{Entries: result}, nil
-}
-
 // OpenArchiveEntryParams reads one entry out of an archive without extracting
-// anything to disk.
+// anything.
 type OpenArchiveEntryParams struct {
-	// Ctx bounds the VFS read.
+	// Ctx bounds the read.
 	Ctx context.Context
-	// Registry serves the read when no serial routes past it.
+	// Registry holds the namespace of the device Serial names.
 	Registry vfs.Registry
-	// Storage reads the archive for a device-scoped request.
-	Storage *storageutil.StorageService
 	// ArchivePath is the archive, relative to the device files directory.
 	ArchivePath string
 	// EntryPath is the entry inside the archive.
@@ -365,84 +293,43 @@ func statStoragePath(params FindArchiveParams, filePath string) (*vfs.FileInfo, 
 }
 
 // openArchiveEntryStream finds an entry and opens its decompressed stream.
+// The stream reads out of the archive, so the archive closes with it.
 func openArchiveEntryStream(params OpenArchiveEntryParams) (OpenArchiveEntryResult, error) {
-	// VFS path: only when no serial is provided.
-	if params.Serial == "" {
-		if fsys, err := FilesVFS(params.Registry, ""); err == nil {
-			return openArchiveEntryVFS(params, fsys)
-		}
-	}
-
-	// StorageService fallback.
-	reader, size, err := params.Storage.ReadArchiveEntry(storageutil.ReadArchiveEntryParams{
-		ArchivePath:  params.ArchivePath,
-		EntryPath:    params.EntryPath,
-		DeviceSerial: params.Serial,
-	})
-	if err != nil {
-		log.Printf("[files] ReadArchiveEntry failed: path=%q entry=%q err=%v", params.ArchivePath, params.EntryPath, err)
-		if errors.Is(err, fs.ErrNotExist) {
-			return OpenArchiveEntryResult{}, notFound(err)
-		}
-		return OpenArchiveEntryResult{}, err
-	}
-	return OpenArchiveEntryResult{Reader: reader, Size: size}, nil
-}
-
-// openArchiveEntryVFS finds an entry in an archive read out of the VFS namespace.
-func openArchiveEntryVFS(params OpenArchiveEntryParams, fsys vfs.VFS) (OpenArchiveEntryResult, error) {
-	zr, archive, err := readZipVFS(params.Ctx, fsys, params.ArchivePath)
+	archive, err := openFilesArchive(params.Ctx, params.Registry, params.Serial, params.ArchivePath)
 	if err != nil {
 		return OpenArchiveEntryResult{}, err
 	}
 
-	// Normalize the requested entry path (forward slashes, no leading slash).
-	normalizedEntry := strings.Trim(filepath.ToSlash(params.EntryPath), "/")
-
-	for _, f := range zr.File {
-		name := strings.Trim(filepath.ToSlash(f.Name), "/")
-		if name != normalizedEntry {
-			continue
+	want := entryName(params.EntryPath)
+	var found *OpenArchiveEntryResult
+	err = archive.walk(params.Ctx, func(e archiveEntry) error {
+		if want == "" || e.name != want {
+			return nil
 		}
-
-		rc, err := openZipEntry(f)
+		if e.isDir || e.isLink {
+			return notFoundf("entry %q is not a file", params.EntryPath)
+		}
+		rc, err := e.open()
 		if err != nil {
-			archive.Close()
-			return OpenArchiveEntryResult{}, err
+			return err
 		}
-		// The entry streams out of the archive, so the archive closes with it.
-		return OpenArchiveEntryResult{
-			Reader: entryReader{ReadCloser: rc, archive: archive},
-			Size:   int64(f.UncompressedSize64),
-		}, nil
+		found = &OpenArchiveEntryResult{Reader: entryReader{ReadCloser: rc, archive: archive}, Size: e.size}
+		// A streamed format can only be read from where the walk stands, so
+		// the walk stops here and leaves the stream on this entry.
+		return errEntryFound
+	})
+	if found != nil {
+		return *found, nil
 	}
-
 	archive.Close()
+	if err != nil {
+		return OpenArchiveEntryResult{}, err
+	}
 	return OpenArchiveEntryResult{}, notFoundf("entry %q not found in archive", params.EntryPath)
 }
 
-// readZipVFS opens an archive in the VFS namespace for random access, which is
-// what a zip reader needs. A vfs.File reads at an offset, so nothing is
-// buffered: buffering is what turned a 4 GiB archive into a 500 — io.ReadAll
-// wanted ~12 GiB of heap to hold it (#1705). The returned Closer owns the
-// archive and must outlive every entry reader taken from it.
-func readZipVFS(ctx context.Context, fsys vfs.VFS, filePath string) (*zip.Reader, io.Closer, error) {
-	f, err := fsys.Open(ctx, filePath)
-	if err != nil {
-		return nil, nil, notFound(err)
-	}
-	size, err := f.Seek(0, io.SeekEnd)
-	if err != nil {
-		f.Close()
-		return nil, nil, fmt.Errorf("failed to size archive: %w", err)
-	}
-	zr, err := zip.NewReader(f, size)
-	if err != nil {
-		f.Close()
-		return nil, nil, fmt.Errorf("failed to open zip archive: %w", err)
-	}
-	return zr, f, nil
-}
+// errEntryFound stops a walk at the entry being opened.
+var errEntryFound = errors.New("entry found")
 
 // entryReader keeps the archive open behind a streaming entry and closes it
 // with the entry.
@@ -459,105 +346,355 @@ func (e entryReader) Close() error {
 	return err
 }
 
-// ExtractZipVFSResult reports where an archive was extracted.
-type ExtractZipVFSResult struct {
-	// DestDir is the files-relative folder the entries landed in.
-	DestDir string
-	// Created is false when DestDir was already there and the entries were
-	// merged into it.
-	Created bool
+// ExtractArchiveParams extracts an archive beside itself.
+type ExtractArchiveParams struct {
+	// Ctx bounds the extraction: a multi-gigabyte archive takes minutes, and
+	// it stops when the caller goes away.
+	Ctx context.Context
+	// Registry holds the namespace of the device Serial names.
+	Registry vfs.Registry
+	// EventBus is told about the item that appeared. Nil publishes nothing.
+	EventBus *eventbus.Bus
+	// FilePath is the archive, relative to the device files directory.
+	FilePath string
+	// Serial identifies the device, empty for the internal one.
+	Serial string
 }
 
-// ExtractZipVFS extracts a .zip archive via the VFS layer, streaming each entry
-// out of the archive and back through VFS.Write / VFS.MkdirAll, into a sibling
-// folder named after the archive stem.
-func ExtractZipVFS(ctx context.Context, fsys vfs.VFS, filePath string) (ExtractZipVFSResult, error) {
-	base := filepath.Base(filePath)
-	stem := strings.TrimSuffix(base, filepath.Ext(base))
-	destDir := path.Join(path.Dir(filePath), stem)
-	_, statErr := fsys.Stat(ctx, destDir)
-
-	if err := extractZipVFSInto(ctx, fsys, filePath, destDir); err != nil {
-		return ExtractZipVFSResult{}, err
-	}
-	return ExtractZipVFSResult{DestDir: destDir, Created: statErr != nil}, nil
+// ExtractArchiveResult reports what an extraction made.
+type ExtractArchiveResult struct {
+	// CreatedPath is the new item, files-relative: the folder the archive's
+	// entries landed in, or the file a bare compressed stream decompressed to.
+	// It is named after the archive, numbered when that name is taken, so it
+	// is always new.
+	CreatedPath string
 }
 
-// extractZipVFSInto streams every entry of the archive at filePath into destDir.
-func extractZipVFSInto(ctx context.Context, fsys vfs.VFS, filePath, destDir string) error {
-	zr, archive, err := readZipVFS(ctx, fsys, filePath)
+// ExtractArchive extracts the archive at FilePath into a new folder beside it
+// named after the archive, or decompresses a bare compressed stream (a .gz
+// that holds no tar) to a new file beside it. Every entry streams out of the
+// archive and back in through VFS.Write. The folder is filled under a hidden
+// name and moved into place once every entry is in it, so an extraction that
+// fails partway leaves nothing behind under a name a user would see.
+func ExtractArchive(params ExtractArchiveParams) (ExtractArchiveResult, error) {
+	fsys, err := FilesVFS(params.Registry, params.Serial)
 	if err != nil {
-		return err
+		return ExtractArchiveResult{}, err
+	}
+	archive, err := openArchive(params.Ctx, fsys, params.FilePath)
+	if err != nil {
+		return ExtractArchiveResult{}, err
 	}
 	defer archive.Close()
 
-	if err := fsys.MkdirAll(ctx, destDir); err != nil {
-		return fmt.Errorf("failed to create destination directory: %w", err)
+	dir := path.Dir(filepath.ToSlash(params.FilePath))
+	stem := storageutil.ArchiveStem(params.FilePath)
+	kind := eventbus.EventNewFolder
+	var created string
+	if archive.decompressor != nil {
+		kind = eventbus.EventUpload
+		created, err = decompressInto(params.Ctx, fsys, archive, dir, stem)
+	} else {
+		created, err = extractInto(params.Ctx, fsys, archive, dir, stem)
+	}
+	if err != nil {
+		return ExtractArchiveResult{}, err
 	}
 
-	// Canonical Zip Slip anchor: every resolved path must begin with this prefix.
-	cleanDestDir := path.Clean(destDir) + "/"
+	if params.EventBus != nil {
+		params.EventBus.Publish(eventbus.Event{Kind: kind, Path: created, DeviceSerial: params.Serial})
+	}
+	return ExtractArchiveResult{CreatedPath: created}, nil
+}
 
-	var entryCount int
-	for _, f := range zr.File {
-		// Extracting a multi-gigabyte archive takes minutes; stop writing when
-		// the caller has gone away rather than finishing the whole thing.
+// extractInto extracts every entry of archive into a hidden folder in dir and
+// moves it to the first free name taken from stem once it is complete. The
+// hidden folder is removed when anything fails.
+func extractInto(ctx context.Context, fsys vfs.VFS, archive *openedArchive, dir, stem string) (string, error) {
+	staging := path.Join(dir, storageutil.WriteTempPrefix+"extract-"+rand.Text())
+	if err := fsys.MkdirAll(ctx, staging); err != nil {
+		return "", fmt.Errorf("failed to create destination directory: %w", err)
+	}
+
+	err := archive.walk(ctx, func(e archiveEntry) error {
+		// A link can point anywhere, out of the folder included.
+		if e.isLink {
+			return nil
+		}
+		dest := path.Join(staging, e.name)
+		if e.isDir {
+			return fsys.MkdirAll(ctx, dest)
+		}
+		if err := fsys.MkdirAll(ctx, path.Dir(dest)); err != nil {
+			return fmt.Errorf("failed to create parent directory for %s: %w", e.name, err)
+		}
+		return writeEntry(ctx, fsys, dest, e)
+	})
+	var created string
+	if err == nil {
+		created, err = freeName(ctx, fsys, dir, stem)
+	}
+	if err == nil {
+		err = fsys.Move(ctx, staging, created)
+	}
+	if err != nil {
+		// The caller may have gone away, which is what stopped the walk; the
+		// half-filled folder is removed regardless.
+		if delErr := fsys.Delete(context.WithoutCancel(ctx), staging, vfs.DeleteOptions{Recursive: true}); delErr != nil {
+			slog.Error("extract: could not remove a failed extraction", "path", staging, "err", delErr)
+		}
+		return "", err
+	}
+	return created, nil
+}
+
+// decompressInto writes a bare compressed stream to the first free name in dir
+// taken from stem. VFS.Write lands it under that name only once it is whole.
+func decompressInto(ctx context.Context, fsys vfs.VFS, archive *openedArchive, dir, stem string) (string, error) {
+	created, err := freeName(ctx, fsys, dir, stem)
+	if err != nil {
+		return "", err
+	}
+	err = archive.walk(ctx, func(e archiveEntry) error {
+		return writeEntry(ctx, fsys, created, e)
+	})
+	if err != nil {
+		return "", err
+	}
+	return created, nil
+}
+
+// writeEntry streams one entry to dest, refusing it when it is over
+// [storageutil.MaxArchiveEntryBytes]. The declared size turns away an honest
+// oversized entry outright; capReader refuses one whose header lied, and since
+// VFS.Write only lands a complete stream, nothing is left at dest either way.
+// IfNoneMatch keeps a decompressed file from replacing one that appeared after
+// its name was chosen.
+func writeEntry(ctx context.Context, fsys vfs.VFS, dest string, e archiveEntry) error {
+	if e.size > storageutil.MaxArchiveEntryBytes {
+		return entryTooLarge(e.name)
+	}
+	rc, err := e.open()
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	capped := &capReader{r: rc, left: storageutil.MaxArchiveEntryBytes, name: e.name}
+	if err := fsys.Write(ctx, dest, capped, vfs.WriteOptions{IfNoneMatch: "*"}); err != nil {
+		return fmt.Errorf("failed to write %s: %w", e.name, err)
+	}
+	return nil
+}
+
+// capReader reads r and fails once it has given more than left bytes.
+type capReader struct {
+	r    io.Reader
+	left int64
+	name string
+}
+
+func (c *capReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.left -= int64(n)
+	if c.left < 0 {
+		return 0, entryTooLarge(c.name)
+	}
+	return n, err
+}
+
+// entryTooLarge refuses an entry over the per-entry limit. The archive is the
+// caller's, so it is a 400.
+func entryTooLarge(name string) error {
+	return &UnsupportedError{Err: fmt.Errorf("archive entry %q exceeds maximum allowed size of %d bytes", name, storageutil.MaxArchiveEntryBytes)}
+}
+
+// freeName returns dir/name, or the first numbered name beside it that nothing
+// occupies.
+func freeName(ctx context.Context, fsys vfs.VFS, dir, name string) (string, error) {
+	for n := 0; ; n++ {
+		p := path.Join(dir, storageutil.NumberedName(name, n))
+		_, err := fsys.Stat(ctx, p)
+		if errors.Is(err, vfs.ErrNotFound) {
+			return p, nil
+		}
+		if err != nil {
+			return "", fmt.Errorf("failed to stat %s: %w", p, err)
+		}
+	}
+}
+
+// archiveEntry is one entry of an archive, whatever its format.
+type archiveEntry struct {
+	// name is the entry's path, slash-separated, with no leading or trailing
+	// slash. See entryName.
+	name   string
+	isDir  bool
+	isLink bool
+	// size is the decompressed length, negative when the archive does not say.
+	size int64
+	// compressedSize is the stored length, zero when the format does not say.
+	compressedSize int64
+	modTime        time.Time
+	open           func() (io.ReadCloser, error)
+}
+
+// openedArchive is an archive open for reading. Exactly one of zip, extractor
+// and decompressor is set.
+type openedArchive struct {
+	file vfs.File
+	path string
+	// zip reads a .zip in place through the file's ReadAt. It is Go's own
+	// reader rather than archiver's so an unsupported compression method
+	// can be named (openZipEntry).
+	zip *zip.Reader
+	// extractor walks every other archive format.
+	extractor archiver.Extractor
+	// decompressor reads a bare compressed stream, which holds one file.
+	decompressor archiver.Decompressor
+	// input is the stream extractor and decompressor read: the file itself,
+	// rewound, since a vfs.File seeks.
+	input io.Reader
+}
+
+// openFilesArchive opens the archive at p in the files namespace of the device
+// serial names. A device that is not attached is a [NotFoundError].
+func openFilesArchive(ctx context.Context, registry vfs.Registry, serial, p string) (*openedArchive, error) {
+	fsys, err := FilesVFS(registry, serial)
+	if err != nil {
+		return nil, err
+	}
+	return openArchive(ctx, fsys, p)
+}
+
+// openArchive opens the archive at p in fsys and identifies its format. A
+// name Quark does not read as an archive, or content no format matches, is an
+// [UnsupportedError]; a path that cannot be opened is a [NotFoundError].
+func openArchive(ctx context.Context, fsys vfs.VFS, p string) (*openedArchive, error) {
+	if !storageutil.IsSupportedArchive(p) {
+		return nil, &UnsupportedError{Err: fmt.Errorf("%s is not an archive: supported formats are %s",
+			path.Base(p), strings.Join(storageutil.SupportedArchiveExts(), ", "))}
+	}
+	f, err := fsys.Open(ctx, p)
+	if err != nil {
+		return nil, notFound(fmt.Errorf("file not found: %s: %w", p, err))
+	}
+	archive := &openedArchive{file: f, path: p}
+	if err := archive.identify(ctx); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return archive, nil
+}
+
+// identify works out which reader the archive needs.
+func (a *openedArchive) identify(ctx context.Context) error {
+	if strings.EqualFold(path.Ext(a.path), ".zip") {
+		size, err := a.file.Seek(0, io.SeekEnd)
+		if err != nil {
+			return fmt.Errorf("failed to size archive: %w", err)
+		}
+		a.zip, err = zip.NewReader(a.file, size)
+		if err != nil {
+			return &UnsupportedError{Err: fmt.Errorf("%s is not a readable zip archive: %w", path.Base(a.path), err)}
+		}
+		return nil
+	}
+
+	format, input, err := archiver.Identify(ctx, path.Base(a.path), a.file)
+	if errors.Is(err, archiver.NoMatch) {
+		return &UnsupportedError{Err: fmt.Errorf("%s is not a readable archive", path.Base(a.path))}
+	}
+	if err != nil {
+		return fmt.Errorf("failed to identify archive format: %w", err)
+	}
+	a.input = input
+	if ex, ok := format.(archiver.Extractor); ok {
+		a.extractor = ex
+		return nil
+	}
+	if d, ok := format.(archiver.Decompressor); ok {
+		a.decompressor = d
+		return nil
+	}
+	return &UnsupportedError{Err: fmt.Errorf("archive format %T cannot be read", format)}
+}
+
+// Close closes the archive file.
+func (a *openedArchive) Close() error { return a.file.Close() }
+
+// walk calls visit for every entry of the archive, in archive order, and
+// fails once it passes [storageutil.MaxArchiveEntries]. An entry whose name
+// climbs out of the archive is skipped. A bare compressed stream is one entry
+// named after the archive's stem, of unknown size.
+func (a *openedArchive) walk(ctx context.Context, visit func(archiveEntry) error) error {
+	count := 0
+	counted := func(e archiveEntry) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-
-		entryCount++
-		if entryCount > storageutil.MaxArchiveEntries {
-			return fmt.Errorf("archive exceeds maximum of %d entries", storageutil.MaxArchiveEntries)
+		count++
+		if count > storageutil.MaxArchiveEntries {
+			return &UnsupportedError{Err: fmt.Errorf("archive exceeds maximum of %d entries", storageutil.MaxArchiveEntries)}
 		}
-
-		// Normalize to forward-slash, clean, and strip any leading slash.
-		entryName := strings.TrimPrefix(path.Clean("/"+filepath.ToSlash(f.Name)), "/")
-		if entryName == "" || entryName == "." {
-			continue
+		if e.name == "" {
+			return nil
 		}
-
-		destPath := path.Join(destDir, entryName)
-
-		// Zip Slip guard: the resolved destination must stay within destDir.
-		// This is the canonical check CodeQL and other scanners understand.
-		if !strings.HasPrefix(path.Clean(destPath)+"/", cleanDestDir) {
-			continue // path traversal attempt — discard silently
-		}
-
-		if f.FileInfo().IsDir() {
-			if err := fsys.MkdirAll(ctx, destPath); err != nil {
-				return fmt.Errorf("failed to create directory %s: %w", destPath, err)
-			}
-			continue
-		}
-
-		// Ensure parent directory exists.
-		parentDir := path.Dir(destPath)
-		if err := fsys.MkdirAll(ctx, parentDir); err != nil {
-			return fmt.Errorf("failed to create parent directory for %s: %w", destPath, err)
-		}
-
-		rc, err := openZipEntry(f)
-		if err != nil {
-			return err
-		}
-
-		// Apply per-entry size limit. The declared size rejects an honest
-		// oversized entry outright; the LimitReader caps a lying header. Reading
-		// one byte past the limit and never checking it, as this used to, wrote
-		// the entry silently truncated instead of refusing it.
-		if f.UncompressedSize64 > uint64(storageutil.MaxArchiveEntryBytes) {
-			rc.Close()
-			return fmt.Errorf("archive entry %s exceeds maximum allowed size of %d bytes", f.Name, storageutil.MaxArchiveEntryBytes)
-		}
-		limited := io.LimitReader(rc, storageutil.MaxArchiveEntryBytes)
-		if err := fsys.Write(ctx, destPath, limited, vfs.WriteOptions{}); err != nil {
-			rc.Close()
-			return fmt.Errorf("failed to write %s: %w", destPath, err)
-		}
-		rc.Close()
+		return visit(e)
 	}
 
-	return nil
+	switch {
+	case a.zip != nil:
+		for _, f := range a.zip.File {
+			if err := counted(zipEntry(f)); err != nil {
+				return err
+			}
+		}
+		return nil
+	case a.decompressor != nil:
+		return counted(archiveEntry{
+			name: storageutil.ArchiveStem(a.path),
+			size: -1,
+			open: func() (io.ReadCloser, error) { return a.decompressor.OpenReader(a.input) },
+		})
+	}
+	return a.extractor.Extract(ctx, a.input, func(_ context.Context, af archiver.FileInfo) error {
+		return counted(archiveEntry{
+			name:   entryName(af.NameInArchive),
+			isDir:  af.IsDir(),
+			isLink: af.LinkTarget != "" || af.Mode()&fs.ModeSymlink != 0,
+			size:   af.Size(),
+			// A tar or rar header has no compressed size of its own.
+			modTime: af.ModTime(),
+			open:    func() (io.ReadCloser, error) { return af.Open() },
+		})
+	})
+}
+
+// zipEntry describes a zip entry.
+func zipEntry(f *zip.File) archiveEntry {
+	return archiveEntry{
+		name:           entryName(f.Name),
+		isDir:          f.FileInfo().IsDir(),
+		isLink:         f.Mode()&fs.ModeSymlink != 0,
+		size:           int64(f.UncompressedSize64),
+		compressedSize: int64(f.CompressedSize64),
+		modTime:        f.Modified,
+		open:           func() (io.ReadCloser, error) { return openZipEntry(f) },
+	}
+}
+
+// entryName cleans an entry's name to a slash-separated path with no leading
+// or trailing slash. A name that climbs out of the archive ("../x",
+// "a/../../x") is "", which every caller skips: written out, it would land
+// outside the folder the archive extracts into (Zip Slip).
+func entryName(raw string) string {
+	p := path.Clean(filepath.ToSlash(raw))
+	if p == ".." || strings.HasPrefix(p, "../") {
+		return ""
+	}
+	p = strings.TrimLeft(p, "/")
+	if p == "." {
+		return ""
+	}
+	return p
 }

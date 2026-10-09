@@ -45,7 +45,6 @@ func listArchive(c *gin.Context) *serverutil.Response {
 	result, err := fileutil.ListArchive(fileutil.ListArchiveParams{
 		Ctx:      c.Request.Context(),
 		Registry: deps.VFSRegistry(),
-		Storage:  deps.StorageService(),
 		FilePath: filePath,
 		SubPath:  c.Query("subPath"),
 		Serial:   c.Query("serial"),
