@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:photo_manager/photo_manager.dart';
 import 'package:quark/controllers/photo_bytes_cache.dart';
 import 'package:quark/controllers/photos_controller.dart';
+import 'package:quark/controllers/photos_list_cache.dart';
 import 'package:quark/models/paginated_photos_response.dart' as wire;
 import 'package:quark/models/photo_album.dart';
 import 'package:quark/models/photo_sort.dart';
@@ -141,8 +142,14 @@ class _FakeQuark {
   /// Where the next upload says its files landed.
   List<String> landedPaths = const [];
 
+  /// What a visit leaves for the next one, kept to this fake so no test sees
+  /// another's photos. [scope] stands for the Quark and account (#1778).
+  String scope = 'quark-a';
+  late final PhotosListCache listCache = PhotosListCache(scope: () => scope);
+
   PhotosController controller() => PhotosController(
     isWeb: false,
+    listCache: listCache,
     activeHost: () => host,
     getPhotos:
         ({
@@ -344,6 +351,149 @@ void main() {
       await controller.refresh();
 
       expect(controller.quarkUnreachable, isFalse);
+    });
+  });
+
+  group('session cache (#1778)', () {
+    test('a return visit shows the last first page before any fetch', () async {
+      final quark = _FakeQuark(total: 60)..favorites = {'sd1:camera/1.jpg'};
+      await quark.controller().refresh();
+      quark.calls.clear();
+
+      final returning = quark.controller();
+
+      expect(quark.calls, isEmpty);
+      expect(returning.photos, hasLength(PhotosController.pageSize));
+      expect(returning.photos[1].isFavorite, isTrue);
+      expect(returning.hasMore, isTrue);
+      expect(
+        {for (final c in returning.categories) c.id: c.count}['quark'],
+        60,
+      );
+    });
+
+    test('the refresh behind a return visit replaces what was kept', () async {
+      final quark = _FakeQuark();
+      await quark.controller().refresh();
+      quark.total = 2;
+
+      final returning = quark.controller();
+      expect(returning.photos, hasLength(3));
+      await returning.refresh();
+
+      expect(returning.photos, hasLength(2));
+      expect(quark.controller().photos, hasLength(2));
+    });
+
+    test(
+      'a failed refresh keeps the photos on screen and in the cache',
+      () async {
+        final quark = _FakeQuark();
+        final controller = quark.controller();
+        await controller.refresh();
+        quark.photosError = http.ClientException('connection refused');
+
+        await controller.refresh();
+
+        expect(controller.photos, hasLength(3));
+        expect(quark.controller().photos, hasLength(3));
+      },
+    );
+
+    test('a failed refresh into another sort does not keep the old '
+        'order', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      quark.photosError = http.ClientException('connection refused');
+
+      await controller.setSort(PhotoSortField.name, PhotoSortOrder.asc);
+
+      expect(controller.photos, isEmpty);
+      expect(controller.quarkUnreachable, isTrue);
+    });
+
+    test('a toggled favorite is there on the return visit', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+
+      await controller.toggleFavorite('sd1:camera/1.jpg');
+      expect(quark.controller().photos[1].isFavorite, isTrue);
+
+      await controller.toggleFavorite('sd1:camera/1.jpg');
+      expect(quark.controller().photos[1].isFavorite, isFalse);
+    });
+
+    test('a deleted photo is gone on the return visit', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      await controller.refresh();
+      quark.total = 2;
+
+      await controller.deletePhoto('sd1:camera/2.jpg');
+
+      expect(quark.controller().photos, hasLength(2));
+    });
+
+    test('another Quark never shows this one\'s photos', () async {
+      final quark = _FakeQuark();
+      await quark.controller().refresh();
+
+      quark.scope = 'quark-b';
+
+      expect(quark.controller().photos, isEmpty);
+    });
+
+    test('an answer for the Quark that was left is not kept for the new '
+        'one', () async {
+      final quark = _FakeQuark();
+      final controller = quark.controller();
+      final pending = controller.refresh();
+      quark.scope = 'quark-b';
+      await pending;
+
+      expect(quark.controller().photos, isEmpty);
+    });
+
+    test('photos kept in one sort are not shown under another', () async {
+      final quark = _FakeQuark();
+      await quark.controller().refresh();
+      AppSettings.instance.photoSortOrder.value = PhotoSortOrder.asc;
+
+      expect(quark.controller().photos, isEmpty);
+    });
+
+    test('nothing is shown when no host is chosen', () async {
+      final quark = _FakeQuark();
+      await quark.controller().refresh();
+      quark.host = null;
+
+      expect(quark.controller().photos, isEmpty);
+    });
+
+    test('Demo mode neither reads nor fills the shared cache', () async {
+      PhotosListCache.instance.putPhotos(
+        [_wirePhoto(7)],
+        total: 1,
+        sort: PhotoSortField.added,
+        order: PhotoSortOrder.desc,
+      );
+      addTearDown(PhotosListCache.instance.clear);
+
+      final demo = PhotosController.demo();
+      expect(demo.photos, isEmpty);
+      await demo.refresh();
+
+      expect(demo.photos, isNotEmpty);
+      expect(
+        PhotosListCache.instance
+            .photos(sort: PhotoSortField.added, order: PhotoSortOrder.desc)!
+            .photos
+            .single
+            .fileName,
+        '7.jpg',
+      );
     });
   });
 

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:photo_manager/photo_manager.dart';
 import 'package:quark/controllers/photo_bytes_cache.dart';
+import 'package:quark/controllers/photos_list_cache.dart';
 import 'package:quark/models/file_node.dart';
 import 'package:quark/models/paginated_photos_response.dart' as wire;
 import 'package:quark/models/photo_album.dart';
@@ -69,6 +70,11 @@ class AddToAlbumOutcome {
 /// the selection, and the album tree, and makes every service call behind
 /// them. The page keeps navigation, dialogs, sheets and snack bars, and turns
 /// failures into copy.
+///
+/// Starts out showing the first page and favorites the last visit left in
+/// [PhotosListCache], so coming back to Photos draws the grid at once while
+/// [refresh] runs; every good refresh and favorite toggle writes back to it
+/// (#1778).
 ///
 /// Service calls arrive as function parameters defaulting to the real static
 /// methods, so a test passes fakes without a mocking library.
@@ -165,6 +171,7 @@ class PhotosController extends ChangeNotifier {
         deleteFile =
         FilesService.deleteFile,
     PhotoBytesCache? bytesCache,
+    PhotosListCache? listCache,
     bool isWeb = kIsWeb,
   }) : _getPhotos = getPhotos,
        _loadDeviceAssets = loadDeviceAssets,
@@ -190,14 +197,27 @@ class PhotosController extends ChangeNotifier {
        _copyPhoto = copyPhoto,
        _deleteFile = deleteFile,
        _bytesCache = bytesCache ?? PhotoBytesCache.instance,
-       _isWeb = isWeb;
+       _listCache = listCache ?? PhotosListCache.instance,
+       _isWeb = isWeb {
+    // With no host there is a different page to show, not an old grid.
+    if (_activeHost() == null) return;
+    _favoriteKeys.addAll(_listCache.favoriteKeys ?? const {});
+    final cached = _listCache.photos(sort: _sortField, order: _sortOrder);
+    if (cached == null) return;
+    _quark = cached.photos.map(_Photo.fromWire).toList(growable: false);
+    _quarkSort = (_sortField, _sortOrder);
+    _quarkTotal = cached.total;
+    _quarkLoaded = true;
+  }
 
   /// A controller over Demo mode's bundled sample library (#1746).
   ///
   /// Every Quark-bound photo and album call is swapped for its
   /// [DemoPhotosService] stand-in, so nothing it shows comes from, or is
-  /// asked of, a Quark. Device photos and uploads are left as they are.
+  /// asked of, a Quark. Device photos and uploads are left as they are. The
+  /// samples get a cache of their own, so they never show for the Quark.
   factory PhotosController.demo() => PhotosController(
+    listCache: PhotosListCache(),
     getPhotos: DemoPhotosService.getPhotos,
     activeHost: DemoPhotosService.activeHost,
     listFavoriteKeys: DemoPhotosService.listFavoriteKeys,
@@ -296,11 +316,16 @@ class PhotosController extends ChangeNotifier {
   })
   _deleteFile;
   final PhotoBytesCache _bytesCache;
+  final PhotosListCache _listCache;
   final bool _isWeb;
 
   // ── Photos ─────────────────────────────────────────────────────────────────
 
   List<_Photo> _quark = const [];
+
+  /// The sort [_quark] arrived in, which a failed refresh into another sort
+  /// must not leave on screen under the new one's name.
+  (PhotoSortField, PhotoSortOrder)? _quarkSort;
   int _quarkTotal = 0;
   bool _quarkLoaded = false;
   bool _isLoadingMore = false;
@@ -564,10 +589,16 @@ class PhotosController extends ChangeNotifier {
   /// the favorites, and the album tree.
   ///
   /// The current lists stay in place until the new ones arrive, so a refresh
-  /// never blanks the grid.
+  /// never blanks the grid, and Quark photos already showing in this sort
+  /// stay when the Quark cannot be asked for new ones (#1778).
   Future<void> refresh() async {
     final generation = ++_generation;
     final noHost = _activeHost() == null;
+    // Read before the requests, so an answer for a Quark, account or sort
+    // left mid-request is not kept for the one that replaced it.
+    final scope = _listCache.scope;
+    final sort = _sortField;
+    final order = _sortOrder;
 
     final Future<_QuarkPage?> quark = noHost
         ? Future.value()
@@ -589,13 +620,16 @@ class PhotosController extends ChangeNotifier {
     await albumItems;
     if (generation != _generation || _disposed) return;
 
+    final sameScope = scope == _listCache.scope;
     _noHostSelected = noHost;
     _mobile = _sortDevicePhotos(mobilePhotos);
     if (favoriteKeys != null) {
       _favoriteKeys
         ..clear()
         ..addAll(favoriteKeys);
+      if (sameScope) _listCache.putFavoriteKeys(favoriteKeys);
     }
+    final error = quarkPage?.error;
     if (quarkPage == null) {
       // No host is a different state with its own UI, so nothing left over
       // from the host that was just removed may outlive it.
@@ -603,11 +637,20 @@ class PhotosController extends ChangeNotifier {
       _quarkTotal = 0;
       _quarkLoaded = false;
       _quarkUnreachable = false;
-    } else {
-      _quark = quarkPage.photos;
+    } else if (error == null || _quark.isEmpty || _quarkSort != (sort, order)) {
+      _quark = quarkPage.photos.map(_Photo.fromWire).toList(growable: false);
+      _quarkSort = (sort, order);
       _quarkTotal = quarkPage.total;
       _quarkLoaded = true;
-      _quarkUnreachable = quarkPage.unreachable;
+      _quarkUnreachable = error != null && isQuarkUnreachableError(error);
+      if (error == null && sameScope) {
+        _listCache.putPhotos(
+          quarkPage.photos,
+          total: quarkPage.total,
+          sort: sort,
+          order: order,
+        );
+      }
     }
     notifyListeners();
   }
@@ -649,18 +692,10 @@ class PhotosController extends ChangeNotifier {
         sort: _sortField,
         order: _sortOrder,
       );
-      return (
-        photos: response.photos.map(_Photo.fromWire).toList(growable: false),
-        total: response.total,
-        unreachable: false,
-      );
+      return (photos: response.photos, total: response.total, error: null);
     } catch (e) {
       debugPrint('[photos_controller.dart] Error loading photos: $e');
-      return (
-        photos: const <_Photo>[],
-        total: 0,
-        unreachable: isQuarkUnreachableError(e),
-      );
+      return (photos: const <wire.PhotoItem>[], total: 0, error: e);
     }
   }
 
@@ -804,6 +839,7 @@ class PhotosController extends ChangeNotifier {
       relPath: relPath,
       serial: serial.isNotEmpty ? serial : null,
     );
+    _listCache.setFavorite(id, isFavorite: isFavorite);
     if (isFavorite) {
       _favoriteKeys.add(id);
     } else {
@@ -1384,8 +1420,8 @@ class PhotosController extends ChangeNotifier {
   );
 }
 
-/// The first page of Quark photos, or why there is none.
-typedef _QuarkPage = ({List<_Photo> photos, int total, bool unreachable});
+/// The first page of Quark photos, or the [error] that kept it away.
+typedef _QuarkPage = ({List<wire.PhotoItem> photos, int total, Object? error});
 
 /// One photo from either source, with what the services need to reach it.
 class _Photo {
