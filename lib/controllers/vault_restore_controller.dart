@@ -13,8 +13,7 @@ class VaultRestoreController extends ChangeNotifier {
   /// Creates a controller talking to the real [StorageService] and
   /// [VaultBackupService] unless overridden.
   VaultRestoreController({
-    Future<List<StorageDevice>> Function() listDevices =
-        StorageService.listDevices,
+    Future<List<StorageDevice>> Function() listDevices = _listFreshDevices,
     Future<VaultRestoreResult> Function({
           required String deviceSerial,
           required String recoveryPassword,
@@ -23,6 +22,14 @@ class VaultRestoreController extends ChangeNotifier {
         VaultBackupService.restoreFromDrive,
   }) : _listDevices = listDevices,
        _restoreFromDrive = restoreFromDrive;
+
+  /// The drives as the Quark sees them now. [StorageService.listDevices]
+  /// answers from a 10-second cache, which would hide a drive plugged in
+  /// just before "Check again".
+  static Future<List<StorageDevice>> _listFreshDevices() {
+    StorageService.invalidateDeviceCache();
+    return StorageService.listDevices();
+  }
 
   final Future<List<StorageDevice>> Function() _listDevices;
   final Future<VaultRestoreResult> Function({

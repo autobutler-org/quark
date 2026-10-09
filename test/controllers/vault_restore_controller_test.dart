@@ -1,5 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:quark/controllers/vault_restore_controller.dart';
+import 'package:quark/services/authenticated_service.dart';
 import 'package:quark/services/storage_service.dart';
 import 'package:quark/services/vault_backup_service.dart';
 import 'package:quark/services/vault_service.dart';
@@ -143,5 +148,39 @@ void main() {
     final before = notified;
     await loading;
     expect(notified, before);
+  });
+
+  test('checking again asks the Quark, not the device cache', () async {
+    var plugged = false;
+    resetSharedHttpClient();
+    sharedHttpClientFactory = () => MockClient(
+      (_) async => http.Response(
+        jsonEncode({
+          'devices': [
+            if (plugged)
+              {
+                'mountPoint': '/mnt/usb',
+                'isEnabled': true,
+                'usbInfo': {'serial': 'SN1'},
+              },
+          ],
+        }),
+        200,
+      ),
+    );
+    addTearDown(() {
+      resetSharedHttpClient();
+      sharedHttpClientFactory = buildLocalTrustHttpClient;
+      StorageService.invalidateDeviceCache();
+    });
+    final controller = VaultRestoreController();
+    addTearDown(controller.dispose);
+
+    await controller.load();
+    expect(controller.devices, isEmpty);
+
+    plugged = true;
+    await controller.load();
+    expect(controller.selectedSerial, 'SN1');
   });
 }
