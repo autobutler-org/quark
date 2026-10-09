@@ -143,6 +143,28 @@ abstract final class Errors {
       ? restoreConflict
       : message(error, action);
 
+  /// A vault restore the Quark refused with a 400: the recovery password is
+  /// wrong, or the drive has no vault backup on it. The Quark does not say
+  /// which, so the copy covers both.
+  static const String vaultBackupRejected =
+      "Couldn't restore from that drive. Check the recovery password, and "
+      'that the drive holds a vault backup.';
+
+  /// A vault restore refused with a 503: the drive the vault itself lives on
+  /// is unplugged, which is not the Quark being busy.
+  static const String vaultDriveDisconnected =
+      "The drive your vault is stored on isn't connected. Reconnect it, then "
+      'try again.';
+
+  /// A failed restore of the vault from a backup drive (#1665). A 400 gets
+  /// [vaultBackupRejected] and a 503 [vaultDriveDisconnected]; the rest is as
+  /// in [message].
+  static String vaultRestore(Object? error) => switch (error) {
+    ApiException(statusCode: 400) => vaultBackupRejected,
+    ApiException(statusCode: 503) => vaultDriveDisconnected,
+    _ => message(error, 'restore your vault'),
+  };
+
   /// A conversion or retry refused with a 403. The output lands beside the
   /// video, so the account has to be able to save files in its folder.
   static const String cantSaveInFolder = "You can't save files in that folder.";
