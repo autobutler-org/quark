@@ -182,6 +182,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _autoUpdateError;
   bool _isLoadingAutoUpdate = false;
 
+  bool _highContrast = false;
   bool _demoMode = false;
 
   // SBOM state
@@ -251,6 +252,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void _load() {
     _theme = AppSettings.instance.themeMode.value;
     _refreshIntervalSeconds = AppSettings.instance.refreshIntervalSeconds;
+    _highContrast = AppSettings.instance.highContrast.value;
     _demoMode = AppSettings.instance.demoMode.value;
     // Cleared up front so removing the last host retires the banner: with no
     // host every loader below returns early and none would ever clear it.
@@ -567,6 +569,8 @@ class _SettingsPageState extends State<SettingsPage> {
               header: banner,
               theme: _theme,
               onThemeChanged: _setTheme,
+              highContrast: _highContrast,
+              onHighContrastChanged: _setHighContrast,
               themeColor: settings.themeColor.value,
               followsQuarkThemeColor:
                   (settings.userThemeColor.value ?? '').isEmpty,
@@ -707,6 +711,11 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _setTheme(ThemeMode mode) async {
     await AppSettings.instance.setThemeMode(mode);
     if (mounted) setState(() => _theme = mode);
+  }
+
+  Future<void> _setHighContrast(bool enabled) async {
+    setState(() => _highContrast = enabled);
+    await AppSettings.instance.setHighContrast(enabled);
   }
 
   Future<void> _setRefreshInterval(int seconds) async {

@@ -3,8 +3,8 @@ import 'package:quark/widgets/host_manager.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
-/// The General tab of Settings (#2350): backend hosts, theme, the theme color
-/// color (#2740), the auto-refresh interval and demo mode, plus a link to the
+/// The General tab of Settings (#2350): backend hosts, theme, the high
+/// contrast switch (#2601), the theme color (#2740), the auto-refresh interval and demo mode, plus a link to the
 /// drives. Beta switches live on the Features tab (#2542).
 ///
 /// First because it holds the backend hosts, which every "manage hosts" link
@@ -15,6 +15,8 @@ class SettingsGeneralTab extends StatelessWidget {
   const SettingsGeneralTab({
     required this.theme,
     required this.onThemeChanged,
+    this.highContrast = false,
+    this.onHighContrastChanged,
     required this.themeColor,
     required this.followsQuarkThemeColor,
     required this.quarkThemeColor,
@@ -35,6 +37,12 @@ class SettingsGeneralTab extends StatelessWidget {
 
   /// Called with the theme the user picked.
   final ValueChanged<ThemeMode> onThemeChanged;
+
+  /// Whether the high-contrast themes are switched on.
+  final bool highContrast;
+
+  /// Called when the user flips high contrast. Null hides the switch.
+  final ValueChanged<bool>? onHighContrastChanged;
 
   /// The theme color the app wears: the user's own, or the Quark's while
   /// [followsQuarkThemeColor].
@@ -114,6 +122,19 @@ class SettingsGeneralTab extends StatelessWidget {
             ],
           ),
         ),
+        if (onHighContrastChanged != null)
+          Card(
+            child: SwitchListTile(
+              key: const ValueKey('settings_high_contrast'),
+              title: const Text('High contrast'),
+              subtitle: const Text(
+                'Stronger colors and bolder outlines, so text and buttons '
+                'are easier to see.',
+              ),
+              value: highContrast,
+              onChanged: onHighContrastChanged,
+            ),
+          ),
         if (onThemeColorChanged != null) ...[
           const SizedBox(height: 24),
           const Text('Theme color', style: heading),

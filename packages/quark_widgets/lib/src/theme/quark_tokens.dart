@@ -23,9 +23,11 @@ import '../layout/quark_chrome.dart';
 /// );
 /// ```
 ///
-/// [QuarkTokens.dark] and [QuarkTokens.light] are the two sets the app ships,
-/// and what the `classic` theme color yields. Every other theme color derives
-/// a set of its own; see `QuarkThemeColor.tokensFor`.
+/// [QuarkTokens.dark] and [QuarkTokens.light] are the two everyday sets the
+/// app ships, and what the `classic` theme color yields. Every other theme
+/// color derives a set of its own; see `QuarkThemeColor.tokensFor`.
+/// [QuarkTokens.highContrastDark] and [QuarkTokens.highContrastLight] replace
+/// them, whatever the theme color, for someone who asks for more contrast.
 @immutable
 class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// Creates a token set. Every value is required so a new token cannot be
@@ -60,6 +62,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     required this.spacingMd,
     required this.spacingLg,
     required this.spacingXl,
+    required this.focusRingWidth,
     required this.eventColors,
   });
 
@@ -168,6 +171,10 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
   /// The widest gap in the spacing scale, for page-level margins.
   final double spacingXl;
 
+  /// How thick, in logical pixels, the outline a control wears while it holds
+  /// keyboard focus is. The high-contrast sets draw it heavier.
+  final double focusRingWidth;
+
   /// The colors a person can give a calendar event, in the order the picker
   /// offers them. The first is every event's default: a blue of its own, which
   /// does not follow the theme color. An event stores its index, so reordering
@@ -205,6 +212,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     spacingMd: 16,
     spacingLg: 24,
     spacingXl: 32,
+    focusRingWidth: 2,
     eventColors: [
       Color(0xFF0EA5E9), // sky
       Color(0xFF10B981), // green
@@ -246,6 +254,96 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     spacingMd: 16,
     spacingLg: 24,
     spacingXl: 32,
+    focusRingWidth: 2,
+    eventColors: [
+      Color(0xFF0EA5E9), // sky
+      Color(0xFF059669), // green
+      Color(0xFFD97706), // amber
+      Color(0xFF7C3AED), // violet
+      Color(0xFFE11D48), // rose
+      Color(0xFF64748B), // slate
+    ],
+  );
+
+  /// The high-contrast dark set, for someone who has asked for more contrast.
+  ///
+  /// Aims for WCAG AAA: every text token is at least 7:1 on every surface,
+  /// borders are at least 3:1, and the focus ring is heavier. It ignores the
+  /// theme color — a tinted surface costs contrast.
+  static const QuarkTokens highContrastDark = QuarkTokens(
+    background: Color(0xFF000000),
+    card: Color(0xFF0A0A0A),
+    sidebar: Color(0xFF000000),
+    border: Color(0xFFA3A3A3),
+    input: Color(0xFF000000),
+    mutedForeground: Color(0xFFCCCCCC),
+    secondaryForeground: Color(0xFFE5E5E5),
+    foreground: Color(0xFFFFFFFF),
+    cardForeground: Color(0xFFFFFFFF),
+    primary: Color(0xFF7DD3FC),
+    primaryForeground: Color(0xFF000000),
+    chrome: Color(0xFF000000),
+    chromeBorder: Color(0xFFA3A3A3),
+    chromeForeground: Color(0xFFFFFFFF),
+    chromeSecondaryForeground: Color(0xFFE5E5E5),
+    chromeMutedForeground: Color(0xFFCCCCCC),
+    chromePrimary: Color(0xFF7DD3FC),
+    error: Color(0xFFFF9C9C),
+    errorForeground: Color(0xFF000000),
+    warning: Color(0xFFFFD54F),
+    success: Color(0xFF6EE7B7),
+    radiusSm: 4,
+    radiusMd: 8,
+    radiusLg: 12,
+    spacingXs: 4,
+    spacingSm: 8,
+    spacingMd: 16,
+    spacingLg: 24,
+    spacingXl: 32,
+    focusRingWidth: 3,
+    eventColors: [
+      Color(0xFF0EA5E9), // sky
+      Color(0xFF10B981), // green
+      Color(0xFFF59E0B), // amber
+      Color(0xFF8B5CF6), // violet
+      Color(0xFFF43F5E), // rose
+      Color(0xFF94A3B8), // slate
+    ],
+  );
+
+  /// The high-contrast light set, for someone who has asked for more
+  /// contrast. Held to the same targets as [highContrastDark].
+  static const QuarkTokens highContrastLight = QuarkTokens(
+    background: Color(0xFFFFFFFF),
+    card: Color(0xFFFFFFFF),
+    sidebar: Color(0xFFF5F5F5),
+    border: Color(0xFF595959),
+    input: Color(0xFFFFFFFF),
+    mutedForeground: Color(0xFF404040),
+    secondaryForeground: Color(0xFF262626),
+    foreground: Color(0xFF000000),
+    cardForeground: Color(0xFF000000),
+    primary: Color(0xFF00436E),
+    primaryForeground: Color(0xFFFFFFFF),
+    chrome: Color(0xFFF5F5F5),
+    chromeBorder: Color(0xFF595959),
+    chromeForeground: Color(0xFF000000),
+    chromeSecondaryForeground: Color(0xFF262626),
+    chromeMutedForeground: Color(0xFF404040),
+    chromePrimary: Color(0xFF00436E),
+    error: Color(0xFF9F0000),
+    errorForeground: Color(0xFFFFFFFF),
+    warning: Color(0xFF7A4A00),
+    success: Color(0xFF00603A),
+    radiusSm: 4,
+    radiusMd: 8,
+    radiusLg: 12,
+    spacingXs: 4,
+    spacingSm: 8,
+    spacingMd: 16,
+    spacingLg: 24,
+    spacingXl: 32,
+    focusRingWidth: 3,
     eventColors: [
       Color(0xFF0EA5E9), // sky
       Color(0xFF059669), // green
@@ -314,6 +412,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     double? spacingMd,
     double? spacingLg,
     double? spacingXl,
+    double? focusRingWidth,
     List<Color>? eventColors,
   }) {
     return QuarkTokens(
@@ -348,6 +447,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
       spacingMd: spacingMd ?? this.spacingMd,
       spacingLg: spacingLg ?? this.spacingLg,
       spacingXl: spacingXl ?? this.spacingXl,
+      focusRingWidth: focusRingWidth ?? this.focusRingWidth,
       eventColors: eventColors ?? this.eventColors,
     );
   }
@@ -405,6 +505,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
       spacingMd: lerpDouble(spacingMd, other.spacingMd, t)!,
       spacingLg: lerpDouble(spacingLg, other.spacingLg, t)!,
       spacingXl: lerpDouble(spacingXl, other.spacingXl, t)!,
+      focusRingWidth: lerpDouble(focusRingWidth, other.focusRingWidth, t)!,
       // Pairs up by index; a set longer than the other keeps its extras as
       // they are rather than fading them to nothing.
       eventColors: [
@@ -449,6 +550,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
         other.spacingMd == spacingMd &&
         other.spacingLg == spacingLg &&
         other.spacingXl == spacingXl &&
+        other.focusRingWidth == focusRingWidth &&
         listEquals(other.eventColors, eventColors);
   }
 
@@ -483,6 +585,7 @@ class QuarkTokens extends ThemeExtension<QuarkTokens> {
     spacingMd,
     spacingLg,
     spacingXl,
+    focusRingWidth,
     Object.hashAll(eventColors),
   ]);
 }

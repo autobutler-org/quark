@@ -138,6 +138,11 @@ class AppSettings {
 
   final ValueNotifier<ThemeMode> themeMode = ValueNotifier(ThemeMode.system);
 
+  /// Whether the user asked for the high-contrast themes in Settings (#2601),
+  /// for a platform with no contrast setting of its own, such as the web.
+  /// Off still honors the platform's setting.
+  final ValueNotifier<bool> highContrast = ValueNotifier(false);
+
   final ValueNotifier<bool> demoMode = ValueNotifier(false);
 
   /// How the photo grid orders its items, and the direction — All photos,
@@ -290,6 +295,7 @@ class AppSettings {
   static const _acceptedTermsHostsKey = 'acceptedTermsHosts';
   static const _ownerWelcomeHostsKey = 'ownerWelcomeHosts';
   static const _demoModeKey = 'demoMode';
+  static const _highContrastKey = 'highContrast';
   static const _photoSortFieldKey = 'photoSortField';
   static const _photoSortOrderKey = 'photoSortOrder';
   static const _albumSortKey = 'albumSort';
@@ -315,6 +321,7 @@ class AppSettings {
         : theme == 'dark'
         ? ThemeMode.dark
         : ThemeMode.system;
+    highContrast.value = _prefs!.getBool(_highContrastKey) ?? false;
     demoMode.value = _prefs!.getBool(_demoModeKey) ?? false;
 
     final sortFieldRaw = _prefs!.getString(_photoSortFieldKey);
@@ -775,6 +782,11 @@ class AppSettings {
         ? 'dark'
         : 'system';
     await _prefs?.setString('themeMode', key);
+  }
+
+  Future<void> setHighContrast(bool enabled) async {
+    highContrast.value = enabled;
+    await _prefs?.setBool(_highContrastKey, enabled);
   }
 
   Future<void> setDemoMode(bool enabled) async {
