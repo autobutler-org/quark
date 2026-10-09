@@ -646,3 +646,31 @@ The Quark has at least one feature in beta, such as Chat.
 - Off by default.
 - Drill-down pages (editors, viewers) keep their back button on the left, and overlays inside a page, such as the
   controls on a photo, do not move yet.
+
+---
+
+### JN-ST-034: Copy the app logs for a bug report
+
+**Preconditions:** User is on the About tab of Settings (`/settings/about`), in the iOS or Android app.
+
+**Steps:**
+
+1. Find the **Help & Support** section.
+2. Tap **Copy app logs**.
+3. Paste into a bug report or a message to support.
+
+**Expected result:**
+
+- A snack bar reads **App logs copied**, or **No app logs yet** when nothing has been logged.
+- The pasted text is the app's own log from this device, oldest entry first: a timestamped line for each app start
+  and each error the app did not handle, with its stack trace (#1822).
+- The log is still there after the app crashes or is closed, and whether or not the Quark can be reached: it is kept
+  on this device's own disk, never on the Quark.
+
+**Notes:**
+
+- The log is capped at about 1 MiB: one file of 512 KiB, plus the one rotated out before it.
+- Anything shaped like a credential (a token, a password, an `Authorization` header) is replaced with `[redacted]`
+  before it is written.
+- The web app keeps no log and shows no **Copy app logs** button; the browser console has what was printed.
+- Nothing is sent anywhere. Sending logs to support from inside the app is not built yet (#1822).
