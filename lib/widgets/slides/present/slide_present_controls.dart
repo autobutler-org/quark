@@ -5,9 +5,10 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// The bar over a running presentation (#1165): previous, where the show is
 /// ("Slide 2 of 5"), next, the presenter view toggle, fullscreen, and end.
 ///
-/// It fades out while [visible] is false — the pointer has rested a while —
-/// and takes no taps then. Under reduced motion it disappears without the
-/// fade. A screen reader has no pointer to wake it with, so with one
+/// It fades out while [visible] is false — the pointer has rested a while.
+/// Its buttons take no taps then: a tap where the bar sits calls [onWake]
+/// instead, rather than falling through to the slide and stepping it
+/// (#2932). Under reduced motion it disappears without the fade. A screen reader has no pointer to wake it with, so with one
 /// running it never hides.
 ///
 /// The buttons wrap onto a second row rather than overflow a phone at a
@@ -25,6 +26,7 @@ import 'package:quark_widgets/quark_widgets.dart';
 ///   onPrevious: c.isFirst ? null : c.previous,
 ///   onNext: c.isLast ? null : c.next,
 ///   onExit: exit,
+///   onWake: c.wakeControls,
 /// );
 /// ```
 class SlidePresentControls extends StatelessWidget {
@@ -39,6 +41,7 @@ class SlidePresentControls extends StatelessWidget {
     this.onTogglePresenterView,
     this.isFullscreen = false,
     this.onToggleFullscreen,
+    this.onWake,
     super.key,
   });
 
@@ -71,6 +74,9 @@ class SlidePresentControls extends StatelessWidget {
   /// has no fullscreen.
   final VoidCallback? onToggleFullscreen;
 
+  /// Brings the bar back; called by a tap on it while it is hidden.
+  final VoidCallback? onWake;
+
   @override
   Widget build(BuildContext context) {
     final tokens = QuarkTokens.of(context);
@@ -90,75 +96,80 @@ class SlidePresentControls extends StatelessWidget {
       duration: reduceMotion
           ? Duration.zero
           : const Duration(milliseconds: 200),
-      child: IgnorePointer(
-        ignoring: !shown,
-        child: ExcludeSemantics(
-          excluding: !shown,
-          child: Padding(
-            padding: EdgeInsets.all(tokens.spacingSm),
-            child: Material(
-              color: tokens.card,
-              borderRadius: BorderRadius.circular(tokens.radiusLg),
-              child: Padding(
-                padding: EdgeInsets.all(tokens.spacingXs),
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    QuarkBarIconButton(
-                      key: const ValueKey('slide_present_previous'),
-                      icon: QuarkIcons.chevron_left,
-                      tooltip: 'Previous slide',
-                      onPressed: onPrevious,
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: tokens.spacingSm,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        onTap: shown ? null : onWake,
+        child: IgnorePointer(
+          ignoring: !shown,
+          child: ExcludeSemantics(
+            excluding: !shown,
+            child: Padding(
+              padding: EdgeInsets.all(tokens.spacingSm),
+              child: Material(
+                color: tokens.card,
+                borderRadius: BorderRadius.circular(tokens.radiusLg),
+                child: Padding(
+                  padding: EdgeInsets.all(tokens.spacingXs),
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      QuarkBarIconButton(
+                        key: const ValueKey('slide_present_previous'),
+                        icon: QuarkIcons.chevron_left,
+                        tooltip: 'Previous slide',
+                        onPressed: onPrevious,
                       ),
-                      child: Semantics(
-                        liveRegion: true,
-                        child: Text(
-                          position,
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(color: tokens.foreground),
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: tokens.spacingSm,
+                        ),
+                        child: Semantics(
+                          liveRegion: true,
+                          child: Text(
+                            position,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(color: tokens.foreground),
+                          ),
                         ),
                       ),
-                    ),
-                    QuarkBarIconButton(
-                      key: const ValueKey('slide_present_next'),
-                      icon: QuarkIcons.chevron_right,
-                      tooltip: 'Next slide',
-                      onPressed: onNext,
-                    ),
-                    if (onTogglePresenterView != null)
-                      QuarkBarChip(
-                        key: const ValueKey('slide_present_presenter_view'),
-                        icon: QuarkIcons.notes_rounded,
-                        label: 'Presenter view',
-                        tooltip: presenterView
-                            ? 'Hide the presenter view'
-                            : 'Show the next slide, notes and time',
-                        active: presenterView,
-                        onPressed: onTogglePresenterView,
-                      ),
-                    if (onToggleFullscreen != null)
                       QuarkBarIconButton(
-                        key: const ValueKey('slide_present_fullscreen'),
-                        icon: isFullscreen
-                            ? QuarkIcons.fullscreen_exit
-                            : QuarkIcons.fullscreen,
-                        tooltip: isFullscreen
-                            ? 'Exit fullscreen'
-                            : 'Fullscreen',
-                        onPressed: onToggleFullscreen,
+                        key: const ValueKey('slide_present_next'),
+                        icon: QuarkIcons.chevron_right,
+                        tooltip: 'Next slide',
+                        onPressed: onNext,
                       ),
-                    QuarkBarIconButton(
-                      key: const ValueKey('slide_present_exit'),
-                      icon: QuarkIcons.close,
-                      tooltip: 'End the presentation',
-                      onPressed: onExit,
-                    ),
-                  ],
+                      if (onTogglePresenterView != null)
+                        QuarkBarChip(
+                          key: const ValueKey('slide_present_presenter_view'),
+                          icon: QuarkIcons.notes_rounded,
+                          label: 'Presenter view',
+                          tooltip: presenterView
+                              ? 'Hide the presenter view'
+                              : 'Show the next slide, notes and time',
+                          active: presenterView,
+                          onPressed: onTogglePresenterView,
+                        ),
+                      if (onToggleFullscreen != null)
+                        QuarkBarIconButton(
+                          key: const ValueKey('slide_present_fullscreen'),
+                          icon: isFullscreen
+                              ? QuarkIcons.fullscreen_exit
+                              : QuarkIcons.fullscreen,
+                          tooltip: isFullscreen
+                              ? 'Exit fullscreen'
+                              : 'Fullscreen',
+                          onPressed: onToggleFullscreen,
+                        ),
+                      QuarkBarIconButton(
+                        key: const ValueKey('slide_present_exit'),
+                        icon: QuarkIcons.close,
+                        tooltip: 'End the presentation',
+                        onPressed: onExit,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
