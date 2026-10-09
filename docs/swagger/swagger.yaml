@@ -536,6 +536,14 @@ definitions:
           $ref: '#/definitions/featureflagutil.FlagState'
         type: array
     type: object
+  fileversionutil.Kind:
+    enum:
+    - auto
+    - named
+    type: string
+    x-enum-varnames:
+    - KindAuto
+    - KindNamed
   grouputil.Group:
     properties:
       builtin:
@@ -1963,6 +1971,72 @@ definitions:
         type: string
       semver:
         type: string
+    type: object
+  v0_versions.ListVersionsJSON:
+    properties:
+      versions:
+        items:
+          $ref: '#/definitions/v0_versions.VersionJSON'
+        type: array
+    type: object
+  v0_versions.RestoreJSON:
+    properties:
+      backup:
+        allOf:
+        - $ref: '#/definitions/v0_versions.VersionJSON'
+        description: Backup holds what the file held before; restoring it undoes this
+          one.
+      restored:
+        allOf:
+        - $ref: '#/definitions/v0_versions.VersionJSON'
+        description: Restored is the version the file now holds.
+    type: object
+  v0_versions.SnapshotJSON:
+    properties:
+      created:
+        description: |-
+          Created is false when the content matched the newest snapshot, or an
+          auto snapshot came too soon after the last.
+        type: boolean
+      version:
+        allOf:
+        - $ref: '#/definitions/v0_versions.VersionJSON'
+        description: |-
+          Version holds the file's content: the new snapshot, or the existing one
+          that already did when nothing was copied.
+    type: object
+  v0_versions.VersionJSON:
+    properties:
+      authorId:
+        description: AuthorID is the account that took the snapshot, zero for the
+          system.
+        type: integer
+      createdAt:
+        type: string
+      id:
+        type: string
+      kind:
+        $ref: '#/definitions/fileversionutil.Kind'
+      label:
+        type: string
+      sha256:
+        type: string
+      size:
+        type: integer
+    type: object
+  v0_versions.createVersionRequest:
+    properties:
+      kind:
+        description: Kind is "named" (the default) or "auto".
+        type: string
+      label:
+        description: Label names a named version, and is required for one.
+        type: string
+      path:
+        description: Path is the file, files-relative.
+        type: string
+    required:
+    - path
     type: object
   v0_videos.VideoMetadataJSON:
     properties:
@@ -6208,10 +6282,12 @@ paths:
       description: Upload one or more files via multipart/form-data. Needs write access
         on the top-level directory; the caller owns each file the upload creates.
         A name already in use is a 409 unless overwrite or keepBoth says what to do
-        about it. Answers with the files-relative path each file landed at, after
-        any keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long
-        edge 400) may follow its file as a part named thumbnail whose filename is
-        the file's; one that names no earlier file, or is not a valid JPEG, is skipped.
+        about it. Overwriting a .qslide, .qsheet or .qdoc first snapshots its old
+        content into its version history. Answers with the files-relative path each
+        file landed at, after any keepBoth rename. A photo or video's client-rendered
+        thumbnail (JPEG, long edge 400) may follow its file as a part named thumbnail
+        whose filename is the file's; one that names no earlier file, or is not a
+        valid JPEG, is skipped.
       parameters:
       - description: Device serial number to upload to
         in: query
@@ -6415,11 +6491,12 @@ paths:
       - multipart/form-data
       description: Upload one or more files via multipart/form-data. Needs write access
         on the directory; the caller owns each file the upload creates. A name already
-        in use is a 409 unless overwrite or keepBoth says what to do about it. Answers
-        with the files-relative path each file landed at, after any keepBoth rename.
-        A photo or video's client-rendered thumbnail (JPEG, long edge 400) may follow
-        its file as a part named thumbnail whose filename is the file's; one that
-        names no earlier file, or is not a valid JPEG, is skipped.
+        in use is a 409 unless overwrite or keepBoth says what to do about it. Overwriting
+        a .qslide, .qsheet or .qdoc first snapshots its old content into its version
+        history. Answers with the files-relative path each file landed at, after any
+        keepBoth rename. A photo or video's client-rendered thumbnail (JPEG, long
+        edge 400) may follow its file as a part named thumbnail whose filename is
+        the file's; one that names no earlier file, or is not a valid JPEG, is skipped.
       parameters:
       - description: Directory to upload into
         in: path
@@ -9053,6 +9130,214 @@ paths:
       summary: Perform update
       tags:
       - version
+  /versions:
+    get:
+      description: List the snapshots in a file's version history, newest first. A
+        file with no history has none. Needs read access on the file.
+      parameters:
+      - description: Files-relative path of the file
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_versions.ListVersionsJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: List a file's versions
+      tags:
+      - versions
+    post:
+      consumes:
+      - application/json
+      description: 'Copy a file''s current content into its version history. A named
+        version needs a label of up to 100 characters; an auto version within 10 minutes
+        of the file''s last one is skipped. Content identical to the newest version
+        is not copied again: the answer names that version with created false, and
+        naming it labels it. Needs write access on the file.'
+      parameters:
+      - description: File and label
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/v0_versions.createVersionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_versions.SnapshotJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "413":
+          description: Version history is full
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Snapshot a file
+      tags:
+      - versions
+  /versions/{id}:
+    delete:
+      description: Delete a named version from a file's history. Auto versions are
+        removed by retention only. Needs write access on the file.
+      parameters:
+      - description: Version id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Files-relative path of the file
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Ok
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Delete a named version
+      tags:
+      - versions
+  /versions/{id}/content:
+    get:
+      description: Stream one version's content, typed by the file's extension. Needs
+        read access on the file.
+      parameters:
+      - description: Version id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Files-relative path of the file
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: The version's content
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Download a version
+      tags:
+      - versions
+  /versions/{id}/restore:
+    post:
+      description: Put a version's content back in the file. The file's current content
+        is snapshotted first, labeled "Before restore", so restoring that snapshot
+        undoes this. The file is replaced atomically, and an upload event announces
+        it. Needs write access on the file.
+      parameters:
+      - description: Version id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Files-relative path of the file
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v0_versions.RestoreJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serverutil.Response'
+      security:
+      - BearerAuth: []
+      summary: Restore a version
+      tags:
+      - versions
   /videos/metadata:
     get:
       description: Returns duration, resolution, codec, bitrate, framerate, rotation,

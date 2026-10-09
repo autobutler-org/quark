@@ -2,6 +2,7 @@ package storageutil
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -2239,5 +2240,54 @@ func TestStorageService_FileExists(t *testing.T) {
 	}
 	if exists(serial, "../../etc/passwd") {
 		t.Error("a path out of the files directory reads as there")
+	}
+}
+
+// A file's version store (#1173) is Quark's bookkeeping, not the user's: the
+// folder listing, the recursive walk every by-type and recent view uses, and
+// the file-name index all skip it, while the file it versions stays visible.
+func TestVersionStoreIsHidden(t *testing.T) {
+	if !IsInternalName(VersionsDirName) {
+		t.Fatalf("IsInternalName(%q) = false, want true", VersionsDirName)
+	}
+	device := makeManagedDeviceForImpl(t, "versions")
+	for _, rel := range []string{
+		"docs/pitch.qslide",
+		"docs/" + VersionsDirName + "/pitch.qslide/20261005T101530Z-3f9a0c1d.snap",
+		"docs/" + VersionsDirName + "/pitch.qslide/index.json",
+	} {
+		full := filepath.Join(device.FilesDir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, make([]byte, 10), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	listed, err := StatFilesInDir(filepath.Join(device.FilesDir, "docs"), device.Name, device.MountPoint, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 || listed[0].Name() != "pitch.qslide" {
+		t.Errorf("docs listing has %d entries, want only pitch.qslide", len(listed))
+	}
+	var walked []string
+	if err := WalkFilesInDir(context.Background(), device.FilesDir, device.Name, device.MountPoint, "", func(f WalkedFile) error {
+		if !f.Info.IsDir() {
+			walked = append(walked, f.RelPath)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(walked) != 1 || walked[0] != "docs/pitch.qslide" {
+		t.Errorf("walk = %v, want only docs/pitch.qslide", walked)
+	}
+	idx := NewFileIndex()
+	idx.Build([]ManagedDevice{*device})
+	results := idx.Search("", nil)
+	if len(results) != 1 || results[0].RelPath != "docs/pitch.qslide" {
+		t.Errorf("file index = %+v, want only pitch.qslide", results)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/downloadutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/util/fileversionutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
 	"github.com/autobutler-org/quark/pkg/util/ratelimitutil"
@@ -57,6 +58,8 @@ type Dependencies interface {
 	DownloadTokens() *downloadutil.TokenStore
 	EventBus() *eventbus.Bus
 	FileIndex() *storageutil.FileIndex
+	// FileVersions keeps each file's version history (#1173).
+	FileVersions() *fileversionutil.Store
 	HealthDatabase() *db.DatabaseRaw
 	IOSemaphore() *iosemutil.Semaphore
 	JobQueue() *jobutil.Queue
@@ -82,6 +85,7 @@ type Dependencies interface {
 	WithDownloadTokens(store *downloadutil.TokenStore) Dependencies
 	WithEventBus(b *eventbus.Bus) Dependencies
 	WithFileIndex(idx *storageutil.FileIndex) Dependencies
+	WithFileVersions(store *fileversionutil.Store) Dependencies
 	WithHealthDatabase(healthDatabase *db.DatabaseRaw) Dependencies
 	WithIOSemaphore(sem *iosemutil.Semaphore) Dependencies
 	WithJobQueue(q *jobutil.Queue) Dependencies
@@ -121,6 +125,9 @@ func NewDependencies() Dependencies {
 		// zipSlots is a channel and nothing else, sized from the cores; see
 		// downloadutil.DefaultZipSlots (#2757).
 		zipSlots: downloadutil.NewZipSlots(downloadutil.ZipSlotsParams{}),
+		// fileVersions is a set of mutexes and nothing else until server
+		// startup calls its Watch (#1173).
+		fileVersions: fileversionutil.NewStore(fileversionutil.NewStoreParams{}),
 		// authRateLimiter protects auth endpoints (login, setup, recover) from
 		// brute-force attacks. Shared across all requests — 5 req/s per IP, burst 10.
 		authRateLimiter: ratelimitutil.New(),

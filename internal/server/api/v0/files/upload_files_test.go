@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/autobutler-org/quark/pkg/util/storageutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -156,5 +157,35 @@ func TestConcurrentUploadsIntoTheSameNestedDir(t *testing.T) {
 				assertFileExists(t, filepath.Join(filesDir, "notes", "2024", fmt.Sprintf("file%d.txt", i)))
 			}
 		})
+	}
+}
+
+// Saving over an editor document snapshots what it replaces first (#1173),
+// so the history holds the state the save overwrote. Any other file is
+// overwritten without one, and a new document has nothing to snapshot.
+func TestUploadOverwriteSnapshotsEditorDocuments(t *testing.T) {
+	t.Parallel()
+	e, filesDir := newStorageVFSTestEngine(t)
+	for _, name := range []string{"deck.qslide", "notes.txt"} {
+		if w := uploadFile(t, e, "/api/v0/files/upload/docs", name, "first"); w.Code != http.StatusOK {
+			t.Fatalf("upload %s returned %d: %s", name, w.Code, w.Body.String())
+		}
+		if w := uploadFile(t, e, "/api/v0/files/upload/docs?overwrite=true", name, "second"); w.Code != http.StatusOK {
+			t.Fatalf("overwrite %s returned %d: %s", name, w.Code, w.Body.String())
+		}
+	}
+	store := filepath.Join(filesDir, "docs", storageutil.VersionsDirName)
+	snaps, err := filepath.Glob(filepath.Join(store, "deck.qslide", "*.snap"))
+	if err != nil || len(snaps) != 1 {
+		t.Fatalf("deck.qslide snapshots = %v (%v), want one", snaps, err)
+	}
+	if b, err := os.ReadFile(snaps[0]); err != nil || string(b) != "first" {
+		t.Errorf("snapshot holds %q (%v), want the content the save replaced", b, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(filesDir, "docs", "deck.qslide")); err != nil || string(b) != "second" {
+		t.Errorf("deck.qslide holds %q (%v), want the saved content", b, err)
+	}
+	if _, err := os.Stat(filepath.Join(store, "notes.txt")); !os.IsNotExist(err) {
+		t.Errorf("notes.txt was versioned (stat err %v); only editor documents are", err)
 	}
 }

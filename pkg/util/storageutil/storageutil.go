@@ -304,14 +304,19 @@ func GetFolderSize(dir string) (int64, error) {
 // directory so the rename is atomic, which is why listings must skip it (#1828).
 const WriteTempPrefix = ".vfs-write-"
 
+// VersionsDirName is the hidden directory beside a versioned file that holds
+// its earlier copies, one store per file name (#1173). See
+// docs/architecture/versions.md.
+const VersionsDirName = ".quark-versions"
+
 // IsInternalName reports whether a directory entry is Quark's own bookkeeping
-// rather than user content: the old hidden trash, or a write still in flight.
-// The trash itself sits beside FilesDir now (#2173), but trashed items are
-// still addressed as `.trash/...`, so the name stays reserved, and an old
-// trash is hidden until its first use moves it out. Every other dotfile is the
-// user's — a `.env` they uploaded must stay visible.
+// rather than user content: the old hidden trash, a file's version store, or a
+// write still in flight. The trash itself sits beside FilesDir now (#2173),
+// but trashed items are still addressed as `.trash/...`, so the name stays
+// reserved, and an old trash is hidden until its first use moves it out. Every
+// other dotfile is the user's — a `.env` they uploaded must stay visible.
 func IsInternalName(name string) bool {
-	return name == trashPathPrefix || strings.HasPrefix(name, WriteTempPrefix)
+	return name == trashPathPrefix || name == VersionsDirName || strings.HasPrefix(name, WriteTempPrefix)
 }
 
 func StatFilesInDir(dir string, deviceName string, devicePath string, deviceSerial string) ([]*DeviceFileInfo, error) {

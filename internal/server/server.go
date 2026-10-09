@@ -26,6 +26,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/deviceutil"
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
+	"github.com/autobutler-org/quark/pkg/util/fileversionutil"
 	"github.com/autobutler-org/quark/pkg/util/grouputil"
 	"github.com/autobutler-org/quark/pkg/util/healthutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
@@ -102,6 +103,12 @@ func setupServices(deps deputil.Dependencies) (*backup.SyncWorker, func(), error
 	byType := fileutil.NewByTypeCache()
 	byType.Watch(deps.EventBus())
 	deps.WithByTypeCache(byType)
+
+	// Keep each file's version history beside it as it is moved, and drop it
+	// once the file leaves the trash for good (#1173).
+	deps.FileVersions().Watch(fileversionutil.WatchParams{
+		Bus: deps.EventBus(), Registry: deps.VFSRegistry(), Storage: deps.StorageService(),
+	})
 
 	// Start the FTS5 content indexer — indexes uploaded text files and
 	// removes entries for deleted/moved files.

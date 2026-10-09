@@ -77,6 +77,9 @@ func WriteMultipartVFS(params WriteMultipartParams) (WriteMultipartResult, error
 		var created bool
 		destPath, err := placeUnderFreeName(params.RootDir, filepath.Base(fileName), params.KeepBoth, func(p string) error {
 			created = !params.Overwrite || !vfsExists(params.Ctx, params.FS, p)
+			if !created && params.BeforeOverwrite != nil {
+				params.BeforeOverwrite(p)
+			}
 			return params.FS.Write(params.Ctx, p, part, opts)
 		})
 		part.Close()

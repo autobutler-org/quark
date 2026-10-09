@@ -183,6 +183,9 @@ type WriteMultipartParams struct {
 	KeepBoth bool
 	// Sidecar, when set, is handed every part that is not a file.
 	Sidecar storageutil.SidecarFunc
+	// BeforeOverwrite, when set, is called with a file's path just before a
+	// part replaces it, while the old content is still there to snapshot.
+	BeforeOverwrite func(path string)
 }
 
 // WriteMultipartResult lists the files a multipart body wrote, in the order
