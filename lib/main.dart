@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -8,6 +10,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:quark/controllers/chat_channel_keys_controller.dart';
 import 'package:quark/controllers/chat_keys_controller.dart';
 import 'package:quark/controllers/connection_controller.dart';
+import 'package:quark/controllers/file_browser_cache.dart';
 import 'package:quark/controllers/jobs_controller.dart';
 import 'package:quark/router.dart';
 import 'package:quark/services/app_settings.dart';
@@ -31,6 +34,9 @@ Future<void> main() async {
   if (kIsWeb) SemanticsBinding.instance.ensureSemantics();
   await maybeStartProbeAgent();
   await AppSettings.instance.load();
+  // What the last launch left on disk shows while the first listing loads
+  // (#1781). Not awaited: a snapshot is not worth holding the first frame.
+  unawaited(FileBrowserCache.instance.hydrate());
   // Quarks on the local network serve self-signed certificates. Install the
   // trust policy after settings load so it can consult the configured host.
   installLocalTrustHttpOverrides();
