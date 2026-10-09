@@ -43,6 +43,7 @@ void main() {
     QuarkThemeColor quarkThemeColor = QuarkThemeColor.blue,
     ValueChanged<String>? onThemeColorChanged,
     ValueChanged<String>? onQuarkThemeColorChanged,
+    Widget? notifications,
   }) async {
     tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1;
@@ -59,6 +60,7 @@ void main() {
             quarkThemeColor: quarkThemeColor,
             onThemeColorChanged: onThemeColorChanged,
             onQuarkThemeColorChanged: onQuarkThemeColorChanged,
+            notifications: notifications,
             refreshIntervalSeconds: 15,
             onRefreshIntervalChanged: (_) {},
             demoMode: false,
@@ -148,5 +150,18 @@ void main() {
     final picker = tester.widget<QuarkThemeColorPicker>(find.byKey(userPicker));
     expect(picker.usingDefault, isTrue);
     expect(picker.value, QuarkThemeColor.lime);
+  });
+
+  // #2493: the page passes the notification switches for an admin only.
+  testWidgets('shows the notifications control it is given, or nothing', (
+    tester,
+  ) async {
+    const slot = ValueKey('notifications_slot');
+    await pumpTab(tester);
+    expect(find.byKey(slot), findsNothing);
+
+    await pumpTab(tester, notifications: const Text('Switches', key: slot));
+    expect(find.byKey(slot), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

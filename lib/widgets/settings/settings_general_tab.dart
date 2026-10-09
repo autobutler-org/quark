@@ -7,8 +7,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 
 /// The General tab of Settings (#2350): backend hosts, theme, the high
 /// contrast switch (#2601), the left-handed switch (#1812), the theme color (#2740), the view Calendar opens on
-/// (#2521), the auto-refresh interval and demo mode, plus a link to the drives. Beta switches live on the Features
-/// tab (#2542).
+/// (#2521), the [notifications] switches (#2493), the auto-refresh interval and demo mode, plus a link to the
+/// drives. Beta switches live on the Features tab (#2542).
 ///
 /// First because it holds the backend hosts, which every "manage hosts" link
 /// in the app lands on. The page owns the values; this tab renders them and
@@ -29,6 +29,7 @@ class SettingsGeneralTab extends StatelessWidget {
     this.onQuarkThemeColorChanged,
     this.defaultCalendarView = CalendarView.week,
     this.onDefaultCalendarViewChanged,
+    this.notifications,
     required this.refreshIntervalSeconds,
     required this.onRefreshIntervalChanged,
     required this.demoMode,
@@ -83,6 +84,10 @@ class SettingsGeneralTab extends StatelessWidget {
   /// Called with the view the user picked for Calendar to open on. Null
   /// hides the section, as when the calendar is turned off for this Quark.
   final ValueChanged<CalendarView>? onDefaultCalendarViewChanged;
+
+  /// The control for which notifications the account receives, shown under
+  /// the calendar setting; null shows nothing.
+  final Widget? notifications;
 
   /// How often pages refresh themselves, in seconds; 0 is off.
   final int refreshIntervalSeconds;
@@ -202,6 +207,10 @@ class SettingsGeneralTab extends StatelessWidget {
             value: defaultCalendarView,
             onChanged: onDefaultCalendarViewChanged,
           ),
+        ],
+        if (notifications != null) ...[
+          const SizedBox(height: 24),
+          notifications!,
         ],
         const SizedBox(height: 24),
         const Text('Auto-refresh interval', style: heading),
