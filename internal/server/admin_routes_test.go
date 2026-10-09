@@ -12,6 +12,7 @@ import (
 	"github.com/autobutler-org/quark/internal/server/middleware"
 	"github.com/autobutler-org/quark/pkg/util/authutil"
 	"github.com/autobutler-org/quark/pkg/util/deputil"
+	"github.com/autobutler-org/quark/pkg/util/hostnameutil"
 	"github.com/autobutler-org/quark/pkg/util/sshutil"
 	"github.com/autobutler-org/quark/pkg/vfs"
 	"github.com/gin-gonic/gin"
@@ -43,10 +44,13 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 		t.Fatalf("login member: %v", err)
 	}
 
-	// SSH access reports itself unavailable, so no admin request here can
-	// reach sudo on the machine running the test.
+	// SSH access and renaming report themselves unavailable, so no admin
+	// request here can reach sudo on the machine running the test.
 	deps := deputil.NewDependencies().WithDatabase(database).WithSSHSystem(sshutil.System{
 		Unavailable: func() sshutil.Reason { return sshutil.ReasonNotService },
+	}).WithHostnameSystem(hostnameutil.System{
+		Unavailable: func() hostnameutil.Reason { return hostnameutil.ReasonNotService },
+		Hostname:    func() (string, error) { return "quark", nil },
 	})
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -132,6 +136,9 @@ func TestAdminGate_ApplianceRoutes(t *testing.T) {
 		{http.MethodPut, "/api/v0/ssh/password"},
 		// SSH access is unavailable in this graph, so the admin gets a 409.
 		{http.MethodDelete, "/api/v0/ssh/password"},
+		{http.MethodGet, "/api/v0/hostname"},
+		// No body, so the admin stops at a 400 and nothing is renamed.
+		{http.MethodPut, "/api/v0/hostname"},
 	}
 	for _, r := range gated {
 		if got := do(r.method, r.path, member.SessionToken); got != http.StatusForbidden {

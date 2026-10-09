@@ -52,6 +52,11 @@ const (
 	// every signed-in app fetches it again. Path and Data are empty.
 	EventPublicSettingsChanged EventKind = "public_settings_changed"
 
+	// EventHostnameChanged fires when an admin renames the device (#2344), so
+	// an app that saved the old <name>.local address can move to the new one.
+	// Data is a HostnameChanged; Path is empty.
+	EventHostnameChanged EventKind = "hostname_changed"
+
 	// EventAccessChanged fires when access rows moved with a path or were
 	// deleted with it (#1905). Path and DeviceSerial name where the rows are
 	// now, or where they were deleted from.
@@ -90,6 +95,16 @@ const (
 	// shared by every account (#1144), so every client hears it.
 	EventCalendarChanged EventKind = "calendar_changed"
 )
+
+// HostnameChanged is the data of a hostname_changed event.
+type HostnameChanged struct {
+	// Hostname is the device's new hostname.
+	Hostname string `json:"hostname"`
+	// AdvertisedHostname is the name it answers to on the network without the
+	// .local suffix, when Avahi says: it differs from Hostname when another
+	// device already had the name.
+	AdvertisedHostname string `json:"advertisedHostname,omitempty"`
+}
 
 // ChatChannelChanged is the data of a chat_channel_changed, chat_key_needed or
 // chat_key_granted event. It lives here

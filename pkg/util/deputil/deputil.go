@@ -15,6 +15,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/fileversionutil"
+	"github.com/autobutler-org/quark/pkg/util/hostnameutil"
 	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
@@ -63,6 +64,7 @@ type Dependencies interface {
 	// FileVersions keeps each file's version history (#1173).
 	FileVersions() *fileversionutil.Store
 	HealthDatabase() *db.DatabaseRaw
+	HostnameSystem() hostnameutil.System
 	IOSemaphore() *iosemutil.Semaphore
 	JobQueue() *jobutil.Queue
 	// LoginGuard locks out an address or account after repeated failed
@@ -89,6 +91,7 @@ type Dependencies interface {
 	WithFileIndex(idx *indexutil.FileIndex) Dependencies
 	WithFileVersions(store *fileversionutil.Store) Dependencies
 	WithHealthDatabase(healthDatabase *db.DatabaseRaw) Dependencies
+	WithHostnameSystem(system hostnameutil.System) Dependencies
 	WithIOSemaphore(sem *iosemutil.Semaphore) Dependencies
 	WithJobQueue(q *jobutil.Queue) Dependencies
 	WithLoginGuard(guard *ratelimitutil.LoginGuard) Dependencies
@@ -154,6 +157,9 @@ func NewDependencies() Dependencies {
 		// repairSystem is the real host too: it reports itself unavailable
 		// anywhere but the installed service with a current unit (#2121).
 		repairSystem: repairutil.DefaultSystem(),
+		// hostnameSystem is the real host as well, and likewise renames
+		// nothing anywhere but the installed service (#2344).
+		hostnameSystem: hostnameutil.DefaultSystem(),
 	}
 }
 

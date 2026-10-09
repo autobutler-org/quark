@@ -6027,6 +6027,116 @@
                 }
             }
         },
+        "/hostname": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The device's hostname, the name it answers to on the local network when that differs (another device already had the name, so Avahi took the next free one), and whether this Quark can be renamed. A Quark that is not the installed Linux service reports available false with a reason. Admin-only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hostname"
+                ],
+                "summary": "Get the device hostname",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_hostname.hostnameResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sets the device's hostname with no reboot, and publishes hostname_changed. The device then answers to the new name under .local, advertises itself as \"Quark on\" that name, and serves a regenerated TLS certificate that covers the new name, so an app that saved the old address has to move to the new one. hostname is one RFC 1123 label: 1 to 63 lowercase letters, digits or hyphens, with at least one letter and no hyphen at either end. advertisedHostname in the answer differs from hostname when another device already had the name; that can take a second to show, so read GET /hostname afterwards. Admin-only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "hostname"
+                ],
+                "summary": "Rename the device",
+                "parameters": [
+                    {
+                        "description": "The new hostname",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v0_hostname.setHostnameBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v0_hostname.hostnameResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Not a valid hostname",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "This Quark can't be renamed",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/serverutil.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/jobs": {
             "get": {
                 "security": [
@@ -12489,6 +12599,39 @@
                 },
                 "temperatureCelsius": {
                     "type": "number"
+                }
+            }
+        },
+        "v0_hostname.hostnameResponse": {
+            "type": "object",
+            "properties": {
+                "advertisedHostname": {
+                    "description": "AdvertisedHostname is the name the device answers to on the network,\nwithout the .local suffix. It differs from hostname when another device\nalready had the name, and is absent when Avahi does not say.",
+                    "type": "string"
+                },
+                "available": {
+                    "description": "Available is whether this Quark can be renamed.",
+                    "type": "boolean"
+                },
+                "hostname": {
+                    "description": "Hostname is the system hostname.",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "Reason is why not, when available is false: unsupported_os, not_service\nor helper_missing.",
+                    "type": "string"
+                }
+            }
+        },
+        "v0_hostname.setHostnameBody": {
+            "type": "object",
+            "required": [
+                "hostname"
+            ],
+            "properties": {
+                "hostname": {
+                    "description": "Hostname is 1 to 63 lowercase letters, digits or hyphens, with at least\none letter and no hyphen at either end.",
+                    "type": "string"
                 }
             }
         },

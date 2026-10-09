@@ -10,6 +10,7 @@ import (
 	"github.com/autobutler-org/quark/pkg/util/eventbus"
 	"github.com/autobutler-org/quark/pkg/util/fileutil"
 	"github.com/autobutler-org/quark/pkg/util/fileversionutil"
+	"github.com/autobutler-org/quark/pkg/util/hostnameutil"
 	"github.com/autobutler-org/quark/pkg/util/indexutil"
 	"github.com/autobutler-org/quark/pkg/util/iosemutil"
 	"github.com/autobutler-org/quark/pkg/util/jobutil"
@@ -41,6 +42,7 @@ type dependencies struct {
 	fileVersions   *fileversionutil.Store
 	healthDatabase *db.DatabaseRaw
 	sshSystem      sshutil.System
+	hostnameSystem hostnameutil.System
 	repairSystem   repairutil.System
 	ioSemaphore    *iosemutil.Semaphore
 	storageService *storageutil.StorageService
@@ -69,6 +71,15 @@ func (d *dependencies) SSHSystem() sshutil.System {
 
 func (d *dependencies) WithSSHSystem(system sshutil.System) Dependencies {
 	d.sshSystem = system
+	return d
+}
+
+func (d *dependencies) HostnameSystem() hostnameutil.System {
+	return d.hostnameSystem
+}
+
+func (d *dependencies) WithHostnameSystem(system hostnameutil.System) Dependencies {
+	d.hostnameSystem = system
 	return d
 }
 

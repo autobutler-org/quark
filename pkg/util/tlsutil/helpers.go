@@ -12,14 +12,17 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/autobutler-org/quark/pkg/util/storageutil"
 )
 
-// needsRegen returns true when the cert file is absent, unreadable, or expires
-// within the renewalWindow.
+// needsRegen returns true when the cert file is absent, unreadable, expires
+// within the renewalWindow, or no longer names this host: after a rename, by
+// Quark or with hostnamectl, the old cert fails verification at
+// https://<new>.local (#2344).
 func needsRegen(certFile string) bool {
 	data, err := os.ReadFile(certFile)
 	if err != nil {
@@ -33,7 +36,15 @@ func needsRegen(certFile string) bool {
 	if err != nil {
 		return true
 	}
-	return time.Until(cert.NotAfter) < renewalWindow
+	if time.Until(cert.NotAfter) < renewalWindow {
+		return true
+	}
+	for _, name := range localDNSNames() {
+		if !slices.Contains(cert.DNSNames, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // generate creates a new ECDSA P-256 self-signed certificate with SANs covering
