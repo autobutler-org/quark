@@ -1,7 +1,9 @@
 import 'dart:ui' show SemanticsAction;
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 import 'package:quark_widgets/src/calendar/calendar_time_grid/time_grid_layout.dart';
 
@@ -319,6 +321,96 @@ void main() {
       expect(semantics.flagsCollection.isButton, isTrue);
       expect(semantics.hasAction(SemanticsAction.tap), isTrue);
       handle.dispose();
+    });
+  });
+
+  // #2886: the dashed "New event at" hint is a live hover and nothing else. It
+  // goes when the span changes under a resting pointer, stays off while a
+  // button is held (a drag is a swipe, not a create), and goes once its slot
+  // is tapped.
+  group('the hover hint', () {
+    int ghosts() => find
+        .descendant(
+          of: find.byType(CalendarTimeGrid),
+          matching: find.byIcon(QuarkIcons.add_rounded),
+        )
+        .evaluate()
+        .length;
+
+    Offset slot(WidgetTester tester, DateTime day, int hour) =>
+        tester.getCenter(
+          find.byKey(ValueKey('calendar_slot_${CalendarDates.key(day)}_$hour')),
+        );
+
+    Future<TestGesture> mouseAt(WidgetTester tester, Offset at) async {
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: at);
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      return mouse;
+    }
+
+    testBothViewports('clears when the span changes', (tester, size) async {
+      final week = CalendarDates.weekOf(_today);
+      await pumpAt(
+        tester,
+        _grid(days: week, onSlotTap: (_) {}),
+        size: size,
+      );
+      await mouseAt(tester, slot(tester, _today, 13));
+      expect(ghosts(), 1);
+
+      final next = [for (final d in week) CalendarDates.addDays(d, 7)];
+      await pumpAt(
+        tester,
+        _grid(days: next, onSlotTap: (_) {}),
+        size: size,
+      );
+      expect(ghosts(), 0);
+    });
+
+    testBothViewports('stays off while a button is held', (tester, size) async {
+      await pumpAt(
+        tester,
+        _grid(days: CalendarDates.weekOf(_today), onSlotTap: (_) {}),
+        size: size,
+      );
+      final start = slot(tester, DateTime(2026, 9, 27), 13);
+      final mouse = await mouseAt(tester, start);
+      await mouse.down(start);
+      for (var i = 0; i < 8; i++) {
+        await mouse.moveBy(Offset(size.width / 40, 0));
+        await tester.pump();
+        expect(ghosts(), 0);
+      }
+      await mouse.up();
+      await tester.pump();
+      expect(ghosts(), 0);
+
+      // Moving again is a hover again.
+      await mouse.moveBy(const Offset(0, 2));
+      await tester.pump();
+      expect(ghosts(), 1);
+    });
+
+    testBothViewports('clears when its slot is tapped', (tester, size) async {
+      DateTime? tapped;
+      await pumpAt(
+        tester,
+        _grid(
+          days: CalendarDates.weekOf(_today),
+          onSlotTap: (start) => tapped = start,
+        ),
+        size: size,
+      );
+      final at = slot(tester, _today, 13);
+      final mouse = await mouseAt(tester, at);
+      expect(ghosts(), 1);
+      await mouse.down(at);
+      await mouse.up();
+      await tester.pump();
+      expect(tapped, DateTime(2026, 9, 29, 13));
+      expect(ghosts(), 0);
     });
   });
 }

@@ -59,6 +59,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // #2889: the title field is named "Title" whether or not it holds one. Its
+  // hint goes quiet once there is a title, which left an edit's field with
+  // nothing for a screen reader to call it.
+  for (final isNew in [true, false]) {
+    testBothViewports(
+      'names the title field when ${isNew ? 'new' : 'editing'}',
+      (tester, size) async {
+        final handle = tester.ensureSemantics();
+        final draft = isNew ? _draft.copyWith(title: '') : _draft;
+        await pumpAt(
+          tester,
+          _Harness().editor(draft: draft, isNew: isNew),
+          size: size,
+        );
+        final data = tester
+            .getSemantics(
+              find.descendant(
+                of: find.byKey(const ValueKey('event_title')),
+                matching: find.byType(EditableText),
+              ),
+            )
+            .getSemanticsData();
+        expect(data.flagsCollection.isTextField, isTrue);
+        // A new event's empty field still reads its hint after the name.
+        expect(data.label, isNew ? 'Title\nAdd a title' : 'Title');
+        expect(data.value, draft.title);
+        handle.dispose();
+      },
+    );
+  }
+
   testBothViewports('typing a title reports the new draft', (
     tester,
     size,

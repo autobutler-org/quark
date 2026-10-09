@@ -225,21 +225,27 @@ class _CalendarEventEditorState extends State<CalendarEventEditor> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   spacing: gap,
                   children: [
-                    TextField(
-                      key: const ValueKey('event_title'),
-                      controller: _title,
-                      autofocus: widget.isNew,
-                      textCapitalization: TextCapitalization.sentences,
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w500,
-                        color: tokens.foreground,
+                    // The hint names a new event's field and goes quiet
+                    // once there is a title, so the field carries its own
+                    // name for a screen reader (#2889).
+                    Semantics(
+                      label: 'Title',
+                      child: TextField(
+                        key: const ValueKey('event_title'),
+                        controller: _title,
+                        autofocus: widget.isNew,
+                        textCapitalization: TextCapitalization.sentences,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w500,
+                          color: tokens.foreground,
+                        ),
+                        decoration: const InputDecoration(
+                          hintText: 'Add a title',
+                        ),
+                        onChanged: (title) =>
+                            widget.onChanged(draft.copyWith(title: title)),
                       ),
-                      decoration: const InputDecoration(
-                        hintText: 'Add a title',
-                      ),
-                      onChanged: (title) =>
-                          widget.onChanged(draft.copyWith(title: title)),
                     ),
                     EditorFieldRow(
                       label: 'All day',

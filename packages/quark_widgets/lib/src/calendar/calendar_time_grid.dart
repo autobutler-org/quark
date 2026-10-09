@@ -15,8 +15,9 @@ import 'calendar_time_grid/time_grid_hour_gutter.dart';
 /// sit on it as blocks, overlapping ones side by side. All-day events sit in a
 /// row above it that keeps its height when it is empty. With more than one date
 /// each column is headed by its weekday and date. The timeline scrolls; it
-/// opens at [initialHour], and the now line shows while [now] falls on a date
-/// on show. Give it a bounded height.
+/// opens at [initialHour] and keeps its place when [days] changes, so stepping
+/// to the next week leaves the same hours on show (#2887). The now line shows
+/// while [now] falls on a date on show. Give it a bounded height.
 ///
 /// Hours are 56 pixels tall on a wide screen and 64 on a phone, where fingers
 /// need the room. On a phone a week's seven columns are too narrow for more
