@@ -56,6 +56,51 @@ void main() {
     });
   }
 
+  // Reading the state and failing to read it are different answers, and
+  // the row says which (#2904).
+  testBothViewports('says remote access is being checked', (
+    tester,
+    size,
+  ) async {
+    await pumpAt(
+      tester,
+      ConnectionStatusView(
+        mode: ConnectionMode.local,
+        label: 'Home',
+        detail: 'Detail.',
+        isCheckingRemoteAccess: true,
+        onOpenSettings: () {},
+      ),
+      size: size,
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Checking remote access…'), findsOneWidget);
+    expect(find.text('Remote access settings'), findsNothing);
+  });
+
+  testBothViewports('says why remote access could not be read', (
+    tester,
+    size,
+  ) async {
+    var opens = 0;
+    await pumpAt(
+      tester,
+      ConnectionStatusView(
+        mode: ConnectionMode.local,
+        label: 'Home',
+        detail: 'Detail.',
+        remoteAccessError: "Couldn't load remote access status.",
+        onOpenSettings: () => opens++,
+      ),
+      size: size,
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text("Couldn't load remote access status."), findsOneWidget);
+    expect(find.text('Remote access settings'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('connection_sheet_settings')));
+    expect(opens, 1);
+  });
+
   testWidgets('hides the settings row without onOpenSettings', (tester) async {
     await pumpAt(
       tester,

@@ -95,9 +95,11 @@ void main() {
       stepSemantics(tester, 2).properties.label,
       'Connecting your Quark, in progress',
     );
+    // Nothing the Quark reports marks a check after it joins, so there is
+    // no third step to sit idle beside a spinner (#2903).
     expect(
-      stepSemantics(tester, 3).properties.label,
-      'Making sure it works, waiting',
+      find.byKey(const ValueKey('remote_access_setup_step_3')),
+      findsNothing,
     );
   });
 
@@ -113,6 +115,16 @@ void main() {
     );
     expect(find.text('Remote access is on'), findsOneWidget);
     expect(find.byType(QuarkLoader), findsNothing);
+    for (final (step, label) in [
+      (1, 'Preparing a private connection'),
+      (2, 'Connecting your Quark'),
+    ]) {
+      expect(stepSemantics(tester, step).properties.label, '$label, done');
+    }
+    expect(
+      find.byKey(const ValueKey('remote_access_setup_step_3')),
+      findsNothing,
+    );
     await tester.ensureVisible(
       find.byKey(const ValueKey('remote_access_setup_done')),
     );

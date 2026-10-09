@@ -399,10 +399,20 @@ final List<GalleryEntry> registry = [
           onOpenSettings: () => log('ConnectionStatusView.onOpenSettings'),
         ),
         const Divider(),
-        const ConnectionStatusView(
+        ConnectionStatusView(
+          mode: ConnectionMode.local,
+          label: 'Connected on your home network',
+          detail: 'The status is still being read.',
+          isCheckingRemoteAccess: true,
+          onOpenSettings: () => log('ConnectionStatusView.onOpenSettings'),
+        ),
+        const Divider(),
+        ConnectionStatusView(
           mode: ConnectionMode.offline,
           label: 'Your Quark is not reachable',
           detail: "The app can't reach your Quark right now.",
+          remoteAccessError: "Couldn't load remote access status.",
+          onOpenSettings: () => log('ConnectionStatusView.onOpenSettings'),
         ),
       ],
     ),

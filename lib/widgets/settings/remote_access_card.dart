@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:quark/controllers/remote_access_controller.dart';
 import 'package:quark/services/remote_access_service.dart';
 import 'package:quark/utils/error_text.dart';
 import 'package:quark/utils/remote_access_config.dart';
+import 'package:quark/widgets/settings/help_support_card.dart';
 import 'package:quark_widgets/quark_widgets.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// The Remote access card on the Network tab of Settings: the Quark's
 /// remote access [status] as the package [RemoteAccessPanel] shows it, with
@@ -23,7 +27,7 @@ class RemoteAccessCard extends StatelessWidget {
     required this.onSetUp,
     required this.onTurnOff,
     required this.onTryAgain,
-    this.onGetHelp,
+    this.onGetHelp = openSupportPage,
     super.key,
   });
 
@@ -58,8 +62,17 @@ class RemoteAccessCard extends StatelessWidget {
   /// Turns remote access on again after it failed to connect.
   final VoidCallback onTryAgain;
 
-  /// Opens help while remote access is failing.
-  final VoidCallback? onGetHelp;
+  /// Opens help while remote access is failing. The support page by
+  /// default, in the browser, so the failure stays on screen (#2902).
+  final VoidCallback onGetHelp;
+
+  /// Opens [HelpSupportCard.supportUrl] in the browser.
+  static void openSupportPage() => unawaited(
+    launchUrl(
+      Uri.parse(HelpSupportCard.supportUrl),
+      mode: LaunchMode.externalApplication,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {

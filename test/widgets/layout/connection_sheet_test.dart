@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quark/services/remote_access_service.dart';
@@ -87,8 +89,32 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(Errors.quarkOutOfReach), findsOneWidget);
-    expect(find.text('Remote access settings'), findsOneWidget);
+    // A failed read says so, rather than the same words as one in flight
+    // (#2904).
+    expect(
+      find.text(Errors.message(Exception(), 'load remote access status')),
+      findsOneWidget,
+    );
+    expect(find.text('Checking remote access…'), findsNothing);
     expect(find.textContaining('Exception'), findsNothing);
+  });
+
+  testWidgets('says it is checking while the status is read', (tester) async {
+    final status = Completer<RemoteAccessStatus>();
+    await pumpButton(
+      tester,
+      mode: ConnectionMode.local,
+      read: () => status.future,
+      onNavigate: (_) {},
+    );
+    await tester.tap(find.byKey(const ValueKey('connection_indicator')));
+    await tester.pumpAndSettle();
+    expect(find.text('Checking remote access…'), findsOneWidget);
+
+    status.complete(const RemoteAccessStatus(enabled: false));
+    await tester.pumpAndSettle();
+    expect(find.text('Checking remote access…'), findsNothing);
+    expect(find.text('Remote access is off'), findsOneWidget);
   });
 
   testWidgets('shows a failing Quark as such', (tester) async {

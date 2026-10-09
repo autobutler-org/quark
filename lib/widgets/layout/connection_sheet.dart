@@ -9,8 +9,8 @@ import 'package:quark_widgets/quark_widgets.dart';
 /// a way to its settings.
 ///
 /// It reads the remote access status once when it opens. While that is in
-/// flight, or when the Quark cannot be reached to ask, the settings row says
-/// only "Remote access settings".
+/// flight the settings row says it is checking, and if the read fails it
+/// says so in [Errors]' words (#2904).
 class ConnectionSheet extends StatefulWidget {
   /// Creates the sheet's content for [mode].
   const ConnectionSheet({
@@ -42,20 +42,20 @@ class ConnectionSheet extends StatefulWidget {
 }
 
 class _ConnectionSheetState extends State<ConnectionSheet> {
-  late final Future<RemoteAccessState?> _remoteAccess = _read();
+  late final Future<RemoteAccessState> _remoteAccess = _read();
 
-  Future<RemoteAccessState?> _read() async {
+  Future<RemoteAccessState> _read() async {
     try {
       return RemoteAccessController.stateOf(await widget.readRemoteAccess());
     } catch (error) {
       debugPrint('[connection_sheet.dart] Remote access read failed: $error');
-      return null;
+      rethrow;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<RemoteAccessState?>(
+    return FutureBuilder<RemoteAccessState>(
       future: _remoteAccess,
       builder: (context, snapshot) => ConnectionStatusView(
         mode: widget.mode,
@@ -70,6 +70,11 @@ class _ConnectionSheetState extends State<ConnectionSheet> {
           ConnectionMode.offline => Errors.quarkOutOfReach,
         },
         remoteAccess: snapshot.data,
+        isCheckingRemoteAccess:
+            snapshot.connectionState != ConnectionState.done,
+        remoteAccessError: snapshot.hasError
+            ? Errors.message(snapshot.error, 'load remote access status')
+            : null,
         onOpenSettings: widget.onOpenSettings,
       ),
     );
