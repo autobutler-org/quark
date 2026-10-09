@@ -27,6 +27,7 @@ class RecentFileChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final tokens = QuarkTokens.of(context);
     return Material(
       color: colorScheme.surfaceContainerHighest,
       shape: RoundedRectangleBorder(
@@ -78,9 +79,7 @@ class RecentFileChip extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: colorScheme.onSurface.withValues(
-                                    alpha: 0.4,
-                                  ),
+                                  color: tokens.mutedForeground,
                                 ),
                               ),
                           ],
@@ -100,7 +99,7 @@ class RecentFileChip extends StatelessWidget {
                     child: Icon(
                       QuarkIcons.folder_open_rounded,
                       size: 14,
-                      color: colorScheme.onSurface.withValues(alpha: 0.4),
+                      color: tokens.secondaryForeground,
                     ),
                   ),
                 ),

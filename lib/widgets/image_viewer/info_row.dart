@@ -21,7 +21,7 @@ class InfoRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: Colors.white38),
+          Icon(icon, size: 16, color: Colors.white70),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -38,7 +38,7 @@ class InfoRow extends StatelessWidget {
             const Icon(
               QuarkIcons.chevron_right,
               size: 16,
-              color: Colors.white24,
+              color: Colors.white70,
             ),
         ],
       ),

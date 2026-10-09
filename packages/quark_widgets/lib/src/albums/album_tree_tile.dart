@@ -174,7 +174,7 @@ class AlbumTreeTile extends StatelessWidget {
                       '${album.itemCount}',
                       style: TextStyle(
                         fontSize: 11,
-                        color: colorScheme.onSurface.withValues(alpha: 0.4),
+                        color: tokens.mutedForeground,
                       ),
                     ),
                   if (openMenu != null)

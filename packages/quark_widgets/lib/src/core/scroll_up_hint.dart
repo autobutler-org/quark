@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:quark_icons/quark_icons.dart';
 
+import '../theme/quark_tokens.dart';
+
 /// A chevron fading down from the top edge, hinting that there is more above.
 ///
 /// For a scroll view that starts scrolled past its first content, such as a
@@ -45,7 +47,7 @@ class ScrollUpHint extends StatelessWidget {
           child: Icon(
             QuarkIcons.keyboard_arrow_up_rounded,
             size: 20,
-            color: colorScheme.onSurface.withValues(alpha: 0.4),
+            color: QuarkTokens.of(context).mutedForeground,
           ),
         ),
       ),
