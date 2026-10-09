@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:quark/controllers/connection_controller.dart';
 import 'package:quark/controllers/file_browser_cache.dart';
+import 'package:quark/models/calendar_view.dart';
 import 'package:quark/models/feature_flag.dart';
 import 'package:quark/models/file_list_column.dart';
 import 'package:quark/models/photo_sort.dart';
@@ -146,6 +147,12 @@ class AppSettings {
   /// the brand button and the drawer on the right, floating buttons on the
   /// left.
   final ValueNotifier<bool> leftHanded = ValueNotifier(false);
+
+  /// The view a bare `/calendar` opens on, on this device (#2521). Week until
+  /// the user picks another in Settings; a link naming a view still wins.
+  final ValueNotifier<CalendarView> defaultCalendarView = ValueNotifier(
+    CalendarView.week,
+  );
 
   final ValueNotifier<bool> demoMode = ValueNotifier(false);
 
@@ -301,6 +308,9 @@ class AppSettings {
   static const _demoModeKey = 'demoMode';
   static const _highContrastKey = 'highContrast';
   static const _leftHandedKey = 'leftHanded';
+
+  /// Holds the chosen view's slug.
+  static const _defaultCalendarViewKey = 'defaultCalendarView';
   static const _photoSortFieldKey = 'photoSortField';
   static const _photoSortOrderKey = 'photoSortOrder';
   static const _albumSortKey = 'albumSort';
@@ -328,6 +338,11 @@ class AppSettings {
         : ThemeMode.system;
     highContrast.value = _prefs!.getBool(_highContrastKey) ?? false;
     leftHanded.value = _prefs!.getBool(_leftHandedKey) ?? false;
+    final calendarViewRaw = _prefs!.getString(_defaultCalendarViewKey);
+    defaultCalendarView.value = CalendarView.values.firstWhere(
+      (view) => view.slug == calendarViewRaw,
+      orElse: () => CalendarView.week,
+    );
     demoMode.value = _prefs!.getBool(_demoModeKey) ?? false;
 
     final sortFieldRaw = _prefs!.getString(_photoSortFieldKey);
@@ -847,6 +862,12 @@ class AppSettings {
   Future<void> setLeftHanded(bool enabled) async {
     leftHanded.value = enabled;
     await _prefs?.setBool(_leftHandedKey, enabled);
+  }
+
+  /// Sets the view a bare `/calendar` opens on and persists it (#2521).
+  Future<void> setDefaultCalendarView(CalendarView view) async {
+    defaultCalendarView.value = view;
+    await _prefs?.setString(_defaultCalendarViewKey, view.slug);
   }
 
   Future<void> setDemoMode(bool enabled) async {

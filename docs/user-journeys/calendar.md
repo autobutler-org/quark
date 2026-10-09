@@ -2,8 +2,8 @@
 
 Covers the Calendar page (`/calendar`): one household calendar, Personal, that every signed-in account sees and edits
 (#1144). Views have their own URLs (`/calendar/day`, `/calendar/week`, `/calendar/month`, `/calendar/upcoming`) and
-the date on show is the `date` query (`?date=2026-09-29`). Reminders show inside the app only; phone alerts are
-#1145.
+the date on show is the `date` query (`?date=2026-09-29`). A bare `/calendar` opens the view chosen in Settings,
+Week until one is chosen (JN-CA-011). Reminders show inside the app only; phone alerts are #1145.
 
 ---
 
@@ -18,11 +18,12 @@ the date on show is the `date` query (`?date=2026-09-29`). Reminders show inside
 
 **Expected result:**
 
-- The app navigates to `/calendar/week`, and **Calendar** is marked in the drawer.
+- The app navigates to `/calendar/week`, or to the view chosen in Settings, and **Calendar** is marked in the
+  drawer.
 - This week shows, today's date filled in the accent color, the timeline opened at 8 AM.
 - On today, a line in the accent color marks the current time, with the time in the hour column.
 
-**Notes:** Week is the default view (#2519). Choosing another default is #2521.
+**Notes:** Week is the default view (#2519). JN-CA-011 chooses another.
 
 ---
 
@@ -213,3 +214,24 @@ and show only under **Everyone**.
 **Notes:** The end date is a calendar date, the same wherever the calendar is read (#2524). The Quark leaves a series
 that ended before the dates on screen out of what it sends (#2535). An event saved by an app from before end dates
 repeats forever.
+
+---
+
+### JN-CA-011: Choose the view Calendar opens on
+
+**Preconditions:** Logged in, on Settings' General tab.
+
+**Steps:**
+
+1. Under **Calendar opens on**, choose **Month**.
+2. Open the drawer and tap **Calendar**.
+
+**Expected result:**
+
+- The dropdown lists **Day**, **Week**, **Month** and **Upcoming**, and starts on **Week**.
+- The app navigates to `/calendar/month`, and opens there every time after, across restarts.
+- A link that names a view still wins: `/calendar/day` opens Day.
+- Switching views on the Calendar page does not change the choice.
+
+**Notes:** The choice is kept on this device, not on the Quark: another phone or browser has its own (#2521). The
+control is hidden while the calendar is turned off for this Quark (#2609).

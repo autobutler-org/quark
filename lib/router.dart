@@ -68,7 +68,8 @@ class AppRoutes {
   static const photosAlbumParam = 'album';
 
   /// The household calendar (#1144). Its views have their own URLs, see
-  /// [calendarView]; this bare path redirects to the default one, Week.
+  /// [calendarView]; this bare path redirects to the one chosen in Settings,
+  /// Week until the user picks another (#2521).
   static const calendar = '/calendar';
 
   /// The query parameter naming the date a calendar view shows,
@@ -444,6 +445,10 @@ enum SettingsTab implements RouteTab {
 /// slug redirects to the first tab with the query kept, since a stale link is
 /// not a broken app.
 ///
+/// [initialTab] names the tab those redirects land on instead of the first,
+/// for a page whose opening tab is a setting (#2521). It is read on every
+/// redirect, so a change applies to the next visit.
+///
 /// [builder] gets the tab to show and `onTabSelected`, which the page wires to
 /// its `QuarkTabView`: it moves with `context.go`, never `push`, so the address
 /// bar follows (see AGENTS.md, Navigation and routing).
@@ -460,9 +465,11 @@ List<GoRoute> tabbedRoutes<T extends RouteTab>({
   required List<T> tabs,
   required Widget Function(T tab, ValueChanged<T> onTabSelected) builder,
   bool keepQuery = false,
+  T Function()? initialTab,
 }) {
-  String firstTab(GoRouterState state) =>
-      state.uri.replace(path: '$path/${tabs.first.slug}').toString();
+  String firstTab(GoRouterState state) => state.uri
+      .replace(path: '$path/${(initialTab?.call() ?? tabs.first).slug}')
+      .toString();
   return [
     GoRoute(path: path, redirect: (_, state) => firstTab(state)),
     GoRoute(
@@ -746,6 +753,7 @@ final router = GoRouter(
       path: AppRoutes.calendar,
       tabs: CalendarView.values,
       keepQuery: true,
+      initialTab: () => AppSettings.instance.defaultCalendarView.value,
       builder: (view, onViewSelected) =>
           CalendarPage(view: view, onViewSelected: onViewSelected),
     ),

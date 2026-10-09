@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:quark/models/calendar_view.dart';
 import 'package:quark/widgets/host_manager.dart';
+import 'package:quark/widgets/settings/calendar_view_setting.dart';
 import 'package:quark_icons/quark_icons.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The General tab of Settings (#2350): backend hosts, theme, the high
-/// contrast switch (#2601), the left-handed switch (#1812), the theme color (#2740), the auto-refresh interval and
-/// demo mode, plus a link to the drives. Beta switches live on the Features tab (#2542).
+/// contrast switch (#2601), the left-handed switch (#1812), the theme color (#2740), the view Calendar opens on
+/// (#2521), the auto-refresh interval and demo mode, plus a link to the drives. Beta switches live on the Features
+/// tab (#2542).
 ///
 /// First because it holds the backend hosts, which every "manage hosts" link
 /// in the app lands on. The page owns the values; this tab renders them and
@@ -24,6 +27,8 @@ class SettingsGeneralTab extends StatelessWidget {
     required this.quarkThemeColor,
     this.onThemeColorChanged,
     this.onQuarkThemeColorChanged,
+    this.defaultCalendarView = CalendarView.week,
+    this.onDefaultCalendarViewChanged,
     required this.refreshIntervalSeconds,
     required this.onRefreshIntervalChanged,
     required this.demoMode,
@@ -72,6 +77,13 @@ class SettingsGeneralTab extends StatelessWidget {
   /// Quark's default. Null hides the section, as it is for a non-admin.
   final ValueChanged<String>? onQuarkThemeColorChanged;
 
+  /// The view Calendar opens on.
+  final CalendarView defaultCalendarView;
+
+  /// Called with the view the user picked for Calendar to open on. Null
+  /// hides the section, as when the calendar is turned off for this Quark.
+  final ValueChanged<CalendarView>? onDefaultCalendarViewChanged;
+
   /// How often pages refresh themselves, in seconds; 0 is off.
   final int refreshIntervalSeconds;
 
@@ -98,6 +110,7 @@ class SettingsGeneralTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final onThemeColorChanged = this.onThemeColorChanged;
     final onQuarkThemeColorChanged = this.onQuarkThemeColorChanged;
+    final onDefaultCalendarViewChanged = this.onDefaultCalendarViewChanged;
     const heading = TextStyle(fontSize: 16, fontWeight: FontWeight.bold);
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -181,6 +194,13 @@ class SettingsGeneralTab extends StatelessWidget {
             value: quarkThemeColor,
             onChanged: (picked) =>
                 onQuarkThemeColorChanged(picked.storageValue),
+          ),
+        ],
+        if (onDefaultCalendarViewChanged != null) ...[
+          const SizedBox(height: 24),
+          CalendarViewSetting(
+            value: defaultCalendarView,
+            onChanged: onDefaultCalendarViewChanged,
           ),
         ],
         const SizedBox(height: 24),

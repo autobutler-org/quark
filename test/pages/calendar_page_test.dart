@@ -13,8 +13,9 @@ import 'package:quark/services/authenticated_service.dart';
 import 'package:quark_widgets/quark_widgets.dart';
 
 /// The Calendar page (#1148, #2519): its views at their own URLs, Week by
-/// default, the date kept across switches, the event form, and weeks that
-/// start where the device's locale says (#2539).
+/// default or the view chosen in Settings (#2521), the date kept across
+/// switches, the event form, and weeks that start where the device's locale
+/// says (#2539).
 void main() {
   final settings = AppSettings.instance;
   final requests = <http.Request>[];
@@ -98,6 +99,7 @@ void main() {
   tearDown(() async {
     resetSharedHttpClient();
     sharedHttpClientFactory = buildLocalTrustHttpClient;
+    settings.defaultCalendarView.value = CalendarView.week;
     await clearHosts();
   });
 
@@ -118,6 +120,7 @@ void main() {
         path: AppRoutes.calendar,
         tabs: CalendarView.values,
         keepQuery: true,
+        initialTab: () => settings.defaultCalendarView.value,
         builder: (view, onViewSelected) =>
             CalendarPage(view: view, onViewSelected: onViewSelected),
       ),
@@ -155,6 +158,22 @@ void main() {
       );
       expect(find.text('Plumber visit'), findsOneWidget);
       expect(listCalls(), isNotEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('$name: /calendar opens on the view chosen in Settings', (
+      tester,
+    ) async {
+      settings.defaultCalendarView.value = CalendarView.month;
+      final r = await pumpCalendar(tester, AppRoutes.calendar, size);
+
+      expect(at(r), '/calendar/month');
+      expect(tester.takeException(), isNull);
+
+      // A link naming a view still wins.
+      r.go(AppRoutes.calendarView(CalendarView.day));
+      await tester.pumpAndSettle();
+      expect(at(r), '/calendar/day');
       expect(tester.takeException(), isNull);
     });
 

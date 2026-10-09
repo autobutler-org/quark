@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quark/models/calendar_view.dart';
 import 'package:quark/models/feature_flag.dart';
 import 'package:quark/models/trash_item.dart';
 import 'package:quark/pages/chat_page.dart';
@@ -670,12 +671,17 @@ void main() {
 
   // #2349: a page whose tabs have their own URLs.
   group('tabbedRoutes', () {
-    Future<GoRouter> pumpTabbed(WidgetTester tester, String location) async {
+    Future<GoRouter> pumpTabbed(
+      WidgetTester tester,
+      String location, {
+      UsersTab Function()? initialTab,
+    }) async {
       final r = GoRouter(
         initialLocation: location,
         routes: tabbedRoutes(
           path: AppRoutes.users,
           tabs: UsersTab.values,
+          initialTab: initialTab,
           builder: (tab, onTabSelected) =>
               _TabbedPage(tab: tab, onTabSelected: onTabSelected),
         ),
@@ -739,6 +745,72 @@ void main() {
       expect(find.text('tab accounts'), findsOneWidget);
       expect(tester.state(find.byType(_TabbedPage)), same(before));
       expect(_TabbedPageState.created, 1);
+    });
+
+    // #2521: a page whose opening tab is a setting.
+    testWidgets('initialTab is where the base path and an unknown tab land', (
+      tester,
+    ) async {
+      var initial = UsersTab.groups;
+      final r = await pumpTabbed(
+        tester,
+        '/users?serial=abc',
+        initialTab: () => initial,
+      );
+      expect(at(r), '/users/groups?serial=abc');
+      expect(find.text('tab groups'), findsOneWidget);
+
+      r.go('/users/bogus?serial=abc');
+      await tester.pumpAndSettle();
+      expect(at(r), '/users/groups?serial=abc');
+
+      // Read on every redirect, so a changed setting needs no restart.
+      initial = UsersTab.accounts;
+      r.go(AppRoutes.users);
+      await tester.pumpAndSettle();
+      expect(at(r), '/users/accounts');
+    });
+
+    testWidgets('a tab URL wins over initialTab', (tester) async {
+      final r = await pumpTabbed(
+        tester,
+        AppRoutes.usersTab(UsersTab.accounts),
+        initialTab: () => UsersTab.groups,
+      );
+
+      expect(at(r), '/users/accounts');
+      expect(find.text('tab accounts'), findsOneWidget);
+    });
+
+    testWidgets('the app opens /calendar on the view chosen in Settings', (
+      tester,
+    ) async {
+      final chosen = AppSettings.instance.defaultCalendarView;
+      addTearDown(() => chosen.value = CalendarView.week);
+      final r = GoRouter(
+        initialLocation: AppRoutes.calendar,
+        routes: [
+          // The app's own redirect, under a stand-in for the page.
+          ...router.configuration.routes.whereType<GoRoute>().where(
+            (route) => route.path == AppRoutes.calendar,
+          ),
+          GoRoute(
+            path: '${AppRoutes.calendar}/:view',
+            builder: (_, state) =>
+                Text('calendar ${state.pathParameters['view']}'),
+          ),
+        ],
+      );
+      addTearDown(r.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: r));
+      await tester.pumpAndSettle();
+      expect(at(r), '/calendar/week');
+
+      chosen.value = CalendarView.month;
+      r.go('${AppRoutes.calendar}?date=2026-09-29');
+      await tester.pumpAndSettle();
+      expect(at(r), '/calendar/month?date=2026-09-29');
+      expect(find.text('calendar month'), findsOneWidget);
     });
   });
 

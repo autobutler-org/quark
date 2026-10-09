@@ -7,7 +7,7 @@ unknown tab lands on General too. Admins get a sixth tab, Features, while the Qu
 
 | Tab | URL | Holds |
 | --- | --- | --- |
-| **General** | `/settings/general` | Backend hosts, theme, left-handed mode, theme color, auto-refresh interval, demo mode, a link to the drives |
+| **General** | `/settings/general` | Backend hosts, theme, left-handed mode, theme color, the view Calendar opens on ([JN-CA-011](calendar.md)), auto-refresh interval, demo mode, a link to the drives |
 | **Account** | `/settings/account` | Sign out, your sessions, then an **Account and data** row at the bottom that leads to Delete account and (admins) Reset this Quark |
 | **Network** | `/settings/network` | Remote access, connected devices, SSH access (admins) |
 | **Updates** | `/settings/updates` | The Quark's version, updates and automatic updates (admins), Repair installation (admins) |
