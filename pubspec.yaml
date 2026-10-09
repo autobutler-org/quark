@@ -19,7 +19,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 environment:
   sdk: ^3.11.0
-  flutter: 3.47.6
+  flutter: 3.47.7
 
 # Dart pub workspace: one shared pubspec.lock and one resolution for the app,
 # every package under packages/, and every example app. Members declare
@@ -101,7 +101,7 @@ dependencies:
   # is built with --dart-define=PROBE_AGENT=true; see lib/probe_bootstrap*.dart
   # and `make test/probe`. Kept as a regular dependency so lib/ can import it;
   # the dart-define + tree-shaking keep it inactive in normal/release builds.
-  flutter_probe_agent: ^0.16.0
+  flutter_probe_agent: ^0.19.0
   sodium: ^4.1.1+1
 
 # Patched desktop_drop: upstream's web handler calls webkitGetAsEntry()! on every
